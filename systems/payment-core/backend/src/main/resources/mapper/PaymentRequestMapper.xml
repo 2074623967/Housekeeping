@@ -26,6 +26,17 @@
                     ORDER BY prr.created_at DESC, prr.id DESC
                     LIMIT 1
                 )
+        <where>
+            <if test="query.requestNo != null and query.requestNo != ''">
+                pa.attempt_no LIKE CONCAT('%', #{query.requestNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
+                AND pa.attempt_status = #{query.requestStatus}
+            </if>
+        </where>
         ORDER BY pa.created_at DESC
     </select>
 </mapper>

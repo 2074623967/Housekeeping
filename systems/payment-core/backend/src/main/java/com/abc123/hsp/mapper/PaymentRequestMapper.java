@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
+import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface PaymentRequestMapper {
      *
      * @return 支付请求列表
      */
-    List<PaymentRequestListItemDTO> findAll();
+    List<PaymentRequestListItemDTO> findAll(PaymentRequestQueryDTO query);
 }
