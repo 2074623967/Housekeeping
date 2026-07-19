@@ -1,10 +1,10 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
-import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,8 +20,15 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     }
 
     @Override
-    public List<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
+    public PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        return paymentLogMapper.findAll(query);
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return new PageResultDTO<>(
+                paymentLogMapper.findAll(query),
+                paymentLogMapper.count(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
     }
 }

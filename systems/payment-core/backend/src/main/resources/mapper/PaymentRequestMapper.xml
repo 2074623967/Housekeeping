@@ -38,5 +38,30 @@
             </if>
         </where>
         ORDER BY pa.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_attempt pa
+                 LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+                 LEFT JOIN t_payment_route_record latest_route ON latest_route.id = (
+                    SELECT prr.id
+                    FROM t_payment_route_record prr
+                    WHERE prr.payment_order_id = pa.payment_order_id
+                    ORDER BY prr.created_at DESC, prr.id DESC
+                    LIMIT 1
+                )
+        <where>
+            <if test="query.requestNo != null and query.requestNo != ''">
+                pa.attempt_no LIKE CONCAT('%', #{query.requestNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
+                AND pa.attempt_status = #{query.requestStatus}
+            </if>
+        </where>
     </select>
 </mapper>

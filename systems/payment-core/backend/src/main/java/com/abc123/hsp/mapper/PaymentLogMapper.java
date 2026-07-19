@@ -15,4 +15,9 @@ public interface PaymentLogMapper {
      * @return 支付处理日志列表
      */
     List<PaymentLogListItemDTO> findAll(PaymentLogQueryDTO query);
+
+    /**
+     * 统计符合条件的支付处理日志总数。
+     */
+    long count(PaymentLogQueryDTO query);
 }

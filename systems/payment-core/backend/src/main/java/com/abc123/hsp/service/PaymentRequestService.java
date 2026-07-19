@@ -2,7 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
-import java.util.List;
+import com.abc123.hsp.dto.PageResultDTO;
 
 /**
  * 支付请求 Service，面向联调和排障提供支付报文查询。
@@ -14,5 +14,5 @@ public interface PaymentRequestService {
      *
      * @return 支付请求列表
      */
-    List<PaymentRequestListItemDTO> list(PaymentRequestQueryDTO query);
+    PageResultDTO<PaymentRequestListItemDTO> list(PaymentRequestQueryDTO query);
 }

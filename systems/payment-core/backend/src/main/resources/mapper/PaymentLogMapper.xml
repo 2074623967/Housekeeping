@@ -94,5 +94,89 @@
             </if>
         </where>
         ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM (
+            SELECT pa.attempt_no AS log_no,
+                   pa.payment_order_id,
+                   po.order_no,
+                   '支付提交' AS process_stage,
+                   CASE
+                       WHEN pa.attempt_status_type = 'danger' THEN 'ERROR'
+                       WHEN pa.attempt_status_type = 'warn' THEN 'WARN'
+                       ELSE 'INFO'
+                   END AS log_level,
+                   pa.attempt_status_type AS log_level_type,
+                   CONCAT('支付方式=', pa.payment_method, '；请求状态=', pa.attempt_status, '；请求报文=', pa.request_payload) AS message,
+                   pa.channel_code AS source,
+                   DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_attempt pa
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+
+            UNION ALL
+
+            SELECT pnl.notify_no AS log_no,
+                   pnl.payment_order_id,
+                   po.order_no,
+                   '渠道回调' AS process_stage,
+                   CASE
+                       WHEN pnl.notify_status_type = 'danger' THEN 'ERROR'
+                       WHEN pnl.notify_status_type = 'warn' THEN 'WARN'
+                       ELSE 'INFO'
+                   END AS log_level,
+                   pnl.notify_status_type AS log_level_type,
+                   CONCAT('回调类型=', pnl.notify_type, '；处理状态=', pnl.notify_status, '；结果=', COALESCE(pnl.notify_result, '-')) AS message,
+                   pnl.channel_code AS source,
+                   DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_notify_log pnl
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
+
+            UNION ALL
+
+            SELECT prr.route_no AS log_no,
+                   prr.payment_order_id,
+                   po.order_no,
+                   '支付路由' AS process_stage,
+                   'INFO' AS log_level,
+                   'info' AS log_level_type,
+                   CONCAT('路由规则=', prr.route_rule, '；路由结果=', prr.route_result) AS message,
+                   prr.channel_code AS source,
+                   DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_route_record prr
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+
+            UNION ALL
+
+            SELECT pe.event_no AS log_no,
+                   pe.payment_order_id,
+                   pe.biz_no AS order_no,
+                   '业务事件' AS process_stage,
+                   CASE
+                       WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'WARN'
+                       ELSE 'INFO'
+                   END AS log_level,
+                   CASE
+                       WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'warn'
+                       ELSE 'info'
+                   END AS log_level_type,
+                   CONCAT('事件类型=', pe.event_type, '；事件载荷=', pe.event_payload) AS message,
+                   'payment-core' AS source,
+                   DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_event pe
+        ) payment_log_union
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.processStage != null and query.processStage != '' and query.processStage != '全部'">
+                AND process_stage = #{query.processStage}
+            </if>
+            <if test="query.logLevel != null and query.logLevel != '' and query.logLevel != '全部'">
+                AND log_level = #{query.logLevel}
+            </if>
+        </where>
     </select>
 </mapper>

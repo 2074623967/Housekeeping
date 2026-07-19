@@ -15,4 +15,9 @@ public interface PaymentRequestMapper {
      * @return 支付请求列表
      */
     List<PaymentRequestListItemDTO> findAll(PaymentRequestQueryDTO query);
+
+    /**
+     * 统计符合条件的支付请求总数。
+     */
+    long count(PaymentRequestQueryDTO query);
 }
