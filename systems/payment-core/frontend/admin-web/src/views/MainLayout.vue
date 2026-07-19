@@ -10,6 +10,7 @@ const navGroups = [
       { label: "订单中心", to: "/orders" },
       { label: "账单中心", to: "/bills" },
       { label: "支付流水查询", to: "/payment-flows" },
+      { label: "收银台会话", to: "/cashier-sessions" },
       { label: "支付单管理", to: "/payments" },
       { label: "退款单管理", to: "/refunds" }
     ]

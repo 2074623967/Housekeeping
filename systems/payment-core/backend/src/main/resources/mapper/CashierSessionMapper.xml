@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.CashierSessionMapper">
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.CashierSessionListItemDTO">
+        SELECT pr.prepay_order_no AS sessionNo,
+               pr.prepay_order_no AS prepayOrderNo,
+               pr.payment_order_id AS paymentOrderId,
+               pr.order_no AS orderNo,
+               pr.bill_no AS billNo,
+               pr.customer_name AS customerName,
+               pr.cashier_title AS cashierTitle,
+               pr.pay_scene AS terminal,
+               CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
+               CASE
+                   WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
+                   WHEN pr.expires_at &lt; NOW() THEN '已失效'
+                   ELSE pr.cashier_status
+               END AS sessionStatus,
+               CASE
+                   WHEN pr.cashier_status IN ('已完成', '支付成功') THEN 'success'
+                   WHEN pr.expires_at &lt; NOW() THEN 'danger'
+                   ELSE pr.cashier_status_type
+               END AS sessionStatusType,
+               DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
+        FROM t_prepay_order pr
+        ORDER BY pr.created_at DESC
+    </select>
+</mapper>

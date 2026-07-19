@@ -48,6 +48,10 @@ export const paymentFlowApi = {
   getList: () => request("/api/payment-flows")
 };
 
+export const cashierSessionApi = {
+  getList: () => request("/api/cashier-sessions")
+};
+
 export const paymentApi = {
   getList: () => request("/api/payments"),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
