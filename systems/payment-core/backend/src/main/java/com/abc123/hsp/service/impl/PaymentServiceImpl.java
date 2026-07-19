@@ -54,6 +54,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public PrepayOrderDTO prepay(PrepayRequestDTO request) {
         // 预付单创建会同时影响账单、支付单和收银台状态，必须放在同一个事务里。
+        PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
+        if (activePrepay != null) {
+            // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
+            return activePrepay;
+        }
         BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
         BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
         if (orderAmount == null || paidAmount == null) {

@@ -104,6 +104,30 @@
         WHERE prepay_order_no = #{prepayOrderNo}
     </select>
 
+    <select id="findLatestActivePrepayByOrderNo" resultType="com.abc123.hsp.dto.PrepayOrderDTO">
+        SELECT pr.prepay_order_no AS prepayOrderNo,
+               pr.bill_no AS billNo,
+               pr.order_no AS orderNo,
+               pr.customer_name AS customerName,
+               CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
+               pr.pay_scene AS payScene,
+               pr.cashier_title AS cashierTitle,
+               pr.cashier_status AS cashierStatus,
+               pr.cashier_status_type AS cashierStatusType,
+               pr.payment_order_id AS paymentOrderId,
+               p.status AS paymentStatus,
+               DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
+        FROM t_prepay_order pr
+                 INNER JOIN t_payment_order p ON p.payment_order_id = pr.payment_order_id
+        WHERE pr.order_no = #{orderNo}
+          AND pr.expires_at &gt; NOW()
+          AND pr.cashier_status IN ('待支付', '支付中')
+          AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+        ORDER BY pr.created_at DESC, pr.id DESC
+        LIMIT 1
+    </select>
+
     <select id="findNotifyLogs" resultType="string">
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', notify_type, ' | ', notify_status) AS item
         FROM t_payment_notify_log

@@ -87,6 +87,11 @@ public interface PaymentMapper {
     PrepayOrderDTO findPrepay(@Param("prepayOrderNo") String prepayOrderNo);
 
     /**
+     * 查询订单当前可复用的有效预付单。
+     */
+    PrepayOrderDTO findLatestActivePrepayByOrderNo(@Param("orderNo") String orderNo);
+
+    /**
      * 查询支付回调日志列表。
      */
     List<String> findNotifyLogs(@Param("paymentOrderId") String paymentOrderId);

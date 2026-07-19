@@ -12,6 +12,7 @@ public class PrepayOrderDTO {
     private String cashierStatus;
     private String cashierStatusType;
     private String paymentOrderId;
+    private String paymentStatus;
     private String createdAt;
     private String expiresAt;
 
@@ -93,6 +94,14 @@ public class PrepayOrderDTO {
 
     public void setPaymentOrderId(String paymentOrderId) {
         this.paymentOrderId = paymentOrderId;
+    }
+
+    public String getPaymentStatus() {
+        return paymentStatus;
+    }
+
+    public void setPaymentStatus(String paymentStatus) {
+        this.paymentStatus = paymentStatus;
     }
 
     public String getCreatedAt() {
