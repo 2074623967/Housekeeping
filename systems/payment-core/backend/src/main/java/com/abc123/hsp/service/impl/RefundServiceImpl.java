@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.RefundListItemDTO;
+import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundService;
 import java.util.List;
@@ -16,7 +17,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     @Override
-    public List<RefundListItemDTO> list() {
-        return refundMapper.findAll();
+    public List<RefundListItemDTO> list(RefundQueryDTO query) {
+        return refundMapper.findAll(query);
     }
 }

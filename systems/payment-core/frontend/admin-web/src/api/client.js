@@ -155,9 +155,35 @@ export const paymentApi = {
 };
 
 export const refundApi = {
-  getList: () => request("/api/refunds")
+  getList: ({
+    refundOrderId = "",
+    paymentOrderId = "",
+    refundStatus = "全部",
+    refundMethod = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      refundOrderId,
+      paymentOrderId,
+      refundStatus,
+      refundMethod
+    });
+    return request(`/api/refunds?${params.toString()}`);
+  }
 };
 
 export const settlementApi = {
-  getWorkerList: () => request("/api/settlements/workers")
+  getWorkerList: ({
+    settlementOrderId = "",
+    workerKeyword = "",
+    settlementStatus = "全部",
+    payoutStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      settlementOrderId,
+      workerKeyword,
+      settlementStatus,
+      payoutStatus
+    });
+    return request(`/api/settlements/workers?${params.toString()}`);
+  }
 };

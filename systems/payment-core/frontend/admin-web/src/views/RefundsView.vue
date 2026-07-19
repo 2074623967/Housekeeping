@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { refundApi } from "../api/client";
 
 const items = ref([]);
@@ -12,20 +12,6 @@ const filters = ref({
   refundMethod: "全部"
 });
 
-const filteredItems = computed(() =>
-  items.value.filter((refundItem) => {
-    const matchesRefundOrderId = !filters.value.refundOrderId
-      || refundItem.refundOrderId.includes(filters.value.refundOrderId.trim());
-    const matchesPaymentOrderId = !filters.value.paymentOrderId
-      || refundItem.paymentOrderId.includes(filters.value.paymentOrderId.trim());
-    const matchesRefundStatus = filters.value.refundStatus === "全部"
-      || refundItem.status === filters.value.refundStatus;
-    const matchesRefundMethod = filters.value.refundMethod === "全部"
-      || refundItem.refundMethod === filters.value.refundMethod;
-    return matchesRefundOrderId && matchesPaymentOrderId && matchesRefundStatus && matchesRefundMethod;
-  })
-);
-
 function resetFilters() {
   filters.value = {
     refundOrderId: "",
@@ -33,17 +19,31 @@ function resetFilters() {
     refundStatus: "全部",
     refundMethod: "全部"
   };
+  loadRefunds();
 }
 
-onMounted(async () => {
+function applyFilters() {
+  loadRefunds();
+}
+
+async function loadRefunds() {
+  isLoading.value = true;
+  errorMessage.value = "";
   try {
-    items.value = await refundApi.getList();
+    items.value = await refundApi.getList({
+      refundOrderId: filters.value.refundOrderId,
+      paymentOrderId: filters.value.paymentOrderId,
+      refundStatus: filters.value.refundStatus,
+      refundMethod: filters.value.refundMethod
+    });
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
-});
+}
+
+onMounted(loadRefunds);
 </script>
 
 <template>
@@ -88,14 +88,14 @@ onMounted(async () => {
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary">查询</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">退款单数据加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的退款单数据</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的退款单数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -114,7 +114,7 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.refundOrderId">
+            <tr v-for="item in items" :key="item.refundOrderId">
               <td>{{ item.refundOrderId }}</td>
               <td>{{ item.paymentOrderId }}</td>
               <td>{{ item.orderNo }}</td>

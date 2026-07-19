@@ -19,6 +19,20 @@
                    ELSE DATE_FORMAT(success_at, '%Y-%m-%d %H:%i:%s')
                END AS successAt
         FROM t_refund_order
+        <where>
+            <if test="query.refundOrderId != null and query.refundOrderId != ''">
+                refund_order_id LIKE CONCAT('%', #{query.refundOrderId}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
+                AND status = #{query.refundStatus}
+            </if>
+            <if test="query.refundMethod != null and query.refundMethod != '' and query.refundMethod != '全部'">
+                AND refund_method = #{query.refundMethod}
+            </if>
+        </where>
         ORDER BY applied_at DESC
     </select>
 </mapper>

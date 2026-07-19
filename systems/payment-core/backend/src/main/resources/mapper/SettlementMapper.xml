@@ -17,6 +17,20 @@
                payout_status AS payoutStatus,
                payout_status_type AS payoutStatusType
         FROM t_worker_settlement_order
+        <where>
+            <if test="query.settlementOrderId != null and query.settlementOrderId != ''">
+                settlement_order_id LIKE CONCAT('%', #{query.settlementOrderId}, '%')
+            </if>
+            <if test="query.workerKeyword != null and query.workerKeyword != ''">
+                AND worker_name LIKE CONCAT('%', #{query.workerKeyword}, '%')
+            </if>
+            <if test="query.settlementStatus != null and query.settlementStatus != '' and query.settlementStatus != '全部'">
+                AND status = #{query.settlementStatus}
+            </if>
+            <if test="query.payoutStatus != null and query.payoutStatus != '' and query.payoutStatus != '全部'">
+                AND payout_status = #{query.payoutStatus}
+            </if>
+        </where>
         ORDER BY period_end DESC, created_at DESC
     </select>
 </mapper>
