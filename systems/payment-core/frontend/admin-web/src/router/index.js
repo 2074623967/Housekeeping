@@ -7,6 +7,7 @@ import PaymentFlowsView from "../views/PaymentFlowsView.vue";
 import CashierSessionsView from "../views/CashierSessionsView.vue";
 import PaymentRequestsView from "../views/PaymentRequestsView.vue";
 import PaymentLogsView from "../views/PaymentLogsView.vue";
+import PaymentRecordsView from "../views/PaymentRecordsView.vue";
 import PaymentsView from "../views/PaymentsView.vue";
 import PaymentDetailView from "../views/PaymentDetailView.vue";
 import RefundsView from "../views/RefundsView.vue";
@@ -25,6 +26,30 @@ const routes = [
       { path: "cashier-sessions", component: CashierSessionsView },
       { path: "payment-requests", component: PaymentRequestsView },
       { path: "payment-logs", component: PaymentLogsView },
+      {
+        path: "payment-records",
+        component: PaymentRecordsView,
+        meta: {
+          pageTitle: "统一支付记录",
+          recordType: "ALL"
+        }
+      },
+      {
+        path: "payment-records/wechat-alipay",
+        component: PaymentRecordsView,
+        meta: {
+          pageTitle: "微信支付宝支付记录",
+          recordType: "WECHAT"
+        }
+      },
+      {
+        path: "payment-records/bank-card",
+        component: PaymentRecordsView,
+        meta: {
+          pageTitle: "银行卡支付记录",
+          recordType: "BANK_CARD"
+        }
+      },
       { path: "payments", component: PaymentsView },
       { path: "payments/:paymentOrderId", component: PaymentDetailView },
       { path: "refunds", component: RefundsView },

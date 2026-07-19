@@ -335,6 +335,164 @@ th {
   border: 1px solid #fecaca;
 }
 
+/* 收款记录按原型采用紧凑横向表格，而不是卡片化列表。 */
+.prototype-page {
+  min-width: 1680px;
+  color: #222;
+}
+
+.prototype-titlebar {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  margin-bottom: 28px;
+  background: #d3d3d3;
+}
+
+.prototype-titlebar h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.prototype-query-panel {
+  display: flex;
+  align-items: end;
+  gap: 28px;
+  margin: 0 16px 20px;
+}
+
+.prototype-field {
+  display: grid;
+  grid-template-columns: auto 197px;
+  gap: 10px;
+  align-items: center;
+}
+
+.prototype-field label {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.prototype-field input,
+.prototype-field select {
+  height: 34px;
+  width: 197px;
+  padding: 0 10px;
+  border: 1px solid #8d8d8d;
+  border-radius: 0;
+  background: #fff;
+}
+
+.prototype-query-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.prototype-button {
+  min-width: 92px;
+  height: 43px;
+  padding: 0 20px;
+  border: 1px solid #8d8d8d;
+  border-radius: 8px;
+  background: #fff;
+  color: #222;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.prototype-table-shell {
+  margin: 0 0 30px 1px;
+  overflow: auto;
+  border: 1px solid #8c8c8c;
+  background: #fff;
+}
+
+.prototype-table {
+  width: 2620px;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.prototype-table th,
+.prototype-table td {
+  height: 90px;
+  padding: 8px 6px;
+  border: 1px solid #8c8c8c;
+  text-align: center;
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.prototype-table th {
+  background: #fff;
+  color: #222;
+  font-weight: 700;
+}
+
+.prototype-table th small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.prototype-table td {
+  height: 98px;
+  font-size: 14px;
+}
+
+.prototype-table .prototype-status,
+.prototype-table .prototype-link {
+  color: #204cff;
+  font-weight: 700;
+}
+
+.prototype-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.prototype-empty {
+  height: 120px !important;
+  color: #777;
+}
+
+.col-serial { width: 86px; }
+.col-payment-id { width: 111px; }
+.col-business-order { width: 103px; }
+.col-payment-request { width: 123px; }
+.col-source { width: 94px; }
+.col-line { width: 90px; }
+.col-external { width: 103px; }
+.col-gateway { width: 86px; }
+.col-channel { width: 86px; }
+.col-type { width: 115px; }
+.col-status { width: 74px; }
+.col-bank { width: 90px; }
+.col-card { width: 90px; }
+.col-code { width: 82px; }
+.col-return-type { width: 82px; }
+.col-parameter { width: 120px; }
+.col-validity { width: 76px; }
+.col-amount { width: 90px; }
+.col-refund-count { width: 74px; }
+.col-refunded { width: 80px; }
+.col-product { width: 123px; }
+.col-user-channel { width: 125px; }
+.col-account { width: 86px; }
+.col-notify { width: 110px; }
+.col-mq { width: 110px; }
+.col-time { width: 90px; }
+.col-user-id { width: 82px; }
+.col-operation { width: 86px; }
+
 .state-banner {
   margin-bottom: 16px;
   padding: 12px 14px;

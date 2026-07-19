@@ -60,6 +60,10 @@ export const paymentLogApi = {
   getList: () => request("/api/payment-logs")
 };
 
+export const paymentRecordApi = {
+  getList: (recordType = "ALL") => request(`/api/payment-records?recordType=${recordType}`)
+};
+
 export const paymentApi = {
   getList: () => request("/api/payments"),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
