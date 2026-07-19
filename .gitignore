@@ -1,8 +1,8 @@
 .DS_Store
 
-systems/*/frontend/node_modules/
-systems/*/frontend/dist/
-systems/*/frontend/.npm-cache/
+systems/*/frontend/*/node_modules/
+systems/*/frontend/*/dist/
+systems/*/frontend/*/.npm-cache/
 
 systems/*/backend/target/
 .idea/

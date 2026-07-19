@@ -20,6 +20,7 @@
 核心文档：
 
 - `docs/整体架构与实现目标.md`
+- `docs/开发排期与提交流程.md`
 - `docs/模块开发交付标准.md`
 - `docs/系统分期建设方案.md`
 - `docs/系统目录总览.md`
@@ -33,6 +34,12 @@
 - `docs`
 - `frontend`
 - `backend`
+
+`payment-core/frontend` 当前已拆分为：
+
+- `admin-web`
+- `app-web`
+- `shared`
 
 ## 系统建设顺序
 

@@ -15,6 +15,15 @@ payment-core
 └── backend
 ```
 
+其中 `frontend` 已拆分为：
+
+```text
+frontend
+├── admin-web
+├── app-web
+└── shared
+```
+
 ## 当前范围
 
 当前已覆盖：
@@ -24,6 +33,10 @@ payment-core
 - 支付单管理
 - 退款单管理入口
 - 服务者结算入口
+
+这些页面当前都归属于：
+
+- `frontend/admin-web`
 
 ## 文档入口
 
