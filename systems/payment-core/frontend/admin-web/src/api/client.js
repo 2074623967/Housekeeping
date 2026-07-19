@@ -1,5 +1,8 @@
-async function request(url) {
-  const response = await fetch(url);
+async function request(url, options = {}) {
+  const response = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options
+  });
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
@@ -21,6 +24,7 @@ export const orderApi = {
 export const paymentApi = {
   getList: () => request("/api/payments"),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
+  prepay: (payload) => request("/api/payments/prepay", { method: "POST", body: JSON.stringify(payload) }),
   query: (paymentOrderId) => request("/api/payments/query", { method: "POST", body: JSON.stringify({ paymentOrderId }) }),
   close: (paymentOrderId) => request("/api/payments/close", { method: "POST", body: JSON.stringify({ paymentOrderId }) }),
   callback: (channel, paymentOrderId) =>

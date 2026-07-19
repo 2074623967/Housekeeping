@@ -3,6 +3,9 @@ async function request(url, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options
   });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
   const payload = await response.json();
   if (payload.code !== "0") {
     throw new Error(payload.message || "Request failed");

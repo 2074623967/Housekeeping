@@ -1,33 +1,40 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 
+const router = useRouter();
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
-const detail = ref(null);
+const actionMessage = ref("");
+const filters = ref({
+  paymentOrderId: "",
+  orderNo: "",
+  paymentMethod: "全部",
+  status: "全部"
+});
 
-async function openDetail(paymentOrderId) {
-  try {
-    detail.value = await paymentApi.getDetail(paymentOrderId);
-  } catch (error) {
-    errorMessage.value = error.message;
-  }
+const filteredItems = computed(() =>
+  items.value.filter((item) => {
+    const matchesPaymentOrderId = !filters.value.paymentOrderId || item.paymentOrderId.includes(filters.value.paymentOrderId.trim());
+    const matchesOrderNo = !filters.value.orderNo || item.orderNo.includes(filters.value.orderNo.trim());
+    const matchesMethod = filters.value.paymentMethod === "全部" || item.paymentMethod === filters.value.paymentMethod;
+    const matchesStatus = filters.value.status === "全部" || item.status === filters.value.status;
+    return matchesPaymentOrderId && matchesOrderNo && matchesMethod && matchesStatus;
+  })
+);
+
+function resetFilters() {
+  filters.value = {
+    paymentOrderId: "",
+    orderNo: "",
+    paymentMethod: "全部",
+    status: "全部"
+  };
 }
 
-async function handleQuery(paymentOrderId) {
-  detail.value = await paymentApi.query(paymentOrderId);
-}
-
-async function handleClose(paymentOrderId) {
-  detail.value = await paymentApi.close(paymentOrderId);
-}
-
-async function handleCallback(paymentOrderId) {
-  detail.value = await paymentApi.callback("wx_jsapi", paymentOrderId);
-}
-
-onMounted(async () => {
+async function refreshList() {
   try {
     items.value = await paymentApi.getList();
   } catch (error) {
@@ -35,7 +42,31 @@ onMounted(async () => {
   } finally {
     isLoading.value = false;
   }
-});
+}
+
+function openDetail(paymentOrderId) {
+  router.push(`/payments/${paymentOrderId}`);
+}
+
+async function handleQuery(paymentOrderId) {
+  await paymentApi.query(paymentOrderId);
+  actionMessage.value = `支付单 ${paymentOrderId} 已发起主动查单。`;
+  await refreshList();
+}
+
+async function handleClose(paymentOrderId) {
+  await paymentApi.close(paymentOrderId);
+  actionMessage.value = `支付单 ${paymentOrderId} 已关闭。`;
+  await refreshList();
+}
+
+async function handleCallback(paymentOrderId) {
+  await paymentApi.callback("wx_jsapi", paymentOrderId);
+  actionMessage.value = `支付单 ${paymentOrderId} 已模拟成功回调。`;
+  await refreshList();
+}
+
+onMounted(refreshList);
 </script>
 
 <template>
@@ -52,43 +83,49 @@ onMounted(async () => {
       <div v-if="errorMessage" class="error-banner">
         支付单数据加载失败：{{ errorMessage }}
       </div>
+      <div v-if="actionMessage" class="state-banner">
+        {{ actionMessage }}
+      </div>
 
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" />
         </div>
         <div class="field">
           <label>支付方式</label>
-          <select>
+          <select v-model="filters.paymentMethod">
             <option>全部</option>
             <option>微信</option>
             <option>支付宝</option>
-            <option>银行卡</option>
+            <option>银行转账</option>
+            <option>待选渠道</option>
           </select>
         </div>
         <div class="field">
           <label>支付状态</label>
-          <select>
+          <select v-model="filters.status">
             <option>全部</option>
             <option>SUCCESS</option>
             <option>WAIT_CALLBACK</option>
             <option>FAIL</option>
+            <option>CLOSED</option>
+            <option>PREPAY_CREATED</option>
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary">查询</button>
-          <button class="button secondary">重置</button>
+          <button class="button primary" @click="refreshList">刷新</button>
+          <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付单数据加载中...</div>
 
-      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付单数据</div>
+      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的支付单数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -107,7 +144,7 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in items" :key="item.paymentOrderId">
+            <tr v-for="item in filteredItems" :key="item.paymentOrderId">
               <td>{{ item.paymentOrderId }}</td>
               <td>{{ item.orderNo }}</td>
               <td>{{ item.customerName }}</td>
@@ -128,37 +165,6 @@ onMounted(async () => {
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div v-if="detail" class="detail-panel">
-        <div class="section-title">
-          <h3>支付单详情</h3>
-          <span class="meta">{{ detail.paymentOrderId }}</span>
-        </div>
-        <div class="detail-grid">
-          <div><strong>预付单号：</strong>{{ detail.prepayOrderNo }}</div>
-          <div><strong>账单号：</strong>{{ detail.billNo }}</div>
-          <div><strong>订单号：</strong>{{ detail.orderNo }}</div>
-          <div><strong>金额：</strong>{{ detail.amount }}</div>
-          <div><strong>方式：</strong>{{ detail.paymentMethod }}</div>
-          <div><strong>渠道：</strong>{{ detail.channel }}</div>
-          <div><strong>状态：</strong>{{ detail.status }}</div>
-          <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
-        </div>
-        <div class="split-panels">
-          <section class="panel mini">
-            <h4>路由记录</h4>
-            <div v-for="item in detail.routeLogs || []" :key="item">{{ item }}</div>
-          </section>
-          <section class="panel mini">
-            <h4>回调日志</h4>
-            <div v-for="item in detail.notifyLogs || []" :key="item">{{ item }}</div>
-          </section>
-        </div>
-        <section class="panel mini">
-          <h4>事件轨迹</h4>
-          <div v-for="item in detail.eventLogs || []" :key="item">{{ item }}</div>
-        </section>
       </div>
     </section>
   </div>

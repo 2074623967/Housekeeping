@@ -28,7 +28,14 @@ async function pay() {
     paymentMethod: selected.value,
     channelCode: selected.value === "微信支付" ? "wx_jsapi" : selected.value === "支付宝" ? "alipay_h5" : "bank_card"
   });
-  router.push(`/result/${next?.cashierStatusType === "success" ? "success" : "pending"}`);
+  router.push({
+    path: "/result/pending",
+    query: {
+      prepayOrderNo: next?.prepayOrderNo,
+      paymentOrderId: next?.paymentOrderId,
+      paymentMethod: selected.value
+    }
+  });
 }
 </script>
 
@@ -52,7 +59,14 @@ async function pay() {
       <div class="panel">
         <h3 class="title">选择支付方式</h3>
         <div class="chips">
-          <button v-for="item in channels" :key="item" class="button secondary" @click="selected = item">{{ item }}</button>
+          <button
+            v-for="item in channels"
+            :key="item"
+            :class="['button', selected === item ? 'primary' : 'secondary']"
+            @click="selected = item"
+          >
+            {{ item }}
+          </button>
         </div>
         <button class="button primary" @click="pay">确认支付</button>
       </div>

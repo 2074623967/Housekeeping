@@ -6,10 +6,15 @@ spring:
     name: home-service-payment-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${HSP_DB_URL:jdbc:mysql://127.0.0.1:3306/housekeeping_payment?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    url: ${HSP_DB_URL:jdbc:mysql://127.0.0.1:3306/housekeeping_payment_core?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
     username: ${HSP_DB_USERNAME:root}
     password: ${HSP_DB_PASSWORD:}
   sql:
     init:
       mode: always
       encoding: UTF-8
+
+mybatis:
+  mapper-locations: classpath:/mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true

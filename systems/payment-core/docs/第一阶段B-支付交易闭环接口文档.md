@@ -7,7 +7,7 @@
 目标：
 
 - 明确支付交易闭环核心接口
-- 为后续 controller / service / repository 开发提供接口基线
+- 为后续 `controller / service / serviceimpl / mapper / mapper.xml / entity` 开发提供接口基线
 
 ## 2. 接口列表
 
@@ -221,5 +221,4 @@
 
 ## 11. 结论
 
-从 `Sunday, July 19, 2026` 开始，第一阶段B的接口已经具备明确边界，后续可以按这份文档继续推进 controller、service、repository 和数据库实现。
-
+从 `Sunday, July 19, 2026` 开始，第一阶段B的接口已经具备明确边界，后续可以按这份文档继续推进 `controller、service、serviceimpl、mapper、mapper.xml、entity` 和数据库实现。
