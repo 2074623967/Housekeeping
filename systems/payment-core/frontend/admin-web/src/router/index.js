@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import MainLayout from "../views/MainLayout.vue";
 import DashboardView from "../views/DashboardView.vue";
 import OrdersView from "../views/OrdersView.vue";
+import BillsView from "../views/BillsView.vue";
 import PaymentsView from "../views/PaymentsView.vue";
 import PaymentDetailView from "../views/PaymentDetailView.vue";
 import RefundsView from "../views/RefundsView.vue";
@@ -15,6 +16,7 @@ const routes = [
       { path: "", redirect: "/dashboard" },
       { path: "dashboard", component: DashboardView },
       { path: "orders", component: OrdersView },
+      { path: "bills", component: BillsView },
       { path: "payments", component: PaymentsView },
       { path: "payments/:paymentOrderId", component: PaymentDetailView },
       { path: "refunds", component: RefundsView },

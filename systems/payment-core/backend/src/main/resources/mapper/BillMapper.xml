@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.BillMapper">
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.BillListItemDTO">
+        SELECT bill_no AS billNo,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               CONCAT('¥', FORMAT(bill_amount, 2)) AS billAmount,
+               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
+               CONCAT('¥', FORMAT(bill_amount - paid_amount, 2)) AS unpaidAmount,
+               bill_status AS billStatus,
+               bill_status_type AS billStatusType,
+               DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_bill
+        ORDER BY created_at DESC
+    </select>
+</mapper>

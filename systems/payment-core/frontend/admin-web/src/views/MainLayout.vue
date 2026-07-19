@@ -8,6 +8,7 @@ const navGroups = [
     title: "交易支付",
     links: [
       { label: "订单中心", to: "/orders" },
+      { label: "账单中心", to: "/bills" },
       { label: "支付单管理", to: "/payments" },
       { label: "退款单管理", to: "/refunds" }
     ]

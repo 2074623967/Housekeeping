@@ -40,6 +40,10 @@ export const orderApi = {
   getList: () => request("/api/orders")
 };
 
+export const billApi = {
+  getList: () => request("/api/bills")
+};
+
 export const paymentApi = {
   getList: () => request("/api/payments"),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
