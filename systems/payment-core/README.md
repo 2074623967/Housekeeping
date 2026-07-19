@@ -30,10 +30,15 @@ frontend
 
 - 工作台
 - 订单中心
+- 账单中心规划
 - 支付单管理
 - 支付单详情
-- 退款单管理入口
-- 服务者结算入口
+- 支付流水查询规划
+- 收银台会话管理规划
+- 支付请求管理规划
+- 支付处理日志规划
+- 退款单联查入口
+- 服务者结算联查入口
 - 用户端收银台
 - 用户端支付结果页
 
@@ -60,11 +65,36 @@ frontend
 - 当前版本并不等于“完整支付平台全量完成”
 - 若要从完整支付系统视角评估当前 `payment-core` 的页面、端类型、模块边界和能力缺口，请优先阅读：
   - [payment-core全量交付差距清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core全量交付差距清单.md)
+  - [payment-core页面矩阵与系统归属清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core页面矩阵与系统归属清单.md)
+
+## 页面边界冻结说明
+
+`payment-core` 后续只继续承接以下两类内容：
+
+1. 正向支付交易主链路
+2. 支付核心运营查询与排障能力
+
+以下能力默认不再继续堆到 `payment-core`，而是拆到独立系统：
+
+- 账户账务
+- 清分清算
+- 结算出款
+- 完整退款闭环
+- 财务对账
+- 保证金
+- 钱包与营销资金
+- 配置中心
+- 风控中台
+
+若要查看完整页面归属与冻结边界，请优先阅读：
+
+- [payment-core页面矩阵与系统归属清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core页面矩阵与系统归属清单.md)
 
 ## 文档入口
 
 - [开发落地说明](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/开发落地说明.md)
 - [payment-core全量交付差距清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core全量交付差距清单.md)
+- [payment-core页面矩阵与系统归属清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core页面矩阵与系统归属清单.md)
 - [一期-支付核心系统接口与数据设计](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/一期-支付核心系统接口与数据设计.md)
 - [一期-支付核心系统前端页面与交互说明](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/一期-支付核心系统前端页面与交互说明.md)
 - [一期-支付核心系统后端详细设计](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/一期-支付核心系统后端详细设计.md)
