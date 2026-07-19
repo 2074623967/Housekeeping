@@ -118,6 +118,31 @@ t_order
 | `payment_method` | 支付方式 |
 | `channel_code` | 渠道编码 |
 | `channel_transaction_no` | 渠道流水号 |
+
+### 4.5 已落地索引
+
+1. `t_payment_order`
+   - `payment_order_id` 唯一索引
+   - `order_no` 索引
+   - `status, created_at` 组合索引
+   - `channel_code, created_at` 组合索引
+2. `t_prepay_order`
+   - `prepay_order_no` 唯一索引
+   - `expires_at, payment_order_id` 组合索引
+   - `order_no, created_at` 组合索引
+3. `t_payment_attempt`
+   - `attempt_no` 唯一索引
+   - `payment_order_id, created_at` 组合索引
+4. `t_payment_notify_log`
+   - `notify_no` 唯一索引
+   - `payment_order_id, created_at` 组合索引
+5. `t_payment_route_record`
+   - `route_no` 唯一索引
+   - `payment_order_id, created_at` 组合索引
+6. `t_payment_event`
+   - `event_no` 唯一索引
+   - `payment_order_id, created_at` 组合索引
+   - `biz_no, created_at` 组合索引
 | `status` | 支付状态 |
 
 ### 4.5 支付尝试表 `t_payment_attempt`

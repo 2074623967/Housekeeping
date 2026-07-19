@@ -52,7 +52,10 @@ CREATE TABLE t_payment_order (
     status_type VARCHAR(32) NOT NULL COMMENT '支付状态样式类型',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_payment_order_id (payment_order_id)
+    UNIQUE KEY uk_payment_order_id (payment_order_id),
+    KEY idx_payment_order_no (order_no),
+    KEY idx_payment_status_created (status, created_at),
+    KEY idx_payment_channel_created (channel_code, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
 
 CREATE TABLE t_bill (
@@ -85,7 +88,9 @@ CREATE TABLE t_prepay_order (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     expires_at DATETIME NOT NULL COMMENT '失效时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_prepay_order_no (prepay_order_no)
+    UNIQUE KEY uk_prepay_order_no (prepay_order_no),
+    KEY idx_prepay_expire_payment (expires_at, payment_order_id),
+    KEY idx_prepay_order_created (order_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预付单表';
 
 CREATE TABLE t_payment_attempt (
@@ -101,7 +106,8 @@ CREATE TABLE t_payment_attempt (
     attempt_status_type VARCHAR(32) NOT NULL COMMENT '尝试状态样式类型',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_attempt_no (attempt_no)
+    UNIQUE KEY uk_attempt_no (attempt_no),
+    KEY idx_attempt_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付尝试表';
 
 CREATE TABLE t_payment_notify_log (
@@ -116,7 +122,8 @@ CREATE TABLE t_payment_notify_log (
     notify_status_type VARCHAR(32) NOT NULL COMMENT '回调状态样式类型',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_notify_no (notify_no)
+    UNIQUE KEY uk_notify_no (notify_no),
+    KEY idx_notify_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调日志表';
 
 CREATE TABLE t_payment_route_record (
@@ -128,7 +135,8 @@ CREATE TABLE t_payment_route_record (
     route_result VARCHAR(128) NOT NULL COMMENT '路由结果描述',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_route_no (route_no)
+    UNIQUE KEY uk_route_no (route_no),
+    KEY idx_route_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由记录表';
 
 CREATE TABLE t_payment_event (
@@ -140,7 +148,9 @@ CREATE TABLE t_payment_event (
     event_payload VARCHAR(2048) NOT NULL COMMENT '事件报文',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_event_no (event_no)
+    UNIQUE KEY uk_event_no (event_no),
+    KEY idx_event_payment_created (payment_order_id, created_at),
+    KEY idx_event_biz_created (biz_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付事件表';
 
 CREATE TABLE t_refund_order (
