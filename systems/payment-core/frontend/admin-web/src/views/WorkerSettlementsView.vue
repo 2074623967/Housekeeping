@@ -1,10 +1,39 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { settlementApi } from "../api/client";
 
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const filters = ref({
+  settlementOrderId: "",
+  workerKeyword: "",
+  settlementStatus: "全部",
+  payoutStatus: "全部"
+});
+
+const filteredItems = computed(() =>
+  items.value.filter((settlementItem) => {
+    const matchesSettlementOrderId = !filters.value.settlementOrderId
+      || settlementItem.settlementOrderId.includes(filters.value.settlementOrderId.trim());
+    const matchesWorkerKeyword = !filters.value.workerKeyword
+      || settlementItem.workerName.includes(filters.value.workerKeyword.trim());
+    const matchesSettlementStatus = filters.value.settlementStatus === "全部"
+      || settlementItem.status === filters.value.settlementStatus;
+    const matchesPayoutStatus = filters.value.payoutStatus === "全部"
+      || settlementItem.payoutStatus === filters.value.payoutStatus;
+    return matchesSettlementOrderId && matchesWorkerKeyword && matchesSettlementStatus && matchesPayoutStatus;
+  })
+);
+
+function resetFilters() {
+  filters.value = {
+    settlementOrderId: "",
+    workerKeyword: "",
+    settlementStatus: "全部",
+    payoutStatus: "全部"
+  };
+}
 
 onMounted(async () => {
   try {
@@ -35,24 +64,24 @@ onMounted(async () => {
       <div class="toolbar">
         <div class="field">
           <label>结算单号</label>
-          <input placeholder="请输入结算单号" />
+          <input v-model="filters.settlementOrderId" placeholder="请输入结算单号" />
         </div>
         <div class="field">
           <label>服务者 ID</label>
-          <input placeholder="请输入服务者 ID" />
+          <input v-model="filters.workerKeyword" placeholder="请输入服务者名称" />
         </div>
         <div class="field">
-          <label>城市</label>
-          <select>
+          <label>出款状态</label>
+          <select v-model="filters.payoutStatus">
             <option>全部</option>
-            <option>上海</option>
-            <option>杭州</option>
-            <option>北京</option>
+            <option>待出款</option>
+            <option>出款中</option>
+            <option>出款成功</option>
           </select>
         </div>
         <div class="field">
           <label>结算状态</label>
-          <select>
+          <select v-model="filters.settlementStatus">
             <option>全部</option>
             <option>待审核</option>
             <option>待出款</option>
@@ -61,13 +90,13 @@ onMounted(async () => {
         </div>
         <div class="toolbar-actions">
           <button class="button primary">查询</button>
-          <button class="button secondary">重置</button>
+          <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">服务者结算数据加载中...</div>
 
-      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的服务者结算数据</div>
+      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的服务者结算数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -86,7 +115,7 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in items" :key="item.settlementOrderId">
+            <tr v-for="item in filteredItems" :key="item.settlementOrderId">
               <td>{{ item.settlementOrderId }}</td>
               <td>{{ item.workerName }}</td>
               <td>{{ item.period }}</td>
