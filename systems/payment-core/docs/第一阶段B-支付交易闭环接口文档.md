@@ -104,8 +104,11 @@
 ```json
 {
   "prepayOrderNo": "PRE1752912345678",
-    "paymentMethod": "微信支付",
-    "channelCode": "WX_H5"
+  "paymentMethod": "微信支付",
+  "channelCode": "WX_H5",
+  "terminal": "APP_WEB",
+  "clientIp": "127.0.0.1",
+  "idempotencyKey": "PRE1752912345678|微信支付|WX_H5"
 }
 ```
 
@@ -153,7 +156,8 @@
 幂等说明：
 
 1. 当同一预付单重复提交时，如果支付单已进入 `WAIT_CALLBACK`、`SUCCESS` 或 `CLOSED`，接口直接返回当前预付单信息。
-2. 这样可以避免按钮重复点击导致重复路由、重复尝试和重复待回调日志。
+2. 如果幂等键已存在，接口同样直接返回当前预付单信息。
+3. 这样可以避免按钮重复点击、浏览器重试和接口重放导致重复路由、重复尝试和重复待回调日志。
 
 ## 6. 模拟回调
 
@@ -168,6 +172,21 @@
 请求示例：
 
 ```json
+{
+  "paymentOrderId": "PAY1752912340001",
+  "channelTransactionNo": "WX202607190001",
+  "tradeStatus": "SUCCESS",
+  "timestamp": "1752912930",
+  "nonce": "N202607190001",
+  "signature": "base64-signature"
+}
+```
+
+验签说明：
+
+1. `timestamp` 必须在允许时间窗内
+2. `nonce` 必须未被重复使用
+3. 签名串按 `channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce` 组织
 {
   "paymentOrderId": "PAY1752912340001",
   "tradeStatus": "SUCCESS",

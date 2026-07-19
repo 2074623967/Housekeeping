@@ -17,6 +17,7 @@ import com.abc123.hsp.service.PaymentChannelQueryService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
+import java.util.StringJoiner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -135,9 +136,16 @@ public class PaymentServiceImpl implements PaymentService {
             // 收银台重复点击提交按钮时直接复用当前支付状态，避免重复写支付尝试、路由和待回调日志。
             return currentPrepay;
         }
+        String terminal = StringUtils.hasText(request.getTerminal()) ? request.getTerminal().trim() : "UNKNOWN";
+        String clientIp = StringUtils.hasText(request.getClientIp()) ? request.getClientIp().trim() : "UNKNOWN";
         String resolvedChannelCode = paymentChannelRoutingService.resolve(
                 request.getPaymentMethod(),
                 request.getChannelCode());
+        String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
+        if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
+            // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
+            return currentPrepay;
+        }
         // 收银台提交后，先把预付单状态收口，再补齐支付单上的支付方式和渠道。
         paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
         paymentMapper.updatePaymentMethodAndChannel(
@@ -158,7 +166,10 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentOrderId,
                 resolvedChannelCode,
                 request.getPaymentMethod(),
-                "{\"method\":\"" + request.getPaymentMethod() + "\",\"channelCode\":\"" + request.getChannelCode() + "\"}",
+                terminal,
+                clientIp,
+                idempotencyKey,
+                buildSubmitRequestPayload(request, terminal, clientIp, idempotencyKey, resolvedChannelCode),
                 "{\"code\":\"SUCCESS\"}",
                 "处理中",
                 "info"
@@ -270,6 +281,38 @@ public class PaymentServiceImpl implements PaymentService {
         paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.insertEvent("EVT" + System.currentTimeMillis(), "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), "{\"close\":\"manual\"}");
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+    }
+
+    /**
+     * 幂等键优先使用前端显式透传值，未透传时退化为预付单+支付方式+渠道的组合键。
+     */
+    private String buildIdempotencyKey(
+            PaymentSubmitRequestDTO request,
+            PrepayOrderDTO currentPrepay,
+            String resolvedChannelCode) {
+        if (StringUtils.hasText(request.getIdempotencyKey())) {
+            return request.getIdempotencyKey().trim();
+        }
+        return currentPrepay.getPrepayOrderNo() + "|" + request.getPaymentMethod() + "|" + resolvedChannelCode;
+    }
+
+    /**
+     * 统一请求留痕口径，便于在支付请求管理页直接复盘一次发起请求。
+     */
+    private String buildSubmitRequestPayload(
+            PaymentSubmitRequestDTO request,
+            String terminal,
+            String clientIp,
+            String idempotencyKey,
+            String resolvedChannelCode) {
+        return new StringJoiner(",", "{", "}")
+                .add("\"method\":\"" + request.getPaymentMethod() + "\"")
+                .add("\"channelCode\":\"" + request.getChannelCode() + "\"")
+                .add("\"resolvedChannelCode\":\"" + resolvedChannelCode + "\"")
+                .add("\"terminal\":\"" + terminal + "\"")
+                .add("\"clientIp\":\"" + clientIp + "\"")
+                .add("\"idempotencyKey\":\"" + idempotencyKey + "\"")
+                .toString();
     }
 
     private PaymentDetailDTO enrichDetail(PaymentDetailDTO detail) {

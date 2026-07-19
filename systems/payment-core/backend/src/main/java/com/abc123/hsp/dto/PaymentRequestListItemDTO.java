@@ -22,6 +22,12 @@ public class PaymentRequestListItemDTO {
     private String channelCode;
     /** 路由结果。 */
     private String routeResult;
+    /** 发起终端。 */
+    private String terminal;
+    /** 客户端 IP。 */
+    private String clientIp;
+    /** 幂等键。 */
+    private String idempotencyKey;
     /** 请求状态。 */
     private String requestStatus;
     /** 请求状态样式。 */

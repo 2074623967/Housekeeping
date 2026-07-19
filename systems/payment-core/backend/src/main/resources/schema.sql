@@ -100,6 +100,9 @@ CREATE TABLE t_payment_attempt (
     payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
     payment_method VARCHAR(32) NOT NULL COMMENT '支付方式',
+    terminal VARCHAR(32) NOT NULL COMMENT '发起终端',
+    client_ip VARCHAR(64) NOT NULL COMMENT '客户端IP',
+    idempotency_key VARCHAR(128) NOT NULL COMMENT '幂等键',
     request_payload VARCHAR(2048) NOT NULL COMMENT '请求报文',
     response_payload VARCHAR(2048) DEFAULT NULL COMMENT '响应报文',
     attempt_status VARCHAR(32) NOT NULL COMMENT '尝试状态',
@@ -107,6 +110,7 @@ CREATE TABLE t_payment_attempt (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_attempt_no (attempt_no),
+    UNIQUE KEY uk_attempt_idempotency (idempotency_key),
     KEY idx_attempt_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付尝试表';
 

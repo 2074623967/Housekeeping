@@ -127,6 +127,9 @@ onMounted(loadPaymentRequests);
               <th>支付方式</th>
               <th>渠道编码</th>
               <th>路由结果</th>
+              <th>终端</th>
+              <th>客户端 IP</th>
+              <th>幂等键</th>
               <th>请求状态</th>
               <th>创建时间</th>
               <th>操作</th>
@@ -142,6 +145,9 @@ onMounted(loadPaymentRequests);
                 <td>{{ item.paymentMethod }}</td>
                 <td>{{ item.channelCode }}</td>
                 <td>{{ item.routeResult || "-" }}</td>
+                <td>{{ item.terminal || "-" }}</td>
+                <td>{{ item.clientIp || "-" }}</td>
+                <td>{{ item.idempotencyKey || "-" }}</td>
                 <td><span :class="['badge', item.requestStatusType]">{{ item.requestStatus }}</span></td>
                 <td>{{ item.createdAt }}</td>
                 <td>
@@ -151,7 +157,7 @@ onMounted(loadPaymentRequests);
                 </td>
               </tr>
               <tr v-if="expandedRequestNo === item.requestNo">
-                <td colspan="10">
+                <td colspan="13">
                   <div class="payload-grid">
                     <div>
                       <strong>请求报文</strong>

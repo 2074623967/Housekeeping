@@ -227,7 +227,13 @@
     </insert>
 
     <insert id="insertPaymentAttempt">
-        INSERT INTO t_payment_attempt(attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, request_payload, response_payload, attempt_status, attempt_status_type, created_at)
-        VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
+        INSERT INTO t_payment_attempt(attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at)
+        VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
     </insert>
+
+    <select id="existsPaymentAttemptByIdempotencyKey" resultType="boolean">
+        SELECT COUNT(1) &gt; 0
+        FROM t_payment_attempt
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
 </mapper>

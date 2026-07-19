@@ -12,12 +12,21 @@ const message = ref("");
 const selectedPaymentMethod = ref("微信支付");
 const submitLoading = ref(false);
 const refreshLoading = ref(false);
+const idempotencyKey = ref("");
+
+function generateIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `IDEMP-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 async function loadCashier() {
   loading.value = true;
   message.value = "";
   try {
     cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
+    idempotencyKey.value = generateIdempotencyKey();
     if (cashier.value?.channels?.length > 0) {
       selectedPaymentMethod.value = cashier.value.channels[0];
     }
@@ -53,7 +62,9 @@ async function pay() {
     const submitResult = await paymentApi.submit({
       prepayOrderNo: cashier.value.prepayOrderNo,
       paymentMethod: selectedPaymentMethod.value,
-      channelCode: resolvePaymentChannelCode(selectedPaymentMethod.value)
+      channelCode: resolvePaymentChannelCode(selectedPaymentMethod.value),
+      terminal: "APP_WEB",
+      idempotencyKey: idempotencyKey.value
     });
     router.push({
       path: `/payment-result/${submitResult?.paymentOrderId}`,
@@ -118,6 +129,7 @@ async function pay() {
         <div class="row"><span>状态</span><span>{{ cashier.status }}</span></div>
         <div class="row"><span>到期时间</span><span>{{ cashier.expiresAt }}</span></div>
         <div class="row"><span>可选渠道</span><span>{{ channels.join(" / ") || "-" }}</span></div>
+        <div class="row"><span>幂等键</span><span>{{ idempotencyKey || "-" }}</span></div>
       </div>
     </div>
   </div>

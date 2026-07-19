@@ -204,8 +204,16 @@ public interface PaymentMapper {
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
             @Param("paymentMethod") String paymentMethod,
+            @Param("terminal") String terminal,
+            @Param("clientIp") String clientIp,
+            @Param("idempotencyKey") String idempotencyKey,
             @Param("requestPayload") String requestPayload,
             @Param("responsePayload") String responsePayload,
             @Param("attemptStatus") String attemptStatus,
             @Param("attemptStatusType") String attemptStatusType);
+
+    /**
+     * 判断幂等键对应的支付尝试是否已经存在。
+     */
+    boolean existsPaymentAttemptByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 }
