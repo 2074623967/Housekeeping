@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentFlowMapper">
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentFlowListItemDTO">
+        SELECT flow_no AS flowNo,
+               payment_order_id AS paymentOrderId,
+               order_no AS orderNo,
+               prepay_order_no AS prepayOrderNo,
+               flow_type AS flowType,
+               flow_type_tag AS flowTypeTag,
+               channel_code AS channelCode,
+               business_status AS businessStatus,
+               business_status_type AS businessStatusType,
+               summary,
+               created_at AS createdAt
+        FROM (
+            SELECT attempt_no AS flow_no,
+                   pa.payment_order_id,
+                   po.order_no,
+                   pa.prepay_order_no,
+                   '支付尝试' AS flow_type,
+                   'info' AS flow_type_tag,
+                   pa.channel_code,
+                   pa.attempt_status AS business_status,
+                   pa.attempt_status_type AS business_status_type,
+                   CONCAT('方式=', pa.payment_method, ' / 请求=', pa.request_payload) AS summary,
+                   DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_attempt pa
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+
+            UNION ALL
+
+            SELECT notify_no AS flow_no,
+                   pnl.payment_order_id,
+                   po.order_no,
+                   latest_pr.prepay_order_no,
+                   '渠道回调' AS flow_type,
+                   'warn' AS flow_type_tag,
+                   pnl.channel_code,
+                   pnl.notify_status AS business_status,
+                   pnl.notify_status_type AS business_status_type,
+                   CONCAT('类型=', pnl.notify_type, ' / 报文=', pnl.notify_payload) AS summary,
+                   DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_notify_log pnl
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
+                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
+                        SELECT pr.id
+                        FROM t_prepay_order pr
+                        WHERE pr.payment_order_id = pnl.payment_order_id
+                        ORDER BY pr.created_at DESC, pr.id DESC
+                        LIMIT 1
+                    )
+
+            UNION ALL
+
+            SELECT route_no AS flow_no,
+                   prr.payment_order_id,
+                   po.order_no,
+                   latest_pr.prepay_order_no,
+                   '路由记录' AS flow_type,
+                   'info' AS flow_type_tag,
+                   prr.channel_code,
+                   prr.route_result AS business_status,
+                   'info' AS business_status_type,
+                   CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
+                   DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_route_record prr
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
+                        SELECT pr.id
+                        FROM t_prepay_order pr
+                        WHERE pr.payment_order_id = prr.payment_order_id
+                        ORDER BY pr.created_at DESC, pr.id DESC
+                        LIMIT 1
+                    )
+
+            UNION ALL
+
+            SELECT event_no AS flow_no,
+                   pe.payment_order_id,
+                   pe.biz_no AS order_no,
+                   latest_pr.prepay_order_no,
+                   '业务事件' AS flow_type,
+                   'success' AS flow_type_tag,
+                   po.channel_code,
+                   pe.event_type AS business_status,
+                   CASE
+                       WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
+                       WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
+                       ELSE 'info'
+                   END AS business_status_type,
+                   CONCAT('事件=', pe.event_type, ' / 载荷=', pe.event_payload) AS summary,
+                   DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+            FROM t_payment_event pe
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
+                     LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
+                        SELECT pr.id
+                        FROM t_prepay_order pr
+                        WHERE pr.payment_order_id = pe.payment_order_id
+                        ORDER BY pr.created_at DESC, pr.id DESC
+                        LIMIT 1
+                    )
+        ) payment_flow_union
+        ORDER BY created_at DESC
+    </select>
+</mapper>

@@ -236,6 +236,12 @@ th {
   background: #f8fafc;
 }
 
+.flow-summary-cell {
+  min-width: 360px;
+  white-space: normal;
+  line-height: 1.6;
+}
+
 .section-title {
   display: flex;
   justify-content: space-between;
