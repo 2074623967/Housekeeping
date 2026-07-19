@@ -150,6 +150,15 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             return null;
         }
+        // 已经成功或关闭的支付单不允许被迟到回调重新打开，保证回调幂等和状态单向收敛。
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
+                || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+            return enrichDetail(detail);
+        }
+        if (!StringUtils.hasText(request.getTradeStatus())
+                || !StringUtils.hasText(request.getChannelTransactionNo())) {
+            throw new IllegalArgumentException("tradeStatus and channelTransactionNo are required");
+        }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
         paymentMapper.insertNotifyLog(

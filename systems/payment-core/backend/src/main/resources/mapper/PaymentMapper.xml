@@ -19,6 +19,18 @@
         ORDER BY p.created_at DESC
     </select>
 
+    <select id="findExpiredPayments" resultType="com.abc123.hsp.dto.ExpiredPaymentDTO">
+        SELECT p.payment_order_id AS paymentOrderId,
+               p.order_no AS orderNo,
+               p.channel_transaction_no AS channelTransactionNo
+        FROM t_payment_order p
+                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        WHERE p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+          AND pr.expires_at &lt; NOW()
+        GROUP BY p.payment_order_id, p.order_no, p.channel_transaction_no
+        ORDER BY MIN(pr.expires_at)
+    </select>
+
     <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentDetailDTO">
         SELECT p.payment_order_id AS paymentOrderId,
                pr.prepay_order_no AS prepayOrderNo,

@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.CashierPageDTO;
+import com.abc123.hsp.dto.ExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
@@ -17,6 +18,11 @@ public interface PaymentMapper {
      * 查询支付单列表。
      */
     List<PaymentListItemDTO> findAll();
+
+    /**
+     * 查询已经超过收银台失效时间且仍未收口的支付单。
+     */
+    List<ExpiredPaymentDTO> findExpiredPayments();
 
     /**
      * 查询支付单详情。
