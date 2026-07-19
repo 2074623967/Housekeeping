@@ -61,7 +61,24 @@ export const paymentLogApi = {
 };
 
 export const paymentRecordApi = {
-  getList: (recordType = "ALL") => request(`/api/payment-records?recordType=${recordType}`)
+  getList: ({
+    recordType = "ALL",
+    userId = "",
+    businessOrderNo = "",
+    paymentType = "",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      recordType,
+      userId,
+      businessOrderNo,
+      paymentType,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-records?${params.toString()}`);
+  }
 };
 
 export const paymentApi = {

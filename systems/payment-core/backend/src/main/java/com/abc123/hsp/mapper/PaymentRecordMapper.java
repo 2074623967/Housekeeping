@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -15,5 +16,10 @@ public interface PaymentRecordMapper {
      * @param recordType 记录类型，ALL、WECHAT、BANK_CARD
      * @return 收款记录列表
      */
-    List<PaymentRecordRowDTO> findAll(@Param("recordType") String recordType);
+    List<PaymentRecordRowDTO> findAll(PaymentRecordQueryDTO query);
+
+    /**
+     * 统计符合条件的收款记录总数。
+     */
+    long count(PaymentRecordQueryDTO query);
 }

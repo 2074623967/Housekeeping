@@ -22,6 +22,7 @@
 | `/api/payments/query` | `POST` | 主动查单 |
 | `/api/payments/close` | `POST` | 关闭支付单 |
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
+| `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 
 ## 3. 创建预付单
 
@@ -238,6 +239,34 @@
 6. 事件轨迹
 
 ## 10. 错误与边界说明
+
+## 10.1 收款记录分页查询
+
+接口：`GET /api/payment-records`
+
+查询参数：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `recordType` | 否 | `ALL`、`WECHAT`、`BANK_CARD`，默认 `ALL` |
+| `userId` | 否 | 用户 ID 模糊查询 |
+| `businessOrderNo` | 否 | 业务订单号模糊查询 |
+| `paymentType` | 否 | 支付类型，例如 `消费支付` |
+| `pageNo` | 否 | 页码，从 1 开始，默认 1 |
+| `pageSize` | 否 | 每页条数，默认 20，最大 100 |
+
+返回结构：
+
+```json
+{
+  "items": [],
+  "total": 3,
+  "pageNo": 1,
+  "pageSize": 20
+}
+```
+
+## 10.2 错误与边界说明
 
 当前版本重点是开发与联调基线，尚未完整沉淀生产级错误码体系。建议后续统一补充：
 

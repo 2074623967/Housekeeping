@@ -464,6 +464,29 @@ th {
   color: #777;
 }
 
+.prototype-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  margin: -16px 0 20px;
+  color: #555;
+  font-size: 13px;
+}
+
+.prototype-pagination button {
+  padding: 5px 12px;
+  border: 1px solid #8d8d8d;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.prototype-pagination button:disabled {
+  color: #aaa;
+  cursor: not-allowed;
+}
+
 .col-serial { width: 86px; }
 .col-payment-id { width: 111px; }
 .col-business-order { width: 103px; }

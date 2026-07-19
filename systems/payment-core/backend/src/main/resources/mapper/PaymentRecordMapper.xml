@@ -73,7 +73,40 @@
             <if test="recordType == 'BANK_CARD'">
                 (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
             </if>
+            <if test="userId != null and userId != ''">
+                AND p.customer_name LIKE CONCAT('%', #{userId}, '%')
+            </if>
+            <if test="businessOrderNo != null and businessOrderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{businessOrderNo}, '%')
+            </if>
+            <if test="paymentType != null and paymentType != ''">
+                AND '消费支付' = #{paymentType}
+            </if>
         </where>
         ORDER BY p.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_order p
+        <where>
+            <if test="recordType == 'WECHAT'">
+                (p.channel_code LIKE 'wx%' OR p.payment_method = '微信'
+                 OR p.channel_code LIKE 'alipay%' OR p.payment_method = '支付宝')
+            </if>
+            <if test="recordType == 'BANK_CARD'">
+                (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
+            </if>
+            <if test="userId != null and userId != ''">
+                AND p.customer_name LIKE CONCAT('%', #{userId}, '%')
+            </if>
+            <if test="businessOrderNo != null and businessOrderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{businessOrderNo}, '%')
+            </if>
+            <if test="paymentType != null and paymentType != ''">
+                AND '消费支付' = #{paymentType}
+            </if>
+        </where>
     </select>
 </mapper>

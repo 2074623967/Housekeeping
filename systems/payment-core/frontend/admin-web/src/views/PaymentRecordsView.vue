@@ -6,6 +6,9 @@ import { paymentRecordApi } from "../api/client";
 const route = useRoute();
 const router = useRouter();
 const rows = ref([]);
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const isLoading = ref(false);
 const errorMessage = ref("");
 const filters = ref({
@@ -52,21 +55,18 @@ const columns = [
   { key: "userId", label: "用户ID", className: "col-user-id" }
 ];
 
-const visibleRows = computed(() => rows.value.filter((row) => {
-  const userMatches = !filters.value.userId
-    || row.userId.toLowerCase().includes(filters.value.userId.trim().toLowerCase());
-  const orderMatches = !filters.value.businessOrderNo
-    || row.businessOrderNo.toLowerCase().includes(filters.value.businessOrderNo.trim().toLowerCase());
-  const typeMatches = !filters.value.paymentType
-    || row.paymentType === filters.value.paymentType;
-  return userMatches && orderMatches && typeMatches;
-}));
-
 async function loadRows() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    rows.value = await paymentRecordApi.getList(pageConfig.value.recordType);
+    const result = await paymentRecordApi.getList({
+      recordType: pageConfig.value.recordType,
+      ...filters.value,
+      pageNo: pageNo.value,
+      pageSize
+    });
+    rows.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -76,6 +76,16 @@ async function loadRows() {
 
 function resetFilters() {
   filters.value = { userId: "", businessOrderNo: "", paymentType: "" };
+  pageNo.value = 1;
+  loadRows();
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadRows();
 }
 
 function openPayment(row) {
@@ -133,7 +143,7 @@ onMounted(loadRows);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in visibleRows" :key="row.paymentOrderId">
+          <tr v-for="row in rows" :key="row.paymentOrderId">
             <td v-for="column in columns" :key="column.key" :class="column.className">
               <span :class="{ 'prototype-status': column.key === 'paymentStatus' }">
                 {{ formatCell(row, column) }}
@@ -143,11 +153,23 @@ onMounted(loadRows);
               <button class="prototype-link" type="button" @click="openPayment(row)">支付记录</button>
             </td>
           </tr>
-          <tr v-if="!visibleRows.length">
+          <tr v-if="!rows.length">
             <td class="prototype-empty" :colspan="columns.length + 1">暂无符合条件的支付记录</td>
           </tr>
         </tbody>
       </table>
+    </div>
+    <div v-if="total > pageSize" class="prototype-pagination">
+      <span>共 {{ total }} 条</span>
+      <button type="button" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+      <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+      <button
+        type="button"
+        :disabled="pageNo >= Math.ceil(total / pageSize)"
+        @click="goToPage(pageNo + 1)"
+      >
+        下一页
+      </button>
     </div>
   </div>
 </template>
