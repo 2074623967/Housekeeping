@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface PaymentLogService {
      *
      * @return 支付处理日志列表
      */
-    List<PaymentLogListItemDTO> list();
+    List<PaymentLogListItemDTO> list(PaymentLogQueryDTO query);
 }

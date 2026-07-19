@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
 import java.util.List;
@@ -19,7 +20,8 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     }
 
     @Override
-    public List<PaymentLogListItemDTO> list() {
-        return paymentLogMapper.findAll();
+    public List<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
+        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        return paymentLogMapper.findAll(query);
     }
 }

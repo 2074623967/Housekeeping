@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { paymentLogApi } from "../api/client";
 
 const items = ref([]);
@@ -11,32 +11,28 @@ const filters = ref({
   logLevel: "全部"
 });
 
-const filteredItems = computed(() =>
-  items.value.filter((logItem) => {
-    const normalizedPaymentOrderId = filters.value.paymentOrderId.trim();
-    const matchesPaymentOrderId = !normalizedPaymentOrderId
-      || logItem.paymentOrderId.includes(normalizedPaymentOrderId);
-    const matchesStage = filters.value.processStage === "全部"
-      || logItem.processStage === filters.value.processStage;
-    const matchesLevel = filters.value.logLevel === "全部"
-      || logItem.logLevel === filters.value.logLevel;
-    return matchesPaymentOrderId && matchesStage && matchesLevel;
-  })
-);
-
 function resetFilters() {
   filters.value = {
     paymentOrderId: "",
     processStage: "全部",
     logLevel: "全部"
   };
+  loadPaymentLogs();
+}
+
+function applyFilters() {
+  loadPaymentLogs();
 }
 
 async function loadPaymentLogs() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await paymentLogApi.getList();
+    items.value = await paymentLogApi.getList({
+      paymentOrderId: filters.value.paymentOrderId,
+      processStage: filters.value.processStage,
+      logLevel: filters.value.logLevel
+    });
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -88,17 +84,17 @@ onMounted(loadPaymentLogs);
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="当前聚合支付处理节点日志，生产环境需接入检索和告警平台" disabled />
+          <input value="当前已接入后端筛选，生产环境需接入检索和告警平台" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadPaymentLogs">刷新</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付处理日志加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的支付处理日志</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付处理日志</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -115,7 +111,7 @@ onMounted(loadPaymentLogs);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.logNo">
+            <tr v-for="item in items" :key="item.logNo">
               <td>{{ item.logNo }}</td>
               <td>{{ item.paymentOrderId }}</td>
               <td>{{ item.orderNo }}</td>

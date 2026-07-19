@@ -72,7 +72,18 @@ export const paymentRequestApi = {
 };
 
 export const paymentLogApi = {
-  getList: () => request("/api/payment-logs")
+  getList: ({
+    paymentOrderId = "",
+    processStage = "全部",
+    logLevel = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      processStage,
+      logLevel
+    });
+    return request(`/api/payment-logs?${params.toString()}`);
+  }
 };
 
 export const paymentRecordApi = {

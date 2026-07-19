@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface PaymentLogMapper {
      *
      * @return 支付处理日志列表
      */
-    List<PaymentLogListItemDTO> findAll();
+    List<PaymentLogListItemDTO> findAll(PaymentLogQueryDTO query);
 }
