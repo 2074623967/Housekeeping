@@ -19,7 +19,19 @@ export const orderApi = {
 };
 
 export const paymentApi = {
-  getList: () => request("/api/payments")
+  getList: () => request("/api/payments"),
+  getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
+  query: (paymentOrderId) => request("/api/payments/query", { method: "POST", body: JSON.stringify({ paymentOrderId }) }),
+  close: (paymentOrderId) => request("/api/payments/close", { method: "POST", body: JSON.stringify({ paymentOrderId }) }),
+  callback: (channel, paymentOrderId) =>
+    request(`/api/payments/callback/${channel}`, {
+      method: "POST",
+      body: JSON.stringify({
+        paymentOrderId,
+        channelTransactionNo: `SIM${Date.now()}`,
+        tradeStatus: "SUCCESS"
+      })
+    })
 };
 
 export const refundApi = {

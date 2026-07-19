@@ -31,6 +31,7 @@
 `payment-core` 第一阶段B 关键文档：
 
 - `systems/payment-core/docs/第一阶段B-支付交易闭环设计.md`
+- `systems/payment-core/docs/第一阶段B-支付交易闭环需求清单.md`
 - `systems/payment-core/docs/第一阶段B-支付交易闭环数据库设计.md`
 - `systems/payment-core/docs/第一阶段B-支付交易闭环接口文档.md`
 

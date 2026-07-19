@@ -14,6 +14,36 @@ INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, amount, 
 ('PAY202607190002', 'ORD202607190002', '王先生', 2000.00, '支付宝', 'alipay_h5', 'ALI77665544', 'WAIT_CALLBACK', 'warn', '2026-07-19 10:03:01'),
 ('PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 3600.00, '银行转账', 'offline_bank', 'BANK332211', 'SUCCESS', 'success', '2026-07-18 18:41:09');
 
+INSERT INTO t_bill (bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at) VALUES
+('BILL202607190001', 'ORD202607190001', '张女士', 268.00, 268.00, '已支付', 'success', '2026-07-20 23:59:59', '2026-07-19 09:20:35'),
+('BILL202607190002', 'ORD202607190002', '王先生', 8800.00, 2000.00, '部分支付', 'warn', '2026-07-21 23:59:59', '2026-07-19 10:02:51'),
+('BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 3600.00, '已结清', 'success', '2026-07-19 23:59:59', '2026-07-18 18:40:18');
+
+INSERT INTO t_prepay_order (prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, created_at, expires_at) VALUES
+('PRE202607190001', 'BILL202607190001', 'ORD202607190001', '张女士', 268.00, 'H5', '家政服务收银台', '待支付', 'warn', 'PAY202607190001', '2026-07-19 09:20:58', '2026-07-19 10:20:58'),
+('PRE202607190002', 'BILL202607190002', 'ORD202607190002', '王先生', 6800.00, 'H5', '家政服务收银台', '支付中', 'info', 'PAY202607190002', '2026-07-19 10:03:00', '2026-07-19 11:03:00'),
+('PRE202607180118', 'BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 'PC', '企业客户收银台', '已完成', 'success', 'PAY202607180074', '2026-07-18 18:40:52', '2026-07-18 19:40:52');
+
+INSERT INTO t_payment_attempt (attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, request_payload, response_payload, attempt_status, attempt_status_type, created_at) VALUES
+('ATT202607190001', 'PRE202607190001', 'PAY202607190001', 'wx_jsapi', '微信', '{"scene":"H5","amount":268.00}', '{"payUrl":"https://pay.example.com/wx/1"}', '成功', 'success', '2026-07-19 09:21:10'),
+('ATT202607190002', 'PRE202607190002', 'PAY202607190002', 'alipay_h5', '支付宝', '{"scene":"H5","amount":6800.00}', '{"payUrl":"https://pay.example.com/ali/2"}', '等待回调', 'warn', '2026-07-19 10:03:11'),
+('ATT202607180074', 'PRE202607180118', 'PAY202607180074', 'offline_bank', '银行转账', '{"scene":"PC","amount":3600.00}', '{"bankNo":"BANK332211"}', '成功', 'success', '2026-07-18 18:41:11');
+
+INSERT INTO t_payment_notify_log (notify_no, payment_order_id, channel_code, notify_type, notify_payload, notify_result, notify_status, notify_status_type, created_at) VALUES
+('NTF202607190001', 'PAY202607190001', 'wx_jsapi', 'SUCCESS', '{"tradeState":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-19 09:21:22'),
+('NTF202607190002', 'PAY202607190002', 'alipay_h5', 'WAITING', '{"tradeStatus":"WAIT_BUYER_PAY"}', NULL, '待处理', 'warn', '2026-07-19 10:03:18'),
+('NTF202607180074', 'PAY202607180074', 'offline_bank', 'SUCCESS', '{"status":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-18 18:41:20');
+
+INSERT INTO t_payment_route_record (route_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES
+('RTR202607190001', 'PAY202607190001', 'wx_jsapi', 'customer_channel=wechat', '微信JSAPI', '2026-07-19 09:20:59'),
+('RTR202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
+('RTR202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
+
+INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, event_payload, created_at) VALUES
+('EVT202607190001', 'PAYMENT_SUCCESS', 'PAY202607190001', 'ORD202607190001', '{"amount":268.00}', '2026-07-19 09:21:23'),
+('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', '{"amount":6800.00}', '2026-07-19 10:03:19'),
+('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', '{"amount":3600.00}', '2026-07-18 18:41:21');
+
 INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, status, status_type, applied_at, success_at) VALUES
 ('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
 ('REF202607180019', 'PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),

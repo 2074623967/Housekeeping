@@ -1,4 +1,10 @@
 DROP TABLE IF EXISTS t_dashboard_card;
+DROP TABLE IF EXISTS t_payment_event;
+DROP TABLE IF EXISTS t_payment_route_record;
+DROP TABLE IF EXISTS t_payment_notify_log;
+DROP TABLE IF EXISTS t_payment_attempt;
+DROP TABLE IF EXISTS t_prepay_order;
+DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_order;
@@ -48,6 +54,94 @@ CREATE TABLE t_payment_order (
     PRIMARY KEY (id),
     UNIQUE KEY uk_payment_order_id (payment_order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
+
+CREATE TABLE t_bill (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    bill_no VARCHAR(64) NOT NULL,
+    order_no VARCHAR(64) NOT NULL,
+    customer_name VARCHAR(128) NOT NULL,
+    bill_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    paid_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    bill_status VARCHAR(32) NOT NULL,
+    bill_status_type VARCHAR(32) NOT NULL,
+    due_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_bill_no (bill_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账单表';
+
+CREATE TABLE t_prepay_order (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    prepay_order_no VARCHAR(64) NOT NULL,
+    bill_no VARCHAR(64) NOT NULL,
+    order_no VARCHAR(64) NOT NULL,
+    customer_name VARCHAR(128) NOT NULL,
+    amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    pay_scene VARCHAR(32) NOT NULL,
+    cashier_title VARCHAR(128) NOT NULL,
+    cashier_status VARCHAR(32) NOT NULL,
+    cashier_status_type VARCHAR(32) NOT NULL,
+    payment_order_id VARCHAR(64) DEFAULT NULL,
+    created_at DATETIME NOT NULL,
+    expires_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_prepay_order_no (prepay_order_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预付单表';
+
+CREATE TABLE t_payment_attempt (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    attempt_no VARCHAR(64) NOT NULL,
+    prepay_order_no VARCHAR(64) NOT NULL,
+    payment_order_id VARCHAR(64) NOT NULL,
+    channel_code VARCHAR(64) NOT NULL,
+    payment_method VARCHAR(32) NOT NULL,
+    request_payload VARCHAR(2048) NOT NULL,
+    response_payload VARCHAR(2048) DEFAULT NULL,
+    attempt_status VARCHAR(32) NOT NULL,
+    attempt_status_type VARCHAR(32) NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_attempt_no (attempt_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付尝试表';
+
+CREATE TABLE t_payment_notify_log (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    notify_no VARCHAR(64) NOT NULL,
+    payment_order_id VARCHAR(64) NOT NULL,
+    channel_code VARCHAR(64) NOT NULL,
+    notify_type VARCHAR(32) NOT NULL,
+    notify_payload VARCHAR(2048) NOT NULL,
+    notify_result VARCHAR(2048) DEFAULT NULL,
+    notify_status VARCHAR(32) NOT NULL,
+    notify_status_type VARCHAR(32) NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_notify_no (notify_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调日志表';
+
+CREATE TABLE t_payment_route_record (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    route_no VARCHAR(64) NOT NULL,
+    payment_order_id VARCHAR(64) NOT NULL,
+    channel_code VARCHAR(64) NOT NULL,
+    route_rule VARCHAR(128) NOT NULL,
+    route_result VARCHAR(128) NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_route_no (route_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由记录表';
+
+CREATE TABLE t_payment_event (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    event_no VARCHAR(64) NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    payment_order_id VARCHAR(64) NOT NULL,
+    biz_no VARCHAR(64) NOT NULL,
+    event_payload VARCHAR(2048) NOT NULL,
+    created_at DATETIME NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_event_no (event_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付事件表';
 
 CREATE TABLE t_refund_order (
     id BIGINT NOT NULL AUTO_INCREMENT,

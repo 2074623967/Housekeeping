@@ -5,6 +5,27 @@ import { paymentApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const detail = ref(null);
+
+async function openDetail(paymentOrderId) {
+  try {
+    detail.value = await paymentApi.getDetail(paymentOrderId);
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
+}
+
+async function handleQuery(paymentOrderId) {
+  detail.value = await paymentApi.query(paymentOrderId);
+}
+
+async function handleClose(paymentOrderId) {
+  detail.value = await paymentApi.close(paymentOrderId);
+}
+
+async function handleCallback(paymentOrderId) {
+  detail.value = await paymentApi.callback("wx_jsapi", paymentOrderId);
+}
 
 onMounted(async () => {
   try {
@@ -98,14 +119,46 @@ onMounted(async () => {
               <td>{{ item.createdAt }}</td>
               <td>
                 <div class="list-actions">
-                  <span>详情</span>
-                  <span>主动查询</span>
-                  <span>回调</span>
+                  <button class="link-button" @click="openDetail(item.paymentOrderId)">详情</button>
+                  <button class="link-button" @click="handleQuery(item.paymentOrderId)">查单</button>
+                  <button class="link-button" @click="handleCallback(item.paymentOrderId)">回调</button>
+                  <button class="link-button" @click="handleClose(item.paymentOrderId)">关闭</button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div v-if="detail" class="detail-panel">
+        <div class="section-title">
+          <h3>支付单详情</h3>
+          <span class="meta">{{ detail.paymentOrderId }}</span>
+        </div>
+        <div class="detail-grid">
+          <div><strong>预付单号：</strong>{{ detail.prepayOrderNo }}</div>
+          <div><strong>账单号：</strong>{{ detail.billNo }}</div>
+          <div><strong>订单号：</strong>{{ detail.orderNo }}</div>
+          <div><strong>金额：</strong>{{ detail.amount }}</div>
+          <div><strong>方式：</strong>{{ detail.paymentMethod }}</div>
+          <div><strong>渠道：</strong>{{ detail.channel }}</div>
+          <div><strong>状态：</strong>{{ detail.status }}</div>
+          <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
+        </div>
+        <div class="split-panels">
+          <section class="panel mini">
+            <h4>路由记录</h4>
+            <div v-for="item in detail.routeLogs || []" :key="item">{{ item }}</div>
+          </section>
+          <section class="panel mini">
+            <h4>回调日志</h4>
+            <div v-for="item in detail.notifyLogs || []" :key="item">{{ item }}</div>
+          </section>
+        </div>
+        <section class="panel mini">
+          <h4>事件轨迹</h4>
+          <div v-for="item in detail.eventLogs || []" :key="item">{{ item }}</div>
+        </section>
       </div>
     </section>
   </div>
