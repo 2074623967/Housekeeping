@@ -3,10 +3,18 @@ import { onMounted, ref } from "vue";
 import { dashboardApi } from "../api/client";
 
 const summary = ref([]);
+const isLoading = ref(true);
+const errorMessage = ref("");
 
 onMounted(async () => {
-  const data = await dashboardApi.getSummary();
-  summary.value = data.cards;
+  try {
+    const data = await dashboardApi.getSummary();
+    summary.value = data.cards;
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    isLoading.value = false;
+  }
 });
 </script>
 
@@ -24,7 +32,13 @@ onMounted(async () => {
       当前存在 2 笔高优先级资金差异，1 笔线下汇入待人工审核，请财务和运营优先处理。
     </div>
 
-    <div class="card-grid">
+    <div v-if="errorMessage" class="error-banner">
+      工作台数据加载失败：{{ errorMessage }}
+    </div>
+
+    <div v-if="isLoading" class="state-box">工作台数据加载中...</div>
+
+    <div v-else class="card-grid">
       <div v-for="card in summary" :key="card.key" class="card">
         <p class="card-title">{{ card.title }}</p>
         <p class="card-value">{{ card.value }}</p>
@@ -32,7 +46,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="split-panels">
+    <div v-if="!isLoading" class="split-panels">
       <section class="panel">
         <div class="section-title">
           <h3>今日重点事项</h3>

@@ -24,7 +24,7 @@ const navGroups = [
     <aside class="sidebar">
       <div class="brand">
         <h1>家政支付系统</h1>
-        <p>Vue3 + Java MVP</p>
+        <p>Payment Core / Admin Web</p>
       </div>
       <div v-for="group in navGroups" :key="group.title" class="nav-group">
         <div class="nav-group-title">{{ group.title }}</div>

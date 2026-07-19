@@ -3,9 +3,17 @@ import { onMounted, ref } from "vue";
 import { paymentApi } from "../api/client";
 
 const items = ref([]);
+const isLoading = ref(true);
+const errorMessage = ref("");
 
 onMounted(async () => {
-  items.value = await paymentApi.getList();
+  try {
+    items.value = await paymentApi.getList();
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    isLoading.value = false;
+  }
 });
 </script>
 
@@ -20,6 +28,10 @@ onMounted(async () => {
     </div>
 
     <section class="panel">
+      <div v-if="errorMessage" class="error-banner">
+        支付单数据加载失败：{{ errorMessage }}
+      </div>
+
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
@@ -53,7 +65,11 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="table-wrap">
+      <div v-if="isLoading" class="state-box">支付单数据加载中...</div>
+
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付单数据</div>
+
+      <div v-else class="table-wrap">
         <table>
           <thead>
             <tr>

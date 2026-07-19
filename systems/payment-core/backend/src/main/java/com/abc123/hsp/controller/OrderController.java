@@ -1,8 +1,9 @@
 package com.abc123.hsp.controller;
 
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.OrderListItemDTO;
 import com.abc123.hsp.service.OrderService;
 import java.util.List;
-import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,7 +19,7 @@ public class OrderController {
     }
 
     @GetMapping
-    public List<Map<String, Object>> list() {
-        return orderService.list();
+    public ApiResponse<List<OrderListItemDTO>> list() {
+        return ApiResponse.success(orderService.list());
     }
 }

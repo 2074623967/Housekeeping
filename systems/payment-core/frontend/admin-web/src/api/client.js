@@ -3,7 +3,11 @@ async function request(url) {
   if (!response.ok) {
     throw new Error(`Request failed: ${response.status}`);
   }
-  return response.json();
+  const payload = await response.json();
+  if (payload.code !== "0") {
+    throw new Error(payload.message || "Request failed");
+  }
+  return payload.data;
 }
 
 export const dashboardApi = {

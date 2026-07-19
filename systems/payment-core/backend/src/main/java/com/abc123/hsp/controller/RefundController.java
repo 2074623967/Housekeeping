@@ -1,8 +1,9 @@
 package com.abc123.hsp.controller;
 
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.service.RefundService;
 import java.util.List;
-import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,7 +19,7 @@ public class RefundController {
     }
 
     @GetMapping
-    public List<Map<String, Object>> list() {
-        return refundService.list();
+    public ApiResponse<List<RefundListItemDTO>> list() {
+        return ApiResponse.success(refundService.list());
     }
 }

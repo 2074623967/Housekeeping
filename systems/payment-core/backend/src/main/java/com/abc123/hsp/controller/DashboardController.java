@@ -1,7 +1,8 @@
 package com.abc123.hsp.controller;
 
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.DashboardSummaryDTO;
 import com.abc123.hsp.service.DashboardService;
-import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,7 +18,7 @@ public class DashboardController {
     }
 
     @GetMapping("/summary")
-    public Map<String, Object> summary() {
-        return dashboardService.getSummary();
+    public ApiResponse<DashboardSummaryDTO> summary() {
+        return ApiResponse.success(dashboardService.getSummary());
     }
 }

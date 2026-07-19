@@ -261,6 +261,39 @@ th {
 }
 
 .risk-banner {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.split-panels {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+.state-box {
+  padding: 28px 16px;
+  border-radius: 14px;
+  text-align: center;
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+}
+
+.error-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.risk-banner {
   background: linear-gradient(90deg, #7f1d1d, #b91c1c);
   color: #fff7ed;
   padding: 14px 16px;
