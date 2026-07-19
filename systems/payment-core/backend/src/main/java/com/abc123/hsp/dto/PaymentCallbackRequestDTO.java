@@ -5,6 +5,9 @@ public class PaymentCallbackRequestDTO {
     private String paymentOrderId;
     private String channelTransactionNo;
     private String tradeStatus;
+    private String timestamp;
+    private String nonce;
+    private String signature;
 
     public String getPaymentOrderId() {
         return paymentOrderId;
@@ -28,5 +31,29 @@ public class PaymentCallbackRequestDTO {
 
     public void setTradeStatus(String tradeStatus) {
         this.tradeStatus = tradeStatus;
+    }
+
+    public String getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(String timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public String getNonce() {
+        return nonce;
+    }
+
+    public void setNonce(String nonce) {
+        this.nonce = nonce;
+    }
+
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
     }
 }

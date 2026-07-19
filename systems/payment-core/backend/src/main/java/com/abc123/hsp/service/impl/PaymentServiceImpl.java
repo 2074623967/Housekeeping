@@ -11,6 +11,7 @@ import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
+import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -22,9 +23,13 @@ import org.springframework.util.StringUtils;
 public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentMapper paymentMapper;
+    private final PaymentCallbackSignatureService paymentCallbackSignatureService;
 
-    public PaymentServiceImpl(PaymentMapper paymentMapper) {
+    public PaymentServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentCallbackSignatureService paymentCallbackSignatureService) {
         this.paymentMapper = paymentMapper;
+        this.paymentCallbackSignatureService = paymentCallbackSignatureService;
     }
 
     @Override
@@ -146,6 +151,13 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     @Override
     public PaymentDetailDTO callback(String channel, PaymentCallbackRequestDTO request) {
+        if (!StringUtils.hasText(request.getPaymentOrderId())
+                || !StringUtils.hasText(request.getTradeStatus())
+                || !StringUtils.hasText(request.getChannelTransactionNo())) {
+            throw new IllegalArgumentException(
+                    "paymentOrderId, tradeStatus and channelTransactionNo are required");
+        }
+        paymentCallbackSignatureService.verify(channel, request);
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
             return null;
@@ -154,10 +166,6 @@ public class PaymentServiceImpl implements PaymentService {
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
             return enrichDetail(detail);
-        }
-        if (!StringUtils.hasText(request.getTradeStatus())
-                || !StringUtils.hasText(request.getChannelTransactionNo())) {
-            throw new IllegalArgumentException("tradeStatus and channelTransactionNo are required");
         }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。

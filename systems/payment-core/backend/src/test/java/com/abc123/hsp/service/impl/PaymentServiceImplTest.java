@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
+import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +23,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentMapper paymentMapper;
+
+    @Mock
+    private PaymentCallbackSignatureService paymentCallbackSignatureService;
 
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
@@ -38,7 +42,8 @@ class PaymentServiceImplTest {
         callback.setTradeStatus("SUCCESS");
         callback.setChannelTransactionNo("CHANNEL-002");
 
-        new PaymentServiceImpl(paymentMapper).callback("wx_h5", callback);
+        new PaymentServiceImpl(paymentMapper, paymentCallbackSignatureService)
+                .callback("wx_h5", callback);
 
         verify(paymentMapper, never()).updatePaymentStatus(
                 "PAY-001", "SUCCESS", "success", "CHANNEL-002");
@@ -65,7 +70,8 @@ class PaymentServiceImplTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentServiceImpl(paymentMapper).callback("wx_h5", callback)
+                () -> new PaymentServiceImpl(paymentMapper, paymentCallbackSignatureService)
+                        .callback("wx_h5", callback)
         );
     }
 }

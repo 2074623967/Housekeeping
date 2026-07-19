@@ -20,5 +20,9 @@ mybatis:
     map-underscore-to-camel-case: true
 
 payment:
+  callback:
+    # 模拟环境关闭，真实渠道接入环境必须打开并注入独立密钥。
+    require-signature: ${HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE:false}
+    secret: ${HSP_PAYMENT_CALLBACK_SECRET:}
   expiry-close:
     fixed-delay-ms: ${HSP_PAYMENT_EXPIRY_CLOSE_DELAY_MS:60000}

@@ -158,9 +158,18 @@
 {
   "paymentOrderId": "PAY1752912340001",
   "tradeStatus": "SUCCESS",
-  "channelTransactionNo": "WX2026071900001"
+  "channelTransactionNo": "WX2026071900001",
+  "timestamp": "1752912345",
+  "nonce": "abc123",
+  "signature": "base64-hmac-sha256"
 }
 ```
+
+生产环境开启 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE=true` 后，签名原文为：
+
+`channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce`
+
+使用渠道独立密钥计算 HMAC-SHA256，并将结果 Base64 编码后放入 `signature`。
 
 返回示例：
 
