@@ -55,9 +55,16 @@ frontend
 4. 后台订单中心可生成收银台链接并串联到用户端支付流程
 5. 当前版本适合作为一期支付核心域的开发、联调和测试基线
 
+注意：
+
+- 当前版本并不等于“完整支付平台全量完成”
+- 若要从完整支付系统视角评估当前 `payment-core` 的页面、端类型、模块边界和能力缺口，请优先阅读：
+  - [payment-core全量交付差距清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core全量交付差距清单.md)
+
 ## 文档入口
 
 - [开发落地说明](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/开发落地说明.md)
+- [payment-core全量交付差距清单](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/payment-core全量交付差距清单.md)
 - [一期-支付核心系统接口与数据设计](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/一期-支付核心系统接口与数据设计.md)
 - [一期-支付核心系统前端页面与交互说明](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/一期-支付核心系统前端页面与交互说明.md)
 - [一期-支付核心系统后端详细设计](/Users/abc123/workspace/home-service-payment-system/systems/payment-core/docs/一期-支付核心系统后端详细设计.md)
