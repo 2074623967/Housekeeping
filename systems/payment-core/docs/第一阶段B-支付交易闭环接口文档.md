@@ -223,6 +223,11 @@
 当前版本已经抽象渠道查单适配器，但默认使用 `LOCAL_SIMULATION` 本地模拟适配器；
 真实微信、支付宝、银行查单适配器由 `gateway-access` 接入后注册，不改变本接口契约。
 
+返回要点：
+
+1. `channelTransactionNo` 会返回本次查单得到的渠道流水号。
+2. `querySource` 会返回查单结果来源，例如 `LOCAL_SIMULATION`、`WECHAT`、`ALIPAY`。
+
 ## 8. 关闭支付单
 
 接口：`POST /api/payments/close`

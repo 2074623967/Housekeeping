@@ -10,11 +10,15 @@ import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
+import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -175,5 +179,34 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-NEW", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-NEW", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldExposeQuerySourceWhenChannelAdapterReturnsResult() {
+        PaymentChannelQueryAdapter adapter = new PaymentChannelQueryAdapter() {
+            @Override
+            public boolean supports(String channelCode) {
+                return true;
+            }
+
+            @Override
+            public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
+                PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
+                result.setTradeStatus("WAIT_CALLBACK");
+                result.setChannelTransactionNo("CHANNEL-1001");
+                result.setQuerySource("LOCAL_SIMULATION");
+                return result;
+            }
+        };
+        PaymentChannelQueryService queryService = new PaymentChannelQueryServiceImpl(Arrays.asList(adapter));
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-1001");
+        detail.setChannel("wx_h5");
+
+        PaymentDetailDTO result = queryService.query(detail);
+
+        org.junit.jupiter.api.Assertions.assertEquals("CHANNEL-1001", result.getChannelTransactionNo());
+        org.junit.jupiter.api.Assertions.assertEquals("LOCAL_SIMULATION", result.getQuerySource());
     }
 }

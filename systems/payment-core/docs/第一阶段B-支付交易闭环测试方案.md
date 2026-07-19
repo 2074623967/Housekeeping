@@ -61,7 +61,7 @@
 | PAY-TC-002 | 获取收银台成功 | 调用 `GET /api/payments/cashier/{prepayOrderNo}` | 返回金额、订单摘要、支付方式 | P0 |
 | PAY-TC-003 | 提交支付成功 | 调用 `POST /api/payments/submit` | 预付单进入支付中，写尝试/路由/事件日志 | P0 |
 | PAY-TC-004 | 回调成功收口 | 调用 `POST /api/payments/callback/{channel}` | 支付单状态变成功，写回调日志和成功事件 | P0 |
-| PAY-TC-005 | 主动查单成功 | 调用 `POST /api/payments/query` | 返回最新支付详情 | P1 |
+| PAY-TC-005 | 主动查单成功 | 调用 `POST /api/payments/query` | 返回最新支付详情，并包含查单来源 | P1 |
 | PAY-TC-006 | 关闭支付单成功 | 调用 `POST /api/payments/close` | 支付单状态变关闭，写关闭事件 | P1 |
 | PAY-TC-007 | 支付详情展示正确 | 调用 `GET /api/payments/{paymentOrderId}` | 返回基本信息、路由、回调、事件轨迹 | P0 |
 | PAY-TC-008 | 后台页面回归 | 访问 `admin-web` 页面 | 查询与详情页无阻断错误 | P1 |
@@ -70,7 +70,7 @@
 | PAY-TC-011 | 重复回调保护 | 对成功支付单连续回调两次 | 第二次不新增状态更新、日志和事件 | P0 |
 | PAY-TC-012 | 超时自动关单 | 将预付单失效时间置为过去并执行任务 | 支付单、支付尝试、预付单和事件同步收口 | P0 |
 | PAY-TC-013 | 渠道编码规范化 | 使用 `WX_H5`、`alipay_h5`、`BANK_CARD` 提交支付 | 统一落库为 `wx_h5`、`alipay_h5`、`offline_bank` | P1 |
-| PAY-TC-014 | 查单适配器调用 | 调用 `POST /api/payments/query` | 通过渠道查单适配器返回最新查询结果 | P1 |
+| PAY-TC-014 | 查单适配器调用 | 调用 `POST /api/payments/query` | 通过渠道查单适配器返回最新查询结果，并标识 `querySource` | P1 |
 | PAY-TC-015 | 重复拉起收银台幂等 | 对同一订单连续两次调用 `POST /api/payments/prepay` | 第二次返回同一预付单号和支付单号，不新增支付单 | P0 |
 
 ## 5. 验收标准

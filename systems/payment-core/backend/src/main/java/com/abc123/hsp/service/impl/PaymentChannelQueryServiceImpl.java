@@ -26,6 +26,7 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
                 PaymentChannelQueryResultDTO result = adapter.query(paymentDetail);
                 // 当前查单结果只补充查询来源，不直接越过回调流程修改支付状态。
                 paymentDetail.setChannelTransactionNo(result.getChannelTransactionNo());
+                paymentDetail.setQuerySource(result.getQuerySource());
                 return paymentDetail;
             }
         }

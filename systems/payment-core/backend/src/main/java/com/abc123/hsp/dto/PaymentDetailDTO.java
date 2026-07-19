@@ -13,6 +13,7 @@ public class PaymentDetailDTO {
     private String paymentMethod;
     private String channel;
     private String channelTransactionNo;
+    private String querySource;
     private String status;
     private String statusType;
     private String createdAt;
@@ -90,6 +91,14 @@ public class PaymentDetailDTO {
 
     public void setChannelTransactionNo(String channelTransactionNo) {
         this.channelTransactionNo = channelTransactionNo;
+    }
+
+    public String getQuerySource() {
+        return querySource;
+    }
+
+    public void setQuerySource(String querySource) {
+        this.querySource = querySource;
     }
 
     public String getStatus() {
