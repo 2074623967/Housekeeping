@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.OrderMapper">
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.OrderListItemDTO">
+        SELECT order_no AS orderNo,
+               customer_name AS customerName,
+               service_type AS serviceType,
+               worker_name AS workerName,
+               CONCAT('¥', FORMAT(order_amount, 2)) AS orderAmount,
+               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
+               order_status AS orderStatus,
+               order_status_type AS orderStatusType,
+               fulfillment_status AS fulfillmentStatus,
+               fulfillment_status_type AS fulfillmentStatusType,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_order
+        ORDER BY created_at DESC
+    </select>
+</mapper>

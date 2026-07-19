@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.DashboardMapper">
+
+    <select id="findCards" resultType="com.abc123.hsp.dto.DashboardCardDTO">
+        SELECT card_key AS `key`,
+               title,
+               value,
+               badge_type AS badgeType,
+               badge_text AS badgeText
+        FROM t_dashboard_card
+        ORDER BY sort_no ASC
+    </select>
+</mapper>

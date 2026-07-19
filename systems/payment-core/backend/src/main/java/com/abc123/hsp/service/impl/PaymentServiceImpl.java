@@ -1,0 +1,206 @@
+package com.abc123.hsp.service.impl;
+
+import com.abc123.hsp.dto.CashierPageDTO;
+import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
+import com.abc123.hsp.dto.PaymentCloseRequestDTO;
+import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentListItemDTO;
+import com.abc123.hsp.dto.PaymentQueryRequestDTO;
+import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
+import com.abc123.hsp.dto.PrepayOrderDTO;
+import com.abc123.hsp.dto.PrepayRequestDTO;
+import com.abc123.hsp.mapper.PaymentMapper;
+import com.abc123.hsp.service.PaymentService;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+@Service
+public class PaymentServiceImpl implements PaymentService {
+
+    private final PaymentMapper paymentMapper;
+
+    public PaymentServiceImpl(PaymentMapper paymentMapper) {
+        this.paymentMapper = paymentMapper;
+    }
+
+    @Override
+    public List<PaymentListItemDTO> list() {
+        return paymentMapper.findAll();
+    }
+
+    @Override
+    public PaymentDetailDTO detail(String paymentOrderId) {
+        return enrichDetail(paymentMapper.findDetail(paymentOrderId));
+    }
+
+    @Transactional
+    @Override
+    public PrepayOrderDTO prepay(PrepayRequestDTO request) {
+        // 预付单创建会同时影响账单、支付单和收银台状态，必须放在同一个事务里。
+        BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
+        BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
+        String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
+        String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
+        if (billNo == null) {
+            billNo = "BILL" + System.currentTimeMillis();
+            BigDecimal remainAmount = orderAmount.subtract(paidAmount);
+            String billStatus = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "已结清" : "待支付";
+            String billStatusType = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "success" : "warn";
+            paymentMapper.insertBill(billNo, request.getOrderNo(), customerName, orderAmount, paidAmount, billStatus, billStatusType);
+        }
+        String paymentOrderId = paymentMapper.findLatestPaymentOrderIdByOrderNo(request.getOrderNo());
+        if (!StringUtils.hasText(paymentOrderId)) {
+            paymentOrderId = "PAY" + System.currentTimeMillis();
+            paymentMapper.insertPaymentOrder(
+                    paymentOrderId,
+                    request.getOrderNo(),
+                    customerName,
+                    orderAmount.subtract(paidAmount),
+                    request.getPayScene()
+            );
+        }
+        String prepayOrderNo = "PRE" + System.currentTimeMillis();
+        paymentMapper.insertPrepayOrder(
+                prepayOrderNo,
+                billNo,
+                request.getOrderNo(),
+                customerName,
+                orderAmount.subtract(paidAmount),
+                request.getPayScene(),
+                "家政服务收银台",
+                paymentOrderId
+        );
+        return paymentMapper.findPrepay(prepayOrderNo);
+    }
+
+    @Override
+    public CashierPageDTO cashier(String prepayOrderNo) {
+        PrepayOrderDTO prepayOrder = paymentMapper.findPrepay(prepayOrderNo);
+        if (prepayOrder == null) {
+            return null;
+        }
+        CashierPageDTO cashierPage = new CashierPageDTO();
+        cashierPage.setPrepayOrderNo(prepayOrder.getPrepayOrderNo());
+        cashierPage.setOrderNo(prepayOrder.getOrderNo());
+        cashierPage.setBillNo(prepayOrder.getBillNo());
+        cashierPage.setCustomerName(prepayOrder.getCustomerName());
+        cashierPage.setAmount(prepayOrder.getAmount());
+        cashierPage.setPayScene(prepayOrder.getPayScene());
+        cashierPage.setTitle(prepayOrder.getCashierTitle());
+        cashierPage.setStatus(prepayOrder.getCashierStatus());
+        cashierPage.setStatusType(prepayOrder.getCashierStatusType());
+        cashierPage.setExpiresAt(prepayOrder.getExpiresAt());
+        cashierPage.setChannels(Arrays.asList("微信支付", "支付宝", "银行卡"));
+        return cashierPage;
+    }
+
+    @Transactional
+    @Override
+    public PrepayOrderDTO submit(PaymentSubmitRequestDTO request) {
+        String paymentOrderId = paymentMapper.findPaymentOrderIdByPrepayOrderNo(request.getPrepayOrderNo());
+        if (!StringUtils.hasText(paymentOrderId)) {
+            return null;
+        }
+        // 收银台提交后，先把预付单状态收口，再补齐支付单上的支付方式和渠道。
+        paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
+        paymentMapper.updatePaymentMethodAndChannel(paymentOrderId, request.getPaymentMethod(), request.getChannelCode());
+        String routeNo = "RTR" + System.currentTimeMillis();
+        paymentMapper.insertRouteRecord(routeNo, paymentOrderId, request.getChannelCode(), "默认渠道路由", request.getPaymentMethod());
+        String attemptNo = "ATT" + System.currentTimeMillis();
+        paymentMapper.insertPaymentAttempt(
+                attemptNo,
+                request.getPrepayOrderNo(),
+                paymentOrderId,
+                request.getChannelCode(),
+                request.getPaymentMethod(),
+                "{\"method\":\"" + request.getPaymentMethod() + "\",\"channelCode\":\"" + request.getChannelCode() + "\"}",
+                "{\"code\":\"SUCCESS\"}",
+                "处理中",
+                "info"
+        );
+        paymentMapper.insertEvent(
+                "EVT" + System.currentTimeMillis(),
+                "PAYMENT_SUBMIT",
+                paymentOrderId,
+                paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo()),
+                request.getChannelCode()
+        );
+        paymentMapper.insertNotifyLog(
+                "NTF" + System.currentTimeMillis(),
+                paymentOrderId,
+                request.getChannelCode(),
+                "SUBMIT",
+                "{\"method\":\"" + request.getPaymentMethod() + "\"}",
+                "{\"code\":\"SUCCESS\"}",
+                "待回调",
+                "warn"
+        );
+        return paymentMapper.findPrepay(request.getPrepayOrderNo());
+    }
+
+    @Transactional
+    @Override
+    public PaymentDetailDTO callback(String channel, PaymentCallbackRequestDTO request) {
+        PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
+        if (detail == null) {
+            return null;
+        }
+        // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
+        paymentMapper.insertNotifyLog(
+                "NTF" + System.currentTimeMillis(),
+                request.getPaymentOrderId(),
+                channel,
+                request.getTradeStatus(),
+                "{\"tradeStatus\":\"" + request.getTradeStatus() + "\"}",
+                "{\"code\":\"SUCCESS\"}",
+                "已收口",
+                "success"
+        );
+        paymentMapper.updatePaymentStatus(
+                request.getPaymentOrderId(),
+                "SUCCESS".equalsIgnoreCase(request.getTradeStatus()) ? "SUCCESS" : "WAIT_CALLBACK",
+                "SUCCESS".equalsIgnoreCase(request.getTradeStatus()) ? "success" : "warn",
+                request.getChannelTransactionNo()
+        );
+        paymentMapper.insertEvent(
+                "EVT" + System.currentTimeMillis(),
+                "SUCCESS".equalsIgnoreCase(request.getTradeStatus()) ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING",
+                request.getPaymentOrderId(),
+                detail.getOrderNo(),
+                "{\"channel\":\"" + channel + "\"}"
+        );
+        return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+    }
+
+    @Override
+    public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
+        return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+    }
+
+    @Transactional
+    @Override
+    public PaymentDetailDTO close(PaymentCloseRequestDTO request) {
+        PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
+        if (detail == null) {
+            return null;
+        }
+        // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
+        paymentMapper.updatePaymentStatus(request.getPaymentOrderId(), "CLOSED", "danger", detail.getChannelTransactionNo());
+        paymentMapper.insertEvent("EVT" + System.currentTimeMillis(), "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), "{\"close\":\"manual\"}");
+        return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+    }
+
+    private PaymentDetailDTO enrichDetail(PaymentDetailDTO detail) {
+        if (detail == null) {
+            return null;
+        }
+        detail.setRouteLogs(paymentMapper.findRouteLogs(detail.getPaymentOrderId()));
+        detail.setNotifyLogs(paymentMapper.findNotifyLogs(detail.getPaymentOrderId()));
+        detail.setEventLogs(paymentMapper.findEventItems(detail.getPaymentOrderId()));
+        return detail;
+    }
+}
