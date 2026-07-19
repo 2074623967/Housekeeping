@@ -43,33 +43,34 @@ public class PaymentServiceImpl implements PaymentService {
         // 预付单创建会同时影响账单、支付单和收银台状态，必须放在同一个事务里。
         BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
         BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
+        if (orderAmount == null || paidAmount == null) {
+            return null;
+        }
         String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
+        BigDecimal remainAmount = orderAmount.subtract(paidAmount);
         if (billNo == null) {
             billNo = "BILL" + System.currentTimeMillis();
-            BigDecimal remainAmount = orderAmount.subtract(paidAmount);
             String billStatus = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "已结清" : "待支付";
             String billStatusType = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "success" : "warn";
             paymentMapper.insertBill(billNo, request.getOrderNo(), customerName, orderAmount, paidAmount, billStatus, billStatusType);
         }
-        String paymentOrderId = paymentMapper.findLatestPaymentOrderIdByOrderNo(request.getOrderNo());
-        if (!StringUtils.hasText(paymentOrderId)) {
-            paymentOrderId = "PAY" + System.currentTimeMillis();
-            paymentMapper.insertPaymentOrder(
-                    paymentOrderId,
-                    request.getOrderNo(),
-                    customerName,
-                    orderAmount.subtract(paidAmount),
-                    request.getPayScene()
-            );
-        }
+        // 每次拉起收银台都生成独立支付单，避免多个预付单复用同一支付单造成状态串单。
+        String paymentOrderId = "PAY" + System.currentTimeMillis();
+        paymentMapper.insertPaymentOrder(
+                paymentOrderId,
+                request.getOrderNo(),
+                customerName,
+                remainAmount,
+                request.getPayScene()
+        );
         String prepayOrderNo = "PRE" + System.currentTimeMillis();
         paymentMapper.insertPrepayOrder(
                 prepayOrderNo,
                 billNo,
                 request.getOrderNo(),
                 customerName,
-                orderAmount.subtract(paidAmount),
+                remainAmount,
                 request.getPayScene(),
                 "家政服务收银台",
                 paymentOrderId
@@ -149,6 +150,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             return null;
         }
+        boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
         paymentMapper.insertNotifyLog(
                 "NTF" + System.currentTimeMillis(),
@@ -162,13 +164,28 @@ public class PaymentServiceImpl implements PaymentService {
         );
         paymentMapper.updatePaymentStatus(
                 request.getPaymentOrderId(),
-                "SUCCESS".equalsIgnoreCase(request.getTradeStatus()) ? "SUCCESS" : "WAIT_CALLBACK",
-                "SUCCESS".equalsIgnoreCase(request.getTradeStatus()) ? "success" : "warn",
+                paySuccess ? "SUCCESS" : "WAIT_CALLBACK",
+                paySuccess ? "success" : "warn",
                 request.getChannelTransactionNo()
         );
+        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
+                request.getPaymentOrderId(),
+                paySuccess ? "成功" : "待回调",
+                paySuccess ? "success" : "warn"
+        );
+        paymentMapper.updatePrepayStatusByPaymentOrderId(
+                request.getPaymentOrderId(),
+                paySuccess ? "支付成功" : "待回调",
+                paySuccess ? "success" : "warn"
+        );
+        if (paySuccess) {
+            BigDecimal latestOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
+            paymentMapper.updateOrderAfterPayment(detail.getOrderNo(), latestOrderAmount, "待履约", "info");
+            paymentMapper.updateBillAfterPayment(detail.getOrderNo(), latestOrderAmount, "已结清", "success");
+        }
         paymentMapper.insertEvent(
                 "EVT" + System.currentTimeMillis(),
-                "SUCCESS".equalsIgnoreCase(request.getTradeStatus()) ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING",
+                paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING",
                 request.getPaymentOrderId(),
                 detail.getOrderNo(),
                 "{\"channel\":\"" + channel + "\"}"
@@ -188,8 +205,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             return null;
         }
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus()) || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+            return enrichDetail(detail);
+        }
         // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
         paymentMapper.updatePaymentStatus(request.getPaymentOrderId(), "CLOSED", "danger", detail.getChannelTransactionNo());
+        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
+        paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.insertEvent("EVT" + System.currentTimeMillis(), "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), "{\"close\":\"manual\"}");
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }

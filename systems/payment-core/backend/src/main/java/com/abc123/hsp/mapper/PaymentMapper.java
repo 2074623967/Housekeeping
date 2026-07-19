@@ -55,11 +55,6 @@ public interface PaymentMapper {
             @Param("billStatusType") String billStatusType);
 
     /**
-     * 查询订单最近一条支付单号。
-     */
-    String findLatestPaymentOrderIdByOrderNo(@Param("orderNo") String orderNo);
-
-    /**
      * 新增支付单。
      */
     void insertPaymentOrder(@Param("paymentOrderId") String paymentOrderId,
@@ -124,11 +119,41 @@ public interface PaymentMapper {
     void updatePrepayToPaying(@Param("prepayOrderNo") String prepayOrderNo);
 
     /**
+     * 按支付单更新收银台状态。
+     */
+    void updatePrepayStatusByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId,
+            @Param("cashierStatus") String cashierStatus,
+            @Param("cashierStatusType") String cashierStatusType);
+
+    /**
      * 回写支付方式和渠道编码。
      */
     void updatePaymentMethodAndChannel(@Param("paymentOrderId") String paymentOrderId,
             @Param("paymentMethod") String paymentMethod,
             @Param("channelCode") String channelCode);
+
+    /**
+     * 按支付单回写支付尝试状态，便于前后端查看当前尝试收口结果。
+     */
+    void updatePaymentAttemptStatusByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId,
+            @Param("attemptStatus") String attemptStatus,
+            @Param("attemptStatusType") String attemptStatusType);
+
+    /**
+     * 支付成功后更新订单已支付金额和订单状态。
+     */
+    void updateOrderAfterPayment(@Param("orderNo") String orderNo,
+            @Param("paidAmount") BigDecimal paidAmount,
+            @Param("orderStatus") String orderStatus,
+            @Param("orderStatusType") String orderStatusType);
+
+    /**
+     * 支付成功后更新账单已支付金额和账单状态。
+     */
+    void updateBillAfterPayment(@Param("orderNo") String orderNo,
+            @Param("paidAmount") BigDecimal paidAmount,
+            @Param("billStatus") String billStatus,
+            @Param("billStatusType") String billStatusType);
 
     /**
      * 写入支付回调日志。
