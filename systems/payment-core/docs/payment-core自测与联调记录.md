@@ -163,6 +163,8 @@
 | --- | --- | --- |
 | 后端编译 | JDK `1.8.0_202` + IDEA Maven `mvn -DskipTests package` | 通过 |
 | 后台前端构建 | `npm run build` | 通过 |
+| 自动化测试源码编译 | `mvn -DskipTests package` | 通过 |
+| 自动化测试执行 | `mvn test` | 环境阻塞：本机缺少 `surefire-junit-platform`，测试代码尚未执行 |
 
 ### 6.2 接口验证
 
