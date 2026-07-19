@@ -1,29 +1,17 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { paymentRequestApi } from "../api/client";
 
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const expandedRequestNo = ref("");
+const total = ref(0);
 const filters = ref({
   requestNo: "",
   paymentOrderId: "",
   requestStatus: "全部"
 });
-
-const filteredItems = computed(() =>
-  items.value.filter((requestItem) => {
-    const normalizedRequestNo = filters.value.requestNo.trim();
-    const normalizedPaymentOrderId = filters.value.paymentOrderId.trim();
-    const matchesRequestNo = !normalizedRequestNo || requestItem.requestNo.includes(normalizedRequestNo);
-    const matchesPaymentOrderId = !normalizedPaymentOrderId
-      || requestItem.paymentOrderId.includes(normalizedPaymentOrderId);
-    const matchesStatus = filters.value.requestStatus === "全部"
-      || requestItem.requestStatus === filters.value.requestStatus;
-    return matchesRequestNo && matchesPaymentOrderId && matchesStatus;
-  })
-);
 
 function resetFilters() {
   filters.value = {
@@ -31,6 +19,8 @@ function resetFilters() {
     paymentOrderId: "",
     requestStatus: "全部"
   };
+  expandedRequestNo.value = "";
+  loadPaymentRequests();
 }
 
 function togglePayload(requestNo) {
@@ -41,12 +31,23 @@ async function loadPaymentRequests() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await paymentRequestApi.getList();
+    const result = await paymentRequestApi.getList({
+      requestNo: filters.value.requestNo,
+      paymentOrderId: filters.value.paymentOrderId,
+      requestStatus: filters.value.requestStatus
+    });
+    items.value = result;
+    total.value = result.length;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function applyFilters() {
+  expandedRequestNo.value = "";
+  loadPaymentRequests();
 }
 
 onMounted(loadPaymentRequests);
@@ -88,17 +89,17 @@ onMounted(loadPaymentRequests);
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="当前展示支付尝试报文，生产环境需继续脱敏和权限控制" disabled />
+          <input value="当前已接入后端筛选，生产环境需继续脱敏和权限控制" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadPaymentRequests">刷新</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付请求数据加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的支付请求</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付请求</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -117,7 +118,7 @@ onMounted(loadPaymentRequests);
             </tr>
           </thead>
           <tbody>
-            <template v-for="item in filteredItems" :key="item.requestNo">
+            <template v-for="item in items" :key="item.requestNo">
               <tr>
                 <td>{{ item.requestNo }}</td>
                 <td>{{ item.paymentOrderId }}</td>
@@ -151,6 +152,9 @@ onMounted(loadPaymentRequests);
             </template>
           </tbody>
         </table>
+      </div>
+      <div class="pager">
+        <span>共 {{ total }} 条支付请求</span>
       </div>
     </section>
   </div>

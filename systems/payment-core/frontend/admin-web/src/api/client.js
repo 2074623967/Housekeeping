@@ -57,7 +57,18 @@ export const cashierSessionApi = {
 };
 
 export const paymentRequestApi = {
-  getList: () => request("/api/payment-requests")
+  getList: ({
+    requestNo = "",
+    paymentOrderId = "",
+    requestStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      requestNo,
+      paymentOrderId,
+      requestStatus
+    });
+    return request(`/api/payment-requests?${params.toString()}`);
+  }
 };
 
 export const paymentLogApi = {
