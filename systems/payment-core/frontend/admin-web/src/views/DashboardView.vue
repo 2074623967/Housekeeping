@@ -1,15 +1,25 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import { dashboardApi } from "../api/client";
+import { dashboardApi, paymentMetricsApi } from "../api/client";
 
 const summary = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const metrics = ref({
+  successRate: "—",
+  successAmount: "—",
+  pendingCount: 0,
+  closedCount: 0
+});
 
 onMounted(async () => {
   try {
-    const data = await dashboardApi.getSummary();
+    const [data, metricData] = await Promise.all([
+      dashboardApi.getSummary(),
+      paymentMetricsApi.getSummary()
+    ]);
     summary.value = data.cards;
+    metrics.value = metricData;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -93,19 +103,19 @@ onMounted(async () => {
           <tbody>
             <tr>
               <th>支付成功率</th>
-              <td>98.74%</td>
+              <td>{{ metrics.successRate }}</td>
             </tr>
             <tr>
               <th>退款成功率</th>
-              <td>96.22%</td>
+              <td>{{ metrics.successAmount }}</td>
             </tr>
             <tr>
               <th>服务者结算准时率</th>
-              <td>94.10%</td>
+              <td>{{ metrics.pendingCount }} 笔</td>
             </tr>
             <tr>
               <th>资金日报完成度</th>
-              <td>83.00%</td>
+              <td>{{ metrics.closedCount }} 笔</td>
             </tr>
           </tbody>
         </table>

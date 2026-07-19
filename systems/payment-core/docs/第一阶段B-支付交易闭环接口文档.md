@@ -23,6 +23,7 @@
 | `/api/payments/close` | `POST` | 关闭支付单 |
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
+| `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
 
 ## 3. 创建预付单
 

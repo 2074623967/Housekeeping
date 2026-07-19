@@ -36,6 +36,10 @@ export const dashboardApi = {
   getSummary: () => request("/api/dashboard/summary")
 };
 
+export const paymentMetricsApi = {
+  getSummary: () => request("/api/payment-metrics/summary")
+};
+
 export const orderApi = {
   getList: () => request("/api/orders")
 };
