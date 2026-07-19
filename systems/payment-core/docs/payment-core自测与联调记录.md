@@ -17,10 +17,18 @@
 
 1. `systems/payment-core/frontend/admin-web` 可完成 Vite 构建
 2. `systems/payment-core/frontend/app-web` 可完成 Vite 构建
+3. `admin-web` 到 `app-web` 的主链路路由口径已对齐：
+   - 后台订单中心发起支付后可生成收银台链接
+   - 收银台路由已统一为 `/cashier/:prepayOrderNo`
+   - 支付结果页路由已统一为 `/payment-result/:paymentOrderId`
+4. 用户端页面当前已覆盖：
+   - 收银台
+   - 支付结果页
+5. 支付结果页已按接口文档改为优先调用 `GET /api/payments/{paymentOrderId}` 查询结果详情
 
 结论：
 
-- 当前前端代码至少满足静态构建通过标准
+- 当前前端代码不仅满足静态构建通过标准，也已具备后台发起支付到用户端结果页的联调基础
 
 ### 2.2 数据库验证
 
@@ -53,6 +61,7 @@
 3. `schema.sql` 已补表注释与字段注释
 4. `entity` 已统一使用 `@Data`
 5. 前端页面与主链路接口已形成对应关系
+6. `app-web` 的页面路由与《一期-支付核心系统前端页面与交互说明》保持一致
 
 ### 2.4 后端构建与启动验证
 
@@ -118,6 +127,9 @@
 2. 提交支付后支付单状态未进入 `WAIT_CALLBACK`
 3. 支付成功后订单、账单、收银台、支付尝试状态未同步收口
 4. 成功支付单仍可被关闭，状态机不符合支付域预期
+5. `admin-web` 发起支付跳转的用户端端口错误，导致后台无法正确打开收银台
+6. `app-web` 支付结果页路由与接口文档不一致，已统一为 `/payment-result/:paymentOrderId`
+7. 后台模拟回调渠道编码与后端当前主链路口径不一致，已统一为 `WX_H5`
 
 ## 4. 当前风险清单
 
