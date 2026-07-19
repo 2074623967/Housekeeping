@@ -2,252 +2,220 @@
 
 ## 1. 文档定位
 
-本文档是 `payment-core` 在 `Sunday, July 19, 2026` 的 `第一阶段B：支付交易闭环` 数据库设计稿。
+虽然文件名保留“第一阶段B”，但本文档内容已经作为 `payment-core` 一期支付交易闭环 V1 的冻结版数据库设计说明使用。
 
 目标：
 
-- 补齐订单支付主链路的核心对象
-- 为后续接口开发和代码落地提供数据库基线
+1. 解释支付主链路核心对象关系
+2. 说明当前 `schema.sql` 的真实落地范围
+3. 为后续账务、清分、结算系统提供上游对象基线
 
-## 2. 设计范围
+## 2. 数据对象范围
 
-本次新增对象聚焦于支付交易闭环，不覆盖：
+本次聚焦支付核心域，不覆盖：
 
-- 账务分录
-- 清分结果
-- 对账差异
-- 保证金扣罚
+1. 账务分录
+2. 清分结果
+3. 清算出款
+4. 对账差异
+5. 保证金扣罚
 
-本次新增对象包括：
+本次核心对象包括：
 
-1. `t_bill`
-2. `t_prepay_order`
-3. `t_payment_attempt`
-4. `t_payment_notify_log`
-5. `t_payment_channel_route_record`
-6. `t_payment_event`
+1. `t_order`
+2. `t_bill`
+3. `t_prepay_order`
+4. `t_payment_order`
+5. `t_payment_attempt`
+6. `t_payment_notify_log`
+7. `t_payment_route_record`
+8. `t_payment_event`
 
 ## 3. 对象关系
 
 ```text
-order
-  -> bill
-    -> prepay_order
-      -> payment_order
-        -> payment_attempt
-        -> payment_channel_route_record
-        -> payment_notify_log
-        -> payment_event
+t_order
+  -> t_bill
+    -> t_prepay_order
+      -> t_payment_order
+        -> t_payment_attempt
+        -> t_payment_route_record
+        -> t_payment_notify_log
+        -> t_payment_event
 ```
 
-说明：
+关系说明：
 
-- 一笔订单可对应多条账单
-- 一条账单可创建一个预付单
-- 一个预付单可收敛到一个支付单
-- 一个支付单可有多次尝试
-- 一个支付单可有多条回调日志
+1. 一笔订单在一期场景下至少对应一张账单。
+2. 一张账单可创建一个预付单。
+3. 一个预付单关联一个支付单。
+4. 一个支付单可有多次尝试、多条回调、多条事件。
 
-## 4. 表设计
+## 4. 核心表设计
 
-### 4.1 账单表 `t_bill`
+### 4.1 订单表 `t_order`
 
-用途：
+作用：沉淀支付域读取的订单基础信息。
 
-- 作为订单与支付之间的金额桥梁
+关键字段：
 
-核心字段：
+| 字段 | 说明 |
+| --- | --- |
+| `order_no` | 订单号 |
+| `customer_name` | 客户名称 |
+| `service_type` | 服务品类 |
+| `worker_name` | 服务者 |
+| `order_amount` | 订单应收金额 |
+| `paid_amount` | 订单已支付金额 |
+| `order_status` | 订单状态 |
+| `fulfillment_status` | 履约状态 |
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `bill_no` | varchar(64) | 账单号 |
-| `order_no` | varchar(64) | 订单号 |
-| `bill_type` | varchar(32) | 主账单、补差价账单、尾款账单 |
-| `amount` | decimal(18,2) | 应付金额 |
-| `paid_amount` | decimal(18,2) | 已付金额 |
-| `bill_status` | varchar(32) | 账单状态 |
-| `expire_time` | datetime | 过期时间 |
-| `created_at` | datetime | 创建时间 |
-| `updated_at` | datetime | 更新时间 |
+### 4.2 账单表 `t_bill`
 
-索引建议：
+作用：作为订单与支付之间的金额桥梁。
 
-- `uk_bill_no`
-- `idx_order_no`
-- `idx_bill_status`
+关键字段：
 
-### 4.2 预付单表 `t_prepay_order`
+| 字段 | 说明 |
+| --- | --- |
+| `bill_no` | 账单号 |
+| `order_no` | 关联订单号 |
+| `customer_name` | 客户名称 |
+| `bill_amount` | 账单应收金额 |
+| `paid_amount` | 账单已支付金额 |
+| `bill_status` | 账单状态 |
+| `due_at` | 到期时间 |
 
-用途：
+### 4.3 预付单表 `t_prepay_order`
 
-- 作为收银台展示和支付提交前的统一支付入口对象
+作用：作为收银台直接读取的统一支付入口对象。
 
-核心字段：
+关键字段：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `prepay_order_no` | varchar(64) | 预付单号 |
-| `bill_no` | varchar(64) | 关联账单号 |
-| `order_no` | varchar(64) | 订单号 |
-| `payment_order_id` | varchar(64) | 关联支付单号 |
-| `amount` | decimal(18,2) | 支付金额 |
-| `currency` | varchar(16) | 币种 |
-| `status` | varchar(32) | 预付单状态 |
-| `default_method` | varchar(32) | 默认支付方式 |
-| `expire_time` | datetime | 过期时间 |
-| `created_at` | datetime | 创建时间 |
-| `updated_at` | datetime | 更新时间 |
+| 字段 | 说明 |
+| --- | --- |
+| `prepay_order_no` | 预付单号 |
+| `bill_no` | 关联账单号 |
+| `order_no` | 关联订单号 |
+| `amount` | 预付金额 |
+| `pay_scene` | 支付场景 |
+| `cashier_title` | 收银台标题 |
+| `cashier_status` | 收银台状态 |
+| `payment_order_id` | 关联支付单号 |
+| `expires_at` | 失效时间 |
 
-索引建议：
+### 4.4 支付单表 `t_payment_order`
 
-- `uk_prepay_order_no`
-- `idx_bill_no`
-- `idx_payment_order_id`
+作用：后台运营与状态追踪主对象。
 
-### 4.3 支付尝试表 `t_payment_attempt`
+关键字段：
 
-用途：
+| 字段 | 说明 |
+| --- | --- |
+| `payment_order_id` | 支付单号 |
+| `order_no` | 订单号 |
+| `amount` | 本次支付金额 |
+| `payment_method` | 支付方式 |
+| `channel_code` | 渠道编码 |
+| `channel_transaction_no` | 渠道流水号 |
+| `status` | 支付状态 |
 
-- 记录一次支付单的每次真实支付尝试
+### 4.5 支付尝试表 `t_payment_attempt`
 
-核心字段：
+作用：沉淀每次支付提交的请求和响应轨迹。
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `attempt_no` | varchar(64) | 尝试号 |
-| `payment_order_id` | varchar(64) | 支付单号 |
-| `prepay_order_no` | varchar(64) | 预付单号 |
-| `payment_method` | varchar(32) | 支付方式 |
-| `channel_code` | varchar(64) | 渠道编码 |
-| `submit_status` | varchar(32) | 提交状态 |
-| `channel_request_no` | varchar(128) | 渠道请求号 |
-| `channel_pay_token` | varchar(256) | 渠道支付令牌 |
-| `fail_reason` | varchar(256) | 失败原因 |
-| `created_at` | datetime | 创建时间 |
-| `updated_at` | datetime | 更新时间 |
+关键字段：
 
-索引建议：
+| 字段 | 说明 |
+| --- | --- |
+| `attempt_no` | 支付尝试号 |
+| `prepay_order_no` | 预付单号 |
+| `payment_order_id` | 支付单号 |
+| `channel_code` | 渠道编码 |
+| `payment_method` | 支付方式 |
+| `request_payload` | 请求报文 |
+| `response_payload` | 响应报文 |
+| `attempt_status` | 尝试状态 |
 
-- `uk_attempt_no`
-- `idx_payment_order_id`
-- `idx_channel_code`
+### 4.6 回调日志表 `t_payment_notify_log`
 
-### 4.4 支付回调日志表 `t_payment_notify_log`
+作用：沉淀异步回调轨迹与收口结果。
 
-用途：
+关键字段：
 
-- 记录渠道回调原文和收口结果
+| 字段 | 说明 |
+| --- | --- |
+| `notify_no` | 回调日志号 |
+| `payment_order_id` | 支付单号 |
+| `channel_code` | 渠道编码 |
+| `notify_type` | 回调类型 |
+| `notify_payload` | 回调报文 |
+| `notify_result` | 处理结果报文 |
+| `notify_status` | 回调处理状态 |
 
-核心字段：
+### 4.7 路由记录表 `t_payment_route_record`
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `notify_no` | varchar(64) | 回调日志号 |
-| `payment_order_id` | varchar(64) | 支付单号 |
-| `channel_code` | varchar(64) | 渠道编码 |
-| `channel_transaction_no` | varchar(128) | 渠道交易号 |
-| `notify_status` | varchar(32) | 回调处理状态 |
-| `sign_verify_result` | varchar(32) | 验签结果 |
-| `notify_payload` | text | 回调原文 |
-| `received_at` | datetime | 接收时间 |
-| `processed_at` | datetime | 处理时间 |
+作用：沉淀支付渠道选择过程。
 
-索引建议：
+关键字段：
 
-- `uk_notify_no`
-- `idx_payment_order_id`
-- `idx_channel_transaction_no`
+| 字段 | 说明 |
+| --- | --- |
+| `route_no` | 路由记录号 |
+| `payment_order_id` | 支付单号 |
+| `channel_code` | 渠道编码 |
+| `route_rule` | 路由规则 |
+| `route_result` | 路由结果 |
 
-### 4.5 渠道路由记录表 `t_payment_channel_route_record`
+### 4.8 支付事件表 `t_payment_event`
 
-用途：
+作用：沉淀支付主链路关键事件，为后续账务和清结算消费做准备。
 
-- 记录支付单在支付提交前后的路由决策结果
+关键字段：
 
-核心字段：
+| 字段 | 说明 |
+| --- | --- |
+| `event_no` | 事件号 |
+| `event_type` | 事件类型 |
+| `payment_order_id` | 支付单号 |
+| `biz_no` | 业务单号 |
+| `event_payload` | 事件内容 |
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `route_record_no` | varchar(64) | 路由记录号 |
-| `payment_order_id` | varchar(64) | 支付单号 |
-| `route_scene` | varchar(32) | 路由场景 |
-| `candidate_channels` | varchar(512) | 候选渠道 |
-| `selected_channel` | varchar(64) | 选中渠道 |
-| `route_result` | varchar(32) | 路由结果 |
-| `route_reason` | varchar(256) | 路由原因 |
-| `created_at` | datetime | 创建时间 |
+## 5. 状态建议
 
-索引建议：
+### 5.1 当前版本已使用状态
 
-- `uk_route_record_no`
-- `idx_payment_order_id`
+| 对象 | 当前状态 |
+| --- | --- |
+| 账单 | `待支付` / `已结清` |
+| 预付单 | `待支付` / `支付中` |
+| 支付单 | `PREPAY_CREATED` / `WAIT_CALLBACK` / `SUCCESS` / `CLOSED` |
+| 回调日志 | `待回调` / `已收口` |
 
-### 4.6 支付事件表 `t_payment_event`
+### 5.2 后续增强建议
 
-用途：
+后续可进一步拆分为：
 
-- 用于记录支付主链路中的状态事件，供后续账务、清结算消费
+1. 支付提交状态
+2. 渠道受理状态
+3. 回调处理状态
+4. 查单确认状态
+5. 关闭原因状态
 
-核心字段：
+## 6. 索引与查询建议
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `id` | bigint | 主键 |
-| `event_no` | varchar(64) | 事件号 |
-| `payment_order_id` | varchar(64) | 支付单号 |
-| `event_type` | varchar(64) | 事件类型 |
-| `event_status` | varchar(32) | 事件状态 |
-| `event_body` | text | 事件内容 |
-| `published_flag` | tinyint | 是否已发布 |
-| `created_at` | datetime | 创建时间 |
+当前和后续都应遵循：
 
-索引建议：
+1. 主业务单号必须唯一索引
+2. 支付详情页常用追踪字段必须具备索引
+3. 后续如果引入分页和筛选，优先为 `payment_order_id`、`order_no`、`status`、`created_at` 建组合索引
 
-- `uk_event_no`
-- `idx_payment_order_id`
-- `idx_event_type`
-- `idx_published_flag`
+## 7. 版本结论
 
-## 5. 状态字段建议
+当前数据库设计已经不再是“待补的概念稿”，而是与 `schema.sql` 对齐的正式数据库交付说明。
 
-### 5.1 账单状态
+它的价值在于：
 
-- `INIT`
-- `WAIT_PAY`
-- `PART_PAY`
-- `PAID`
-- `CLOSED`
-
-### 5.2 预付单状态
-
-- `INIT`
-- `PREPAY_CREATED`
-- `PAYING`
-- `EXPIRED`
-- `CLOSED`
-
-### 5.3 支付尝试状态
-
-- `SUBMITTING`
-- `ACCEPTED`
-- `FAIL`
-- `TIMEOUT`
-
-### 5.4 回调处理状态
-
-- `RECEIVED`
-- `SIGN_FAIL`
-- `IGNORED`
-- `PROCESSED`
-
-## 6. 设计结论
-
-从 `Sunday, July 19, 2026` 开始，`payment-core` 如果要进入真正支付闭环开发，数据库层至少要补齐以上 6 个核心对象。
-
-在这些对象落地前，系统只能被视为“支付后台骨架”，不能被视为完整支付一期。
-
+1. 明确支付域对象边界
+2. 支撑当前前后端联调
+3. 为账务、清结算、对账系统提供稳定上游对象

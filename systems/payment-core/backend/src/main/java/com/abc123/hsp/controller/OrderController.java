@@ -18,6 +18,9 @@ public class OrderController {
         this.orderService = orderService;
     }
 
+    /**
+     * 查询订单中心列表，为支付发起和履约排查提供基础数据。
+     */
     @GetMapping
     public ApiResponse<List<OrderListItemDTO>> list() {
         return ApiResponse.success(orderService.list());

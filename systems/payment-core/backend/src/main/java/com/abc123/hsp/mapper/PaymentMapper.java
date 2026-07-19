@@ -8,20 +8,44 @@ import java.math.BigDecimal;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
+/**
+ * 支付核心域数据访问接口，负责支付单、预付单、账单和轨迹表读写。
+ */
 public interface PaymentMapper {
 
+    /**
+     * 查询支付单列表。
+     */
     List<PaymentListItemDTO> findAll();
 
+    /**
+     * 查询支付单详情。
+     */
     PaymentDetailDTO findDetail(@Param("paymentOrderId") String paymentOrderId);
 
+    /**
+     * 查询订单应收金额。
+     */
     BigDecimal findOrderAmount(@Param("orderNo") String orderNo);
 
+    /**
+     * 查询订单已支付金额。
+     */
     BigDecimal findPaidAmount(@Param("orderNo") String orderNo);
 
+    /**
+     * 查询订单客户名称。
+     */
     String findCustomerNameByOrderNo(@Param("orderNo") String orderNo);
 
+    /**
+     * 查询订单关联账单号。
+     */
     String findBillNoByOrderNo(@Param("orderNo") String orderNo);
 
+    /**
+     * 新增账单。
+     */
     void insertBill(@Param("billNo") String billNo,
             @Param("orderNo") String orderNo,
             @Param("customerName") String customerName,
@@ -30,14 +54,23 @@ public interface PaymentMapper {
             @Param("billStatus") String billStatus,
             @Param("billStatusType") String billStatusType);
 
+    /**
+     * 查询订单最近一条支付单号。
+     */
     String findLatestPaymentOrderIdByOrderNo(@Param("orderNo") String orderNo);
 
+    /**
+     * 新增支付单。
+     */
     void insertPaymentOrder(@Param("paymentOrderId") String paymentOrderId,
             @Param("orderNo") String orderNo,
             @Param("customerName") String customerName,
             @Param("amount") BigDecimal amount,
             @Param("channelCode") String channelCode);
 
+    /**
+     * 新增预付单。
+     */
     void insertPrepayOrder(@Param("prepayOrderNo") String prepayOrderNo,
             @Param("billNo") String billNo,
             @Param("orderNo") String orderNo,
@@ -47,29 +80,59 @@ public interface PaymentMapper {
             @Param("cashierTitle") String cashierTitle,
             @Param("paymentOrderId") String paymentOrderId);
 
+    /**
+     * 查询预付单。
+     */
     PrepayOrderDTO findPrepay(@Param("prepayOrderNo") String prepayOrderNo);
 
+    /**
+     * 查询支付回调日志列表。
+     */
     List<String> findNotifyLogs(@Param("paymentOrderId") String paymentOrderId);
 
+    /**
+     * 查询支付路由日志列表。
+     */
     List<String> findRouteLogs(@Param("paymentOrderId") String paymentOrderId);
 
+    /**
+     * 查询支付事件列表。
+     */
     List<String> findEventItems(@Param("paymentOrderId") String paymentOrderId);
 
+    /**
+     * 根据预付单查询支付单号。
+     */
     String findPaymentOrderIdByPrepayOrderNo(@Param("prepayOrderNo") String prepayOrderNo);
 
+    /**
+     * 根据预付单查询订单号。
+     */
     String findOrderNoByPrepayOrderNo(@Param("prepayOrderNo") String prepayOrderNo);
 
+    /**
+     * 更新支付单状态。
+     */
     void updatePaymentStatus(@Param("paymentOrderId") String paymentOrderId,
             @Param("status") String status,
             @Param("statusType") String statusType,
             @Param("channelTransactionNo") String channelTransactionNo);
 
+    /**
+     * 更新预付单为支付中状态。
+     */
     void updatePrepayToPaying(@Param("prepayOrderNo") String prepayOrderNo);
 
+    /**
+     * 回写支付方式和渠道编码。
+     */
     void updatePaymentMethodAndChannel(@Param("paymentOrderId") String paymentOrderId,
             @Param("paymentMethod") String paymentMethod,
             @Param("channelCode") String channelCode);
 
+    /**
+     * 写入支付回调日志。
+     */
     void insertNotifyLog(@Param("notifyNo") String notifyNo,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
@@ -79,18 +142,27 @@ public interface PaymentMapper {
             @Param("notifyStatus") String notifyStatus,
             @Param("notifyStatusType") String notifyStatusType);
 
+    /**
+     * 写入支付路由日志。
+     */
     void insertRouteRecord(@Param("routeNo") String routeNo,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
             @Param("routeRule") String routeRule,
             @Param("routeResult") String routeResult);
 
+    /**
+     * 写入支付事件。
+     */
     void insertEvent(@Param("eventNo") String eventNo,
             @Param("eventType") String eventType,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("bizNo") String bizNo,
             @Param("eventPayload") String eventPayload);
 
+    /**
+     * 写入支付尝试记录。
+     */
     void insertPaymentAttempt(@Param("attemptNo") String attemptNo,
             @Param("prepayOrderNo") String prepayOrderNo,
             @Param("paymentOrderId") String paymentOrderId,

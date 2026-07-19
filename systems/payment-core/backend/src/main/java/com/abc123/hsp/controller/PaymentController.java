@@ -29,41 +29,65 @@ public class PaymentController {
         this.paymentService = paymentService;
     }
 
+    /**
+     * 查询支付单列表，供后台运营页展示。
+     */
     @GetMapping
     public ApiResponse<List<PaymentListItemDTO>> list() {
         return ApiResponse.success(paymentService.list());
     }
 
+    /**
+     * 查询支付单详情，返回基本信息和全量轨迹日志。
+     */
     @GetMapping("/{paymentOrderId}")
     public ApiResponse<PaymentDetailDTO> detail(@PathVariable String paymentOrderId) {
         return ApiResponse.success(paymentService.detail(paymentOrderId));
     }
 
+    /**
+     * 基于订单发起支付，生成账单、支付单和预付单。
+     */
     @PostMapping("/prepay")
     public ApiResponse<PrepayOrderDTO> prepay(@RequestBody PrepayRequestDTO request) {
         return ApiResponse.success(paymentService.prepay(request));
     }
 
+    /**
+     * 获取收银台页面所需的订单摘要、金额和支付方式。
+     */
     @GetMapping("/cashier/{prepayOrderNo}")
     public ApiResponse<CashierPageDTO> cashier(@PathVariable String prepayOrderNo) {
         return ApiResponse.success(paymentService.cashier(prepayOrderNo));
     }
 
+    /**
+     * 提交支付，记录支付尝试、路由轨迹和事件轨迹。
+     */
     @PostMapping("/submit")
     public ApiResponse<PrepayOrderDTO> submit(@RequestBody PaymentSubmitRequestDTO request) {
         return ApiResponse.success(paymentService.submit(request));
     }
 
+    /**
+     * 接收渠道回调并收口支付状态。
+     */
     @PostMapping("/callback/{channel}")
     public ApiResponse<PaymentDetailDTO> callback(@PathVariable String channel, @RequestBody PaymentCallbackRequestDTO request) {
         return ApiResponse.success(paymentService.callback(channel, request));
     }
 
+    /**
+     * 主动查单，当前版本以查询本地支付详情为主。
+     */
     @PostMapping("/query")
     public ApiResponse<PaymentDetailDTO> query(@RequestBody PaymentQueryRequestDTO request) {
         return ApiResponse.success(paymentService.query(request));
     }
 
+    /**
+     * 关闭支付单，供超时关闭或人工终止使用。
+     */
     @PostMapping("/close")
     public ApiResponse<PaymentDetailDTO> close(@RequestBody PaymentCloseRequestDTO request) {
         return ApiResponse.success(paymentService.close(request));
