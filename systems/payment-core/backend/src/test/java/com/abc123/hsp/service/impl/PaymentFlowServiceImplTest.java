@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import com.abc123.hsp.mapper.PaymentFlowMapper;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,11 +25,15 @@ class PaymentFlowServiceImplTest {
         query.setPaymentOrderId(" PAY-001 ");
         query.setOrderNo(" ORD-001 ");
         query.setFlowType("支付尝试");
-        query.setPageNo(3);
-        query.setPageSize(30);
+        query.setPageNo(-3);
+        query.setPageSize(0);
 
+        org.mockito.Mockito.when(paymentFlowMapper.findAll(query)).thenReturn(Collections.emptyList());
+        org.mockito.Mockito.when(paymentFlowMapper.count(query)).thenReturn(0L);
         new PaymentFlowServiceImpl(paymentFlowMapper).list(query);
 
+        org.junit.jupiter.api.Assertions.assertEquals(1, query.getPageNo());
+        org.junit.jupiter.api.Assertions.assertEquals(1, query.getPageSize());
         verify(paymentFlowMapper).findAll(query);
         verify(paymentFlowMapper).count(query);
     }

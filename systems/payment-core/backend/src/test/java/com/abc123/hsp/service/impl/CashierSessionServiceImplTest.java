@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.mapper.CashierSessionMapper;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,10 +27,14 @@ class CashierSessionServiceImplTest {
         query.setTerminal("H5");
         query.setSessionStatus("待支付");
         query.setPageNo(2);
-        query.setPageSize(40);
+        query.setPageSize(999);
 
+        org.mockito.Mockito.when(cashierSessionMapper.findAll(query)).thenReturn(Collections.emptyList());
+        org.mockito.Mockito.when(cashierSessionMapper.count(query)).thenReturn(0L);
         new CashierSessionServiceImpl(cashierSessionMapper).list(query);
 
+        org.junit.jupiter.api.Assertions.assertEquals(2, query.getPageNo());
+        org.junit.jupiter.api.Assertions.assertEquals(100, query.getPageSize());
         verify(cashierSessionMapper).findAll(query);
         verify(cashierSessionMapper).count(query);
     }
