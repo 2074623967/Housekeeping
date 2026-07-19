@@ -1,0 +1,100 @@
+CREATE TABLE t_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    order_no VARCHAR(64) NOT NULL COMMENT '订单号',
+    customer_id BIGINT NOT NULL COMMENT '用户ID',
+    customer_name VARCHAR(128) NOT NULL COMMENT '用户名称',
+    service_type VARCHAR(64) NOT NULL COMMENT '服务品类',
+    worker_id BIGINT DEFAULT NULL COMMENT '服务者ID',
+    worker_name VARCHAR(128) DEFAULT NULL COMMENT '服务者名称',
+    order_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '订单总金额',
+    paid_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '已付金额',
+    order_status VARCHAR(32) NOT NULL COMMENT '订单状态',
+    fulfillment_status VARCHAR(32) NOT NULL COMMENT '履约状态',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_order_no (order_no),
+    KEY idx_customer_id (customer_id),
+    KEY idx_worker_id (worker_id),
+    KEY idx_order_status (order_status),
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单主表';
+
+CREATE TABLE t_bill (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    bill_no VARCHAR(64) NOT NULL COMMENT '账单号',
+    order_no VARCHAR(64) NOT NULL COMMENT '订单号',
+    bill_type VARCHAR(32) NOT NULL COMMENT '账单类型',
+    bill_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '账单金额',
+    bill_status VARCHAR(32) NOT NULL COMMENT '账单状态',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_bill_no (bill_no),
+    KEY idx_order_no (order_no),
+    KEY idx_bill_status (bill_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账单表';
+
+CREATE TABLE t_payment_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
+    order_no VARCHAR(64) NOT NULL COMMENT '订单号',
+    bill_no VARCHAR(64) NOT NULL COMMENT '账单号',
+    customer_id BIGINT NOT NULL COMMENT '用户ID',
+    payment_method VARCHAR(32) NOT NULL COMMENT '支付方式',
+    channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
+    channel_transaction_no VARCHAR(128) DEFAULT NULL COMMENT '渠道交易号',
+    amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '支付金额',
+    status VARCHAR(32) NOT NULL COMMENT '支付状态',
+    notify_status VARCHAR(32) NOT NULL DEFAULT 'INIT' COMMENT '回调状态',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_payment_order_id (payment_order_id),
+    KEY idx_order_no (order_no),
+    KEY idx_bill_no (bill_no),
+    KEY idx_customer_id (customer_id),
+    KEY idx_status (status),
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
+
+CREATE TABLE t_refund_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    refund_order_id VARCHAR(64) NOT NULL COMMENT '退款单号',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '原支付单号',
+    order_no VARCHAR(64) NOT NULL COMMENT '原订单号',
+    refund_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款金额',
+    refund_method VARCHAR(32) NOT NULL COMMENT '退款方式',
+    status VARCHAR(32) NOT NULL COMMENT '退款状态',
+    applied_at DATETIME NOT NULL COMMENT '申请时间',
+    success_at DATETIME DEFAULT NULL COMMENT '成功时间',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_refund_order_id (refund_order_id),
+    KEY idx_payment_order_id (payment_order_id),
+    KEY idx_order_no (order_no),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
+
+CREATE TABLE t_worker_settlement_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    settlement_order_id VARCHAR(64) NOT NULL COMMENT '结算单号',
+    worker_id BIGINT NOT NULL COMMENT '服务者ID',
+    worker_name VARCHAR(128) NOT NULL COMMENT '服务者名称',
+    period_start DATE NOT NULL COMMENT '账期开始日期',
+    period_end DATE NOT NULL COMMENT '账期结束日期',
+    amount_should_settle DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '应结金额',
+    deduct_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '扣减金额',
+    deposit_impact_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '保证金影响金额',
+    amount_net_settle DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '实结金额',
+    status VARCHAR(32) NOT NULL COMMENT '结算状态',
+    payout_status VARCHAR(32) NOT NULL COMMENT '出款状态',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_settlement_order_id (settlement_order_id),
+    KEY idx_worker_id (worker_id),
+    KEY idx_status (status),
+    KEY idx_payout_status (payout_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服务者结算单表';
