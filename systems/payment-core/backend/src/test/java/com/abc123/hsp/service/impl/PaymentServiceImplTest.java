@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
+import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
@@ -179,6 +180,52 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-NEW", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-NEW", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldReuseCurrentPrepayWhenSubmitAlreadyEnteredWaitCallback() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-100");
+        prepay.setPaymentOrderId("PAY-100");
+        when(paymentMapper.findPrepay("PRE-100")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-100");
+        detail.setStatus("WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-100")).thenReturn(detail);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-100");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+
+        PrepayOrderDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService)
+                .submit(request);
+
+        verify(paymentMapper, times(1)).findPrepay("PRE-100");
+        verify(paymentMapper, times(1)).findDetail("PAY-100");
+        verify(paymentMapper, never()).updatePrepayToPaying("PRE-100");
+        verify(paymentMapper, never()).insertRouteRecord(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        verify(paymentMapper, never()).insertPaymentAttempt(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        org.junit.jupiter.api.Assertions.assertEquals("PRE-100", result.getPrepayOrderNo());
     }
 
     @Test

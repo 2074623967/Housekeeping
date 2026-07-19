@@ -120,9 +120,20 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     @Override
     public PrepayOrderDTO submit(PaymentSubmitRequestDTO request) {
-        String paymentOrderId = paymentMapper.findPaymentOrderIdByPrepayOrderNo(request.getPrepayOrderNo());
-        if (!StringUtils.hasText(paymentOrderId)) {
+        PrepayOrderDTO currentPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
+        if (currentPrepay == null || !StringUtils.hasText(currentPrepay.getPaymentOrderId())) {
             return null;
+        }
+        String paymentOrderId = currentPrepay.getPaymentOrderId();
+        PaymentDetailDTO currentDetail = paymentMapper.findDetail(paymentOrderId);
+        if (currentDetail == null) {
+            return null;
+        }
+        if ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
+                || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus())
+                || "CLOSED".equalsIgnoreCase(currentDetail.getStatus())) {
+            // 收银台重复点击提交按钮时直接复用当前支付状态，避免重复写支付尝试、路由和待回调日志。
+            return currentPrepay;
         }
         String resolvedChannelCode = paymentChannelRoutingService.resolve(
                 request.getPaymentMethod(),
