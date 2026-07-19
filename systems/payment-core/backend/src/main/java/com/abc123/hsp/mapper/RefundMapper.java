@@ -7,4 +7,6 @@ import java.util.List;
 public interface RefundMapper {
 
     List<RefundListItemDTO> findAll(RefundQueryDTO query);
+
+    long count(RefundQueryDTO query);
 }

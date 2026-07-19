@@ -15,4 +15,9 @@ public interface BillMapper {
      * @return 账单列表
      */
     List<BillListItemDTO> findAll(BillQueryDTO query);
+
+    /**
+     * 统计符合条件的账单总数。
+     */
+    long count(BillQueryDTO query);
 }

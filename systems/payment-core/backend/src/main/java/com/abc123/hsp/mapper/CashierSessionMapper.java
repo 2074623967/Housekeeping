@@ -15,4 +15,9 @@ public interface CashierSessionMapper {
      * @return 收银台会话列表
      */
     List<CashierSessionListItemDTO> findAll(CashierSessionQueryDTO query);
+
+    /**
+     * 统计符合条件的收银台会话总数。
+     */
+    long count(CashierSessionQueryDTO query);
 }

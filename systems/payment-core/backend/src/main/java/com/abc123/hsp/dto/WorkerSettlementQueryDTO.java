@@ -9,6 +9,8 @@ public class WorkerSettlementQueryDTO {
     private String workerKeyword;
     private String settlementStatus;
     private String payoutStatus;
+    private int pageNo = 1;
+    private int pageSize = 20;
 
     public String getSettlementOrderId() {
         return settlementOrderId;
@@ -40,5 +42,29 @@ public class WorkerSettlementQueryDTO {
 
     public void setPayoutStatus(String payoutStatus) {
         this.payoutStatus = payoutStatus;
+    }
+
+    public int getPageNo() {
+        return pageNo;
+    }
+
+    public void setPageNo(int pageNo) {
+        this.pageNo = pageNo;
+    }
+
+    public int getPageSize() {
+        return pageSize;
+    }
+
+    public void setPageSize(int pageSize) {
+        this.pageSize = pageSize;
+    }
+
+    public int getOffset() {
+        return (Math.max(pageNo, 1) - 1) * Math.min(Math.max(pageSize, 1), 100);
+    }
+
+    public int getLimit() {
+        return Math.min(Math.max(pageSize, 1), 100);
     }
 }

@@ -5,6 +5,9 @@ import { settlementApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   settlementOrderId: "",
   workerKeyword: "",
@@ -19,10 +22,12 @@ function resetFilters() {
     settlementStatus: "全部",
     payoutStatus: "全部"
   };
+  pageNo.value = 1;
   loadWorkerSettlements();
 }
 
 function applyFilters() {
+  pageNo.value = 1;
   loadWorkerSettlements();
 }
 
@@ -30,17 +35,29 @@ async function loadWorkerSettlements() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await settlementApi.getWorkerList({
+    const result = await settlementApi.getWorkerList({
       settlementOrderId: filters.value.settlementOrderId,
       workerKeyword: filters.value.workerKeyword,
       settlementStatus: filters.value.settlementStatus,
-      payoutStatus: filters.value.payoutStatus
+      payoutStatus: filters.value.payoutStatus,
+      pageNo: pageNo.value,
+      pageSize
     });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadWorkerSettlements();
 }
 
 onMounted(loadWorkerSettlements);
@@ -135,6 +152,12 @@ onMounted(loadWorkerSettlements);
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条服务者结算单</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

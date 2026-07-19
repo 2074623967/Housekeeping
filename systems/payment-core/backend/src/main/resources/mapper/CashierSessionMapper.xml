@@ -48,5 +48,31 @@
             </if>
         </where>
         ORDER BY pr.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_prepay_order pr
+        <where>
+            <if test="query.sessionNo != null and query.sessionNo != ''">
+                pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND pr.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND pr.pay_scene = #{query.terminal}
+            </if>
+            <if test="query.sessionStatus != null and query.sessionStatus != '' and query.sessionStatus != '全部'">
+                AND (
+                    CASE
+                        WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
+                        WHEN pr.expires_at &lt; NOW() THEN '已失效'
+                        ELSE pr.cashier_status
+                    END
+                ) = #{query.sessionStatus}
+            </if>
+        </where>
     </select>
 </mapper>

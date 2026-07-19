@@ -5,6 +5,9 @@ import { cashierSessionApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   sessionNo: "",
   orderNo: "",
@@ -19,10 +22,12 @@ function resetFilters() {
     terminal: "全部",
     sessionStatus: "全部"
   };
+  pageNo.value = 1;
   loadCashierSessions();
 }
 
 function applyFilters() {
+  pageNo.value = 1;
   loadCashierSessions();
 }
 
@@ -30,17 +35,29 @@ async function loadCashierSessions() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await cashierSessionApi.getList({
+    const result = await cashierSessionApi.getList({
       sessionNo: filters.value.sessionNo,
       orderNo: filters.value.orderNo,
       terminal: filters.value.terminal,
-      sessionStatus: filters.value.sessionStatus
+      sessionStatus: filters.value.sessionStatus,
+      pageNo: pageNo.value,
+      pageSize
     });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadCashierSessions();
 }
 
 onMounted(loadCashierSessions);
@@ -136,6 +153,12 @@ onMounted(loadCashierSessions);
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条会话</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

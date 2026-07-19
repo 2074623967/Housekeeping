@@ -7,4 +7,6 @@ import java.util.List;
 public interface SettlementMapper {
 
     List<WorkerSettlementListItemDTO> findWorkerSettlements(WorkerSettlementQueryDTO query);
+
+    long count(WorkerSettlementQueryDTO query);
 }

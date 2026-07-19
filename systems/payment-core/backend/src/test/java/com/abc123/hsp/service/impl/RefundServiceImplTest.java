@@ -25,9 +25,12 @@ class RefundServiceImplTest {
         query.setPaymentOrderId("PAY-001");
         query.setRefundStatus("SUCCESS");
         query.setRefundMethod("原路退回");
+        query.setPageNo(2);
+        query.setPageSize(20);
 
         new RefundServiceImpl(refundMapper).list(query);
 
         verify(refundMapper).findAll(query);
+        verify(refundMapper).count(query);
     }
 }

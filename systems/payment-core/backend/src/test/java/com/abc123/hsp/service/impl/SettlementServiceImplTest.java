@@ -25,9 +25,12 @@ class SettlementServiceImplTest {
         query.setWorkerKeyword("李师傅");
         query.setSettlementStatus("待审核");
         query.setPayoutStatus("待出款");
+        query.setPageNo(2);
+        query.setPageSize(20);
 
         new SettlementServiceImpl(settlementMapper).workerList(query);
 
         verify(settlementMapper).findWorkerSettlements(query);
+        verify(settlementMapper).count(query);
     }
 }

@@ -48,12 +48,16 @@ export const billApi = {
   getList: ({
     billNo = "",
     orderNo = "",
-    billStatus = "全部"
+    billStatus = "全部",
+    pageNo = 1,
+    pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       billNo,
       orderNo,
-      billStatus
+      billStatus,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
     });
     return request(`/api/bills?${params.toString()}`);
   }
@@ -63,12 +67,16 @@ export const paymentFlowApi = {
   getList: ({
     paymentOrderId = "",
     orderNo = "",
-    flowType = "全部"
+    flowType = "全部",
+    pageNo = 1,
+    pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       paymentOrderId,
       orderNo,
-      flowType
+      flowType,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
     });
     return request(`/api/payment-flows?${params.toString()}`);
   }
@@ -79,13 +87,17 @@ export const cashierSessionApi = {
     sessionNo = "",
     orderNo = "",
     terminal = "全部",
-    sessionStatus = "全部"
+    sessionStatus = "全部",
+    pageNo = 1,
+    pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       sessionNo,
       orderNo,
       terminal,
-      sessionStatus
+      sessionStatus,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
     });
     return request(`/api/cashier-sessions?${params.toString()}`);
   }
@@ -167,13 +179,17 @@ export const refundApi = {
     refundOrderId = "",
     paymentOrderId = "",
     refundStatus = "全部",
-    refundMethod = "全部"
+    refundMethod = "全部",
+    pageNo = 1,
+    pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       refundOrderId,
       paymentOrderId,
       refundStatus,
-      refundMethod
+      refundMethod,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
     });
     return request(`/api/refunds?${params.toString()}`);
   }
@@ -184,13 +200,17 @@ export const settlementApi = {
     settlementOrderId = "",
     workerKeyword = "",
     settlementStatus = "全部",
-    payoutStatus = "全部"
+    payoutStatus = "全部",
+    pageNo = 1,
+    pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       settlementOrderId,
       workerKeyword,
       settlementStatus,
-      payoutStatus
+      payoutStatus,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
     });
     return request(`/api/settlements/workers?${params.toString()}`);
   }

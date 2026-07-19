@@ -2,7 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
-import java.util.List;
+import com.abc123.hsp.dto.PageResultDTO;
 
 /**
  * 账单中心 Service，提供交易账单视角查询能力。
@@ -14,5 +14,5 @@ public interface BillService {
      *
      * @return 账单列表
      */
-    List<BillListItemDTO> list(BillQueryDTO query);
+    PageResultDTO<BillListItemDTO> list(BillQueryDTO query);
 }

@@ -5,6 +5,9 @@ import { refundApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   refundOrderId: "",
   paymentOrderId: "",
@@ -19,10 +22,12 @@ function resetFilters() {
     refundStatus: "全部",
     refundMethod: "全部"
   };
+  pageNo.value = 1;
   loadRefunds();
 }
 
 function applyFilters() {
+  pageNo.value = 1;
   loadRefunds();
 }
 
@@ -30,17 +35,29 @@ async function loadRefunds() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await refundApi.getList({
+    const result = await refundApi.getList({
       refundOrderId: filters.value.refundOrderId,
       paymentOrderId: filters.value.paymentOrderId,
       refundStatus: filters.value.refundStatus,
-      refundMethod: filters.value.refundMethod
+      refundMethod: filters.value.refundMethod,
+      pageNo: pageNo.value,
+      pageSize
     });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadRefunds();
 }
 
 onMounted(loadRefunds);
@@ -134,6 +151,12 @@ onMounted(loadRefunds);
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条退款单</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

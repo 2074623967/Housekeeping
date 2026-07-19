@@ -15,4 +15,9 @@ public interface PaymentFlowMapper {
      * @return 支付流水列表
      */
     List<PaymentFlowListItemDTO> findAll(PaymentFlowQueryDTO query);
+
+    /**
+     * 统计符合条件的支付流水总数。
+     */
+    long count(PaymentFlowQueryDTO query);
 }

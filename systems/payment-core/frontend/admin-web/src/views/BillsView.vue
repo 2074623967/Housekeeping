@@ -5,6 +5,9 @@ import { billApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   billNo: "",
   orderNo: "",
@@ -17,10 +20,12 @@ function resetFilters() {
     orderNo: "",
     billStatus: "全部"
   };
+  pageNo.value = 1;
   loadBills();
 }
 
 function applyFilters() {
+  pageNo.value = 1;
   loadBills();
 }
 
@@ -28,16 +33,28 @@ async function loadBills() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await billApi.getList({
+    const result = await billApi.getList({
       billNo: filters.value.billNo,
       orderNo: filters.value.orderNo,
-      billStatus: filters.value.billStatus
+      billStatus: filters.value.billStatus,
+      pageNo: pageNo.value,
+      pageSize
     });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadBills();
 }
 
 onMounted(loadBills);
@@ -118,6 +135,12 @@ onMounted(loadBills);
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条账单</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

@@ -9,6 +9,8 @@ public class RefundQueryDTO {
     private String paymentOrderId;
     private String refundStatus;
     private String refundMethod;
+    private int pageNo = 1;
+    private int pageSize = 20;
 
     public String getRefundOrderId() {
         return refundOrderId;
@@ -40,5 +42,29 @@ public class RefundQueryDTO {
 
     public void setRefundMethod(String refundMethod) {
         this.refundMethod = refundMethod;
+    }
+
+    public int getPageNo() {
+        return pageNo;
+    }
+
+    public void setPageNo(int pageNo) {
+        this.pageNo = pageNo;
+    }
+
+    public int getPageSize() {
+        return pageSize;
+    }
+
+    public void setPageSize(int pageSize) {
+        this.pageSize = pageSize;
+    }
+
+    public int getOffset() {
+        return (Math.max(pageNo, 1) - 1) * Math.min(Math.max(pageSize, 1), 100);
+    }
+
+    public int getLimit() {
+        return Math.min(Math.max(pageSize, 1), 100);
     }
 }

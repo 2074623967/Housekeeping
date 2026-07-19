@@ -5,6 +5,9 @@ import { paymentFlowApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   paymentOrderId: "",
   orderNo: "",
@@ -17,10 +20,12 @@ function resetFilters() {
     orderNo: "",
     flowType: "全部"
   };
+  pageNo.value = 1;
   loadPaymentFlows();
 }
 
 function applyFilters() {
+  pageNo.value = 1;
   loadPaymentFlows();
 }
 
@@ -28,16 +33,28 @@ async function loadPaymentFlows() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await paymentFlowApi.getList({
+    const result = await paymentFlowApi.getList({
       paymentOrderId: filters.value.paymentOrderId,
       orderNo: filters.value.orderNo,
-      flowType: filters.value.flowType
+      flowType: filters.value.flowType,
+      pageNo: pageNo.value,
+      pageSize
     });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadPaymentFlows();
 }
 
 onMounted(loadPaymentFlows);
@@ -120,6 +137,12 @@ onMounted(loadPaymentFlows);
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条支付流水</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

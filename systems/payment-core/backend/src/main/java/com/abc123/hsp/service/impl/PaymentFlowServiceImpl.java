@@ -1,10 +1,10 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import com.abc123.hsp.mapper.PaymentFlowMapper;
 import com.abc123.hsp.service.PaymentFlowService;
-import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,9 +20,16 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
     }
 
     @Override
-    public List<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query) {
+    public PageResultDTO<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        return paymentFlowMapper.findAll(query);
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return new PageResultDTO<>(
+                paymentFlowMapper.findAll(query),
+                paymentFlowMapper.count(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
     }
 }
