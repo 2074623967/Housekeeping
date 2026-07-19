@@ -11,6 +11,8 @@ const navGroups = [
       { label: "账单中心", to: "/bills" },
       { label: "支付流水查询", to: "/payment-flows" },
       { label: "收银台会话", to: "/cashier-sessions" },
+      { label: "支付请求管理", to: "/payment-requests" },
+      { label: "支付处理日志", to: "/payment-logs" },
       { label: "支付单管理", to: "/payments" },
       { label: "退款单管理", to: "/refunds" }
     ]

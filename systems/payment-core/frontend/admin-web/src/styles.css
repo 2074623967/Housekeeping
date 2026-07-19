@@ -242,6 +242,34 @@ th {
   line-height: 1.6;
 }
 
+.payload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.payload-grid strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #475569;
+}
+
+.payload-grid pre {
+  min-height: 64px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #dbe3f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font: 12px/1.6 "SFMono-Regular", Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .section-title {
   display: flex;
   justify-content: space-between;

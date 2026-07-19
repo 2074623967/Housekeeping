@@ -52,6 +52,14 @@ export const cashierSessionApi = {
   getList: () => request("/api/cashier-sessions")
 };
 
+export const paymentRequestApi = {
+  getList: () => request("/api/payment-requests")
+};
+
+export const paymentLogApi = {
+  getList: () => request("/api/payment-logs")
+};
+
 export const paymentApi = {
   getList: () => request("/api/payments"),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
