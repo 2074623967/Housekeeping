@@ -9,6 +9,7 @@ const cashier = ref(null);
 const loading = ref(true);
 const message = ref("");
 const selected = ref("微信支付");
+const submitLoading = ref(false);
 
 onMounted(async () => {
   try {
@@ -23,19 +24,26 @@ onMounted(async () => {
 const channels = computed(() => cashier.value?.channels || []);
 
 async function pay() {
-  const next = await paymentApi.submit({
-    prepayOrderNo: cashier.value.prepayOrderNo,
-    paymentMethod: selected.value,
-    channelCode: selected.value === "微信支付" ? "wx_jsapi" : selected.value === "支付宝" ? "alipay_h5" : "bank_card"
-  });
-  router.push({
-    path: "/result/pending",
-    query: {
-      prepayOrderNo: next?.prepayOrderNo,
-      paymentOrderId: next?.paymentOrderId,
-      paymentMethod: selected.value
-    }
-  });
+  submitLoading.value = true;
+  message.value = "";
+  try {
+    const next = await paymentApi.submit({
+      prepayOrderNo: cashier.value.prepayOrderNo,
+      paymentMethod: selected.value,
+      channelCode: selected.value === "微信支付" ? "WX_H5" : selected.value === "支付宝" ? "ALIPAY_H5" : "BANK_CARD"
+    });
+    router.push({
+      path: `/payment-result/${next?.paymentOrderId}`,
+      query: {
+        prepayOrderNo: next?.prepayOrderNo,
+        paymentMethod: selected.value
+      }
+    });
+  } catch (error) {
+    message.value = error.message;
+  } finally {
+    submitLoading.value = false;
+  }
 }
 </script>
 
@@ -68,7 +76,10 @@ async function pay() {
             {{ item }}
           </button>
         </div>
-        <button class="button primary" @click="pay">确认支付</button>
+        <button class="button primary" :disabled="submitLoading" @click="pay">
+          {{ submitLoading ? "提交中..." : "确认支付" }}
+        </button>
+        <p v-if="message" class="inline-message">{{ message }}</p>
       </div>
       <div class="panel">
         <h3 class="title">订单信息</h3>

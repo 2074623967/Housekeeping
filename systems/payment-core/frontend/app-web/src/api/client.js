@@ -16,6 +16,7 @@ async function request(url, options = {}) {
 export const paymentApi = {
   prepay: (data) => request("/api/payments/prepay", { method: "POST", body: JSON.stringify(data) }),
   getCashier: (prepayOrderNo) => request(`/api/payments/cashier/${prepayOrderNo}`),
+  getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
   submit: (data) => request("/api/payments/submit", { method: "POST", body: JSON.stringify(data) }),
   callback: (channel, data) => request(`/api/payments/callback/${channel}`, { method: "POST", body: JSON.stringify(data) }),
   query: (data) => request("/api/payments/query", { method: "POST", body: JSON.stringify(data) }),

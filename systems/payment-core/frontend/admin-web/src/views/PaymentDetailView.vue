@@ -29,7 +29,7 @@ async function handleQuery() {
 }
 
 async function handleCallback() {
-  await paymentApi.callback("wx_jsapi", route.params.paymentOrderId);
+  await paymentApi.callback("WX_H5", route.params.paymentOrderId);
   actionMessage.value = `支付单 ${route.params.paymentOrderId} 已模拟成功回调。`;
   await loadDetail();
 }

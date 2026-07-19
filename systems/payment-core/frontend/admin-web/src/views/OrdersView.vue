@@ -13,7 +13,7 @@ const filters = ref({
   orderStatus: "全部"
 });
 
-const appWebBaseUrl = "http://127.0.0.1:5174";
+const appWebBaseUrl = "http://127.0.0.1:5175";
 
 const filteredItems = computed(() =>
   items.value.filter((item) => {
@@ -47,7 +47,7 @@ async function launchPayment(orderNo) {
   try {
     const prepay = await paymentApi.prepay({
       orderNo,
-      payScene: "H5"
+      payScene: "HOME_CLEAN"
     });
     launchPayload.value = {
       orderNo,

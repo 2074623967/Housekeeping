@@ -61,7 +61,7 @@ async function handleClose(paymentOrderId) {
 }
 
 async function handleCallback(paymentOrderId) {
-  await paymentApi.callback("wx_jsapi", paymentOrderId);
+  await paymentApi.callback("WX_H5", paymentOrderId);
   actionMessage.value = `支付单 ${paymentOrderId} 已模拟成功回调。`;
   await refreshList();
 }

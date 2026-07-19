@@ -6,7 +6,7 @@ import "./styles.css";
 const routes = [
   { path: "/", redirect: "/cashier/PRE202607190002" },
   { path: "/cashier/:prepayOrderNo", component: () => import("./views/CashierView.vue") },
-  { path: "/result/:status", component: () => import("./views/ResultView.vue") }
+  { path: "/payment-result/:paymentOrderId", component: () => import("./views/ResultView.vue") }
 ];
 
 const router = createRouter({
