@@ -22,6 +22,8 @@
 - `docs/整体架构与实现目标.md`
 - `docs/开发排期与提交流程.md`
 - `docs/总体架构与系统实施蓝图.md`
+- `docs/系统级设计模板.md`
+- `docs/第二阶段系统落地清单.md`
 - `docs/模块开发交付标准.md`
 - `docs/系统分期建设方案.md`
 - `docs/系统目录总览.md`
@@ -29,6 +31,9 @@
 当前已落地系统：
 
 - `systems/payment-core`
+- `systems/accounting-system`
+- `systems/clearing-system`
+- `systems/settlement-system`
 
 `payment-core` 内部包含：
 
