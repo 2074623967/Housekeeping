@@ -13,12 +13,23 @@ async function request(url, options = {}) {
   return payload.data;
 }
 
+function buildJsonRequestOptions(method, payload) {
+  return {
+    method,
+    body: JSON.stringify(payload)
+  };
+}
+
+function postJson(url, payload) {
+  return request(url, buildJsonRequestOptions("POST", payload));
+}
+
 export const paymentApi = {
-  prepay: (data) => request("/api/payments/prepay", { method: "POST", body: JSON.stringify(data) }),
+  prepay: (payload) => postJson("/api/payments/prepay", payload),
   getCashier: (prepayOrderNo) => request(`/api/payments/cashier/${prepayOrderNo}`),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
-  submit: (data) => request("/api/payments/submit", { method: "POST", body: JSON.stringify(data) }),
-  callback: (channel, data) => request(`/api/payments/callback/${channel}`, { method: "POST", body: JSON.stringify(data) }),
-  query: (data) => request("/api/payments/query", { method: "POST", body: JSON.stringify(data) }),
-  close: (data) => request("/api/payments/close", { method: "POST", body: JSON.stringify(data) })
+  submit: (payload) => postJson("/api/payments/submit", payload),
+  callback: (channelCode, payload) => postJson(`/api/payments/callback/${channelCode}`, payload),
+  query: (payload) => postJson("/api/payments/query", payload),
+  close: (payload) => postJson("/api/payments/close", payload)
 };

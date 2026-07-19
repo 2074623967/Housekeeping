@@ -13,6 +13,25 @@ async function request(url, options = {}) {
   return payload.data;
 }
 
+function buildJsonRequestOptions(method, payload) {
+  return {
+    method,
+    body: JSON.stringify(payload)
+  };
+}
+
+function postJson(url, payload) {
+  return request(url, buildJsonRequestOptions("POST", payload));
+}
+
+function buildSuccessCallbackPayload(paymentOrderId) {
+  return {
+    paymentOrderId,
+    channelTransactionNo: `SIM${Date.now()}`,
+    tradeStatus: "SUCCESS"
+  };
+}
+
 export const dashboardApi = {
   getSummary: () => request("/api/dashboard/summary")
 };
@@ -24,18 +43,13 @@ export const orderApi = {
 export const paymentApi = {
   getList: () => request("/api/payments"),
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
-  prepay: (payload) => request("/api/payments/prepay", { method: "POST", body: JSON.stringify(payload) }),
-  query: (paymentOrderId) => request("/api/payments/query", { method: "POST", body: JSON.stringify({ paymentOrderId }) }),
-  close: (paymentOrderId) => request("/api/payments/close", { method: "POST", body: JSON.stringify({ paymentOrderId }) }),
-  callback: (channel, paymentOrderId) =>
-    request(`/api/payments/callback/${channel}`, {
-      method: "POST",
-      body: JSON.stringify({
-        paymentOrderId,
-        channelTransactionNo: `SIM${Date.now()}`,
-        tradeStatus: "SUCCESS"
-      })
-    })
+  prepay: (payload) => postJson("/api/payments/prepay", payload),
+  query: (paymentOrderId) => postJson("/api/payments/query", { paymentOrderId }),
+  close: (paymentOrderId) => postJson("/api/payments/close", { paymentOrderId }),
+  callback: (channelCode, paymentOrderId) => postJson(
+    `/api/payments/callback/${channelCode}`,
+    buildSuccessCallbackPayload(paymentOrderId)
+  )
 };
 
 export const refundApi = {

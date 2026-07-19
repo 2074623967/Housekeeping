@@ -2,13 +2,14 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
+import { resolvePaymentChannelCode } from "../constants/payment";
 
 const route = useRoute();
 const router = useRouter();
 const cashier = ref(null);
 const loading = ref(true);
 const message = ref("");
-const selected = ref("微信支付");
+const selectedPaymentMethod = ref("微信支付");
 const submitLoading = ref(false);
 
 onMounted(async () => {
@@ -22,21 +23,26 @@ onMounted(async () => {
 });
 
 const channels = computed(() => cashier.value?.channels || []);
+const hasChannels = computed(() => channels.value.length > 0);
 
 async function pay() {
+  if (!cashier.value || !hasChannels.value) {
+    message.value = "当前暂无可用支付方式，请稍后重试。";
+    return;
+  }
   submitLoading.value = true;
   message.value = "";
   try {
-    const next = await paymentApi.submit({
+    const submitResult = await paymentApi.submit({
       prepayOrderNo: cashier.value.prepayOrderNo,
-      paymentMethod: selected.value,
-      channelCode: selected.value === "微信支付" ? "WX_H5" : selected.value === "支付宝" ? "ALIPAY_H5" : "BANK_CARD"
+      paymentMethod: selectedPaymentMethod.value,
+      channelCode: resolvePaymentChannelCode(selectedPaymentMethod.value)
     });
     router.push({
-      path: `/payment-result/${next?.paymentOrderId}`,
+      path: `/payment-result/${submitResult?.paymentOrderId}`,
       query: {
-        prepayOrderNo: next?.prepayOrderNo,
-        paymentMethod: selected.value
+        prepayOrderNo: submitResult?.prepayOrderNo,
+        paymentMethod: selectedPaymentMethod.value
       }
     });
   } catch (error) {
@@ -70,13 +76,14 @@ async function pay() {
           <button
             v-for="item in channels"
             :key="item"
-            :class="['button', selected === item ? 'primary' : 'secondary']"
-            @click="selected = item"
+            :class="['button', selectedPaymentMethod === item ? 'primary' : 'secondary']"
+            @click="selectedPaymentMethod = item"
           >
             {{ item }}
           </button>
         </div>
-        <button class="button primary" :disabled="submitLoading" @click="pay">
+        <div v-if="!hasChannels" class="inline-message">当前暂无可用渠道，请稍后刷新页面。</div>
+        <button class="button primary" :disabled="submitLoading || !hasChannels" @click="pay">
           {{ submitLoading ? "提交中..." : "确认支付" }}
         </button>
         <p v-if="message" class="inline-message">{{ message }}</p>
