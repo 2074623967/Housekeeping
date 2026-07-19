@@ -104,10 +104,18 @@
 ```json
 {
   "prepayOrderNo": "PRE1752912345678",
-  "paymentMethod": "微信支付",
-  "channelCode": "WX_H5"
+    "paymentMethod": "微信支付",
+    "channelCode": "WX_H5"
 }
 ```
+
+`channelCode` 会由支付核心统一规范化为标准编码：
+
+| 请求渠道/支付方式 | 标准渠道编码 |
+| --- | --- |
+| 微信、`WX_H5`、`wx_jsapi` | `wx_h5` |
+| 支付宝、`ALIPAY_H5`、`alipay_h5` | `alipay_h5` |
+| 银行卡、银行转账、`BANK_CARD` | `offline_bank` |
 
 返回示例：
 

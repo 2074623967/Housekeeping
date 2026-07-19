@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
+import com.abc123.hsp.service.PaymentChannelRoutingService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -24,12 +25,15 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentMapper paymentMapper;
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
+    private final PaymentChannelRoutingService paymentChannelRoutingService;
 
     public PaymentServiceImpl(
             PaymentMapper paymentMapper,
-            PaymentCallbackSignatureService paymentCallbackSignatureService) {
+            PaymentCallbackSignatureService paymentCallbackSignatureService,
+            PaymentChannelRoutingService paymentChannelRoutingService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
+        this.paymentChannelRoutingService = paymentChannelRoutingService;
     }
 
     @Override
@@ -111,17 +115,28 @@ public class PaymentServiceImpl implements PaymentService {
         if (!StringUtils.hasText(paymentOrderId)) {
             return null;
         }
+        String resolvedChannelCode = paymentChannelRoutingService.resolve(
+                request.getPaymentMethod(),
+                request.getChannelCode());
         // 收银台提交后，先把预付单状态收口，再补齐支付单上的支付方式和渠道。
         paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
-        paymentMapper.updatePaymentMethodAndChannel(paymentOrderId, request.getPaymentMethod(), request.getChannelCode());
+        paymentMapper.updatePaymentMethodAndChannel(
+                paymentOrderId,
+                request.getPaymentMethod(),
+                resolvedChannelCode);
         String routeNo = "RTR" + System.currentTimeMillis();
-        paymentMapper.insertRouteRecord(routeNo, paymentOrderId, request.getChannelCode(), "默认渠道路由", request.getPaymentMethod());
+        paymentMapper.insertRouteRecord(
+                routeNo,
+                paymentOrderId,
+                resolvedChannelCode,
+                "默认渠道路由",
+                resolvedChannelCode);
         String attemptNo = "ATT" + System.currentTimeMillis();
         paymentMapper.insertPaymentAttempt(
                 attemptNo,
                 request.getPrepayOrderNo(),
                 paymentOrderId,
-                request.getChannelCode(),
+                resolvedChannelCode,
                 request.getPaymentMethod(),
                 "{\"method\":\"" + request.getPaymentMethod() + "\",\"channelCode\":\"" + request.getChannelCode() + "\"}",
                 "{\"code\":\"SUCCESS\"}",
@@ -133,12 +148,12 @@ public class PaymentServiceImpl implements PaymentService {
                 "PAYMENT_SUBMIT",
                 paymentOrderId,
                 paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo()),
-                request.getChannelCode()
+                resolvedChannelCode
         );
         paymentMapper.insertNotifyLog(
                 "NTF" + System.currentTimeMillis(),
                 paymentOrderId,
-                request.getChannelCode(),
+                resolvedChannelCode,
                 "SUBMIT",
                 "{\"method\":\"" + request.getPaymentMethod() + "\"}",
                 "{\"code\":\"SUCCESS\"}",

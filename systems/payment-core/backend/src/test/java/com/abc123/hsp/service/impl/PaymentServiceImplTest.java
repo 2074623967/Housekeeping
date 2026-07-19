@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
+import com.abc123.hsp.service.PaymentChannelRoutingService;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +28,9 @@ class PaymentServiceImplTest {
     @Mock
     private PaymentCallbackSignatureService paymentCallbackSignatureService;
 
+    @Mock
+    private PaymentChannelRoutingService paymentChannelRoutingService;
+
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
@@ -42,7 +46,10 @@ class PaymentServiceImplTest {
         callback.setTradeStatus("SUCCESS");
         callback.setChannelTransactionNo("CHANNEL-002");
 
-        new PaymentServiceImpl(paymentMapper, paymentCallbackSignatureService)
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService)
                 .callback("wx_h5", callback);
 
         verify(paymentMapper, never()).updatePaymentStatus(
@@ -70,7 +77,10 @@ class PaymentServiceImplTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentServiceImpl(paymentMapper, paymentCallbackSignatureService)
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService)
                         .callback("wx_h5", callback)
         );
     }
