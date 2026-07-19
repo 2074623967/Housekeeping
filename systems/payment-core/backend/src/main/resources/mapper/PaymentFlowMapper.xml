@@ -104,6 +104,17 @@
                         LIMIT 1
                     )
         ) payment_flow_union
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.flowType != null and query.flowType != '' and query.flowType != '全部'">
+                AND flow_type = #{query.flowType}
+            </if>
+        </where>
         ORDER BY created_at DESC
     </select>
 </mapper>

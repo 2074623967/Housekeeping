@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface BillService {
      *
      * @return 账单列表
      */
-    List<BillListItemDTO> list();
+    List<BillListItemDTO> list(BillQueryDTO query);
 }

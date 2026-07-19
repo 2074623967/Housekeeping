@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.mapper.BillMapper;
 import com.abc123.hsp.service.BillService;
 import java.util.List;
@@ -19,7 +20,9 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
-    public List<BillListItemDTO> list() {
-        return billMapper.findAll();
+    public List<BillListItemDTO> list(BillQueryDTO query) {
+        query.setBillNo(query.getBillNo() == null ? null : query.getBillNo().trim());
+        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        return billMapper.findAll(query);
     }
 }

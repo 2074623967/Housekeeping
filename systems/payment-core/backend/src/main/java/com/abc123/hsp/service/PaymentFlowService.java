@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
+import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface PaymentFlowService {
      *
      * @return 支付流水列表
      */
-    List<PaymentFlowListItemDTO> list();
+    List<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query);
 }

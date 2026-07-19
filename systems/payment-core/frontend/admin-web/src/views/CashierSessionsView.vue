@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { cashierSessionApi } from "../api/client";
 
 const items = ref([]);
@@ -12,19 +12,6 @@ const filters = ref({
   sessionStatus: "全部"
 });
 
-const filteredItems = computed(() =>
-  items.value.filter((sessionItem) => {
-    const normalizedSessionNo = filters.value.sessionNo.trim();
-    const normalizedOrderNo = filters.value.orderNo.trim();
-    const matchesSessionNo = !normalizedSessionNo || sessionItem.sessionNo.includes(normalizedSessionNo);
-    const matchesOrderNo = !normalizedOrderNo || sessionItem.orderNo.includes(normalizedOrderNo);
-    const matchesTerminal = filters.value.terminal === "全部" || sessionItem.terminal === filters.value.terminal;
-    const matchesStatus = filters.value.sessionStatus === "全部"
-      || sessionItem.sessionStatus === filters.value.sessionStatus;
-    return matchesSessionNo && matchesOrderNo && matchesTerminal && matchesStatus;
-  })
-);
-
 function resetFilters() {
   filters.value = {
     sessionNo: "",
@@ -32,13 +19,23 @@ function resetFilters() {
     terminal: "全部",
     sessionStatus: "全部"
   };
+  loadCashierSessions();
+}
+
+function applyFilters() {
+  loadCashierSessions();
 }
 
 async function loadCashierSessions() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await cashierSessionApi.getList();
+    items.value = await cashierSessionApi.getList({
+      sessionNo: filters.value.sessionNo,
+      orderNo: filters.value.orderNo,
+      terminal: filters.value.terminal,
+      sessionStatus: filters.value.sessionStatus
+    });
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -94,15 +91,19 @@ onMounted(loadCashierSessions);
             <option>已失效</option>
           </select>
         </div>
+        <div class="field">
+          <label>当前说明</label>
+          <input value="当前已接入后端筛选，便于定位终端会话异常" disabled />
+        </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadCashierSessions">刷新</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">收银台会话加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的收银台会话</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的收银台会话</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -121,7 +122,7 @@ onMounted(loadCashierSessions);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.sessionNo">
+            <tr v-for="item in items" :key="item.sessionNo">
               <td>{{ item.sessionNo }}</td>
               <td>{{ item.prepayOrderNo }}</td>
               <td>{{ item.paymentOrderId }}</td>

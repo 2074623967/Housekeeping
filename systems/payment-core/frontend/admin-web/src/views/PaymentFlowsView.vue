@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { paymentFlowApi } from "../api/client";
 
 const items = ref([]);
@@ -11,31 +11,28 @@ const filters = ref({
   flowType: "全部"
 });
 
-const filteredItems = computed(() =>
-  items.value.filter((flowItem) => {
-    const normalizedPaymentOrderId = filters.value.paymentOrderId.trim();
-    const normalizedOrderNo = filters.value.orderNo.trim();
-    const matchesPaymentOrderId = !normalizedPaymentOrderId
-      || flowItem.paymentOrderId.includes(normalizedPaymentOrderId);
-    const matchesOrderNo = !normalizedOrderNo || flowItem.orderNo.includes(normalizedOrderNo);
-    const matchesFlowType = filters.value.flowType === "全部" || flowItem.flowType === filters.value.flowType;
-    return matchesPaymentOrderId && matchesOrderNo && matchesFlowType;
-  })
-);
-
 function resetFilters() {
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
     flowType: "全部"
   };
+  loadPaymentFlows();
+}
+
+function applyFilters() {
+  loadPaymentFlows();
 }
 
 async function loadPaymentFlows() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await paymentFlowApi.getList();
+    items.value = await paymentFlowApi.getList({
+      paymentOrderId: filters.value.paymentOrderId,
+      orderNo: filters.value.orderNo,
+      flowType: filters.value.flowType
+    });
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -82,17 +79,17 @@ onMounted(loadPaymentFlows);
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="当前聚合四类支付过程流水，便于联调与排障" disabled />
+          <input value="当前已接入后端筛选，便于联调与排障" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadPaymentFlows">刷新</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付流水数据加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的支付流水数据</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付流水数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -110,7 +107,7 @@ onMounted(loadPaymentFlows);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.flowNo">
+            <tr v-for="item in items" :key="item.flowNo">
               <td>{{ item.flowNo }}</td>
               <td>{{ item.paymentOrderId }}</td>
               <td>{{ item.orderNo }}</td>

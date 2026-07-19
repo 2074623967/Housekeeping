@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface CashierSessionMapper {
      *
      * @return 收银台会话列表
      */
-    List<CashierSessionListItemDTO> findAll();
+    List<CashierSessionListItemDTO> findAll(CashierSessionQueryDTO query);
 }

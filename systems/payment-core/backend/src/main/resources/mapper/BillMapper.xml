@@ -16,6 +16,17 @@
                DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_bill
+        <where>
+            <if test="query.billNo != null and query.billNo != ''">
+                bill_no LIKE CONCAT('%', #{query.billNo}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.billStatus != null and query.billStatus != '' and query.billStatus != '全部'">
+                AND bill_status = #{query.billStatus}
+            </if>
+        </where>
         ORDER BY created_at DESC
     </select>
 </mapper>

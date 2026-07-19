@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { billApi } from "../api/client";
 
 const items = ref([]);
@@ -11,30 +11,28 @@ const filters = ref({
   billStatus: "全部"
 });
 
-const filteredItems = computed(() =>
-  items.value.filter((item) => {
-    const normalizedBillNo = filters.value.billNo.trim();
-    const normalizedOrderNo = filters.value.orderNo.trim();
-    const matchesBillNo = !normalizedBillNo || item.billNo.includes(normalizedBillNo);
-    const matchesOrderNo = !normalizedOrderNo || item.orderNo.includes(normalizedOrderNo);
-    const matchesStatus = filters.value.billStatus === "全部" || item.billStatus === filters.value.billStatus;
-    return matchesBillNo && matchesOrderNo && matchesStatus;
-  })
-);
-
 function resetFilters() {
   filters.value = {
     billNo: "",
     orderNo: "",
     billStatus: "全部"
   };
+  loadBills();
+}
+
+function applyFilters() {
+  loadBills();
 }
 
 async function loadBills() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    items.value = await billApi.getList();
+    items.value = await billApi.getList({
+      billNo: filters.value.billNo,
+      orderNo: filters.value.orderNo,
+      billStatus: filters.value.billStatus
+    });
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -79,17 +77,17 @@ onMounted(loadBills);
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="当前以交易账单查询为主，不承接账务会计口径" disabled />
+          <input value="当前已接入后端筛选，不承接账务会计口径" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadBills">刷新</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">账单数据加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的账单数据</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的账单数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -107,7 +105,7 @@ onMounted(loadBills);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.billNo">
+            <tr v-for="item in items" :key="item.billNo">
               <td>{{ item.billNo }}</td>
               <td>{{ item.orderNo }}</td>
               <td>{{ item.customerName }}</td>

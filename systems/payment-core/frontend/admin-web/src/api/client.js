@@ -45,15 +45,50 @@ export const orderApi = {
 };
 
 export const billApi = {
-  getList: () => request("/api/bills")
+  getList: ({
+    billNo = "",
+    orderNo = "",
+    billStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      billNo,
+      orderNo,
+      billStatus
+    });
+    return request(`/api/bills?${params.toString()}`);
+  }
 };
 
 export const paymentFlowApi = {
-  getList: () => request("/api/payment-flows")
+  getList: ({
+    paymentOrderId = "",
+    orderNo = "",
+    flowType = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      flowType
+    });
+    return request(`/api/payment-flows?${params.toString()}`);
+  }
 };
 
 export const cashierSessionApi = {
-  getList: () => request("/api/cashier-sessions")
+  getList: ({
+    sessionNo = "",
+    orderNo = "",
+    terminal = "全部",
+    sessionStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      sessionNo,
+      orderNo,
+      terminal,
+      sessionStatus
+    });
+    return request(`/api/cashier-sessions?${params.toString()}`);
+  }
 };
 
 export const paymentRequestApi = {

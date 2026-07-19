@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface CashierSessionService {
      *
      * @return 收银台会话列表
      */
-    List<CashierSessionListItemDTO> list();
+    List<CashierSessionListItemDTO> list(CashierSessionQueryDTO query);
 }

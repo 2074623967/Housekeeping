@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
+import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import java.util.List;
 
 /**
@@ -13,5 +14,5 @@ public interface PaymentFlowMapper {
      *
      * @return 支付流水列表
      */
-    List<PaymentFlowListItemDTO> findAll();
+    List<PaymentFlowListItemDTO> findAll(PaymentFlowQueryDTO query);
 }
