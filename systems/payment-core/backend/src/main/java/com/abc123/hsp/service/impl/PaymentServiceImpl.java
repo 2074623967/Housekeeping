@@ -13,6 +13,7 @@ import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
+import com.abc123.hsp.service.PaymentChannelQueryService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -26,14 +27,17 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentMapper paymentMapper;
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
     private final PaymentChannelRoutingService paymentChannelRoutingService;
+    private final PaymentChannelQueryService paymentChannelQueryService;
 
     public PaymentServiceImpl(
             PaymentMapper paymentMapper,
             PaymentCallbackSignatureService paymentCallbackSignatureService,
-            PaymentChannelRoutingService paymentChannelRoutingService) {
+            PaymentChannelRoutingService paymentChannelRoutingService,
+            PaymentChannelQueryService paymentChannelQueryService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
+        this.paymentChannelQueryService = paymentChannelQueryService;
     }
 
     @Override
@@ -227,7 +231,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
-        return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
+        if (detail == null) {
+            return null;
+        }
+        return enrichDetail(paymentChannelQueryService.query(detail));
     }
 
     @Transactional

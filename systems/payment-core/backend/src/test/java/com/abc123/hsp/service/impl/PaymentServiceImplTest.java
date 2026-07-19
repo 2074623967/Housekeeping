@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
+import com.abc123.hsp.service.PaymentChannelQueryService;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,9 @@ class PaymentServiceImplTest {
     @Mock
     private PaymentChannelRoutingService paymentChannelRoutingService;
 
+    @Mock
+    private PaymentChannelQueryService paymentChannelQueryService;
+
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
@@ -49,7 +53,8 @@ class PaymentServiceImplTest {
         new PaymentServiceImpl(
                 paymentMapper,
                 paymentCallbackSignatureService,
-                paymentChannelRoutingService)
+                paymentChannelRoutingService,
+                paymentChannelQueryService)
                 .callback("wx_h5", callback);
 
         verify(paymentMapper, never()).updatePaymentStatus(
@@ -80,7 +85,8 @@ class PaymentServiceImplTest {
                 () -> new PaymentServiceImpl(
                         paymentMapper,
                         paymentCallbackSignatureService,
-                        paymentChannelRoutingService)
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService)
                         .callback("wx_h5", callback)
         );
     }
