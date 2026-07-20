@@ -80,11 +80,6 @@ class PaymentServiceImplTest {
 
     @Test
     void shouldRejectCallbackWithoutTradeStatusOrChannelTransactionNo() {
-        PaymentDetailDTO detail = new PaymentDetailDTO();
-        detail.setPaymentOrderId("PAY-002");
-        detail.setStatus("WAIT_CALLBACK");
-        when(paymentMapper.findDetail("PAY-002")).thenReturn(detail);
-
         PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
         callback.setPaymentOrderId("PAY-002");
 
@@ -188,7 +183,6 @@ class PaymentServiceImplTest {
         prepay.setPrepayOrderNo("PRE-100");
         prepay.setPaymentOrderId("PAY-100");
         when(paymentMapper.findPrepay("PRE-100")).thenReturn(prepay);
-        when(paymentMapper.existsPaymentAttemptByIdempotencyKey(org.mockito.ArgumentMatchers.anyString())).thenReturn(false);
 
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-100");

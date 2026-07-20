@@ -5,6 +5,8 @@ import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
+import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
@@ -16,7 +18,6 @@ import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.List;
 import java.util.StringJoiner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,8 +43,14 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public List<PaymentListItemDTO> list() {
-        return paymentMapper.findAll();
+    public PageResultDTO<PaymentListItemDTO> list(PaymentListQueryDTO query) {
+        normalizeQuery(query);
+        return new PageResultDTO<>(
+                paymentMapper.findAll(query),
+                paymentMapper.count(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
     }
 
     @Override
@@ -323,5 +330,17 @@ public class PaymentServiceImpl implements PaymentService {
         detail.setNotifyLogs(paymentMapper.findNotifyLogs(detail.getPaymentOrderId()));
         detail.setEventLogs(paymentMapper.findEventItems(detail.getPaymentOrderId()));
         return detail;
+    }
+
+    /**
+     * 支付单列表统一在服务层收敛分页边界，避免全量拉取影响后台排障性能。
+     */
+    private void normalizeQuery(PaymentListQueryDTO query) {
+        query.setPaymentOrderId(StringUtils.hasText(query.getPaymentOrderId()) ? query.getPaymentOrderId().trim() : null);
+        query.setOrderNo(StringUtils.hasText(query.getOrderNo()) ? query.getOrderNo().trim() : null);
+        query.setPaymentMethod(StringUtils.hasText(query.getPaymentMethod()) ? query.getPaymentMethod().trim() : "全部");
+        query.setStatus(StringUtils.hasText(query.getStatus()) ? query.getStatus().trim() : "全部");
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
     }
 }

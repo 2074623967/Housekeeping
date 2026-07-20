@@ -16,7 +16,41 @@
                p.status_type AS statusType,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_order p
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND p.payment_method = #{query.paymentMethod}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND p.status = #{query.status}
+            </if>
+        </where>
         ORDER BY p.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_order p
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND p.payment_method = #{query.paymentMethod}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND p.status = #{query.status}
+            </if>
+        </where>
     </select>
 
     <select id="findExpiredPayments" resultType="com.abc123.hsp.dto.ExpiredPaymentDTO">

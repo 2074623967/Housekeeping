@@ -193,10 +193,17 @@
 | `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
 | `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
 | `h5-web` | 复用 `app-web` Vite 命令构建 | 环境阻塞 | `h5-web` 当前未安装本地 `node_modules`，需执行依赖安装后再复核；代码层面上一轮临时依赖验证曾通过 |
-| 后端测试 | `mvn test` | 环境阻塞 | 当前 shell 找不到 `mvn`，需在 IDEA Maven 或配置 Maven PATH 后执行 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`18` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
 1. 当前一期主线应以 `admin-web + app-web + backend` 为核心交付，不再将 `pc-web` 作为当前阻塞项。
 2. `h5-web` 可保留为多端扩展基础，但必须完成依赖安装与构建复核后，才能标记为正式交付端。
-3. 后续继续开发前，需要把本轮环境阻塞项纳入自测清单，不把“未验证”误写成“已通过”。
+3. 后续继续开发前，需要把 H5 依赖安装和真实接口联调纳入自测清单，不把“未验证”误写成“已通过”。
+
+### 7.3 本轮修复项
+
+1. 修复 `PaymentController` 中 `jakarta.servlet.http.HttpServletRequest` 与 Spring Boot 2.7 / `javax.servlet-api` 不匹配的问题。
+2. 修复 `PaymentServiceImplTest` 两处 Mockito 严格模式下的无用 stubbing。
+3. 将订单中心、支付单管理升级为后端分页筛选，减少后台页面全量拉取数据的风险。
+4. 为订单中心、支付单管理 Mapper 查询参数补充 `@Param("query")`，保证 `mapper.xml` 中 `query.xxx` 动态 SQL 运行时绑定稳定。

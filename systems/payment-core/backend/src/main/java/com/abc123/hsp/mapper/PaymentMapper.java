@@ -4,6 +4,7 @@ import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.ExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
+import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,7 +18,12 @@ public interface PaymentMapper {
     /**
      * 查询支付单列表。
      */
-    List<PaymentListItemDTO> findAll();
+    List<PaymentListItemDTO> findAll(@Param("query") PaymentListQueryDTO query);
+
+    /**
+     * 统计符合条件的支付单总数。
+     */
+    long count(@Param("query") PaymentListQueryDTO query);
 
     /**
      * 查询已经超过收银台失效时间且仍未收口的支付单。

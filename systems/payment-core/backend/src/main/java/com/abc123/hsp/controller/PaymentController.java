@@ -5,19 +5,21 @@ import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
+import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
-import jakarta.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequest;
 import com.abc123.hsp.service.PaymentService;
-import java.util.List;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -35,8 +37,21 @@ public class PaymentController {
      * 查询支付单列表，供后台运营页展示。
      */
     @GetMapping
-    public ApiResponse<List<PaymentListItemDTO>> list() {
-        return ApiResponse.success(paymentService.list());
+    public ApiResponse<PageResultDTO<PaymentListItemDTO>> list(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(defaultValue = "全部") String paymentMethod,
+            @RequestParam(defaultValue = "全部") String status,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        PaymentListQueryDTO query = new PaymentListQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setPaymentMethod(paymentMethod);
+        query.setStatus(status);
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        return ApiResponse.success(paymentService.list(query));
     }
 
     /**

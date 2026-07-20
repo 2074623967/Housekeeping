@@ -9,6 +9,7 @@ const detail = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
+const activeAction = ref("");
 
 async function loadDetail() {
   isLoading.value = true;
@@ -22,22 +23,49 @@ async function loadDetail() {
   }
 }
 
+function isActionRunning(actionName) {
+  return activeAction.value === actionName;
+}
+
 async function handleQuery() {
-  await paymentApi.query(route.params.paymentOrderId);
-  actionMessage.value = `支付单 ${route.params.paymentOrderId} 已完成主动查单。`;
-  await loadDetail();
+  activeAction.value = "query";
+  try {
+    const paymentDetail = await paymentApi.query(route.params.paymentOrderId);
+    actionMessage.value = `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = `主动查单失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
 }
 
 async function handleCallback() {
-  await paymentApi.callback("WX_H5", route.params.paymentOrderId);
-  actionMessage.value = `支付单 ${route.params.paymentOrderId} 已模拟成功回调。`;
-  await loadDetail();
+  activeAction.value = "callback";
+  try {
+    const paymentDetail = await paymentApi.callback("WX_H5", route.params.paymentOrderId);
+    actionMessage.value = `支付单 ${route.params.paymentOrderId} 已模拟回调，当前状态为 ${paymentDetail.status}。`;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = `模拟回调失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
 }
 
 async function handleClose() {
-  await paymentApi.close(route.params.paymentOrderId);
-  actionMessage.value = `支付单 ${route.params.paymentOrderId} 已关闭。`;
-  await loadDetail();
+  activeAction.value = "close";
+  try {
+    const paymentDetail = await paymentApi.close(route.params.paymentOrderId);
+    actionMessage.value = paymentDetail.status === "CLOSED"
+      ? `支付单 ${route.params.paymentOrderId} 已关闭。`
+      : `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = `关闭支付单失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
 }
 
 onMounted(loadDetail);
@@ -52,9 +80,15 @@ onMounted(loadDetail);
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="router.push('/payments')">返回列表</button>
-        <button class="button secondary" @click="handleQuery">主动查单</button>
-        <button class="button secondary" @click="handleCallback">模拟回调</button>
-        <button class="button primary" @click="handleClose">关闭支付单</button>
+        <button class="button secondary" :disabled="!!activeAction" @click="handleQuery">
+          {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
+        </button>
+        <button class="button secondary" :disabled="!!activeAction" @click="handleCallback">
+          {{ isActionRunning("callback") ? "回调中..." : "模拟回调" }}
+        </button>
+        <button class="button primary" :disabled="!!activeAction" @click="handleClose">
+          {{ isActionRunning("close") ? "关闭中..." : "关闭支付单" }}
+        </button>
       </div>
     </div>
 

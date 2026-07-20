@@ -178,7 +178,24 @@ export const paymentRecordApi = {
 };
 
 export const paymentApi = {
-  getList: () => request("/api/payments"),
+  getList: ({
+    paymentOrderId = "",
+    orderNo = "",
+    paymentMethod = "全部",
+    status = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      paymentMethod,
+      status,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payments?${params.toString()}`);
+  },
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
   prepay: (payload) => postJson("/api/payments/prepay", payload),
   query: (paymentOrderId) => postJson("/api/payments/query", { paymentOrderId }),

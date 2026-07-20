@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 
@@ -8,22 +8,17 @@ const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
+const activePaymentOrderId = ref("");
+const activeAction = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   paymentOrderId: "",
   orderNo: "",
   paymentMethod: "全部",
   status: "全部"
 });
-
-const filteredItems = computed(() =>
-  items.value.filter((item) => {
-    const matchesPaymentOrderId = !filters.value.paymentOrderId || item.paymentOrderId.includes(filters.value.paymentOrderId.trim());
-    const matchesOrderNo = !filters.value.orderNo || item.orderNo.includes(filters.value.orderNo.trim());
-    const matchesMethod = filters.value.paymentMethod === "全部" || item.paymentMethod === filters.value.paymentMethod;
-    const matchesStatus = filters.value.status === "全部" || item.status === filters.value.status;
-    return matchesPaymentOrderId && matchesOrderNo && matchesMethod && matchesStatus;
-  })
-);
 
 function resetFilters() {
   filters.value = {
@@ -32,11 +27,24 @@ function resetFilters() {
     paymentMethod: "全部",
     status: "全部"
   };
+  pageNo.value = 1;
+  refreshList();
 }
 
 async function refreshList() {
+  isLoading.value = true;
+  errorMessage.value = "";
   try {
-    items.value = await paymentApi.getList();
+    const result = await paymentApi.getList({
+      paymentOrderId: filters.value.paymentOrderId,
+      orderNo: filters.value.orderNo,
+      paymentMethod: filters.value.paymentMethod,
+      status: filters.value.status,
+      pageNo: pageNo.value,
+      pageSize
+    });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -44,26 +52,72 @@ async function refreshList() {
   }
 }
 
+function applyFilters() {
+  pageNo.value = 1;
+  refreshList();
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  refreshList();
+}
+
 function openDetail(paymentOrderId) {
   router.push(`/payments/${paymentOrderId}`);
 }
 
+function isActionRunning(paymentOrderId, actionName) {
+  return activePaymentOrderId.value === paymentOrderId && activeAction.value === actionName;
+}
+
 async function handleQuery(paymentOrderId) {
-  await paymentApi.query(paymentOrderId);
-  actionMessage.value = `支付单 ${paymentOrderId} 已发起主动查单。`;
-  await refreshList();
+  activePaymentOrderId.value = paymentOrderId;
+  activeAction.value = "query";
+  try {
+    const paymentDetail = await paymentApi.query(paymentOrderId);
+    actionMessage.value = `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
+    await refreshList();
+  } catch (error) {
+    actionMessage.value = `支付单 ${paymentOrderId} 查单失败：${error.message}`;
+  } finally {
+    activePaymentOrderId.value = "";
+    activeAction.value = "";
+  }
 }
 
 async function handleClose(paymentOrderId) {
-  await paymentApi.close(paymentOrderId);
-  actionMessage.value = `支付单 ${paymentOrderId} 已关闭。`;
-  await refreshList();
+  activePaymentOrderId.value = paymentOrderId;
+  activeAction.value = "close";
+  try {
+    const paymentDetail = await paymentApi.close(paymentOrderId);
+    actionMessage.value = paymentDetail.status === "CLOSED"
+      ? `支付单 ${paymentOrderId} 已关闭。`
+      : `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
+    await refreshList();
+  } catch (error) {
+    actionMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}`;
+  } finally {
+    activePaymentOrderId.value = "";
+    activeAction.value = "";
+  }
 }
 
 async function handleCallback(paymentOrderId) {
-  await paymentApi.callback("WX_H5", paymentOrderId);
-  actionMessage.value = `支付单 ${paymentOrderId} 已模拟成功回调。`;
-  await refreshList();
+  activePaymentOrderId.value = paymentOrderId;
+  activeAction.value = "callback";
+  try {
+    const paymentDetail = await paymentApi.callback("WX_H5", paymentOrderId);
+    actionMessage.value = `支付单 ${paymentOrderId} 已模拟回调，当前状态为 ${paymentDetail.status}。`;
+    await refreshList();
+  } catch (error) {
+    actionMessage.value = `支付单 ${paymentOrderId} 模拟回调失败：${error.message}`;
+  } finally {
+    activePaymentOrderId.value = "";
+    activeAction.value = "";
+  }
 }
 
 onMounted(refreshList);
@@ -118,14 +172,14 @@ onMounted(refreshList);
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="refreshList">刷新</button>
+          <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付单数据加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的支付单数据</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付单数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -144,7 +198,7 @@ onMounted(refreshList);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.paymentOrderId">
+            <tr v-for="item in items" :key="item.paymentOrderId">
               <td>{{ item.paymentOrderId }}</td>
               <td>{{ item.orderNo }}</td>
               <td>{{ item.customerName }}</td>
@@ -157,14 +211,26 @@ onMounted(refreshList);
               <td>
                 <div class="list-actions">
                   <button class="link-button" @click="openDetail(item.paymentOrderId)">详情</button>
-                  <button class="link-button" @click="handleQuery(item.paymentOrderId)">查单</button>
-                  <button class="link-button" @click="handleCallback(item.paymentOrderId)">回调</button>
-                  <button class="link-button" @click="handleClose(item.paymentOrderId)">关闭</button>
+                  <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleQuery(item.paymentOrderId)">
+                    {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
+                  </button>
+                  <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleCallback(item.paymentOrderId)">
+                    {{ isActionRunning(item.paymentOrderId, "callback") ? "回调中..." : "回调" }}
+                  </button>
+                  <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleClose(item.paymentOrderId)">
+                    {{ isActionRunning(item.paymentOrderId, "close") ? "关闭中..." : "关闭" }}
+                  </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条支付单</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
