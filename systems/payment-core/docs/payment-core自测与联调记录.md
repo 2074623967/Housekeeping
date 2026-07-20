@@ -194,16 +194,17 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
-| `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
-| `h5-web` | `npm install --cache /private/tmp/h5-web-npm-cache` 后执行 `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` | 通过 | H5 用户端当前已完成依赖安装与生产构建复核 |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`38` 个测试全部通过 |
+| `admin-web` | `npm run build` | 通过 | 后台运营端当前可完成生产构建 |
+| `app-web` | `npm run build` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
+| `pc-web` | `npm run build` | 通过 | PC 收银台与结果页当前可完成生产构建 |
+| `h5-web` | `npm run build` | 通过 | H5 用户端当前可完成生产构建 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 `repository`，`44` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
-1. 当前一期主线应以 `admin-web + app-web + pc-web + backend` 为核心交付，`h5-web` 作为独立交付端继续保留。
-2. `h5-web` 已从“多端扩展基础”升级为“已完成构建复核的正式交付端”，后续可以继续增强页面矩阵与真实链路联调。
-3. 后续继续开发前，需要把 H5 和 PC 真实接口联调纳入自测清单，不把“仅构建通过”误写成“全链路已验证”。
+1. 当前一期主线应以 `admin-web + app-web + pc-web + h5-web + backend` 作为完整交付基线，而不是只看后台和单一用户端。
+2. `payment-core` 当前的主要问题已经不是“能不能构建”，而是“生产级能力是否补齐”，例如真实渠道接入、验签、幂等、防重、补偿和跨系统事件收敛。
+3. 后续继续开发前，需要把 `pc-web` 和 `h5-web` 的真实接口联调纳入自测清单，不把“构建通过”误写成“全链路已验证”。
 
 ### 7.3 本轮修复项
 
