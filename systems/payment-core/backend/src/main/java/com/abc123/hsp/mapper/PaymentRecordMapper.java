@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import java.util.List;
@@ -22,4 +23,9 @@ public interface PaymentRecordMapper {
      * 统计符合条件的收款记录总数。
      */
     long count(@Param("query") PaymentRecordQueryDTO query);
+
+    /**
+     * 查询收款记录详情。
+     */
+    PaymentRecordDetailDTO findDetail(@Param("paymentOrderId") String paymentOrderId);
 }

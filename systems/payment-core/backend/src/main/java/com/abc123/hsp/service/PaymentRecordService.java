@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
 
@@ -16,4 +17,9 @@ public interface PaymentRecordService {
      * @return 收款记录列表
      */
     PageResultDTO<PaymentRecordRowDTO> list(PaymentRecordQueryDTO query);
+
+    /**
+     * 查询收款记录详情。
+     */
+    PaymentRecordDetailDTO detail(String paymentOrderId);
 }

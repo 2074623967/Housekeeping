@@ -197,7 +197,8 @@ export const paymentRecordApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-records?${params.toString()}`);
-  }
+  },
+  getDetail: (paymentOrderId) => request(`/api/payment-records/${paymentOrderId}`)
 };
 
 export const paymentApi = {

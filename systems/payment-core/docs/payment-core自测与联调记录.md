@@ -173,6 +173,7 @@
 | `/api/payment-records?recordType=ALL` | 返回统一收款记录完整原型字段 |
 | `/api/payment-records?recordType=WECHAT` | 返回微信支付宝维度记录 |
 | `/api/payment-records?recordType=BANK_CARD` | 返回银行卡维度记录 |
+| `/api/payment-records/{paymentOrderId}` | 返回最近一次支付尝试、请求报文、响应报文、路由/回调/事件轨迹 |
 | 过期支付单自动关单 | 测试库中的已过期支付单被任务收口为 `CLOSED` |
 | 成功支付单重复回调 | 第二次回调直接返回已成功结果，不重复写入日志和事件 |
 | `/api/payment-metrics/summary` | 返回支付单总数、成功数、处理中数、关闭数、成功金额和成功率 |
@@ -213,9 +214,9 @@
 8. 补齐支付监控分析 V1：支付趋势、渠道表现、异常告警接口与后台页面，并增加监控服务单测。
 9. 将支付回调安全能力升级为生产化 V1：渠道独立回调密钥、持久化 nonce 防重放、渠道编码统一归一化，并更新配置展示页。
 
-## 9. 2026-07-20 用户支付端精修复核
+## 8. 2026-07-20 用户支付端精修复核
 
-### 9.1 本轮验证结论
+### 8.1 本轮验证结论
 
 本轮围绕 `app-web / h5-web` 的收银台与支付结果页进行了前端交付增强，确认两端已经从“基础可用”升级到“可联调、可演示、可继续扩展”的正式页面状态。
 
@@ -227,7 +228,7 @@
 | `app-web` 构建 | 通过 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-20260720 --emptyOutDir` 成功 |
 | `h5-web` 构建 | 通过 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` 成功 |
 
-### 9.2 本轮修复项
+### 8.2 本轮修复项
 
 1. 将用户端样式升级为响应式终端布局，去掉旧版 `min-width: 1200px` 的桌面限制。
 2. 为收银台补齐支付方式说明、倒计时、会话状态、支付单号和联调留痕信息。
@@ -235,9 +236,9 @@
 4. 为支付结果页补齐关闭支付、返回收银台、路由/回调/事件分区展示。
 5. 为 `h5-web` 完成依赖安装与正式构建复核，修正此前“环境阻塞”的旧结论。
 
-## 8. 2026-07-20 配置化路由闭环复核
+## 9. 2026-07-20 配置化路由闭环复核
 
-### 8.1 本轮验证结论
+### 9.1 本轮验证结论
 
 本轮围绕“支付配置中心的路由规则不能只停留在展示层”进行了代码与测试复核，确认当前主链路已经从硬编码默认路由升级为配置驱动路由执行。
 
@@ -246,9 +247,9 @@
 | 支付提交主链路 | 通过 | `submit` 已按支付方式、请求渠道、支付场景、终端、金额、客户类型组装路由上下文 |
 | 路由规则命中 | 通过 | 已支持 `matchScene` + `AND/OR` 表达式匹配 |
 | 路由兜底 | 通过 | 目标渠道停用时，可自动落到规则兜底渠道 |
-| 自动化测试 | 通过 | 新增配置化路由测试后，全量后端测试为 `36` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `38` 个并全部通过 |
 
-### 8.2 本轮修复项
+### 9.2 本轮修复项
 
 1. 将 `PaymentServiceImpl.submit` 从旧版 `paymentMethod + channelCode` 硬编码路由，改为读取配置化路由决策对象。
 2. 提交支付时，路由日志不再写“默认渠道路由”，改为真实记录命中的 `routeRule` 和 `routeResult`。
@@ -268,7 +269,7 @@
 | 回调安全异常 | 通过 | 验签失败、密钥缺失、时间戳异常、nonce 重放均已落到独立错误码 |
 | 前端错误展示 | 通过 | `admin-web / app-web / h5-web` 请求层已透出 `message + code + requestId` |
 | H5 终端入口 | 通过 | `h5-web` 已改为走自身包装视图，不再直接绕过 H5 终端差异层 |
-| 自动化测试 | 通过 | 新增异常处理器测试后，全量后端测试为 `36` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `38` 个并全部通过 |
 
 ### 10.2 本轮修复项
 
@@ -277,3 +278,22 @@
 3. 为支付主链路和支付路由、查单、回调验签补齐第一版业务错误码。
 4. 为 `app-web` 和 `admin-web` 请求层补齐错误码、`requestId` 展示口径。
 5. 修复 `h5-web` 入口仍直接引用 `app-web` 组件的问题，确保 H5 终端差异层真正生效。
+
+## 11. 2026-07-20 支付记录详情钻取复核
+
+### 11.1 本轮验证结论
+
+本轮围绕后台收款记录页的“列表 -> 详情 -> 支付单 / 请求 / 日志”钻取链路进行了补齐，验证目标是让支付运营、研发和测试在不切 SQL 的前提下完成单笔支付问题定位。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 新增 `PaymentRecordServiceImplTest` 后，全量后端测试共 `38` 个并全部通过 |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260720-record-detail --emptyOutDir` | 通过 | 新增 `PaymentRecordDetailView`、路由和 API 调用均可稳定构建 |
+| 收款记录详情接口 | `GET /api/payment-records/{paymentOrderId}` | 已完成代码交付 | 当前已完成 service、controller、mapper、前端详情页与文档同步，待下一轮联调时补充真实接口截图或 curl 记录 |
+
+### 11.2 本轮补齐项
+
+1. 新增 `PaymentRecordDetailDTO` 作为支付记录详情聚合对象。
+2. 新增 `PaymentRecordService.detail` 与 `GET /api/payment-records/{paymentOrderId}` 接口。
+3. 后台新增“支付记录详情”页面，支持返回来源列表、查看支付单详情、查看支付请求、查看处理日志、主动查单。
+4. 将收款记录列表“支付记录”操作从直接跳支付单详情改为先进入支付记录详情页。

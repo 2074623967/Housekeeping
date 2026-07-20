@@ -8,6 +8,7 @@ import CashierSessionsView from "../views/CashierSessionsView.vue";
 import PaymentRequestsView from "../views/PaymentRequestsView.vue";
 import PaymentLogsView from "../views/PaymentLogsView.vue";
 import PaymentRecordsView from "../views/PaymentRecordsView.vue";
+import PaymentRecordDetailView from "../views/PaymentRecordDetailView.vue";
 import PaymentsView from "../views/PaymentsView.vue";
 import PaymentDetailView from "../views/PaymentDetailView.vue";
 import RefundsView from "../views/RefundsView.vue";
@@ -52,6 +53,7 @@ const routes = [
           recordType: "BANK_CARD"
         }
       },
+      { path: "payment-records/:paymentOrderId", component: PaymentRecordDetailView },
       { path: "payments", component: PaymentsView },
       { path: "payments/:paymentOrderId", component: PaymentDetailView },
       { path: "refunds", component: RefundsView },

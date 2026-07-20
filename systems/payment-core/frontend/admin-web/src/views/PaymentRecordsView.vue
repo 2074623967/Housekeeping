@@ -89,7 +89,10 @@ function goToPage(nextPage) {
 }
 
 function openPayment(row) {
-  router.push(`/payments/${row.paymentOrderId}`);
+  router.push({
+    path: `/payment-records/${row.paymentOrderId}`,
+    query: { recordType: pageConfig.value.recordType }
+  });
 }
 
 function formatCell(row, column) {

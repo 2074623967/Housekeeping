@@ -109,4 +109,84 @@
             </if>
         </where>
     </select>
+
+    <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentRecordDetailDTO">
+        SELECT p.id AS serialNo,
+               p.payment_order_id AS paymentOrderId,
+               p.order_no AS businessOrderNo,
+               CONCAT(p.payment_order_id, '-REQ') AS paymentRequestNo,
+               'housekeeping-admin' AS applicationSourceId,
+               'housekeeping-service' AS businessLineId,
+               p.channel_transaction_no AS externalTransactionNo,
+               CASE
+                   WHEN p.channel_code LIKE 'wx%' THEN '微信支付网关'
+                   WHEN p.channel_code LIKE 'alipay%' THEN '支付宝支付网关'
+                   WHEN p.channel_code LIKE '%bank%' OR p.channel_code = 'offline_bank' THEN '银行支付网关'
+                   ELSE '统一支付网关'
+               END AS paymentGateway,
+               p.channel_code AS paymentChannel,
+               COALESCE(pa.payment_method, p.payment_method) AS paymentMethod,
+               '消费支付' AS paymentType,
+               CASE p.status
+                   WHEN 'SUCCESS' THEN '支付成功'
+                   WHEN 'WAIT_CALLBACK' THEN '支付中'
+                   WHEN 'CLOSED' THEN '已关闭'
+                   WHEN 'FAIL' THEN '支付失败'
+                   ELSE p.status
+               END AS paymentStatus,
+               CASE
+                   WHEN p.channel_code LIKE '%bank%' OR p.channel_code = 'offline_bank' THEN '招商银行'
+                   ELSE '—'
+               END AS bankName,
+               CASE
+                   WHEN p.channel_code LIKE '%bank%' OR p.channel_code = 'offline_bank' THEN '54**54'
+                   ELSE '—'
+               END AS cardNo,
+               CASE
+                   WHEN p.status = 'SUCCESS' THEN '200'
+                   WHEN p.status = 'WAIT_CALLBACK' THEN '100'
+                   ELSE '400'
+               END AS channelReturnCode,
+               CASE
+                   WHEN p.channel_code LIKE 'wx%' THEN '预支付标识'
+                   WHEN p.channel_code LIKE 'alipay%' THEN '支付宝订单号'
+                   ELSE '银行流水号'
+               END AS returnParameterType,
+               p.channel_transaction_no AS parameterValue,
+               '1小时' AS validityPeriod,
+               CONCAT('¥', FORMAT(p.amount, 2)) AS paymentAmount,
+               0 AS refundCount,
+               '¥0.00' AS refundedAmount,
+               CONCAT('家政服务-', p.order_no, '-订单支付') AS productName,
+               CONCAT('user-', p.customer_name) AS userPaymentChannelId,
+               '123' AS receivingAccount,
+               'https://pay.housekeeping.local/callback' AS notifyUrl,
+               'payment.payment-result' AS callbackMqTopic,
+               DATE_FORMAT(DATE_ADD(p.created_at, INTERVAL 1 HOUR), '%Y-%m-%d %H:%i:%s') AS expireTime,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS updatedAt,
+               CASE WHEN p.status = 'SUCCESS'
+                    THEN DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s')
+                    ELSE NULL
+               END AS paidAt,
+               CONCAT('user-', p.customer_name) AS userId,
+               p.status_type AS statusType,
+               pa.terminal AS latestTerminal,
+               pa.client_ip AS latestClientIp,
+               pa.idempotency_key AS latestIdempotencyKey,
+               pa.attempt_status AS latestAttemptStatus,
+               pa.attempt_status_type AS latestAttemptStatusType,
+               pa.request_payload AS latestRequestPayload,
+               pa.response_payload AS latestResponsePayload
+        FROM t_payment_order p
+        LEFT JOIN t_payment_attempt pa
+            ON pa.payment_order_id = p.payment_order_id
+           AND pa.created_at = (
+               SELECT MAX(inner_pa.created_at)
+               FROM t_payment_attempt inner_pa
+               WHERE inner_pa.payment_order_id = p.payment_order_id
+           )
+        WHERE p.payment_order_id = #{paymentOrderId}
+        LIMIT 1
+    </select>
 </mapper>

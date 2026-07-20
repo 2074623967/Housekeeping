@@ -2,10 +2,12 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import com.abc123.hsp.service.PaymentRecordService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,5 +44,13 @@ public class PaymentRecordController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRecordService.list(query));
+    }
+
+    /**
+     * 查询单笔支付记录详情，补齐支付尝试、路由、通知与事件轨迹。
+     */
+    @GetMapping("/{paymentOrderId}")
+    public ApiResponse<PaymentRecordDetailDTO> detail(@PathVariable String paymentOrderId) {
+        return ApiResponse.success(paymentRecordService.detail(paymentOrderId));
     }
 }

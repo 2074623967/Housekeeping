@@ -23,6 +23,7 @@
 | `/api/payments/close` | `POST` | 关闭支付单 |
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
+| `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
 | `/api/refunds` | `GET` | 分页查询退款单 |
 | `/api/refunds/apply` | `POST` | 发起退款申请 |
@@ -335,9 +336,55 @@
 }
 ```
 
-## 11. 退款管理接口
+## 11. 收款记录详情查询
 
-### 11.1 分页查询退款单
+接口：`GET /api/payment-records/{paymentOrderId}`
+
+返回示例：
+
+```json
+{
+  "code": "0",
+  "message": "success",
+  "data": {
+    "paymentOrderId": "PAY1752912340001",
+    "businessOrderNo": "ORD202607190003",
+    "paymentRequestNo": "PAY1752912340001-REQ",
+    "paymentGateway": "微信支付网关",
+    "paymentChannel": "wx_h5",
+    "paymentMethod": "微信支付",
+    "paymentStatus": "支付成功",
+    "paymentAmount": "¥168.00",
+    "latestTerminal": "APP_WEB",
+    "latestClientIp": "127.0.0.1",
+    "latestIdempotencyKey": "PRE1752912345678|微信支付|WX_H5",
+    "latestAttemptStatus": "SUCCESS",
+    "latestAttemptStatusType": "success",
+    "latestRequestPayload": "{\"paymentOrderId\":\"PAY1752912340001\",\"channelCode\":\"wx_h5\"}",
+    "latestResponsePayload": "{\"tradeStatus\":\"SUCCESS\",\"channelTransactionNo\":\"WX2026071900001\"}",
+    "routeLogs": [
+      "2026-07-19 10:16:01 | RULE_HOME_WX | 家政 H5 微信优先 -> wx_h5"
+    ],
+    "notifyLogs": [
+      "2026-07-19 10:16:33 | SUCCESS | 已收口"
+    ],
+    "eventLogs": [
+      "PAYMENT_SUCCESS | ORD202607190003 | 2026-07-19 10:16:33"
+    ]
+  },
+  "requestId": "REQ202607190010"
+}
+```
+
+返回说明：
+
+1. 该接口面向后台“支付记录详情”页面，补齐支付记录列表无法承载的报文和轨迹信息。
+2. `latestRequestPayload` 与 `latestResponsePayload` 来自最近一次支付尝试记录。
+3. `routeLogs`、`notifyLogs`、`eventLogs` 直接复用支付主链路轨迹表，便于运营与研发统一排障。
+
+## 12. 退款管理接口
+
+### 12.1 分页查询退款单
 
 接口：`GET /api/refunds`
 
@@ -352,7 +399,7 @@
 | `pageNo` | 否 | 页码，从 1 开始 |
 | `pageSize` | 否 | 每页条数，最大 100 |
 
-### 11.2 发起退款申请
+### 12.2 发起退款申请
 
 接口：`POST /api/refunds/apply`
 
@@ -374,7 +421,7 @@
 3. 同一支付单下 `REVIEWING`、`PROCESSING`、`SUCCESS` 状态退款金额累计不能超过原支付金额。
 4. 创建后状态为 `REVIEWING`，等待运营或财务审核。
 
-### 11.3 退款动作接口
+### 12.3 退款动作接口
 
 审核通过：
 
