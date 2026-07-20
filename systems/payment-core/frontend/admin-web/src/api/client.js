@@ -41,7 +41,22 @@ export const paymentMetricsApi = {
 };
 
 export const orderApi = {
-  getList: () => request("/api/orders")
+  getList: ({
+    orderNo = "",
+    serviceType = "全部",
+    orderStatus = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      orderNo,
+      serviceType,
+      orderStatus,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/orders?${params.toString()}`);
+  }
 };
 
 export const billApi = {

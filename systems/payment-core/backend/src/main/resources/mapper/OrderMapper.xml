@@ -17,6 +17,34 @@
                fulfillment_status_type AS fulfillmentStatusType,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_order
+        <where>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
+                AND service_type = #{query.serviceType}
+            </if>
+            <if test="query.orderStatus != null and query.orderStatus != '' and query.orderStatus != '全部'">
+                AND order_status = #{query.orderStatus}
+            </if>
+        </where>
         ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_order
+        <where>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
+                AND service_type = #{query.serviceType}
+            </if>
+            <if test="query.orderStatus != null and query.orderStatus != '' and query.orderStatus != '全部'">
+                AND order_status = #{query.orderStatus}
+            </if>
+        </where>
     </select>
 </mapper>

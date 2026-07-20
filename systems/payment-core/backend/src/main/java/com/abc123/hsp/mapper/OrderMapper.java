@@ -1,11 +1,21 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.OrderListItemDTO;
-import com.abc123.hsp.entity.OrderEntity;
-
+import com.abc123.hsp.dto.OrderQueryDTO;
 import java.util.List;
 
-public interface OrderMapper{
+/**
+ * 订单中心 Mapper，负责订单运营列表查询。
+ */
+public interface OrderMapper {
 
-    List<OrderListItemDTO> findAll();
+    /**
+     * 查询订单中心分页列表。
+     */
+    List<OrderListItemDTO> findAll(OrderQueryDTO query);
+
+    /**
+     * 统计符合条件的订单总数。
+     */
+    long count(OrderQueryDTO query);
 }

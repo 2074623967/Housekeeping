@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { orderApi, paymentApi } from "../api/client";
 
 const items = ref([]);
@@ -7,6 +7,10 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const launchPayload = ref(null);
+const activeOrderNo = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
 const filters = ref({
   orderNo: "",
   serviceType: "全部",
@@ -15,26 +19,34 @@ const filters = ref({
 
 const appWebBaseUrl = "http://127.0.0.1:5175";
 
-const filteredItems = computed(() =>
-  items.value.filter((item) => {
-    const matchesOrderNo = !filters.value.orderNo || item.orderNo.includes(filters.value.orderNo.trim());
-    const matchesServiceType = filters.value.serviceType === "全部" || item.serviceType === filters.value.serviceType;
-    const matchesOrderStatus = filters.value.orderStatus === "全部" || item.orderStatus === filters.value.orderStatus;
-    return matchesOrderNo && matchesServiceType && matchesOrderStatus;
-  })
-);
-
 function resetFilters() {
   filters.value = {
     orderNo: "",
     serviceType: "全部",
     orderStatus: "全部"
   };
+  pageNo.value = 1;
+  loadOrders();
+}
+
+function applyFilters() {
+  pageNo.value = 1;
+  loadOrders();
 }
 
 async function loadOrders() {
+  isLoading.value = true;
+  errorMessage.value = "";
   try {
-    items.value = await orderApi.getList();
+    const result = await orderApi.getList({
+      orderNo: filters.value.orderNo,
+      serviceType: filters.value.serviceType,
+      orderStatus: filters.value.orderStatus,
+      pageNo: pageNo.value,
+      pageSize
+    });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -42,7 +54,20 @@ async function loadOrders() {
   }
 }
 
+function canLaunchPayment(orderItem) {
+  return orderItem.orderStatus === "待支付";
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadOrders();
+}
+
 async function launchPayment(orderNo) {
+  activeOrderNo.value = orderNo;
   actionMessage.value = "";
   try {
     const prepay = await paymentApi.prepay({
@@ -58,6 +83,8 @@ async function launchPayment(orderNo) {
     actionMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
   } catch (error) {
     actionMessage.value = `发起支付失败：${error.message}`;
+  } finally {
+    activeOrderNo.value = "";
   }
 }
 
@@ -130,7 +157,7 @@ onMounted(loadOrders);
 
       <div v-if="isLoading" class="state-box">订单数据加载中...</div>
 
-      <div v-else-if="!filteredItems.length" class="state-box">当前暂无符合条件的订单数据</div>
+      <div v-else-if="!items.length" class="state-box">当前暂无符合条件的订单数据</div>
 
       <div v-else class="table-wrap">
         <table>
@@ -149,7 +176,7 @@ onMounted(loadOrders);
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredItems" :key="item.orderNo">
+            <tr v-for="item in items" :key="item.orderNo">
               <td>{{ item.orderNo }}</td>
               <td>{{ item.customerName }}</td>
               <td>{{ item.serviceType }}</td>
@@ -161,14 +188,32 @@ onMounted(loadOrders);
               <td>{{ item.createdAt }}</td>
               <td>
                 <div class="list-actions">
-                  <span>详情</span>
-                  <span>账单</span>
-                  <button class="link-button" @click="launchPayment(item.orderNo)">发起支付</button>
+                  <span>{{ item.orderStatus === "待支付" ? "待发起" : "已生成支付链路" }}</span>
+                  <span>{{ item.paidAmount === item.orderAmount ? "账单已结清" : "账单待支付" }}</span>
+                  <button
+                    class="link-button"
+                    :disabled="activeOrderNo === item.orderNo || !canLaunchPayment(item)"
+                    @click="launchPayment(item.orderNo)"
+                  >
+                    {{
+                      activeOrderNo === item.orderNo
+                        ? "发起中..."
+                        : canLaunchPayment(item)
+                          ? "发起支付"
+                          : "无需发起"
+                    }}
+                  </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条订单</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

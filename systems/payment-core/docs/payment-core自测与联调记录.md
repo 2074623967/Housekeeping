@@ -181,3 +181,22 @@
 
 本次接口联调使用独立测试库 `housekeeping_payment_core_smoke_v2`，未修改默认业务库。
 支付提交、回调测试必须按“预付单 -> 提交支付 -> 回调”的顺序串联，禁止并发触发造成时序假象。
+
+## 7. 2026-07-20 主线构建复核
+
+### 7.1 本轮验证结论
+
+本轮按照“先全量交付 `payment-core`，再推进其他系统”的主线，对当前前后端执行了一次构建复核。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
+| `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
+| `h5-web` | 复用 `app-web` Vite 命令构建 | 环境阻塞 | `h5-web` 当前未安装本地 `node_modules`，需执行依赖安装后再复核；代码层面上一轮临时依赖验证曾通过 |
+| 后端测试 | `mvn test` | 环境阻塞 | 当前 shell 找不到 `mvn`，需在 IDEA Maven 或配置 Maven PATH 后执行 |
+
+### 7.2 本轮专业判断
+
+1. 当前一期主线应以 `admin-web + app-web + backend` 为核心交付，不再将 `pc-web` 作为当前阻塞项。
+2. `h5-web` 可保留为多端扩展基础，但必须完成依赖安装与构建复核后，才能标记为正式交付端。
+3. 后续继续开发前，需要把本轮环境阻塞项纳入自测清单，不把“未验证”误写成“已通过”。
