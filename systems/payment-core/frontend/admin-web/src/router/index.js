@@ -17,6 +17,7 @@ import WorkerSettlementsView from "../views/WorkerSettlementsView.vue";
 import PaymentConfigView from "../views/PaymentConfigView.vue";
 import PaymentMonitorView from "../views/PaymentMonitorView.vue";
 import PaymentDayEndView from "../views/PaymentDayEndView.vue";
+import PaymentTaskCenterView from "../views/PaymentTaskCenterView.vue";
 
 const routes = [
   {
@@ -62,6 +63,7 @@ const routes = [
       { path: "refunds", component: RefundsView },
       { path: "payment-config", component: PaymentConfigView },
       { path: "payment-monitor", component: PaymentMonitorView },
+      { path: "payment-task-center", component: PaymentTaskCenterView },
       { path: "payment-day-end", component: PaymentDayEndView },
       { path: "worker-settlements", component: WorkerSettlementsView }
     ]

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentTaskCenterMapper">
+
+    <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO">
+        SELECT
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_order p
+                INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                WHERE p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+                  AND pr.expires_at &lt; NOW()
+            ), 0) AS expiredPaymentCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_order
+                WHERE status = 'WAIT_CALLBACK'
+            ), 0) AS pendingCallbackCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_event
+                WHERE publish_status = 'FAILED'
+            ), 0) AS failedEventCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_refund_order
+                WHERE status = 'FAIL'
+            ), 0) AS failedRefundCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_day_end_batch
+                WHERE batch_status = 'WARNING'
+            ), 0) AS warningDayEndBatchCount
+    </select>
+
+    <select id="findRecentTaskRuns" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
+        SELECT task_log_no AS taskLogNo,
+               task_code AS taskCode,
+               task_name AS taskName,
+               run_mode AS runMode,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               processed_count AS processedCount,
+               success_count AS successCount,
+               fail_count AS failCount,
+               summary_comment AS summaryComment,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_task_run_log
+        ORDER BY started_at DESC, id DESC
+        LIMIT 10
+    </select>
+
+    <insert id="insertTaskRunLog" parameterType="com.abc123.hsp.entity.PaymentTaskRunLogEntity">
+        INSERT INTO t_payment_task_run_log (
+            task_log_no,
+            task_code,
+            task_name,
+            run_mode,
+            task_status,
+            task_status_type,
+            processed_count,
+            success_count,
+            fail_count,
+            summary_comment,
+            triggered_by,
+            started_at,
+            completed_at
+        ) VALUES (
+            #{taskLogNo},
+            #{taskCode},
+            #{taskName},
+            #{runMode},
+            #{taskStatus},
+            #{taskStatusType},
+            #{processedCount},
+            #{successCount},
+            #{failCount},
+            #{summaryComment},
+            #{triggeredBy},
+            NOW(),
+            NOW()
+        )
+    </insert>
+</mapper>

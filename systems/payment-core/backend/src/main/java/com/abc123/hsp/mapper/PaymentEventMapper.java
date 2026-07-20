@@ -21,6 +21,11 @@ public interface PaymentEventMapper {
     long count(@Param("query") PaymentEventQueryDTO query);
 
     /**
+     * 查询失败事件号列表。
+     */
+    List<String> findFailedEventNos();
+
+    /**
      * 手动重发事件，模拟事件重新投递成功。
      */
     int markRepublished(@Param("eventNo") String eventNo);

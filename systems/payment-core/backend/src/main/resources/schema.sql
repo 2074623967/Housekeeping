@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
+DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_gateway_config;
@@ -334,3 +335,23 @@ CREATE TABLE t_payment_day_end_batch (
     UNIQUE KEY uk_day_end_batch_no (batch_no),
     KEY idx_day_end_biz_date_status (biz_date, batch_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付日终批次表';
+
+CREATE TABLE t_payment_task_run_log (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    task_log_no VARCHAR(64) NOT NULL COMMENT '任务日志号',
+    task_code VARCHAR(64) NOT NULL COMMENT '任务编码',
+    task_name VARCHAR(128) NOT NULL COMMENT '任务名称',
+    run_mode VARCHAR(32) NOT NULL COMMENT '运行方式',
+    task_status VARCHAR(32) NOT NULL COMMENT '任务状态',
+    task_status_type VARCHAR(32) NOT NULL COMMENT '任务状态样式类型',
+    processed_count INT NOT NULL DEFAULT 0 COMMENT '处理总数',
+    success_count INT NOT NULL DEFAULT 0 COMMENT '成功数',
+    fail_count INT NOT NULL DEFAULT 0 COMMENT '失败数',
+    summary_comment VARCHAR(512) NOT NULL COMMENT '执行摘要',
+    triggered_by VARCHAR(64) NOT NULL COMMENT '触发人',
+    started_at DATETIME NOT NULL COMMENT '开始时间',
+    completed_at DATETIME NOT NULL COMMENT '完成时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_task_log_no (task_log_no),
+    KEY idx_task_code_started_at (task_code, started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付任务执行日志表';

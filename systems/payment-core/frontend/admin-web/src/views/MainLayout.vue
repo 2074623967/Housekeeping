@@ -33,6 +33,7 @@ const navGroups = [
     title: "监控分析",
     links: [
       { label: "支付监控分析", to: "/payment-monitor" },
+      { label: "支付任务中心", to: "/payment-task-center" },
       { label: "支付日终处理", to: "/payment-day-end" }
     ]
   }

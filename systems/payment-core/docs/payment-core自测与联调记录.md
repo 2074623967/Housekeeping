@@ -258,6 +258,29 @@
 5. 统一按专业口径修正退款成功统计日期，改为 `success_at`
 6. 修复聚合空结果时页面可能出现 `null` 的边界问题
 
+## 11. 2026-07-20 支付任务中心 V1 验证
+
+### 11.1 本轮验证结论
+
+本轮围绕“任务监控与失败重试正式化”补齐了支付任务中心，确认 `payment-core` 已经从“只有定时任务和零散重试按钮”升级到“具备统一任务处理台、人工触发入口和执行留痕”的阶段。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 新增 `PaymentTaskCenterServiceImplTest`、`PaymentExpiryTaskServiceImplTest`，当前全量后端测试为 `52` 个并全部通过 |
+| 后台前端构建 | `npm run build` | 通过 | `PaymentTaskCenterView`、路由、导航和接口封装全部通过生产构建 |
+
+### 11.2 本轮修复项
+
+1. 新增支付任务执行日志表 `t_payment_task_run_log`，沉淀任务编码、执行结果、处理量和触发人
+2. 新增支付任务中心总览接口：`GET /api/payment-task-center/overview`
+3. 新增支付任务动作接口：
+   - `POST /api/payment-task-center/close-expired-payments`
+   - `POST /api/payment-task-center/republish-failed-events`
+   - `POST /api/payment-task-center/retry-failed-refunds`
+4. 将超时关单逻辑从 `PaymentExpiryScheduler` 中抽到 `PaymentExpiryTaskServiceImpl`，统一给调度器和任务中心复用
+5. 新增后台页面“支付任务中心”，统一查看超时关单、失败事件、失败退款、日终告警和最近执行日志
+6. 修复差距清单里“日终处理重复且状态冲突”的旧口径问题
+
 ## 8. 2026-07-20 用户支付端精修复核
 
 ### 8.1 本轮验证结论

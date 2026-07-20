@@ -68,6 +68,13 @@ export const paymentDayEndApi = {
   runBatch: (payload) => postJson("/api/payment-day-end/run", payload)
 };
 
+export const paymentTaskCenterApi = {
+  getOverview: () => request("/api/payment-task-center/overview"),
+  runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
+  runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
+  runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {})
+};
+
 export const orderApi = {
   getList: ({
     orderNo = "",

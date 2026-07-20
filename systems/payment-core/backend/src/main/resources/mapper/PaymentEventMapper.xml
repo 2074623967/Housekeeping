@@ -56,6 +56,13 @@
         </where>
     </select>
 
+    <select id="findFailedEventNos" resultType="string">
+        SELECT event_no
+        FROM t_payment_event
+        WHERE publish_status = 'FAILED'
+        ORDER BY created_at ASC, id ASC
+    </select>
+
     <update id="markRepublished">
         UPDATE t_payment_event
         SET publish_status = 'SUCCESS',

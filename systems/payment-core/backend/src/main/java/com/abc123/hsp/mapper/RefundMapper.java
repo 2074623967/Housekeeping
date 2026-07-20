@@ -21,6 +21,11 @@ public interface RefundMapper {
     long count(@Param("query") RefundQueryDTO query);
 
     /**
+     * 查询失败退款单号列表。
+     */
+    List<String> findFailedRefundOrderIds();
+
+    /**
      * 查询退款单详情。
      */
     RefundListItemDTO findByRefundOrderId(String refundOrderId);

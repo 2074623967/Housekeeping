@@ -83,3 +83,8 @@ INSERT INTO t_worker_settlement_order (settlement_order_id, worker_name, period_
 INSERT INTO t_payment_day_end_batch (batch_no, biz_date, run_mode, batch_status, batch_status_type, payment_total_count, payment_success_count, payment_success_amount, refund_success_count, refund_success_amount, channel_abnormal_count, internal_abnormal_count, pending_refund_count, summary_comment, triggered_by, created_at, completed_at) VALUES
 ('DEB202607190001', '2026-07-19', 'AUTO', 'WARNING', 'warn', 2, 1, 268.00, 0, 0.00, 0, 0, 1, '支付主链路收口正常，仍有退款处理中需在下一账期继续跟进。', 'system', '2026-07-19 23:30:00', '2026-07-19 23:30:10'),
 ('DEB202607180001', '2026-07-18', 'AUTO', 'WARNING', 'warn', 1, 1, 3600.00, 1, 600.00, 0, 1, 0, '内部事件存在未发布成功记录，需与清分、结算和账务链路一起排查。', 'system', '2026-07-18 23:30:00', '2026-07-18 23:30:12');
+
+INSERT INTO t_payment_task_run_log (task_log_no, task_code, task_name, run_mode, task_status, task_status_type, processed_count, success_count, fail_count, summary_comment, triggered_by, started_at, completed_at) VALUES
+('PTL202607190001', 'PAYMENT_EXPIRE_CLOSE', '支付超时关单', 'AUTO', 'SUCCESS', 'success', 1, 1, 0, '自动关闭 1 笔已过期未收口支付单。', 'system-scheduler', '2026-07-19 11:05:00', '2026-07-19 11:05:02'),
+('PTL202607190002', 'PAYMENT_EVENT_RETRY', '失败事件重发', 'MANUAL', 'SUCCESS', 'success', 1, 1, 0, '已重发 1 条失败事件，当前无剩余失败事件。', 'payment-core-admin', '2026-07-19 15:30:00', '2026-07-19 15:30:03'),
+('PTL202607180001', 'REFUND_FAIL_RETRY', '失败退款重试', 'MANUAL', 'WARNING', 'warn', 2, 1, 1, '已重试 1 笔失败退款，仍有 1 笔待人工排查。', 'payment-core-admin', '2026-07-18 18:10:00', '2026-07-18 18:10:05');
