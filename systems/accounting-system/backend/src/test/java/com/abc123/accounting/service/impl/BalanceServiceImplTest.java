@@ -6,19 +6,22 @@ import com.abc123.accounting.dto.BalanceOperationRequestDTO;
 import com.abc123.accounting.dto.BalanceSnapshotDTO;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 余额服务测试。
  */
+@SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class BalanceServiceImplTest {
+
+    @Autowired
+    private BalanceServiceImpl balanceService;
 
     @Test
     void shouldMoveFrozenAmountBackToAvailableWhenUnfreeze() {
-        AccountingMemoryStore store = new AccountingMemoryStore();
-        store.initDemoData();
-        AccountingMapper mapper = new AccountingMapper();
-        BalanceServiceImpl balanceService = new BalanceServiceImpl(store, mapper);
-
         BalanceOperationRequestDTO request = new BalanceOperationRequestDTO();
         request.setAccountNo("ACT10001");
         request.setBizNo("ORD202607200001");

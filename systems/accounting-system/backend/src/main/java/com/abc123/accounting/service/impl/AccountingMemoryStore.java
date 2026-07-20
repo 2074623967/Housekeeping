@@ -7,22 +7,21 @@ import com.abc123.accounting.entity.AccountEventEntity;
 import com.abc123.accounting.entity.AccountFreezeEntity;
 import com.abc123.accounting.entity.AccountLedgerEntity;
 import com.abc123.accounting.entity.AccountSubjectEntity;
+import com.abc123.accounting.mapper.AccountingDataMapper;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 账务系统内存态数据仓，用于第二阶段第一版骨架联调。
+ * 账务系统持久化数据仓，用于第二阶段第一版正式版联调。
  */
 @Component
 public class AccountingMemoryStore {
@@ -30,23 +29,24 @@ public class AccountingMemoryStore {
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DecimalFormat AMOUNT_FORMAT = new DecimalFormat("0.00");
 
-    private final AtomicLong subjectSeq = new AtomicLong(1000L);
-    private final AtomicLong accountSeq = new AtomicLong(10000L);
-    private final AtomicLong ledgerSeq = new AtomicLong(20000L);
-    private final AtomicLong freezeSeq = new AtomicLong(30000L);
-    private final AtomicLong adjustSeq = new AtomicLong(40000L);
-    private final AtomicLong eventSeq = new AtomicLong(50000L);
+    private final AtomicLong subjectSeq = new AtomicLong(1003L);
+    private final AtomicLong accountSeq = new AtomicLong(10003L);
+    private final AtomicLong ledgerSeq = new AtomicLong(20004L);
+    private final AtomicLong freezeSeq = new AtomicLong(30001L);
+    private final AtomicLong adjustSeq = new AtomicLong(40001L);
+    private final AtomicLong eventSeq = new AtomicLong(50001L);
+    private final AccountingDataMapper accountingDataMapper;
 
-    private final Map<String, AccountSubjectEntity> subjects = new LinkedHashMap<>();
-    private final Map<String, AccountEntity> accounts = new LinkedHashMap<>();
-    private final Map<String, AccountBalanceEntity> balances = new LinkedHashMap<>();
-    private final Map<String, AccountFreezeEntity> freezes = new LinkedHashMap<>();
-    private final Map<String, AccountAdjustmentEntity> adjustments = new LinkedHashMap<>();
-    private final List<AccountLedgerEntity> ledgers = new ArrayList<>();
-    private final List<AccountEventEntity> events = new ArrayList<>();
+    public AccountingMemoryStore(AccountingDataMapper accountingDataMapper) {
+        this.accountingDataMapper = accountingDataMapper;
+    }
 
     @PostConstruct
+    @Transactional
     public void initDemoData() {
+        if (accountingDataMapper.countSubjects() > 0) {
+            return;
+        }
         AccountSubjectEntity customer = createSubject("CUSTOMER", "张女士", "张女士", "启用");
         AccountSubjectEntity worker = createSubject("WORKER", "李阿姨", "李阿姨", "启用");
         AccountSubjectEntity platform = createSubject("PLATFORM", "家政平台主体", "财务中心", "启用");
@@ -56,36 +56,20 @@ public class AccountingMemoryStore {
         AccountEntity platformAccount = createAccount(platform, "平台手续费账户", "CNY", "正常");
 
         credit(customerAccount.getAccountNo(), "PAYMENT_SUCCESS", "PAY202607200001", new BigDecimal("168.00"), "系统入账");
-        freeze(customerAccount.getAccountNo(), "ORD202607200001", "服务履约担保", new BigDecimal("68.00"), "运营冻结");
+        createFreeze(customerAccount.getAccountNo(), "ORD202607200001", "履约担保", "服务履约担保", new BigDecimal("68.00"), "运营冻结");
         credit(workerAccount.getAccountNo(), "CLEARING_RESULT", "CLR202607200001", new BigDecimal("120.00"), "清分入账");
         credit(platformAccount.getAccountNo(), "SERVICE_FEE", "FEE202607200001", new BigDecimal("12.00"), "平台服务费入账");
 
-        AccountAdjustmentEntity adjustmentEntity = new AccountAdjustmentEntity();
-        adjustmentEntity.setAdjustNo(nextNo("ADJ", adjustSeq));
-        adjustmentEntity.setAccountNo(workerAccount.getAccountNo());
-        adjustmentEntity.setAdjustDirection("贷方");
-        adjustmentEntity.setAdjustAmount(new BigDecimal("8.00"));
-        adjustmentEntity.setAdjustReason("履约奖励补贴");
-        adjustmentEntity.setAdjustStatus("待审批");
-        adjustmentEntity.setCreatedBy("财务小李");
-        adjustmentEntity.setCreatedAt(now());
-        adjustments.put(adjustmentEntity.getAdjustNo(), adjustmentEntity);
-
-        AccountEventEntity eventEntity = new AccountEventEntity();
-        eventEntity.setEventNo(nextNo("EVT", eventSeq));
-        eventEntity.setEventType("PAYMENT_SUCCESS");
-        eventEntity.setBizNo("PAY202607200001");
-        eventEntity.setSummary("消费支付成功后用户入账");
-        eventEntity.setPayload("{\"paymentOrderId\":\"PAY202607200001\",\"amount\":168.00}");
-        eventEntity.setEventStatus("已消费");
-        eventEntity.setCreatedAt(now());
-        events.add(eventEntity);
+        createAdjustment(workerAccount.getAccountNo(), "贷方", new BigDecimal("8.00"), "履约奖励补贴", "财务小李");
+        recordEvent("PAYMENT_SUCCESS", "PAY202607200001", "消费支付成功后用户入账",
+                "{\"paymentOrderId\":\"PAY202607200001\",\"amount\":168.00}");
     }
 
     public List<AccountSubjectEntity> subjects() {
-        return new ArrayList<>(subjects.values());
+        return accountingDataMapper.findSubjects();
     }
 
+    @Transactional
     public AccountSubjectEntity createSubject(String subjectType, String subjectName, String ownerName, String status) {
         AccountSubjectEntity entity = new AccountSubjectEntity();
         entity.setSubjectId(nextNo("SUB", subjectSeq));
@@ -94,18 +78,19 @@ public class AccountingMemoryStore {
         entity.setOwnerName(ownerName);
         entity.setStatus(status);
         entity.setCreatedAt(now());
-        subjects.put(entity.getSubjectId(), entity);
+        accountingDataMapper.insertSubject(entity);
         return entity;
     }
 
     public AccountSubjectEntity findSubject(String subjectId) {
-        return subjects.get(subjectId);
+        return accountingDataMapper.findSubject(subjectId);
     }
 
     public List<AccountEntity> accounts() {
-        return new ArrayList<>(accounts.values());
+        return accountingDataMapper.findAccounts();
     }
 
+    @Transactional
     public AccountEntity createAccount(AccountSubjectEntity subject, String accountType, String currency, String status) {
         AccountEntity entity = new AccountEntity();
         entity.setAccountNo(nextNo("ACT", accountSeq));
@@ -116,7 +101,7 @@ public class AccountingMemoryStore {
         entity.setAccountStatus(status);
         entity.setCreatedAt(now());
         entity.setLastChangeAt(entity.getCreatedAt());
-        accounts.put(entity.getAccountNo(), entity);
+        accountingDataMapper.insertAccount(entity);
 
         AccountBalanceEntity balanceEntity = new AccountBalanceEntity();
         balanceEntity.setAccountNo(entity.getAccountNo());
@@ -124,46 +109,48 @@ public class AccountingMemoryStore {
         balanceEntity.setFrozenAmount(BigDecimal.ZERO);
         balanceEntity.setInTransitAmount(BigDecimal.ZERO);
         balanceEntity.setUpdatedAt(now());
-        balances.put(entity.getAccountNo(), balanceEntity);
+        accountingDataMapper.insertBalance(balanceEntity);
         return entity;
     }
 
     public AccountEntity findAccount(String accountNo) {
-        return accounts.get(accountNo);
+        return accountingDataMapper.findAccount(accountNo);
     }
 
     public AccountBalanceEntity findBalance(String accountNo) {
-        return balances.get(accountNo);
+        return accountingDataMapper.findBalance(accountNo);
     }
 
     public List<AccountLedgerEntity> ledgers() {
-        List<AccountLedgerEntity> copied = new ArrayList<>(ledgers);
+        List<AccountLedgerEntity> copied = new ArrayList<>(accountingDataMapper.findLedgers());
         copied.sort(Comparator.comparing(AccountLedgerEntity::getCreatedAt).reversed());
         return copied;
     }
 
+    @Transactional
     public AccountLedgerEntity credit(String accountNo, String bizType, String bizNo, BigDecimal amount, String operatorName) {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.add(amount);
-        balance.setAvailableAmount(after);
-        balance.setUpdatedAt(now());
+        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount(), balance.getInTransitAmount(), now());
         updateAccountChangeTime(accountNo);
         AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "贷方", amount, before, after, operatorName);
-        ledgers.add(entity);
+        accountingDataMapper.insertLedger(entity);
         return entity;
     }
 
+    @Transactional
     public AccountLedgerEntity freeze(String accountNo, String bizNo, String freezeReason, BigDecimal amount, String operatorName) {
         return freezeBalanceOnly(accountNo, bizNo, freezeReason, amount, operatorName);
     }
 
     public List<AccountFreezeEntity> freezes() {
-        List<AccountFreezeEntity> copied = new ArrayList<>(freezes.values());
+        List<AccountFreezeEntity> copied = new ArrayList<>(accountingDataMapper.findFreezes());
         copied.sort(Comparator.comparing(AccountFreezeEntity::getCreatedAt).reversed());
         return copied;
     }
 
+    @Transactional
     public AccountFreezeEntity createFreeze(String accountNo, String bizNo, String freezeType, String freezeReason,
             BigDecimal freezeAmount, String operatorName) {
         AccountFreezeEntity entity = new AccountFreezeEntity();
@@ -176,7 +163,7 @@ public class AccountingMemoryStore {
         entity.setFreezeStatus("冻结中");
         entity.setOperatorName(operatorName);
         entity.setCreatedAt(now());
-        freezes.put(entity.getFreezeNo(), entity);
+        accountingDataMapper.insertFreeze(entity);
         freezeBalanceOnly(accountNo, bizNo, freezeReason, freezeAmount, operatorName);
         return entity;
     }
@@ -186,19 +173,18 @@ public class AccountingMemoryStore {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.subtract(amount);
-        balance.setAvailableAmount(after);
-        balance.setFrozenAmount(balance.getFrozenAmount().add(amount));
-        balance.setUpdatedAt(now());
+        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount().add(amount), balance.getInTransitAmount(), now());
         updateAccountChangeTime(accountNo);
 
         AccountLedgerEntity entity = buildLedger(accountNo, "BALANCE_FREEZE", bizNo, "借方", amount, before, after, operatorName);
-        ledgers.add(entity);
+        accountingDataMapper.insertLedger(entity);
         return entity;
     }
 
+    @Transactional
     public AccountFreezeEntity unfreeze(String freezeNo, String operatorName, String reason) {
-        AccountFreezeEntity freezeEntity = freezes.get(freezeNo);
-        if (freezeEntity == null || Objects.equals(freezeEntity.getFreezeStatus(), "已解冻")) {
+        AccountFreezeEntity freezeEntity = accountingDataMapper.findFreeze(freezeNo);
+        if (freezeEntity == null || "已解冻".equals(freezeEntity.getFreezeStatus())) {
             return freezeEntity;
         }
         unfreezeBalanceOnly(
@@ -207,32 +193,37 @@ public class AccountingMemoryStore {
                 freezeEntity.getFreezeAmount(),
                 operatorName);
 
+        accountingDataMapper.updateFreeze(
+                freezeNo,
+                "已解冻",
+                freezeEntity.getFreezeReason() + " / " + reason,
+                now());
         freezeEntity.setFreezeStatus("已解冻");
         freezeEntity.setUnfrozenAt(now());
         freezeEntity.setFreezeReason(freezeEntity.getFreezeReason() + " / " + reason);
         return freezeEntity;
     }
 
+    @Transactional
     public AccountLedgerEntity unfreezeBalanceOnly(String accountNo, String bizNo, BigDecimal amount, String operatorName) {
         AccountBalanceEntity balance = findBalance(accountNo);
         BigDecimal before = balance.getAvailableAmount();
         BigDecimal after = before.add(amount);
-        balance.setAvailableAmount(after);
-        balance.setFrozenAmount(balance.getFrozenAmount().subtract(amount));
-        balance.setUpdatedAt(now());
+        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount().subtract(amount), balance.getInTransitAmount(), now());
         updateAccountChangeTime(accountNo);
 
         AccountLedgerEntity entity = buildLedger(accountNo, "BALANCE_UNFREEZE", bizNo, "贷方", amount, before, after, operatorName);
-        ledgers.add(entity);
+        accountingDataMapper.insertLedger(entity);
         return entity;
     }
 
     public List<AccountAdjustmentEntity> adjustments() {
-        List<AccountAdjustmentEntity> copied = new ArrayList<>(adjustments.values());
+        List<AccountAdjustmentEntity> copied = new ArrayList<>(accountingDataMapper.findAdjustments());
         copied.sort(Comparator.comparing(AccountAdjustmentEntity::getCreatedAt).reversed());
         return copied;
     }
 
+    @Transactional
     public AccountAdjustmentEntity createAdjustment(String accountNo, String adjustDirection, BigDecimal adjustAmount,
             String adjustReason, String createdBy) {
         AccountAdjustmentEntity entity = new AccountAdjustmentEntity();
@@ -244,25 +235,24 @@ public class AccountingMemoryStore {
         entity.setAdjustStatus("待审批");
         entity.setCreatedBy(createdBy);
         entity.setCreatedAt(now());
-        adjustments.put(entity.getAdjustNo(), entity);
+        accountingDataMapper.insertAdjustment(entity);
         return entity;
     }
 
+    @Transactional
     public AccountAdjustmentEntity approveAdjustment(String adjustNo, String approvedBy) {
-        AccountAdjustmentEntity entity = adjustments.get(adjustNo);
-        if (entity == null || Objects.equals(entity.getAdjustStatus(), "已生效")) {
+        AccountAdjustmentEntity entity = accountingDataMapper.findAdjustment(adjustNo);
+        if (entity == null || "已生效".equals(entity.getAdjustStatus())) {
             return entity;
         }
-        entity.setAdjustStatus("已生效");
-        entity.setApprovedBy(approvedBy);
-        entity.setApprovedAt(now());
+        accountingDataMapper.updateAdjustmentApproval(adjustNo, "已生效", approvedBy, now());
         BigDecimal before = findBalance(entity.getAccountNo()).getAvailableAmount();
         BigDecimal amount = entity.getAdjustAmount();
         BigDecimal after = "贷方".equals(entity.getAdjustDirection()) ? before.add(amount) : before.subtract(amount);
-        findBalance(entity.getAccountNo()).setAvailableAmount(after);
-        findBalance(entity.getAccountNo()).setUpdatedAt(now());
+        AccountBalanceEntity balance = findBalance(entity.getAccountNo());
+        accountingDataMapper.updateBalance(entity.getAccountNo(), after, balance.getFrozenAmount(), balance.getInTransitAmount(), now());
         updateAccountChangeTime(entity.getAccountNo());
-        ledgers.add(buildLedger(
+        accountingDataMapper.insertLedger(buildLedger(
                 entity.getAccountNo(),
                 "ACCOUNT_ADJUSTMENT",
                 entity.getAdjustNo(),
@@ -271,15 +261,17 @@ public class AccountingMemoryStore {
                 before,
                 after,
                 approvedBy));
+        entity.setAdjustStatus("已生效");
+        entity.setApprovedBy(approvedBy);
+        entity.setApprovedAt(now());
         return entity;
     }
 
     public List<AccountEventEntity> events() {
-        List<AccountEventEntity> copied = new ArrayList<>(events);
-        copied.sort(Comparator.comparing(AccountEventEntity::getCreatedAt).reversed());
-        return copied;
+        return accountingDataMapper.findEvents();
     }
 
+    @Transactional
     public AccountEventEntity recordEvent(String eventType, String bizNo, String summary, String payload) {
         AccountEventEntity entity = new AccountEventEntity();
         entity.setEventNo(nextNo("EVT", eventSeq));
@@ -289,7 +281,7 @@ public class AccountingMemoryStore {
         entity.setPayload(payload);
         entity.setEventStatus("已消费");
         entity.setCreatedAt(now());
-        events.add(entity);
+        accountingDataMapper.insertEvent(entity);
         return entity;
     }
 
@@ -315,10 +307,7 @@ public class AccountingMemoryStore {
     }
 
     private void updateAccountChangeTime(String accountNo) {
-        AccountEntity accountEntity = accounts.get(accountNo);
-        if (accountEntity != null) {
-            accountEntity.setLastChangeAt(now());
-        }
+        accountingDataMapper.updateAccountChangeTime(accountNo, now());
     }
 
     private String nextNo(String prefix, AtomicLong sequence) {

@@ -7,20 +7,25 @@ import com.abc123.accounting.dto.BalanceSnapshotDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 账务事件服务测试。
  */
+@SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class AccountingEventServiceImplTest {
+
+    @Autowired
+    private AccountingEventServiceImpl eventService;
+
+    @Autowired
+    private BalanceServiceImpl balanceService;
 
     @Test
     void shouldCreditBalanceWhenPaymentSuccessEventConsumed() {
-        AccountingMemoryStore store = new AccountingMemoryStore();
-        store.initDemoData();
-        AccountingMapper mapper = new AccountingMapper();
-        AccountingEventServiceImpl eventService = new AccountingEventServiceImpl(store, mapper);
-        BalanceServiceImpl balanceService = new BalanceServiceImpl(store, mapper);
-
         PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
         request.setAccountNo("ACT10001");
         request.setPaymentOrderId("PAY202607200099");
