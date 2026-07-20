@@ -28,6 +28,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
         overview.setChannels(paymentConfigMapper.findChannels());
         overview.setRouteRules(paymentConfigMapper.findRouteRules());
+        overview.setProtocols(paymentConfigMapper.findProtocols());
         return overview;
     }
 
@@ -57,6 +58,21 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         );
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付路由规则不存在");
+        }
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO toggleProtocol(PaymentConfigToggleRequestDTO request) {
+        String configCode = requireConfigCode(request);
+        int affectedRows = paymentConfigMapper.updateProtocolStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("支付协议配置不存在");
         }
         return overview();
     }

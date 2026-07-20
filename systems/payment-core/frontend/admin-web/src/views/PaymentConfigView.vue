@@ -4,6 +4,7 @@ import { paymentConfigApi } from "../api/client";
 
 const channels = ref([]);
 const routeRules = ref([]);
+const protocols = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
@@ -16,6 +17,7 @@ async function loadOverview() {
     const overview = await paymentConfigApi.getOverview();
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
+    protocols.value = overview.protocols;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -41,6 +43,15 @@ async function toggleRouteRule(rule) {
   );
 }
 
+async function toggleProtocol(protocol) {
+  await toggleConfig(
+    protocol.protocolCode,
+    protocol.status !== "ENABLED",
+    "支付协议",
+    paymentConfigApi.toggleProtocol
+  );
+}
+
 async function toggleConfig(configCode, enabled, configType, toggleRunner) {
   activeConfigCode.value = configCode;
   actionMessage.value = "";
@@ -48,6 +59,7 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
     const overview = await toggleRunner(configCode, enabled);
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
+    protocols.value = overview.protocols;
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
@@ -175,6 +187,60 @@ onMounted(loadOverview);
                       @click="toggleRouteRule(rule)"
                     >
                       {{ rule.status === "ENABLED" ? "停用" : "启用" }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>支付协议管理</h3>
+              <p class="meta">维护签约协议、预授权协议和代扣协议模板，控制场景适用范围与启停状态</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>协议编码</th>
+                  <th>协议名称</th>
+                  <th>协议类型</th>
+                  <th>模板版本</th>
+                  <th>签约模式</th>
+                  <th>适用场景</th>
+                  <th>适用渠道</th>
+                  <th>商户确认</th>
+                  <th>风控标签</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="protocol in protocols" :key="protocol.protocolCode">
+                  <td>{{ protocol.protocolCode }}</td>
+                  <td>{{ protocol.protocolName }}</td>
+                  <td>{{ protocol.protocolType }}</td>
+                  <td>{{ protocol.templateVersion }}</td>
+                  <td>{{ protocol.signMode }}</td>
+                  <td>{{ protocol.sceneScope }}</td>
+                  <td>{{ protocol.channelScope }}</td>
+                  <td>{{ protocol.merchantAckRequired }}</td>
+                  <td class="flow-summary-cell">{{ protocol.riskControlTag }}</td>
+                  <td><span :class="['badge', protocol.statusType]">{{ protocol.status }}</span></td>
+                  <td>{{ protocol.updatedAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === protocol.protocolCode"
+                      @click="toggleProtocol(protocol)"
+                    >
+                      {{ protocol.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
                   </td>
                 </tr>

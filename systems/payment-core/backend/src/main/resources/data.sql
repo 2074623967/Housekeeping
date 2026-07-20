@@ -14,6 +14,11 @@ INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, matc
 ('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
 ('RULE_ENTERPRISE_BANK', '企业大额订单走线下银行', 'ENTERPRISE/PC', 'amount>5000 OR customerType=ENTERPRISE', 'offline_bank', 'alipay_h5', 'ENABLED', 'success', 3, '2026-07-20 22:40:00');
 
+INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_type, template_version, sign_mode, scene_scope, channel_scope, merchant_ack_required, risk_control_tag, status, status_type, priority, updated_at) VALUES
+('PROTO_HOUSEKEEPING_SIGN_V1', '家政服务标准收单协议', 'PAYMENT_SIGN', 'v1.0.0', '线上签约+实名校验', '保洁/月嫂/到家服务', 'wx_h5,alipay_h5', '需要', '实名+重复签约校验', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('PROTO_ENTERPRISE_PREAUTH_V1', '企业客户预授权协议', 'PREAUTH', 'v1.2.0', '线下审核+线上确认', '企业保洁/长期合同', 'offline_bank,alipay_h5', '需要', '企业白名单+大额限额', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('PROTO_MEMBER_DEDUCT_V1', '会员代扣协议', 'WITHHOLD', 'v0.9.3', '短信确认+静默续扣', '包月保洁/会员续费', 'wx_h5', '不需要', '签约时效+扣款频控', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
+
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),
 ('ORD202607190002', '王先生', '月嫂套餐', '周阿姨', 8800.00, 2000.00, '待支付', 'warn', '待确认', 'warn', '2026-07-19 10:02:44'),

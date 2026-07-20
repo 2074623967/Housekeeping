@@ -39,6 +39,23 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findProtocols" resultType="com.abc123.hsp.dto.PaymentProtocolConfigDTO">
+        SELECT protocol_code AS protocolCode,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_protocol_config
+        ORDER BY priority ASC, id ASC
+    </select>
+
     <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
         SELECT channel_code AS channelCode,
                payment_method AS paymentMethod,
@@ -76,5 +93,13 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE rule_code = #{ruleCode}
+    </update>
+
+    <update id="updateProtocolStatus">
+        UPDATE t_payment_protocol_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE protocol_code = #{protocolCode}
     </update>
 </mapper>

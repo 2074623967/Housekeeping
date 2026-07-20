@@ -46,4 +46,12 @@ public class PaymentConfigController {
     public ApiResponse<PaymentConfigOverviewDTO> toggleRouteRule(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleRouteRule(request));
     }
+
+    /**
+     * 启停支付协议配置。
+     */
+    @PostMapping("/protocols/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleProtocol(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleProtocol(request));
+    }
 }

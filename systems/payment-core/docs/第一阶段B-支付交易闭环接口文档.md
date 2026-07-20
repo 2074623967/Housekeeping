@@ -481,6 +481,7 @@ POST /api/refunds/retry
 
 1. `channels`：支付渠道配置，包含渠道编码、渠道名称、支付方式、商户号、回调通知地址、验签密钥配置情况、适用场景、状态、单日限额、优先级。
 2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、状态、优先级。
+3. `protocols`：支付协议配置，包含协议编码、协议名称、协议类型、模板版本、签约模式、适用场景、适用渠道、商户确认要求、风控标签、状态。
 
 ### 12.2 启停渠道或路由规则
 
@@ -496,6 +497,12 @@ POST /api/payment-config/channels/toggle
 POST /api/payment-config/route-rules/toggle
 ```
 
+启停支付协议：
+
+```http
+POST /api/payment-config/protocols/toggle
+```
+
 请求示例：
 
 ```json
@@ -509,7 +516,8 @@ POST /api/payment-config/route-rules/toggle
 
 1. `enabled=true` 时状态更新为 `ENABLED`。
 2. `enabled=false` 时状态更新为 `DISABLED`。
-3. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
+3. 协议配置当前已支持运营查看和启停，后续继续补充协议模板编辑、协议种类管理、签约要素配置和电子签章能力。
+4. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
 
 ## 13. 支付监控分析接口
 

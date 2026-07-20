@@ -22,4 +22,9 @@ public interface PaymentConfigService {
      * 启停路由规则。
      */
     PaymentConfigOverviewDTO toggleRouteRule(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 启停支付协议配置。
+     */
+    PaymentConfigOverviewDTO toggleProtocol(PaymentConfigToggleRequestDTO request);
 }

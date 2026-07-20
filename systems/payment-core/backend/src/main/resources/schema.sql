@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_order;
+DROP TABLE IF EXISTS t_payment_protocol_config;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
 DROP TABLE IF EXISTS t_order;
@@ -72,6 +73,26 @@ CREATE TABLE t_payment_route_rule_config (
     UNIQUE KEY uk_rule_code (rule_code),
     KEY idx_route_scene_status (match_scene, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则配置表';
+
+CREATE TABLE t_payment_protocol_config (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    protocol_code VARCHAR(64) NOT NULL COMMENT '支付协议编码',
+    protocol_name VARCHAR(128) NOT NULL COMMENT '支付协议名称',
+    protocol_type VARCHAR(64) NOT NULL COMMENT '协议类型',
+    template_version VARCHAR(32) NOT NULL COMMENT '模板版本',
+    sign_mode VARCHAR(64) NOT NULL COMMENT '签约模式',
+    scene_scope VARCHAR(128) NOT NULL COMMENT '适用场景',
+    channel_scope VARCHAR(128) NOT NULL COMMENT '适用渠道范围',
+    merchant_ack_required VARCHAR(32) NOT NULL COMMENT '是否要求商户确认',
+    risk_control_tag VARCHAR(128) NOT NULL COMMENT '风控标签',
+    status VARCHAR(32) NOT NULL COMMENT '协议状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '协议状态样式类型',
+    priority INT NOT NULL DEFAULT 0 COMMENT '协议优先级，数字越小优先级越高',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_protocol_code (protocol_code),
+    KEY idx_protocol_type_status (protocol_type, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付协议配置表';
 
 CREATE TABLE t_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
