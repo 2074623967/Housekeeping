@@ -198,7 +198,7 @@
 | `app-web` | `npm run build` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
 | `pc-web` | `npm run build` | 通过 | PC 收银台与结果页当前可完成生产构建 |
 | `h5-web` | `npm run build` | 通过 | H5 用户端当前可完成生产构建 |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 `repository`，`47` 个测试全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 `repository`，`49` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
@@ -237,6 +237,26 @@
 4. 为 `PaymentConfigMapper` 补齐协议单条查询、插入、更新 `mapper.xml`
 5. 为后台配置页补齐协议新增、编辑、重置表单和优先级展示
 6. 修复“编辑已有协议时优先级被默认值覆盖”的隐性配置风险
+
+## 10. 2026-07-20 支付日终处理 V1 验证
+
+### 10.1 本轮验证结论
+
+本轮围绕“支付日终处理”补齐了后台页面、后端聚合接口、手动触发接口和批次留痕表，确认 `payment-core` 已经从“只有支付监控，没有日终收口”推进到“具备基础日终批次视角”的阶段。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 新增 `PaymentDayEndServiceImplTest`，覆盖总览查询与手动跑批 |
+| 后台前端构建 | `npm run build` | 通过 | `PaymentDayEndView`、路由、导航与接口封装全部通过生产构建 |
+
+### 10.2 本轮修复项
+
+1. 新增支付日终批次表 `t_payment_day_end_batch`，沉淀业务日、批次状态、异常数和执行备注
+2. 新增支付日终总览接口：`GET /api/payment-day-end/overview`
+3. 新增支付日终手动触发接口：`POST /api/payment-day-end/run`
+4. 新增后台页面“支付日终处理”，支持查看总览、异常数、最近批次与手动触发
+5. 统一按专业口径修正退款成功统计日期，改为 `success_at`
+6. 修复聚合空结果时页面可能出现 `null` 的边界问题
 
 ## 8. 2026-07-20 用户支付端精修复核
 

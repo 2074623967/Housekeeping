@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentDayEndMapper">
+
+    <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentDayEndOverviewDTO">
+        SELECT COUNT(1) AS totalBatchCount,
+               COALESCE(SUM(CASE WHEN batch_status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS completedBatchCount,
+               COALESCE(SUM(CASE WHEN batch_status = 'WARNING' THEN 1 ELSE 0 END), 0) AS abnormalBatchCount,
+               DATE_FORMAT(MAX(biz_date), '%Y-%m-%d') AS latestBizDate,
+               COALESCE((
+                   SELECT batch_status
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), '未跑批') AS latestBatchStatus,
+               COALESCE((
+                   SELECT channel_abnormal_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), 0) AS openChannelAbnormalCount,
+               COALESCE((
+                   SELECT internal_abnormal_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), 0) AS openInternalAbnormalCount,
+               COALESCE((
+                   SELECT pending_refund_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), 0) AS openPendingRefundCount
+        FROM t_payment_day_end_batch
+    </select>
+
+    <select id="findRecentBatches" resultType="com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO">
+        SELECT batch_no AS batchNo,
+               DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
+               run_mode AS runMode,
+               batch_status AS batchStatus,
+               batch_status_type AS batchStatusType,
+               payment_total_count AS paymentTotalCount,
+               payment_success_count AS paymentSuccessCount,
+               CONCAT('¥', FORMAT(payment_success_amount, 2)) AS paymentSuccessAmount,
+               refund_success_count AS refundSuccessCount,
+               CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
+               channel_abnormal_count AS channelAbnormalCount,
+               internal_abnormal_count AS internalAbnormalCount,
+               pending_refund_count AS pendingRefundCount,
+               summary_comment AS summaryComment,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_day_end_batch
+        ORDER BY biz_date DESC, id DESC
+        LIMIT 10
+    </select>
+
+    <select id="countPaymentsByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order
+        WHERE DATE(created_at) = #{bizDate}
+    </select>
+
+    <select id="countSuccessPaymentsByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order
+        WHERE DATE(created_at) = #{bizDate}
+          AND status = 'SUCCESS'
+    </select>
+
+    <select id="sumSuccessPaymentAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(amount), 0)
+        FROM t_payment_order
+        WHERE DATE(created_at) = #{bizDate}
+          AND status = 'SUCCESS'
+    </select>
+
+    <select id="countSuccessRefundsByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_refund_order
+        WHERE DATE(success_at) = #{bizDate}
+          AND status = 'SUCCESS'
+    </select>
+
+    <select id="sumSuccessRefundAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(refund_amount), 0)
+        FROM t_refund_order
+        WHERE DATE(success_at) = #{bizDate}
+          AND status = 'SUCCESS'
+    </select>
+
+    <select id="countChannelAbnormalByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_notify_log notify_log
+              WHERE notify_log.payment_order_id = payment_order.payment_order_id
+                AND notify_log.notify_status = 'SUCCESS'
+          )
+    </select>
+
+    <select id="countInternalAbnormalByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_event payment_event
+              WHERE payment_event.payment_order_id = payment_order.payment_order_id
+                AND payment_event.event_type = 'PAYMENT_SUCCESS'
+                AND payment_event.publish_status = 'SUCCESS'
+          )
+    </select>
+
+    <select id="countPendingRefundByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_refund_order
+        WHERE DATE(applied_at) = #{bizDate}
+          AND status NOT IN ('SUCCESS', 'FAIL')
+    </select>
+
+    <insert id="insertBatch" parameterType="com.abc123.hsp.entity.PaymentDayEndBatchEntity">
+        INSERT INTO t_payment_day_end_batch (
+            batch_no,
+            biz_date,
+            run_mode,
+            batch_status,
+            batch_status_type,
+            payment_total_count,
+            payment_success_count,
+            payment_success_amount,
+            refund_success_count,
+            refund_success_amount,
+            channel_abnormal_count,
+            internal_abnormal_count,
+            pending_refund_count,
+            summary_comment,
+            triggered_by,
+            created_at,
+            completed_at
+        ) VALUES (
+            #{batchNo},
+            #{bizDate},
+            #{runMode},
+            #{batchStatus},
+            #{batchStatusType},
+            #{paymentTotalCount},
+            #{paymentSuccessCount},
+            #{paymentSuccessAmount},
+            #{refundSuccessCount},
+            #{refundSuccessAmount},
+            #{channelAbnormalCount},
+            #{internalAbnormalCount},
+            #{pendingRefundCount},
+            #{summaryComment},
+            #{triggeredBy},
+            NOW(),
+            NOW()
+        )
+    </insert>
+</mapper>

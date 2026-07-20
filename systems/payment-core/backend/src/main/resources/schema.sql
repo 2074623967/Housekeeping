@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS t_prepay_order;
 DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
+DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_gateway_config;
@@ -309,3 +310,27 @@ CREATE TABLE t_worker_settlement_order (
     PRIMARY KEY (id),
     UNIQUE KEY uk_settlement_order_id (settlement_order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='服务者结算单表';
+
+CREATE TABLE t_payment_day_end_batch (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    batch_no VARCHAR(64) NOT NULL COMMENT '日终批次号',
+    biz_date DATE NOT NULL COMMENT '业务日期',
+    run_mode VARCHAR(32) NOT NULL COMMENT '运行方式',
+    batch_status VARCHAR(32) NOT NULL COMMENT '批次状态',
+    batch_status_type VARCHAR(32) NOT NULL COMMENT '批次状态样式类型',
+    payment_total_count INT NOT NULL DEFAULT 0 COMMENT '支付总单量',
+    payment_success_count INT NOT NULL DEFAULT 0 COMMENT '支付成功单量',
+    payment_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '支付成功金额',
+    refund_success_count INT NOT NULL DEFAULT 0 COMMENT '退款成功单量',
+    refund_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款成功金额',
+    channel_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '渠道异常数',
+    internal_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '内部异常数',
+    pending_refund_count INT NOT NULL DEFAULT 0 COMMENT '待收口退款数',
+    summary_comment VARCHAR(512) NOT NULL COMMENT '执行备注',
+    triggered_by VARCHAR(64) NOT NULL COMMENT '触发人',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    completed_at DATETIME NOT NULL COMMENT '完成时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_day_end_batch_no (batch_no),
+    KEY idx_day_end_biz_date_status (biz_date, batch_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付日终批次表';

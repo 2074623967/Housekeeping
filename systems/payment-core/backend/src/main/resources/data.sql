@@ -79,3 +79,7 @@ INSERT INTO t_worker_settlement_order (settlement_order_id, worker_name, period_
 ('SETW202607190001', '李阿姨', '2026-07-14', '2026-07-19', 4260.00, 120.00, 4140.00, 0.00, '待审核', 'warn', '待出款', 'info', '2026-07-19 12:10:00'),
 ('SETW202607190002', '周阿姨', '2026-07-14', '2026-07-19', 9860.00, 300.00, 9560.00, 200.00, '待出款', 'info', '出款中', 'warn', '2026-07-19 12:15:00'),
 ('SETW202607180017', '陈师傅', '2026-07-07', '2026-07-13', 3120.00, 0.00, 3120.00, 0.00, '已完成', 'success', '出款成功', 'success', '2026-07-18 16:30:00');
+
+INSERT INTO t_payment_day_end_batch (batch_no, biz_date, run_mode, batch_status, batch_status_type, payment_total_count, payment_success_count, payment_success_amount, refund_success_count, refund_success_amount, channel_abnormal_count, internal_abnormal_count, pending_refund_count, summary_comment, triggered_by, created_at, completed_at) VALUES
+('DEB202607190001', '2026-07-19', 'AUTO', 'WARNING', 'warn', 2, 1, 268.00, 0, 0.00, 0, 0, 1, '支付主链路收口正常，仍有退款处理中需在下一账期继续跟进。', 'system', '2026-07-19 23:30:00', '2026-07-19 23:30:10'),
+('DEB202607180001', '2026-07-18', 'AUTO', 'WARNING', 'warn', 1, 1, 3600.00, 1, 600.00, 0, 1, 0, '内部事件存在未发布成功记录，需与清分、结算和账务链路一起排查。', 'system', '2026-07-18 23:30:00', '2026-07-18 23:30:12');

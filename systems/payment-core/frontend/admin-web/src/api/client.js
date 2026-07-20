@@ -63,6 +63,11 @@ export const paymentMonitorApi = {
   getOverview: () => request("/api/payment-monitor/overview")
 };
 
+export const paymentDayEndApi = {
+  getOverview: () => request("/api/payment-day-end/overview"),
+  runBatch: (payload) => postJson("/api/payment-day-end/run", payload)
+};
+
 export const orderApi = {
   getList: ({
     orderNo = "",
