@@ -1,0 +1,6 @@
+server:
+  port: 18130
+
+spring:
+  application:
+    name: home-service-settlement-backend
