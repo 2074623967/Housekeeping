@@ -3,9 +3,12 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import org.springframework.web.bind.annotation.PathVariable;
 import com.abc123.hsp.service.PaymentConfigService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -53,6 +56,23 @@ public class PaymentConfigController {
     @PostMapping("/protocols/toggle")
     public ApiResponse<PaymentConfigOverviewDTO> toggleProtocol(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleProtocol(request));
+    }
+
+    /**
+     * 新增支付协议配置。
+     */
+    @PostMapping("/protocols")
+    public ApiResponse<PaymentConfigOverviewDTO> createProtocol(@RequestBody PaymentProtocolUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.createProtocol(request));
+    }
+
+    /**
+     * 编辑支付协议配置。
+     */
+    @PutMapping("/protocols/{protocolCode}")
+    public ApiResponse<PaymentConfigOverviewDTO> updateProtocol(@PathVariable("protocolCode") String protocolCode,
+                                                                @RequestBody PaymentProtocolUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.updateProtocol(protocolCode, request));
     }
 
     /**

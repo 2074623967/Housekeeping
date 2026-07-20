@@ -11,6 +11,24 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeConfigCode = ref("");
+const editingProtocolCode = ref("");
+const protocolForm = ref(createProtocolForm());
+
+function createProtocolForm() {
+  return {
+    protocolCode: "",
+    protocolName: "",
+    protocolType: "",
+    templateVersion: "",
+    signMode: "",
+    sceneScope: "",
+    channelScope: "",
+    merchantAckRequired: "需要",
+    riskControlTag: "",
+    priority: 99,
+    enabled: true
+  };
+}
 
 async function loadOverview() {
   isLoading.value = true;
@@ -106,6 +124,57 @@ async function toggleMappingConfig(configCode, subCode, enabled, configType, tog
     actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode}/${subCode} 操作失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+function startCreateProtocol() {
+  editingProtocolCode.value = "";
+  protocolForm.value = createProtocolForm();
+  actionMessage.value = "";
+}
+
+function startEditProtocol(protocol) {
+  editingProtocolCode.value = protocol.protocolCode;
+  protocolForm.value = {
+    protocolCode: protocol.protocolCode,
+    protocolName: protocol.protocolName,
+    protocolType: protocol.protocolType,
+    templateVersion: protocol.templateVersion,
+    signMode: protocol.signMode,
+    sceneScope: protocol.sceneScope,
+    channelScope: protocol.channelScope,
+    merchantAckRequired: protocol.merchantAckRequired,
+    riskControlTag: protocol.riskControlTag,
+    priority: protocol.priority,
+    enabled: protocol.status === "ENABLED"
+  };
+  actionMessage.value = `正在编辑协议 ${protocol.protocolCode}`;
+}
+
+async function submitProtocolForm() {
+  activeConfigCode.value = editingProtocolCode.value || protocolForm.value.protocolCode;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      ...protocolForm.value,
+      priority: Number(protocolForm.value.priority || 99)
+    };
+    const overview = editingProtocolCode.value
+      ? await paymentConfigApi.updateProtocol(editingProtocolCode.value, payload)
+      : await paymentConfigApi.createProtocol(payload);
+    channels.value = overview.channels;
+    routeRules.value = overview.routeRules;
+    protocols.value = overview.protocols;
+    returnCodeMappings.value = overview.returnCodeMappings;
+    gateways.value = overview.gateways;
+    actionMessage.value = editingProtocolCode.value
+      ? `支付协议 ${editingProtocolCode.value} 已更新。`
+      : `支付协议 ${protocolForm.value.protocolCode} 已新增。`;
+    startCreateProtocol();
+  } catch (error) {
+    actionMessage.value = `支付协议保存失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -244,6 +313,80 @@ onMounted(loadOverview);
               <h3>支付协议管理</h3>
               <p class="meta">维护签约协议、预授权协议和代扣协议模板，控制场景适用范围与启停状态</p>
             </div>
+            <button class="button secondary" @click="startCreateProtocol">新建协议</button>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ editingProtocolCode ? "编辑支付协议" : "新增支付协议" }}</h3>
+                <p class="meta">按协议模板、渠道范围、商户确认和风控标签维护支付协议标准配置</p>
+              </div>
+            </div>
+
+            <div class="filter-grid">
+              <label>
+                协议编码
+                <input v-model.trim="protocolForm.protocolCode" :disabled="Boolean(editingProtocolCode)" />
+              </label>
+              <label>
+                协议名称
+                <input v-model.trim="protocolForm.protocolName" />
+              </label>
+              <label>
+                协议类型
+                <input v-model.trim="protocolForm.protocolType" placeholder="PAYMENT_SIGN / PREAUTH / WITHHOLD" />
+              </label>
+              <label>
+                模板版本
+                <input v-model.trim="protocolForm.templateVersion" placeholder="v1.0.0" />
+              </label>
+              <label>
+                签约模式
+                <input v-model.trim="protocolForm.signMode" />
+              </label>
+              <label>
+                商户确认
+                <select v-model="protocolForm.merchantAckRequired">
+                  <option value="需要">需要</option>
+                  <option value="不需要">不需要</option>
+                </select>
+              </label>
+              <label>
+                适用场景
+                <input v-model.trim="protocolForm.sceneScope" placeholder="保洁/月嫂/到家服务" />
+              </label>
+              <label>
+                适用渠道
+                <input v-model.trim="protocolForm.channelScope" placeholder="wx_h5,alipay_h5" />
+              </label>
+              <label>
+                风控标签
+                <input v-model.trim="protocolForm.riskControlTag" placeholder="实名+重复签约校验" />
+              </label>
+              <label>
+                优先级
+                <input v-model.number="protocolForm.priority" type="number" min="0" />
+              </label>
+              <label>
+                启用状态
+                <select v-model="protocolForm.enabled">
+                  <option :value="true">启用</option>
+                  <option :value="false">停用</option>
+                </select>
+              </label>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button
+                class="button primary"
+                :disabled="activeConfigCode === (editingProtocolCode || protocolForm.protocolCode)"
+                @click="submitProtocolForm"
+              >
+                {{ editingProtocolCode ? "保存修改" : "新增协议" }}
+              </button>
+              <button class="button secondary" @click="startCreateProtocol">重置表单</button>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -259,6 +402,7 @@ onMounted(loadOverview);
                   <th>适用渠道</th>
                   <th>商户确认</th>
                   <th>风控标签</th>
+                  <th>优先级</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th>操作</th>
@@ -275,9 +419,17 @@ onMounted(loadOverview);
                   <td>{{ protocol.channelScope }}</td>
                   <td>{{ protocol.merchantAckRequired }}</td>
                   <td class="flow-summary-cell">{{ protocol.riskControlTag }}</td>
+                  <td>{{ protocol.priority }}</td>
                   <td><span :class="['badge', protocol.statusType]">{{ protocol.status }}</span></td>
                   <td>{{ protocol.updatedAt }}</td>
                   <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === protocol.protocolCode"
+                      @click="startEditProtocol(protocol)"
+                    >
+                      编辑
+                    </button>
                     <button
                       class="link-button"
                       :disabled="activeConfigCode === protocol.protocolCode"

@@ -1,12 +1,12 @@
-package com.abc123.hsp.dto;
+package com.abc123.hsp.entity;
 
 import lombok.Data;
 
 /**
- * 支付协议配置展示对象。
+ * 支付协议配置实体，对应表：t_payment_protocol_config。
  */
 @Data
-public class PaymentProtocolConfigDTO {
+public class PaymentProtocolConfigEntity {
 
     /** 协议编码。 */
     private String protocolCode;
@@ -20,18 +20,16 @@ public class PaymentProtocolConfigDTO {
     private String signMode;
     /** 适用场景。 */
     private String sceneScope;
-    /** 适用渠道。 */
+    /** 适用渠道范围。 */
     private String channelScope;
-    /** 商户确认要求。 */
+    /** 是否要求商户确认。 */
     private String merchantAckRequired;
     /** 风控标签。 */
     private String riskControlTag;
-    /** 协议优先级。 */
-    private Integer priority;
-    /** 协议状态。 */
+    /** 状态。 */
     private String status;
-    /** 协议状态样式。 */
+    /** 状态样式类型。 */
     private String statusType;
-    /** 更新时间。 */
-    private String updatedAt;
+    /** 优先级。 */
+    private Integer priority;
 }

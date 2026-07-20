@@ -198,7 +198,7 @@
 | `app-web` | `npm run build` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
 | `pc-web` | `npm run build` | 通过 | PC 收银台与结果页当前可完成生产构建 |
 | `h5-web` | `npm run build` | 通过 | H5 用户端当前可完成生产构建 |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 `repository`，`44` 个测试全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 `repository`，`47` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
@@ -217,6 +217,26 @@
 7. 补齐支付配置中心 V1：支付渠道配置、路由规则配置、渠道/规则启停接口和后台页面，并增加配置服务单测。
 8. 补齐支付监控分析 V1：支付趋势、渠道表现、异常告警接口与后台页面，并增加监控服务单测。
 9. 将支付回调安全能力升级为生产化 V1：渠道独立回调密钥、持久化 nonce 防重放、渠道编码统一归一化，并更新配置展示页。
+
+## 9. 2026-07-20 支付协议管理增强验证
+
+### 9.1 本轮验证结论
+
+本轮围绕支付配置中心中的“支付协议管理”进行了正式化增强，确认后台已经从“只读+启停”升级到“可新增、可编辑、可启停”的一体化维护形态。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `PaymentConfigServiceImplTest` 已扩展到协议新增、编辑、重复编码校验 |
+| 后台前端构建 | `npm run build` | 通过 | `PaymentConfigView` 已新增协议表单、编辑入口、优先级展示与状态维护 |
+
+### 9.2 本轮修复项
+
+1. 新增支付协议新增接口：`POST /api/payment-config/protocols`
+2. 新增支付协议编辑接口：`PUT /api/payment-config/protocols/{protocolCode}`
+3. 为支付协议配置补齐 `PaymentProtocolUpsertRequestDTO` 与 `PaymentProtocolConfigEntity`
+4. 为 `PaymentConfigMapper` 补齐协议单条查询、插入、更新 `mapper.xml`
+5. 为后台配置页补齐协议新增、编辑、重置表单和优先级展示
+6. 修复“编辑已有协议时优先级被默认值覆盖”的隐性配置风险
 
 ## 8. 2026-07-20 用户支付端精修复核
 

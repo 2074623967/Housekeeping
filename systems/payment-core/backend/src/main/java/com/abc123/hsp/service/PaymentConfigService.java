@@ -2,6 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 
 /**
  * 支付配置中心服务。
@@ -27,6 +28,16 @@ public interface PaymentConfigService {
      * 启停支付协议配置。
      */
     PaymentConfigOverviewDTO toggleProtocol(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 新增支付协议配置。
+     */
+    PaymentConfigOverviewDTO createProtocol(PaymentProtocolUpsertRequestDTO request);
+
+    /**
+     * 编辑支付协议配置。
+     */
+    PaymentConfigOverviewDTO updateProtocol(String protocolCode, PaymentProtocolUpsertRequestDTO request);
 
     /**
      * 启停渠道返回码映射配置。

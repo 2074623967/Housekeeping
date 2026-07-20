@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
+import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -29,6 +30,11 @@ public interface PaymentConfigMapper {
      * 查询支付协议配置。
      */
     List<PaymentProtocolConfigDTO> findProtocols();
+
+    /**
+     * 按协议编码查询支付协议配置。
+     */
+    PaymentProtocolConfigEntity findProtocolByCode(@Param("protocolCode") String protocolCode);
 
     /**
      * 查询渠道返回码映射配置。
@@ -70,6 +76,16 @@ public interface PaymentConfigMapper {
     int updateProtocolStatus(@Param("protocolCode") String protocolCode,
                              @Param("status") String status,
                              @Param("statusType") String statusType);
+
+    /**
+     * 新增支付协议配置。
+     */
+    int insertProtocol(PaymentProtocolConfigEntity entity);
+
+    /**
+     * 更新支付协议配置。
+     */
+    int updateProtocol(PaymentProtocolConfigEntity entity);
 
     /**
      * 更新渠道返回码映射启停状态。

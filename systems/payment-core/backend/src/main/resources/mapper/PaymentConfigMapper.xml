@@ -49,11 +49,30 @@
                channel_scope AS channelScope,
                merchant_ack_required AS merchantAckRequired,
                risk_control_tag AS riskControlTag,
+               priority,
                status,
                status_type AS statusType,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_protocol_config
         ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findProtocolByCode" resultType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        SELECT protocol_code AS protocolCode,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               status,
+               status_type AS statusType,
+               priority
+        FROM t_payment_protocol_config
+        WHERE protocol_code = #{protocolCode}
+        LIMIT 1
     </select>
 
     <select id="findReturnCodeMappings" resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
@@ -130,6 +149,55 @@
         UPDATE t_payment_protocol_config
         SET status = #{status},
             status_type = #{statusType},
+            updated_at = NOW()
+        WHERE protocol_code = #{protocolCode}
+    </update>
+
+    <insert id="insertProtocol" parameterType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        INSERT INTO t_payment_protocol_config (
+            protocol_code,
+            protocol_name,
+            protocol_type,
+            template_version,
+            sign_mode,
+            scene_scope,
+            channel_scope,
+            merchant_ack_required,
+            risk_control_tag,
+            status,
+            status_type,
+            priority,
+            updated_at
+        ) VALUES (
+            #{protocolCode},
+            #{protocolName},
+            #{protocolType},
+            #{templateVersion},
+            #{signMode},
+            #{sceneScope},
+            #{channelScope},
+            #{merchantAckRequired},
+            #{riskControlTag},
+            #{status},
+            #{statusType},
+            #{priority},
+            NOW()
+        )
+    </insert>
+
+    <update id="updateProtocol" parameterType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        UPDATE t_payment_protocol_config
+        SET protocol_name = #{protocolName},
+            protocol_type = #{protocolType},
+            template_version = #{templateVersion},
+            sign_mode = #{signMode},
+            scene_scope = #{sceneScope},
+            channel_scope = #{channelScope},
+            merchant_ack_required = #{merchantAckRequired},
+            risk_control_tag = #{riskControlTag},
+            status = #{status},
+            status_type = #{statusType},
+            priority = #{priority},
             updated_at = NOW()
         WHERE protocol_code = #{protocolCode}
     </update>
