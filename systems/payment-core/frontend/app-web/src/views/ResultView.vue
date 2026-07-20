@@ -202,6 +202,34 @@ function backToCashier() {
             <span>查单来源</span>
             <strong>{{ paymentDetail?.querySource || "-" }}</strong>
           </div>
+          <div class="summary-item">
+            <span>最近尝试状态</span>
+            <strong>{{ paymentDetail?.latestAttemptStatus || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>发起终端</span>
+            <strong>{{ paymentDetail?.latestTerminal || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>客户端 IP</span>
+            <strong>{{ paymentDetail?.latestClientIp || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>幂等键</span>
+            <strong class="mono-text">{{ paymentDetail?.latestIdempotencyKey || "-" }}</strong>
+          </div>
+        </div>
+
+        <div class="ops-card">
+          <div class="ops-title">最近支付尝试</div>
+          <div class="ops-row">
+            <span>尝试状态</span>
+            <span :class="['status-pill', `status-${paymentDetail?.latestAttemptStatusType || 'info'}`]">
+              {{ paymentDetail?.latestAttemptStatus || "-" }}
+            </span>
+          </div>
+          <div class="ops-row"><span>最近请求报文</span><span class="mono-text">{{ paymentDetail?.latestRequestPayload || "-" }}</span></div>
+          <div class="ops-row"><span>最近响应报文</span><span class="mono-text">{{ paymentDetail?.latestResponsePayload || "-" }}</span></div>
         </div>
 
         <div class="terminal-actions">

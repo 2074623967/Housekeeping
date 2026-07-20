@@ -266,7 +266,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 新增 `PaymentTaskCenterServiceImplTest`、`PaymentExpiryTaskServiceImplTest`，当前全量后端测试为 `52` 个并全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 新增 `PaymentTaskCenterServiceImplTest`、`PaymentExpiryTaskServiceImplTest`，当前全量后端测试为 `54` 个并全部通过 |
 | 后台前端构建 | `npm run build` | 通过 | `PaymentTaskCenterView`、路由、导航和接口封装全部通过生产构建 |
 
 ### 11.2 本轮修复项
@@ -317,7 +317,7 @@
 | 支付提交主链路 | 通过 | `submit` 已按支付方式、请求渠道、支付场景、终端、金额、客户类型组装路由上下文 |
 | 路由规则命中 | 通过 | 已支持 `matchScene` + `AND/OR` 表达式匹配 |
 | 路由兜底 | 通过 | 目标渠道停用时，可自动落到规则兜底渠道 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `52` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `54` 个并全部通过 |
 
 ### 9.2 本轮修复项
 
@@ -340,7 +340,7 @@
 | 前端错误展示 | 通过 | `admin-web / app-web / h5-web / pc-web` 请求层已透出 `message + code + requestId` |
 | H5 终端入口 | 通过 | `h5-web` 已改为走自身包装视图，不再直接绕过 H5 终端差异层 |
 | PC 终端入口 | 通过 | `pc-web` 已改为走独立入口与独立路由，不再与 App/H5 混用 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `52` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `54` 个并全部通过 |
 
 ### 10.2 本轮修复项
 
@@ -362,7 +362,7 @@
 | 渠道下单抽象 | 通过 | 已新增 `PaymentChannelSubmitAdapter + PaymentChannelSubmitService`，提交支付不再在主服务里硬编码渠道响应 |
 | 提交结果留痕 | 通过 | 支付单已回写 `channelTransactionNo`，支付尝试与通知日志已记录真实适配器返回报文 |
 | 本地模拟渠道 | 通过 | 已补齐 `LocalPaymentChannelSubmitAdapter`，在未接真实微信/支付宝前可稳定支撑联调 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `52` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `54` 个并全部通过 |
 
 ### 12.2 本轮修复项
 
@@ -412,6 +412,26 @@
 2. 在支付单详情页补充 `billNo`、`querySource` 和轨迹空态提示，提升排障可读性。
 3. 在 `app-web` 的桌面端分支中增加独立二维码承载区和桌面端扫码元信息，支撑后续替换为真实二维码。
 4. 为 `pc-web` 收银台补充失败补救动作和联查建议，使桌面端页面不再只剩提示文案。
+
+## 15. 2026-07-20 支付详情尝试信息对齐复核
+
+### 15.1 本轮验证结论
+
+本轮围绕“支付单详情接口、后台支付详情页和支付结果页对最近支付尝试信息展示不一致”的问题进行了补齐，确认三端口径已进一步收敛。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| 支付详情接口字段 | 通过 | `GET /api/payments/{paymentOrderId}` 已补齐最近尝试终端、IP、幂等键、尝试状态、请求报文和响应报文 |
+| 后台支付详情页 | 通过 | 已新增最近支付尝试区块，支持直接查看请求/响应报文 |
+| 用户支付结果页 | 通过 | 已新增最近尝试状态、终端、IP、幂等键和请求/响应报文展示 |
+| 自动化测试 | 通过 | 新增支付详情尝试信息单测后，当前全量后端测试为 `54` 个并全部通过 |
+
+### 15.2 本轮修复项
+
+1. 扩展 `PaymentDetailDTO`，补齐最近一次支付尝试相关字段。
+2. 扩展 `PaymentMapper.findDetail`，关联最新支付尝试记录。
+3. 为 `PaymentServiceImplTest` 增加支付详情尝试信息聚合测试。
+4. 为后台支付详情页和用户支付结果页补齐尝试信息展示，提升联调和排障可读性。
 
 ## 11. 2026-07-20 支付记录详情钻取复核
 

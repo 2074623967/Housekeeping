@@ -75,6 +75,13 @@
                p.payment_method AS paymentMethod,
                p.channel_code AS channel,
                p.channel_transaction_no AS channelTransactionNo,
+               pa.terminal AS latestTerminal,
+               pa.client_ip AS latestClientIp,
+               pa.idempotency_key AS latestIdempotencyKey,
+               pa.attempt_status AS latestAttemptStatus,
+               pa.attempt_status_type AS latestAttemptStatusType,
+               pa.request_payload AS latestRequestPayload,
+               pa.response_payload AS latestResponsePayload,
                p.status,
                p.status_type AS statusType,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
@@ -87,6 +94,13 @@
                     LIMIT 1
                 )
                  LEFT JOIN t_bill b ON b.order_no = p.order_no
+                 LEFT JOIN t_payment_attempt pa ON pa.id = (
+                    SELECT latest_pa.id
+                    FROM t_payment_attempt latest_pa
+                    WHERE latest_pa.payment_order_id = p.payment_order_id
+                    ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
+                    LIMIT 1
+                )
         WHERE p.payment_order_id = #{paymentOrderId}
     </select>
 

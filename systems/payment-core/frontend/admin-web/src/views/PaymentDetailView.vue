@@ -176,6 +176,29 @@ onMounted(loadDetail);
         </div>
 
         <section class="panel mini">
+          <h4>最近支付尝试</h4>
+          <div class="detail-grid detail-grid-wide">
+            <div>
+              <strong>尝试状态：</strong>
+              <span :class="['badge', detail.latestAttemptStatusType || 'info']">{{ detail.latestAttemptStatus || "-" }}</span>
+            </div>
+            <div><strong>发起终端：</strong>{{ detail.latestTerminal || "-" }}</div>
+            <div><strong>客户端 IP：</strong>{{ detail.latestClientIp || "-" }}</div>
+            <div><strong>幂等键：</strong>{{ detail.latestIdempotencyKey || "-" }}</div>
+          </div>
+          <div class="payload-grid">
+            <div>
+              <strong>最近一次请求报文</strong>
+              <pre>{{ detail.latestRequestPayload || "暂无请求报文" }}</pre>
+            </div>
+            <div>
+              <strong>最近一次响应报文</strong>
+              <pre>{{ detail.latestResponsePayload || "暂无响应报文" }}</pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel mini">
           <h4>联查入口</h4>
           <div class="list-actions">
             <RouterLink v-if="detail.orderNo" class="link-button" :to="orderRoute">回到订单中心</RouterLink>

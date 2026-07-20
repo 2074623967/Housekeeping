@@ -427,4 +427,40 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_ORDER_NOT_FOUND, exception.getCode());
     }
+
+    @Test
+    void shouldKeepLatestAttemptContextWhenLoadingPaymentDetail() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-DETAIL-100");
+        detail.setLatestTerminal("PC_WEB");
+        detail.setLatestClientIp("10.10.1.8");
+        detail.setLatestIdempotencyKey("IDEMP-DETAIL-100");
+        detail.setLatestAttemptStatus("处理中");
+        detail.setLatestAttemptStatusType("info");
+        detail.setLatestRequestPayload("{\"paymentOrderId\":\"PAY-DETAIL-100\"}");
+        detail.setLatestResponsePayload("{\"code\":\"SUCCESS\"}");
+        when(paymentMapper.findDetail("PAY-DETAIL-100")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-DETAIL-100")).thenReturn(Arrays.asList("ROUTE-1"));
+        when(paymentMapper.findNotifyLogs("PAY-DETAIL-100")).thenReturn(Arrays.asList("NOTIFY-1"));
+        when(paymentMapper.findEventItems("PAY-DETAIL-100")).thenReturn(Arrays.asList("EVENT-1"));
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .detail("PAY-DETAIL-100");
+
+        org.junit.jupiter.api.Assertions.assertEquals("PC_WEB", result.getLatestTerminal());
+        org.junit.jupiter.api.Assertions.assertEquals("10.10.1.8", result.getLatestClientIp());
+        org.junit.jupiter.api.Assertions.assertEquals("IDEMP-DETAIL-100", result.getLatestIdempotencyKey());
+        org.junit.jupiter.api.Assertions.assertEquals("处理中", result.getLatestAttemptStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("info", result.getLatestAttemptStatusType());
+        org.junit.jupiter.api.Assertions.assertEquals("{\"paymentOrderId\":\"PAY-DETAIL-100\"}", result.getLatestRequestPayload());
+        org.junit.jupiter.api.Assertions.assertEquals("{\"code\":\"SUCCESS\"}", result.getLatestResponsePayload());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getRouteLogs().size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getNotifyLogs().size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getEventLogs().size());
+    }
 }

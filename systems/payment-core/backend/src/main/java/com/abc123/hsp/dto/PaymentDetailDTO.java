@@ -13,6 +13,13 @@ public class PaymentDetailDTO {
     private String paymentMethod;
     private String channel;
     private String channelTransactionNo;
+    private String latestTerminal;
+    private String latestClientIp;
+    private String latestIdempotencyKey;
+    private String latestAttemptStatus;
+    private String latestAttemptStatusType;
+    private String latestRequestPayload;
+    private String latestResponsePayload;
     private String querySource;
     private String status;
     private String statusType;
@@ -91,6 +98,62 @@ public class PaymentDetailDTO {
 
     public void setChannelTransactionNo(String channelTransactionNo) {
         this.channelTransactionNo = channelTransactionNo;
+    }
+
+    public String getLatestTerminal() {
+        return latestTerminal;
+    }
+
+    public void setLatestTerminal(String latestTerminal) {
+        this.latestTerminal = latestTerminal;
+    }
+
+    public String getLatestClientIp() {
+        return latestClientIp;
+    }
+
+    public void setLatestClientIp(String latestClientIp) {
+        this.latestClientIp = latestClientIp;
+    }
+
+    public String getLatestIdempotencyKey() {
+        return latestIdempotencyKey;
+    }
+
+    public void setLatestIdempotencyKey(String latestIdempotencyKey) {
+        this.latestIdempotencyKey = latestIdempotencyKey;
+    }
+
+    public String getLatestAttemptStatus() {
+        return latestAttemptStatus;
+    }
+
+    public void setLatestAttemptStatus(String latestAttemptStatus) {
+        this.latestAttemptStatus = latestAttemptStatus;
+    }
+
+    public String getLatestAttemptStatusType() {
+        return latestAttemptStatusType;
+    }
+
+    public void setLatestAttemptStatusType(String latestAttemptStatusType) {
+        this.latestAttemptStatusType = latestAttemptStatusType;
+    }
+
+    public String getLatestRequestPayload() {
+        return latestRequestPayload;
+    }
+
+    public void setLatestRequestPayload(String latestRequestPayload) {
+        this.latestRequestPayload = latestRequestPayload;
+    }
+
+    public String getLatestResponsePayload() {
+        return latestResponsePayload;
+    }
+
+    public void setLatestResponsePayload(String latestResponsePayload) {
+        this.latestResponsePayload = latestResponsePayload;
     }
 
     public String getQuerySource() {
