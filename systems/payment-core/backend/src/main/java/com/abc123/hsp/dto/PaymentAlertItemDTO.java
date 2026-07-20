@@ -20,4 +20,8 @@ public class PaymentAlertItemDTO {
     private String alertLevelType;
     /** 影响笔数。 */
     private Integer affectedCount;
+    /** 建议动作。 */
+    private String suggestedAction;
+    /** 建议跳转页面。 */
+    private String actionRoute;
 }

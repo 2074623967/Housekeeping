@@ -20,6 +20,7 @@ public class PaymentMonitorServiceImpl implements PaymentMonitorService {
     @Override
     public PaymentMonitorOverviewDTO overview() {
         PaymentMonitorOverviewDTO overview = new PaymentMonitorOverviewDTO();
+        overview.setSummary(paymentMonitorMapper.findSummary());
         overview.setTrends(paymentMonitorMapper.findRecentTrends());
         overview.setChannelMetrics(paymentMonitorMapper.findChannelMetrics());
         overview.setAlerts(paymentMonitorMapper.findAlerts());

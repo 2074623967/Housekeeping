@@ -4,6 +4,41 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentMonitorMapper">
 
+    <select id="findSummary" resultType="com.abc123.hsp.dto.PaymentMonitorSummaryDTO">
+        SELECT payment_summary.total_count AS totalCount,
+               payment_summary.success_count AS successCount,
+               CONCAT(FORMAT(payment_summary.success_rate, 2), '%') AS successRate,
+               CONCAT('¥', FORMAT(payment_summary.success_amount, 2)) AS successAmount,
+               payment_summary.pending_payment_count AS pendingPaymentCount,
+               COALESCE(refund_summary.failed_refund_count, 0) AS failedRefundCount,
+               COALESCE(channel_summary.disabled_channel_count, 0) AS disabledChannelCount,
+               (
+                   CASE WHEN payment_summary.pending_payment_count &gt; 0 THEN 1 ELSE 0 END +
+                   CASE WHEN COALESCE(refund_summary.failed_refund_count, 0) &gt; 0 THEN 1 ELSE 0 END +
+                   CASE WHEN COALESCE(channel_summary.disabled_channel_count, 0) &gt; 0 THEN 1 ELSE 0 END
+               ) AS alertCount
+        FROM (
+            SELECT COUNT(1) AS total_count,
+                   SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,
+                   CASE WHEN COUNT(1) = 0 THEN 0
+                        ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
+                   END AS success_rate,
+                   COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS success_amount,
+                   SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) AS pending_payment_count
+            FROM t_payment_order
+        ) payment_summary
+                 CROSS JOIN (
+            SELECT COUNT(1) AS failed_refund_count
+            FROM t_refund_order
+            WHERE status = 'FAIL'
+        ) refund_summary
+                 CROSS JOIN (
+            SELECT COUNT(1) AS disabled_channel_count
+            FROM t_payment_channel_config
+            WHERE status = 'DISABLED'
+        ) channel_summary
+    </select>
+
     <select id="findRecentTrends" resultType="com.abc123.hsp.dto.PaymentTrendPointDTO">
         SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS statDate,
                COUNT(1) AS totalCount,
@@ -30,7 +65,34 @@
                    '%'
                ) AS successRate,
                CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0), 2)) AS successAmount,
-               SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) AS pendingCount
+               SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) AS pendingCount,
+               CASE
+                   WHEN SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) &gt; 0 THEN 'P1'
+                   WHEN (
+                       CASE WHEN COUNT(1) = 0 THEN 0
+                            ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
+                       END
+                   ) &lt; 80 THEN 'P2'
+                   ELSE '正常'
+               END AS riskLevel,
+               CASE
+                   WHEN SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) &gt; 0 THEN 'danger'
+                   WHEN (
+                       CASE WHEN COUNT(1) = 0 THEN 0
+                            ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
+                       END
+                   ) &lt; 80 THEN 'warn'
+                   ELSE 'success'
+               END AS riskLevelType,
+               CASE
+                   WHEN SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) &gt; 0 THEN '存在待收口支付单，建议优先查单并核对回调。'
+                   WHEN (
+                       CASE WHEN COUNT(1) = 0 THEN 0
+                            ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
+                       END
+                   ) &lt; 80 THEN '成功率偏低，建议检查路由命中、渠道稳定性和异常日志。'
+                   ELSE '当前渠道表现稳定，可持续观察。'
+               END AS riskHint
         FROM t_payment_order
         GROUP BY channel_code, payment_method
         ORDER BY totalCount DESC, successCount DESC
@@ -42,7 +104,9 @@
                '仍有支付单处于待回调状态，需要主动查单或补回调。' AS alertMessage,
                'P1' AS alertLevel,
                'danger' AS alertLevelType,
-               COUNT(1) AS affectedCount
+               COUNT(1) AS affectedCount,
+               '进入支付单管理或支付日志页，优先核对待回调支付单与回调日志。' AS suggestedAction,
+               '/payments?status=WAIT_CALLBACK' AS actionRoute
         FROM t_payment_order
         WHERE status = 'WAIT_CALLBACK'
         HAVING COUNT(1) &gt; 0
@@ -54,7 +118,9 @@
                '退款单存在失败记录，需要运营复核后重试或切线下处理。' AS alertMessage,
                'P1' AS alertLevel,
                'danger' AS alertLevelType,
-               COUNT(1) AS affectedCount
+               COUNT(1) AS affectedCount,
+               '进入退款单管理页，按失败状态过滤后复核重试。' AS suggestedAction,
+               '/refunds?refundStatus=FAIL' AS actionRoute
         FROM t_refund_order
         WHERE status = 'FAIL'
         HAVING COUNT(1) &gt; 0
@@ -66,7 +132,9 @@
                '存在已停用渠道，请确认是否需要同步调整路由规则。' AS alertMessage,
                'P2' AS alertLevel,
                'warn' AS alertLevelType,
-               COUNT(1) AS affectedCount
+               COUNT(1) AS affectedCount,
+               '进入支付渠道与路由页，检查停用渠道和对应路由规则。' AS suggestedAction,
+               '/payment-config' AS actionRoute
         FROM t_payment_channel_config
         WHERE status = 'DISABLED'
         HAVING COUNT(1) &gt; 0

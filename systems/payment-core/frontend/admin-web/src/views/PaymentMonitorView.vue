@@ -1,14 +1,52 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { paymentMonitorApi } from "../api/client";
 
+const router = useRouter();
 const overview = ref({
+  summary: {
+    totalCount: 0,
+    successCount: 0,
+    successRate: "0.00%",
+    successAmount: "¥0.00",
+    pendingPaymentCount: 0,
+    failedRefundCount: 0,
+    disabledChannelCount: 0,
+    alertCount: 0
+  },
   trends: [],
   channelMetrics: [],
   alerts: []
 });
 const isLoading = ref(true);
 const errorMessage = ref("");
+
+const monitorCards = computed(() => {
+  const summary = overview.value.summary || {};
+  return [
+    {
+      title: "支付单总量",
+      value: summary.totalCount ?? 0,
+      hint: `成功 ${summary.successCount ?? 0} 笔`
+    },
+    {
+      title: "整体成功率",
+      value: summary.successRate || "0.00%",
+      hint: `成功金额 ${summary.successAmount || "¥0.00"}`
+    },
+    {
+      title: "待收口支付",
+      value: summary.pendingPaymentCount ?? 0,
+      hint: "建议优先查单与核对回调"
+    },
+    {
+      title: "异常告警数",
+      value: summary.alertCount ?? 0,
+      hint: `退款失败 ${summary.failedRefundCount ?? 0} / 停用渠道 ${summary.disabledChannelCount ?? 0}`
+    }
+  ];
+});
 
 async function loadOverview() {
   isLoading.value = true;
@@ -20,6 +58,21 @@ async function loadOverview() {
   } finally {
     isLoading.value = false;
   }
+}
+
+function openAlertRoute(actionRoute) {
+  if (!actionRoute) {
+    return;
+  }
+  router.push(actionRoute);
+}
+
+function openChannelDrillDown(item) {
+  if ((item.pendingCount || 0) > 0) {
+    router.push(`/payments?paymentMethod=${item.paymentMethod}&status=WAIT_CALLBACK`);
+    return;
+  }
+  router.push(`/payment-flows?channelCode=${item.channelCode}`);
 }
 
 onMounted(loadOverview);
@@ -44,21 +97,10 @@ onMounted(loadOverview);
 
       <template v-else>
         <div class="detail-card-grid">
-          <div class="detail-card">
-            <div class="detail-label">最近趋势天数</div>
-            <div class="detail-value">{{ overview.trends.length }}</div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-label">渠道监控维度</div>
-            <div class="detail-value">{{ overview.channelMetrics.length }}</div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-label">异常告警数</div>
-            <div class="detail-value">{{ overview.alerts.length }}</div>
-          </div>
-          <div class="detail-card">
-            <div class="detail-label">监控状态</div>
-            <div class="detail-value">在线</div>
+          <div v-for="card in monitorCards" :key="card.title" class="detail-card">
+            <div class="detail-label">{{ card.title }}</div>
+            <div class="detail-value">{{ card.value }}</div>
+            <div class="meta">{{ card.hint }}</div>
           </div>
         </div>
 
@@ -99,6 +141,7 @@ onMounted(loadOverview);
                   <th>等级</th>
                   <th>标题</th>
                   <th>影响</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,8 +150,12 @@ onMounted(loadOverview);
                   <td>
                     <div>{{ alert.alertTitle }}</div>
                     <div class="meta">{{ alert.alertMessage }}</div>
+                    <div class="meta">{{ alert.suggestedAction }}</div>
                   </td>
                   <td>{{ alert.affectedCount }} 笔</td>
+                  <td>
+                    <button class="link-button" @click="openAlertRoute(alert.actionRoute)">立即排查</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -130,6 +177,9 @@ onMounted(loadOverview);
                 <th>成功率</th>
                 <th>成功金额</th>
                 <th>待处理</th>
+                <th>风险等级</th>
+                <th>风险说明</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -141,6 +191,11 @@ onMounted(loadOverview);
                 <td>{{ item.successRate }}</td>
                 <td>{{ item.successAmount }}</td>
                 <td>{{ item.pendingCount }}</td>
+                <td><span :class="['badge', item.riskLevelType]">{{ item.riskLevel }}</span></td>
+                <td class="flow-summary-cell">{{ item.riskHint }}</td>
+                <td>
+                  <button class="link-button" @click="openChannelDrillDown(item)">查看明细</button>
+                </td>
               </tr>
             </tbody>
           </table>

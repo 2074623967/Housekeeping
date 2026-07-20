@@ -673,9 +673,61 @@ POST /api/payment-config/gateways/toggle
 
 返回内容：
 
-1. `trends`：最近 7 天支付趋势，包含日期、总单量、成功单量和成功金额。
-2. `channelMetrics`：按渠道与支付方式统计的总单量、成功率、成功金额和待处理笔数。
-3. `alerts`：待处理异常告警列表，当前包括回调待收口、退款失败、渠道停用三类。
+1. `summary`：支付监控摘要卡片数据，包含支付单总量、成功笔数、成功率、成功金额、待回调支付单量、退款失败笔数、停用渠道数和异常告警数。
+2. `trends`：最近 7 天支付趋势，包含日期、总单量、成功单量和成功金额。
+3. `channelMetrics`：按渠道与支付方式统计的总单量、成功率、成功金额和待处理笔数，并补充 `riskLevel`、`riskLevelType`、`riskHint` 便于前端直接展示风险标签和说明。
+4. `alerts`：待处理异常告警列表，当前包括回调待收口、退款失败、渠道停用三类，并补充 `suggestedAction` 和 `actionRoute` 便于前端一键跳转到排障页。
+
+返回示例：
+
+```json
+{
+  "summary": {
+    "totalCount": 268,
+    "successCount": 247,
+    "successRate": "92.16%",
+    "successAmount": "¥18,932.00",
+    "pendingPaymentCount": 12,
+    "failedRefundCount": 3,
+    "disabledChannelCount": 1,
+    "alertCount": 4
+  },
+  "trends": [
+    {
+      "statDate": "2026-07-20",
+      "totalCount": 38,
+      "successCount": 35,
+      "successAmount": "¥2,866.00"
+    }
+  ],
+  "channelMetrics": [
+    {
+      "channelCode": "WX_H5",
+      "paymentMethod": "WECHAT_H5",
+      "totalCount": 72,
+      "successCount": 65,
+      "successRate": "90.28%",
+      "successAmount": "¥5,880.00",
+      "pendingCount": 4,
+      "riskLevel": "中风险",
+      "riskLevelType": "warn",
+      "riskHint": "存在 4 笔待回调支付，建议优先查单"
+    }
+  ],
+  "alerts": [
+    {
+      "alertType": "WAIT_CALLBACK",
+      "alertTitle": "待回调支付积压",
+      "alertMessage": "存在支付结果未收口的交易",
+      "alertLevel": "高",
+      "alertLevelType": "danger",
+      "affectedCount": 12,
+      "suggestedAction": "进入支付单管理页，优先筛查待回调订单并主动查单",
+      "actionRoute": "/payments?status=WAIT_CALLBACK"
+    }
+  ]
+}
+```
 
 ## 14. 错误与边界说明
 

@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class PaymentMonitorOverviewDTO {
 
+    /** 监控摘要。 */
+    private PaymentMonitorSummaryDTO summary;
     /** 趋势统计。 */
     private List<PaymentTrendPointDTO> trends;
     /** 渠道监控统计。 */

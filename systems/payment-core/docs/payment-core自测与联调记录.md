@@ -514,6 +514,27 @@
 3. 调整共享样式，支撑新增的支付前检查区、对比区和建议清单展示。
 4. 完成 `app-web / h5-web / pc-web` 三端生产构建复核，确保共享交易逻辑增强后仍可稳定交付。
 
+## 20. 2026-07-20 支付监控 drill-down 增强复核
+
+### 20.1 本轮验证结论
+
+本轮围绕“支付监控页只有趋势和简单列表，缺少正式运营需要的摘要卡片、风险提示和排障跳转动作”的问题进行了补齐，确认监控页已经从“观察页”升级为“监控与排障入口页”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 全量后端测试共 `55` 个并全部通过，新增覆盖 `findSummary()` 与监控聚合返回字段 |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260720-monitor-drilldown --emptyOutDir` | 通过 | 支付监控页新增摘要卡片、异常告警操作列、渠道风险说明与 drill-down 跳转后可稳定构建 |
+| 监控总览接口 | `GET /api/payment-monitor/overview` | 已完成代码交付 | 当前已补齐 `summary`、`riskLevel/riskHint`、`suggestedAction/actionRoute`，前端已完成消费与跳转 |
+
+### 20.2 本轮补齐项
+
+1. 新增 `PaymentMonitorSummaryDTO`，统一承载监控摘要卡片数据。
+2. 扩展 `PaymentMonitorOverviewDTO`，增加 `summary` 聚合返回。
+3. 扩展 `PaymentChannelMetricDTO`，增加 `riskLevel`、`riskLevelType`、`riskHint`。
+4. 扩展 `PaymentAlertItemDTO`，增加 `suggestedAction`、`actionRoute`。
+5. 扩展 `PaymentMonitorMapper.xml`，增加监控摘要 SQL，并为渠道与告警结果补充风险和跳转信息。
+6. 升级后台支付监控页，补齐四张摘要卡、异常告警排查动作和渠道明细钻取动作。
+
 ## 11. 2026-07-20 支付记录详情钻取复核
 
 ### 11.1 本轮验证结论

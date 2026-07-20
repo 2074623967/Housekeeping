@@ -22,4 +22,10 @@ public class PaymentChannelMetricDTO {
     private String successAmount;
     /** 待处理笔数。 */
     private Integer pendingCount;
+    /** 风险等级。 */
+    private String riskLevel;
+    /** 风险等级样式。 */
+    private String riskLevelType;
+    /** 风险说明。 */
+    private String riskHint;
 }
