@@ -1,0 +1,6 @@
+server:
+  port: 18120
+
+spring:
+  application:
+    name: home-service-clearing-backend
