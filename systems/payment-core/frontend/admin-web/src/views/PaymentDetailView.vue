@@ -80,6 +80,12 @@ onMounted(loadDetail);
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="router.push('/payments')">返回列表</button>
+        <button class="button secondary" @click="router.push(`/payment-requests?paymentOrderId=${route.params.paymentOrderId}`)">
+          查看支付请求
+        </button>
+        <button class="button secondary" @click="router.push(`/payment-logs?paymentOrderId=${route.params.paymentOrderId}`)">
+          查看处理日志
+        </button>
         <button class="button secondary" :disabled="!!activeAction" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
         </button>

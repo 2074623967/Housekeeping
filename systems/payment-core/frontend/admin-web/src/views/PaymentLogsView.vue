@@ -1,7 +1,9 @@
 <script setup>
 import { onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { paymentLogApi } from "../api/client";
 
+const route = useRoute();
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
@@ -9,9 +11,9 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
-  paymentOrderId: "",
-  processStage: "全部",
-  logLevel: "全部"
+  paymentOrderId: route.query.paymentOrderId || "",
+  processStage: route.query.processStage || "全部",
+  logLevel: route.query.logLevel || "全部"
 });
 
 function resetFilters() {
@@ -130,7 +132,11 @@ onMounted(loadPaymentLogs);
           <tbody>
             <tr v-for="item in items" :key="item.logNo">
               <td>{{ item.logNo }}</td>
-              <td>{{ item.paymentOrderId }}</td>
+              <td>
+                <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                  {{ item.paymentOrderId }}
+                </RouterLink>
+              </td>
               <td>{{ item.orderNo }}</td>
               <td>{{ item.processStage }}</td>
               <td><span :class="['badge', item.logLevelType]">{{ item.logLevel }}</span></td>

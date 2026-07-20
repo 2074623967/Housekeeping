@@ -1,7 +1,9 @@
 <script setup>
 import { onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { paymentRequestApi } from "../api/client";
 
+const route = useRoute();
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
@@ -10,9 +12,9 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
-  requestNo: "",
-  paymentOrderId: "",
-  requestStatus: "全部"
+  requestNo: route.query.requestNo || "",
+  paymentOrderId: route.query.paymentOrderId || "",
+  requestStatus: route.query.requestStatus || "全部"
 });
 
 function resetFilters() {
@@ -139,7 +141,11 @@ onMounted(loadPaymentRequests);
             <template v-for="item in items" :key="item.requestNo">
               <tr>
                 <td>{{ item.requestNo }}</td>
-                <td>{{ item.paymentOrderId }}</td>
+                <td>
+                  <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                    {{ item.paymentOrderId }}
+                  </RouterLink>
+                </td>
                 <td>{{ item.prepayOrderNo }}</td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.paymentMethod }}</td>
@@ -151,6 +157,9 @@ onMounted(loadPaymentRequests);
                 <td><span :class="['badge', item.requestStatusType]">{{ item.requestStatus }}</span></td>
                 <td>{{ item.createdAt }}</td>
                 <td>
+                  <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                    查看支付单
+                  </RouterLink>
                   <button class="link-button" @click="togglePayload(item.requestNo)">
                     {{ expandedRequestNo === item.requestNo ? "收起报文" : "查看报文" }}
                   </button>
