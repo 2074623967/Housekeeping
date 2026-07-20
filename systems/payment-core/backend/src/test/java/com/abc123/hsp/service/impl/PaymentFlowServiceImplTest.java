@@ -25,6 +25,8 @@ class PaymentFlowServiceImplTest {
         query.setPaymentOrderId(" PAY-001 ");
         query.setOrderNo(" ORD-001 ");
         query.setFlowType("支付尝试");
+        query.setChannelCode(" wx_h5 ");
+        query.setBusinessStatus(" WAIT_CALLBACK ");
         query.setPageNo(-3);
         query.setPageSize(0);
 
@@ -34,6 +36,8 @@ class PaymentFlowServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(1, query.getPageNo());
         org.junit.jupiter.api.Assertions.assertEquals(1, query.getPageSize());
+        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getChannelCode());
+        org.junit.jupiter.api.Assertions.assertEquals("WAIT_CALLBACK", query.getBusinessStatus());
         verify(paymentFlowMapper).findAll(query);
         verify(paymentFlowMapper).count(query);
     }

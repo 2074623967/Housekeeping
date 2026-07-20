@@ -118,6 +118,8 @@ export const paymentFlowApi = {
     paymentOrderId = "",
     orderNo = "",
     flowType = "全部",
+    channelCode = "",
+    businessStatus = "全部",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -125,6 +127,8 @@ export const paymentFlowApi = {
       paymentOrderId,
       orderNo,
       flowType,
+      channelCode,
+      businessStatus,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });

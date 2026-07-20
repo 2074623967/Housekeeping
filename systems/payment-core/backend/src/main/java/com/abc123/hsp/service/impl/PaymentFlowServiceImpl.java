@@ -23,6 +23,8 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
     public PageResultDTO<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
+        query.setBusinessStatus(query.getBusinessStatus() == null ? null : query.getBusinessStatus().trim());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

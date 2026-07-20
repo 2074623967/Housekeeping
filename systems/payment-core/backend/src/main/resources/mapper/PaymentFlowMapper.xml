@@ -12,8 +12,19 @@
                flow_type AS flowType,
                flow_type_tag AS flowTypeTag,
                channel_code AS channelCode,
+               terminal,
+               client_ip AS clientIp,
+               idempotency_key AS idempotencyKey,
                business_status AS businessStatus,
                business_status_type AS businessStatusType,
+               notify_type AS notifyType,
+               route_rule AS routeRule,
+               downstream_system AS downstreamSystem,
+               event_topic AS eventTopic,
+               publish_status AS publishStatus,
+               retry_count AS retryCount,
+               request_payload AS requestPayload,
+               response_payload AS responsePayload,
                summary,
                created_at AS createdAt
         FROM (
@@ -24,8 +35,19 @@
                    '支付尝试' AS flow_type,
                    'info' AS flow_type_tag,
                    pa.channel_code,
+                   pa.terminal,
+                   pa.client_ip,
+                   pa.idempotency_key,
                    pa.attempt_status AS business_status,
                    pa.attempt_status_type AS business_status_type,
+                   NULL AS notify_type,
+                   NULL AS route_rule,
+                   NULL AS downstream_system,
+                   NULL AS event_topic,
+                   NULL AS publish_status,
+                   NULL AS retry_count,
+                   pa.request_payload,
+                   pa.response_payload,
                    CONCAT('方式=', pa.payment_method, ' / 请求=', pa.request_payload) AS summary,
                    DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_attempt pa
@@ -40,8 +62,19 @@
                    '渠道回调' AS flow_type,
                    'warn' AS flow_type_tag,
                    pnl.channel_code,
+                   NULL AS terminal,
+                   NULL AS client_ip,
+                   NULL AS idempotency_key,
                    pnl.notify_status AS business_status,
                    pnl.notify_status_type AS business_status_type,
+                   pnl.notify_type,
+                   NULL AS route_rule,
+                   NULL AS downstream_system,
+                   NULL AS event_topic,
+                   NULL AS publish_status,
+                   NULL AS retry_count,
+                   pnl.notify_payload AS request_payload,
+                   pnl.notify_result AS response_payload,
                    CONCAT('类型=', pnl.notify_type, ' / 报文=', pnl.notify_payload) AS summary,
                    DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_notify_log pnl
@@ -63,8 +96,19 @@
                    '路由记录' AS flow_type,
                    'info' AS flow_type_tag,
                    prr.channel_code,
+                   NULL AS terminal,
+                   NULL AS client_ip,
+                   NULL AS idempotency_key,
                    prr.route_result AS business_status,
                    'info' AS business_status_type,
+                   NULL AS notify_type,
+                   prr.route_rule,
+                   NULL AS downstream_system,
+                   NULL AS event_topic,
+                   NULL AS publish_status,
+                   NULL AS retry_count,
+                   NULL AS request_payload,
+                   NULL AS response_payload,
                    CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
                    DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_route_record prr
@@ -86,12 +130,23 @@
                    '业务事件' AS flow_type,
                    'success' AS flow_type_tag,
                    po.channel_code,
+                   NULL AS terminal,
+                   NULL AS client_ip,
+                   NULL AS idempotency_key,
                    pe.event_type AS business_status,
                    CASE
                        WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
                        WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
                        ELSE 'info'
                    END AS business_status_type,
+                   NULL AS notify_type,
+                   NULL AS route_rule,
+                   pe.downstream_system,
+                   pe.event_topic,
+                   pe.publish_status,
+                   pe.retry_count,
+                   pe.event_payload AS request_payload,
+                   NULL AS response_payload,
                    CONCAT('事件=', pe.event_type, ' / 载荷=', pe.event_payload) AS summary,
                    DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_event pe
@@ -113,6 +168,12 @@
             </if>
             <if test="query.flowType != null and query.flowType != '' and query.flowType != '全部'">
                 AND flow_type = #{query.flowType}
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.businessStatus != null and query.businessStatus != '' and query.businessStatus != '全部'">
+                AND business_status = #{query.businessStatus}
             </if>
         </where>
         ORDER BY created_at DESC
@@ -129,8 +190,19 @@
                    '支付尝试' AS flow_type,
                    'info' AS flow_type_tag,
                    pa.channel_code,
+                   pa.terminal,
+                   pa.client_ip,
+                   pa.idempotency_key,
                    pa.attempt_status AS business_status,
                    pa.attempt_status_type AS business_status_type,
+                   NULL AS notify_type,
+                   NULL AS route_rule,
+                   NULL AS downstream_system,
+                   NULL AS event_topic,
+                   NULL AS publish_status,
+                   NULL AS retry_count,
+                   pa.request_payload,
+                   pa.response_payload,
                    CONCAT('方式=', pa.payment_method, ' / 请求=', pa.request_payload) AS summary,
                    DATE_FORMAT(pa.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_attempt pa
@@ -145,8 +217,19 @@
                    '渠道回调' AS flow_type,
                    'warn' AS flow_type_tag,
                    pnl.channel_code,
+                   NULL AS terminal,
+                   NULL AS client_ip,
+                   NULL AS idempotency_key,
                    pnl.notify_status AS business_status,
                    pnl.notify_status_type AS business_status_type,
+                   pnl.notify_type,
+                   NULL AS route_rule,
+                   NULL AS downstream_system,
+                   NULL AS event_topic,
+                   NULL AS publish_status,
+                   NULL AS retry_count,
+                   pnl.notify_payload AS request_payload,
+                   pnl.notify_result AS response_payload,
                    CONCAT('类型=', pnl.notify_type, ' / 报文=', pnl.notify_payload) AS summary,
                    DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_notify_log pnl
@@ -168,8 +251,19 @@
                    '路由记录' AS flow_type,
                    'info' AS flow_type_tag,
                    prr.channel_code,
+                   NULL AS terminal,
+                   NULL AS client_ip,
+                   NULL AS idempotency_key,
                    prr.route_result AS business_status,
                    'info' AS business_status_type,
+                   NULL AS notify_type,
+                   prr.route_rule,
+                   NULL AS downstream_system,
+                   NULL AS event_topic,
+                   NULL AS publish_status,
+                   NULL AS retry_count,
+                   NULL AS request_payload,
+                   NULL AS response_payload,
                    CONCAT('规则=', prr.route_rule, ' / 结果=', prr.route_result) AS summary,
                    DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_route_record prr
@@ -191,12 +285,23 @@
                    '业务事件' AS flow_type,
                    'success' AS flow_type_tag,
                    po.channel_code,
+                   NULL AS terminal,
+                   NULL AS client_ip,
+                   NULL AS idempotency_key,
                    pe.event_type AS business_status,
                    CASE
                        WHEN pe.event_type = 'PAYMENT_SUCCESS' THEN 'success'
                        WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'danger'
                        ELSE 'info'
                    END AS business_status_type,
+                   NULL AS notify_type,
+                   NULL AS route_rule,
+                   pe.downstream_system,
+                   pe.event_topic,
+                   pe.publish_status,
+                   pe.retry_count,
+                   pe.event_payload AS request_payload,
+                   NULL AS response_payload,
                    CONCAT('事件=', pe.event_type, ' / 载荷=', pe.event_payload) AS summary,
                    DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
             FROM t_payment_event pe
@@ -218,6 +323,12 @@
             </if>
             <if test="query.flowType != null and query.flowType != '' and query.flowType != '全部'">
                 AND flow_type = #{query.flowType}
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.businessStatus != null and query.businessStatus != '' and query.businessStatus != '全部'">
+                AND business_status = #{query.businessStatus}
             </if>
         </where>
     </select>

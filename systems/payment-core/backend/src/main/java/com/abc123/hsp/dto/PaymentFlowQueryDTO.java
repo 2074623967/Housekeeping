@@ -14,6 +14,10 @@ public class PaymentFlowQueryDTO {
     private String orderNo;
     /** 流水类型。 */
     private String flowType = "全部";
+    /** 渠道编码。 */
+    private String channelCode;
+    /** 业务状态。 */
+    private String businessStatus;
     /** 页码，从 1 开始。 */
     private int pageNo = 1;
     /** 每页条数，最大 100。 */
