@@ -120,6 +120,45 @@ export const paymentFlowApi = {
   }
 };
 
+export const paymentEventApi = {
+  getList: ({
+    paymentOrderId = "",
+    eventType = "全部",
+    publishStatus = "全部",
+    downstreamSystem = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      eventType,
+      publishStatus,
+      downstreamSystem,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-events?${params.toString()}`);
+  },
+  republish: (eventNo, {
+    paymentOrderId = "",
+    eventType = "全部",
+    publishStatus = "全部",
+    downstreamSystem = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      eventType,
+      publishStatus,
+      downstreamSystem,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return postJson(`/api/payment-events/republish?${params.toString()}`, { eventNo });
+  }
+};
+
 export const cashierSessionApi = {
   getList: ({
     sessionNo = "",

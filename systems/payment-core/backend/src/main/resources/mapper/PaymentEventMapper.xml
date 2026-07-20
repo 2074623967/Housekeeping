@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentEventMapper">
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
+        SELECT event_no AS eventNo,
+               event_type AS eventType,
+               payment_order_id AS paymentOrderId,
+               biz_no AS bizNo,
+               event_topic AS eventTopic,
+               downstream_system AS downstreamSystem,
+               publish_status AS publishStatus,
+               publish_status_type AS publishStatusType,
+               retry_count AS retryCount,
+               DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
+               DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               event_payload AS eventPayload,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_event
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.eventType != null and query.eventType != '' and query.eventType != '全部'">
+                AND event_type = #{query.eventType}
+            </if>
+            <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
+                AND publish_status = #{query.publishStatus}
+            </if>
+            <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
+                AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
+            </if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{query.limit} OFFSET #{query.offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_event
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.eventType != null and query.eventType != '' and query.eventType != '全部'">
+                AND event_type = #{query.eventType}
+            </if>
+            <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
+                AND publish_status = #{query.publishStatus}
+            </if>
+            <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
+                AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
+            </if>
+        </where>
+    </select>
+
+    <update id="markRepublished">
+        UPDATE t_payment_event
+        SET publish_status = 'SUCCESS',
+            publish_status_type = 'success',
+            retry_count = retry_count + 1,
+            last_published_at = NOW(),
+            next_retry_at = NULL
+        WHERE event_no = #{eventNo}
+    </update>
+</mapper>

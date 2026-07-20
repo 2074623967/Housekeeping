@@ -65,10 +65,10 @@ INSERT INTO t_payment_route_record (route_no, payment_order_id, channel_code, ro
 ('RTR202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
 ('RTR202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
 
-INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, event_payload, created_at) VALUES
-('EVT202607190001', 'PAYMENT_SUCCESS', 'PAY202607190001', 'ORD202607190001', '{"amount":268.00}', '2026-07-19 09:21:23'),
-('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', '{"amount":6800.00}', '2026-07-19 10:03:19'),
-('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', '{"amount":3600.00}', '2026-07-18 18:41:21');
+INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, downstream_system, event_topic, publish_status, publish_status_type, retry_count, last_published_at, next_retry_at, event_payload, created_at) VALUES
+('EVT202607190001', 'PAYMENT_SUCCESS', 'PAY202607190001', 'ORD202607190001', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'SUCCESS', 'success', 1, '2026-07-19 09:21:25', NULL, '{"amount":268.00}', '2026-07-19 09:21:23'),
+('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', 'payment-core-ops', 'payment.trade.pending.v1', 'PENDING', 'warn', 0, NULL, '2026-07-20 10:08:19', '{"amount":6800.00}', '2026-07-19 10:03:19'),
+('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 2, '2026-07-18 18:41:30', '2026-07-20 09:00:00', '{"amount":3600.00}', '2026-07-18 18:41:21');
 
 INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, status, status_type, applied_at, success_at) VALUES
 ('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),

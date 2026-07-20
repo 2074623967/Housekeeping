@@ -177,7 +177,7 @@
     </select>
 
     <select id="findEventItems" resultType="string">
-        SELECT CONCAT(event_type, ' | ', biz_no, ' | ', DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s')) AS item
+        SELECT CONCAT(event_type, ' | ', event_topic, ' | ', publish_status, ' | ', DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s')) AS item
         FROM t_payment_event
         WHERE payment_order_id = #{paymentOrderId}
         ORDER BY created_at DESC
@@ -256,8 +256,47 @@
     </insert>
 
     <insert id="insertEvent">
-        INSERT INTO t_payment_event(event_no, event_type, payment_order_id, biz_no, event_payload, created_at)
-        VALUES (#{eventNo}, #{eventType}, #{paymentOrderId}, #{bizNo}, #{eventPayload}, NOW())
+        INSERT INTO t_payment_event(
+            event_no,
+            event_type,
+            payment_order_id,
+            biz_no,
+            downstream_system,
+            event_topic,
+            publish_status,
+            publish_status_type,
+            retry_count,
+            last_published_at,
+            next_retry_at,
+            event_payload,
+            created_at
+        )
+        VALUES (
+            #{eventNo},
+            #{eventType},
+            #{paymentOrderId},
+            #{bizNo},
+            CASE
+                WHEN #{eventType} = 'PAYMENT_SUCCESS' THEN 'accounting-system,clearing-system,settlement-system'
+                WHEN #{eventType} = 'PAYMENT_CLOSED' THEN 'accounting-system'
+                WHEN #{eventType} = 'PAYMENT_SUBMIT' THEN 'gateway-access'
+                ELSE 'payment-core-ops'
+            END,
+            CASE
+                WHEN #{eventType} = 'PAYMENT_SUCCESS' THEN 'payment.trade.succeeded.v1'
+                WHEN #{eventType} = 'PAYMENT_CLOSED' THEN 'payment.trade.closed.v1'
+                WHEN #{eventType} = 'PAYMENT_EXPIRED_CLOSED' THEN 'payment.trade.expired-closed.v1'
+                WHEN #{eventType} = 'PAYMENT_SUBMIT' THEN 'payment.trade.submitted.v1'
+                ELSE 'payment.trade.pending.v1'
+            END,
+            'PENDING',
+            'warn',
+            0,
+            NULL,
+            DATE_ADD(NOW(), INTERVAL 5 MINUTE),
+            #{eventPayload},
+            NOW()
+        )
     </insert>
 
     <insert id="insertPaymentAttempt">

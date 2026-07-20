@@ -190,7 +190,7 @@ public class PaymentServiceImpl implements PaymentService {
                 "PAYMENT_SUBMIT",
                 paymentOrderId,
                 paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo()),
-                resolvedChannelCode
+                "{\"channel\":\"" + resolvedChannelCode + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}"
         );
         paymentMapper.insertNotifyLog(
                 "NTF" + System.currentTimeMillis(),
