@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.gatewayaccess.mapper.GatewayAccessMapper">
+
+    <select id="findApplications" resultType="com.abc123.gatewayaccess.dto.GatewayAppDTO">
+        SELECT app_code,
+               app_name,
+               source_system,
+               owner,
+               ip_whitelist,
+               permission_scope,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_app
+        ORDER BY id ASC
+    </select>
+
+    <select id="findGateways" resultType="com.abc123.gatewayaccess.dto.GatewayChannelDTO">
+        SELECT gateway_code,
+               gateway_name,
+               channel_type,
+               protocol_type,
+               sign_algorithm,
+               endpoint,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_channel
+        ORDER BY id ASC
+    </select>
+
+    <select id="findCertificates" resultType="com.abc123.gatewayaccess.dto.GatewayCertificateDTO">
+        SELECT certificate_code,
+               gateway_code,
+               certificate_version,
+               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_certificate
+        ORDER BY id ASC
+    </select>
+
+    <select id="findPermissions" resultType="com.abc123.gatewayaccess.dto.GatewayPermissionDTO">
+        SELECT permission_code,
+               app_code,
+               scope,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_permission
+        ORDER BY id ASC
+    </select>
+
+    <select id="countApplications" resultType="long">
+        SELECT COUNT(1) FROM t_gateway_app
+    </select>
+
+    <select id="countEnabledGateways" resultType="long">
+        SELECT COUNT(1)
+        FROM t_gateway_channel
+        WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledCertificates" resultType="long">
+        SELECT COUNT(1)
+        FROM t_gateway_certificate
+        WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledPermissions" resultType="long">
+        SELECT COUNT(1)
+        FROM t_gateway_permission
+        WHERE status = 'ENABLED'
+    </select>
+
+    <update id="updateApplicationStatus">
+        UPDATE t_gateway_app
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE app_code = #{appCode}
+    </update>
+
+    <update id="updateGatewayStatus">
+        UPDATE t_gateway_channel
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE gateway_code = #{gatewayCode}
+    </update>
+
+    <update id="updateCertificateStatus">
+        UPDATE t_gateway_certificate
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE certificate_code = #{certificateCode}
+    </update>
+
+    <update id="updatePermissionStatus">
+        UPDATE t_gateway_permission
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE permission_code = #{permissionCode}
+    </update>
+</mapper>

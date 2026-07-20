@@ -1,6 +1,5 @@
 package com.abc123.gatewayaccess.service.impl;
 
-import com.abc123.gatewayaccess.common.ApiResponse;
 import com.abc123.gatewayaccess.dto.DashboardMetricDTO;
 import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
@@ -9,10 +8,12 @@ import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
+import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
@@ -21,16 +22,20 @@ import org.springframework.util.StringUtils;
 @Service
 public class GatewayAccessServiceImpl implements GatewayAccessService {
 
-    private final GatewayAccessMemoryStore store = new GatewayAccessMemoryStore();
+    private final GatewayAccessMapper gatewayAccessMapper;
+
+    public GatewayAccessServiceImpl(GatewayAccessMapper gatewayAccessMapper) {
+        this.gatewayAccessMapper = gatewayAccessMapper;
+    }
 
     @Override
     public GatewayAccessSummaryDTO summary() {
         GatewayAccessSummaryDTO summary = new GatewayAccessSummaryDTO();
         List<DashboardMetricDTO> metrics = new ArrayList<>();
-        metrics.add(metric("接入应用", String.valueOf(store.apps().size()), "info", "应用白名单"));
-        metrics.add(metric("启用网关", String.valueOf(countEnabledGateways()), "success", "通道在线"));
-        metrics.add(metric("有效证书", String.valueOf(countEnabledCertificates()), "warn", "30天内需关注"));
-        metrics.add(metric("启用权限", String.valueOf(countEnabledPermissions()), "danger", "权限治理"));
+        metrics.add(metric("接入应用", String.valueOf(gatewayAccessMapper.countApplications()), "info", "应用白名单"));
+        metrics.add(metric("启用网关", String.valueOf(gatewayAccessMapper.countEnabledGateways()), "success", "通道在线"));
+        metrics.add(metric("有效证书", String.valueOf(gatewayAccessMapper.countEnabledCertificates()), "warn", "30天内需关注"));
+        metrics.add(metric("启用权限", String.valueOf(gatewayAccessMapper.countEnabledPermissions()), "danger", "权限治理"));
         summary.setMetrics(metrics);
         List<String> highlights = new ArrayList<>();
         highlights.add("渠道接入与证书轮换已纳入 gateway-access");
@@ -42,45 +47,53 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     @Override
     public PageResultDTO<GatewayAppDTO> applications() {
-        return page(store.apps(), 1, 20);
+        List<GatewayAppDTO> records = gatewayAccessMapper.findApplications();
+        return page(records, 1, 20);
     }
 
     @Override
     public PageResultDTO<GatewayChannelDTO> gateways() {
-        return page(store.gateways(), 1, 20);
+        List<GatewayChannelDTO> records = gatewayAccessMapper.findGateways();
+        return page(records, 1, 20);
     }
 
     @Override
     public PageResultDTO<GatewayCertificateDTO> certificates() {
-        return page(store.certificates(), 1, 20);
+        List<GatewayCertificateDTO> records = gatewayAccessMapper.findCertificates();
+        return page(records, 1, 20);
     }
 
     @Override
     public PageResultDTO<GatewayPermissionDTO> permissions() {
-        return page(store.permissions(), 1, 20);
+        List<GatewayPermissionDTO> records = gatewayAccessMapper.findPermissions();
+        return page(records, 1, 20);
     }
 
     @Override
+    @Transactional
     public GatewayAccessSummaryDTO toggleApplication(ToggleRequestDTO request) {
-        toggle(request, "接入应用", store::toggleApp);
+        toggleApplicationRequest(request);
         return summary();
     }
 
     @Override
+    @Transactional
     public GatewayAccessSummaryDTO toggleGateway(ToggleRequestDTO request) {
-        toggle(request, "网关", store::toggleGateway);
+        toggleGatewayRequest(request);
         return summary();
     }
 
     @Override
+    @Transactional
     public GatewayAccessSummaryDTO toggleCertificate(ToggleRequestDTO request) {
-        toggle(request, "证书", store::toggleCertificate);
+        toggleCertificateRequest(request);
         return summary();
     }
 
     @Override
+    @Transactional
     public GatewayAccessSummaryDTO togglePermission(ToggleRequestDTO request) {
-        toggle(request, "权限", store::togglePermission);
+        togglePermissionRequest(request);
         return summary();
     }
 
@@ -93,52 +106,70 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
         return metric;
     }
 
-    private int countEnabledGateways() {
-        int count = 0;
-        for (GatewayChannelDTO gateway : store.gateways()) {
-            if ("ENABLED".equals(gateway.getStatus())) {
-                count++;
-            }
+    private void toggleApplicationRequest(ToggleRequestDTO request) {
+        String configCode = requireConfigCode(request, "接入应用");
+        int affectedRows = gatewayAccessMapper.updateApplicationStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("接入应用不存在");
         }
-        return count;
     }
 
-    private int countEnabledCertificates() {
-        int count = 0;
-        for (GatewayCertificateDTO certificate : store.certificates()) {
-            if ("ENABLED".equals(certificate.getStatus())) {
-                count++;
-            }
+    private void toggleGatewayRequest(ToggleRequestDTO request) {
+        String configCode = requireConfigCode(request, "网关");
+        int affectedRows = gatewayAccessMapper.updateGatewayStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("网关不存在");
         }
-        return count;
     }
 
-    private int countEnabledPermissions() {
-        int count = 0;
-        for (GatewayPermissionDTO permission : store.permissions()) {
-            if ("ENABLED".equals(permission.getStatus())) {
-                count++;
-            }
+    private void toggleCertificateRequest(ToggleRequestDTO request) {
+        String configCode = requireConfigCode(request, "证书");
+        int affectedRows = gatewayAccessMapper.updateCertificateStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("证书不存在");
         }
-        return count;
     }
 
     private <T> PageResultDTO<T> page(List<T> records, int pageNo, int pageSize) {
         return new PageResultDTO<>(records, records.size(), pageNo, pageSize);
     }
 
-    private void toggle(ToggleRequestDTO request, String label, ToggleHandler handler) {
-        if (request == null || !StringUtils.hasText(request.getConfigCode())) {
-            throw new IllegalArgumentException(label + "编码不能为空");
-        }
-        boolean enabled = !Boolean.FALSE.equals(request.getEnabled());
-        boolean updated = handler.toggle(request.getConfigCode().trim(), enabled);
-        if (!updated) {
-            throw new IllegalArgumentException(label + "不存在");
+    private void togglePermissionRequest(ToggleRequestDTO request) {
+        String configCode = requireConfigCode(request, "权限");
+        int affectedRows = gatewayAccessMapper.updatePermissionStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("权限不存在");
         }
     }
 
-    private interface ToggleHandler {
-        boolean toggle(String code, boolean enabled);
+    private String requireConfigCode(ToggleRequestDTO request, String label) {
+        if (request == null || !StringUtils.hasText(request.getConfigCode())) {
+            throw new IllegalArgumentException(label + "编码不能为空");
+        }
+        return request.getConfigCode().trim();
+    }
+
+    private String resolveStatus(Boolean enabled) {
+        return Boolean.FALSE.equals(enabled) ? "DISABLED" : "ENABLED";
+    }
+
+    private String resolveStatusType(Boolean enabled) {
+        return Boolean.FALSE.equals(enabled) ? "danger" : "success";
     }
 }
