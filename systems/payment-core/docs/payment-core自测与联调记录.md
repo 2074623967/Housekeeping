@@ -453,6 +453,26 @@
 3. 为 `PaymentFlowServiceImplTest` 增加查询参数规整断言，确保服务层对渠道编码和业务状态查询口径保持一致。
 4. 为 `PaymentFlowsView` 增加展开详情区、原始报文展示和支付单/支付请求/支付处理日志联查动作。
 
+## 17. 2026-07-20 支付请求与支付日志运营筛选增强复核
+
+### 17.1 本轮验证结论
+
+本轮围绕“支付请求页和支付日志页只能按少量条件筛选，运营排障仍不够高效”的问题进行了补强，确认两类页面已经具备更贴近正式版后台的实战筛选能力。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| 支付请求接口字段 | 通过 | `GET /api/payment-requests` 已补齐订单号、渠道编码、终端筛选 |
+| 支付处理日志接口字段 | 通过 | `GET /api/payment-logs` 已补齐订单号、日志来源、关键字筛选 |
+| 自动化测试 | 通过 | 后端全量测试共 `54` 个并全部通过 |
+| 前端构建验证 | 通过 | `admin-web` 已完成生产构建，请求页和日志页增强查询区可稳定打包 |
+
+### 17.2 本轮修复项
+
+1. 扩展 `PaymentRequestQueryDTO`、`PaymentRequestController`、`PaymentRequestServiceImpl` 和 `PaymentRequestMapper.xml`，补齐订单号、渠道编码、终端查询口径。
+2. 扩展 `PaymentLogQueryDTO`、`PaymentLogController`、`PaymentLogServiceImpl` 和 `PaymentLogMapper.xml`，补齐订单号、日志来源、关键字检索口径。
+3. 为 `PaymentRequestServiceImplTest`、`PaymentLogServiceImplTest` 增加参数规整断言，确保服务层对新增查询字段做统一裁剪。
+4. 为 `PaymentRequestsView`、`PaymentLogsView` 和前端 API 封装补齐新增筛选项，提升运营、研发和测试的联动排障效率。
+
 ## 11. 2026-07-20 支付记录详情钻取复核
 
 ### 11.1 本轮验证结论

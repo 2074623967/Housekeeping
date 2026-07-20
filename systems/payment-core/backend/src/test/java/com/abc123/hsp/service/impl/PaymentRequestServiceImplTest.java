@@ -23,12 +23,18 @@ class PaymentRequestServiceImplTest {
         PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
         query.setRequestNo(" PR-001 ");
         query.setPaymentOrderId(" PAY-001 ");
+        query.setOrderNo(" ORD-001 ");
+        query.setChannelCode(" wx_h5 ");
+        query.setTerminal(" H5 ");
         query.setRequestStatus("处理中");
         query.setPageNo(2);
         query.setPageSize(50);
 
         new PaymentRequestServiceImpl(paymentRequestMapper).list(query);
 
+        org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
+        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getChannelCode());
+        org.junit.jupiter.api.Assertions.assertEquals("H5", query.getTerminal());
         verify(paymentRequestMapper).findAll(query);
         verify(paymentRequestMapper).count(query);
     }

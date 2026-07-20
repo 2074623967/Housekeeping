@@ -23,6 +23,9 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
     public PageResultDTO<PaymentRequestListItemDTO> list(PaymentRequestQueryDTO query) {
         query.setRequestNo(query.getRequestNo() == null ? null : query.getRequestNo().trim());
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
+        query.setTerminal(query.getTerminal() == null ? null : query.getTerminal().trim());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

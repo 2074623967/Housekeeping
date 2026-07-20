@@ -12,6 +12,12 @@ public class PaymentRequestQueryDTO {
     private String requestNo;
     /** 支付单号。 */
     private String paymentOrderId;
+    /** 订单号。 */
+    private String orderNo;
+    /** 渠道编码。 */
+    private String channelCode;
+    /** 发起终端。 */
+    private String terminal;
     /** 请求状态，全部时不筛选。 */
     private String requestStatus = "全部";
     /** 页码，从 1 开始。 */

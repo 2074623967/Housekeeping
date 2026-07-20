@@ -22,6 +22,9 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     @Override
     public PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        query.setSource(query.getSource() == null ? null : query.getSource().trim());
+        query.setKeyword(query.getKeyword() == null ? null : query.getKeyword().trim());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

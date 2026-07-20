@@ -36,6 +36,15 @@
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
             </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND pa.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND pa.terminal = #{query.terminal}
+            </if>
             <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
                 AND pa.attempt_status = #{query.requestStatus}
             </if>
@@ -61,6 +70,15 @@
             </if>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND pa.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND pa.terminal = #{query.terminal}
             </if>
             <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
                 AND pa.attempt_status = #{query.requestStatus}

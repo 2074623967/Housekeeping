@@ -200,6 +200,9 @@ export const paymentRequestApi = {
   getList: ({
     requestNo = "",
     paymentOrderId = "",
+    orderNo = "",
+    channelCode = "",
+    terminal = "全部",
     requestStatus = "全部",
     pageNo = 1,
     pageSize = 20
@@ -207,6 +210,9 @@ export const paymentRequestApi = {
     const params = new URLSearchParams({
       requestNo,
       paymentOrderId,
+      orderNo,
+      channelCode,
+      terminal,
       requestStatus,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
@@ -218,15 +224,21 @@ export const paymentRequestApi = {
 export const paymentLogApi = {
   getList: ({
     paymentOrderId = "",
+    orderNo = "",
     processStage = "全部",
     logLevel = "全部",
+    source = "",
+    keyword = "",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       paymentOrderId,
+      orderNo,
       processStage,
       logLevel,
+      source,
+      keyword,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });

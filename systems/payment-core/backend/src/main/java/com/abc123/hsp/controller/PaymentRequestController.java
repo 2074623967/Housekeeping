@@ -30,12 +30,18 @@ public class PaymentRequestController {
     public ApiResponse<PageResultDTO<PaymentRequestListItemDTO>> list(
             @RequestParam(required = false) String requestNo,
             @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String channelCode,
+            @RequestParam(required = false) String terminal,
             @RequestParam(defaultValue = "全部") String requestStatus,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
         query.setRequestNo(requestNo);
         query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setChannelCode(channelCode);
+        query.setTerminal(terminal);
         query.setRequestStatus(requestStatus);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);

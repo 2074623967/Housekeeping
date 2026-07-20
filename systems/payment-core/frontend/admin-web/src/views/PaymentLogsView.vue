@@ -12,15 +12,21 @@ const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
   paymentOrderId: route.query.paymentOrderId || "",
+  orderNo: route.query.orderNo || "",
   processStage: route.query.processStage || "全部",
-  logLevel: route.query.logLevel || "全部"
+  logLevel: route.query.logLevel || "全部",
+  source: route.query.source || "",
+  keyword: route.query.keyword || ""
 });
 
 function resetFilters() {
   filters.value = {
     paymentOrderId: "",
+    orderNo: "",
     processStage: "全部",
-    logLevel: "全部"
+    logLevel: "全部",
+    source: "",
+    keyword: ""
   };
   pageNo.value = 1;
   loadPaymentLogs();
@@ -37,8 +43,11 @@ async function loadPaymentLogs() {
   try {
     const result = await paymentLogApi.getList({
       paymentOrderId: filters.value.paymentOrderId,
+      orderNo: filters.value.orderNo,
       processStage: filters.value.processStage,
       logLevel: filters.value.logLevel,
+      source: filters.value.source,
+      keyword: filters.value.keyword,
       pageNo: pageNo.value,
       pageSize
     });
@@ -83,6 +92,10 @@ onMounted(loadPaymentLogs);
           <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
         </div>
         <div class="field">
+          <label>订单号</label>
+          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+        </div>
+        <div class="field">
           <label>处理阶段</label>
           <select v-model="filters.processStage">
             <option>全部</option>
@@ -102,8 +115,16 @@ onMounted(loadPaymentLogs);
           </select>
         </div>
         <div class="field">
+          <label>日志来源</label>
+          <input v-model="filters.source" placeholder="如 wx_h5 / payment-core" />
+        </div>
+        <div class="field">
+          <label>日志关键字</label>
+          <input v-model="filters.keyword" placeholder="如 回调 / 路由 / SUCCESS" />
+        </div>
+        <div class="field">
           <label>当前说明</label>
-          <input value="当前已接入后端筛选，生产环境需接入检索和告警平台" disabled />
+          <input value="已支持订单号、来源和关键字检索，生产环境需接入检索与告警平台" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

@@ -22,13 +22,19 @@ class PaymentLogServiceImplTest {
     void shouldNormalizeAndForwardPagingQuery() {
         PaymentLogQueryDTO query = new PaymentLogQueryDTO();
         query.setPaymentOrderId(" PAY-001 ");
+        query.setOrderNo(" ORD-001 ");
         query.setProcessStage("支付提交");
         query.setLogLevel("INFO");
+        query.setSource(" wx_h5 ");
+        query.setKeyword(" 回调 ");
         query.setPageNo(3);
         query.setPageSize(25);
 
         new PaymentLogServiceImpl(paymentLogMapper).list(query);
 
+        org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
+        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getSource());
+        org.junit.jupiter.api.Assertions.assertEquals("回调", query.getKeyword());
         verify(paymentLogMapper).findAll(query);
         verify(paymentLogMapper).count(query);
     }

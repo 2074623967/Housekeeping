@@ -29,14 +29,20 @@ public class PaymentLogController {
     @GetMapping
     public ApiResponse<PageResultDTO<PaymentLogListItemDTO>> list(
             @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
             @RequestParam(defaultValue = "全部") String processStage,
             @RequestParam(defaultValue = "全部") String logLevel,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentLogQueryDTO query = new PaymentLogQueryDTO();
         query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
         query.setProcessStage(processStage);
         query.setLogLevel(logLevel);
+        query.setSource(source);
+        query.setKeyword(keyword);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentLogService.list(query));

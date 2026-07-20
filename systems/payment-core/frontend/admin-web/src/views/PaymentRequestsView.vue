@@ -14,6 +14,9 @@ const pageSize = 20;
 const filters = ref({
   requestNo: route.query.requestNo || "",
   paymentOrderId: route.query.paymentOrderId || "",
+  orderNo: route.query.orderNo || "",
+  channelCode: route.query.channelCode || "",
+  terminal: route.query.terminal || "全部",
   requestStatus: route.query.requestStatus || "全部"
 });
 
@@ -21,6 +24,9 @@ function resetFilters() {
   filters.value = {
     requestNo: "",
     paymentOrderId: "",
+    orderNo: "",
+    channelCode: "",
+    terminal: "全部",
     requestStatus: "全部"
   };
   expandedRequestNo.value = "";
@@ -39,6 +45,9 @@ async function loadPaymentRequests() {
     const result = await paymentRequestApi.getList({
       requestNo: filters.value.requestNo,
       paymentOrderId: filters.value.paymentOrderId,
+      orderNo: filters.value.orderNo,
+      channelCode: filters.value.channelCode,
+      terminal: filters.value.terminal,
       requestStatus: filters.value.requestStatus,
       pageNo: pageNo.value,
       pageSize
@@ -95,6 +104,24 @@ onMounted(loadPaymentRequests);
           <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
         </div>
         <div class="field">
+          <label>订单号</label>
+          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+        </div>
+        <div class="field">
+          <label>渠道编码</label>
+          <input v-model="filters.channelCode" placeholder="如 wx_h5 / alipay_h5" />
+        </div>
+        <div class="field">
+          <label>终端</label>
+          <select v-model="filters.terminal">
+            <option>全部</option>
+            <option>H5</option>
+            <option>PC</option>
+            <option>APP</option>
+            <option>小程序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>请求状态</label>
           <select v-model="filters.requestStatus">
             <option>全部</option>
@@ -106,7 +133,7 @@ onMounted(loadPaymentRequests);
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="当前已接入后端筛选，生产环境需继续脱敏和权限控制" disabled />
+          <input value="已支持订单号、渠道、终端等实战筛选，生产环境需继续脱敏和权限控制" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>
