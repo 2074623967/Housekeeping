@@ -40,6 +40,10 @@ export const paymentMetricsApi = {
   getSummary: () => request("/api/payment-metrics/summary")
 };
 
+export const paymentMonitorApi = {
+  getOverview: () => request("/api/payment-monitor/overview")
+};
+
 export const orderApi = {
   getList: ({
     orderNo = "",

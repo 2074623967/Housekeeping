@@ -27,6 +27,10 @@ const navGroups = [
   {
     title: "配置中心",
     links: [{ label: "支付渠道与路由", to: "/payment-config" }]
+  },
+  {
+    title: "监控分析",
+    links: [{ label: "支付监控分析", to: "/payment-monitor" }]
   }
 ];
 </script>

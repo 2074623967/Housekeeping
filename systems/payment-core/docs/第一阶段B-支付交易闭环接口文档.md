@@ -33,6 +33,7 @@
 | `/api/payment-config` | `GET` | 查询支付渠道与路由规则配置 |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
+| `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 
 ## 3. 创建预付单
 
@@ -450,7 +451,19 @@ POST /api/payment-config/route-rules/toggle
 2. `enabled=false` 时状态更新为 `DISABLED`。
 3. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
 
-## 13. 错误与边界说明
+## 13. 支付监控分析接口
+
+### 13.1 查询监控总览
+
+接口：`GET /api/payment-monitor/overview`
+
+返回内容：
+
+1. `trends`：最近 7 天支付趋势，包含日期、总单量、成功单量和成功金额。
+2. `channelMetrics`：按渠道与支付方式统计的总单量、成功率、成功金额和待处理笔数。
+3. `alerts`：待处理异常告警列表，当前包括回调待收口、退款失败、渠道停用三类。
+
+## 14. 错误与边界说明
 
 当前版本重点是开发与联调基线，尚未完整沉淀生产级错误码体系。建议后续统一补充：
 
@@ -468,6 +481,6 @@ POST /api/payment-config/route-rules/toggle
 | `REF003` | 累计退款金额超过原支付金额 |
 | `REF004` | 退款单状态不允许执行当前操作 |
 
-## 14. 结论
+## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
