@@ -16,6 +16,10 @@ public class PaymentChannelConfigDTO {
     private String paymentMethod;
     /** 渠道商户号。 */
     private String merchantNo;
+    /** 渠道回调通知地址。 */
+    private String callbackNotifyUrl;
+    /** 验签密钥配置情况。 */
+    private String callbackSecretMasked;
     /** 适用场景范围。 */
     private String sceneScope;
     /** 渠道状态。 */

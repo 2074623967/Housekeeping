@@ -2,46 +2,64 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
+import com.abc123.hsp.mapper.PaymentCallbackSecurityMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 /**
  * 回调签名和防重放测试。
  */
+@ExtendWith(MockitoExtension.class)
 class PaymentCallbackSignatureServiceImplTest {
+
+    @Mock
+    private PaymentCallbackSecurityMapper paymentCallbackSecurityMapper;
 
     @Test
     void shouldVerifyValidSignedCallback() throws Exception {
         PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-001",
                 String.valueOf(Instant.now().getEpochSecond()));
+        when(paymentCallbackSecurityMapper.findCallbackSecretByChannelCode("wx_h5")).thenReturn("test-secret");
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
                 true,
-                "test-secret",
+                "",
                 300,
                 600
         );
 
         assertDoesNotThrow(() -> service.verify("wx_h5", request));
+        verify(paymentCallbackSecurityMapper).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper).insertCallbackNonce("wx_h5", "nonce-001", "PAY-TEST-001", 600);
     }
 
     @Test
     void shouldRejectReplayNonce() throws Exception {
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
         PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-002", timestamp);
+        when(paymentCallbackSecurityMapper.findCallbackSecretByChannelCode("wx_h5")).thenReturn("test-secret");
+        org.mockito.Mockito.doThrow(new DuplicateKeyException("duplicate nonce"))
+                .when(paymentCallbackSecurityMapper)
+                .insertCallbackNonce("wx_h5", "nonce-002", "PAY-TEST-001", 600);
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
                 true,
-                "test-secret",
+                "",
                 300,
                 600
         );
-
-        service.verify("wx_h5", request);
 
         assertThrows(IllegalArgumentException.class, () -> service.verify("wx_h5", request));
     }
@@ -53,14 +71,32 @@ class PaymentCallbackSignatureServiceImplTest {
                 "test-secret",
                 "nonce-003",
                 String.valueOf(Instant.now().minusSeconds(1000).getEpochSecond()));
+        when(paymentCallbackSecurityMapper.findCallbackSecretByChannelCode("wx_h5")).thenReturn("test-secret");
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
                 true,
-                "test-secret",
+                "",
                 300,
                 600
         );
 
         assertThrows(IllegalArgumentException.class, () -> service.verify("wx_h5", request));
+    }
+
+    @Test
+    void shouldFallbackToGlobalSecretWhenChannelSecretMissing() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest("wx_h5", "fallback-secret", "nonce-004",
+                String.valueOf(Instant.now().getEpochSecond()));
+        when(paymentCallbackSecurityMapper.findCallbackSecretByChannelCode("wx_h5")).thenReturn("");
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                "fallback-secret",
+                300,
+                600
+        );
+
+        assertDoesNotThrow(() -> service.verify("WX_H5", request));
     }
 
     private PaymentCallbackRequestDTO buildRequest(

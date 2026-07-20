@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS t_dashboard_card;
 DROP TABLE IF EXISTS t_payment_event;
+DROP TABLE IF EXISTS t_payment_callback_nonce;
 DROP TABLE IF EXISTS t_payment_route_record;
 DROP TABLE IF EXISTS t_payment_notify_log;
 DROP TABLE IF EXISTS t_payment_attempt;
@@ -30,6 +31,8 @@ CREATE TABLE t_payment_channel_config (
     channel_name VARCHAR(128) NOT NULL COMMENT '支付渠道名称',
     payment_method VARCHAR(64) NOT NULL COMMENT '支付方式',
     merchant_no VARCHAR(128) NOT NULL COMMENT '渠道商户号',
+    callback_secret VARCHAR(256) NOT NULL COMMENT '渠道回调验签密钥',
+    callback_notify_url VARCHAR(256) NOT NULL COMMENT '渠道回调通知地址',
     scene_scope VARCHAR(128) NOT NULL COMMENT '适用场景范围',
     status VARCHAR(32) NOT NULL COMMENT '渠道状态',
     status_type VARCHAR(32) NOT NULL COMMENT '渠道状态样式类型',
@@ -40,6 +43,18 @@ CREATE TABLE t_payment_channel_config (
     UNIQUE KEY uk_channel_code (channel_code),
     KEY idx_channel_method_status (payment_method, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道配置表';
+
+CREATE TABLE t_payment_callback_nonce (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
+    nonce VARCHAR(128) NOT NULL COMMENT '回调随机串',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
+    expires_at DATETIME NOT NULL COMMENT '过期时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_channel_nonce (channel_code, nonce),
+    KEY idx_nonce_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调防重放随机串表';
 
 CREATE TABLE t_payment_route_rule_config (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

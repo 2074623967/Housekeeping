@@ -195,8 +195,8 @@
 验签说明：
 
 1. `timestamp` 必须在允许时间窗内
-2. `nonce` 必须未被重复使用
-3. 签名串按 `channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce` 组织
+2. `nonce` 必须未被重复使用，当前已落到持久化表做跨实例防重放
+3. 签名串按 `channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce` 组织，`channel` 会先统一规范化为小写编码
 {
   "paymentOrderId": "PAY1752912340001",
   "tradeStatus": "SUCCESS",
@@ -211,7 +211,7 @@
 
 `channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce`
 
-使用渠道独立密钥计算 HMAC-SHA256，并将结果 Base64 编码后放入 `signature`。
+使用渠道独立密钥计算 HMAC-SHA256，并将结果 Base64 编码后放入 `signature`。渠道密钥优先从支付渠道配置中读取，找不到时才回退到全局环境变量。
 
 返回示例：
 
@@ -419,7 +419,7 @@ POST /api/refunds/retry
 
 返回内容：
 
-1. `channels`：支付渠道配置，包含渠道编码、渠道名称、支付方式、商户号、适用场景、状态、单日限额、优先级。
+1. `channels`：支付渠道配置，包含渠道编码、渠道名称、支付方式、商户号、回调通知地址、验签密钥配置情况、适用场景、状态、单日限额、优先级。
 2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、状态、优先级。
 
 ### 12.2 启停渠道或路由规则

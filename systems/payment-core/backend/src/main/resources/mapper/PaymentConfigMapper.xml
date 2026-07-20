@@ -9,6 +9,11 @@
                channel_name AS channelName,
                payment_method AS paymentMethod,
                merchant_no AS merchantNo,
+               callback_notify_url AS callbackNotifyUrl,
+               CASE
+                   WHEN callback_secret IS NULL OR callback_secret = '' THEN '未配置'
+                   ELSE '已配置'
+               END AS callbackSecretMasked,
                scene_scope AS sceneScope,
                status,
                status_type AS statusType,
