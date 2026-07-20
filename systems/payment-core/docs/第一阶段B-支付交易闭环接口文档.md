@@ -31,9 +31,11 @@
 | `/api/refunds/success` | `POST` | 模拟渠道退款成功回调 |
 | `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
 | `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
-| `/api/payment-config` | `GET` | 查询支付渠道与路由规则配置 |
+| `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
+| `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
+| `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 
 ## 3. 创建预付单
@@ -482,6 +484,7 @@ POST /api/refunds/retry
 1. `channels`：支付渠道配置，包含渠道编码、渠道名称、支付方式、商户号、回调通知地址、验签密钥配置情况、适用场景、状态、单日限额、优先级。
 2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、状态、优先级。
 3. `protocols`：支付协议配置，包含协议编码、协议名称、协议类型、模板版本、签约模式、适用场景、适用渠道、商户确认要求、风控标签、状态。
+4. `returnCodeMappings`：渠道返回码映射，包含渠道编码、渠道返回码、渠道返回信息、标准状态、标准错误码、是否可重试、是否需要人工介入、适用处理策略、状态。
 
 ### 12.2 启停渠道或路由规则
 
@@ -503,6 +506,12 @@ POST /api/payment-config/route-rules/toggle
 POST /api/payment-config/protocols/toggle
 ```
 
+启停渠道返回码映射：
+
+```http
+POST /api/payment-config/return-codes/toggle
+```
+
 请求示例：
 
 ```json
@@ -517,7 +526,9 @@ POST /api/payment-config/protocols/toggle
 1. `enabled=true` 时状态更新为 `ENABLED`。
 2. `enabled=false` 时状态更新为 `DISABLED`。
 3. 协议配置当前已支持运营查看和启停，后续继续补充协议模板编辑、协议种类管理、签约要素配置和电子签章能力。
-4. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
+4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
+5. 返回码映射当前已支持运营查看与启停，后续继续补返回码批量导入、映射版本治理、渠道差异比对和异常自动归档。
+6. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
 
 ## 13. 支付监控分析接口
 

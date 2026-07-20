@@ -281,5 +281,6 @@ export const paymentConfigApi = {
   getOverview: () => request("/api/payment-config"),
   toggleChannel: (configCode, enabled) => postJson("/api/payment-config/channels/toggle", { configCode, enabled }),
   toggleRouteRule: (configCode, enabled) => postJson("/api/payment-config/route-rules/toggle", { configCode, enabled }),
-  toggleProtocol: (configCode, enabled) => postJson("/api/payment-config/protocols/toggle", { configCode, enabled })
+  toggleProtocol: (configCode, enabled) => postJson("/api/payment-config/protocols/toggle", { configCode, enabled }),
+  toggleReturnCodeMapping: (configCode, subCode, enabled) => postJson("/api/payment-config/return-codes/toggle", { configCode, subCode, enabled })
 };

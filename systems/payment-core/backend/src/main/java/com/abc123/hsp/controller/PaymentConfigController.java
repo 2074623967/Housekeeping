@@ -24,7 +24,7 @@ public class PaymentConfigController {
     }
 
     /**
-     * 查询支付渠道和路由规则配置。
+     * 查询支付渠道、路由规则、支付协议和返回码映射配置。
      */
     @GetMapping
     public ApiResponse<PaymentConfigOverviewDTO> overview() {
@@ -53,5 +53,13 @@ public class PaymentConfigController {
     @PostMapping("/protocols/toggle")
     public ApiResponse<PaymentConfigOverviewDTO> toggleProtocol(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleProtocol(request));
+    }
+
+    /**
+     * 启停渠道返回码映射配置。
+     */
+    @PostMapping("/return-codes/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleReturnCodeMapping(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleReturnCodeMapping(request));
     }
 }

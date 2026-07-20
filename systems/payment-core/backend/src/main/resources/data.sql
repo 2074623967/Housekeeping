@@ -19,6 +19,12 @@ INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_ty
 ('PROTO_ENTERPRISE_PREAUTH_V1', '企业客户预授权协议', 'PREAUTH', 'v1.2.0', '线下审核+线上确认', '企业保洁/长期合同', 'offline_bank,alipay_h5', '需要', '企业白名单+大额限额', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
 ('PROTO_MEMBER_DEDUCT_V1', '会员代扣协议', 'WITHHOLD', 'v0.9.3', '短信确认+静默续扣', '包月保洁/会员续费', 'wx_h5', '不需要', '签约时效+扣款频控', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
 
+INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code, standardized_code, standardized_message, handling_suggestion, retryable, status, status_type, priority, updated_at) VALUES
+('wx_h5', 'USERPAYING', 'PAYMENT-CHANNEL-1001', '用户支付中，需继续轮询或等待回调', '展示处理中并触发主动查单', '是', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('wx_h5', 'AUTH_CODE_INVALID', 'PAYMENT-CHANNEL-1002', '付款码无效或已过期', '提示用户刷新付款码后重试', '否', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2001', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
+('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', 'DISABLED', 'danger', 4, '2026-07-20 22:40:00');
+
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),
 ('ORD202607190002', '王先生', '月嫂套餐', '周阿姨', 8800.00, 2000.00, '待支付', 'warn', '待确认', 'warn', '2026-07-19 10:02:44'),

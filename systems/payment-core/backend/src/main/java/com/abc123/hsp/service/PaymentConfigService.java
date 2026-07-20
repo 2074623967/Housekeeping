@@ -27,4 +27,9 @@ public interface PaymentConfigService {
      * 启停支付协议配置。
      */
     PaymentConfigOverviewDTO toggleProtocol(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 启停渠道返回码映射配置。
+     */
+    PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request);
 }

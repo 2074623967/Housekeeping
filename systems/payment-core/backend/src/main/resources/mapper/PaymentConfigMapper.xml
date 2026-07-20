@@ -56,6 +56,20 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findReturnCodeMappings" resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
+        SELECT channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               standardized_code AS standardizedCode,
+               standardized_message AS standardizedMessage,
+               handling_suggestion AS handlingSuggestion,
+               retryable,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_channel_return_code_map
+        ORDER BY priority ASC, id ASC
+    </select>
+
     <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
         SELECT channel_code AS channelCode,
                payment_method AS paymentMethod,
@@ -101,5 +115,14 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE protocol_code = #{protocolCode}
+    </update>
+
+    <update id="updateReturnCodeMappingStatus">
+        UPDATE t_payment_channel_return_code_map
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE channel_code = #{channelCode}
+          AND channel_return_code = #{channelReturnCode}
     </update>
 </mapper>

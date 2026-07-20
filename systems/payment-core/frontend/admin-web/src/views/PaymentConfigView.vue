@@ -5,6 +5,7 @@ import { paymentConfigApi } from "../api/client";
 const channels = ref([]);
 const routeRules = ref([]);
 const protocols = ref([]);
+const returnCodeMappings = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
@@ -18,6 +19,7 @@ async function loadOverview() {
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
+    returnCodeMappings.value = overview.returnCodeMappings;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -52,6 +54,16 @@ async function toggleProtocol(protocol) {
   );
 }
 
+async function toggleReturnCodeMapping(mapping) {
+  await toggleMappingConfig(
+    mapping.channelCode,
+    mapping.channelReturnCode,
+    mapping.status !== "ENABLED",
+    "返回码映射",
+    paymentConfigApi.toggleReturnCodeMapping
+  );
+}
+
 async function toggleConfig(configCode, enabled, configType, toggleRunner) {
   activeConfigCode.value = configCode;
   actionMessage.value = "";
@@ -60,9 +72,27 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
+    returnCodeMappings.value = overview.returnCodeMappings;
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function toggleMappingConfig(configCode, subCode, enabled, configType, toggleRunner) {
+  activeConfigCode.value = `${configCode}:${subCode}`;
+  actionMessage.value = "";
+  try {
+    const overview = await toggleRunner(configCode, subCode, enabled);
+    channels.value = overview.channels;
+    routeRules.value = overview.routeRules;
+    protocols.value = overview.protocols;
+    returnCodeMappings.value = overview.returnCodeMappings;
+    actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
+  } catch (error) {
+    actionMessage.value = `${configType} ${configCode}/${subCode} 操作失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -241,6 +271,54 @@ onMounted(loadOverview);
                       @click="toggleProtocol(protocol)"
                     >
                       {{ protocol.status === "ENABLED" ? "停用" : "启用" }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>渠道返回码映射</h3>
+              <p class="meta">统一微信、支付宝、银行通道的错误码口径，沉淀标准化错误文案与处理建议</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>渠道编码</th>
+                  <th>渠道返回码</th>
+                  <th>标准错误码</th>
+                  <th>标准错误文案</th>
+                  <th>处理建议</th>
+                  <th>可重试</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="mapping in returnCodeMappings" :key="`${mapping.channelCode}-${mapping.channelReturnCode}`">
+                  <td>{{ mapping.channelCode }}</td>
+                  <td>{{ mapping.channelReturnCode }}</td>
+                  <td>{{ mapping.standardizedCode }}</td>
+                  <td>{{ mapping.standardizedMessage }}</td>
+                  <td class="flow-summary-cell">{{ mapping.handlingSuggestion }}</td>
+                  <td>{{ mapping.retryable }}</td>
+                  <td><span :class="['badge', mapping.statusType]">{{ mapping.status }}</span></td>
+                  <td>{{ mapping.updatedAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === `${mapping.channelCode}:${mapping.channelReturnCode}`"
+                      @click="toggleReturnCodeMapping(mapping)"
+                    >
+                      {{ mapping.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
                   </td>
                 </tr>

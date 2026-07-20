@@ -29,6 +29,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setChannels(paymentConfigMapper.findChannels());
         overview.setRouteRules(paymentConfigMapper.findRouteRules());
         overview.setProtocols(paymentConfigMapper.findProtocols());
+        overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
         return overview;
     }
 
@@ -77,11 +78,35 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return overview();
     }
 
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request) {
+        String configCode = requireConfigCode(request);
+        String subCode = requireSubCode(request);
+        int affectedRows = paymentConfigMapper.updateReturnCodeMappingStatus(
+                configCode,
+                subCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("渠道返回码映射配置不存在");
+        }
+        return overview();
+    }
+
     private String requireConfigCode(PaymentConfigToggleRequestDTO request) {
         if (request == null || !StringUtils.hasText(request.getConfigCode())) {
             throw new IllegalArgumentException("配置编码不能为空");
         }
         return request.getConfigCode().trim();
+    }
+
+    private String requireSubCode(PaymentConfigToggleRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getSubCode())) {
+            throw new IllegalArgumentException("配置子编码不能为空");
+        }
+        return request.getSubCode().trim();
     }
 
     private String resolveStatus(Boolean enabled) {

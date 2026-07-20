@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_order;
+DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_protocol_config;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
@@ -93,6 +94,23 @@ CREATE TABLE t_payment_protocol_config (
     UNIQUE KEY uk_protocol_code (protocol_code),
     KEY idx_protocol_type_status (protocol_type, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付协议配置表';
+
+CREATE TABLE t_payment_channel_return_code_map (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
+    channel_return_code VARCHAR(64) NOT NULL COMMENT '渠道返回码',
+    standardized_code VARCHAR(64) NOT NULL COMMENT '统一标准错误码',
+    standardized_message VARCHAR(256) NOT NULL COMMENT '统一标准错误文案',
+    handling_suggestion VARCHAR(256) NOT NULL COMMENT '处理建议',
+    retryable VARCHAR(16) NOT NULL COMMENT '是否可重试',
+    status VARCHAR(32) NOT NULL COMMENT '映射状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '映射状态样式类型',
+    priority INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越小越优先',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_channel_return_code (channel_code, channel_return_code),
+    KEY idx_standardized_code_status (standardized_code, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='渠道返回码映射配置表';
 
 CREATE TABLE t_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

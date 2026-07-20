@@ -15,4 +15,6 @@ public class PaymentConfigOverviewDTO {
     private List<PaymentRouteRuleConfigDTO> routeRules;
     /** 支付协议列表。 */
     private List<PaymentProtocolConfigDTO> protocols;
+    /** 渠道返回码映射列表。 */
+    private List<PaymentChannelReturnCodeConfigDTO> returnCodeMappings;
 }
