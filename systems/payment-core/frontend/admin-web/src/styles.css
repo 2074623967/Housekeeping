@@ -335,6 +335,49 @@ th {
   border: 1px solid #fecaca;
 }
 
+.success-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.sub-panel {
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.sub-panel h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sub-panel p {
+  margin: 4px 0 14px;
+  color: #64748b;
+}
+
+.compact-toolbar {
+  grid-template-columns: 1.2fr 0.8fr 0.8fr 1.6fr auto;
+  margin-bottom: 0;
+}
+
+.wide-field {
+  min-width: 260px;
+}
+
+.button:disabled,
+.link-button:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
 /* 收款记录按原型采用紧凑横向表格，而不是卡片化列表。 */
 .prototype-page {
   min-width: 1680px;

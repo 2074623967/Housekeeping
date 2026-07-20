@@ -55,4 +55,58 @@
             </if>
         </where>
     </select>
+
+    <select id="findByRefundOrderId" resultType="com.abc123.hsp.dto.RefundListItemDTO">
+        SELECT refund_order_id AS refundOrderId,
+               payment_order_id AS paymentOrderId,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               CONCAT('¥', FORMAT(refund_amount, 2)) AS refundAmount,
+               refund_method AS refundMethod,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(applied_at, '%Y-%m-%d %H:%i:%s') AS appliedAt,
+               CASE
+                   WHEN success_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(success_at, '%Y-%m-%d %H:%i:%s')
+               END AS successAt
+        FROM t_refund_order
+        WHERE refund_order_id = #{refundOrderId}
+    </select>
+
+    <select id="findPaymentSource" resultType="com.abc123.hsp.dto.RefundPaymentSourceDTO">
+        SELECT payment_order_id AS paymentOrderId,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               amount AS paidAmount,
+               status,
+               payment_method AS paymentMethod
+        FROM t_payment_order
+        WHERE payment_order_id = #{paymentOrderId}
+    </select>
+
+    <select id="sumActiveRefundAmount" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(refund_amount), 0)
+        FROM t_refund_order
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status IN ('REVIEWING', 'PROCESSING', 'SUCCESS')
+    </select>
+
+    <insert id="insertRefund">
+        INSERT INTO t_refund_order(refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, status, status_type, applied_at, success_at)
+        VALUES (#{refundOrderId}, #{source.paymentOrderId}, #{source.orderNo}, #{source.customerName}, #{request.refundAmount}, #{request.refundMethod}, #{status}, #{statusType}, NOW(), NULL)
+    </insert>
+
+    <update id="updateRefundStatus">
+        UPDATE t_refund_order
+        SET status = #{status},
+            status_type = #{statusType},
+            success_at = CASE
+                WHEN #{success} THEN NOW()
+                WHEN #{status} = 'PROCESSING' THEN NULL
+                ELSE success_at
+            END
+        WHERE refund_order_id = #{refundOrderId}
+          AND status = #{fromStatus}
+    </update>
 </mapper>

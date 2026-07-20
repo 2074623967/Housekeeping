@@ -224,7 +224,12 @@ export const refundApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/refunds?${params.toString()}`);
-  }
+  },
+  apply: (payload) => postJson("/api/refunds/apply", payload),
+  approve: (refundOrderId) => postJson("/api/refunds/approve", { refundOrderId }),
+  markSuccess: (refundOrderId) => postJson("/api/refunds/success", { refundOrderId }),
+  markFail: (refundOrderId) => postJson("/api/refunds/fail", { refundOrderId }),
+  retry: (refundOrderId) => postJson("/api/refunds/retry", { refundOrderId })
 };
 
 export const settlementApi = {

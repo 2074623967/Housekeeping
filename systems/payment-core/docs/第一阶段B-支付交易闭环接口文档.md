@@ -24,6 +24,12 @@
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
+| `/api/refunds` | `GET` | 分页查询退款单 |
+| `/api/refunds/apply` | `POST` | 发起退款申请 |
+| `/api/refunds/approve` | `POST` | 审核通过退款单并提交处理 |
+| `/api/refunds/success` | `POST` | 模拟渠道退款成功回调 |
+| `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
+| `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
 
 ## 3. 创建预付单
 
@@ -286,9 +292,7 @@
 5. 回调轨迹
 6. 事件轨迹
 
-## 10. 错误与边界说明
-
-## 10.1 收款记录分页查询
+## 10. 收款记录分页查询
 
 接口：`GET /api/payment-records`
 
@@ -314,7 +318,96 @@
 }
 ```
 
-## 10.2 错误与边界说明
+## 11. 退款管理接口
+
+### 11.1 分页查询退款单
+
+接口：`GET /api/refunds`
+
+查询参数：
+
+| 参数 | 必填 | 说明 |
+| --- | --- | --- |
+| `refundOrderId` | 否 | 退款单号模糊查询 |
+| `paymentOrderId` | 否 | 原支付单号模糊查询 |
+| `refundStatus` | 否 | `全部`、`REVIEWING`、`PROCESSING`、`SUCCESS`、`FAIL` |
+| `refundMethod` | 否 | `全部`、`原路退款`、`线下打款`、`退转付` |
+| `pageNo` | 否 | 页码，从 1 开始 |
+| `pageSize` | 否 | 每页条数，最大 100 |
+
+### 11.2 发起退款申请
+
+接口：`POST /api/refunds/apply`
+
+请求示例：
+
+```json
+{
+  "paymentOrderId": "PAY202607190001",
+  "refundAmount": 68.00,
+  "refundMethod": "原路退款",
+  "refundReason": "客户取消服务"
+}
+```
+
+业务约束：
+
+1. 原支付单必须存在且状态为 `SUCCESS`。
+2. `refundAmount` 必须大于 `0`。
+3. 同一支付单下 `REVIEWING`、`PROCESSING`、`SUCCESS` 状态退款金额累计不能超过原支付金额。
+4. 创建后状态为 `REVIEWING`，等待运营或财务审核。
+
+### 11.3 退款动作接口
+
+审核通过：
+
+```http
+POST /api/refunds/approve
+```
+
+模拟成功：
+
+```http
+POST /api/refunds/success
+```
+
+模拟失败：
+
+```http
+POST /api/refunds/fail
+```
+
+失败重试：
+
+```http
+POST /api/refunds/retry
+```
+
+请求示例：
+
+```json
+{
+  "refundOrderId": "REF20260720223600123",
+  "remark": "运营审核通过"
+}
+```
+
+状态流转：
+
+| 动作 | 原状态 | 目标状态 |
+| --- | --- | --- |
+| 审核通过 | `REVIEWING` | `PROCESSING` |
+| 成功回调 | `PROCESSING` | `SUCCESS` |
+| 失败回调 | `PROCESSING` | `FAIL` |
+| 失败重试 | `FAIL` | `PROCESSING` |
+
+实现说明：
+
+1. 后端使用状态条件更新，避免重复点击、重复回调导致退款状态回退。
+2. `SUCCESS` 会写入 `success_at`，`retry` 会清空成功时间。
+3. 当前为本地模拟闭环，真实渠道退款请求、退款回调验签、退款渠道流水和差错补偿在后续渠道网关能力中扩展。
+
+## 12. 错误与边界说明
 
 当前版本重点是开发与联调基线，尚未完整沉淀生产级错误码体系。建议后续统一补充：
 
@@ -327,7 +420,11 @@
 | `PAY005` | 支付单已关闭 |
 | `PAY006` | 回调验签失败 |
 | `PAY007` | 重复回调 |
+| `REF001` | 原支付单不存在或未成功 |
+| `REF002` | 退款金额非法 |
+| `REF003` | 累计退款金额超过原支付金额 |
+| `REF004` | 退款单状态不允许执行当前操作 |
 
-## 11. 结论
+## 13. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

@@ -5,15 +5,28 @@ import { refundApi } from "../api/client";
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const actionMessage = ref("");
+const activeRefundOrderId = ref("");
+const activeAction = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
+const applyForm = ref({
+  paymentOrderId: "",
+  refundAmount: "",
+  refundMethod: "原路退款",
+  refundReason: ""
+});
 const filters = ref({
   refundOrderId: "",
   paymentOrderId: "",
   refundStatus: "全部",
   refundMethod: "全部"
 });
+
+function isActionRunning(refundOrderId, actionName) {
+  return activeRefundOrderId.value === refundOrderId && activeAction.value === actionName;
+}
 
 function resetFilters() {
   filters.value = {
@@ -52,6 +65,48 @@ async function loadRefunds() {
   }
 }
 
+async function handleApply() {
+  activeAction.value = "apply";
+  actionMessage.value = "";
+  try {
+    const refund = await refundApi.apply({
+      paymentOrderId: applyForm.value.paymentOrderId,
+      refundAmount: Number(applyForm.value.refundAmount),
+      refundMethod: applyForm.value.refundMethod,
+      refundReason: applyForm.value.refundReason
+    });
+    actionMessage.value = `退款单 ${refund.refundOrderId} 已创建，等待审核。`;
+    applyForm.value = {
+      paymentOrderId: "",
+      refundAmount: "",
+      refundMethod: "原路退款",
+      refundReason: ""
+    };
+    pageNo.value = 1;
+    await loadRefunds();
+  } catch (error) {
+    actionMessage.value = `发起退款失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
+}
+
+async function runRefundAction(refundOrderId, actionName, actionLabel, actionRunner) {
+  activeRefundOrderId.value = refundOrderId;
+  activeAction.value = actionName;
+  actionMessage.value = "";
+  try {
+    const refund = await actionRunner(refundOrderId);
+    actionMessage.value = `退款单 ${refund.refundOrderId} 已${actionLabel}，当前状态为 ${refund.status}。`;
+    await loadRefunds();
+  } catch (error) {
+    actionMessage.value = `退款单 ${refundOrderId} ${actionLabel}失败：${error.message}`;
+  } finally {
+    activeRefundOrderId.value = "";
+    activeAction.value = "";
+  }
+}
+
 function goToPage(nextPage) {
   if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
@@ -77,6 +132,43 @@ onMounted(loadRefunds);
       <div v-if="errorMessage" class="error-banner">
         退款单数据加载失败：{{ errorMessage }}
       </div>
+      <div v-if="actionMessage" class="success-banner">
+        {{ actionMessage }}
+      </div>
+
+      <div class="sub-panel">
+        <div>
+          <h3>发起退款</h3>
+          <p>仅允许对支付成功订单发起，后端会校验累计退款金额不超过原支付金额。</p>
+        </div>
+        <div class="toolbar compact-toolbar">
+          <div class="field">
+            <label>原支付单号</label>
+            <input v-model="applyForm.paymentOrderId" placeholder="PAY202607190001" />
+          </div>
+          <div class="field">
+            <label>退款金额</label>
+            <input v-model="applyForm.refundAmount" type="number" min="0.01" step="0.01" placeholder="请输入金额" />
+          </div>
+          <div class="field">
+            <label>退款方式</label>
+            <select v-model="applyForm.refundMethod">
+              <option>原路退款</option>
+              <option>线下打款</option>
+              <option>退转付</option>
+            </select>
+          </div>
+          <div class="field wide-field">
+            <label>退款原因</label>
+            <input v-model="applyForm.refundReason" placeholder="客户取消服务、服务未履约等" />
+          </div>
+          <div class="toolbar-actions">
+            <button class="button primary" :disabled="activeAction === 'apply'" @click="handleApply">
+              {{ activeAction === "apply" ? "提交中..." : "提交退款申请" }}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div class="toolbar">
         <div class="field">
@@ -91,6 +183,7 @@ onMounted(loadRefunds);
           <label>退款状态</label>
           <select v-model="filters.refundStatus">
             <option>全部</option>
+            <option>REVIEWING</option>
             <option>PROCESSING</option>
             <option>SUCCESS</option>
             <option>FAIL</option>
@@ -100,8 +193,9 @@ onMounted(loadRefunds);
           <label>退款方式</label>
           <select v-model="filters.refundMethod">
             <option>全部</option>
-            <option>原路退回</option>
+            <option>原路退款</option>
             <option>线下打款</option>
+            <option>退转付</option>
           </select>
         </div>
         <div class="toolbar-actions">
@@ -143,9 +237,34 @@ onMounted(loadRefunds);
               <td>{{ item.successAt }}</td>
               <td>
                 <div class="list-actions">
-                  <span>详情</span>
-                  <span>重试</span>
-                  <span>退转付</span>
+                  <button
+                    class="link-button"
+                    :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'REVIEWING'"
+                    @click="runRefundAction(item.refundOrderId, 'approve', '审核通过', refundApi.approve)"
+                  >
+                    {{ isActionRunning(item.refundOrderId, "approve") ? "审核中..." : "审核通过" }}
+                  </button>
+                  <button
+                    class="link-button"
+                    :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'PROCESSING'"
+                    @click="runRefundAction(item.refundOrderId, 'success', '退款成功', refundApi.markSuccess)"
+                  >
+                    {{ isActionRunning(item.refundOrderId, "success") ? "处理中..." : "成功回调" }}
+                  </button>
+                  <button
+                    class="link-button"
+                    :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'PROCESSING'"
+                    @click="runRefundAction(item.refundOrderId, 'fail', '退款失败', refundApi.markFail)"
+                  >
+                    {{ isActionRunning(item.refundOrderId, "fail") ? "处理中..." : "失败回调" }}
+                  </button>
+                  <button
+                    class="link-button"
+                    :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'FAIL'"
+                    @click="runRefundAction(item.refundOrderId, 'retry', '重新提交', refundApi.retry)"
+                  >
+                    {{ isActionRunning(item.refundOrderId, "retry") ? "重试中..." : "重试" }}
+                  </button>
                 </div>
               </td>
             </tr>

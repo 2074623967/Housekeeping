@@ -16,10 +16,10 @@ public interface PaymentRecordMapper {
      * @param recordType 记录类型，ALL、WECHAT、BANK_CARD
      * @return 收款记录列表
      */
-    List<PaymentRecordRowDTO> findAll(PaymentRecordQueryDTO query);
+    List<PaymentRecordRowDTO> findAll(@Param("query") PaymentRecordQueryDTO query);
 
     /**
      * 统计符合条件的收款记录总数。
      */
-    long count(PaymentRecordQueryDTO query);
+    long count(@Param("query") PaymentRecordQueryDTO query);
 }

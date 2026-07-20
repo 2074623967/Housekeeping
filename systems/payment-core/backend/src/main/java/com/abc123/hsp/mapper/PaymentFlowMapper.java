@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 支付流水中心 Mapper，负责聚合主链路中的多类过程流水。
@@ -14,10 +15,10 @@ public interface PaymentFlowMapper {
      *
      * @return 支付流水列表
      */
-    List<PaymentFlowListItemDTO> findAll(PaymentFlowQueryDTO query);
+    List<PaymentFlowListItemDTO> findAll(@Param("query") PaymentFlowQueryDTO query);
 
     /**
      * 统计符合条件的支付流水总数。
      */
-    long count(PaymentFlowQueryDTO query);
+    long count(@Param("query") PaymentFlowQueryDTO query);
 }
