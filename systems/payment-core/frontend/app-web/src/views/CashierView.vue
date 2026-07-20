@@ -27,6 +27,14 @@ const TERMINAL_META = {
     actionLabel: "立即支付",
     refreshLabel: "刷新会话",
     closeLabel: "结束当前会话"
+  },
+  pc: {
+    heroLabel: "家政服务 PC 收银台",
+    heroHint: "适用于官网、运营后台代客支付和桌面浏览器场景，强调桌面端信息确认、扫码支付和失败补救动作。",
+    terminalCode: "PC_WEB",
+    actionLabel: "确认并发起支付",
+    refreshLabel: "刷新桌面收银台",
+    closeLabel: "关闭当前支付单"
   }
 };
 
@@ -115,6 +123,7 @@ onMounted(loadCashier);
 onBeforeUnmount(stopCountdown);
 
 const terminalMeta = computed(() => TERMINAL_META[props.terminalVariant] || TERMINAL_META.app);
+const isPcVariant = computed(() => props.terminalVariant === "pc");
 const channels = computed(() => cashier.value?.channels || []);
 const hasChannels = computed(() => channels.value.length > 0);
 const selectedChannelMeta = computed(() => CHANNEL_META[selectedPaymentMethod.value] || null);
@@ -262,6 +271,17 @@ async function closeCurrentPayment() {
         </div>
 
         <p v-if="message" class="feedback-text">{{ message }}</p>
+
+        <div v-if="isPcVariant" class="desktop-hint-grid">
+          <div class="desktop-hint-card">
+            <strong>桌面端支付建议</strong>
+            <p>若用户使用微信或支付宝，建议展示二维码并保留当前页面，等待回调或主动查单完成收口。</p>
+          </div>
+          <div class="desktop-hint-card">
+            <strong>失败补救动作</strong>
+            <p>如浏览器关闭、扫码超时或渠道报错，可先关闭支付单，再由订单中心重新拉起新的预付单。</p>
+          </div>
+        </div>
       </section>
 
       <section class="terminal-card">

@@ -1,0 +1,28 @@
+@import "../../app-web/src/styles.css";
+
+:root {
+  background:
+    radial-gradient(circle at top right, rgba(30, 64, 175, 0.12), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #eff4fb 46%, #e5ebf5 100%);
+}
+
+body {
+  min-width: 1180px;
+}
+
+.terminal-page.terminal-pc {
+  max-width: 1360px;
+  padding-top: 36px;
+}
+
+.terminal-pc .hero-copy h1 {
+  font-size: 38px;
+}
+
+.terminal-pc .hero-copy p {
+  max-width: 760px;
+}
+
+.terminal-pc .hero-amount {
+  font-size: 46px;
+}

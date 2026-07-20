@@ -25,6 +25,13 @@ const TERMINAL_COPY = {
     queryLabel: "刷新支付结果",
     callbackLabel: "模拟成功回调",
     closeLabel: "结束本次支付"
+  },
+  pc: {
+    heroLabel: "PC 支付结果",
+    homeLabel: "返回 PC 收银台",
+    queryLabel: "刷新桌面端支付结果",
+    callbackLabel: "模拟成功回调",
+    closeLabel: "关闭当前支付单"
   }
 };
 
@@ -40,6 +47,7 @@ const closeLoading = ref(false);
 const lastAction = ref("");
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
+const isPcVariant = computed(() => props.terminalVariant === "pc");
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
@@ -212,6 +220,17 @@ function backToCashier() {
         </div>
 
         <p v-if="feedbackMessage" class="feedback-text">{{ feedbackMessage }}</p>
+
+        <div v-if="isPcVariant" class="desktop-hint-grid">
+          <div class="desktop-hint-card">
+            <strong>桌面端结果处理</strong>
+            <p>PC 端适合由客服、运营或用户本人停留在结果页，边看轨迹边执行主动查单或关闭支付动作。</p>
+          </div>
+          <div class="desktop-hint-card">
+            <strong>联调建议</strong>
+            <p>若渠道回调延迟，可先查看路由轨迹，再执行主动查单，确保桌面端结果页与后台详情页状态一致。</p>
+          </div>
+        </div>
       </section>
 
       <section class="terminal-card">

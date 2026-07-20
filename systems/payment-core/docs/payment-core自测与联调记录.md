@@ -17,14 +17,17 @@
 
 1. `systems/payment-core/frontend/admin-web` 可完成 Vite 构建
 2. `systems/payment-core/frontend/app-web` 可完成 Vite 构建
-3. `admin-web` 到 `app-web` 的主链路路由口径已对齐：
+3. `systems/payment-core/frontend/pc-web` 可完成 Vite 构建
+4. `admin-web` 到 `app-web` 的主链路路由口径已对齐：
    - 后台订单中心发起支付后可生成收银台链接
    - 收银台路由已统一为 `/cashier/:prepayOrderNo`
    - 支付结果页路由已统一为 `/payment-result/:paymentOrderId`
-4. 用户端页面当前已覆盖：
+5. 用户端页面当前已覆盖：
    - 收银台
    - 支付结果页
-5. 支付结果页已按接口文档改为优先调用 `GET /api/payments/{paymentOrderId}` 查询结果详情
+   - PC 收银台
+   - PC 支付结果页
+6. 支付结果页已按接口文档改为优先调用 `GET /api/payments/{paymentOrderId}` 查询结果详情
 
 结论：
 
@@ -194,13 +197,13 @@
 | `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
 | `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
 | `h5-web` | `npm install --cache /private/tmp/h5-web-npm-cache` 后执行 `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` | 通过 | H5 用户端当前已完成依赖安装与生产构建复核 |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`36` 个测试全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`38` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
-1. 当前一期主线应以 `admin-web + app-web + backend` 为核心交付，不再将 `pc-web` 作为当前阻塞项。
+1. 当前一期主线应以 `admin-web + app-web + pc-web + backend` 为核心交付，`h5-web` 作为独立交付端继续保留。
 2. `h5-web` 已从“多端扩展基础”升级为“已完成构建复核的正式交付端”，后续可以继续增强页面矩阵与真实链路联调。
-3. 后续继续开发前，需要把 H5 真实接口联调纳入自测清单，不把“仅构建通过”误写成“全链路已验证”。
+3. 后续继续开发前，需要把 H5 和 PC 真实接口联调纳入自测清单，不把“仅构建通过”误写成“全链路已验证”。
 
 ### 7.3 本轮修复项
 
@@ -218,15 +221,17 @@
 
 ### 8.1 本轮验证结论
 
-本轮围绕 `app-web / h5-web` 的收银台与支付结果页进行了前端交付增强，确认两端已经从“基础可用”升级到“可联调、可演示、可继续扩展”的正式页面状态。
+本轮围绕 `app-web / h5-web / pc-web` 的收银台与支付结果页进行了前端交付增强，确认三端已经从“基础可用”升级到“可联调、可演示、可继续扩展”的正式页面状态。
 
 | 项目 | 结果 | 说明 |
 | --- | --- | --- |
 | `app-web` 收银台 | 通过 | 已补齐会话倒计时、渠道说明、支付单号、幂等键、终端标识和主动关闭支付动作 |
 | `app-web` 支付结果页 | 通过 | 已补齐结果摘要、轨迹分区、主动查单、模拟回调、关闭支付、返回收银台动作 |
 | `h5-web` 收银台/结果页 | 通过 | 已复用同一套支付逻辑，并补齐 H5 终端展示文案和构建验证 |
+| `pc-web` 收银台/结果页 | 通过 | 已新增独立 PC 端入口并复用同一套交易逻辑，补齐桌面端支付文案和构建验证 |
 | `app-web` 构建 | 通过 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-20260720 --emptyOutDir` 成功 |
 | `h5-web` 构建 | 通过 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` 成功 |
+| `pc-web` 构建 | 通过 | `npm run build` 成功，产出独立 PC 端构建包 |
 
 ### 8.2 本轮修复项
 
@@ -235,6 +240,7 @@
 3. 为收银台补齐主动关闭支付动作，便于测试异常流和重复发起支付场景。
 4. 为支付结果页补齐关闭支付、返回收银台、路由/回调/事件分区展示。
 5. 为 `h5-web` 完成依赖安装与正式构建复核，修正此前“环境阻塞”的旧结论。
+6. 新增 `pc-web` 独立前端端口与桌面端文案，补齐 PC 收银台/支付结果页基础骨架。
 
 ## 9. 2026-07-20 配置化路由闭环复核
 
@@ -267,8 +273,9 @@
 | --- | --- | --- |
 | 主链路业务异常 | 通过 | `prepay / cashier / submit / callback / query / close` 已补齐核心业务异常码 |
 | 回调安全异常 | 通过 | 验签失败、密钥缺失、时间戳异常、nonce 重放均已落到独立错误码 |
-| 前端错误展示 | 通过 | `admin-web / app-web / h5-web` 请求层已透出 `message + code + requestId` |
+| 前端错误展示 | 通过 | `admin-web / app-web / h5-web / pc-web` 请求层已透出 `message + code + requestId` |
 | H5 终端入口 | 通过 | `h5-web` 已改为走自身包装视图，不再直接绕过 H5 终端差异层 |
+| PC 终端入口 | 通过 | `pc-web` 已改为走独立入口与独立路由，不再与 App/H5 混用 |
 | 自动化测试 | 通过 | 当前全量后端测试为 `38` 个并全部通过 |
 
 ### 10.2 本轮修复项
@@ -278,6 +285,7 @@
 3. 为支付主链路和支付路由、查单、回调验签补齐第一版业务错误码。
 4. 为 `app-web` 和 `admin-web` 请求层补齐错误码、`requestId` 展示口径。
 5. 修复 `h5-web` 入口仍直接引用 `app-web` 组件的问题，确保 H5 终端差异层真正生效。
+6. 新增 `pc-web` 入口和 PC 端展示层，确保桌面端与 App/H5 的终端差异层真正生效。
 
 ## 11. 2026-07-20 支付记录详情钻取复核
 
