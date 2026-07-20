@@ -12,8 +12,14 @@ public class BillQueryDTO {
     private String billNo;
     /** 订单号。 */
     private String orderNo;
+    /** 客户名称。 */
+    private String customerName;
     /** 账单状态。 */
     private String billStatus = "全部";
+    /** 排序字段。 */
+    private String sortField = "createdAt";
+    /** 排序方向。 */
+    private String sortOrder = "desc";
     /** 页码，从 1 开始。 */
     private int pageNo = 1;
     /** 每页条数，最大 100。 */

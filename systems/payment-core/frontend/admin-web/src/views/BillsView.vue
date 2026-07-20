@@ -13,14 +13,20 @@ const pageSize = 20;
 const filters = ref({
   billNo: route.query.billNo || "",
   orderNo: route.query.orderNo || "",
-  billStatus: route.query.billStatus || "全部"
+  customerName: route.query.customerName || "",
+  billStatus: route.query.billStatus || "全部",
+  sortField: route.query.sortField || "createdAt",
+  sortOrder: route.query.sortOrder || "desc"
 });
 
 function resetFilters() {
   filters.value = {
     billNo: "",
     orderNo: "",
-    billStatus: "全部"
+    customerName: "",
+    billStatus: "全部",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   pageNo.value = 1;
   loadBills();
@@ -38,7 +44,10 @@ async function loadBills() {
     const result = await billApi.getList({
       billNo: filters.value.billNo,
       orderNo: filters.value.orderNo,
+      customerName: filters.value.customerName,
       billStatus: filters.value.billStatus,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -67,7 +76,10 @@ watch(
     filters.value = {
       billNo: billNo || "",
       orderNo: orderNo || "",
-      billStatus: billStatus || "全部"
+      customerName: route.query.customerName || "",
+      billStatus: billStatus || "全部",
+      sortField: route.query.sortField || "createdAt",
+      sortOrder: route.query.sortOrder || "desc"
     };
     pageNo.value = 1;
     loadBills();
@@ -100,16 +112,38 @@ watch(
           <input v-model="filters.orderNo" placeholder="请输入订单号" />
         </div>
         <div class="field">
+          <label>客户名称</label>
+          <input v-model="filters.customerName" placeholder="请输入客户名称" />
+        </div>
+        <div class="field">
           <label>账单状态</label>
           <select v-model="filters.billStatus">
             <option>全部</option>
             <option>待支付</option>
+            <option>部分支付</option>
             <option>已结清</option>
+            <option>已支付</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="dueAt">到期时间</option>
+            <option value="billAmount">账单应收</option>
+            <option value="unpaidAmount">待支付金额</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
           </select>
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="当前已接入后端筛选，不承接账务会计口径" disabled />
+          <input value="当前已接入后端筛选和排序，不承接账务会计口径" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

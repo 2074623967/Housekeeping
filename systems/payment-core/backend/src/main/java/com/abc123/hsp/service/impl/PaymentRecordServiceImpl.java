@@ -28,6 +28,14 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
 
     @Override
     public PageResultDTO<PaymentRecordRowDTO> list(PaymentRecordQueryDTO query) {
+        query.setRecordType(query.getRecordType() == null ? "ALL" : query.getRecordType().trim());
+        query.setUserId(query.getUserId() == null ? null : query.getUserId().trim());
+        query.setBusinessOrderNo(query.getBusinessOrderNo() == null ? null : query.getBusinessOrderNo().trim());
+        query.setPaymentType(query.getPaymentType() == null ? null : query.getPaymentType().trim());
+        query.setPaymentStatus(query.getPaymentStatus() == null ? "全部" : query.getPaymentStatus().trim());
+        query.setPaymentChannel(query.getPaymentChannel() == null ? null : query.getPaymentChannel().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

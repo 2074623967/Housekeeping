@@ -23,11 +23,35 @@
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
             </if>
+            <if test="query.customerName != null and query.customerName != ''">
+                AND customer_name LIKE CONCAT('%', #{query.customerName}, '%')
+            </if>
             <if test="query.billStatus != null and query.billStatus != '' and query.billStatus != '全部'">
                 AND bill_status = #{query.billStatus}
             </if>
         </where>
-        ORDER BY created_at DESC
+        <choose>
+            <when test="query.sortField == 'dueAt'">
+                ORDER BY due_at
+            </when>
+            <when test="query.sortField == 'billAmount'">
+                ORDER BY bill_amount
+            </when>
+            <when test="query.sortField == 'unpaidAmount'">
+                ORDER BY (bill_amount - paid_amount)
+            </when>
+            <otherwise>
+                ORDER BY created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -40,6 +64,9 @@
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.customerName != null and query.customerName != ''">
+                AND customer_name LIKE CONCAT('%', #{query.customerName}, '%')
             </if>
             <if test="query.billStatus != null and query.billStatus != '' and query.billStatus != '全部'">
                 AND bill_status = #{query.billStatus}

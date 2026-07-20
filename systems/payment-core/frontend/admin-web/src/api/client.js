@@ -123,14 +123,20 @@ export const billApi = {
   getList: ({
     billNo = "",
     orderNo = "",
+    customerName = "",
     billStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       billNo,
       orderNo,
+      customerName,
       billStatus,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -144,7 +150,11 @@ export const paymentFlowApi = {
     orderNo = "",
     flowType = "全部",
     channelCode = "",
+    terminal = "全部",
     businessStatus = "全部",
+    keyword = "",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -153,7 +163,11 @@ export const paymentFlowApi = {
       orderNo,
       flowType,
       channelCode,
+      terminal,
       businessStatus,
+      keyword,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -226,17 +240,25 @@ export const paymentEventApi = {
 export const cashierSessionApi = {
   getList: ({
     sessionNo = "",
+    paymentOrderId = "",
     orderNo = "",
+    customerName = "",
     terminal = "全部",
     sessionStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
     const params = new URLSearchParams({
       sessionNo,
+      paymentOrderId,
       orderNo,
+      customerName,
       terminal,
       sessionStatus,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -300,6 +322,10 @@ export const paymentRecordApi = {
     userId = "",
     businessOrderNo = "",
     paymentType = "",
+    paymentStatus = "全部",
+    paymentChannel = "",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -308,6 +334,10 @@ export const paymentRecordApi = {
       userId,
       businessOrderNo,
       paymentType,
+      paymentStatus,
+      paymentChannel,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });

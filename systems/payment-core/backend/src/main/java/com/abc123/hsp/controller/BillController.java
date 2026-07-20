@@ -30,13 +30,19 @@ public class BillController {
     public ApiResponse<PageResultDTO<BillListItemDTO>> list(
             @RequestParam(required = false) String billNo,
             @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String customerName,
             @RequestParam(defaultValue = "全部") String billStatus,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         BillQueryDTO query = new BillQueryDTO();
         query.setBillNo(billNo);
         query.setOrderNo(orderNo);
+        query.setCustomerName(customerName);
         query.setBillStatus(billStatus);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(billService.list(query));

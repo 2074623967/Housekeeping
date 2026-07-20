@@ -10,17 +10,25 @@ const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
   sessionNo: "",
+  paymentOrderId: "",
   orderNo: "",
+  customerName: "",
   terminal: "全部",
-  sessionStatus: "全部"
+  sessionStatus: "全部",
+  sortField: "createdAt",
+  sortOrder: "desc"
 });
 
 function resetFilters() {
   filters.value = {
     sessionNo: "",
+    paymentOrderId: "",
     orderNo: "",
+    customerName: "",
     terminal: "全部",
-    sessionStatus: "全部"
+    sessionStatus: "全部",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   pageNo.value = 1;
   loadCashierSessions();
@@ -37,9 +45,13 @@ async function loadCashierSessions() {
   try {
     const result = await cashierSessionApi.getList({
       sessionNo: filters.value.sessionNo,
+      paymentOrderId: filters.value.paymentOrderId,
       orderNo: filters.value.orderNo,
+      customerName: filters.value.customerName,
       terminal: filters.value.terminal,
       sessionStatus: filters.value.sessionStatus,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -88,6 +100,14 @@ onMounted(loadCashierSessions);
           <input v-model="filters.orderNo" placeholder="请输入订单号" />
         </div>
         <div class="field">
+          <label>支付单号</label>
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+        </div>
+        <div class="field">
+          <label>客户名称</label>
+          <input v-model="filters.customerName" placeholder="请输入客户名称" />
+        </div>
+        <div class="field">
           <label>终端场景</label>
           <select v-model="filters.terminal">
             <option>全部</option>
@@ -109,8 +129,23 @@ onMounted(loadCashierSessions);
           </select>
         </div>
         <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="expiresAt">失效时间</option>
+            <option value="amount">会话金额</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>当前说明</label>
-          <input value="当前已接入后端筛选，便于定位终端会话异常" disabled />
+          <input value="当前已接入后端筛选和排序，便于定位终端会话异常" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

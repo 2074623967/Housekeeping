@@ -82,8 +82,41 @@
             <if test="paymentType != null and paymentType != ''">
                 AND '消费支付' = #{paymentType}
             </if>
+            <if test="paymentStatus != null and paymentStatus != '' and paymentStatus != '全部'">
+                AND (
+                    CASE p.status
+                        WHEN 'SUCCESS' THEN '支付成功'
+                        WHEN 'WAIT_CALLBACK' THEN '支付中'
+                        WHEN 'CLOSED' THEN '已关闭'
+                        WHEN 'FAIL' THEN '支付失败'
+                        ELSE p.status
+                    END
+                ) = #{paymentStatus}
+            </if>
+            <if test="paymentChannel != null and paymentChannel != ''">
+                AND p.channel_code LIKE CONCAT('%', #{paymentChannel}, '%')
+            </if>
         </where>
-        ORDER BY p.created_at DESC
+        <choose>
+            <when test="sortField == 'paymentAmount'">
+                ORDER BY p.amount
+            </when>
+            <when test="sortField == 'paidAt'">
+                ORDER BY
+                CASE WHEN p.status = 'SUCCESS' THEN p.created_at ELSE NULL END
+            </when>
+            <otherwise>
+                ORDER BY p.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -106,6 +139,20 @@
             </if>
             <if test="paymentType != null and paymentType != ''">
                 AND '消费支付' = #{paymentType}
+            </if>
+            <if test="paymentStatus != null and paymentStatus != '' and paymentStatus != '全部'">
+                AND (
+                    CASE p.status
+                        WHEN 'SUCCESS' THEN '支付成功'
+                        WHEN 'WAIT_CALLBACK' THEN '支付中'
+                        WHEN 'CLOSED' THEN '已关闭'
+                        WHEN 'FAIL' THEN '支付失败'
+                        ELSE p.status
+                    END
+                ) = #{paymentStatus}
+            </if>
+            <if test="paymentChannel != null and paymentChannel != ''">
+                AND p.channel_code LIKE CONCAT('%', #{paymentChannel}, '%')
             </if>
         </where>
     </select>

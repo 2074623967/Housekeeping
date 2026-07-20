@@ -17,7 +17,11 @@ const filters = ref({
   orderNo: route.query.orderNo || "",
   flowType: route.query.flowType || "全部",
   channelCode: route.query.channelCode || "",
-  businessStatus: route.query.businessStatus || "全部"
+  terminal: route.query.terminal || "全部",
+  businessStatus: route.query.businessStatus || "全部",
+  keyword: route.query.keyword || "",
+  sortField: route.query.sortField || "createdAt",
+  sortOrder: route.query.sortOrder || "desc"
 });
 
 function resetFilters() {
@@ -26,7 +30,11 @@ function resetFilters() {
     orderNo: "",
     flowType: "全部",
     channelCode: "",
-    businessStatus: "全部"
+    terminal: "全部",
+    businessStatus: "全部",
+    keyword: "",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   expandedFlowNo.value = "";
   pageNo.value = 1;
@@ -52,7 +60,11 @@ async function loadPaymentFlows() {
       orderNo: filters.value.orderNo,
       flowType: filters.value.flowType,
       channelCode: filters.value.channelCode,
+      terminal: filters.value.terminal,
       businessStatus: filters.value.businessStatus,
+      keyword: filters.value.keyword,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -136,6 +148,16 @@ onMounted(loadPaymentFlows);
           <input v-model="filters.channelCode" placeholder="如 wx_h5 / alipay_app" />
         </div>
         <div class="field">
+          <label>终端</label>
+          <select v-model="filters.terminal">
+            <option>全部</option>
+            <option>H5</option>
+            <option>PC</option>
+            <option>APP</option>
+            <option>小程序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>业务状态</label>
           <select v-model="filters.businessStatus">
             <option>全部</option>
@@ -152,8 +174,27 @@ onMounted(loadPaymentFlows);
           </select>
         </div>
         <div class="field">
+          <label>关键字</label>
+          <input v-model="filters.keyword" placeholder="支持摘要、请求报文、响应报文检索" />
+        </div>
+        <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="retryCount">重试次数</option>
+            <option value="flowType">流水类型</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>当前说明</label>
-          <input value="已支持渠道、状态、原始报文与联查动作，便于运营和研发统一排障" disabled />
+          <input value="已支持渠道、终端、关键字、原始报文与联查动作，便于运营和研发统一排障" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

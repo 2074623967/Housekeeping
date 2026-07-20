@@ -56,7 +56,11 @@
 | `orderNo` | 订单号，模糊匹配 |
 | `flowType` | 流水类型，支持 `支付尝试 / 渠道回调 / 路由记录 / 业务事件 / 全部` |
 | `channelCode` | 渠道编码，模糊匹配 |
+| `terminal` | 终端，支持 `H5 / PC / APP / 小程序 / 全部` |
 | `businessStatus` | 业务状态，支持按尝试状态、回调状态、路由结果和事件类型统一筛选 |
+| `keyword` | 关键字，按摘要、请求报文、响应报文模糊匹配 |
+| `sortField` | 排序字段，支持 `createdAt / retryCount / flowType` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
 | `pageNo` | 页码，从 `1` 开始 |
 | `pageSize` | 每页条数，最大 `100` |
 
@@ -443,6 +447,26 @@
 ## 10. 收款记录分页查询
 
 接口：`GET /api/payment-records`
+
+当前补充能力：
+
+1. 已支持 `paymentStatus`、`paymentChannel` 两类运营筛选。
+2. 已支持按 `createdAt / paymentAmount / paidAt` 排序。
+3. 适用于统一支付记录、微信支付宝支付记录和银行卡支付记录三类列表页共用。
+
+接口：`GET /api/bills`
+
+当前补充能力：
+
+1. 已支持 `customerName` 筛选。
+2. 已支持按 `createdAt / dueAt / billAmount / unpaidAmount` 排序。
+
+接口：`GET /api/cashier-sessions`
+
+当前补充能力：
+
+1. 已支持 `paymentOrderId`、`customerName` 筛选。
+2. 已支持按 `createdAt / expiresAt / amount` 排序。
 
 查询参数：
 

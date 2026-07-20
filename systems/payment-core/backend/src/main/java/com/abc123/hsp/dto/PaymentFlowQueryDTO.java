@@ -16,8 +16,16 @@ public class PaymentFlowQueryDTO {
     private String flowType = "全部";
     /** 渠道编码。 */
     private String channelCode;
+    /** 终端。 */
+    private String terminal = "全部";
     /** 业务状态。 */
     private String businessStatus;
+    /** 关键字。 */
+    private String keyword;
+    /** 排序字段。 */
+    private String sortField = "createdAt";
+    /** 排序方向。 */
+    private String sortOrder = "desc";
     /** 页码，从 1 开始。 */
     private int pageNo = 1;
     /** 每页条数，最大 100。 */

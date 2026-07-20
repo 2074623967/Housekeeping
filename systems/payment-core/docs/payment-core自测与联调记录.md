@@ -554,6 +554,26 @@
 3. 新增后台页面 `PaymentIssuesView`，支持异常筛选、统一展示和一键排查。
 4. 将支付监控页中“待回调未收口”告警接入支付交易异常中心，形成“监控 -> 异常 -> 详情”的排障链路。
 
+## 22. 2026-07-20 运营筛选与排序增强复核
+
+### 22.1 本轮验证结论
+
+本轮围绕“账单中心、收银台会话、支付流水、统一支付记录虽然已可查询，但排序与运营筛选仍不够正式后台化”的问题进行了补齐，确认这几类高频运营页已经具备更实用的查询能力。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 新增 `PaymentRecordServiceListTest` 后，全量后端测试共 `57` 个并全部通过 |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260720-ops-filters --emptyOutDir` | 通过 | 账单中心、收银台会话、支付流水、统一支付记录增强后的筛选和排序控件可稳定构建 |
+| 查询页增强 | 页面联调复核 | 通过 | 当前已补齐更多运营筛选字段和排序字段，便于大额单、超时会话、关键字报文和渠道维度排查 |
+
+### 22.2 本轮补齐项
+
+1. 扩展 `BillQueryDTO / BillController / BillMapper.xml`，补齐客户名称筛选和账单金额、待支付金额、到期时间排序。
+2. 扩展 `CashierSessionQueryDTO / CashierSessionController / CashierSessionMapper.xml`，补齐支付单号、客户名称筛选和会话金额、失效时间排序。
+3. 扩展 `PaymentFlowQueryDTO / PaymentFlowController / PaymentFlowMapper.xml`，补齐终端、关键字筛选以及重试次数、流水类型排序。
+4. 扩展 `PaymentRecordQueryDTO / PaymentRecordController / PaymentRecordMapper.xml`，补齐支付状态、支付渠道筛选以及支付金额、支付成功时间排序。
+5. 同步增强 `BillsView`、`CashierSessionsView`、`PaymentFlowsView`、`PaymentRecordsView` 和前端 API 参数封装，保证前后端口径一致。
+
 ## 11. 2026-07-20 支付记录详情钻取复核
 
 ### 11.1 本轮验证结论

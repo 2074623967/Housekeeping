@@ -34,6 +34,10 @@ public class PaymentRecordController {
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String businessOrderNo,
             @RequestParam(required = false) String paymentType,
+            @RequestParam(defaultValue = "全部") String paymentStatus,
+            @RequestParam(required = false) String paymentChannel,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
@@ -41,6 +45,10 @@ public class PaymentRecordController {
         query.setUserId(userId);
         query.setBusinessOrderNo(businessOrderNo);
         query.setPaymentType(paymentType);
+        query.setPaymentStatus(paymentStatus);
+        query.setPaymentChannel(paymentChannel);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRecordService.list(query));

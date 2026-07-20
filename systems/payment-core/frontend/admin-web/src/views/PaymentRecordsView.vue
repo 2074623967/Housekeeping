@@ -14,7 +14,11 @@ const errorMessage = ref("");
 const filters = ref({
   userId: "",
   businessOrderNo: "",
-  paymentType: ""
+  paymentType: "",
+  paymentStatus: "全部",
+  paymentChannel: "",
+  sortField: "createdAt",
+  sortOrder: "desc"
 });
 
 const pageConfig = computed(() => ({
@@ -75,7 +79,15 @@ async function loadRows() {
 }
 
 function resetFilters() {
-  filters.value = { userId: "", businessOrderNo: "", paymentType: "" };
+  filters.value = {
+    userId: "",
+    businessOrderNo: "",
+    paymentType: "",
+    paymentStatus: "全部",
+    paymentChannel: "",
+    sortField: "createdAt",
+    sortOrder: "desc"
+  };
   pageNo.value = 1;
   loadRows();
 }
@@ -124,6 +136,35 @@ onMounted(loadRows);
         <select id="record-payment-type" v-model="filters.paymentType">
           <option value="">全部</option>
           <option value="消费支付">消费支付</option>
+        </select>
+      </div>
+      <div class="prototype-field">
+        <label for="record-payment-status">支付状态</label>
+        <select id="record-payment-status" v-model="filters.paymentStatus">
+          <option value="全部">全部</option>
+          <option value="支付成功">支付成功</option>
+          <option value="支付中">支付中</option>
+          <option value="已关闭">已关闭</option>
+          <option value="支付失败">支付失败</option>
+        </select>
+      </div>
+      <div class="prototype-field">
+        <label for="record-payment-channel">支付渠道</label>
+        <input id="record-payment-channel" v-model="filters.paymentChannel" placeholder="请输入支付渠道编码" />
+      </div>
+      <div class="prototype-field">
+        <label for="record-sort-field">排序字段</label>
+        <select id="record-sort-field" v-model="filters.sortField">
+          <option value="createdAt">创建时间</option>
+          <option value="paymentAmount">支付金额</option>
+          <option value="paidAt">支付成功时间</option>
+        </select>
+      </div>
+      <div class="prototype-field">
+        <label for="record-sort-order">排序方向</label>
+        <select id="record-sort-order" v-model="filters.sortOrder">
+          <option value="desc">倒序</option>
+          <option value="asc">正序</option>
         </select>
       </div>
       <div class="prototype-query-actions">

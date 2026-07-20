@@ -16,6 +16,14 @@ public class PaymentRecordQueryDTO {
     private String businessOrderNo;
     /** 支付类型。 */
     private String paymentType;
+    /** 支付状态。 */
+    private String paymentStatus = "全部";
+    /** 支付渠道。 */
+    private String paymentChannel = "";
+    /** 排序字段。 */
+    private String sortField = "createdAt";
+    /** 排序方向。 */
+    private String sortOrder = "desc";
     /** 页码，从 1 开始。 */
     private int pageNo = 1;
     /** 每页条数，最大 100。 */

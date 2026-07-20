@@ -23,9 +23,13 @@ class CashierSessionServiceImplTest {
     void shouldNormalizeAndForwardCashierSessionPagingQuery() {
         CashierSessionQueryDTO query = new CashierSessionQueryDTO();
         query.setSessionNo(" PRE-001 ");
+        query.setPaymentOrderId(" PAY-001 ");
         query.setOrderNo(" ORD-001 ");
+        query.setCustomerName(" 王先生 ");
         query.setTerminal("H5");
         query.setSessionStatus("待支付");
+        query.setSortField(" expiresAt ");
+        query.setSortOrder(" ASC ");
         query.setPageNo(2);
         query.setPageSize(999);
 
@@ -35,6 +39,10 @@ class CashierSessionServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(2, query.getPageNo());
         org.junit.jupiter.api.Assertions.assertEquals(100, query.getPageSize());
+        org.junit.jupiter.api.Assertions.assertEquals("PAY-001", query.getPaymentOrderId());
+        org.junit.jupiter.api.Assertions.assertEquals("王先生", query.getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals("expiresAt", query.getSortField());
+        org.junit.jupiter.api.Assertions.assertEquals("asc", query.getSortOrder());
         verify(cashierSessionMapper).findAll(query);
         verify(cashierSessionMapper).count(query);
     }

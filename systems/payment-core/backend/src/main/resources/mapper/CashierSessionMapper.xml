@@ -31,8 +31,14 @@
             <if test="query.sessionNo != null and query.sessionNo != ''">
                 pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
             </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND pr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND pr.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.customerName != null and query.customerName != ''">
+                AND pr.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
             </if>
             <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
                 AND pr.pay_scene = #{query.terminal}
@@ -47,7 +53,25 @@
                 ) = #{query.sessionStatus}
             </if>
         </where>
-        ORDER BY pr.created_at DESC
+        <choose>
+            <when test="query.sortField == 'expiresAt'">
+                ORDER BY pr.expires_at
+            </when>
+            <when test="query.sortField == 'amount'">
+                ORDER BY pr.amount
+            </when>
+            <otherwise>
+                ORDER BY pr.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -58,8 +82,14 @@
             <if test="query.sessionNo != null and query.sessionNo != ''">
                 pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
             </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND pr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND pr.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.customerName != null and query.customerName != ''">
+                AND pr.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
             </if>
             <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
                 AND pr.pay_scene = #{query.terminal}

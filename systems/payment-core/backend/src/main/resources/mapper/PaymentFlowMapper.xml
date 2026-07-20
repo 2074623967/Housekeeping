@@ -172,11 +172,39 @@
             <if test="query.channelCode != null and query.channelCode != ''">
                 AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
             </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND terminal = #{query.terminal}
+            </if>
             <if test="query.businessStatus != null and query.businessStatus != '' and query.businessStatus != '全部'">
                 AND business_status = #{query.businessStatus}
             </if>
+            <if test="query.keyword != null and query.keyword != ''">
+                AND (
+                    summary LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR response_payload LIKE CONCAT('%', #{query.keyword}, '%')
+                )
+            </if>
         </where>
-        ORDER BY created_at DESC
+        <choose>
+            <when test="query.sortField == 'retryCount'">
+                ORDER BY retry_count
+            </when>
+            <when test="query.sortField == 'flowType'">
+                ORDER BY flow_type
+            </when>
+            <otherwise>
+                ORDER BY created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -327,8 +355,18 @@
             <if test="query.channelCode != null and query.channelCode != ''">
                 AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
             </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND terminal = #{query.terminal}
+            </if>
             <if test="query.businessStatus != null and query.businessStatus != '' and query.businessStatus != '全部'">
                 AND business_status = #{query.businessStatus}
+            </if>
+            <if test="query.keyword != null and query.keyword != ''">
+                AND (
+                    summary LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR request_payload LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR response_payload LIKE CONCAT('%', #{query.keyword}, '%')
+                )
             </if>
         </where>
     </select>

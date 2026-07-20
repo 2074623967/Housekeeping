@@ -23,6 +23,9 @@ public class BillServiceImpl implements BillService {
     public PageResultDTO<BillListItemDTO> list(BillQueryDTO query) {
         query.setBillNo(query.getBillNo() == null ? null : query.getBillNo().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        query.setCustomerName(query.getCustomerName() == null ? null : query.getCustomerName().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

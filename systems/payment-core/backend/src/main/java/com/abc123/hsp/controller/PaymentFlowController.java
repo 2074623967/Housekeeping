@@ -32,7 +32,11 @@ public class PaymentFlowController {
             @RequestParam(required = false) String orderNo,
             @RequestParam(defaultValue = "全部") String flowType,
             @RequestParam(required = false) String channelCode,
+            @RequestParam(defaultValue = "全部") String terminal,
             @RequestParam(required = false) String businessStatus,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentFlowQueryDTO query = new PaymentFlowQueryDTO();
@@ -40,7 +44,11 @@ public class PaymentFlowController {
         query.setOrderNo(orderNo);
         query.setFlowType(flowType);
         query.setChannelCode(channelCode);
+        query.setTerminal(terminal);
         query.setBusinessStatus(businessStatus);
+        query.setKeyword(keyword);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentFlowService.list(query));

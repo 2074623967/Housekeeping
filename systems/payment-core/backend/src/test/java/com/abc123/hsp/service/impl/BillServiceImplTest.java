@@ -24,7 +24,10 @@ class BillServiceImplTest {
         BillQueryDTO query = new BillQueryDTO();
         query.setBillNo(" BILL-001 ");
         query.setOrderNo(" ORD-001 ");
+        query.setCustomerName(" 张女士 ");
         query.setBillStatus("待支付");
+        query.setSortField(" dueAt ");
+        query.setSortOrder(" ASC ");
         query.setPageNo(0);
         query.setPageSize(500);
 
@@ -34,6 +37,9 @@ class BillServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(1, query.getPageNo());
         org.junit.jupiter.api.Assertions.assertEquals(100, query.getPageSize());
+        org.junit.jupiter.api.Assertions.assertEquals("张女士", query.getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals("dueAt", query.getSortField());
+        org.junit.jupiter.api.Assertions.assertEquals("asc", query.getSortOrder());
         verify(billMapper).findAll(query);
         verify(billMapper).count(query);
     }
