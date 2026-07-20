@@ -6,19 +6,25 @@ import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.settlement.dto.SettlementEventDTO;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 结算事件服务测试。
  */
+@SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class SettlementEventServiceImplTest {
+
+    @Autowired
+    private SettlementEventServiceImpl settlementEventService;
+
+    @Autowired
+    private SettlementBatchServiceImpl settlementBatchService;
 
     @Test
     void shouldGenerateSettlementOrderWhenClearingEventConsumed() {
-        SettlementMemoryStore store = new SettlementMemoryStore();
-        store.initDemoData();
-        SettlementMapper mapper = new SettlementMapper();
-        SettlementEventServiceImpl service = new SettlementEventServiceImpl(store, mapper);
-
         ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
         request.setClearingNo("CLO88888");
         request.setPaymentOrderId("PAY88888");
@@ -29,8 +35,9 @@ class SettlementEventServiceImplTest {
         request.setDeductAmount(new BigDecimal("10.00"));
         request.setNetSettleAmount(new BigDecimal("90.00"));
 
-        SettlementEventDTO result = service.consumeClearingGenerated(request);
+        SettlementEventDTO result = settlementEventService.consumeClearingGenerated(request);
 
         assertEquals("CLEARING_GENERATED", result.getEventType());
+        assertEquals(2, settlementBatchService.list("", "", 1, 20).getTotal());
     }
 }

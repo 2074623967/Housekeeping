@@ -43,8 +43,6 @@ public class PayoutServiceImpl implements PayoutService {
                 .filter(order -> "待出款".equals(order.getPayoutStatus()))
                 .forEach(order -> {
                     settlementMemoryStore.createPayoutRecord(dto.getPayoutBatchNo(), order);
-                    order.setPayoutStatus("已发放");
-                    order.setSettlementStatus("已出款");
                 });
         return settlementMapper.toPayoutBatchDTO(settlementMemoryStore.findPayoutBatch(dto.getPayoutBatchNo()));
     }

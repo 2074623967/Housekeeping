@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.settlement.mapper.SettlementDataMapper">
+
+    <select id="countBatches" resultType="long">
+        SELECT COUNT(1) FROM t_settlement_batch
+    </select>
+
+    <select id="findBatches" resultType="com.abc123.settlement.entity.SettlementBatchEntity">
+        SELECT batch_no,
+               batch_date,
+               settlement_type,
+               batch_status,
+               total_count,
+               audited_count,
+               payout_count,
+               total_amount,
+               payout_channel,
+               created_by,
+               created_at,
+               finished_at,
+               idempotency_key
+        FROM t_settlement_batch
+        ORDER BY id DESC
+    </select>
+
+    <select id="findBatch" resultType="com.abc123.settlement.entity.SettlementBatchEntity">
+        SELECT batch_no,
+               batch_date,
+               settlement_type,
+               batch_status,
+               total_count,
+               audited_count,
+               payout_count,
+               total_amount,
+               payout_channel,
+               created_by,
+               created_at,
+               finished_at,
+               idempotency_key
+        FROM t_settlement_batch
+        WHERE batch_no = #{batchNo}
+    </select>
+
+    <select id="findBatchByIdempotencyKey" resultType="com.abc123.settlement.entity.SettlementBatchEntity">
+        SELECT batch_no,
+               batch_date,
+               settlement_type,
+               batch_status,
+               total_count,
+               audited_count,
+               payout_count,
+               total_amount,
+               payout_channel,
+               created_by,
+               created_at,
+               finished_at,
+               idempotency_key
+        FROM t_settlement_batch
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <insert id="insertBatch">
+        INSERT INTO t_settlement_batch (
+            batch_no,
+            batch_date,
+            settlement_type,
+            batch_status,
+            total_count,
+            audited_count,
+            payout_count,
+            total_amount,
+            payout_channel,
+            created_by,
+            created_at,
+            finished_at,
+            idempotency_key
+        ) VALUES (
+            #{batchNo},
+            #{batchDate},
+            #{settlementType},
+            #{batchStatus},
+            #{totalCount},
+            #{auditedCount},
+            #{payoutCount},
+            #{totalAmount},
+            #{payoutChannel},
+            #{createdBy},
+            #{createdAt},
+            #{finishedAt},
+            #{idempotencyKey}
+        )
+    </insert>
+
+    <update id="updateBatch">
+        UPDATE t_settlement_batch
+        SET total_count = #{totalCount},
+            audited_count = #{auditedCount},
+            payout_count = #{payoutCount},
+            total_amount = #{totalAmount},
+            payout_channel = #{payoutChannel},
+            batch_status = #{batchStatus},
+            finished_at = #{finishedAt}
+        WHERE batch_no = #{batchNo}
+    </update>
+
+    <select id="findOrders" resultType="com.abc123.settlement.entity.SettlementOrderEntity">
+        SELECT settlement_no,
+               batch_no,
+               target_type,
+               target_no,
+               target_name,
+               should_settle_amount,
+               deduct_amount,
+               net_settle_amount,
+               settlement_status,
+               payout_status,
+               audit_status,
+               clearing_no,
+               created_at
+        FROM t_settlement_order
+        ORDER BY id DESC
+    </select>
+
+    <select id="findOrder" resultType="com.abc123.settlement.entity.SettlementOrderEntity">
+        SELECT settlement_no,
+               batch_no,
+               target_type,
+               target_no,
+               target_name,
+               should_settle_amount,
+               deduct_amount,
+               net_settle_amount,
+               settlement_status,
+               payout_status,
+               audit_status,
+               clearing_no,
+               created_at
+        FROM t_settlement_order
+        WHERE settlement_no = #{settlementNo}
+    </select>
+
+    <insert id="insertOrder">
+        INSERT INTO t_settlement_order (
+            settlement_no,
+            batch_no,
+            target_type,
+            target_no,
+            target_name,
+            should_settle_amount,
+            deduct_amount,
+            net_settle_amount,
+            settlement_status,
+            payout_status,
+            audit_status,
+            clearing_no,
+            created_at
+        ) VALUES (
+            #{settlementNo},
+            #{batchNo},
+            #{targetType},
+            #{targetNo},
+            #{targetName},
+            #{shouldSettleAmount},
+            #{deductAmount},
+            #{netSettleAmount},
+            #{settlementStatus},
+            #{payoutStatus},
+            #{auditStatus},
+            #{clearingNo},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="updateOrderStatus">
+        UPDATE t_settlement_order
+        SET settlement_status = #{settlementStatus},
+            payout_status = #{payoutStatus},
+            audit_status = #{auditStatus}
+        WHERE settlement_no = #{settlementNo}
+    </update>
+
+    <select id="findItemsBySettlementNo" resultType="com.abc123.settlement.entity.SettlementItemEntity">
+        SELECT item_no,
+               settlement_no,
+               item_type,
+               item_name,
+               item_amount,
+               created_at
+        FROM t_settlement_item
+        WHERE settlement_no = #{settlementNo}
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insertItem">
+        INSERT INTO t_settlement_item (
+            item_no,
+            settlement_no,
+            item_type,
+            item_name,
+            item_amount,
+            created_at
+        ) VALUES (
+            #{itemNo},
+            #{settlementNo},
+            #{itemType},
+            #{itemName},
+            #{itemAmount},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="findAuditLogsBySettlementNo" resultType="com.abc123.settlement.entity.SettlementAuditLogEntity">
+        SELECT audit_no,
+               settlement_no,
+               audit_action,
+               audit_result,
+               operator_name,
+               remark,
+               created_at
+        FROM t_settlement_audit_log
+        WHERE settlement_no = #{settlementNo}
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insertAuditLog">
+        INSERT INTO t_settlement_audit_log (
+            audit_no,
+            settlement_no,
+            audit_action,
+            audit_result,
+            operator_name,
+            remark,
+            created_at
+        ) VALUES (
+            #{auditNo},
+            #{settlementNo},
+            #{auditAction},
+            #{auditResult},
+            #{operatorName},
+            #{remark},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="findPayoutBatches" resultType="com.abc123.settlement.entity.PayoutBatchEntity">
+        SELECT payout_batch_no,
+               batch_no,
+               payout_channel,
+               payout_status,
+               payout_count,
+               success_count,
+               failed_count,
+               total_amount,
+               created_by,
+               created_at,
+               finished_at
+        FROM t_payout_batch
+        ORDER BY id DESC
+    </select>
+
+    <select id="findPayoutBatch" resultType="com.abc123.settlement.entity.PayoutBatchEntity">
+        SELECT payout_batch_no,
+               batch_no,
+               payout_channel,
+               payout_status,
+               payout_count,
+               success_count,
+               failed_count,
+               total_amount,
+               created_by,
+               created_at,
+               finished_at
+        FROM t_payout_batch
+        WHERE payout_batch_no = #{payoutBatchNo}
+    </select>
+
+    <insert id="insertPayoutBatch">
+        INSERT INTO t_payout_batch (
+            payout_batch_no,
+            batch_no,
+            payout_channel,
+            payout_status,
+            payout_count,
+            success_count,
+            failed_count,
+            total_amount,
+            created_by,
+            created_at,
+            finished_at
+        ) VALUES (
+            #{payoutBatchNo},
+            #{batchNo},
+            #{payoutChannel},
+            #{payoutStatus},
+            #{payoutCount},
+            #{successCount},
+            #{failedCount},
+            #{totalAmount},
+            #{createdBy},
+            #{createdAt},
+            #{finishedAt}
+        )
+    </insert>
+
+    <update id="updatePayoutBatch">
+        UPDATE t_payout_batch
+        SET payout_status = #{payoutStatus},
+            payout_count = #{payoutCount},
+            success_count = #{successCount},
+            failed_count = #{failedCount},
+            total_amount = #{totalAmount},
+            finished_at = #{finishedAt}
+        WHERE payout_batch_no = #{payoutBatchNo}
+    </update>
+
+    <select id="findPayoutRecordsByBatchNo" resultType="com.abc123.settlement.entity.PayoutRecordEntity">
+        SELECT payout_no,
+               payout_batch_no,
+               settlement_no,
+               target_no,
+               target_name,
+               payout_amount,
+               payout_status,
+               retry_count,
+               created_at
+        FROM t_payout_record
+        WHERE payout_batch_no = #{payoutBatchNo}
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insertPayoutRecord">
+        INSERT INTO t_payout_record (
+            payout_no,
+            payout_batch_no,
+            settlement_no,
+            target_no,
+            target_name,
+            payout_amount,
+            payout_status,
+            retry_count,
+            created_at
+        ) VALUES (
+            #{payoutNo},
+            #{payoutBatchNo},
+            #{settlementNo},
+            #{targetNo},
+            #{targetName},
+            #{payoutAmount},
+            #{payoutStatus},
+            #{retryCount},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="updatePayoutRecord">
+        UPDATE t_payout_record
+        SET payout_status = #{payoutStatus},
+            retry_count = #{retryCount}
+        WHERE payout_no = #{payoutNo}
+    </update>
+
+    <select id="findEvents" resultType="com.abc123.settlement.entity.SettlementEventEntity">
+        SELECT event_no,
+               event_type,
+               biz_no,
+               summary,
+               payload,
+               event_status,
+               created_at
+        FROM t_settlement_event
+        ORDER BY id DESC
+    </select>
+
+    <insert id="insertEvent">
+        INSERT INTO t_settlement_event (
+            event_no,
+            event_type,
+            biz_no,
+            summary,
+            payload,
+            event_status,
+            created_at
+        ) VALUES (
+            #{eventNo},
+            #{eventType},
+            #{bizNo},
+            #{summary},
+            #{payload},
+            #{eventStatus},
+            #{createdAt}
+        )
+    </insert>
+</mapper>
