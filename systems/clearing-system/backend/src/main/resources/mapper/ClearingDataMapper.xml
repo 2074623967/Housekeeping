@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.clearing.mapper.ClearingDataMapper">
+
+    <select id="countBatches" resultType="long">
+        SELECT COUNT(1) FROM t_clearing_batch
+    </select>
+
+    <select id="findBatches" resultType="com.abc123.clearing.entity.ClearingBatchEntity">
+        SELECT batch_no,
+               batch_date,
+               source_type,
+               batch_status,
+               total_order_count,
+               success_order_count,
+               failed_order_count,
+               total_amount,
+               version_no,
+               created_by,
+               created_at,
+               finished_at,
+               idempotency_key
+        FROM t_clearing_batch
+        ORDER BY id DESC
+    </select>
+
+    <select id="findBatch" resultType="com.abc123.clearing.entity.ClearingBatchEntity">
+        SELECT batch_no,
+               batch_date,
+               source_type,
+               batch_status,
+               total_order_count,
+               success_order_count,
+               failed_order_count,
+               total_amount,
+               version_no,
+               created_by,
+               created_at,
+               finished_at,
+               idempotency_key
+        FROM t_clearing_batch
+        WHERE batch_no = #{batchNo}
+    </select>
+
+    <select id="findBatchByIdempotencyKey" resultType="com.abc123.clearing.entity.ClearingBatchEntity">
+        SELECT batch_no,
+               batch_date,
+               source_type,
+               batch_status,
+               total_order_count,
+               success_order_count,
+               failed_order_count,
+               total_amount,
+               version_no,
+               created_by,
+               created_at,
+               finished_at,
+               idempotency_key
+        FROM t_clearing_batch
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <insert id="insertBatch">
+        INSERT INTO t_clearing_batch (
+            batch_no,
+            batch_date,
+            source_type,
+            batch_status,
+            total_order_count,
+            success_order_count,
+            failed_order_count,
+            total_amount,
+            version_no,
+            created_by,
+            created_at,
+            finished_at,
+            idempotency_key
+        ) VALUES (
+            #{batchNo},
+            #{batchDate},
+            #{sourceType},
+            #{batchStatus},
+            #{totalOrderCount},
+            #{successOrderCount},
+            #{failedOrderCount},
+            #{totalAmount},
+            #{versionNo},
+            #{createdBy},
+            #{createdAt},
+            #{finishedAt},
+            #{idempotencyKey}
+        )
+    </insert>
+
+    <update id="updateBatch">
+        UPDATE t_clearing_batch
+        SET total_order_count = #{totalOrderCount},
+            success_order_count = #{successOrderCount},
+            failed_order_count = #{failedOrderCount},
+            total_amount = #{totalAmount},
+            version_no = #{versionNo},
+            batch_status = #{batchStatus},
+            finished_at = #{finishedAt}
+        WHERE batch_no = #{batchNo}
+    </update>
+
+    <select id="findOrders" resultType="com.abc123.clearing.entity.ClearingOrderEntity">
+        SELECT clearing_no,
+               batch_no,
+               payment_order_id,
+               order_no,
+               order_amount,
+               merchant_amount,
+               worker_amount,
+               platform_amount,
+               channel_fee_amount,
+               subsidy_amount,
+               clearing_status,
+               rule_no,
+               created_at
+        FROM t_clearing_order
+        ORDER BY id DESC
+    </select>
+
+    <select id="findOrder" resultType="com.abc123.clearing.entity.ClearingOrderEntity">
+        SELECT clearing_no,
+               batch_no,
+               payment_order_id,
+               order_no,
+               order_amount,
+               merchant_amount,
+               worker_amount,
+               platform_amount,
+               channel_fee_amount,
+               subsidy_amount,
+               clearing_status,
+               rule_no,
+               created_at
+        FROM t_clearing_order
+        WHERE clearing_no = #{clearingNo}
+    </select>
+
+    <insert id="insertOrder">
+        INSERT INTO t_clearing_order (
+            clearing_no,
+            batch_no,
+            payment_order_id,
+            order_no,
+            order_amount,
+            merchant_amount,
+            worker_amount,
+            platform_amount,
+            channel_fee_amount,
+            subsidy_amount,
+            clearing_status,
+            rule_no,
+            created_at
+        ) VALUES (
+            #{clearingNo},
+            #{batchNo},
+            #{paymentOrderId},
+            #{orderNo},
+            #{orderAmount},
+            #{merchantAmount},
+            #{workerAmount},
+            #{platformAmount},
+            #{channelFeeAmount},
+            #{subsidyAmount},
+            #{clearingStatus},
+            #{ruleNo},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="findRules" resultType="com.abc123.clearing.entity.ClearingRuleEntity">
+        SELECT rule_no,
+               rule_name,
+               rule_type,
+               rule_expression,
+               rule_status,
+               version_no,
+               grey_flag,
+               created_at
+        FROM t_clearing_rule
+        ORDER BY id DESC
+    </select>
+
+    <select id="findRule" resultType="com.abc123.clearing.entity.ClearingRuleEntity">
+        SELECT rule_no,
+               rule_name,
+               rule_type,
+               rule_expression,
+               rule_status,
+               version_no,
+               grey_flag,
+               created_at
+        FROM t_clearing_rule
+        WHERE rule_no = #{ruleNo}
+    </select>
+
+    <insert id="insertRule">
+        INSERT INTO t_clearing_rule (
+            rule_no,
+            rule_name,
+            rule_type,
+            rule_expression,
+            rule_status,
+            version_no,
+            grey_flag,
+            created_at
+        ) VALUES (
+            #{ruleNo},
+            #{ruleName},
+            #{ruleType},
+            #{ruleExpression},
+            #{ruleStatus},
+            #{versionNo},
+            #{greyFlag},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="updateRuleStatus">
+        UPDATE t_clearing_rule
+        SET rule_status = #{ruleStatus}
+        WHERE rule_no = #{ruleNo}
+    </update>
+
+    <select id="findFeeRules" resultType="com.abc123.clearing.entity.FeeRuleEntity">
+        SELECT fee_rule_no,
+               fee_name,
+               fee_type,
+               fee_mode,
+               fee_rate,
+               fixed_amount,
+               fee_bearer,
+               status,
+               created_at
+        FROM t_clearing_fee_rule
+        ORDER BY id DESC
+    </select>
+
+    <insert id="insertFeeRule">
+        INSERT INTO t_clearing_fee_rule (
+            fee_rule_no,
+            fee_name,
+            fee_type,
+            fee_mode,
+            fee_rate,
+            fixed_amount,
+            fee_bearer,
+            status,
+            created_at
+        ) VALUES (
+            #{feeRuleNo},
+            #{feeName},
+            #{feeType},
+            #{feeMode},
+            #{feeRate},
+            #{fixedAmount},
+            #{feeBearer},
+            #{status},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="findShares" resultType="com.abc123.clearing.entity.ShareItemEntity">
+        SELECT share_item_no,
+               clearing_no,
+               share_type,
+               share_target_no,
+               share_target_name,
+               share_amount,
+               share_status,
+               created_at
+        FROM t_clearing_share_item
+        ORDER BY id DESC
+    </select>
+
+    <select id="findSharesByClearingNo" resultType="com.abc123.clearing.entity.ShareItemEntity">
+        SELECT share_item_no,
+               clearing_no,
+               share_type,
+               share_target_no,
+               share_target_name,
+               share_amount,
+               share_status,
+               created_at
+        FROM t_clearing_share_item
+        WHERE clearing_no = #{clearingNo}
+        ORDER BY id DESC
+    </select>
+
+    <insert id="insertShare">
+        INSERT INTO t_clearing_share_item (
+            share_item_no,
+            clearing_no,
+            share_type,
+            share_target_no,
+            share_target_name,
+            share_amount,
+            share_status,
+            created_at
+        ) VALUES (
+            #{shareItemNo},
+            #{clearingNo},
+            #{shareType},
+            #{shareTargetNo},
+            #{shareTargetName},
+            #{shareAmount},
+            #{shareStatus},
+            #{createdAt}
+        )
+    </insert>
+
+    <select id="findEvents" resultType="com.abc123.clearing.entity.ClearingEventEntity">
+        SELECT event_no,
+               event_type,
+               biz_no,
+               summary,
+               payload,
+               event_status,
+               created_at
+        FROM t_clearing_event
+        ORDER BY id DESC
+    </select>
+
+    <insert id="insertEvent">
+        INSERT INTO t_clearing_event (
+            event_no,
+            event_type,
+            biz_no,
+            summary,
+            payload,
+            event_status,
+            created_at
+        ) VALUES (
+            #{eventNo},
+            #{eventType},
+            #{bizNo},
+            #{summary},
+            #{payload},
+            #{eventStatus},
+            #{createdAt}
+        )
+    </insert>
+</mapper>

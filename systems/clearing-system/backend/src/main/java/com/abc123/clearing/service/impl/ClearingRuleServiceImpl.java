@@ -3,7 +3,6 @@ package com.abc123.clearing.service.impl;
 import com.abc123.clearing.dto.ClearingRuleDTO;
 import com.abc123.clearing.dto.CreateClearingRuleRequestDTO;
 import com.abc123.clearing.dto.PageResultDTO;
-import com.abc123.clearing.entity.ClearingRuleEntity;
 import com.abc123.clearing.service.ClearingRuleService;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -44,16 +43,12 @@ public class ClearingRuleServiceImpl implements ClearingRuleService {
 
     @Override
     public ClearingRuleDTO enable(String ruleNo) {
-        ClearingRuleEntity entity = clearingMemoryStore.findRule(ruleNo);
-        entity.setRuleStatus("启用");
-        return clearingMapper.toRuleDTO(entity);
+        return clearingMapper.toRuleDTO(clearingMemoryStore.updateRuleStatus(ruleNo, "启用"));
     }
 
     @Override
     public ClearingRuleDTO disable(String ruleNo) {
-        ClearingRuleEntity entity = clearingMemoryStore.findRule(ruleNo);
-        entity.setRuleStatus("停用");
-        return clearingMapper.toRuleDTO(entity);
+        return clearingMapper.toRuleDTO(clearingMemoryStore.updateRuleStatus(ruleNo, "停用"));
     }
 
     private PageResultDTO<ClearingRuleDTO> page(List<ClearingRuleDTO> items, int pageNo, int pageSize) {

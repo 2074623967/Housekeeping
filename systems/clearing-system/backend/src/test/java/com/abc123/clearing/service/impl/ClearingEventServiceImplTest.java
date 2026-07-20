@@ -9,20 +9,25 @@ import com.abc123.clearing.dto.ShareItemDTO;
 import com.abc123.clearing.service.ShareService;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 
 /**
  * 清分事件服务测试。
  */
+@SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 class ClearingEventServiceImplTest {
+
+    @Autowired
+    private ClearingEventServiceImpl clearingEventService;
+
+    @Autowired
+    private ShareService shareService;
 
     @Test
     void shouldGenerateClearingArtifactsWhenPaymentSuccessConsumed() {
-        ClearingMemoryStore store = new ClearingMemoryStore();
-        store.initDemoData();
-        ClearingMapper mapper = new ClearingMapper();
-        ClearingEventServiceImpl eventService = new ClearingEventServiceImpl(store, mapper);
-        ShareService shareService = new ShareServiceImpl(store, mapper);
-
         PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
         request.setPaymentOrderId("PAY202607200099");
         request.setOrderNo("ORD202607200099");
@@ -32,10 +37,10 @@ class ClearingEventServiceImplTest {
         request.setWorkerName("赵阿姨");
         request.setAmount(new BigDecimal("200.00"));
 
-        ClearingEventDTO result = eventService.consumePaymentSuccess(request);
+        ClearingEventDTO result = clearingEventService.consumePaymentSuccess(request);
         PageResultDTO<ShareItemDTO> shares = shareService.list("", "", 1, 20);
 
         assertEquals("PAYMENT_SUCCESS", result.getEventType());
-        assertEquals(6, shares.getItems().size());
+        assertEquals(6, shares.getTotal());
     }
 }

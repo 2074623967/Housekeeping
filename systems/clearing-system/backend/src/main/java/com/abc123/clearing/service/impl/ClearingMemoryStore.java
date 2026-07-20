@@ -7,22 +7,22 @@ import com.abc123.clearing.entity.ClearingOrderEntity;
 import com.abc123.clearing.entity.ClearingRuleEntity;
 import com.abc123.clearing.entity.FeeRuleEntity;
 import com.abc123.clearing.entity.ShareItemEntity;
+import com.abc123.clearing.mapper.ClearingDataMapper;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 清分系统内存态数据仓，用于第二阶段第一版骨架联调。
+ * 清分系统持久化数据仓，用于第二阶段第一版正式版联调。
  */
 @Component
 public class ClearingMemoryStore {
@@ -35,16 +35,19 @@ public class ClearingMemoryStore {
     private final AtomicLong feeSeq = new AtomicLong(40000L);
     private final AtomicLong shareSeq = new AtomicLong(50000L);
     private final AtomicLong eventSeq = new AtomicLong(60000L);
+    private final ClearingDataMapper clearingDataMapper;
 
-    private final Map<String, ClearingBatchEntity> batches = new LinkedHashMap<>();
-    private final Map<String, ClearingOrderEntity> orders = new LinkedHashMap<>();
-    private final Map<String, ClearingRuleEntity> rules = new LinkedHashMap<>();
-    private final Map<String, FeeRuleEntity> feeRules = new LinkedHashMap<>();
-    private final Map<String, ShareItemEntity> shares = new LinkedHashMap<>();
-    private final List<ClearingEventEntity> events = new ArrayList<>();
+    public ClearingMemoryStore(ClearingDataMapper clearingDataMapper) {
+        this.clearingDataMapper = clearingDataMapper;
+    }
 
     @PostConstruct
+    @Transactional
     public void initDemoData() {
+        if (clearingDataMapper.countBatches() > 0) {
+            syncSequencesFromDatabase();
+            return;
+        }
         ClearingRuleEntity defaultRule = createRule("家政订单基础清分规则", "ORDER", "平台=8%, 渠道=固定1元, 服务者=余下*90%, 商家=剩余", "否");
         createFeeRule("平台服务费", "PLATFORM_FEE", "RATE", new BigDecimal("0.08"), BigDecimal.ZERO, "用户");
         createFeeRule("渠道手续费", "CHANNEL_FEE", "FIXED", BigDecimal.ZERO, new BigDecimal("1.00"), "平台");
@@ -53,19 +56,21 @@ public class ClearingMemoryStore {
     }
 
     public List<ClearingBatchEntity> batches() {
-        return batches.values().stream()
-                .sorted(Comparator.comparing(ClearingBatchEntity::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        List<ClearingBatchEntity> items = new ArrayList<>(clearingDataMapper.findBatches());
+        items.sort(Comparator.comparing(ClearingBatchEntity::getCreatedAt).reversed());
+        return items;
     }
 
     public ClearingBatchEntity findBatch(String batchNo) {
-        return batches.get(batchNo);
+        return clearingDataMapper.findBatch(batchNo);
     }
 
+    @Transactional
     public ClearingBatchEntity createBatch(String batchDate, String sourceType, String createdBy, String idempotencyKey) {
-        for (ClearingBatchEntity batch : batches.values()) {
-            if (idempotencyKey != null && idempotencyKey.equals(batch.getIdempotencyKey())) {
-                return batch;
+        if (idempotencyKey != null && !idempotencyKey.isEmpty()) {
+            ClearingBatchEntity existingBatch = clearingDataMapper.findBatchByIdempotencyKey(idempotencyKey);
+            if (existingBatch != null) {
+                return existingBatch;
             }
         }
         ClearingBatchEntity entity = new ClearingBatchEntity();
@@ -80,17 +85,19 @@ public class ClearingMemoryStore {
         entity.setVersionNo("V1");
         entity.setCreatedBy(createdBy);
         entity.setCreatedAt(now());
+        entity.setFinishedAt(null);
         entity.setIdempotencyKey(idempotencyKey);
-        batches.put(entity.getBatchNo(), entity);
+        clearingDataMapper.insertBatch(entity);
         return entity;
     }
 
+    @Transactional
     public ClearingBatchEntity rerunBatch(String batchNo, String operatorName, String reason) {
         ClearingBatchEntity original = findBatch(batchNo);
         ClearingBatchEntity rerun = createBatch(original.getBatchDate(), "RERUN", operatorName, batchNo + "-" + reason);
         rerun.setVersionNo("V" + (parseVersion(original.getVersionNo()) + 1));
 
-        List<ClearingOrderEntity> originalOrders = orders.values().stream()
+        List<ClearingOrderEntity> originalOrders = orders().stream()
                 .filter(item -> batchNo.equals(item.getBatchNo()))
                 .collect(Collectors.toList());
         for (ClearingOrderEntity order : originalOrders) {
@@ -104,27 +111,39 @@ public class ClearingMemoryStore {
         }
         rerun.setBatchStatus("已完成");
         rerun.setFinishedAt(now());
-        return rerun;
+        clearingDataMapper.updateBatch(
+                rerun.getBatchNo(),
+                rerun.getTotalOrderCount(),
+                rerun.getSuccessOrderCount(),
+                rerun.getFailedOrderCount(),
+                rerun.getTotalAmount(),
+                rerun.getVersionNo(),
+                rerun.getBatchStatus(),
+                rerun.getFinishedAt());
+        return findBatch(rerun.getBatchNo());
     }
 
     public List<ClearingOrderEntity> orders() {
-        return orders.values().stream()
-                .sorted(Comparator.comparing(ClearingOrderEntity::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        List<ClearingOrderEntity> items = new ArrayList<>(clearingDataMapper.findOrders());
+        items.sort(Comparator.comparing(ClearingOrderEntity::getCreatedAt).reversed());
+        return items;
     }
 
     public ClearingOrderEntity findOrder(String clearingNo) {
-        return orders.get(clearingNo);
+        return clearingDataMapper.findOrder(clearingNo);
     }
 
     public List<ClearingRuleEntity> rules() {
-        return new ArrayList<>(rules.values());
+        List<ClearingRuleEntity> items = new ArrayList<>(clearingDataMapper.findRules());
+        items.sort(Comparator.comparing(ClearingRuleEntity::getCreatedAt).reversed());
+        return items;
     }
 
     public ClearingRuleEntity findRule(String ruleNo) {
-        return rules.get(ruleNo);
+        return clearingDataMapper.findRule(ruleNo);
     }
 
+    @Transactional
     public ClearingRuleEntity createRule(String ruleName, String ruleType, String ruleExpression, String greyFlag) {
         ClearingRuleEntity entity = new ClearingRuleEntity();
         entity.setRuleNo(nextNo("CLR", ruleSeq));
@@ -135,14 +154,23 @@ public class ClearingMemoryStore {
         entity.setVersionNo("V1");
         entity.setGreyFlag(greyFlag);
         entity.setCreatedAt(now());
-        rules.put(entity.getRuleNo(), entity);
+        clearingDataMapper.insertRule(entity);
         return entity;
     }
 
-    public List<FeeRuleEntity> feeRules() {
-        return new ArrayList<>(feeRules.values());
+    @Transactional
+    public ClearingRuleEntity updateRuleStatus(String ruleNo, String ruleStatus) {
+        clearingDataMapper.updateRuleStatus(ruleNo, ruleStatus);
+        return findRule(ruleNo);
     }
 
+    public List<FeeRuleEntity> feeRules() {
+        List<FeeRuleEntity> items = new ArrayList<>(clearingDataMapper.findFeeRules());
+        items.sort(Comparator.comparing(FeeRuleEntity::getCreatedAt).reversed());
+        return items;
+    }
+
+    @Transactional
     public FeeRuleEntity createFeeRule(String feeName, String feeType, String feeMode, BigDecimal feeRate, BigDecimal fixedAmount, String feeBearer) {
         FeeRuleEntity entity = new FeeRuleEntity();
         entity.setFeeRuleNo(nextNo("FEE", feeSeq));
@@ -154,30 +182,31 @@ public class ClearingMemoryStore {
         entity.setFeeBearer(feeBearer);
         entity.setStatus("启用");
         entity.setCreatedAt(now());
-        feeRules.put(entity.getFeeRuleNo(), entity);
+        clearingDataMapper.insertFeeRule(entity);
         return entity;
     }
 
     public List<ShareItemEntity> shares() {
-        return shares.values().stream()
-                .sorted(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed())
-                .collect(Collectors.toList());
+        List<ShareItemEntity> items = new ArrayList<>(clearingDataMapper.findShares());
+        items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed());
+        return items;
     }
 
     public List<ShareItemEntity> sharesByClearingNo(String clearingNo) {
-        return shares().stream()
-                .filter(item -> clearingNo.equals(item.getClearingNo()))
-                .collect(Collectors.toList());
+        List<ShareItemEntity> items = new ArrayList<>(clearingDataMapper.findSharesByClearingNo(clearingNo));
+        items.sort(Comparator.comparing(ShareItemEntity::getCreatedAt).reversed());
+        return items;
     }
 
     public List<ClearingEventEntity> events() {
-        List<ClearingEventEntity> copied = new ArrayList<>(events);
-        copied.sort(Comparator.comparing(ClearingEventEntity::getCreatedAt).reversed());
-        return copied;
+        List<ClearingEventEntity> items = new ArrayList<>(clearingDataMapper.findEvents());
+        items.sort(Comparator.comparing(ClearingEventEntity::getCreatedAt).reversed());
+        return items;
     }
 
+    @Transactional
     public ClearingEventEntity consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
-        ClearingRuleEntity activeRule = rules.values().stream()
+        ClearingRuleEntity activeRule = rules().stream()
                 .filter(item -> "启用".equals(item.getRuleStatus()))
                 .findFirst()
                 .orElseGet(() -> createRule("默认清分规则", "ORDER", "平台=8%, 渠道=固定1元", "否"));
@@ -185,8 +214,18 @@ public class ClearingMemoryStore {
         String batchDate = request.getBatchDate() == null || request.getBatchDate().isEmpty() ? "2026-07-20" : request.getBatchDate();
         ClearingBatchEntity batch = createBatch(batchDate, "EVENT", "系统事件", "EVT-" + request.getPaymentOrderId());
         createOrder(batch.getBatchNo(), request.getPaymentOrderId(), request.getOrderNo(), request.getAmount(), activeRule.getRuleNo(), "清分成功");
-        batch.setBatchStatus("已完成");
-        batch.setFinishedAt(now());
+        ClearingBatchEntity refreshedBatch = findBatch(batch.getBatchNo());
+        refreshedBatch.setBatchStatus("已完成");
+        refreshedBatch.setFinishedAt(now());
+        clearingDataMapper.updateBatch(
+                refreshedBatch.getBatchNo(),
+                refreshedBatch.getTotalOrderCount(),
+                refreshedBatch.getSuccessOrderCount(),
+                refreshedBatch.getFailedOrderCount(),
+                refreshedBatch.getTotalAmount(),
+                refreshedBatch.getVersionNo(),
+                refreshedBatch.getBatchStatus(),
+                refreshedBatch.getFinishedAt());
 
         ClearingEventEntity event = new ClearingEventEntity();
         event.setEventNo(nextNo("EVT", eventSeq));
@@ -196,11 +235,13 @@ public class ClearingMemoryStore {
         event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId() + "\",\"orderNo\":\"" + request.getOrderNo() + "\"}");
         event.setEventStatus("已消费");
         event.setCreatedAt(now());
-        events.add(event);
+        clearingDataMapper.insertEvent(event);
         return event;
     }
 
-    private ClearingOrderEntity createOrder(String batchNo, String paymentOrderId, String orderNo, BigDecimal orderAmount, String ruleNo, String successStatus) {
+    @Transactional
+    protected ClearingOrderEntity createOrder(String batchNo, String paymentOrderId, String orderNo, BigDecimal orderAmount,
+            String ruleNo, String successStatus) {
         BigDecimal platformAmount = orderAmount.multiply(new BigDecimal("0.08")).setScale(2, RoundingMode.HALF_UP);
         BigDecimal channelFeeAmount = new BigDecimal("1.00");
         BigDecimal merchantAmount = orderAmount.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP);
@@ -220,20 +261,31 @@ public class ClearingMemoryStore {
         entity.setClearingStatus(successStatus);
         entity.setRuleNo(ruleNo);
         entity.setCreatedAt(now());
-        orders.put(entity.getClearingNo(), entity);
+        clearingDataMapper.insertOrder(entity);
 
         createShare(entity.getClearingNo(), "WORKER", "WRK1001", "李阿姨", workerAmount);
         createShare(entity.getClearingNo(), "MERCHANT", "MCH1001", "上海静安门店", merchantAmount);
         createShare(entity.getClearingNo(), "PLATFORM", "PLT1001", "家政平台", platformAmount);
 
-        ClearingBatchEntity batch = batches.get(batchNo);
+        ClearingBatchEntity batch = findBatch(batchNo);
         batch.setTotalOrderCount(batch.getTotalOrderCount() + 1);
         batch.setSuccessOrderCount(batch.getSuccessOrderCount() + 1);
         batch.setTotalAmount(batch.getTotalAmount().add(orderAmount));
+        clearingDataMapper.updateBatch(
+                batch.getBatchNo(),
+                batch.getTotalOrderCount(),
+                batch.getSuccessOrderCount(),
+                batch.getFailedOrderCount(),
+                batch.getTotalAmount(),
+                batch.getVersionNo(),
+                batch.getBatchStatus(),
+                batch.getFinishedAt());
         return entity;
     }
 
-    private void createShare(String clearingNo, String shareType, String shareTargetNo, String shareTargetName, BigDecimal shareAmount) {
+    @Transactional
+    protected ShareItemEntity createShare(String clearingNo, String shareType, String shareTargetNo, String shareTargetName,
+            BigDecimal shareAmount) {
         ShareItemEntity entity = new ShareItemEntity();
         entity.setShareItemNo(nextNo("SHR", shareSeq));
         entity.setClearingNo(clearingNo);
@@ -243,7 +295,8 @@ public class ClearingMemoryStore {
         entity.setShareAmount(shareAmount);
         entity.setShareStatus("待结算");
         entity.setCreatedAt(now());
-        shares.put(entity.getShareItemNo(), entity);
+        clearingDataMapper.insertShare(entity);
+        return entity;
     }
 
     private PaymentSuccessEventRequestDTO buildDemoEvent(String ruleNo) {
@@ -258,8 +311,58 @@ public class ClearingMemoryStore {
         return request;
     }
 
+    private void syncSequencesFromDatabase() {
+        syncSequence(batchSeq, firstBatchNo());
+        syncSequence(orderSeq, firstOrderNo());
+        syncSequence(ruleSeq, firstRuleNo());
+        syncSequence(feeSeq, firstFeeRuleNo());
+        syncSequence(shareSeq, firstShareItemNo());
+        syncSequence(eventSeq, firstEventNo());
+    }
+
+    private String firstBatchNo() {
+        List<ClearingBatchEntity> items = clearingDataMapper.findBatches();
+        return items.isEmpty() ? null : items.get(0).getBatchNo();
+    }
+
+    private String firstOrderNo() {
+        List<ClearingOrderEntity> items = clearingDataMapper.findOrders();
+        return items.isEmpty() ? null : items.get(0).getClearingNo();
+    }
+
+    private String firstRuleNo() {
+        List<ClearingRuleEntity> items = clearingDataMapper.findRules();
+        return items.isEmpty() ? null : items.get(0).getRuleNo();
+    }
+
+    private String firstFeeRuleNo() {
+        List<FeeRuleEntity> items = clearingDataMapper.findFeeRules();
+        return items.isEmpty() ? null : items.get(0).getFeeRuleNo();
+    }
+
+    private String firstShareItemNo() {
+        List<ShareItemEntity> items = clearingDataMapper.findShares();
+        return items.isEmpty() ? null : items.get(0).getShareItemNo();
+    }
+
+    private String firstEventNo() {
+        List<ClearingEventEntity> items = clearingDataMapper.findEvents();
+        return items.isEmpty() ? null : items.get(0).getEventNo();
+    }
+
+    private void syncSequence(AtomicLong seq, String code) {
+        if (code == null || code.isEmpty()) {
+            return;
+        }
+        seq.set(parseNumericSuffix(code));
+    }
+
     private int parseVersion(String versionNo) {
         return Integer.parseInt(versionNo.replace("V", ""));
+    }
+
+    private long parseNumericSuffix(String code) {
+        return Long.parseLong(code.replaceAll("\\D+", ""));
     }
 
     private String nextNo(String prefix, AtomicLong seq) {
