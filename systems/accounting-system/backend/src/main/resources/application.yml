@@ -1,0 +1,6 @@
+server:
+  port: 18110
+
+spring:
+  application:
+    name: home-service-accounting-backend
