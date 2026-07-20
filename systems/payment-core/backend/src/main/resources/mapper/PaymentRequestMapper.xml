@@ -45,11 +45,32 @@
             <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
                 AND pa.terminal = #{query.terminal}
             </if>
+            <if test="query.clientIp != null and query.clientIp != ''">
+                AND pa.client_ip LIKE CONCAT('%', #{query.clientIp}, '%')
+            </if>
             <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
                 AND pa.attempt_status = #{query.requestStatus}
             </if>
         </where>
-        ORDER BY pa.created_at DESC
+        <choose>
+            <when test="query.sortField == 'channelCode'">
+                ORDER BY pa.channel_code
+            </when>
+            <when test="query.sortField == 'terminal'">
+                ORDER BY pa.terminal
+            </when>
+            <otherwise>
+                ORDER BY pa.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
@@ -79,6 +100,9 @@
             </if>
             <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
                 AND pa.terminal = #{query.terminal}
+            </if>
+            <if test="query.clientIp != null and query.clientIp != ''">
+                AND pa.client_ip LIKE CONCAT('%', #{query.clientIp}, '%')
             </if>
             <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
                 AND pa.attempt_status = #{query.requestStatus}

@@ -26,7 +26,11 @@ class PaymentRouteExecutionServiceImplTest {
         query.setOrderNo(" ORD-001 ");
         query.setRouteRule(" RULE_HOME_WX ");
         query.setChannelCode(" wx_h5 ");
+        query.setPaymentMethod(" 微信 ");
+        query.setTerminal(" H5 ");
         query.setRouteResult(" 命中规则路由 ");
+        query.setSortField(" channelCode ");
+        query.setSortOrder(" ASC ");
         query.setPageNo(-2);
         query.setPageSize(0);
 
@@ -36,7 +40,11 @@ class PaymentRouteExecutionServiceImplTest {
         Assertions.assertEquals("ORD-001", query.getOrderNo());
         Assertions.assertEquals("RULE_HOME_WX", query.getRouteRule());
         Assertions.assertEquals("wx_h5", query.getChannelCode());
+        Assertions.assertEquals("微信", query.getPaymentMethod());
+        Assertions.assertEquals("H5", query.getTerminal());
         Assertions.assertEquals("命中规则路由", query.getRouteResult());
+        Assertions.assertEquals("channelCode", query.getSortField());
+        Assertions.assertEquals("asc", query.getSortOrder());
         Assertions.assertEquals(1, query.getPageNo());
         Assertions.assertEquals(1, query.getPageSize());
         verify(paymentRouteExecutionMapper).findAll(query);

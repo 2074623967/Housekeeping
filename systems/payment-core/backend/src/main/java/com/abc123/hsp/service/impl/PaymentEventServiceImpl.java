@@ -50,6 +50,9 @@ public class PaymentEventServiceImpl implements PaymentEventService {
 
     private void normalizeQuery(PaymentEventQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setEventTopic(query.getEventTopic() == null ? null : query.getEventTopic().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
     }

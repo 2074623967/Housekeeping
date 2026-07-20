@@ -16,6 +16,12 @@ public class PaymentEventQueryDTO {
     private String publishStatus = "全部";
     /** 下游系统。 */
     private String downstreamSystem = "全部";
+    /** 事件主题关键字。 */
+    private String eventTopic;
+    /** 排序字段。 */
+    private String sortField = "createdAt";
+    /** 排序方向。 */
+    private String sortOrder = "desc";
     /** 页码。 */
     private int pageNo = 1;
     /** 每页条数。 */

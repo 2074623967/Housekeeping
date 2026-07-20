@@ -17,7 +17,10 @@ const filters = ref({
   orderNo: route.query.orderNo || "",
   channelCode: route.query.channelCode || "",
   terminal: route.query.terminal || "全部",
-  requestStatus: route.query.requestStatus || "全部"
+  clientIp: route.query.clientIp || "",
+  requestStatus: route.query.requestStatus || "全部",
+  sortField: route.query.sortField || "createdAt",
+  sortOrder: route.query.sortOrder || "desc"
 });
 
 function resetFilters() {
@@ -27,7 +30,10 @@ function resetFilters() {
     orderNo: "",
     channelCode: "",
     terminal: "全部",
-    requestStatus: "全部"
+    clientIp: "",
+    requestStatus: "全部",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   expandedRequestNo.value = "";
   pageNo.value = 1;
@@ -48,7 +54,10 @@ async function loadPaymentRequests() {
       orderNo: filters.value.orderNo,
       channelCode: filters.value.channelCode,
       terminal: filters.value.terminal,
+      clientIp: filters.value.clientIp,
       requestStatus: filters.value.requestStatus,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -122,6 +131,10 @@ onMounted(loadPaymentRequests);
           </select>
         </div>
         <div class="field">
+          <label>客户端 IP</label>
+          <input v-model="filters.clientIp" placeholder="如 127.0.0.1" />
+        </div>
+        <div class="field">
           <label>请求状态</label>
           <select v-model="filters.requestStatus">
             <option>全部</option>
@@ -132,8 +145,23 @@ onMounted(loadPaymentRequests);
           </select>
         </div>
         <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="channelCode">渠道编码</option>
+            <option value="terminal">终端</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>当前说明</label>
-          <input value="已支持订单号、渠道、终端等实战筛选，生产环境需继续脱敏和权限控制" disabled />
+          <input value="已支持订单号、渠道、终端、IP 筛选与排序，生产环境需继续脱敏和权限控制" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

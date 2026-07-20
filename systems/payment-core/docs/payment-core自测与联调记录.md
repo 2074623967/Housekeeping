@@ -258,6 +258,25 @@
 5. 统一按专业口径修正退款成功统计日期，改为 `success_at`
 6. 修复聚合空结果时页面可能出现 `null` 的边界问题
 
+## 11. 2026-07-20 支付运营筛选排序增强验证
+
+### 11.1 本轮验证结论
+
+本轮围绕支付路由执行结果、支付请求管理、支付处理日志、支付事件出站四个运营排障页面进行了同口径增强，确认后台已经从“基础查询可用”升级到“支持运营条件缩圈、排序复核和事件重发后结果回看”的阶段。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | `57` 个测试全部通过，覆盖查询参数归一化和分页查询服务 |
+| 后台前端构建 | `npm run build` | 通过 | `PaymentRequestsView`、`PaymentLogsView`、`PaymentEventsView`、`PaymentRoutesView` 最新筛选栏与排序控件通过生产构建 |
+
+### 11.2 本轮修复项
+
+1. 支付请求管理新增 `clientIp`、`sortField`、`sortOrder` 查询参数，并同步到后台筛选栏和后端动态 SQL。
+2. 支付处理日志新增 `sortField`、`sortOrder` 查询参数，支持按创建时间、日志级别、处理阶段统一排序。
+3. 支付事件出站新增 `eventTopic`、`sortField`、`sortOrder` 查询参数，手动重发后可沿用当前筛选条件回看结果。
+4. 支付路由执行结果新增 `paymentMethod`、`terminal`、`sortField`、`sortOrder` 查询参数，便于从支付方式和终端维度复盘命中结果。
+5. 四个页面的前端说明、接口口径和交付状态文档已同步更新，避免产品、前端、后端、测试看到不同版本字段。
+
 ## 11. 2026-07-20 支付任务中心 V1 验证
 
 ### 11.1 本轮验证结论

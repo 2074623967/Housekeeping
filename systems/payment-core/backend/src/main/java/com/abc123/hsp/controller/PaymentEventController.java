@@ -35,6 +35,9 @@ public class PaymentEventController {
             @RequestParam(defaultValue = "全部") String eventType,
             @RequestParam(defaultValue = "全部") String publishStatus,
             @RequestParam(defaultValue = "全部") String downstreamSystem,
+            @RequestParam(required = false) String eventTopic,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentEventQueryDTO query = new PaymentEventQueryDTO();
@@ -42,6 +45,9 @@ public class PaymentEventController {
         query.setEventType(eventType);
         query.setPublishStatus(publishStatus);
         query.setDownstreamSystem(downstreamSystem);
+        query.setEventTopic(eventTopic);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentEventService.list(query));
@@ -57,6 +63,9 @@ public class PaymentEventController {
             @RequestParam(defaultValue = "全部") String eventType,
             @RequestParam(defaultValue = "全部") String publishStatus,
             @RequestParam(defaultValue = "全部") String downstreamSystem,
+            @RequestParam(required = false) String eventTopic,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentEventQueryDTO query = new PaymentEventQueryDTO();
@@ -64,6 +73,9 @@ public class PaymentEventController {
         query.setEventType(eventType);
         query.setPublishStatus(publishStatus);
         query.setDownstreamSystem(downstreamSystem);
+        query.setEventTopic(eventTopic);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentEventService.republish(request, query));

@@ -26,7 +26,10 @@ class PaymentRequestServiceImplTest {
         query.setOrderNo(" ORD-001 ");
         query.setChannelCode(" wx_h5 ");
         query.setTerminal(" H5 ");
+        query.setClientIp(" 127.0.0.1 ");
         query.setRequestStatus("处理中");
+        query.setSortField(" channelCode ");
+        query.setSortOrder(" ASC ");
         query.setPageNo(2);
         query.setPageSize(50);
 
@@ -35,6 +38,9 @@ class PaymentRequestServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getChannelCode());
         org.junit.jupiter.api.Assertions.assertEquals("H5", query.getTerminal());
+        org.junit.jupiter.api.Assertions.assertEquals("127.0.0.1", query.getClientIp());
+        org.junit.jupiter.api.Assertions.assertEquals("channelCode", query.getSortField());
+        org.junit.jupiter.api.Assertions.assertEquals("asc", query.getSortOrder());
         verify(paymentRequestMapper).findAll(query);
         verify(paymentRequestMapper).count(query);
     }

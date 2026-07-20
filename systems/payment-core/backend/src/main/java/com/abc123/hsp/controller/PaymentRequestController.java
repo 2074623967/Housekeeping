@@ -33,7 +33,10 @@ public class PaymentRequestController {
             @RequestParam(required = false) String orderNo,
             @RequestParam(required = false) String channelCode,
             @RequestParam(required = false) String terminal,
+            @RequestParam(required = false) String clientIp,
             @RequestParam(defaultValue = "全部") String requestStatus,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
@@ -42,7 +45,10 @@ public class PaymentRequestController {
         query.setOrderNo(orderNo);
         query.setChannelCode(channelCode);
         query.setTerminal(terminal);
+        query.setClientIp(clientIp);
         query.setRequestStatus(requestStatus);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRequestService.list(query));

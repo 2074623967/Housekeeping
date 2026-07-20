@@ -27,6 +27,8 @@ class PaymentLogServiceImplTest {
         query.setLogLevel("INFO");
         query.setSource(" wx_h5 ");
         query.setKeyword(" 回调 ");
+        query.setSortField(" logLevel ");
+        query.setSortOrder(" ASC ");
         query.setPageNo(3);
         query.setPageSize(25);
 
@@ -35,6 +37,8 @@ class PaymentLogServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getSource());
         org.junit.jupiter.api.Assertions.assertEquals("回调", query.getKeyword());
+        org.junit.jupiter.api.Assertions.assertEquals("logLevel", query.getSortField());
+        org.junit.jupiter.api.Assertions.assertEquals("asc", query.getSortOrder());
         verify(paymentLogMapper).findAll(query);
         verify(paymentLogMapper).count(query);
     }

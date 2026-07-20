@@ -17,7 +17,11 @@ const filters = ref({
   orderNo: route.query.orderNo || "",
   routeRule: route.query.routeRule || "",
   channelCode: route.query.channelCode || "",
-  routeResult: route.query.routeResult || "全部"
+  paymentMethod: route.query.paymentMethod || "全部",
+  terminal: route.query.terminal || "全部",
+  routeResult: route.query.routeResult || "全部",
+  sortField: route.query.sortField || "createdAt",
+  sortOrder: route.query.sortOrder || "desc"
 });
 
 function resetFilters() {
@@ -26,7 +30,11 @@ function resetFilters() {
     orderNo: "",
     routeRule: "",
     channelCode: "",
-    routeResult: "全部"
+    paymentMethod: "全部",
+    terminal: "全部",
+    routeResult: "全部",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   expandedRouteNo.value = "";
   pageNo.value = 1;
@@ -52,7 +60,11 @@ async function loadPaymentRoutes() {
       orderNo: filters.value.orderNo,
       routeRule: filters.value.routeRule,
       channelCode: filters.value.channelCode,
+      paymentMethod: filters.value.paymentMethod,
+      terminal: filters.value.terminal,
       routeResult: filters.value.routeResult,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -134,6 +146,25 @@ onMounted(loadPaymentRoutes);
           <input v-model="filters.channelCode" placeholder="如 wx_h5 / offline_bank" />
         </div>
         <div class="field">
+          <label>支付方式</label>
+          <select v-model="filters.paymentMethod">
+            <option>全部</option>
+            <option>微信</option>
+            <option>支付宝</option>
+            <option>银行转账</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>终端</label>
+          <select v-model="filters.terminal">
+            <option>全部</option>
+            <option>H5</option>
+            <option>PC</option>
+            <option>APP</option>
+            <option>小程序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>路由结果</label>
           <select v-model="filters.routeResult">
             <option>全部</option>
@@ -142,6 +173,21 @@ onMounted(loadPaymentRoutes);
             <option>线下转账</option>
             <option>命中规则路由</option>
             <option>命中直连</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="channelCode">渠道编码</option>
+            <option value="routeResult">路由结果</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
           </select>
         </div>
         <div class="toolbar-actions">

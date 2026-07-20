@@ -24,6 +24,8 @@
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
+| `/api/payment-requests` | `GET` | 查询支付请求管理台 |
+| `/api/payment-logs` | `GET` | 查询支付处理日志台 |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
@@ -123,7 +125,11 @@
 | `orderNo` | 订单号，模糊匹配 |
 | `routeRule` | 路由规则关键字，模糊匹配 |
 | `channelCode` | 渠道编码，模糊匹配 |
+| `paymentMethod` | 支付方式，支持 `全部 / 微信 / 支付宝 / 银行转账` |
+| `terminal` | 终端，支持 `全部 / H5 / PC / APP / 小程序` |
 | `routeResult` | 路由结果，支持 `全部` |
+| `sortField` | 排序字段，支持 `createdAt / channelCode / routeResult` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
 | `pageNo` | 页码，从 `1` 开始 |
 | `pageSize` | 每页条数，最大 `100` |
 
@@ -169,7 +175,92 @@
 2. 前端可直接用本接口查看路由规则、命中渠道、路由结果以及请求/响应报文，无需再跳多页拼装。
 3. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
 
-## 5. 创建预付单
+## 5. 支付请求管理查询
+
+接口：`GET /api/payment-requests`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `requestNo` | 请求编号，模糊匹配 |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `orderNo` | 订单号，模糊匹配 |
+| `channelCode` | 渠道编码，模糊匹配 |
+| `terminal` | 终端，支持 `全部 / H5 / PC / APP / 小程序` |
+| `clientIp` | 客户端 IP，模糊匹配 |
+| `requestStatus` | 请求状态，支持 `全部 / 请求已发起 / 请求成功 / 请求失败 / 已关闭` |
+| `sortField` | 排序字段，支持 `createdAt / channelCode / terminal` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
+| `pageNo` | 页码，从 `1` 开始 |
+| `pageSize` | 每页条数，最大 `100` |
+
+业务说明：
+
+1. 当前用于查看支付尝试、渠道请求报文、响应报文以及路由结果的统一台账。
+2. 前端可通过 `clientIp + terminal + channelCode` 组合快速反查同一批终端流量。
+3. 生产环境仍需叠加报文字段脱敏和权限分域控制。
+
+## 6. 支付处理日志查询
+
+接口：`GET /api/payment-logs`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `orderNo` | 订单号，模糊匹配 |
+| `processStage` | 处理阶段，支持 `全部 / 支付提交 / 支付路由 / 渠道回调 / 业务事件` |
+| `logLevel` | 日志级别，支持 `全部 / INFO / WARN / ERROR` |
+| `source` | 来源，模糊匹配 |
+| `keyword` | 日志关键字，模糊匹配 |
+| `sortField` | 排序字段，支持 `createdAt / logLevel / processStage` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
+| `pageNo` | 页码，从 `1` 开始 |
+| `pageSize` | 每页条数，最大 `100` |
+
+业务说明：
+
+1. 当前统一收敛支付提交、支付路由、渠道回调和业务事件四类处理日志。
+2. 排序能力主要用于运营优先查看最新错误、按阶段集中复核问题单。
+3. 生产环境后续接日志检索、链路追踪和告警平台时，本接口可继续作为业务态排障入口。
+
+## 7. 支付事件出站查询与重发
+
+查询接口：`GET /api/payment-events`
+
+重发接口：`POST /api/payment-events/republish`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `eventType` | 事件类型，支持 `全部` |
+| `publishStatus` | 发布状态，支持 `全部` |
+| `downstreamSystem` | 下游系统，支持 `全部` |
+| `eventTopic` | 事件主题关键字，模糊匹配 |
+| `sortField` | 排序字段，支持 `createdAt / retryCount / nextRetryAt` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
+| `pageNo` | 页码，从 `1` 开始 |
+| `pageSize` | 每页条数，最大 `100` |
+
+重发请求示例：
+
+```json
+{
+  "eventNo": "EVT202607190002"
+}
+```
+
+业务说明：
+
+1. 重发接口会沿用当前查询条件返回最新分页结果，前端无需额外再发一次查询。
+2. 当前主要支撑支付成功、支付关闭、退款等出站事件的可见化与手动补偿入口。
+3. 后续若接入真实消息总线，需要继续补投递批次、订阅确认和死信处理字段。
+
+## 8. 创建预付单
 
 接口：`POST /api/payments/prepay`
 
@@ -212,7 +303,7 @@
 2. 若订单当前不存在“未过期且未收口”的预付单，则自动创建新的支付单与预付单。
 3. 若同一订单已存在有效预付单，则直接复用原预付单与支付单，保证重复拉起收银台幂等。
 
-## 6. 获取收银台参数
+## 9. 获取收银台参数
 
 接口：`GET /api/payments/cashier/{prepayOrderNo}`
 
@@ -239,7 +330,7 @@
 }
 ```
 
-## 7. 提交支付
+## 10. 提交支付
 
 接口：`POST /api/payments/submit`
 
@@ -444,7 +535,7 @@
 6. 回调轨迹
 7. 事件轨迹
 
-## 10. 收款记录分页查询
+## 13. 收款记录分页查询
 
 接口：`GET /api/payment-records`
 
@@ -490,7 +581,7 @@
 }
 ```
 
-## 11. 收款记录详情查询
+## 14. 收款记录详情查询
 
 接口：`GET /api/payment-records/{paymentOrderId}`
 

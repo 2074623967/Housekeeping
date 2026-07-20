@@ -14,7 +14,10 @@ const filters = ref({
   paymentOrderId: "",
   eventType: "全部",
   publishStatus: "全部",
-  downstreamSystem: "全部"
+  downstreamSystem: "全部",
+  eventTopic: "",
+  sortField: "createdAt",
+  sortOrder: "desc"
 });
 
 function resetFilters() {
@@ -22,7 +25,10 @@ function resetFilters() {
     paymentOrderId: "",
     eventType: "全部",
     publishStatus: "全部",
-    downstreamSystem: "全部"
+    downstreamSystem: "全部",
+    eventTopic: "",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   pageNo.value = 1;
   loadEvents();
@@ -42,6 +48,9 @@ async function loadEvents() {
       eventType: filters.value.eventType,
       publishStatus: filters.value.publishStatus,
       downstreamSystem: filters.value.downstreamSystem,
+      eventTopic: filters.value.eventTopic,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -63,6 +72,9 @@ async function republish(item) {
       eventType: filters.value.eventType,
       publishStatus: filters.value.publishStatus,
       downstreamSystem: filters.value.downstreamSystem,
+      eventTopic: filters.value.eventTopic,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -139,6 +151,25 @@ onMounted(loadEvents);
             <option>clearing-system</option>
             <option>settlement-system</option>
             <option>payment-core-ops</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>事件主题</label>
+          <input v-model="filters.eventTopic" placeholder="如 payment.trade.succeeded.v1" />
+        </div>
+        <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="retryCount">重试次数</option>
+            <option value="nextRetryAt">下次重试时间</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
           </select>
         </div>
         <div class="toolbar-actions">

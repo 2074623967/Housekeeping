@@ -25,7 +25,11 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
         query.setRouteRule(query.getRouteRule() == null ? null : query.getRouteRule().trim());
         query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
+        query.setPaymentMethod(query.getPaymentMethod() == null ? "全部" : query.getPaymentMethod().trim());
+        query.setTerminal(query.getTerminal() == null ? "全部" : query.getTerminal().trim());
         query.setRouteResult(query.getRouteResult() == null ? "全部" : query.getRouteResult().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

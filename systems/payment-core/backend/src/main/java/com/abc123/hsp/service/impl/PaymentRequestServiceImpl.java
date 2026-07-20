@@ -26,6 +26,9 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
         query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
         query.setTerminal(query.getTerminal() == null ? null : query.getTerminal().trim());
+        query.setClientIp(query.getClientIp() == null ? null : query.getClientIp().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(

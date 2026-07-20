@@ -34,6 +34,8 @@ public class PaymentLogController {
             @RequestParam(defaultValue = "全部") String logLevel,
             @RequestParam(required = false) String source,
             @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentLogQueryDTO query = new PaymentLogQueryDTO();
@@ -43,6 +45,8 @@ public class PaymentLogController {
         query.setLogLevel(logLevel);
         query.setSource(source);
         query.setKeyword(keyword);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentLogService.list(query));

@@ -26,12 +26,20 @@ class PaymentEventServiceImplTest {
     @Test
     void shouldListPaymentEvents() {
         PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setEventTopic(" payment.trade ");
+        query.setSortField(" retryCount ");
+        query.setSortOrder(" ASC ");
         query.setPageNo(1);
         query.setPageSize(20);
         when(paymentEventMapper.findAll(query)).thenReturn(Collections.emptyList());
         when(paymentEventMapper.count(query)).thenReturn(0L);
 
         assertEquals(0, new PaymentEventServiceImpl(paymentEventMapper).list(query).getTotal());
+        assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("payment.trade", query.getEventTopic());
+        assertEquals("retryCount", query.getSortField());
+        assertEquals("asc", query.getSortOrder());
     }
 
     @Test
@@ -48,6 +56,9 @@ class PaymentEventServiceImplTest {
         PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
         request.setEventNo("EVT001");
         PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setEventTopic(" payment.trade ");
+        query.setSortField(" nextRetryAt ");
+        query.setSortOrder(" ASC ");
         when(paymentEventMapper.markRepublished("EVT001")).thenReturn(1);
         when(paymentEventMapper.findAll(query)).thenReturn(Collections.emptyList());
         when(paymentEventMapper.count(query)).thenReturn(0L);
@@ -55,5 +66,8 @@ class PaymentEventServiceImplTest {
         new PaymentEventServiceImpl(paymentEventMapper).republish(request, query);
 
         verify(paymentEventMapper).markRepublished("EVT001");
+        assertEquals("payment.trade", query.getEventTopic());
+        assertEquals("nextRetryAt", query.getSortField());
+        assertEquals("asc", query.getSortOrder());
     }
 }

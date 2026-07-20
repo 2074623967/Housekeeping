@@ -38,6 +38,12 @@
             <if test="query.channelCode != null and query.channelCode != ''">
                 AND prr.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
             </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND latest_pa.payment_method = #{query.paymentMethod}
+            </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND latest_pa.terminal = #{query.terminal}
+            </if>
             <if test="query.routeResult != null and query.routeResult != '' and query.routeResult != '全部'">
                 AND prr.route_result = #{query.routeResult}
             </if>
@@ -68,7 +74,27 @@
                DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         <include refid="routeExecutionFromClause" />
         <include refid="routeExecutionWhereClause" />
-        ORDER BY prr.created_at DESC, prr.id DESC
+        <choose>
+            <when test="query.sortField == 'channelCode'">
+                ORDER BY prr.channel_code
+            </when>
+            <when test="query.sortField == 'routeResult'">
+                ORDER BY prr.route_result
+            </when>
+            <otherwise>
+                ORDER BY prr.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC,
+                prr.id ASC
+            </when>
+            <otherwise>
+                DESC,
+                prr.id DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

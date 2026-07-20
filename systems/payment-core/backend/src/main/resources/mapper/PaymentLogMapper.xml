@@ -102,7 +102,25 @@
                 AND message LIKE CONCAT('%', #{query.keyword}, '%')
             </if>
         </where>
-        ORDER BY created_at DESC
+        <choose>
+            <when test="query.sortField == 'logLevel'">
+                ORDER BY log_level
+            </when>
+            <when test="query.sortField == 'processStage'">
+                ORDER BY process_stage
+            </when>
+            <otherwise>
+                ORDER BY created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

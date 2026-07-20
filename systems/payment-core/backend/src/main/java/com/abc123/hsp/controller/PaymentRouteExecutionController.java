@@ -32,7 +32,11 @@ public class PaymentRouteExecutionController {
             @RequestParam(required = false) String orderNo,
             @RequestParam(required = false) String routeRule,
             @RequestParam(required = false) String channelCode,
+            @RequestParam(defaultValue = "全部") String paymentMethod,
+            @RequestParam(defaultValue = "全部") String terminal,
             @RequestParam(defaultValue = "全部") String routeResult,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
@@ -40,7 +44,11 @@ public class PaymentRouteExecutionController {
         query.setOrderNo(orderNo);
         query.setRouteRule(routeRule);
         query.setChannelCode(channelCode);
+        query.setPaymentMethod(paymentMethod);
+        query.setTerminal(terminal);
         query.setRouteResult(routeResult);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRouteExecutionService.list(query));

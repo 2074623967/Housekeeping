@@ -181,7 +181,11 @@ export const paymentRouteApi = {
     orderNo = "",
     routeRule = "",
     channelCode = "",
+    paymentMethod = "全部",
+    terminal = "全部",
     routeResult = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -190,7 +194,11 @@ export const paymentRouteApi = {
       orderNo,
       routeRule,
       channelCode,
+      paymentMethod,
+      terminal,
       routeResult,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -204,6 +212,9 @@ export const paymentEventApi = {
     eventType = "全部",
     publishStatus = "全部",
     downstreamSystem = "全部",
+    eventTopic = "",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -212,6 +223,9 @@ export const paymentEventApi = {
       eventType,
       publishStatus,
       downstreamSystem,
+      eventTopic,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -222,6 +236,9 @@ export const paymentEventApi = {
     eventType = "全部",
     publishStatus = "全部",
     downstreamSystem = "全部",
+    eventTopic = "",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -230,6 +247,9 @@ export const paymentEventApi = {
       eventType,
       publishStatus,
       downstreamSystem,
+      eventTopic,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -273,7 +293,10 @@ export const paymentRequestApi = {
     orderNo = "",
     channelCode = "",
     terminal = "全部",
+    clientIp = "",
     requestStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -283,7 +306,10 @@ export const paymentRequestApi = {
       orderNo,
       channelCode,
       terminal,
+      clientIp,
       requestStatus,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -299,6 +325,8 @@ export const paymentLogApi = {
     logLevel = "全部",
     source = "",
     keyword = "",
+    sortField = "createdAt",
+    sortOrder = "desc",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -309,6 +337,8 @@ export const paymentLogApi = {
       logLevel,
       source,
       keyword,
+      sortField,
+      sortOrder,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });

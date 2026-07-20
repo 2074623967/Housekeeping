@@ -16,7 +16,9 @@ const filters = ref({
   processStage: route.query.processStage || "全部",
   logLevel: route.query.logLevel || "全部",
   source: route.query.source || "",
-  keyword: route.query.keyword || ""
+  keyword: route.query.keyword || "",
+  sortField: route.query.sortField || "createdAt",
+  sortOrder: route.query.sortOrder || "desc"
 });
 
 function resetFilters() {
@@ -26,7 +28,9 @@ function resetFilters() {
     processStage: "全部",
     logLevel: "全部",
     source: "",
-    keyword: ""
+    keyword: "",
+    sortField: "createdAt",
+    sortOrder: "desc"
   };
   pageNo.value = 1;
   loadPaymentLogs();
@@ -48,6 +52,8 @@ async function loadPaymentLogs() {
       logLevel: filters.value.logLevel,
       source: filters.value.source,
       keyword: filters.value.keyword,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
     });
@@ -123,8 +129,23 @@ onMounted(loadPaymentLogs);
           <input v-model="filters.keyword" placeholder="如 回调 / 路由 / SUCCESS" />
         </div>
         <div class="field">
+          <label>排序字段</label>
+          <select v-model="filters.sortField">
+            <option value="createdAt">创建时间</option>
+            <option value="logLevel">日志级别</option>
+            <option value="processStage">处理阶段</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>排序方向</label>
+          <select v-model="filters.sortOrder">
+            <option value="desc">倒序</option>
+            <option value="asc">正序</option>
+          </select>
+        </div>
+        <div class="field">
           <label>当前说明</label>
-          <input value="已支持订单号、来源和关键字检索，生产环境需接入检索与告警平台" disabled />
+          <input value="已支持订单号、来源、关键字检索与排序，生产环境需接入检索与告警平台" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>
