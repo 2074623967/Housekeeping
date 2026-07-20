@@ -14,12 +14,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PaymentExpirySchedulerTest {
 
     @Mock
-    private PaymentExpiryTaskService paymentExpiryTaskService;
+    private PaymentTaskCenterService paymentTaskCenterService;
 
     @Test
     void shouldDelegateToExpiryTaskService() {
-        new PaymentExpiryScheduler(paymentExpiryTaskService).closeExpiredPayments();
+        new PaymentExpiryScheduler(paymentTaskCenterService).closeExpiredPayments();
 
-        verify(paymentExpiryTaskService).closeExpiredPayments();
+        verify(paymentTaskCenterService).runAutoCloseExpiredPayments();
     }
 }

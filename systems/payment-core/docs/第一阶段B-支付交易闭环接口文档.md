@@ -45,6 +45,11 @@
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
+| `/api/payment-task-center/overview` | `GET` | 查询支付任务中心总览 |
+| `/api/payment-task-center/task-runs` | `GET` | 查询支付任务执行日志 |
+| `/api/payment-task-center/close-expired-payments` | `POST` | 手动执行超时关单 |
+| `/api/payment-task-center/republish-failed-events` | `POST` | 手动执行失败事件重发 |
+| `/api/payment-task-center/retry-failed-refunds` | `POST` | 手动执行失败退款重试 |
 
 ## 3. 支付流水排障台查询
 
@@ -898,6 +903,41 @@ POST /api/payment-config/gateways/toggle
   "pageSize": 20
 }
 ```
+
+### 13.3 查询支付任务中心总览
+
+接口：`GET /api/payment-task-center/overview`
+
+返回内容：
+
+1. `expiredPaymentCount`：待超时关单数量。
+2. `pendingCallbackCount`：待收口支付中数量。
+3. `failedEventCount`：失败事件数量。
+4. `failedRefundCount`：失败退款数量。
+5. `warningDayEndBatchCount`：日终告警批次数。
+6. `focusAlerts`：重点任务告警，包含告警标题、告警等级、影响数量和建议跳转路由。
+7. `recentTaskRuns`：最近 10 条任务执行日志。
+
+### 13.4 查询支付任务执行日志
+
+接口：`GET /api/payment-task-center/task-runs`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `taskCode` | 任务编码，支持精确匹配 |
+| `runMode` | 运行方式，支持 `全部 / AUTO / MANUAL` |
+| `taskStatus` | 任务状态，支持 `全部 / SUCCESS / WARNING` |
+| `severityLevel` | 严重等级，支持 `全部 / P1 / P2 / P3` |
+| `pageNo` | 页码，从 `1` 开始 |
+| `pageSize` | 每页条数，最大 `100` |
+
+业务说明：
+
+1. 当前日志已统一落地自动调度和人工触发两类来源，便于区分 `AUTO / MANUAL`。
+2. 每条日志返回严重等级、升级状态、建议动作和推荐路由，便于产品、研发、测试共用同一运维口径。
+3. 当前超时关单、失败事件重发、失败退款重试都由该页统一留痕，后续可继续扩展更多支付运维任务。
 
 ## 14. 错误与边界说明
 

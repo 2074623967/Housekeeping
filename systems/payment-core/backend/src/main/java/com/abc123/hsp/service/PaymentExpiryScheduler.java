@@ -12,10 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class PaymentExpiryScheduler {
 
-    private final PaymentExpiryTaskService paymentExpiryTaskService;
+    private final PaymentTaskCenterService paymentTaskCenterService;
 
-    public PaymentExpiryScheduler(PaymentExpiryTaskService paymentExpiryTaskService) {
-        this.paymentExpiryTaskService = paymentExpiryTaskService;
+    public PaymentExpiryScheduler(PaymentTaskCenterService paymentTaskCenterService) {
+        this.paymentTaskCenterService = paymentTaskCenterService;
     }
 
     /**
@@ -23,6 +23,6 @@ public class PaymentExpiryScheduler {
      */
     @Scheduled(fixedDelayString = "${payment.expiry-close.fixed-delay-ms:60000}")
     public void closeExpiredPayments() {
-        paymentExpiryTaskService.closeExpiredPayments();
+        paymentTaskCenterService.runAutoCloseExpiredPayments();
     }
 }

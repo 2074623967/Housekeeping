@@ -54,6 +54,65 @@
         LIMIT 10
     </select>
 
+    <select id="findTaskRunLogs" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO"
+            resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
+        SELECT task_log_no AS taskLogNo,
+               task_code AS taskCode,
+               task_name AS taskName,
+               run_mode AS runMode,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               severity_level AS severityLevel,
+               severity_level_type AS severityLevelType,
+               escalation_status AS escalationStatus,
+               escalation_status_type AS escalationStatusType,
+               processed_count AS processedCount,
+               success_count AS successCount,
+               fail_count AS failCount,
+               summary_comment AS summaryComment,
+               suggested_action AS suggestedAction,
+               recommended_route AS recommendedRoute,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_task_run_log
+        <where>
+            <if test="taskCode != null and taskCode != ''">
+                AND task_code = #{taskCode}
+            </if>
+            <if test="runMode != null and runMode != '' and runMode != '全部'">
+                AND run_mode = #{runMode}
+            </if>
+            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
+                AND task_status = #{taskStatus}
+            </if>
+            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
+                AND severity_level = #{severityLevel}
+            </if>
+        </where>
+        ORDER BY started_at DESC, id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countTaskRunLogs" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_task_run_log
+        <where>
+            <if test="taskCode != null and taskCode != ''">
+                AND task_code = #{taskCode}
+            </if>
+            <if test="runMode != null and runMode != '' and runMode != '全部'">
+                AND run_mode = #{runMode}
+            </if>
+            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
+                AND task_status = #{taskStatus}
+            </if>
+            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
+                AND severity_level = #{severityLevel}
+            </if>
+        </where>
+    </select>
+
     <insert id="insertTaskRunLog" parameterType="com.abc123.hsp.entity.PaymentTaskRunLogEntity">
         INSERT INTO t_payment_task_run_log (
             task_log_no,
@@ -62,10 +121,16 @@
             run_mode,
             task_status,
             task_status_type,
+            severity_level,
+            severity_level_type,
+            escalation_status,
+            escalation_status_type,
             processed_count,
             success_count,
             fail_count,
             summary_comment,
+            suggested_action,
+            recommended_route,
             triggered_by,
             started_at,
             completed_at
@@ -76,10 +141,16 @@
             #{runMode},
             #{taskStatus},
             #{taskStatusType},
+            #{severityLevel},
+            #{severityLevelType},
+            #{escalationStatus},
+            #{escalationStatusType},
             #{processedCount},
             #{successCount},
             #{failCount},
             #{summaryComment},
+            #{suggestedAction},
+            #{recommendedRoute},
             #{triggeredBy},
             NOW(),
             NOW()

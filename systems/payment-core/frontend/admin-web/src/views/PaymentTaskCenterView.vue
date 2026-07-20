@@ -8,23 +8,73 @@ const overview = ref({
   failedEventCount: 0,
   failedRefundCount: 0,
   warningDayEndBatchCount: 0,
+  focusAlerts: [],
   recentTaskRuns: []
 });
+const taskRuns = ref([]);
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 10;
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeTaskCode = ref("");
+const filters = ref({
+  taskCode: "",
+  runMode: "全部",
+  taskStatus: "全部",
+  severityLevel: "全部"
+});
 
 async function loadOverview() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
     overview.value = await paymentTaskCenterApi.getOverview();
+    await loadTaskRuns();
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+async function loadTaskRuns() {
+  const result = await paymentTaskCenterApi.getTaskRuns({
+    taskCode: filters.value.taskCode,
+    runMode: filters.value.runMode,
+    taskStatus: filters.value.taskStatus,
+    severityLevel: filters.value.severityLevel,
+    pageNo: pageNo.value,
+    pageSize
+  });
+  taskRuns.value = result.items;
+  total.value = result.total;
+}
+
+function applyFilters() {
+  pageNo.value = 1;
+  loadTaskRuns();
+}
+
+function resetFilters() {
+  filters.value = {
+    taskCode: "",
+    runMode: "全部",
+    taskStatus: "全部",
+    severityLevel: "全部"
+  };
+  pageNo.value = 1;
+  loadTaskRuns();
+}
+
+function goToPage(nextPage) {
+  const maxPage = Math.max(1, Math.ceil(total.value / pageSize));
+  if (nextPage < 1 || nextPage > maxPage) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadTaskRuns();
 }
 
 async function runTask(taskCode, taskName, actionRunner) {
@@ -65,6 +115,14 @@ onMounted(loadOverview);
       <div v-if="isLoading" class="state-box">支付任务中心数据加载中...</div>
 
       <template v-else>
+        <div class="detail-card-grid">
+          <div v-for="alert in overview.focusAlerts" :key="alert.alertType" class="detail-card">
+            <div class="detail-label">{{ alert.alertTitle }}</div>
+            <div class="detail-value">{{ alert.affectedCount }}</div>
+            <div class="detail-hint">{{ alert.alertMessage }}</div>
+          </div>
+        </div>
+
         <div class="detail-card-grid">
           <div class="detail-card">
             <div class="detail-label">待超时关单</div>
@@ -183,8 +241,43 @@ onMounted(loadOverview);
         <div class="detail-panel">
           <div class="section-title">
             <div>
-              <h3>最近任务执行日志</h3>
-              <p class="meta">统一留痕任务执行结果，便于产品、后端、测试和财务一起复盘任务效果</p>
+              <h3>任务执行日志</h3>
+              <p class="meta">支持按任务编码、运行方式、任务状态和严重等级筛选</p>
+            </div>
+          </div>
+          <div class="toolbar compact-toolbar">
+            <div class="field">
+              <label>任务编码</label>
+              <input v-model="filters.taskCode" placeholder="如 PAYMENT_EXPIRE_CLOSE" />
+            </div>
+            <div class="field">
+              <label>运行方式</label>
+              <select v-model="filters.runMode">
+                <option>全部</option>
+                <option>AUTO</option>
+                <option>MANUAL</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>任务状态</label>
+              <select v-model="filters.taskStatus">
+                <option>全部</option>
+                <option>SUCCESS</option>
+                <option>WARNING</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>严重等级</label>
+              <select v-model="filters.severityLevel">
+                <option>全部</option>
+                <option>P1</option>
+                <option>P2</option>
+                <option>P3</option>
+              </select>
+            </div>
+            <div class="toolbar-actions">
+              <button class="button primary" @click="applyFilters">查询</button>
+              <button class="button secondary" @click="resetFilters">重置</button>
             </div>
           </div>
           <div class="table-wrap">
@@ -196,32 +289,52 @@ onMounted(loadOverview);
                   <th>任务名称</th>
                   <th>运行方式</th>
                   <th>任务状态</th>
+                  <th>严重等级</th>
+                  <th>升级状态</th>
                   <th>处理总数</th>
                   <th>成功数</th>
                   <th>失败数</th>
                   <th>执行摘要</th>
+                  <th>建议动作</th>
                   <th>触发人</th>
                   <th>开始时间</th>
                   <th>完成时间</th>
+                  <th>路由</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="item in overview.recentTaskRuns" :key="item.taskLogNo">
+                <tr v-for="item in taskRuns" :key="item.taskLogNo">
                   <td>{{ item.taskLogNo }}</td>
                   <td>{{ item.taskCode }}</td>
                   <td>{{ item.taskName }}</td>
                   <td>{{ item.runMode }}</td>
                   <td><span :class="['badge', item.taskStatusType]">{{ item.taskStatus }}</span></td>
+                  <td><span :class="['badge', item.severityLevelType]">{{ item.severityLevel }}</span></td>
+                  <td><span :class="['badge', item.escalationStatusType]">{{ item.escalationStatus }}</span></td>
                   <td>{{ item.processedCount }}</td>
                   <td>{{ item.successCount }}</td>
                   <td>{{ item.failCount }}</td>
                   <td class="flow-summary-cell">{{ item.summaryComment }}</td>
+                  <td class="flow-summary-cell">{{ item.suggestedAction }}</td>
                   <td>{{ item.triggeredBy }}</td>
                   <td>{{ item.startedAt }}</td>
                   <td>{{ item.completedAt }}</td>
+                  <td>
+                    <RouterLink v-if="item.recommendedRoute" class="link-button" :to="item.recommendedRoute">
+                      查看
+                    </RouterLink>
+                  </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div class="pager">
+            <span>共 {{ total }} 条任务日志</span>
+            <template v-if="total > pageSize">
+              <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+              <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+              <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+            </template>
           </div>
         </div>
       </template>

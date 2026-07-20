@@ -19,6 +19,8 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer failedRefundCount;
     /** 日终告警批次数。 */
     private Integer warningDayEndBatchCount;
+    /** 当前重点任务告警。 */
+    private List<PaymentAlertItemDTO> focusAlerts;
     /** 最近任务执行日志。 */
     private List<PaymentTaskRunLogItemDTO> recentTaskRuns;
 }

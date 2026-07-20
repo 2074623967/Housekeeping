@@ -95,6 +95,24 @@ export const paymentDayEndApi = {
 
 export const paymentTaskCenterApi = {
   getOverview: () => request("/api/payment-task-center/overview"),
+  getTaskRuns: ({
+    taskCode = "",
+    runMode = "全部",
+    taskStatus = "全部",
+    severityLevel = "全部",
+    pageNo = 1,
+    pageSize = 10
+  } = {}) => {
+    const params = new URLSearchParams({
+      taskCode,
+      runMode,
+      taskStatus,
+      severityLevel,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-task-center/task-runs?${params.toString()}`);
+  },
   runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
   runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
   runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {})

@@ -300,6 +300,22 @@
 5. 新增后台页面“支付任务中心”，统一查看超时关单、失败事件、失败退款、日终告警和最近执行日志
 6. 修复差距清单里“日终处理重复且状态冲突”的旧口径问题
 
+### 11.3 2026-07-20 支付任务中心 V1.5 补强复核
+
+本轮围绕任务中心的“正式运维能力”继续补强，确认当前版本已经从“只有最近 10 条日志和三个按钮”升级到“自动/手动来源统一留痕、重点告警卡片、日志筛选分页和任务严重等级展示”的阶段。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 当前全量后端测试提升为 `59` 个并全部通过 |
+| 后台前端构建 | `npm run build` | 通过 | `PaymentTaskCenterView` 的重点告警、日志筛选分页与路由跳转能力通过生产构建 |
+
+本轮修复项：
+
+1. 为任务执行日志补齐严重等级、升级状态、建议动作和推荐路由字段。
+2. 新增任务日志分页查询接口：`GET /api/payment-task-center/task-runs`。
+3. 将自动调度的超时关单纳入统一任务日志，正式区分 `AUTO / MANUAL` 两类来源。
+4. 为任务中心总览补齐重点告警卡片，覆盖超时支付、待收口支付和失败事件三类运维关注点。
+
 ## 8. 2026-07-20 用户支付端精修复核
 
 ### 8.1 本轮验证结论
