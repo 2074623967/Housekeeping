@@ -535,6 +535,25 @@
 5. 扩展 `PaymentMonitorMapper.xml`，增加监控摘要 SQL，并为渠道与告警结果补充风险和跳转信息。
 6. 升级后台支付监控页，补齐四张摘要卡、异常告警排查动作和渠道明细钻取动作。
 
+## 21. 2026-07-20 支付交易异常中心复核
+
+### 21.1 本轮验证结论
+
+本轮围绕“支付主链路异常分散在支付单、日志、事件、监控等多个页面，运营缺少统一排障中心”的问题进行了补齐，确认后台已具备支付交易异常聚合和联查入口。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 新增 `PaymentIssueServiceImplTest` 后，全量后端测试共 `56` 个并全部通过 |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260720-issue-center --emptyOutDir` | 通过 | 新增支付交易异常中心页面、路由和导航后可稳定构建 |
+| 异常中心接口 | `GET /api/payment-issues` | 已完成代码交付 | 当前已聚合待回调未收口、回调待处理、下游事件发布失败、命中停用渠道四类异常，并支持推荐路由跳转 |
+
+### 21.2 本轮补齐项
+
+1. 新增 `PaymentIssueQueryDTO`、`PaymentIssueRowDTO`、`PaymentIssueMapper`、`PaymentIssueService`、`PaymentIssueController`。
+2. 新增 `PaymentIssueMapper.xml`，聚合支付单、支付尝试、回调日志、事件出站和渠道状态，生成统一异常列表。
+3. 新增后台页面 `PaymentIssuesView`，支持异常筛选、统一展示和一键排查。
+4. 将支付监控页中“待回调未收口”告警接入支付交易异常中心，形成“监控 -> 异常 -> 详情”的排障链路。
+
 ## 11. 2026-07-20 支付记录详情钻取复核
 
 ### 11.1 本轮验证结论

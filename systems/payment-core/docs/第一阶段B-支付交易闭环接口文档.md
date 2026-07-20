@@ -29,6 +29,7 @@
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
 | `/api/payment-events` | `GET` | 查询支付事件出站台账 |
 | `/api/payment-events/republish` | `POST` | 手动重发支付事件 |
+| `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
 | `/api/refunds` | `GET` | 分页查询退款单 |
 | `/api/refunds/apply` | `POST` | 发起退款申请 |
 | `/api/refunds/approve` | `POST` | 审核通过退款单并提交处理 |
@@ -722,10 +723,64 @@ POST /api/payment-config/gateways/toggle
       "alertLevel": "高",
       "alertLevelType": "danger",
       "affectedCount": 12,
-      "suggestedAction": "进入支付单管理页，优先筛查待回调订单并主动查单",
-      "actionRoute": "/payments?status=WAIT_CALLBACK"
+      "suggestedAction": "进入支付交易异常中心，优先核对待回调支付单、回调日志和查单结果",
+      "actionRoute": "/payment-issues?issueType=待回调未收口"
     }
   ]
+}
+```
+
+### 13.2 查询支付交易异常中心
+
+接口：`GET /api/payment-issues`
+
+请求参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `paymentOrderId` | `string` | 支付单号，模糊查询 |
+| `orderNo` | `string` | 订单号，模糊查询 |
+| `issueType` | `string` | 异常类型，默认 `全部` |
+| `severity` | `string` | 严重等级，默认 `全部` |
+| `channelCode` | `string` | 渠道编码，模糊查询 |
+| `paymentMethod` | `string` | 支付方式，默认 `全部` |
+| `pageNo` | `int` | 页码，默认 `1` |
+| `pageSize` | `int` | 每页条数，默认 `20`，最大 `100` |
+
+返回内容：
+
+1. 聚合 `待回调未收口`、`回调处理待跟进`、`下游事件发布失败`、`命中停用渠道` 四类异常。
+2. 每条异常返回支付单、订单、客户、支付方式、渠道、异常类型、严重等级、支付状态、异常摘要、根因提示、建议动作和推荐跳转路由。
+3. 前端通过 `recommendedRoute` 直接进入支付单详情、支付处理日志、支付事件出站或支付配置页。
+
+返回示例：
+
+```json
+{
+  "items": [
+    {
+      "issueNo": "ISSUE-WAIT-PAY202607190002",
+      "paymentOrderId": "PAY202607190002",
+      "orderNo": "ORD202607190002",
+      "customerName": "王先生",
+      "paymentMethod": "支付宝",
+      "channelCode": "alipay_h5",
+      "issueType": "待回调未收口",
+      "issueTypeTag": "danger",
+      "severity": "P1",
+      "severityType": "danger",
+      "paymentStatus": "WAIT_CALLBACK",
+      "paymentStatusType": "warn",
+      "issueSummary": "支付单仍处于待回调状态，最新回调结果=待处理",
+      "rootCauseHint": "最近支付尝试=等待回调；建议优先主动查单并核对回调验签与状态收口。",
+      "recommendedAction": "查看支付单并核对回调、日志和查单结果",
+      "recommendedRoute": "/payments/PAY202607190002",
+      "createdAt": "2026-07-19 10:03:01"
+    }
+  ],
+  "total": 2,
+  "pageNo": 1,
+  "pageSize": 20
 }
 ```
 

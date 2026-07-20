@@ -105,8 +105,8 @@
                'P1' AS alertLevel,
                'danger' AS alertLevelType,
                COUNT(1) AS affectedCount,
-               '进入支付单管理或支付日志页，优先核对待回调支付单与回调日志。' AS suggestedAction,
-               '/payments?status=WAIT_CALLBACK' AS actionRoute
+               '进入支付交易异常中心，优先核对待回调支付单、回调日志和查单结果。' AS suggestedAction,
+               '/payment-issues?issueType=待回调未收口' AS actionRoute
         FROM t_payment_order
         WHERE status = 'WAIT_CALLBACK'
         HAVING COUNT(1) &gt; 0

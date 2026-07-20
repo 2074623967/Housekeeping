@@ -30,4 +30,5 @@ public interface PaymentMonitorMapper {
      * 查询待处理异常告警。
      */
     List<PaymentAlertItemDTO> findAlerts();
+
 }

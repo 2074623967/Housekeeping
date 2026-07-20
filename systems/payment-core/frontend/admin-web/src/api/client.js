@@ -63,6 +63,31 @@ export const paymentMonitorApi = {
   getOverview: () => request("/api/payment-monitor/overview")
 };
 
+export const paymentIssueApi = {
+  getList: ({
+    paymentOrderId = "",
+    orderNo = "",
+    issueType = "全部",
+    severity = "全部",
+    channelCode = "",
+    paymentMethod = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      issueType,
+      severity,
+      channelCode,
+      paymentMethod,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-issues?${params.toString()}`);
+  }
+};
+
 export const paymentDayEndApi = {
   getOverview: () => request("/api/payment-day-end/overview"),
   runBatch: (payload) => postJson("/api/payment-day-end/run", payload)

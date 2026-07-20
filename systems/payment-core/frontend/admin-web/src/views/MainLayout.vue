@@ -15,6 +15,7 @@ const navGroups = [
       { label: "支付流水查询", to: "/payment-flows" },
       { label: "支付路由执行结果", to: "/payment-routes" },
       { label: "支付事件出站", to: "/payment-events" },
+      { label: "支付交易异常中心", to: "/payment-issues" },
       { label: "收银台会话", to: "/cashier-sessions" },
       { label: "支付请求管理", to: "/payment-requests" },
       { label: "支付处理日志", to: "/payment-logs" },
