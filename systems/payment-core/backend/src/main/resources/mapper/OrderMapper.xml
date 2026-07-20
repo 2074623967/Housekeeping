@@ -5,45 +5,73 @@
 <mapper namespace="com.abc123.hsp.mapper.OrderMapper">
 
     <select id="findAll" resultType="com.abc123.hsp.dto.OrderListItemDTO">
-        SELECT order_no AS orderNo,
-               customer_name AS customerName,
-               service_type AS serviceType,
-               worker_name AS workerName,
-               CONCAT('¥', FORMAT(order_amount, 2)) AS orderAmount,
-               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
-               order_status AS orderStatus,
-               order_status_type AS orderStatusType,
-               fulfillment_status AS fulfillmentStatus,
-               fulfillment_status_type AS fulfillmentStatusType,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
-        FROM t_order
+        SELECT o.order_no AS orderNo,
+               latest_bill.bill_no AS billNo,
+               o.customer_name AS customerName,
+               o.service_type AS serviceType,
+               o.worker_name AS workerName,
+               CONCAT('¥', FORMAT(o.order_amount, 2)) AS orderAmount,
+               CONCAT('¥', FORMAT(o.paid_amount, 2)) AS paidAmount,
+               o.order_status AS orderStatus,
+               o.order_status_type AS orderStatusType,
+               o.fulfillment_status AS fulfillmentStatus,
+               o.fulfillment_status_type AS fulfillmentStatusType,
+               latest_payment.payment_order_id AS latestPaymentOrderId,
+               latest_payment.status AS latestPaymentStatus,
+               latest_payment.status_type AS latestPaymentStatusType,
+               latest_prepay.prepay_order_no AS latestPrepayOrderNo,
+               latest_prepay.cashier_status AS latestCashierStatus,
+               latest_prepay.cashier_status_type AS latestCashierStatusType,
+               DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_order o
+                 LEFT JOIN t_bill latest_bill ON latest_bill.id = (
+                    SELECT latest_b.id
+                    FROM t_bill latest_b
+                    WHERE latest_b.order_no = o.order_no
+                    ORDER BY latest_b.created_at DESC, latest_b.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_order latest_payment ON latest_payment.id = (
+                    SELECT latest_po.id
+                    FROM t_payment_order latest_po
+                    WHERE latest_po.order_no = o.order_no
+                    ORDER BY latest_po.created_at DESC, latest_po.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_prepay_order latest_prepay ON latest_prepay.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.order_no = o.order_no
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
         <where>
             <if test="query.orderNo != null and query.orderNo != ''">
-                order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                o.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
             </if>
             <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
-                AND service_type = #{query.serviceType}
+                AND o.service_type = #{query.serviceType}
             </if>
             <if test="query.orderStatus != null and query.orderStatus != '' and query.orderStatus != '全部'">
-                AND order_status = #{query.orderStatus}
+                AND o.order_status = #{query.orderStatus}
             </if>
         </where>
-        ORDER BY created_at DESC
+        ORDER BY o.created_at DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(1)
-        FROM t_order
+        FROM t_order o
         <where>
             <if test="query.orderNo != null and query.orderNo != ''">
-                order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                o.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
             </if>
             <if test="query.serviceType != null and query.serviceType != '' and query.serviceType != '全部'">
-                AND service_type = #{query.serviceType}
+                AND o.service_type = #{query.serviceType}
             </if>
             <if test="query.orderStatus != null and query.orderStatus != '' and query.orderStatus != '全部'">
-                AND order_status = #{query.orderStatus}
+                AND o.order_status = #{query.orderStatus}
             </if>
         </where>
     </select>

@@ -1,7 +1,9 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { billApi } from "../api/client";
 
+const route = useRoute();
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
@@ -9,9 +11,9 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
-  billNo: "",
-  orderNo: "",
-  billStatus: "全部"
+  billNo: route.query.billNo || "",
+  orderNo: route.query.orderNo || "",
+  billStatus: route.query.billStatus || "全部"
 });
 
 function resetFilters() {
@@ -58,6 +60,19 @@ function goToPage(nextPage) {
 }
 
 onMounted(loadBills);
+
+watch(
+  () => [route.query.billNo, route.query.orderNo, route.query.billStatus],
+  ([billNo, orderNo, billStatus]) => {
+    filters.value = {
+      billNo: billNo || "",
+      orderNo: orderNo || "",
+      billStatus: billStatus || "全部"
+    };
+    pageNo.value = 1;
+    loadBills();
+  }
+);
 </script>
 
 <template>

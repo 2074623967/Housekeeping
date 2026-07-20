@@ -3,6 +3,7 @@ package com.abc123.hsp.dto;
 public class OrderListItemDTO {
 
     private String orderNo;
+    private String billNo;
     private String customerName;
     private String serviceType;
     private String workerName;
@@ -12,6 +13,12 @@ public class OrderListItemDTO {
     private String orderStatusType;
     private String fulfillmentStatus;
     private String fulfillmentStatusType;
+    private String latestPaymentOrderId;
+    private String latestPaymentStatus;
+    private String latestPaymentStatusType;
+    private String latestPrepayOrderNo;
+    private String latestCashierStatus;
+    private String latestCashierStatusType;
     private String createdAt;
 
     public String getOrderNo() {
@@ -20,6 +27,14 @@ public class OrderListItemDTO {
 
     public void setOrderNo(String orderNo) {
         this.orderNo = orderNo;
+    }
+
+    public String getBillNo() {
+        return billNo;
+    }
+
+    public void setBillNo(String billNo) {
+        this.billNo = billNo;
     }
 
     public String getCustomerName() {
@@ -100,5 +115,53 @@ public class OrderListItemDTO {
 
     public void setCreatedAt(String createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getLatestPaymentOrderId() {
+        return latestPaymentOrderId;
+    }
+
+    public void setLatestPaymentOrderId(String latestPaymentOrderId) {
+        this.latestPaymentOrderId = latestPaymentOrderId;
+    }
+
+    public String getLatestPaymentStatus() {
+        return latestPaymentStatus;
+    }
+
+    public void setLatestPaymentStatus(String latestPaymentStatus) {
+        this.latestPaymentStatus = latestPaymentStatus;
+    }
+
+    public String getLatestPaymentStatusType() {
+        return latestPaymentStatusType;
+    }
+
+    public void setLatestPaymentStatusType(String latestPaymentStatusType) {
+        this.latestPaymentStatusType = latestPaymentStatusType;
+    }
+
+    public String getLatestPrepayOrderNo() {
+        return latestPrepayOrderNo;
+    }
+
+    public void setLatestPrepayOrderNo(String latestPrepayOrderNo) {
+        this.latestPrepayOrderNo = latestPrepayOrderNo;
+    }
+
+    public String getLatestCashierStatus() {
+        return latestCashierStatus;
+    }
+
+    public void setLatestCashierStatus(String latestCashierStatus) {
+        this.latestCashierStatus = latestCashierStatus;
+    }
+
+    public String getLatestCashierStatusType() {
+        return latestCashierStatusType;
+    }
+
+    public void setLatestCashierStatusType(String latestCashierStatusType) {
+        this.latestCashierStatusType = latestCashierStatusType;
     }
 }

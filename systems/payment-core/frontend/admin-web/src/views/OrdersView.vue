@@ -19,6 +19,10 @@ const filters = ref({
 
 const appWebBaseUrl = "http://127.0.0.1:5175";
 
+function buildCashierUrl(prepayOrderNo) {
+  return `${appWebBaseUrl}/cashier/${prepayOrderNo}`;
+}
+
 function resetFilters() {
   filters.value = {
     orderNo: "",
@@ -78,14 +82,19 @@ async function launchPayment(orderNo) {
       orderNo,
       prepayOrderNo: prepay.prepayOrderNo,
       paymentOrderId: prepay.paymentOrderId,
-      cashierUrl: `${appWebBaseUrl}/cashier/${prepay.prepayOrderNo}`
+      cashierUrl: buildCashierUrl(prepay.prepayOrderNo)
     };
     actionMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
+    await loadOrders();
   } catch (error) {
     actionMessage.value = `发起支付失败：${error.message}`;
   } finally {
     activeOrderNo.value = "";
   }
+}
+
+function canOpenCashier(orderItem) {
+  return Boolean(orderItem.latestPrepayOrderNo);
 }
 
 onMounted(loadOrders);
@@ -164,6 +173,7 @@ onMounted(loadOrders);
           <thead>
             <tr>
               <th>订单号</th>
+              <th>账单号</th>
               <th>用户</th>
               <th>服务品类</th>
               <th>服务者</th>
@@ -171,6 +181,8 @@ onMounted(loadOrders);
               <th>已付金额</th>
               <th>订单状态</th>
               <th>履约状态</th>
+              <th>最近支付状态</th>
+              <th>最近收银台状态</th>
               <th>创建时间</th>
               <th>操作</th>
             </tr>
@@ -178,6 +190,7 @@ onMounted(loadOrders);
           <tbody>
             <tr v-for="item in items" :key="item.orderNo">
               <td>{{ item.orderNo }}</td>
+              <td>{{ item.billNo || "-" }}</td>
               <td>{{ item.customerName }}</td>
               <td>{{ item.serviceType }}</td>
               <td>{{ item.workerName }}</td>
@@ -185,11 +198,49 @@ onMounted(loadOrders);
               <td>{{ item.paidAmount }}</td>
               <td><span :class="['badge', item.orderStatusType]">{{ item.orderStatus }}</span></td>
               <td><span :class="['badge', item.fulfillmentStatusType]">{{ item.fulfillmentStatus }}</span></td>
+              <td>
+                <span v-if="item.latestPaymentStatus" :class="['badge', item.latestPaymentStatusType]">
+                  {{ item.latestPaymentStatus }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td>
+                <span v-if="item.latestCashierStatus" :class="['badge', item.latestCashierStatusType]">
+                  {{ item.latestCashierStatus }}
+                </span>
+                <span v-else>-</span>
+              </td>
               <td>{{ item.createdAt }}</td>
               <td>
                 <div class="list-actions">
                   <span>{{ item.orderStatus === "待支付" ? "待发起" : "已生成支付链路" }}</span>
-                  <span>{{ item.paidAmount === item.orderAmount ? "账单已结清" : "账单待支付" }}</span>
+                  <span>{{ item.billNo ? `账单 ${item.billNo}` : "尚未生成账单" }}</span>
+                  <RouterLink v-if="item.latestPaymentOrderId" class="link-button" :to="`/payments/${item.latestPaymentOrderId}`">
+                    查看支付单
+                  </RouterLink>
+                  <RouterLink
+                    v-if="item.latestPaymentOrderId"
+                    class="link-button"
+                    :to="`/payment-records/${item.latestPaymentOrderId}?recordType=ALL`"
+                  >
+                    查看支付记录
+                  </RouterLink>
+                  <RouterLink
+                    v-if="item.billNo"
+                    class="link-button"
+                    :to="`/bills?billNo=${item.billNo}&orderNo=${item.orderNo}`"
+                  >
+                    查看账单
+                  </RouterLink>
+                  <a
+                    v-if="canOpenCashier(item)"
+                    class="link-button"
+                    :href="buildCashierUrl(item.latestPrepayOrderNo)"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    打开收银台
+                  </a>
                   <button
                     class="link-button"
                     :disabled="activeOrderNo === item.orderNo || !canLaunchPayment(item)"
