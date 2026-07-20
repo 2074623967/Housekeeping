@@ -31,6 +31,7 @@ class PaymentReturnCodeMappingConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).toggleReturnCodeMapping(request);
 

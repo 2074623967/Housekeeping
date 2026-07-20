@@ -62,4 +62,12 @@ public class PaymentConfigController {
     public ApiResponse<PaymentConfigOverviewDTO> toggleReturnCodeMapping(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleReturnCodeMapping(request));
     }
+
+    /**
+     * 启停支付网关接入配置。
+     */
+    @PostMapping("/gateways/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleGateway(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleGateway(request));
+    }
 }

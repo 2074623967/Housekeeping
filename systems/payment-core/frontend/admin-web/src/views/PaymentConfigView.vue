@@ -6,6 +6,7 @@ const channels = ref([]);
 const routeRules = ref([]);
 const protocols = ref([]);
 const returnCodeMappings = ref([]);
+const gateways = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
@@ -20,6 +21,7 @@ async function loadOverview() {
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
     returnCodeMappings.value = overview.returnCodeMappings;
+    gateways.value = overview.gateways;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -64,6 +66,15 @@ async function toggleReturnCodeMapping(mapping) {
   );
 }
 
+async function toggleGateway(gateway) {
+  await toggleConfig(
+    gateway.gatewayCode,
+    gateway.status !== "ENABLED",
+    "支付网关",
+    paymentConfigApi.toggleGateway
+  );
+}
+
 async function toggleConfig(configCode, enabled, configType, toggleRunner) {
   activeConfigCode.value = configCode;
   actionMessage.value = "";
@@ -73,6 +84,7 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
     returnCodeMappings.value = overview.returnCodeMappings;
+    gateways.value = overview.gateways;
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
@@ -90,6 +102,7 @@ async function toggleMappingConfig(configCode, subCode, enabled, configType, tog
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
     returnCodeMappings.value = overview.returnCodeMappings;
+    gateways.value = overview.gateways;
     actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode}/${subCode} 操作失败：${error.message}`;
@@ -105,8 +118,8 @@ onMounted(loadOverview);
   <div>
     <div class="topbar">
       <div>
-        <h2>支付渠道与路由</h2>
-        <p>管理微信、支付宝、线下银行等渠道，以及家政业务场景下的支付路由规则</p>
+        <h2>支付配置中心</h2>
+        <p>统一管理支付渠道、路由规则、支付协议、返回码映射和支付网关接入配置</p>
       </div>
       <span class="badge info">配置中心 V1</span>
     </div>
@@ -319,6 +332,60 @@ onMounted(loadOverview);
                       @click="toggleReturnCodeMapping(mapping)"
                     >
                       {{ mapping.status === "ENABLED" ? "停用" : "启用" }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>支付网关接入管理</h3>
+              <p class="meta">统一维护渠道接入模式、协议算法、超时重试和网关基础地址，支撑真实渠道适配器正式化</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>网关编码</th>
+                  <th>网关名称</th>
+                  <th>接入模式</th>
+                  <th>适用渠道</th>
+                  <th>基础地址</th>
+                  <th>报文协议</th>
+                  <th>签名算法</th>
+                  <th>超时时间</th>
+                  <th>重试策略</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="gateway in gateways" :key="gateway.gatewayCode">
+                  <td>{{ gateway.gatewayCode }}</td>
+                  <td>{{ gateway.gatewayName }}</td>
+                  <td>{{ gateway.accessMode }}</td>
+                  <td>{{ gateway.channelScope }}</td>
+                  <td class="flow-summary-cell">{{ gateway.apiBaseUrl }}</td>
+                  <td>{{ gateway.protocolType }}</td>
+                  <td>{{ gateway.signAlgorithm }}</td>
+                  <td>{{ gateway.timeoutMs }}</td>
+                  <td class="flow-summary-cell">{{ gateway.retryPolicy }}</td>
+                  <td><span :class="['badge', gateway.statusType]">{{ gateway.status }}</span></td>
+                  <td>{{ gateway.updatedAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === gateway.gatewayCode"
+                      @click="toggleGateway(gateway)"
+                    >
+                      {{ gateway.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
                   </td>
                 </tr>

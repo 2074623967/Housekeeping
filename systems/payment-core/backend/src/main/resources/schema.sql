@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
+DROP TABLE IF EXISTS t_payment_gateway_config;
 DROP TABLE IF EXISTS t_payment_protocol_config;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
@@ -111,6 +112,26 @@ CREATE TABLE t_payment_channel_return_code_map (
     UNIQUE KEY uk_channel_return_code (channel_code, channel_return_code),
     KEY idx_standardized_code_status (standardized_code, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='渠道返回码映射配置表';
+
+CREATE TABLE t_payment_gateway_config (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    gateway_code VARCHAR(64) NOT NULL COMMENT '支付网关编码',
+    gateway_name VARCHAR(128) NOT NULL COMMENT '支付网关名称',
+    access_mode VARCHAR(64) NOT NULL COMMENT '接入模式，如直连或服务商模式',
+    channel_scope VARCHAR(256) NOT NULL COMMENT '适用渠道范围',
+    api_base_url VARCHAR(256) NOT NULL COMMENT '网关基础地址',
+    protocol_type VARCHAR(64) NOT NULL COMMENT '报文协议类型',
+    sign_algorithm VARCHAR(64) NOT NULL COMMENT '签名算法',
+    timeout_ms INT NOT NULL DEFAULT 3000 COMMENT '超时时间毫秒值',
+    retry_policy VARCHAR(128) NOT NULL COMMENT '失败重试策略',
+    status VARCHAR(32) NOT NULL COMMENT '网关状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '网关状态样式类型',
+    priority INT NOT NULL DEFAULT 0 COMMENT '优先级，数字越小越优先',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_gateway_code (gateway_code),
+    KEY idx_gateway_status_priority (status, priority)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付网关接入配置表';
 
 CREATE TABLE t_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

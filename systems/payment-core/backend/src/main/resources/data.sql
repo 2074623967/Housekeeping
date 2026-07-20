@@ -25,6 +25,11 @@ INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code
 ('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2001', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
 ('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', 'DISABLED', 'danger', 4, '2026-07-20 22:40:00');
 
+INSERT INTO t_payment_gateway_config (gateway_code, gateway_name, access_mode, channel_scope, api_base_url, protocol_type, sign_algorithm, timeout_ms, retry_policy, status, status_type, priority, updated_at) VALUES
+('GATEWAY_WX_ACQ', '微信收单网关', '直连', 'wx_h5', 'https://gateway.housekeeping.local/wx/acquire', 'HTTP+JSON', 'HMAC-SHA256', 3000, '失败重试2次+超时查单', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('GATEWAY_ALI_ACQ', '支付宝收单网关', '直连', 'alipay_h5', 'https://gateway.housekeeping.local/alipay/acquire', 'HTTP+FORM', 'RSA2', 3500, '失败重试1次+异步回调兜底', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('GATEWAY_BANK_OFFLINE', '线下银行清算网关', '银行服务商', 'offline_bank', 'https://gateway.housekeeping.local/bank/offline', 'SFTP+文件', 'RSA2048', 8000, '人工复核+批次补传', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
+
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),
 ('ORD202607190002', '王先生', '月嫂套餐', '周阿姨', 8800.00, 2000.00, '待支付', 'warn', '待确认', 'warn', '2026-07-19 10:02:44'),

@@ -36,6 +36,7 @@
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
+| `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 
 ## 3. 创建预付单
@@ -485,6 +486,7 @@ POST /api/refunds/retry
 2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、状态、优先级。
 3. `protocols`：支付协议配置，包含协议编码、协议名称、协议类型、模板版本、签约模式、适用场景、适用渠道、商户确认要求、风控标签、状态。
 4. `returnCodeMappings`：渠道返回码映射，包含渠道编码、渠道返回码、渠道返回信息、标准状态、标准错误码、是否可重试、是否需要人工介入、适用处理策略、状态。
+5. `gateways`：支付网关接入配置，包含网关编码、网关名称、接入模式、适用渠道、网关基础地址、报文协议、签名算法、超时时间、重试策略和状态。
 
 ### 12.2 启停渠道或路由规则
 
@@ -512,6 +514,12 @@ POST /api/payment-config/protocols/toggle
 POST /api/payment-config/return-codes/toggle
 ```
 
+启停支付网关：
+
+```http
+POST /api/payment-config/gateways/toggle
+```
+
 请求示例：
 
 ```json
@@ -528,7 +536,8 @@ POST /api/payment-config/return-codes/toggle
 3. 协议配置当前已支持运营查看和启停，后续继续补充协议模板编辑、协议种类管理、签约要素配置和电子签章能力。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
 5. 返回码映射当前已支持运营查看与启停，后续继续补返回码批量导入、映射版本治理、渠道差异比对和异常自动归档。
-6. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
+6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停和接入参数展示，后续继续补证书管理、灰度发布和环境隔离。
+7. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
 
 ## 13. 支付监控分析接口
 

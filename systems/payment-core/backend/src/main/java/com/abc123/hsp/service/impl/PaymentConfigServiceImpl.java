@@ -30,6 +30,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setRouteRules(paymentConfigMapper.findRouteRules());
         overview.setProtocols(paymentConfigMapper.findProtocols());
         overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
+        overview.setGateways(paymentConfigMapper.findGateways());
         return overview;
     }
 
@@ -91,6 +92,21 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         );
         if (affectedRows == 0) {
             throw new IllegalArgumentException("渠道返回码映射配置不存在");
+        }
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO toggleGateway(PaymentConfigToggleRequestDTO request) {
+        String configCode = requireConfigCode(request);
+        int affectedRows = paymentConfigMapper.updateGatewayStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("支付网关接入配置不存在");
         }
         return overview();
     }

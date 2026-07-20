@@ -12,28 +12,28 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * 支付协议配置服务测试。
+ * 支付网关接入配置服务测试。
  */
 @ExtendWith(MockitoExtension.class)
-class PaymentProtocolConfigServiceImplTest {
+class PaymentGatewayConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
 
     @Test
-    void shouldToggleProtocolStatus() {
+    void shouldToggleGatewayStatus() {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("PROTO_MEMBER_DEDUCT_V1");
+        request.setConfigCode("GATEWAY_BANK_OFFLINE");
         request.setEnabled(true);
-        when(paymentConfigMapper.updateProtocolStatus("PROTO_MEMBER_DEDUCT_V1", "ENABLED", "success")).thenReturn(1);
+        when(paymentConfigMapper.updateGatewayStatus("GATEWAY_BANK_OFFLINE", "ENABLED", "success")).thenReturn(1);
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
 
-        new PaymentConfigServiceImpl(paymentConfigMapper).toggleProtocol(request);
+        new PaymentConfigServiceImpl(paymentConfigMapper).toggleGateway(request);
 
-        verify(paymentConfigMapper).updateProtocolStatus("PROTO_MEMBER_DEDUCT_V1", "ENABLED", "success");
+        verify(paymentConfigMapper).updateGatewayStatus("GATEWAY_BANK_OFFLINE", "ENABLED", "success");
     }
 }

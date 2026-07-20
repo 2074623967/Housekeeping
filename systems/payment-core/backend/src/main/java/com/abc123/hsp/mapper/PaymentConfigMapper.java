@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
+import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
@@ -33,6 +34,11 @@ public interface PaymentConfigMapper {
      * 查询渠道返回码映射配置。
      */
     List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappings();
+
+    /**
+     * 查询支付网关接入配置。
+     */
+    List<PaymentGatewayConfigDTO> findGateways();
 
     /**
      * 查询已启用的渠道配置，供支付路由执行使用。
@@ -72,4 +78,11 @@ public interface PaymentConfigMapper {
                                       @Param("channelReturnCode") String channelReturnCode,
                                       @Param("status") String status,
                                       @Param("statusType") String statusType);
+
+    /**
+     * 更新支付网关启停状态。
+     */
+    int updateGatewayStatus(@Param("gatewayCode") String gatewayCode,
+                            @Param("status") String status,
+                            @Param("statusType") String statusType);
 }

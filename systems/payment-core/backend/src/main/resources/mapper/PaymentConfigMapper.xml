@@ -70,6 +70,23 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findGateways" resultType="com.abc123.hsp.dto.PaymentGatewayConfigDTO">
+        SELECT gateway_code AS gatewayCode,
+               gateway_name AS gatewayName,
+               access_mode AS accessMode,
+               channel_scope AS channelScope,
+               api_base_url AS apiBaseUrl,
+               protocol_type AS protocolType,
+               sign_algorithm AS signAlgorithm,
+               CONCAT(timeout_ms, 'ms') AS timeoutMs,
+               retry_policy AS retryPolicy,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_gateway_config
+        ORDER BY priority ASC, id ASC
+    </select>
+
     <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
         SELECT channel_code AS channelCode,
                payment_method AS paymentMethod,
@@ -124,5 +141,13 @@
             updated_at = NOW()
         WHERE channel_code = #{channelCode}
           AND channel_return_code = #{channelReturnCode}
+    </update>
+
+    <update id="updateGatewayStatus">
+        UPDATE t_payment_gateway_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE gateway_code = #{gatewayCode}
     </update>
 </mapper>

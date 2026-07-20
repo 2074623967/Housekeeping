@@ -9,7 +9,7 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 public interface PaymentConfigService {
 
     /**
-     * 查询渠道和路由规则配置总览。
+     * 查询支付配置中心总览。
      */
     PaymentConfigOverviewDTO overview();
 
@@ -32,4 +32,9 @@ public interface PaymentConfigService {
      * 启停渠道返回码映射配置。
      */
     PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 启停支付网关接入配置。
+     */
+    PaymentConfigOverviewDTO toggleGateway(PaymentConfigToggleRequestDTO request);
 }
