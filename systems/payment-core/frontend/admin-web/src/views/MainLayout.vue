@@ -23,6 +23,10 @@ const navGroups = [
   {
     title: "结算",
     links: [{ label: "服务者结算单", to: "/worker-settlements" }]
+  },
+  {
+    title: "配置中心",
+    links: [{ label: "支付渠道与路由", to: "/payment-config" }]
   }
 ];
 </script>

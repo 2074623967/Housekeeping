@@ -8,6 +8,8 @@ DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_order;
+DROP TABLE IF EXISTS t_payment_route_rule_config;
+DROP TABLE IF EXISTS t_payment_channel_config;
 DROP TABLE IF EXISTS t_order;
 
 CREATE TABLE t_dashboard_card (
@@ -21,6 +23,40 @@ CREATE TABLE t_dashboard_card (
     PRIMARY KEY (id),
     UNIQUE KEY uk_card_key (card_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工作台卡片';
+
+CREATE TABLE t_payment_channel_config (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    channel_code VARCHAR(64) NOT NULL COMMENT '支付渠道编码',
+    channel_name VARCHAR(128) NOT NULL COMMENT '支付渠道名称',
+    payment_method VARCHAR(64) NOT NULL COMMENT '支付方式',
+    merchant_no VARCHAR(128) NOT NULL COMMENT '渠道商户号',
+    scene_scope VARCHAR(128) NOT NULL COMMENT '适用场景范围',
+    status VARCHAR(32) NOT NULL COMMENT '渠道状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '渠道状态样式类型',
+    daily_limit DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '单日限额',
+    priority INT NOT NULL DEFAULT 0 COMMENT '渠道优先级，数字越小优先级越高',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_channel_code (channel_code),
+    KEY idx_channel_method_status (payment_method, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道配置表';
+
+CREATE TABLE t_payment_route_rule_config (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    rule_code VARCHAR(64) NOT NULL COMMENT '路由规则编码',
+    rule_name VARCHAR(128) NOT NULL COMMENT '路由规则名称',
+    match_scene VARCHAR(128) NOT NULL COMMENT '匹配业务场景',
+    match_expression VARCHAR(512) NOT NULL COMMENT '匹配表达式',
+    target_channel_code VARCHAR(64) NOT NULL COMMENT '目标渠道编码',
+    fallback_channel_code VARCHAR(64) NOT NULL COMMENT '兜底渠道编码',
+    status VARCHAR(32) NOT NULL COMMENT '规则状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '规则状态样式类型',
+    priority INT NOT NULL DEFAULT 0 COMMENT '规则优先级，数字越小优先级越高',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_rule_code (rule_code),
+    KEY idx_route_scene_status (match_scene, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则配置表';
 
 CREATE TABLE t_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

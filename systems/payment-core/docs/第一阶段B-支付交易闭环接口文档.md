@@ -30,6 +30,9 @@
 | `/api/refunds/success` | `POST` | 模拟渠道退款成功回调 |
 | `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
 | `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
+| `/api/payment-config` | `GET` | 查询支付渠道与路由规则配置 |
+| `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
+| `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
 
 ## 3. 创建预付单
 
@@ -407,7 +410,47 @@ POST /api/refunds/retry
 2. `SUCCESS` 会写入 `success_at`，`retry` 会清空成功时间。
 3. 当前为本地模拟闭环，真实渠道退款请求、退款回调验签、退款渠道流水和差错补偿在后续渠道网关能力中扩展。
 
-## 12. 错误与边界说明
+## 12. 支付配置中心接口
+
+### 12.1 查询配置总览
+
+接口：`GET /api/payment-config`
+
+返回内容：
+
+1. `channels`：支付渠道配置，包含渠道编码、渠道名称、支付方式、商户号、适用场景、状态、单日限额、优先级。
+2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、状态、优先级。
+
+### 12.2 启停渠道或路由规则
+
+启停渠道：
+
+```http
+POST /api/payment-config/channels/toggle
+```
+
+启停路由规则：
+
+```http
+POST /api/payment-config/route-rules/toggle
+```
+
+请求示例：
+
+```json
+{
+  "configCode": "wx_h5",
+  "enabled": false
+}
+```
+
+说明：
+
+1. `enabled=true` 时状态更新为 `ENABLED`。
+2. `enabled=false` 时状态更新为 `DISABLED`。
+3. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
+
+## 13. 错误与边界说明
 
 当前版本重点是开发与联调基线，尚未完整沉淀生产级错误码体系。建议后续统一补充：
 
@@ -425,6 +468,6 @@ POST /api/refunds/retry
 | `REF003` | 累计退款金额超过原支付金额 |
 | `REF004` | 退款单状态不允许执行当前操作 |
 
-## 13. 结论
+## 14. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

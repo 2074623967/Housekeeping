@@ -252,3 +252,9 @@ export const settlementApi = {
     return request(`/api/settlements/workers?${params.toString()}`);
   }
 };
+
+export const paymentConfigApi = {
+  getOverview: () => request("/api/payment-config"),
+  toggleChannel: (configCode, enabled) => postJson("/api/payment-config/channels/toggle", { configCode, enabled }),
+  toggleRouteRule: (configCode, enabled) => postJson("/api/payment-config/route-rules/toggle", { configCode, enabled })
+};

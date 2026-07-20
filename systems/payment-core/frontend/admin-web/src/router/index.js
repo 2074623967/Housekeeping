@@ -12,6 +12,7 @@ import PaymentsView from "../views/PaymentsView.vue";
 import PaymentDetailView from "../views/PaymentDetailView.vue";
 import RefundsView from "../views/RefundsView.vue";
 import WorkerSettlementsView from "../views/WorkerSettlementsView.vue";
+import PaymentConfigView from "../views/PaymentConfigView.vue";
 
 const routes = [
   {
@@ -53,6 +54,7 @@ const routes = [
       { path: "payments", component: PaymentsView },
       { path: "payments/:paymentOrderId", component: PaymentDetailView },
       { path: "refunds", component: RefundsView },
+      { path: "payment-config", component: PaymentConfigView },
       { path: "worker-settlements", component: WorkerSettlementsView }
     ]
   }

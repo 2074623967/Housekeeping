@@ -4,6 +4,16 @@ INSERT INTO t_dashboard_card (card_key, title, value, badge_type, badge_text, so
 ('worker_pending', '待结算服务者金额', '¥89,360', 'info', '账期待生成', 3),
 ('recon_gap', '未关闭差异金额', '¥3,120', 'danger', '阻断级 2 笔', 4);
 
+INSERT INTO t_payment_channel_config (channel_code, channel_name, payment_method, merchant_no, scene_scope, status, status_type, daily_limit, priority, updated_at) VALUES
+('wx_h5', '微信 H5 支付', '微信支付', 'MCH_WX_10001', 'H5/APP/小程序', 'ENABLED', 'success', 500000.00, 1, '2026-07-20 22:40:00'),
+('alipay_h5', '支付宝 H5 支付', '支付宝', 'MCH_ALI_20001', 'H5/APP/PC', 'ENABLED', 'success', 500000.00, 2, '2026-07-20 22:40:00'),
+('offline_bank', '线下银行转账', '银行转账', 'BANK_OFFLINE_30001', '企业客户/大额订单', 'ENABLED', 'success', 2000000.00, 3, '2026-07-20 22:40:00');
+
+INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, match_expression, target_channel_code, fallback_channel_code, status, status_type, priority, updated_at) VALUES
+('RULE_HOME_WX', '家政 H5 微信优先', 'HOME_CLEAN/H5', 'paymentMethod=微信支付 AND amount<=5000', 'wx_h5', 'alipay_h5', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('RULE_ENTERPRISE_BANK', '企业大额订单走线下银行', 'ENTERPRISE/PC', 'amount>5000 OR customerType=ENTERPRISE', 'offline_bank', 'alipay_h5', 'ENABLED', 'success', 3, '2026-07-20 22:40:00');
+
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),
 ('ORD202607190002', '王先生', '月嫂套餐', '周阿姨', 8800.00, 2000.00, '待支付', 'warn', '待确认', 'warn', '2026-07-19 10:02:44'),

@@ -1,0 +1,49 @@
+package com.abc123.hsp.controller;
+
+import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
+import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.service.PaymentConfigService;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 支付配置中心接口。
+ */
+@RestController
+@RequestMapping("/api/payment-config")
+public class PaymentConfigController {
+
+    private final PaymentConfigService paymentConfigService;
+
+    public PaymentConfigController(PaymentConfigService paymentConfigService) {
+        this.paymentConfigService = paymentConfigService;
+    }
+
+    /**
+     * 查询支付渠道和路由规则配置。
+     */
+    @GetMapping
+    public ApiResponse<PaymentConfigOverviewDTO> overview() {
+        return ApiResponse.success(paymentConfigService.overview());
+    }
+
+    /**
+     * 启停支付渠道。
+     */
+    @PostMapping("/channels/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleChannel(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleChannel(request));
+    }
+
+    /**
+     * 启停支付路由规则。
+     */
+    @PostMapping("/route-rules/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleRouteRule(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleRouteRule(request));
+    }
+}
