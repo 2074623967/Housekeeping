@@ -258,6 +258,21 @@
 5. 统一按专业口径修正退款成功统计日期，改为 `success_at`
 6. 修复聚合空结果时页面可能出现 `null` 的边界问题
 
+### 10.3 2026-07-20 支付日终处理差异事实补强
+
+本轮围绕“日终处理不能只看批次，还要看差异事实”继续补强，确认当前 `payment-core` 已从“基础批次视角”升级到“带前置差异告警的日终事实台”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 当前全量后端测试保持 `59` 个并全部通过 |
+| 后台前端构建 | `npm run build` | 通过 | `PaymentDayEndView` 已补齐差异告警卡片展示并通过生产构建 |
+
+本轮修复项：
+
+1. 为支付日终总览补齐 `alerts` 差异告警结构。
+2. 将渠道回调未收口、内部事件未收口、退款待收口三类问题统一沉淀为日终差异事实。
+3. 为支付日终页面补齐差异告警卡片与推荐跳转路由，缩短次日排查路径。
+
 ## 11. 2026-07-20 支付运营筛选排序增强验证
 
 ### 11.1 本轮验证结论

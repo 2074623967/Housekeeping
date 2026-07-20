@@ -39,6 +39,7 @@ class PaymentDayEndServiceImplTest {
         verify(paymentDayEndMapper).findOverviewSummary();
         verify(paymentDayEndMapper).findRecentBatches();
         org.junit.jupiter.api.Assertions.assertEquals("COMPLETED", result.getLatestBatchStatus());
+        org.junit.jupiter.api.Assertions.assertNotNull(result.getAlerts());
     }
 
     @Test

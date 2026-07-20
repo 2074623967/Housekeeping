@@ -25,6 +25,8 @@ public class PaymentDayEndOverviewDTO {
     private Integer openInternalAbnormalCount;
     /** 当前待收口退款数。 */
     private Integer openPendingRefundCount;
+    /** 当前差异告警。 */
+    private List<PaymentDayEndAlertItemDTO> alerts;
     /** 最近批次列表。 */
     private List<PaymentDayEndBatchListItemDTO> recentBatches;
 }

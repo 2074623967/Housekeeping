@@ -45,6 +45,8 @@
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
+| `/api/payment-day-end/overview` | `GET` | 查询支付日终处理总览与差异告警 |
+| `/api/payment-day-end/run` | `POST` | 手动触发支付日终处理 |
 | `/api/payment-task-center/overview` | `GET` | 查询支付任务中心总览 |
 | `/api/payment-task-center/task-runs` | `GET` | 查询支付任务执行日志 |
 | `/api/payment-task-center/close-expired-payments` | `POST` | 手动执行超时关单 |
@@ -938,6 +940,23 @@ POST /api/payment-config/gateways/toggle
 1. 当前日志已统一落地自动调度和人工触发两类来源，便于区分 `AUTO / MANUAL`。
 2. 每条日志返回严重等级、升级状态、建议动作和推荐路由，便于产品、研发、测试共用同一运维口径。
 3. 当前超时关单、失败事件重发、失败退款重试都由该页统一留痕，后续可继续扩展更多支付运维任务。
+
+### 13.5 查询支付日终处理总览
+
+接口：`GET /api/payment-day-end/overview`
+
+返回内容：
+
+1. `totalBatchCount / completedBatchCount / abnormalBatchCount / latestBizDate`：日终批次汇总。
+2. `openChannelAbnormalCount / openInternalAbnormalCount / openPendingRefundCount`：当前未收口差异计数。
+3. `alerts`：当前差异告警，至少覆盖渠道回调未收口、内部事件未收口、退款待收口三类。
+4. `recentBatches`：最近日终批次列表，供财务和运营回看业务日执行结果。
+
+业务说明：
+
+1. 当前接口定位是“对账前置事实收口”，不是正式财务对账差异闭环系统。
+2. 差异告警的 `actionRoute` 直接指向异常中心、事件出站页或退款页，便于次日快速排查。
+3. 后续如果接入渠道对账文件和账务分录核对，可继续在该接口上扩展更细粒度差异事实。
 
 ## 14. 错误与边界说明
 

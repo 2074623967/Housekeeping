@@ -11,6 +11,7 @@ const overview = ref({
   openChannelAbnormalCount: 0,
   openInternalAbnormalCount: 0,
   openPendingRefundCount: 0,
+  alerts: [],
   recentBatches: []
 });
 const isLoading = ref(true);
@@ -93,6 +94,16 @@ onMounted(loadOverview);
 
         <div class="risk-banner">
           当前未收口：渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，待收口退款 {{ overview.openPendingRefundCount }} 笔。
+        </div>
+
+        <div class="detail-card-grid">
+          <div v-for="alert in overview.alerts" :key="alert.alertType" class="detail-card">
+            <div class="detail-label">{{ alert.alertTitle }}</div>
+            <div class="detail-value">{{ alert.affectedCount }}</div>
+            <div class="detail-hint">{{ alert.alertMessage }}</div>
+            <div class="detail-hint">{{ alert.suggestedAction }}</div>
+            <RouterLink class="link-button" :to="alert.actionRoute">查看</RouterLink>
+          </div>
         </div>
 
         <div class="sub-panel">
