@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
@@ -30,6 +32,9 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
                 return paymentDetail;
             }
         }
-        throw new IllegalArgumentException("no payment channel query adapter available");
+        throw new BusinessException(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_ADAPTER_MISSING,
+                "no payment channel query adapter available"
+        );
     }
 }

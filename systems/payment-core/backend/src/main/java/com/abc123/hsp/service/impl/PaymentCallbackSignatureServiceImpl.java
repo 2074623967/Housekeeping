@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.mapper.PaymentCallbackSecurityMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
@@ -49,14 +51,14 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (!StringUtils.hasText(request.getSignature())
                 || !StringUtils.hasText(request.getTimestamp())
                 || !StringUtils.hasText(request.getNonce())) {
-            throw new IllegalArgumentException("callback signature fields are required");
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature fields are required");
         }
         String normalizedChannel = normalizeChannel(channel);
         String callbackSecret = resolveCallbackSecret(normalizedChannel);
         long timestampSeconds = parseTimestamp(request.getTimestamp());
         long nowSeconds = Instant.now().getEpochSecond();
         if (Math.abs(nowSeconds - timestampSeconds) > allowedSkewSeconds) {
-            throw new IllegalArgumentException("callback timestamp is out of allowed window");
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, "callback timestamp is out of allowed window");
         }
         String payload = String.join("|",
                 normalizedChannel,
@@ -69,7 +71,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (!MessageDigest.isEqual(
                 expectedSignature.getBytes(StandardCharsets.UTF_8),
                 request.getSignature().getBytes(StandardCharsets.UTF_8))) {
-            throw new IllegalArgumentException("callback signature verification failed");
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature verification failed");
         }
         paymentCallbackSecurityMapper.deleteExpiredNonce();
         try {
@@ -80,7 +82,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
                     nonceTtlSeconds
             );
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("callback nonce replay detected");
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, "callback nonce replay detected");
         }
     }
 
@@ -91,7 +93,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         try {
             return Long.parseLong(timestamp.trim());
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("callback timestamp is invalid", exception);
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, "callback timestamp is invalid", exception);
         }
     }
 
@@ -103,12 +105,12 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (StringUtils.hasText(fallbackSecret)) {
             return fallbackSecret;
         }
-        throw new IllegalArgumentException("callback secret is not configured");
+        throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SECRET_MISSING, "callback secret is not configured");
     }
 
     private String normalizeChannel(String channel) {
         if (!StringUtils.hasText(channel)) {
-            throw new IllegalArgumentException("callback channel is required");
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISSING, "callback channel is required");
         }
         return channel.trim().toLowerCase();
     }

@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
@@ -72,7 +74,7 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
         BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
         if (orderAmount == null || paidAmount == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "订单金额或已付金额不存在");
         }
         String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
@@ -110,7 +112,7 @@ public class PaymentServiceImpl implements PaymentService {
     public CashierPageDTO cashier(String prepayOrderNo) {
         PrepayOrderDTO prepayOrder = paymentMapper.findPrepay(prepayOrderNo);
         if (prepayOrder == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在");
         }
         CashierPageDTO cashierPage = new CashierPageDTO();
         cashierPage.setPrepayOrderNo(prepayOrder.getPrepayOrderNo());
@@ -132,12 +134,12 @@ public class PaymentServiceImpl implements PaymentService {
     public PrepayOrderDTO submit(PaymentSubmitRequestDTO request) {
         PrepayOrderDTO currentPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
         if (currentPrepay == null || !StringUtils.hasText(currentPrepay.getPaymentOrderId())) {
-            return null;
+            throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在或未绑定支付单");
         }
         String paymentOrderId = currentPrepay.getPaymentOrderId();
         PaymentDetailDTO currentDetail = paymentMapper.findDetail(paymentOrderId);
         if (currentDetail == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         if ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
                 || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus())
@@ -215,7 +217,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentCallbackSignatureService.verify(channel, request);
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         // 已经成功或关闭的支付单不允许被迟到回调重新打开，保证回调幂等和状态单向收敛。
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
@@ -269,7 +271,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         return enrichDetail(paymentChannelQueryService.query(detail));
     }
@@ -279,7 +281,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentDetailDTO close(PaymentCloseRequestDTO request) {
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus()) || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
             return enrichDetail(detail);

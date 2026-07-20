@@ -6,6 +6,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
@@ -93,6 +95,23 @@ class PaymentServiceImplTest {
                         paymentChannelQueryService)
                         .callback("wx_h5", callback)
         );
+    }
+
+    @Test
+    void shouldThrowBusinessExceptionWhenCashierPrepayOrderMissing() {
+        when(paymentMapper.findPrepay("PRE-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService)
+                        .cashier("PRE-MISSING")
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PREPAY_ORDER_NOT_FOUND, exception.getCode());
     }
 
     @Test
@@ -367,5 +386,25 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals("CHANNEL-1001", result.getChannelTransactionNo());
         org.junit.jupiter.api.Assertions.assertEquals("LOCAL_SIMULATION", result.getQuerySource());
+    }
+
+    @Test
+    void shouldThrowBusinessExceptionWhenQueryPaymentMissing() {
+        when(paymentMapper.findDetail("PAY-MISSING")).thenReturn(null);
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-MISSING");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService)
+                        .query(request)
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_ORDER_NOT_FOUND, exception.getCode());
     }
 }

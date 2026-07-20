@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -27,11 +29,11 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
     @Override
     public PaymentRouteDecisionDTO resolve(PaymentRouteContextDTO routeContext) {
         if (routeContext == null || !StringUtils.hasText(routeContext.getPaymentMethod())) {
-            throw new IllegalArgumentException("paymentMethod is required");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "paymentMethod is required");
         }
         List<PaymentChannelRoutingConfigDTO> enabledChannels = paymentConfigMapper.findEnabledChannelsForRouting();
         if (enabledChannels.isEmpty()) {
-            throw new IllegalArgumentException("no enabled payment channel found");
+            throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, "no enabled payment channel found");
         }
         List<PaymentRouteRuleRuntimeDTO> enabledRules = paymentConfigMapper.findEnabledRouteRulesForRouting();
         PaymentRouteDecisionDTO decision = resolveByRules(routeContext, enabledChannels, enabledRules);
@@ -46,7 +48,7 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         if (decision != null) {
             return decision;
         }
-        throw new IllegalArgumentException("unsupported payment channel");
+        throw new BusinessException(ErrorCode.PAYMENT_ROUTE_UNSUPPORTED, "unsupported payment channel");
     }
 
     private PaymentRouteDecisionDTO resolveByRules(PaymentRouteContextDTO routeContext,

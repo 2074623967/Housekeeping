@@ -1,10 +1,13 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.mapper.PaymentCallbackSecurityMapper;
 import java.nio.charset.StandardCharsets;
@@ -61,7 +64,8 @@ class PaymentCallbackSignatureServiceImplTest {
                 600
         );
 
-        assertThrows(IllegalArgumentException.class, () -> service.verify("wx_h5", request));
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, exception.getCode());
     }
 
     @Test
@@ -80,7 +84,8 @@ class PaymentCallbackSignatureServiceImplTest {
                 600
         );
 
-        assertThrows(IllegalArgumentException.class, () -> service.verify("wx_h5", request));
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, exception.getCode());
     }
 
     @Test

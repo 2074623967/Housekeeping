@@ -2,8 +2,8 @@ import { createApp } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import "../../app-web/src/styles.css";
-import CashierView from "../../app-web/src/views/CashierView.vue";
-import ResultView from "../../app-web/src/views/ResultView.vue";
+import CashierView from "./views/CashierView.vue";
+import ResultView from "./views/ResultView.vue";
 
 const routes = [
   { path: "/", redirect: "/cashier/PRE202607190002" },

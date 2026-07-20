@@ -193,7 +193,7 @@
 | `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
 | `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
 | `h5-web` | `npm install --cache /private/tmp/h5-web-npm-cache` 后执行 `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` | 通过 | H5 用户端当前已完成依赖安装与生产构建复核 |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`31` 个测试全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`36` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
@@ -246,7 +246,7 @@
 | 支付提交主链路 | 通过 | `submit` 已按支付方式、请求渠道、支付场景、终端、金额、客户类型组装路由上下文 |
 | 路由规则命中 | 通过 | 已支持 `matchScene` + `AND/OR` 表达式匹配 |
 | 路由兜底 | 通过 | 目标渠道停用时，可自动落到规则兜底渠道 |
-| 自动化测试 | 通过 | 新增配置化路由测试后，全量后端测试为 `31` 个并全部通过 |
+| 自动化测试 | 通过 | 新增配置化路由测试后，全量后端测试为 `36` 个并全部通过 |
 
 ### 8.2 本轮修复项
 
@@ -255,3 +255,25 @@
 3. 新增金额解析逻辑，将预付单展示金额统一还原为数值，用于路由表达式比较。
 4. 新增 `PaymentChannelRoutingServiceImplTest`，覆盖规则命中、请求渠道直连、支付方式默认路由、目标渠道停用后兜底四类场景。
 5. 调整 `PaymentServiceImplTest`，校验提交支付后写入的是配置化路由结果，而不是旧的默认路由描述。
+
+## 10. 2026-07-20 异常码与失败态复核
+
+### 10.1 本轮验证结论
+
+本轮围绕支付异常流的可观测性进行了补强，确认当前支付核心域已经从“只有失败文案”升级为“后端返回业务错误码，前端展示错误码与 requestId”的联调口径。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| 主链路业务异常 | 通过 | `prepay / cashier / submit / callback / query / close` 已补齐核心业务异常码 |
+| 回调安全异常 | 通过 | 验签失败、密钥缺失、时间戳异常、nonce 重放均已落到独立错误码 |
+| 前端错误展示 | 通过 | `admin-web / app-web / h5-web` 请求层已透出 `message + code + requestId` |
+| H5 终端入口 | 通过 | `h5-web` 已改为走自身包装视图，不再直接绕过 H5 终端差异层 |
+| 自动化测试 | 通过 | 新增异常处理器测试后，全量后端测试为 `36` 个并全部通过 |
+
+### 10.2 本轮修复项
+
+1. 新增 `BusinessException` 和 `ErrorCode`，统一支付核心域错误码常量。
+2. 为全局异常处理器补齐 `BusinessException`、参数校验异常和系统异常三层处理逻辑。
+3. 为支付主链路和支付路由、查单、回调验签补齐第一版业务错误码。
+4. 为 `app-web` 和 `admin-web` 请求层补齐错误码、`requestId` 展示口径。
+5. 修复 `h5-web` 入口仍直接引用 `app-web` 组件的问题，确保 H5 终端差异层真正生效。
