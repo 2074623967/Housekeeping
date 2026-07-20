@@ -11,6 +11,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
@@ -20,6 +21,7 @@ import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import com.abc123.hsp.service.PaymentChannelSubmitService;
 import java.util.Collections;
 import java.util.Arrays;
 import java.util.List;
@@ -46,6 +48,9 @@ class PaymentServiceImplTest {
     @Mock
     private PaymentChannelQueryService paymentChannelQueryService;
 
+    @Mock
+    private PaymentChannelSubmitService paymentChannelSubmitService;
+
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
@@ -65,7 +70,8 @@ class PaymentServiceImplTest {
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
-                paymentChannelQueryService)
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
                 .callback("wx_h5", callback);
 
         verify(paymentMapper, never()).updatePaymentStatus(
@@ -92,7 +98,8 @@ class PaymentServiceImplTest {
                         paymentMapper,
                         paymentCallbackSignatureService,
                         paymentChannelRoutingService,
-                        paymentChannelQueryService)
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
                         .callback("wx_h5", callback)
         );
     }
@@ -107,7 +114,8 @@ class PaymentServiceImplTest {
                         paymentMapper,
                         paymentCallbackSignatureService,
                         paymentChannelRoutingService,
-                        paymentChannelQueryService)
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
                         .cashier("PRE-MISSING")
         );
 
@@ -130,7 +138,8 @@ class PaymentServiceImplTest {
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
-                paymentChannelQueryService)
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
                 .prepay(request);
 
         verify(paymentMapper, times(1)).findLatestActivePrepayByOrderNo("ORD-001");
@@ -174,7 +183,8 @@ class PaymentServiceImplTest {
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
-                paymentChannelQueryService)
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
                 .prepay(request);
 
         verify(paymentMapper, times(1)).findLatestActivePrepayByOrderNo("ORD-002");
@@ -218,7 +228,8 @@ class PaymentServiceImplTest {
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
-                paymentChannelQueryService)
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
                 .submit(request);
 
         verify(paymentMapper, times(1)).findPrepay("PRE-100");
@@ -277,7 +288,8 @@ class PaymentServiceImplTest {
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
-                paymentChannelQueryService)
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
                 .submit(request);
 
         verify(paymentMapper, never()).updatePrepayToPaying("PRE-200");
@@ -320,6 +332,12 @@ class PaymentServiceImplTest {
         when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-300")).thenReturn(false);
         when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-300")).thenReturn("ORD-300");
         when(paymentMapper.findPrepay("PRE-300")).thenReturn(prepay);
+        PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
+        submitResult.setChannelTransactionNo("CHANNEL-300");
+        submitResult.setAttemptStatus("处理中");
+        submitResult.setAttemptStatusType("info");
+        submitResult.setResponsePayload("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}");
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-300");
@@ -333,10 +351,11 @@ class PaymentServiceImplTest {
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
-                paymentChannelQueryService)
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
                 .submit(request);
 
-        verify(paymentMapper, times(1)).updatePaymentMethodAndChannel("PAY-300", "银行转账", "offline_bank");
+        verify(paymentMapper, times(1)).updatePaymentMethodAndChannel("PAY-300", "银行转账", "offline_bank", "CHANNEL-300");
         verify(paymentMapper, times(1)).insertRouteRecord(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("PAY-300"),
@@ -353,7 +372,7 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("10.0.0.3"),
                 org.mockito.ArgumentMatchers.eq("IDEMP-300"),
                 org.mockito.ArgumentMatchers.contains("\"resolvedChannelCode\":\"offline_bank\""),
-                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}"),
                 org.mockito.ArgumentMatchers.eq("处理中"),
                 org.mockito.ArgumentMatchers.eq("info"));
         org.junit.jupiter.api.Assertions.assertEquals("PRE-300", result.getPrepayOrderNo());
@@ -401,7 +420,8 @@ class PaymentServiceImplTest {
                         paymentMapper,
                         paymentCallbackSignatureService,
                         paymentChannelRoutingService,
-                        paymentChannelQueryService)
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
                         .query(request)
         );
 

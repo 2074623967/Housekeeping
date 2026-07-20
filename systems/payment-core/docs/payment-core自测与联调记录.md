@@ -317,7 +317,7 @@
 | 支付提交主链路 | 通过 | `submit` 已按支付方式、请求渠道、支付场景、终端、金额、客户类型组装路由上下文 |
 | 路由规则命中 | 通过 | 已支持 `matchScene` + `AND/OR` 表达式匹配 |
 | 路由兜底 | 通过 | 目标渠道停用时，可自动落到规则兜底渠道 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `38` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `52` 个并全部通过 |
 
 ### 9.2 本轮修复项
 
@@ -340,7 +340,7 @@
 | 前端错误展示 | 通过 | `admin-web / app-web / h5-web / pc-web` 请求层已透出 `message + code + requestId` |
 | H5 终端入口 | 通过 | `h5-web` 已改为走自身包装视图，不再直接绕过 H5 终端差异层 |
 | PC 终端入口 | 通过 | `pc-web` 已改为走独立入口与独立路由，不再与 App/H5 混用 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `38` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `52` 个并全部通过 |
 
 ### 10.2 本轮修复项
 
@@ -350,6 +350,27 @@
 4. 为 `app-web` 和 `admin-web` 请求层补齐错误码、`requestId` 展示口径。
 5. 修复 `h5-web` 入口仍直接引用 `app-web` 组件的问题，确保 H5 终端差异层真正生效。
 6. 新增 `pc-web` 入口和 PC 端展示层，确保桌面端与 App/H5 的终端差异层真正生效。
+
+## 12. 2026-07-20 渠道下单适配器复核
+
+### 12.1 本轮验证结论
+
+本轮围绕“支付提交流程不能继续把渠道返回结果硬编码在 `PaymentServiceImpl` 里”进行了抽象补强，确认支付主链路已经具备第一版可扩展的渠道下单适配层。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| 渠道下单抽象 | 通过 | 已新增 `PaymentChannelSubmitAdapter + PaymentChannelSubmitService`，提交支付不再在主服务里硬编码渠道响应 |
+| 提交结果留痕 | 通过 | 支付单已回写 `channelTransactionNo`，支付尝试与通知日志已记录真实适配器返回报文 |
+| 本地模拟渠道 | 通过 | 已补齐 `LocalPaymentChannelSubmitAdapter`，在未接真实微信/支付宝前可稳定支撑联调 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `52` 个并全部通过 |
+
+### 12.2 本轮修复项
+
+1. 新增 `PaymentChannelSubmitRequestDTO` 和 `PaymentChannelSubmitResultDTO`，统一提交支付时传给渠道适配层的上下文和回参口径。
+2. 新增 `PaymentChannelSubmitAdapter`、`PaymentChannelSubmitService` 及其实现，沿用查单适配器模式对齐后续真实渠道接入方式。
+3. 将 `PaymentServiceImpl.submit` 改为先组装标准化上下文，再委托渠道下单服务完成提交。
+4. 调整 `PaymentMapper.updatePaymentMethodAndChannel`，在支付单上同步回写渠道交易流水号。
+5. 调整 `PaymentServiceImplTest`，校验渠道交易流水号、响应报文和支付尝试状态已来自适配器返回值，而不是旧版硬编码。
 
 ## 11. 2026-07-20 支付记录详情钻取复核
 

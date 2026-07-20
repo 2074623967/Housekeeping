@@ -3,6 +3,8 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.CashierPageDTO;
+import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
@@ -20,6 +22,7 @@ import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import com.abc123.hsp.service.PaymentChannelSubmitService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.StringJoiner;
@@ -34,16 +37,19 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
     private final PaymentChannelRoutingService paymentChannelRoutingService;
     private final PaymentChannelQueryService paymentChannelQueryService;
+    private final PaymentChannelSubmitService paymentChannelSubmitService;
 
     public PaymentServiceImpl(
             PaymentMapper paymentMapper,
             PaymentCallbackSignatureService paymentCallbackSignatureService,
             PaymentChannelRoutingService paymentChannelRoutingService,
-            PaymentChannelQueryService paymentChannelQueryService) {
+            PaymentChannelQueryService paymentChannelQueryService,
+            PaymentChannelSubmitService paymentChannelSubmitService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
         this.paymentChannelQueryService = paymentChannelQueryService;
+        this.paymentChannelSubmitService = paymentChannelSubmitService;
     }
 
     @Override
@@ -157,12 +163,22 @@ public class PaymentServiceImpl implements PaymentService {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
             return currentPrepay;
         }
+        PaymentChannelSubmitResultDTO submitResult = paymentChannelSubmitService.submit(
+                buildSubmitAdapterRequest(
+                        request,
+                        currentPrepay,
+                        paymentOrderId,
+                        resolvedChannelCode,
+                        terminal,
+                        clientIp,
+                        idempotencyKey));
         // 收银台提交后，先把预付单状态收口，再补齐支付单上的支付方式和渠道。
         paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
         paymentMapper.updatePaymentMethodAndChannel(
                 paymentOrderId,
                 request.getPaymentMethod(),
-                resolvedChannelCode);
+                resolvedChannelCode,
+                submitResult.getChannelTransactionNo());
         String routeNo = "RTR" + System.currentTimeMillis();
         paymentMapper.insertRouteRecord(
                 routeNo,
@@ -181,9 +197,9 @@ public class PaymentServiceImpl implements PaymentService {
                 clientIp,
                 idempotencyKey,
                 buildSubmitRequestPayload(request, terminal, clientIp, idempotencyKey, resolvedChannelCode),
-                "{\"code\":\"SUCCESS\"}",
-                "处理中",
-                "info"
+                submitResult.getResponsePayload(),
+                submitResult.getAttemptStatus(),
+                submitResult.getAttemptStatusType()
         );
         paymentMapper.insertEvent(
                 "EVT" + System.currentTimeMillis(),
@@ -198,7 +214,7 @@ public class PaymentServiceImpl implements PaymentService {
                 resolvedChannelCode,
                 "SUBMIT",
                 "{\"method\":\"" + request.getPaymentMethod() + "\"}",
-                "{\"code\":\"SUCCESS\"}",
+                submitResult.getResponsePayload(),
                 "待回调",
                 "warn"
         );
@@ -322,6 +338,33 @@ public class PaymentServiceImpl implements PaymentService {
         routeContext.setAmount(parseAmount(currentPrepay.getAmount()));
         routeContext.setCustomerName(currentPrepay.getCustomerName());
         return routeContext;
+    }
+
+    /**
+     * 渠道适配器只接收标准化上下文，避免后续接入真实微信/支付宝时还要反向依赖页面请求对象。
+     */
+    private PaymentChannelSubmitRequestDTO buildSubmitAdapterRequest(
+            PaymentSubmitRequestDTO request,
+            PrepayOrderDTO currentPrepay,
+            String paymentOrderId,
+            String resolvedChannelCode,
+            String terminal,
+            String clientIp,
+            String idempotencyKey) {
+        PaymentChannelSubmitRequestDTO submitRequest = new PaymentChannelSubmitRequestDTO();
+        submitRequest.setPaymentOrderId(paymentOrderId);
+        submitRequest.setPrepayOrderNo(currentPrepay.getPrepayOrderNo());
+        submitRequest.setOrderNo(currentPrepay.getOrderNo());
+        submitRequest.setPayScene(currentPrepay.getPayScene());
+        submitRequest.setCustomerName(currentPrepay.getCustomerName());
+        submitRequest.setAmount(parseAmount(currentPrepay.getAmount()));
+        submitRequest.setPaymentMethod(request.getPaymentMethod());
+        submitRequest.setRequestedChannelCode(request.getChannelCode());
+        submitRequest.setResolvedChannelCode(resolvedChannelCode);
+        submitRequest.setTerminal(terminal);
+        submitRequest.setClientIp(clientIp);
+        submitRequest.setIdempotencyKey(idempotencyKey);
+        return submitRequest;
     }
 
     /**

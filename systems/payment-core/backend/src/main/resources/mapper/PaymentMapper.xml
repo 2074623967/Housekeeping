@@ -217,6 +217,7 @@
         UPDATE t_payment_order
         SET payment_method = #{paymentMethod},
             channel_code = #{channelCode},
+            channel_transaction_no = #{channelTransactionNo},
             status = 'WAIT_CALLBACK',
             status_type = 'warn'
         WHERE payment_order_id = #{paymentOrderId}

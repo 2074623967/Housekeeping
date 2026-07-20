@@ -147,7 +147,8 @@ public interface PaymentMapper {
      */
     void updatePaymentMethodAndChannel(@Param("paymentOrderId") String paymentOrderId,
             @Param("paymentMethod") String paymentMethod,
-            @Param("channelCode") String channelCode);
+            @Param("channelCode") String channelCode,
+            @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
      * 按支付单回写支付尝试状态，便于前后端查看当前尝试收口结果。
