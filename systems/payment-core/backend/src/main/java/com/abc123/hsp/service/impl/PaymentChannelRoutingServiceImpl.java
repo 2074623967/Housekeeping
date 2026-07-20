@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
+import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,9 +22,12 @@ import org.springframework.util.StringUtils;
 public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingService {
 
     private final PaymentConfigMapper paymentConfigMapper;
+    private final PaymentMapper paymentMapper;
 
-    public PaymentChannelRoutingServiceImpl(PaymentConfigMapper paymentConfigMapper) {
+    public PaymentChannelRoutingServiceImpl(PaymentConfigMapper paymentConfigMapper,
+                                            PaymentMapper paymentMapper) {
         this.paymentConfigMapper = paymentConfigMapper;
+        this.paymentMapper = paymentMapper;
     }
 
     @Override
@@ -59,11 +63,11 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                 continue;
             }
             PaymentChannelRoutingConfigDTO targetChannel = findEnabledChannel(enabledChannels, rule.getTargetChannelCode());
-            if (targetChannel != null) {
+            if (isRouteAvailable(routeContext, targetChannel)) {
                 return buildDecision(targetChannel.getChannelCode(), rule.getRuleCode(), rule.getRuleName() + " -> " + targetChannel.getChannelCode());
             }
             PaymentChannelRoutingConfigDTO fallbackChannel = findEnabledChannel(enabledChannels, rule.getFallbackChannelCode());
-            if (fallbackChannel != null) {
+            if (isRouteAvailable(routeContext, fallbackChannel)) {
                 return buildDecision(
                         fallbackChannel.getChannelCode(),
                         rule.getRuleCode() + "_FALLBACK",
@@ -82,7 +86,13 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         }
         PaymentChannelRoutingConfigDTO requestedChannel = findEnabledChannel(enabledChannels, normalizedRequestedChannel);
         if (requestedChannel == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PAYMENT_REQUESTED_CHANNEL_INVALID, "requested channel is disabled or missing");
+        }
+        if (!matchesChannelScene(routeContext, requestedChannel)) {
+            throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_SCENE_MISMATCH, "requested channel does not match pay scene");
+        }
+        if (!matchesChannelDailyLimit(routeContext, requestedChannel)) {
+            throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_DAILY_LIMIT_EXCEEDED, "requested channel exceeds daily limit");
         }
         return buildDecision(
                 requestedChannel.getChannelCode(),
@@ -95,7 +105,8 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                                                            List<PaymentChannelRoutingConfigDTO> enabledChannels) {
         String normalizedMethod = normalizeText(routeContext.getPaymentMethod());
         for (PaymentChannelRoutingConfigDTO channel : enabledChannels) {
-            if (normalizeText(channel.getPaymentMethod()).equals(normalizedMethod)) {
+            if (normalizeText(channel.getPaymentMethod()).equals(normalizedMethod)
+                    && isRouteAvailable(routeContext, channel)) {
                 return buildDecision(
                         channel.getChannelCode(),
                         "PAYMENT_METHOD_DEFAULT",
@@ -104,6 +115,26 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             }
         }
         return null;
+    }
+
+    private boolean isRouteAvailable(PaymentRouteContextDTO routeContext, PaymentChannelRoutingConfigDTO channel) {
+        return channel != null
+                && matchesChannelScene(routeContext, channel)
+                && matchesChannelDailyLimit(routeContext, channel);
+    }
+
+    private boolean matchesChannelScene(PaymentRouteContextDTO routeContext, PaymentChannelRoutingConfigDTO channel) {
+        return matchesScene(routeContext, channel.getSceneScope());
+    }
+
+    private boolean matchesChannelDailyLimit(PaymentRouteContextDTO routeContext, PaymentChannelRoutingConfigDTO channel) {
+        if (channel == null || channel.getDailyLimit() == null || channel.getDailyLimit().compareTo(BigDecimal.ZERO) <= 0) {
+            return true;
+        }
+        BigDecimal todayAcceptedAmount = paymentMapper.sumTodayAcceptedAmountByChannel(channel.getChannelCode());
+        BigDecimal acceptedAmount = todayAcceptedAmount == null ? BigDecimal.ZERO : todayAcceptedAmount;
+        BigDecimal requestAmount = routeContext.getAmount() == null ? BigDecimal.ZERO : routeContext.getAmount();
+        return acceptedAmount.add(requestAmount).compareTo(channel.getDailyLimit()) <= 0;
     }
 
     private boolean matchesScene(PaymentRouteContextDTO routeContext, String matchScene) {

@@ -52,6 +52,11 @@ public interface PaymentConfigMapper {
     List<PaymentChannelRoutingConfigDTO> findEnabledChannelsForRouting();
 
     /**
+     * 按渠道编码查询路由执行所需配置。
+     */
+    PaymentChannelRoutingConfigDTO findChannelForRouting(@Param("channelCode") String channelCode);
+
+    /**
      * 查询已启用的路由规则，供支付路由执行使用。
      */
     List<PaymentRouteRuleRuntimeDTO> findEnabledRouteRulesForRouting();

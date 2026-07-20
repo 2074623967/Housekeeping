@@ -110,10 +110,22 @@
         SELECT channel_code AS channelCode,
                payment_method AS paymentMethod,
                scene_scope AS sceneScope,
+               daily_limit AS dailyLimit,
                priority
         FROM t_payment_channel_config
         WHERE status = 'ENABLED'
         ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findChannelForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
+        SELECT channel_code AS channelCode,
+               payment_method AS paymentMethod,
+               scene_scope AS sceneScope,
+               daily_limit AS dailyLimit,
+               priority
+        FROM t_payment_channel_config
+        WHERE channel_code = #{channelCode}
+        LIMIT 1
     </select>
 
     <select id="findEnabledRouteRulesForRouting" resultType="com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO">

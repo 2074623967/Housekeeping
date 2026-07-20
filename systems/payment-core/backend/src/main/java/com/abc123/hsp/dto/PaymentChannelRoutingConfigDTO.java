@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import java.math.BigDecimal;
 import lombok.Data;
 
 /**
@@ -14,6 +15,8 @@ public class PaymentChannelRoutingConfigDTO {
     private String paymentMethod;
     /** 适用场景。 */
     private String sceneScope;
+    /** 单日限额。 */
+    private BigDecimal dailyLimit;
     /** 优先级。 */
     private Integer priority;
 }

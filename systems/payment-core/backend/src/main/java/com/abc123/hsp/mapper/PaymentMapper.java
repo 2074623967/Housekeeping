@@ -223,4 +223,9 @@ public interface PaymentMapper {
      * 判断幂等键对应的支付尝试是否已经存在。
      */
     boolean existsPaymentAttemptByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
+    /**
+     * 查询指定渠道当天已受理的交易金额，用于支付控制限额校验。
+     */
+    BigDecimal sumTodayAcceptedAmountByChannel(@Param("channelCode") String channelCode);
 }

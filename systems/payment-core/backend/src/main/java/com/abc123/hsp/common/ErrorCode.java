@@ -16,6 +16,9 @@ public final class ErrorCode {
     public static final String PAYMENT_ROUTE_UNSUPPORTED = "PAYMENT-1003";
     public static final String PAYMENT_CHANNEL_QUERY_ADAPTER_MISSING = "PAYMENT-1004";
     public static final String PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING = "PAYMENT-1012";
+    public static final String PAYMENT_REQUESTED_CHANNEL_INVALID = "PAYMENT-1013";
+    public static final String PAYMENT_CHANNEL_SCENE_MISMATCH = "PAYMENT-1014";
+    public static final String PAYMENT_CHANNEL_DAILY_LIMIT_EXCEEDED = "PAYMENT-1015";
     public static final String PAYMENT_CALLBACK_SIGNATURE_INVALID = "PAYMENT-1005";
     public static final String PAYMENT_CALLBACK_SECRET_MISSING = "PAYMENT-1006";
     public static final String PAYMENT_CALLBACK_NONCE_REPLAY = "PAYMENT-1007";

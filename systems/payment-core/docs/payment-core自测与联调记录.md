@@ -564,6 +564,31 @@
 3. 调整共享样式，支撑新增的支付前检查区、对比区和建议清单展示。
 4. 完成 `app-web / h5-web / pc-web` 三端生产构建复核，确保共享交易逻辑增强后仍可稳定交付。
 
+## 23. 2026-07-20 支付控制管理 V1 复核
+
+### 23.1 本轮验证结论
+
+本轮围绕“渠道配置已经有场景和单日限额字段，但提交支付时没有真正执行控制”的问题进行了补齐，确认支付主链路已经从“可配置路由”升级到“配置真正参与提交流控”的阶段。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 全量后端测试共 `60` 个并全部通过，新增覆盖渠道单日限额超限后自动切换候选渠道 |
+| 路由控制 | `PaymentChannelRoutingServiceImplTest` | 通过 | 已覆盖规则命中、请求渠道直连、默认支付方式路由、目标渠道停用兜底、单日限额超限切换 |
+| 接口文档同步 | 文档复核 | 通过 | 已补充场景匹配、单日限额、请求渠道非法时直接失败等规则说明 |
+
+### 23.2 本轮补齐项
+
+1. 扩展 `PaymentChannelRoutingConfigDTO`，补齐 `dailyLimit` 路由运行时字段。
+2. 扩展 `PaymentConfigMapper.xml`，让已启用渠道路由查询真实返回 `daily_limit`。
+3. 扩展 `PaymentMapper` 与 `PaymentMapper.xml`，新增按渠道汇总当日已受理金额能力。
+4. 升级 `PaymentChannelRoutingServiceImpl`，在路由决策时叠加渠道场景匹配与单日限额校验。
+5. 为请求渠道不可用、场景不匹配、单日限额超限补齐第一版业务错误码。
+
+### 23.3 当前专业判断
+
+1. 这一版已经把“支付控制管理”从纯文档能力推进到真实主链路能力，但仍只是 V1。
+2. 后续还需要继续补商户权限、接口级限流、并发令牌、重试策略、自检巡检和更复杂的风控分层。
+
 ## 20. 2026-07-20 支付监控 drill-down 增强复核
 
 ### 20.1 本轮验证结论
