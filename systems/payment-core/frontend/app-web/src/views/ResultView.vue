@@ -1,20 +1,48 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { PAYMENT_RESULT_STATE_META, resolvePaymentResultState } from "../constants/payment";
 
+const props = defineProps({
+  terminalVariant: {
+    type: String,
+    default: "app"
+  }
+});
+
+const TERMINAL_COPY = {
+  app: {
+    heroLabel: "App 支付结果",
+    homeLabel: "返回收银台",
+    queryLabel: "查询最新状态",
+    callbackLabel: "模拟成功回调",
+    closeLabel: "关闭支付单"
+  },
+  h5: {
+    heroLabel: "H5 支付结果",
+    homeLabel: "回到支付页",
+    queryLabel: "刷新支付结果",
+    callbackLabel: "模拟成功回调",
+    closeLabel: "结束本次支付"
+  }
+};
+
 const route = useRoute();
+const router = useRouter();
 const resultState = ref("pending");
 const feedbackMessage = ref("");
 const paymentDetail = ref(null);
 const detailLoading = ref(true);
 const queryLoading = ref(false);
 const callbackLoading = ref(false);
+const closeLoading = ref(false);
 const lastAction = ref("");
 
+const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
+const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
 
 function syncStatusByDetail() {
   if (!paymentDetail.value) {
@@ -45,7 +73,7 @@ async function queryResult() {
     paymentDetail.value = await paymentApi.query({ paymentOrderId: route.params.paymentOrderId });
     syncStatusByDetail();
     feedbackMessage.value = `已查询支付单 ${route.params.paymentOrderId} 的最新状态。`;
-    lastAction.value = "query";
+    lastAction.value = "主动查单";
   } catch (error) {
     feedbackMessage.value = error.message;
   } finally {
@@ -63,60 +91,155 @@ async function mockSuccessCallback() {
     });
     syncStatusByDetail();
     feedbackMessage.value = "已模拟成功回调并完成状态收口。";
-    lastAction.value = "callback";
+    lastAction.value = "模拟成功回调";
   } catch (error) {
     feedbackMessage.value = error.message;
   } finally {
     callbackLoading.value = false;
   }
 }
+
+async function closePayment() {
+  closeLoading.value = true;
+  try {
+    paymentDetail.value = await paymentApi.close({ paymentOrderId: route.params.paymentOrderId });
+    syncStatusByDetail();
+    feedbackMessage.value = `支付单 ${route.params.paymentOrderId} 已执行关闭动作。`;
+    lastAction.value = "关闭支付单";
+  } catch (error) {
+    feedbackMessage.value = error.message;
+  } finally {
+    closeLoading.value = false;
+  }
+}
+
+function backToCashier() {
+  const prepayOrderNo = route.query.prepayOrderNo;
+  if (!prepayOrderNo) {
+    return;
+  }
+  router.push(`/cashier/${prepayOrderNo}`);
+}
 </script>
 
 <template>
-  <div class="page">
-    <div class="result">
-      <div class="result-icon">{{ resultState === "success" ? "✓" : resultState === "closed" ? "!" : "…" }}</div>
-      <h1>{{ resultTitle }}</h1>
-      <p class="muted">{{ resultHint }}</p>
-      <div class="result-meta">
-        <div>支付单号：{{ route.params.paymentOrderId || "-" }}</div>
-        <div>预付单号：{{ route.query.prepayOrderNo || "-" }}</div>
-        <div>支付方式：{{ route.query.paymentMethod || "-" }}</div>
+  <div class="terminal-page" :class="`terminal-${terminalVariant}`">
+    <section class="terminal-hero">
+      <div class="hero-copy">
+        <div class="hero-label">{{ terminalCopy.heroLabel }}</div>
+        <h1>{{ resultTitle }}</h1>
+        <p>{{ resultHint }}</p>
       </div>
-      <div class="result-actions">
-        <button class="button secondary" :disabled="queryLoading" @click="queryResult">
-          {{ queryLoading ? "查询中..." : "查询最新状态" }}
-        </button>
-        <button class="button primary" :disabled="callbackLoading" @click="mockSuccessCallback">
-          {{ callbackLoading ? "回调中..." : "模拟成功回调" }}
-        </button>
-      </div>
-      <div v-if="feedbackMessage" class="result-message">{{ feedbackMessage }}</div>
-      <div v-if="detailLoading" class="result-message">支付结果加载中...</div>
-      <div v-if="paymentDetail" class="result-detail">
-        <div><strong>当前状态：</strong>{{ paymentDetail.status }}</div>
-        <div><strong>订单号：</strong>{{ paymentDetail.orderNo }}</div>
-        <div><strong>金额：</strong>{{ paymentDetail.amount }}</div>
-        <div><strong>渠道：</strong>{{ paymentDetail.channel }}</div>
-        <div><strong>最近动作：</strong>{{ lastAction || "-" }}</div>
-        <div><strong>查单来源：</strong>{{ paymentDetail.querySource || "-" }}</div>
-        <div><strong>支付方式：</strong>{{ paymentDetail.paymentMethod || "-" }}</div>
-        <div><strong>渠道流水号：</strong>{{ paymentDetail.channelTransactionNo || "-" }}</div>
-      </div>
-      <div v-if="paymentDetail" class="timeline-panel">
-        <div class="timeline-section">
-          <h3>路由轨迹</h3>
-          <div v-for="item in paymentDetail.routeLogs || []" :key="item" class="timeline-item">{{ item }}</div>
-        </div>
-        <div class="timeline-section">
-          <h3>回调轨迹</h3>
-          <div v-for="item in paymentDetail.notifyLogs || []" :key="item" class="timeline-item">{{ item }}</div>
-        </div>
-        <div class="timeline-section">
-          <h3>事件轨迹</h3>
-          <div v-for="item in paymentDetail.eventLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+      <div class="hero-amount-card">
+        <div class="mini-label">支付状态</div>
+        <div class="hero-amount status-text">{{ paymentDetail?.status || "处理中" }}</div>
+        <div class="hero-status-row">
+          <span class="status-pill" :class="resultBadgeClass">{{ paymentDetail?.statusType || "info" }}</span>
+          <span class="countdown-pill">{{ route.params.paymentOrderId }}</span>
         </div>
       </div>
+    </section>
+
+    <div v-if="detailLoading" class="terminal-card terminal-state-card">支付结果加载中...</div>
+    <div v-else-if="feedbackMessage && !paymentDetail" class="terminal-card terminal-state-card">{{ feedbackMessage }}</div>
+
+    <div v-else class="terminal-grid">
+      <section class="terminal-card">
+        <div class="section-heading">
+          <div>
+            <h3>结果摘要</h3>
+            <p>当前支付单的交易收口状态、渠道流水和联调动作都会在这里更新。</p>
+          </div>
+          <span class="support-tag">交易闭环已留痕</span>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span>支付单号</span>
+            <strong>{{ paymentDetail?.paymentOrderId || route.params.paymentOrderId }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>预付单号</span>
+            <strong>{{ paymentDetail?.prepayOrderNo || route.query.prepayOrderNo || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>订单号</span>
+            <strong>{{ paymentDetail?.orderNo || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>客户名称</span>
+            <strong>{{ paymentDetail?.customerName || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>金额</span>
+            <strong>{{ paymentDetail?.amount || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>支付方式</span>
+            <strong>{{ paymentDetail?.paymentMethod || route.query.paymentMethod || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>渠道编码</span>
+            <strong>{{ paymentDetail?.channel || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>渠道流水号</span>
+            <strong>{{ paymentDetail?.channelTransactionNo || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>最近动作</span>
+            <strong>{{ lastAction || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>查单来源</span>
+            <strong>{{ paymentDetail?.querySource || "-" }}</strong>
+          </div>
+        </div>
+
+        <div class="terminal-actions">
+          <button class="action-button primary" :disabled="queryLoading" @click="queryResult">
+            {{ queryLoading ? "查询中..." : terminalCopy.queryLabel }}
+          </button>
+          <button class="action-button secondary" :disabled="callbackLoading" @click="mockSuccessCallback">
+            {{ callbackLoading ? "回调中..." : terminalCopy.callbackLabel }}
+          </button>
+          <button class="action-button ghost" :disabled="closeLoading" @click="closePayment">
+            {{ closeLoading ? "关闭中..." : terminalCopy.closeLabel }}
+          </button>
+          <button class="action-button secondary" :disabled="!route.query.prepayOrderNo" @click="backToCashier">
+            {{ terminalCopy.homeLabel }}
+          </button>
+        </div>
+
+        <p v-if="feedbackMessage" class="feedback-text">{{ feedbackMessage }}</p>
+      </section>
+
+      <section class="terminal-card">
+        <div class="section-heading">
+          <div>
+            <h3>支付轨迹</h3>
+            <p>按路由、回调、事件三个维度查看整个支付链路的收口过程。</p>
+          </div>
+        </div>
+
+        <div class="timeline-cluster">
+          <div class="timeline-block">
+            <h4>路由轨迹</h4>
+            <div v-for="item in paymentDetail?.routeLogs || []" :key="item" class="timeline-entry">{{ item }}</div>
+            <div v-if="!(paymentDetail?.routeLogs || []).length" class="timeline-empty">当前暂无路由轨迹</div>
+          </div>
+          <div class="timeline-block">
+            <h4>回调轨迹</h4>
+            <div v-for="item in paymentDetail?.notifyLogs || []" :key="item" class="timeline-entry">{{ item }}</div>
+            <div v-if="!(paymentDetail?.notifyLogs || []).length" class="timeline-empty">当前暂无回调轨迹</div>
+          </div>
+          <div class="timeline-block">
+            <h4>事件轨迹</h4>
+            <div v-for="item in paymentDetail?.eventLogs || []" :key="item" class="timeline-entry">{{ item }}</div>
+            <div v-if="!(paymentDetail?.eventLogs || []).length" class="timeline-empty">当前暂无事件轨迹</div>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>

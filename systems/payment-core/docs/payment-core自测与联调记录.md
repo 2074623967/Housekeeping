@@ -192,14 +192,14 @@
 | --- | --- | --- | --- |
 | `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
 | `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
-| `h5-web` | 复用 `app-web` Vite 命令构建 | 环境阻塞 | `h5-web` 当前未安装本地 `node_modules`，需执行依赖安装后再复核；代码层面上一轮临时依赖验证曾通过 |
+| `h5-web` | `npm install --cache /private/tmp/h5-web-npm-cache` 后执行 `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` | 通过 | H5 用户端当前已完成依赖安装与生产构建复核 |
 | 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`31` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
 1. 当前一期主线应以 `admin-web + app-web + backend` 为核心交付，不再将 `pc-web` 作为当前阻塞项。
-2. `h5-web` 可保留为多端扩展基础，但必须完成依赖安装与构建复核后，才能标记为正式交付端。
-3. 后续继续开发前，需要把 H5 依赖安装和真实接口联调纳入自测清单，不把“未验证”误写成“已通过”。
+2. `h5-web` 已从“多端扩展基础”升级为“已完成构建复核的正式交付端”，后续可以继续增强页面矩阵与真实链路联调。
+3. 后续继续开发前，需要把 H5 真实接口联调纳入自测清单，不把“仅构建通过”误写成“全链路已验证”。
 
 ### 7.3 本轮修复项
 
@@ -212,6 +212,28 @@
 7. 补齐支付配置中心 V1：支付渠道配置、路由规则配置、渠道/规则启停接口和后台页面，并增加配置服务单测。
 8. 补齐支付监控分析 V1：支付趋势、渠道表现、异常告警接口与后台页面，并增加监控服务单测。
 9. 将支付回调安全能力升级为生产化 V1：渠道独立回调密钥、持久化 nonce 防重放、渠道编码统一归一化，并更新配置展示页。
+
+## 9. 2026-07-20 用户支付端精修复核
+
+### 9.1 本轮验证结论
+
+本轮围绕 `app-web / h5-web` 的收银台与支付结果页进行了前端交付增强，确认两端已经从“基础可用”升级到“可联调、可演示、可继续扩展”的正式页面状态。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| `app-web` 收银台 | 通过 | 已补齐会话倒计时、渠道说明、支付单号、幂等键、终端标识和主动关闭支付动作 |
+| `app-web` 支付结果页 | 通过 | 已补齐结果摘要、轨迹分区、主动查单、模拟回调、关闭支付、返回收银台动作 |
+| `h5-web` 收银台/结果页 | 通过 | 已复用同一套支付逻辑，并补齐 H5 终端展示文案和构建验证 |
+| `app-web` 构建 | 通过 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-20260720 --emptyOutDir` 成功 |
+| `h5-web` 构建 | 通过 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260720 --emptyOutDir` 成功 |
+
+### 9.2 本轮修复项
+
+1. 将用户端样式升级为响应式终端布局，去掉旧版 `min-width: 1200px` 的桌面限制。
+2. 为收银台补齐支付方式说明、倒计时、会话状态、支付单号和联调留痕信息。
+3. 为收银台补齐主动关闭支付动作，便于测试异常流和重复发起支付场景。
+4. 为支付结果页补齐关闭支付、返回收银台、路由/回调/事件分区展示。
+5. 为 `h5-web` 完成依赖安装与正式构建复核，修正此前“环境阻塞”的旧结论。
 
 ## 8. 2026-07-20 配置化路由闭环复核
 

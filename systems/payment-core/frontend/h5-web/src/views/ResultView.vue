@@ -1,5 +1,5 @@
 <template>
-  <ResultView />
+  <ResultView terminal-variant="h5" />
 </template>
 
 <script setup>

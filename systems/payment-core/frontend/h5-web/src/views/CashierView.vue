@@ -1,5 +1,5 @@
 <template>
-  <CashierView />
+  <CashierView terminal-variant="h5" />
 </template>
 
 <script setup>
