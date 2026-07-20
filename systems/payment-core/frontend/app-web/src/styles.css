@@ -423,6 +423,76 @@ button {
   gap: 12px;
 }
 
+.desktop-payment-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.desktop-qr-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.desktop-qr-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.desktop-qr-header p {
+  margin: 8px 0 0;
+  color: #53657d;
+  line-height: 1.65;
+}
+
+.desktop-qr-frame {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.desktop-qr-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+  width: 208px;
+  height: 208px;
+}
+
+.desktop-qr-cell {
+  border-radius: 4px;
+  background: #dbeafe;
+}
+
+.desktop-qr-cell.filled {
+  background: #0f172a;
+}
+
+.desktop-qr-meta {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.desktop-qr-meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-qr-meta span {
+  color: #64748b;
+  font-size: 13px;
+}
+
 .desktop-hint-card {
   padding: 16px;
   border-radius: 18px;
@@ -448,6 +518,7 @@ button {
   .terminal-grid,
   .channel-tips,
   .summary-grid,
+  .desktop-payment-grid,
   .desktop-hint-grid {
     grid-template-columns: 1fr;
   }

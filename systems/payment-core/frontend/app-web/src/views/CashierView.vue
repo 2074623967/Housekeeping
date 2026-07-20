@@ -131,6 +131,25 @@ const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
 });
+const desktopQrCodeValue = computed(() => {
+  if (!isPcVariant.value || !cashier.value) {
+    return "";
+  }
+  return [
+    "HSPAY",
+    cashier.value.paymentOrderId || "UNKNOWN",
+    cashier.value.prepayOrderNo || "UNKNOWN",
+    resolvePaymentChannelCode(selectedPaymentMethod.value),
+    terminalMeta.value.terminalCode
+  ].join("|");
+});
+const desktopQrBlocks = computed(() => {
+  const source = desktopQrCodeValue.value || "HSPAY";
+  return Array.from({ length: 81 }, (_, index) => {
+    const seed = source.charCodeAt(index % source.length) + index * 7;
+    return seed % 3 === 0;
+  });
+});
 const countdownLabel = computed(() => {
   const hours = String(Math.floor(countdownSeconds.value / 3600)).padStart(2, "0");
   const minutes = String(Math.floor((countdownSeconds.value % 3600) / 60)).padStart(2, "0");
@@ -272,14 +291,44 @@ async function closeCurrentPayment() {
 
         <p v-if="message" class="feedback-text">{{ message }}</p>
 
-        <div v-if="isPcVariant" class="desktop-hint-grid">
-          <div class="desktop-hint-card">
-            <strong>桌面端支付建议</strong>
-            <p>若用户使用微信或支付宝，建议展示二维码并保留当前页面，等待回调或主动查单完成收口。</p>
+        <div v-if="isPcVariant" class="desktop-payment-grid">
+          <div class="desktop-qr-card">
+            <div class="desktop-qr-header">
+              <div>
+                <strong>桌面端扫码支付区</strong>
+                <p>当前桌面端保留模拟二维码载体，后续可直接替换为真实渠道二维码组件。</p>
+              </div>
+              <span class="support-tag">PC 扫码模式</span>
+            </div>
+            <div class="desktop-qr-frame">
+              <div class="desktop-qr-grid">
+                <span
+                  v-for="(filled, index) in desktopQrBlocks"
+                  :key="index"
+                  :class="['desktop-qr-cell', { filled }]"
+                />
+              </div>
+            </div>
+            <div class="desktop-qr-meta">
+              <div><span>扫码方式</span><strong>{{ selectedPaymentMethod }}</strong></div>
+              <div><span>渠道编码</span><strong>{{ resolvePaymentChannelCode(selectedPaymentMethod) }}</strong></div>
+              <div><span>支付载荷</span><strong class="mono-text">{{ desktopQrCodeValue }}</strong></div>
+            </div>
           </div>
-          <div class="desktop-hint-card">
-            <strong>失败补救动作</strong>
-            <p>如浏览器关闭、扫码超时或渠道报错，可先关闭支付单，再由订单中心重新拉起新的预付单。</p>
+
+          <div class="desktop-hint-grid">
+            <div class="desktop-hint-card">
+              <strong>桌面端支付建议</strong>
+              <p>若用户使用微信或支付宝，建议保留当前页面等待回调；如迟迟未返回，可在结果页或后台执行主动查单。</p>
+            </div>
+            <div class="desktop-hint-card">
+              <strong>失败补救动作</strong>
+              <p>如浏览器关闭、扫码超时或渠道报错，可先关闭支付单，再由订单中心重新拉起新的预付单。</p>
+            </div>
+            <div class="desktop-hint-card">
+              <strong>联查建议</strong>
+              <p>若支付状态与后台不一致，请记录支付单号和预付单号，先核对支付请求，再查看回调与事件轨迹。</p>
+            </div>
           </div>
         </div>
       </section>

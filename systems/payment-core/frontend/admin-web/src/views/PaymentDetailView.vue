@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 
@@ -10,6 +10,36 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
+
+const paymentRecordDetailRoute = computed(() => {
+  if (!detail.value?.paymentOrderId) {
+    return "";
+  }
+  return `/payment-records/${detail.value.paymentOrderId}?recordType=ALL`;
+});
+
+const orderRoute = computed(() => {
+  if (!detail.value?.orderNo) {
+    return "";
+  }
+  return `/orders?orderNo=${detail.value.orderNo}`;
+});
+
+const billRoute = computed(() => {
+  if (!detail.value?.billNo && !detail.value?.orderNo) {
+    return "";
+  }
+  const billNo = detail.value?.billNo || "";
+  const orderNo = detail.value?.orderNo || "";
+  return `/bills?billNo=${billNo}&orderNo=${orderNo}`;
+});
+
+const cashierUrl = computed(() => {
+  if (!detail.value?.prepayOrderNo) {
+    return "";
+  }
+  return `http://127.0.0.1:5175/cashier/${detail.value.prepayOrderNo}`;
+});
 
 async function loadDetail() {
   isLoading.value = true;
@@ -83,6 +113,13 @@ onMounted(loadDetail);
         <button class="button secondary" @click="router.push(`/payment-requests?paymentOrderId=${route.params.paymentOrderId}`)">
           查看支付请求
         </button>
+        <button
+          class="button secondary"
+          :disabled="!paymentRecordDetailRoute"
+          @click="router.push(paymentRecordDetailRoute)"
+        >
+          查看支付记录
+        </button>
         <button class="button secondary" @click="router.push(`/payment-logs?paymentOrderId=${route.params.paymentOrderId}`)">
           查看处理日志
         </button>
@@ -129,26 +166,41 @@ onMounted(loadDetail);
         <div class="detail-grid detail-grid-wide">
           <div><strong>订单号：</strong>{{ detail.orderNo }}</div>
           <div><strong>客户：</strong>{{ detail.customerName }}</div>
+          <div><strong>账单号：</strong>{{ detail.billNo || "-" }}</div>
           <div><strong>金额：</strong>{{ detail.amount }}</div>
           <div><strong>支付方式：</strong>{{ detail.paymentMethod }}</div>
           <div><strong>支付渠道：</strong>{{ detail.channel }}</div>
           <div><strong>渠道交易号：</strong>{{ detail.channelTransactionNo || "-" }}</div>
+          <div><strong>查单来源：</strong>{{ detail.querySource || "-" }}</div>
           <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
         </div>
+
+        <section class="panel mini">
+          <h4>联查入口</h4>
+          <div class="list-actions">
+            <RouterLink v-if="detail.orderNo" class="link-button" :to="orderRoute">回到订单中心</RouterLink>
+            <RouterLink v-if="detail.billNo || detail.orderNo" class="link-button" :to="billRoute">查看账单中心</RouterLink>
+            <RouterLink v-if="paymentRecordDetailRoute" class="link-button" :to="paymentRecordDetailRoute">查看支付记录详情</RouterLink>
+            <a v-if="cashierUrl" class="link-button" :href="cashierUrl" target="_blank" rel="noreferrer">打开当前收银台</a>
+          </div>
+        </section>
 
         <div class="split-panels">
           <section class="panel mini">
             <h4>路由记录</h4>
             <div v-for="item in detail.routeLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+            <div v-if="!(detail.routeLogs || []).length" class="state-box">当前暂无路由记录</div>
           </section>
           <section class="panel mini">
             <h4>回调日志</h4>
             <div v-for="item in detail.notifyLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+            <div v-if="!(detail.notifyLogs || []).length" class="state-box">当前暂无回调日志</div>
           </section>
         </div>
         <section class="panel mini">
           <h4>事件轨迹</h4>
           <div v-for="item in detail.eventLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+          <div v-if="!(detail.eventLogs || []).length" class="state-box">当前暂无事件轨迹</div>
         </section>
       </template>
     </section>
