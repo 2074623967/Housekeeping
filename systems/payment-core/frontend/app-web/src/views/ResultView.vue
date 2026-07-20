@@ -51,6 +51,45 @@ const isPcVariant = computed(() => props.terminalVariant === "pc");
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
+const nextStepChecklist = computed(() => {
+  if (resultState.value === "success") {
+    return [
+      "支付已成功收口，可回到订单页继续履约或查看服务进度。",
+      "若后台与用户端状态不一致，优先查看事件轨迹是否已投递到账务、清分和结算链路。",
+      "若是 PC 场景，建议客服或运营保留当前页，便于复核渠道流水号。"
+    ];
+  }
+  if (resultState.value === "closed") {
+    return [
+      "当前支付单已关闭，建议返回收银台重新发起新的预付单。",
+      "若用户已实际付款，请先保留凭证并联系运营核查渠道回调与支付请求。",
+      "如关闭前发生重复点击，需对照幂等键和支付请求页确认是否存在重复提交流水。"
+    ];
+  }
+  return [
+    "当前结果尚未最终收口，可先执行主动查单刷新最新状态。",
+    "若渠道回调存在延迟，建议结合路由轨迹、回调轨迹和事件轨迹一起排查。",
+    "若用户需要立即重试，先关闭当前支付单，再回到收银台切换支付方式发起新支付。"
+  ];
+});
+const recoveryActions = computed(() => {
+  if (resultState.value === "success") {
+    return [
+      "回到订单中心确认履约状态。",
+      "如需补开发票或二次服务，可沿用当前订单号继续后续流程。"
+    ];
+  }
+  if (resultState.value === "closed") {
+    return [
+      "重新拉起新的预付单并刷新用户收银台。",
+      "同步客服说明当前旧支付单已关闭，避免用户重复付款。"
+    ];
+  }
+  return [
+    "优先主动查单，再决定是否模拟回调或关闭支付单。",
+    "保留支付单号、预付单号、幂等键，便于后台快速联查。"
+  ];
+});
 
 function syncStatusByDetail() {
   if (!paymentDetail.value) {
@@ -230,6 +269,21 @@ function backToCashier() {
           </div>
           <div class="ops-row"><span>最近请求报文</span><span class="mono-text">{{ paymentDetail?.latestRequestPayload || "-" }}</span></div>
           <div class="ops-row"><span>最近响应报文</span><span class="mono-text">{{ paymentDetail?.latestResponsePayload || "-" }}</span></div>
+        </div>
+
+        <div class="terminal-ops-grid">
+          <div class="ops-card">
+            <div class="ops-title">建议下一步</div>
+            <ul class="result-checklist">
+              <li v-for="item in nextStepChecklist" :key="item">{{ item }}</li>
+            </ul>
+          </div>
+          <div class="ops-card">
+            <div class="ops-title">补救动作</div>
+            <ul class="result-checklist">
+              <li v-for="item in recoveryActions" :key="item">{{ item }}</li>
+            </ul>
+          </div>
         </div>
 
         <div class="terminal-actions">

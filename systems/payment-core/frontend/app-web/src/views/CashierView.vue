@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { resolvePaymentChannelCode } from "../constants/payment";
@@ -42,17 +42,23 @@ const CHANNEL_META = {
   微信支付: {
     icon: "WX",
     description: "适合大多数个人用户，回调速度快，适配 H5 / App。",
-    settlementHint: "预计实时回调，异常时支持主动查单。 "
+    settlementHint: "预计实时回调，异常时支持主动查单。",
+    recommendedScenes: "个人用户、日常保洁、到家服务",
+    fallbackAction: "若停留在支付中，可等待回调 3-5 秒后主动查单。"
   },
   支付宝: {
     icon: "ALI",
     description: "适合 H5、生活服务与活动支付场景，兼容性稳定。",
-    settlementHint: "适用于兜底路由和多终端支付结果收口。"
+    settlementHint: "适用于兜底路由和多终端支付结果收口。",
+    recommendedScenes: "活动拉新、生活服务、桌面浏览器",
+    fallbackAction: "若用户侧浏览器中断，可重新进入收银台并沿用当前支付单继续查单。"
   },
   银行卡: {
     icon: "BANK",
     description: "适合企业客户、大额支付和线下转账认领。",
-    settlementHint: "大额订单建议保留付款凭证，便于运营复核。"
+    settlementHint: "大额订单建议保留付款凭证，便于运营复核。",
+    recommendedScenes: "企业客户、大额补款、线下转账",
+    fallbackAction: "若用户已转账但结果未收口，请保留凭证并联系运营核对渠道流水。"
   }
 };
 
@@ -127,6 +133,7 @@ const isPcVariant = computed(() => props.terminalVariant === "pc");
 const channels = computed(() => cashier.value?.channels || []);
 const hasChannels = computed(() => channels.value.length > 0);
 const selectedChannelMeta = computed(() => CHANNEL_META[selectedPaymentMethod.value] || null);
+const selectedChannelCode = computed(() => resolvePaymentChannelCode(selectedPaymentMethod.value));
 const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
@@ -157,6 +164,55 @@ const countdownLabel = computed(() => {
   return `${hours}:${minutes}:${seconds}`;
 });
 const canClose = computed(() => Boolean(cashier.value?.paymentOrderId) && countdownSeconds.value > 0);
+const countdownRiskLevel = computed(() => {
+  if (countdownSeconds.value <= 0) {
+    return "danger";
+  }
+  if (countdownSeconds.value <= 300) {
+    return "warn";
+  }
+  return "info";
+});
+const countdownRiskHint = computed(() => {
+  if (countdownSeconds.value <= 0) {
+    return "当前会话已过期，建议关闭支付单后重新发起新的预付单。";
+  }
+  if (countdownSeconds.value <= 300) {
+    return "当前会话剩余时间较短，建议尽快完成支付，避免支付中断后重新拉起。";
+  }
+  return "会话状态正常，可继续完成支付。";
+});
+const paymentReadinessChecklist = computed(() => {
+  return [
+    {
+      title: "支付对象",
+      detail: `订单 ${cashier.value?.orderNo || "-"} / 账单 ${cashier.value?.billNo || "-"}`,
+      statusType: cashier.value?.orderNo && cashier.value?.billNo ? "success" : "warn"
+    },
+    {
+      title: "会话时效",
+      detail: countdownRiskHint.value,
+      statusType: countdownRiskLevel.value
+    },
+    {
+      title: "支付方式",
+      detail: `${selectedPaymentMethod.value || "-"} / ${selectedChannelCode.value || "-"}`,
+      statusType: hasChannels.value ? "success" : "danger"
+    }
+  ];
+});
+const paymentMethodComparisonRows = computed(() => {
+  return channels.value.map((item) => {
+    const meta = CHANNEL_META[item] || {};
+    return {
+      paymentMethod: item,
+      channelCode: resolvePaymentChannelCode(item),
+      description: meta.description || "系统已接入该支付方式。",
+      recommendedScenes: meta.recommendedScenes || "通用支付场景",
+      fallbackAction: meta.fallbackAction || "支付异常时建议先主动查单，再决定是否关闭当前支付单。"
+    };
+  });
+});
 
 async function refreshCashier() {
   refreshLoading.value = true;
@@ -213,6 +269,15 @@ async function closeCurrentPayment() {
     closeLoading.value = false;
   }
 }
+
+function regenerateIdempotencyKey() {
+  idempotencyKey.value = generateIdempotencyKey();
+  message.value = "已重新生成本次支付的幂等键，可用于重新联调当前支付方式。";
+}
+
+watch(selectedPaymentMethod, () => {
+  idempotencyKey.value = generateIdempotencyKey();
+});
 </script>
 
 <template>
@@ -275,6 +340,10 @@ async function closeCurrentPayment() {
             <strong>结算提示</strong>
             <p>{{ selectedChannelMeta.settlementHint }}</p>
           </div>
+          <div>
+            <strong>失败补救</strong>
+            <p>{{ selectedChannelMeta.fallbackAction }}</p>
+          </div>
         </div>
 
         <div class="terminal-actions">
@@ -287,9 +356,30 @@ async function closeCurrentPayment() {
           <button class="action-button ghost" :disabled="closeLoading || !canClose" @click="closeCurrentPayment">
             {{ closeLoading ? "关闭中..." : terminalMeta.closeLabel }}
           </button>
+          <button class="action-button secondary" @click="regenerateIdempotencyKey">
+            重置幂等键
+          </button>
         </div>
 
         <p v-if="message" class="feedback-text">{{ message }}</p>
+
+        <div class="terminal-ops-grid">
+          <div class="ops-card">
+            <div class="ops-title">支付前检查</div>
+            <div v-for="item in paymentReadinessChecklist" :key="item.title" class="ops-row">
+              <span>{{ item.title }}</span>
+              <span :class="['status-pill', `status-${item.statusType}`]">{{ item.detail }}</span>
+            </div>
+          </div>
+          <div class="ops-card">
+            <div class="ops-title">会话风险提示</div>
+            <div class="ops-row">
+              <span>当前倒计时</span>
+              <span :class="['status-pill', `status-${countdownRiskLevel}`]">{{ countdownLabel }}</span>
+            </div>
+            <p class="ops-description">{{ countdownRiskHint }}</p>
+          </div>
+        </div>
 
         <div v-if="isPcVariant" class="desktop-payment-grid">
           <div class="desktop-qr-card">
@@ -381,6 +471,21 @@ async function closeCurrentPayment() {
           <div class="ops-row"><span>终端标识</span><span>{{ terminalMeta.terminalCode }}</span></div>
           <div class="ops-row"><span>幂等键</span><span class="mono-text">{{ idempotencyKey || "-" }}</span></div>
           <div class="ops-row"><span>可选渠道</span><span>{{ channels.join(" / ") || "-" }}</span></div>
+        </div>
+
+        <div v-if="paymentMethodComparisonRows.length" class="ops-card">
+          <div class="ops-title">支付方式对比与补救建议</div>
+          <div v-for="item in paymentMethodComparisonRows" :key="item.paymentMethod" class="comparison-card">
+            <div class="comparison-header">
+              <strong>{{ item.paymentMethod }}</strong>
+              <span class="mono-text">{{ item.channelCode }}</span>
+            </div>
+            <p>{{ item.description }}</p>
+            <div class="comparison-meta">
+              <span>推荐场景：{{ item.recommendedScenes }}</span>
+              <span>补救建议：{{ item.fallbackAction }}</span>
+            </div>
+          </div>
         </div>
       </section>
     </div>
