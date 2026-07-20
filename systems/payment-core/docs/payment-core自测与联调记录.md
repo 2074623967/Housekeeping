@@ -117,7 +117,7 @@
    - `PAYMENT_SUBMIT`
    - `PAYMENT_SUCCESS`
    - 回调日志 `SUBMIT / SUCCESS`
-   - 路由日志 `默认渠道路由 / 微信支付`
+   - 路由日志 `RULE_HOME_WX / 家政 H5 微信优先 -> wx_h5`
 
 ## 3. 本轮修复项
 
@@ -193,7 +193,7 @@
 | `admin-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist --emptyOutDir` | 通过 | 后台运营端当前可完成生产构建 |
 | `app-web` | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist --emptyOutDir` | 通过 | 用户端收银台与结果页当前可完成生产构建 |
 | `h5-web` | 复用 `app-web` Vite 命令构建 | 环境阻塞 | `h5-web` 当前未安装本地 `node_modules`，需执行依赖安装后再复核；代码层面上一轮临时依赖验证曾通过 |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`26` 个测试全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 使用用户指定 Maven 与 repository，`31` 个测试全部通过 |
 
 ### 7.2 本轮专业判断
 
@@ -212,3 +212,24 @@
 7. 补齐支付配置中心 V1：支付渠道配置、路由规则配置、渠道/规则启停接口和后台页面，并增加配置服务单测。
 8. 补齐支付监控分析 V1：支付趋势、渠道表现、异常告警接口与后台页面，并增加监控服务单测。
 9. 将支付回调安全能力升级为生产化 V1：渠道独立回调密钥、持久化 nonce 防重放、渠道编码统一归一化，并更新配置展示页。
+
+## 8. 2026-07-20 配置化路由闭环复核
+
+### 8.1 本轮验证结论
+
+本轮围绕“支付配置中心的路由规则不能只停留在展示层”进行了代码与测试复核，确认当前主链路已经从硬编码默认路由升级为配置驱动路由执行。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| 支付提交主链路 | 通过 | `submit` 已按支付方式、请求渠道、支付场景、终端、金额、客户类型组装路由上下文 |
+| 路由规则命中 | 通过 | 已支持 `matchScene` + `AND/OR` 表达式匹配 |
+| 路由兜底 | 通过 | 目标渠道停用时，可自动落到规则兜底渠道 |
+| 自动化测试 | 通过 | 新增配置化路由测试后，全量后端测试为 `31` 个并全部通过 |
+
+### 8.2 本轮修复项
+
+1. 将 `PaymentServiceImpl.submit` 从旧版 `paymentMethod + channelCode` 硬编码路由，改为读取配置化路由决策对象。
+2. 提交支付时，路由日志不再写“默认渠道路由”，改为真实记录命中的 `routeRule` 和 `routeResult`。
+3. 新增金额解析逻辑，将预付单展示金额统一还原为数值，用于路由表达式比较。
+4. 新增 `PaymentChannelRoutingServiceImplTest`，覆盖规则命中、请求渠道直连、支付方式默认路由、目标渠道停用后兜底四类场景。
+5. 调整 `PaymentServiceImplTest`，校验提交支付后写入的是配置化路由结果，而不是旧的默认路由描述。

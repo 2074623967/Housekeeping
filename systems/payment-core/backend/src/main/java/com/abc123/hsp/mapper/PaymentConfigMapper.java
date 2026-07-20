@@ -1,7 +1,9 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -19,6 +21,16 @@ public interface PaymentConfigMapper {
      * 查询支付路由规则配置。
      */
     List<PaymentRouteRuleConfigDTO> findRouteRules();
+
+    /**
+     * 查询已启用的渠道配置，供支付路由执行使用。
+     */
+    List<PaymentChannelRoutingConfigDTO> findEnabledChannelsForRouting();
+
+    /**
+     * 查询已启用的路由规则，供支付路由执行使用。
+     */
+    List<PaymentRouteRuleRuntimeDTO> findEnabledRouteRulesForRouting();
 
     /**
      * 更新渠道启停状态。

@@ -39,6 +39,29 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
+        SELECT channel_code AS channelCode,
+               payment_method AS paymentMethod,
+               scene_scope AS sceneScope,
+               priority
+        FROM t_payment_channel_config
+        WHERE status = 'ENABLED'
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findEnabledRouteRulesForRouting" resultType="com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO">
+        SELECT rule_code AS ruleCode,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               priority
+        FROM t_payment_route_rule_config
+        WHERE status = 'ENABLED'
+        ORDER BY priority ASC, id ASC
+    </select>
+
     <update id="updateChannelStatus">
         UPDATE t_payment_channel_config
         SET status = #{status},

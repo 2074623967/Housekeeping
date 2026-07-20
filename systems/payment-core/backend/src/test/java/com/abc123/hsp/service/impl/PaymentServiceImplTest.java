@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
+import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
@@ -231,13 +232,20 @@ class PaymentServiceImplTest {
         PrepayOrderDTO prepay = new PrepayOrderDTO();
         prepay.setPrepayOrderNo("PRE-200");
         prepay.setPaymentOrderId("PAY-200");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        prepay.setCustomerName("张女士");
         when(paymentMapper.findPrepay("PRE-200")).thenReturn(prepay);
 
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-200");
         detail.setStatus("PREPAY_CREATED");
         when(paymentMapper.findDetail("PAY-200")).thenReturn(detail);
-        when(paymentChannelRoutingService.resolve("微信支付", "WX_H5")).thenReturn("WX_H5");
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
         when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-200")).thenReturn(true);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
@@ -268,6 +276,68 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-200", result.getPrepayOrderNo());
+    }
+
+    @Test
+    void shouldWriteConfiguredRoutingDecisionWhenSubmitPayment() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-300");
+        prepay.setPaymentOrderId("PAY-300");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥6,800.00");
+        prepay.setCustomerName("企业客户-晨星科技");
+        when(paymentMapper.findPrepay("PRE-300")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-300");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-300")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("offline_bank");
+        routeDecision.setRouteRule("RULE_ENTERPRISE_BANK");
+        routeDecision.setRouteResult("企业大额订单走线下银行 -> offline_bank");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-300")).thenReturn(false);
+        when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-300")).thenReturn("ORD-300");
+        when(paymentMapper.findPrepay("PRE-300")).thenReturn(prepay);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-300");
+        request.setPaymentMethod("银行转账");
+        request.setChannelCode("BANK_CARD");
+        request.setTerminal("PC");
+        request.setClientIp("10.0.0.3");
+        request.setIdempotencyKey("IDEMP-300");
+
+        PrepayOrderDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService)
+                .submit(request);
+
+        verify(paymentMapper, times(1)).updatePaymentMethodAndChannel("PAY-300", "银行转账", "offline_bank");
+        verify(paymentMapper, times(1)).insertRouteRecord(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("PAY-300"),
+                org.mockito.ArgumentMatchers.eq("offline_bank"),
+                org.mockito.ArgumentMatchers.eq("RULE_ENTERPRISE_BANK"),
+                org.mockito.ArgumentMatchers.eq("企业大额订单走线下银行 -> offline_bank"));
+        verify(paymentMapper, times(1)).insertPaymentAttempt(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("PRE-300"),
+                org.mockito.ArgumentMatchers.eq("PAY-300"),
+                org.mockito.ArgumentMatchers.eq("offline_bank"),
+                org.mockito.ArgumentMatchers.eq("银行转账"),
+                org.mockito.ArgumentMatchers.eq("PC"),
+                org.mockito.ArgumentMatchers.eq("10.0.0.3"),
+                org.mockito.ArgumentMatchers.eq("IDEMP-300"),
+                org.mockito.ArgumentMatchers.contains("\"resolvedChannelCode\":\"offline_bank\""),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("处理中"),
+                org.mockito.ArgumentMatchers.eq("info"));
+        org.junit.jupiter.api.Assertions.assertEquals("PRE-300", result.getPrepayOrderNo());
     }
 
     @Test

@@ -6,6 +6,8 @@ import com.abc123.hsp.dto.PaymentCloseRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PaymentRouteContextDTO;
+import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
@@ -145,9 +147,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
         String terminal = StringUtils.hasText(request.getTerminal()) ? request.getTerminal().trim() : "UNKNOWN";
         String clientIp = StringUtils.hasText(request.getClientIp()) ? request.getClientIp().trim() : "UNKNOWN";
-        String resolvedChannelCode = paymentChannelRoutingService.resolve(
-                request.getPaymentMethod(),
-                request.getChannelCode());
+        PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
+                buildRouteContext(request, currentPrepay, terminal));
+        String resolvedChannelCode = routeDecision.getChannelCode();
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
@@ -164,8 +166,8 @@ public class PaymentServiceImpl implements PaymentService {
                 routeNo,
                 paymentOrderId,
                 resolvedChannelCode,
-                "默认渠道路由",
-                resolvedChannelCode);
+                routeDecision.getRouteRule(),
+                routeDecision.getRouteResult());
         String attemptNo = "ATT" + System.currentTimeMillis();
         paymentMapper.insertPaymentAttempt(
                 attemptNo,
@@ -304,6 +306,23 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     /**
+     * 提交支付前统一收口路由上下文，避免路由规则读取到的口径在不同入口下不一致。
+     */
+    private PaymentRouteContextDTO buildRouteContext(
+            PaymentSubmitRequestDTO request,
+            PrepayOrderDTO currentPrepay,
+            String terminal) {
+        PaymentRouteContextDTO routeContext = new PaymentRouteContextDTO();
+        routeContext.setPaymentMethod(request.getPaymentMethod());
+        routeContext.setRequestedChannelCode(request.getChannelCode());
+        routeContext.setPayScene(currentPrepay.getPayScene());
+        routeContext.setTerminal(terminal);
+        routeContext.setAmount(parseAmount(currentPrepay.getAmount()));
+        routeContext.setCustomerName(currentPrepay.getCustomerName());
+        return routeContext;
+    }
+
+    /**
      * 统一请求留痕口径，便于在支付请求管理页直接复盘一次发起请求。
      */
     private String buildSubmitRequestPayload(
@@ -320,6 +339,20 @@ public class PaymentServiceImpl implements PaymentService {
                 .add("\"clientIp\":\"" + clientIp + "\"")
                 .add("\"idempotencyKey\":\"" + idempotencyKey + "\"")
                 .toString();
+    }
+
+    /**
+     * 预付单金额字段当前为展示口径，路由规则比较前统一还原成数值。
+     */
+    private BigDecimal parseAmount(String amountText) {
+        if (!StringUtils.hasText(amountText)) {
+            return BigDecimal.ZERO;
+        }
+        String normalizedAmount = amountText
+                .replace("¥", "")
+                .replace(",", "")
+                .trim();
+        return new BigDecimal(normalizedAmount);
     }
 
     private PaymentDetailDTO enrichDetail(PaymentDetailDTO detail) {
