@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentRouteExecutionMapper">
+
+    <sql id="routeExecutionFromClause">
+        FROM t_payment_route_record prr
+                 LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id
+                 LEFT JOIN t_prepay_order latest_pr ON latest_pr.id = (
+                    SELECT pr.id
+                    FROM t_prepay_order pr
+                    WHERE pr.payment_order_id = prr.payment_order_id
+                    ORDER BY pr.created_at DESC, pr.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_attempt latest_pa ON latest_pa.id = (
+                    SELECT pa.id
+                    FROM t_payment_attempt pa
+                    WHERE pa.payment_order_id = prr.payment_order_id
+                      AND pa.created_at <= prr.created_at
+                    ORDER BY pa.created_at DESC, pa.id DESC
+                    LIMIT 1
+                )
+    </sql>
+
+    <sql id="routeExecutionWhereClause">
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                prr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.routeRule != null and query.routeRule != ''">
+                AND prr.route_rule LIKE CONCAT('%', #{query.routeRule}, '%')
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND prr.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.routeResult != null and query.routeResult != '' and query.routeResult != '全部'">
+                AND prr.route_result = #{query.routeResult}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO">
+        SELECT prr.route_no AS routeNo,
+               prr.payment_order_id AS paymentOrderId,
+               po.order_no AS orderNo,
+               latest_pr.prepay_order_no AS prepayOrderNo,
+               po.customer_name AS customerName,
+               CONCAT('¥', FORMAT(po.amount, 2)) AS amount,
+               latest_pa.payment_method AS paymentMethod,
+               prr.channel_code AS channelCode,
+               prr.route_rule AS routeRule,
+               prr.route_result AS routeResult,
+               CASE
+                   WHEN prr.route_result LIKE '%兜底%' THEN 'warn'
+                   WHEN prr.route_result LIKE '%线下%' THEN 'info'
+                   ELSE 'success'
+               END AS routeResultType,
+               latest_pa.terminal AS terminal,
+               latest_pa.client_ip AS clientIp,
+               latest_pa.idempotency_key AS idempotencyKey,
+               latest_pa.request_payload AS requestPayload,
+               latest_pa.response_payload AS responsePayload,
+               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        <include refid="routeExecutionFromClause" />
+        <include refid="routeExecutionWhereClause" />
+        ORDER BY prr.created_at DESC, prr.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        <include refid="routeExecutionFromClause" />
+        <include refid="routeExecutionWhereClause" />
+    </select>
+</mapper>

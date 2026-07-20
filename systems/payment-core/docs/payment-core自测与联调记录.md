@@ -266,7 +266,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 新增 `PaymentTaskCenterServiceImplTest`、`PaymentExpiryTaskServiceImplTest`，当前全量后端测试为 `54` 个并全部通过 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 新增 `PaymentTaskCenterServiceImplTest`、`PaymentExpiryTaskServiceImplTest`，当前全量后端测试为 `55` 个并全部通过 |
 | 后台前端构建 | `npm run build` | 通过 | `PaymentTaskCenterView`、路由、导航和接口封装全部通过生产构建 |
 
 ### 11.2 本轮修复项
@@ -317,7 +317,7 @@
 | 支付提交主链路 | 通过 | `submit` 已按支付方式、请求渠道、支付场景、终端、金额、客户类型组装路由上下文 |
 | 路由规则命中 | 通过 | 已支持 `matchScene` + `AND/OR` 表达式匹配 |
 | 路由兜底 | 通过 | 目标渠道停用时，可自动落到规则兜底渠道 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `54` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `55` 个并全部通过 |
 
 ### 9.2 本轮修复项
 
@@ -340,7 +340,7 @@
 | 前端错误展示 | 通过 | `admin-web / app-web / h5-web / pc-web` 请求层已透出 `message + code + requestId` |
 | H5 终端入口 | 通过 | `h5-web` 已改为走自身包装视图，不再直接绕过 H5 终端差异层 |
 | PC 终端入口 | 通过 | `pc-web` 已改为走独立入口与独立路由，不再与 App/H5 混用 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `54` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `55` 个并全部通过 |
 
 ### 10.2 本轮修复项
 
@@ -362,7 +362,7 @@
 | 渠道下单抽象 | 通过 | 已新增 `PaymentChannelSubmitAdapter + PaymentChannelSubmitService`，提交支付不再在主服务里硬编码渠道响应 |
 | 提交结果留痕 | 通过 | 支付单已回写 `channelTransactionNo`，支付尝试与通知日志已记录真实适配器返回报文 |
 | 本地模拟渠道 | 通过 | 已补齐 `LocalPaymentChannelSubmitAdapter`，在未接真实微信/支付宝前可稳定支撑联调 |
-| 自动化测试 | 通过 | 当前全量后端测试为 `54` 个并全部通过 |
+| 自动化测试 | 通过 | 当前全量后端测试为 `55` 个并全部通过 |
 
 ### 12.2 本轮修复项
 
@@ -424,7 +424,7 @@
 | 支付详情接口字段 | 通过 | `GET /api/payments/{paymentOrderId}` 已补齐最近尝试终端、IP、幂等键、尝试状态、请求报文和响应报文 |
 | 后台支付详情页 | 通过 | 已新增最近支付尝试区块，支持直接查看请求/响应报文 |
 | 用户支付结果页 | 通过 | 已新增最近尝试状态、终端、IP、幂等键和请求/响应报文展示 |
-| 自动化测试 | 通过 | 新增支付详情尝试信息单测后，当前全量后端测试为 `54` 个并全部通过 |
+| 自动化测试 | 通过 | 新增支付详情尝试信息单测后，当前全量后端测试为 `55` 个并全部通过 |
 
 ### 15.2 本轮修复项
 
@@ -443,7 +443,7 @@
 | --- | --- | --- |
 | 支付流水接口字段 | 通过 | `GET /api/payment-flows` 已补齐渠道编码、业务状态筛选，以及终端、IP、幂等键、回调类型、路由规则、下游系统、事件主题、发布状态、重试次数、原始报文等深度字段 |
 | 后台支付流水页 | 通过 | 已支持按渠道编码、业务状态筛选，并支持展开详情查看原始报文与联查动作 |
-| 自动化测试 | 通过 | `PaymentFlowServiceImplTest` 所在后端全量测试共 `54` 个并全部通过 |
+| 自动化测试 | 通过 | `PaymentFlowServiceImplTest` 所在后端全量测试共 `55` 个并全部通过 |
 | 前端构建验证 | 通过 | `admin-web` 已完成生产构建，支付流水排障台增强页可稳定打包 |
 
 ### 16.2 本轮修复项
@@ -463,7 +463,7 @@
 | --- | --- | --- |
 | 支付请求接口字段 | 通过 | `GET /api/payment-requests` 已补齐订单号、渠道编码、终端筛选 |
 | 支付处理日志接口字段 | 通过 | `GET /api/payment-logs` 已补齐订单号、日志来源、关键字筛选 |
-| 自动化测试 | 通过 | 后端全量测试共 `54` 个并全部通过 |
+| 自动化测试 | 通过 | 后端全量测试共 `55` 个并全部通过 |
 | 前端构建验证 | 通过 | `admin-web` 已完成生产构建，请求页和日志页增强查询区可稳定打包 |
 
 ### 17.2 本轮修复项
@@ -472,6 +472,26 @@
 2. 扩展 `PaymentLogQueryDTO`、`PaymentLogController`、`PaymentLogServiceImpl` 和 `PaymentLogMapper.xml`，补齐订单号、日志来源、关键字检索口径。
 3. 为 `PaymentRequestServiceImplTest`、`PaymentLogServiceImplTest` 增加参数规整断言，确保服务层对新增查询字段做统一裁剪。
 4. 为 `PaymentRequestsView`、`PaymentLogsView` 和前端 API 封装补齐新增筛选项，提升运营、研发和测试的联动排障效率。
+
+## 18. 2026-07-20 支付路由执行结果台增强复核
+
+### 18.1 本轮验证结论
+
+本轮围绕“支付路由执行结果仍需要从支付流水和支付详情里拼装查看，不利于独立排障”的问题进行了补强，确认后台已具备独立的支付路由执行结果台。
+
+| 项目 | 结果 | 说明 |
+| --- | --- | --- |
+| 支付路由执行结果接口 | 通过 | `GET /api/payment-routes` 已补齐支付单、订单、路由规则、命中渠道、终端、幂等键和请求/响应报文聚合字段 |
+| 后台支付路由页 | 通过 | 已新增独立路由页，支持筛选、展开详情和支付单/路由流水/支付请求/配置联查动作 |
+| 自动化测试 | 通过 | 新增 `PaymentRouteExecutionServiceImplTest` 后，后端全量测试共 `55` 个并全部通过 |
+| 前端构建验证 | 通过 | `admin-web` 已完成生产构建，支付路由执行结果页可稳定打包 |
+
+### 18.2 本轮修复项
+
+1. 新增 `PaymentRouteExecutionQueryDTO`、`PaymentRouteExecutionListItemDTO`、`PaymentRouteExecutionMapper`、`PaymentRouteExecutionService` 与控制器，补齐支付路由执行结果独立查询能力。
+2. 新增 `PaymentRouteExecutionMapper.xml`，聚合路由记录、支付单、预付单和最近支付请求上下文。
+3. 新增 `PaymentRouteExecutionServiceImplTest`，校验查询条件的统一裁剪与分页口径。
+4. 新增后台页面 `PaymentRoutesView`，支持独立路由页、展开详情、查看路由流水、支付请求和路由配置。
 
 ## 11. 2026-07-20 支付记录详情钻取复核
 

@@ -136,6 +136,29 @@ export const paymentFlowApi = {
   }
 };
 
+export const paymentRouteApi = {
+  getList: ({
+    paymentOrderId = "",
+    orderNo = "",
+    routeRule = "",
+    channelCode = "",
+    routeResult = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      routeRule,
+      channelCode,
+      routeResult,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-routes?${params.toString()}`);
+  }
+};
+
 export const paymentEventApi = {
   getList: ({
     paymentOrderId = "",

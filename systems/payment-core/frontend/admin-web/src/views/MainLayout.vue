@@ -13,6 +13,7 @@ const navGroups = [
       { label: "微信支付宝支付记录", to: "/payment-records/wechat-alipay" },
       { label: "银行卡支付记录", to: "/payment-records/bank-card" },
       { label: "支付流水查询", to: "/payment-flows" },
+      { label: "支付路由执行结果", to: "/payment-routes" },
       { label: "支付事件出站", to: "/payment-events" },
       { label: "收银台会话", to: "/cashier-sessions" },
       { label: "支付请求管理", to: "/payment-requests" },

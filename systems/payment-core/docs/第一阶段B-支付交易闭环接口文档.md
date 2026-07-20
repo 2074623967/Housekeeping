@@ -23,6 +23,7 @@
 | `/api/payments/close` | `POST` | 关闭支付单 |
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
+| `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
@@ -105,7 +106,65 @@
 2. 不同流水类型会按统一字段口径返回深度排障信息，例如终端、IP、幂等键、回调类型、路由规则、下游系统、事件主题、发布状态和重试次数。
 3. 前端可直接使用 `requestPayload`、`responsePayload` 展开原始报文区，无需再拼接二次接口。
 
-## 4. 创建预付单
+## 4. 支付路由执行结果台查询
+
+接口：`GET /api/payment-routes`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `orderNo` | 订单号，模糊匹配 |
+| `routeRule` | 路由规则关键字，模糊匹配 |
+| `channelCode` | 渠道编码，模糊匹配 |
+| `routeResult` | 路由结果，支持 `全部` |
+| `pageNo` | 页码，从 `1` 开始 |
+| `pageSize` | 每页条数，最大 `100` |
+
+返回示例：
+
+```json
+{
+  "code": "0",
+  "message": "success",
+  "data": {
+    "items": [
+      {
+        "routeNo": "RTR202607190002",
+        "paymentOrderId": "PAY202607190002",
+        "orderNo": "ORD202607190002",
+        "prepayOrderNo": "PRE202607190002",
+        "customerName": "王先生",
+        "amount": "¥2000.00",
+        "paymentMethod": "支付宝",
+        "channelCode": "alipay_h5",
+        "routeRule": "amount>1000 => alipay",
+        "routeResult": "支付宝H5",
+        "routeResultType": "success",
+        "terminal": "H5",
+        "clientIp": "127.0.0.1",
+        "idempotencyKey": "PRE202607190002|支付宝|alipay_h5",
+        "requestPayload": "{\"scene\":\"H5\",\"amount\":6800.00}",
+        "responsePayload": "{\"payUrl\":\"https://pay.example.com/ali/2\"}",
+        "createdAt": "2026-07-19 10:03:02"
+      }
+    ],
+    "total": 1,
+    "pageNo": 1,
+    "pageSize": 20
+  },
+  "requestId": "REQ202607200031"
+}
+```
+
+业务说明：
+
+1. 当前按支付路由记录聚合支付单、订单、预付单和最近一次支付请求上下文。
+2. 前端可直接用本接口查看路由规则、命中渠道、路由结果以及请求/响应报文，无需再跳多页拼装。
+3. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
+
+## 5. 创建预付单
 
 接口：`POST /api/payments/prepay`
 
@@ -148,7 +207,7 @@
 2. 若订单当前不存在“未过期且未收口”的预付单，则自动创建新的支付单与预付单。
 3. 若同一订单已存在有效预付单，则直接复用原预付单与支付单，保证重复拉起收银台幂等。
 
-## 5. 获取收银台参数
+## 6. 获取收银台参数
 
 接口：`GET /api/payments/cashier/{prepayOrderNo}`
 
@@ -175,7 +234,7 @@
 }
 ```
 
-## 6. 提交支付
+## 7. 提交支付
 
 接口：`POST /api/payments/submit`
 
@@ -252,7 +311,7 @@
 2. 如果幂等键已存在，接口同样直接返回当前预付单信息。
 3. 这样可以避免按钮重复点击、浏览器重试和接口重放导致重复路由、重复尝试和重复待回调日志。
 
-## 7. 模拟回调
+## 8. 模拟回调
 
 接口：`POST /api/payments/callback/{channel}`
 
