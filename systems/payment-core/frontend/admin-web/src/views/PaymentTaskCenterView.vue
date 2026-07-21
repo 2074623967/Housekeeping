@@ -146,6 +146,47 @@ onMounted(loadOverview);
           当前尚有 {{ overview.warningDayEndBatchCount }} 个日终告警批次未完全收口，建议优先处理超时支付、失败事件和失败退款后再推进对账闭环。
         </div>
 
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>严重等级与升级口径</h3>
+              <p class="meta">任务中心 V1.7 已按任务类型、失败笔数和处理规模统一严重等级，避免只要失败就一律标红</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>任务类型</th>
+                  <th>P1 升级值班负责人</th>
+                  <th>P2 纳入当班跟进</th>
+                  <th>P3 正常观察</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>支付超时关单</td>
+                  <td>失败 ≥ 5 或单次处理量 ≥ 30</td>
+                  <td>失败 1-4 或单次处理量 10-29</td>
+                  <td>无失败且处理量 &lt; 10</td>
+                </tr>
+                <tr>
+                  <td>失败事件重发</td>
+                  <td>失败 ≥ 3 或单次处理量 ≥ 10</td>
+                  <td>失败 1-2 或有失败事件被成功重发</td>
+                  <td>无失败事件待处理</td>
+                </tr>
+                <tr>
+                  <td>失败退款重试</td>
+                  <td>失败 ≥ 2 或单次处理量 ≥ 8</td>
+                  <td>失败 1 笔或有退款被批量重试</td>
+                  <td>无失败退款待处理</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="split-panels">
           <section class="panel mini">
             <div class="section-title">
@@ -232,6 +273,11 @@ onMounted(loadOverview);
                   <td>日终告警批次</td>
                   <td>{{ overview.warningDayEndBatchCount }}</td>
                   <td>为下一步对账和差错处理提供排查入口</td>
+                </tr>
+                <tr>
+                  <td>升级判定口径</td>
+                  <td>V1.7</td>
+                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3</td>
                 </tr>
               </tbody>
             </table>

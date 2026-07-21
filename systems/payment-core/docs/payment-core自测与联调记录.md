@@ -363,6 +363,23 @@
 3. 为任务中心服务补齐自动执行入口，继续区分 `AUTO / MANUAL` 两类来源。
 4. 将任务中心版本口径从 `V1.5` 收紧为 `V1.6`，避免文档与代码能力断层。
 
+### 11.5 2026-07-21 支付任务中心失败分级与告警升级复核
+
+本轮围绕“任务中心不能只把失败一律标红，而要给出可复核的升级口径”继续补强，确认当前 `payment-core` 已经从“有日志的任务处理台”升级到“具备统一分级和升级标准的正式运维台”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `74` 个并全部通过，新增 `PaymentTaskCenterServiceImplTest` 断言覆盖 `P1 / P2` 分级与升级状态 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-task-center-v17 --emptyOutDir` | 通过 | `PaymentTaskCenterView` 已补充严重等级与升级口径说明区并通过生产构建 |
+
+本轮修复项：
+
+1. 将任务中心的严重等级与升级状态从“失败即 `P1`”升级为“按任务类型、失败笔数和处理规模综合判定”。
+2. 为超时关单、失败事件重发、失败退款重试三类任务分别定义 `P1 / P2 / P3` 判断口径。
+3. 将升级状态从“需立即升级 / 需关注 / 正常”升级为“升级值班负责人 / 纳入当班跟进 / 正常”，更贴近生产值班语言。
+4. 为后台页面补充“严重等级与升级口径”说明区，便于产品、研发、测试共享同一套解释标准。
+5. 为失败事件成功重发、失败退款持续失败两类场景补充测试断言，避免规则回退到简单二分。
+
 ## 8. 2026-07-20 用户支付端精修复核
 
 ### 8.1 本轮验证结论

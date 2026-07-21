@@ -29,6 +29,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String RUN_MODE_AUTO = "AUTO";
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
     private static final String TASK_STATUS_WARN = "WARNING";
+    private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
+    private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
+    private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
@@ -105,7 +108,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         int failCount = Math.max(failedEventNos.size() - successCount, 0);
         return buildAndRecordResult(
-                "PAYMENT_EVENT_RETRY",
+                TASK_CODE_EVENT_RETRY,
                 "失败事件重发",
                 runMode,
                 triggeredBy,
@@ -139,7 +142,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         int failCount = Math.max(failedRefundOrderIds.size() - successCount, 0);
         return buildAndRecordResult(
-                "REFUND_FAIL_RETRY",
+                TASK_CODE_REFUND_RETRY,
                 "失败退款重试",
                 runMode,
                 triggeredBy,
@@ -167,10 +170,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setRunMode(runMode);
         entity.setTaskStatus(failCount > 0 ? TASK_STATUS_WARN : TASK_STATUS_SUCCESS);
         entity.setTaskStatusType(failCount > 0 ? "warn" : "success");
-        entity.setSeverityLevel(resolveSeverityLevel(failCount, processedCount));
-        entity.setSeverityLevelType(resolveSeverityType(failCount, processedCount));
-        entity.setEscalationStatus(resolveEscalationStatus(failCount, processedCount));
-        entity.setEscalationStatusType(resolveEscalationType(failCount, processedCount));
+        entity.setSeverityLevel(resolveSeverityLevel(taskCode, failCount, processedCount));
+        entity.setSeverityLevelType(resolveSeverityType(taskCode, failCount, processedCount));
+        entity.setEscalationStatus(resolveEscalationStatus(taskCode, failCount, processedCount));
+        entity.setEscalationStatusType(resolveEscalationType(taskCode, failCount, processedCount));
         entity.setProcessedCount(processedCount);
         entity.setSuccessCount(successCount);
         entity.setFailCount(failCount);
@@ -195,7 +198,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int successCount = paymentExpiryTaskService.closeExpiredPayments();
         int processedCount = successCount;
         return buildAndRecordResult(
-                "PAYMENT_EXPIRE_CLOSE",
+                TASK_CODE_EXPIRE_CLOSE,
                 "支付超时关单",
                 runMode,
                 triggeredBy,
@@ -260,61 +263,79 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         return alert;
     }
 
-    private String resolveSeverityLevel(int failCount, int processedCount) {
-        if (failCount > 0) {
+    private String resolveSeverityLevel(String taskCode, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
             return "P1";
         }
-        if (processedCount > 0) {
+        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
             return "P2";
         }
         return "P3";
     }
 
-    private String resolveSeverityType(int failCount, int processedCount) {
-        if (failCount > 0) {
+    private String resolveSeverityType(String taskCode, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
             return "danger";
         }
-        if (processedCount > 0) {
+        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
             return "warn";
         }
         return "success";
     }
 
-    private String resolveEscalationStatus(int failCount, int processedCount) {
-        if (failCount > 0) {
-            return "需立即升级";
+    private String resolveEscalationStatus(String taskCode, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+            return "升级值班负责人";
         }
-        if (processedCount > 0) {
-            return "需关注";
+        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
+            return "纳入当班跟进";
         }
         return "正常";
     }
 
-    private String resolveEscalationType(int failCount, int processedCount) {
-        if (failCount > 0) {
+    private String resolveEscalationType(String taskCode, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
             return "danger";
         }
-        if (processedCount > 0) {
+        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
             return "warn";
         }
         return "success";
     }
 
     private String resolveSuggestedAction(String taskCode, int failCount, int processedCount) {
-        if ("PAYMENT_EXPIRE_CLOSE".equals(taskCode)) {
-            return failCount > 0 ? "优先核对超时支付单并补充关闭原因" : "可继续观察超时关单队列";
+        if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
+            if (failCount > 0) {
+                return "先核对超时支付单状态机与收银台过期时间，再补关单原因并复跑任务";
+            }
+            if (processedCount >= 20) {
+                return "批量关单量较大，建议复核是否存在回调延迟或收银台过期参数异常";
+            }
+            return processedCount > 0 ? "已完成超时收口，继续观察新进入队列的支付单" : "暂无超时支付待处理";
+        }
+        if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先核对出站事件主题、下游订阅状态与重发表，必要时升级账务/清分值班";
+            }
+            return processedCount > 0 ? "重发后需复核下游是否完成收口，避免跨系统状态分叉" : "暂无失败事件待处理";
+        }
+        if (TASK_CODE_REFUND_RETRY.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先核对退款渠道响应、退款单状态和逆向账务，必要时转财务人工补退";
+            }
+            return processedCount > 0 ? "重试后需继续跟踪退款回调与用户到账结果" : "暂无失败退款待处理";
         }
         return processedCount > 0 ? "优先处理异常明细并确认下游收口" : "暂无待处理任务";
     }
 
     private String resolveRecommendedRoute(String taskCode) {
-        if ("PAYMENT_EXPIRE_CLOSE".equals(taskCode)) {
+        if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return "/payment-task-center";
         }
-        if ("PAYMENT_EVENT_RETRY".equals(taskCode)) {
+        if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
             return "/payment-events";
         }
-        if ("REFUND_FAIL_RETRY".equals(taskCode)) {
+        if (TASK_CODE_REFUND_RETRY.equals(taskCode)) {
             return "/refunds";
         }
         return "/payment-task-center";
@@ -322,14 +343,55 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private List<PaymentTaskRunLogItemDTO> enrichTaskRuns(List<PaymentTaskRunLogItemDTO> items) {
         for (PaymentTaskRunLogItemDTO item : items) {
-            item.setSeverityLevel(resolveSeverityLevel(valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setSeverityLevelType(resolveSeverityType(valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setEscalationStatus(resolveEscalationStatus(valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setEscalationStatusType(resolveEscalationType(valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setSeverityLevel(resolveSeverityLevel(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setSeverityLevelType(resolveSeverityType(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setEscalationStatus(resolveEscalationStatus(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setEscalationStatusType(resolveEscalationType(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
             item.setSuggestedAction(resolveSuggestedAction(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
             item.setRecommendedRoute(resolveRecommendedRoute(item.getTaskCode()));
         }
         return items;
+    }
+
+    /**
+     * 根据任务类型、失败量和处理规模推导是否需要立即升级。
+     */
+    private boolean shouldEscalateImmediately(String taskCode, int failCount, int processedCount) {
+        if (failCount <= 0) {
+            return false;
+        }
+        if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
+            return failCount >= 3 || processedCount >= 10;
+        }
+        if (TASK_CODE_REFUND_RETRY.equals(taskCode)) {
+            return failCount >= 2 || processedCount >= 8;
+        }
+        if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
+            return failCount >= 5 || processedCount >= 30;
+        }
+        return failCount >= 1;
+    }
+
+    /**
+     * 根据任务类型判断是否需要纳入当班关注。
+     */
+    private boolean shouldFocusOnDuty(String taskCode, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+            return false;
+        }
+        if (failCount > 0) {
+            return true;
+        }
+        if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
+            return processedCount >= 1;
+        }
+        if (TASK_CODE_REFUND_RETRY.equals(taskCode)) {
+            return processedCount >= 1;
+        }
+        if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
+            return processedCount >= 10;
+        }
+        return processedCount > 0;
     }
 
     private PaymentTaskRunLogQueryDTO normalizeQuery(PaymentTaskRunLogQueryDTO query) {
