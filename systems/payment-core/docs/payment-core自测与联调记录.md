@@ -238,6 +238,24 @@
 5. 为后台配置页补齐协议新增、编辑、重置表单和优先级展示
 6. 修复“编辑已有协议时优先级被默认值覆盖”的隐性配置风险
 
+## 28. 2026-07-21 支付网关接入治理增强验证
+
+### 28.1 本轮验证结论
+
+本轮围绕支付配置中心中的“支付网关接入管理”继续正式化，确认后台已从“网关基础参数展示”升级为“接入治理台账展示”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `78` 个并全部通过，覆盖网关治理字段总览回归 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-gateway-v11 --emptyOutDir` | 通过 | `PaymentConfigView` 新增环境、证书、灰度、白名单和适配器编排列后构建通过 |
+
+### 28.2 本轮修复项
+
+1. 为 `t_payment_gateway_config` 补齐环境范围、证书别名、证书状态、发布阶段、灰度策略、回调白名单和适配器编排字段。
+2. 为 `PaymentGatewayConfigDTO`、`PaymentConfigMapper.xml`、样例数据和前端页面同步补齐对应字段。
+3. 为支付配置中心后台页面补齐网关治理视角列，便于产品、测试和研发统一评审接入事实。
+4. 为 `PaymentGatewayConfigServiceImplTest` 补齐网关治理字段在配置总览中的断言，避免后续字段被悄悄删减。
+
 ## 10. 2026-07-20 支付日终处理 V1 验证
 
 ### 10.1 本轮验证结论
@@ -734,7 +752,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `77` 个并全部通过，覆盖协议类型字典匹配、协议正文必填校验和实体回填 |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `78` 个并全部通过，覆盖协议类型字典匹配、协议正文必填校验和实体回填 |
 | 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-protocol-v13 --emptyOutDir` | 通过 | 协议管理表单已新增协议类型下拉和协议正文文本域，并通过生产构建 |
 
 本轮补齐项：
@@ -753,7 +771,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `77` 个并全部通过，返回码映射增强后主流程无回归 |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `78` 个并全部通过，返回码映射增强后主流程无回归 |
 | 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-return-code-v11 --emptyOutDir` | 通过 | 返回码映射表格新增版本、归档状态和人工介入列后可稳定生产构建 |
 
 ### 27.2 本轮补齐项

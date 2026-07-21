@@ -572,9 +572,16 @@ onMounted(loadOverview);
                   <th>网关名称</th>
                   <th>接入模式</th>
                   <th>适用渠道</th>
+                  <th>环境范围</th>
                   <th>基础地址</th>
                   <th>报文协议</th>
                   <th>签名算法</th>
+                  <th>证书别名</th>
+                  <th>证书状态</th>
+                  <th>发布阶段</th>
+                  <th>灰度策略</th>
+                  <th>回调白名单</th>
+                  <th>适配器编排</th>
                   <th>超时时间</th>
                   <th>重试策略</th>
                   <th>状态</th>
@@ -588,9 +595,16 @@ onMounted(loadOverview);
                   <td>{{ gateway.gatewayName }}</td>
                   <td>{{ gateway.accessMode }}</td>
                   <td>{{ gateway.channelScope }}</td>
+                  <td>{{ gateway.environmentScope }}</td>
                   <td class="flow-summary-cell">{{ gateway.apiBaseUrl }}</td>
                   <td>{{ gateway.protocolType }}</td>
                   <td>{{ gateway.signAlgorithm }}</td>
+                  <td>{{ gateway.certificateAlias }}</td>
+                  <td><span :class="['badge', gateway.certificateStatusType]">{{ gateway.certificateStatus }}</span></td>
+                  <td>{{ gateway.releaseStage }}</td>
+                  <td class="flow-summary-cell">{{ gateway.grayStrategy }}</td>
+                  <td class="flow-summary-cell">{{ gateway.callbackWhitelist }}</td>
+                  <td class="flow-summary-cell">{{ gateway.adapterRegistry }}</td>
                   <td>{{ gateway.timeoutMs }}</td>
                   <td class="flow-summary-cell">{{ gateway.retryPolicy }}</td>
                   <td><span :class="['badge', gateway.statusType]">{{ gateway.status }}</span></td>

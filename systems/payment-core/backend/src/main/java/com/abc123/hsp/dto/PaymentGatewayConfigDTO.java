@@ -16,12 +16,28 @@ public class PaymentGatewayConfigDTO {
     private String accessMode;
     /** 适用渠道范围。 */
     private String channelScope;
+    /** 环境范围。 */
+    private String environmentScope;
     /** 网关基础地址。 */
     private String apiBaseUrl;
     /** 报文协议。 */
     private String protocolType;
     /** 签名算法。 */
     private String signAlgorithm;
+    /** 证书别名。 */
+    private String certificateAlias;
+    /** 证书状态。 */
+    private String certificateStatus;
+    /** 证书状态样式。 */
+    private String certificateStatusType;
+    /** 发布阶段。 */
+    private String releaseStage;
+    /** 灰度策略。 */
+    private String grayStrategy;
+    /** 回调白名单。 */
+    private String callbackWhitelist;
+    /** 适配器编排。 */
+    private String adapterRegistry;
     /** 超时时间。 */
     private String timeoutMs;
     /** 重试策略。 */
