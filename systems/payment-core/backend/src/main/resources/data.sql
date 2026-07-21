@@ -19,11 +19,11 @@ INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_ty
 ('PROTO_ENTERPRISE_PREAUTH_V1', '企业客户预授权协议', 'PREAUTH', '预授权协议', 'TPL_ENT_PREAUTH', '企业预授权协议模板', 'v1.2.0', '线下审核+线上确认', '企业主体/统一社会信用代码/授权人签字/预授权额度', 'E-SIGN-ENTERPRISE', '企业保洁/长期合同', 'offline_bank,alipay_h5', '需要', '企业白名单+大额限额', '1. 企业客户需先完成预授权额度确认。\\n2. 平台仅在服务完成或合同约定条件满足后执行正式扣款。\\n3. 预授权异常需由企业运营与财务双人复核。', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
 ('PROTO_MEMBER_DEDUCT_V1', '会员代扣协议', 'WITHHOLD', '代扣协议', 'TPL_MEMBER_WITHHOLD', '会员代扣模板', 'v0.9.3', '短信确认+静默续扣', '会员ID/手机号/扣款周期/续扣授权', 'E-SIGN-LITE', '包月保洁/会员续费', 'wx_h5', '不需要', '签约时效+扣款频控', '1. 用户授权平台按会员周期自动续扣。\\n2. 每次续扣前平台应按约定方式提醒用户。\\n3. 用户可在下一计费周期前取消自动续扣授权。', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
 
-INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code, standardized_code, standardized_message, handling_suggestion, retryable, status, status_type, priority, updated_at) VALUES
-('wx_h5', 'USERPAYING', 'PAYMENT-CHANNEL-1001', '用户支付中，需继续轮询或等待回调', '展示处理中并触发主动查单', '是', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
-('wx_h5', 'AUTH_CODE_INVALID', 'PAYMENT-CHANNEL-1002', '付款码无效或已过期', '提示用户刷新付款码后重试', '否', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
-('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2001', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
-('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', 'DISABLED', 'danger', 4, '2026-07-20 22:40:00');
+INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code, standardized_code, standardized_message, handling_suggestion, retryable, manual_intervention_required, mapping_version, archive_status, archive_status_type, status, status_type, priority, updated_at) VALUES
+('wx_h5', 'USERPAYING', 'PAYMENT-CHANNEL-1001', '用户支付中，需继续轮询或等待回调', '展示处理中并触发主动查单', '是', '否', 'v2026.07.1', 'ACTIVE', 'success', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('wx_h5', 'AUTH_CODE_INVALID', 'PAYMENT-CHANNEL-1002', '付款码无效或已过期', '提示用户刷新付款码后重试', '否', '否', 'v2026.07.1', 'ACTIVE', 'success', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2001', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', '否', 'v2026.07.2', 'ACTIVE', 'success', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
+('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', '是', 'v2026.06.archive', 'ARCHIVED', 'warn', 'DISABLED', 'danger', 4, '2026-07-20 22:40:00');
 
 INSERT INTO t_payment_gateway_config (gateway_code, gateway_name, access_mode, channel_scope, api_base_url, protocol_type, sign_algorithm, timeout_ms, retry_policy, status, status_type, priority, updated_at) VALUES
 ('GATEWAY_WX_ACQ', '微信收单网关', '直连', 'wx_h5', 'https://gateway.housekeeping.local/wx/acquire', 'HTTP+JSON', 'HMAC-SHA256', 3000, '失败重试2次+超时查单', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),

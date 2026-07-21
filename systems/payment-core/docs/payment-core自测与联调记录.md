@@ -745,6 +745,24 @@
 4. 升级 `PaymentConfigServiceImpl`，在保存协议时按字典反查协议类型名称，并校验协议正文必填。
 5. 升级支付配置中心前端协议表单和列表，支持协议类型选择、协议正文录入和协议类型名称展示。
 
+## 27. 2026-07-21 渠道返回码映射 V1.1 复核
+
+### 27.1 本轮验证结论
+
+本轮围绕“返回码映射只有启停和基础文案，缺少版本与归档口径”的问题继续补强，确认返回码映射已经从“基础错误码展示”升级到“具备版本治理台账信息的配置页”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `77` 个并全部通过，返回码映射增强后主流程无回归 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-return-code-v11 --emptyOutDir` | 通过 | 返回码映射表格新增版本、归档状态和人工介入列后可稳定生产构建 |
+
+### 27.2 本轮补齐项
+
+1. 扩展 `t_payment_channel_return_code_map`，新增 `manual_intervention_required`、`mapping_version`、`archive_status`、`archive_status_type` 字段及注释。
+2. 扩展返回码映射 DTO 和 MyBatis 映射，保证版本、人工介入和归档状态查询口径一致。
+3. 升级支付配置中心前端返回码映射表格，支持直接查看人工介入判断、映射版本和归档状态。
+4. 同步更新样例数据，让本地初始化结果更贴近真实通道错误码治理场景。
+
 ## 20. 2026-07-20 支付监控 drill-down 增强复核
 
 ### 20.1 本轮验证结论

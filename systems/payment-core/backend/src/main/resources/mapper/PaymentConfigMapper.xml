@@ -108,6 +108,10 @@
                standardized_message AS standardizedMessage,
                handling_suggestion AS handlingSuggestion,
                retryable,
+               manual_intervention_required AS manualInterventionRequired,
+               mapping_version AS mappingVersion,
+               archive_status AS archiveStatus,
+               archive_status_type AS archiveStatusType,
                status,
                status_type AS statusType,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt

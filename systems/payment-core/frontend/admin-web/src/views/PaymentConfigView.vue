@@ -520,6 +520,9 @@ onMounted(loadOverview);
                   <th>标准错误文案</th>
                   <th>处理建议</th>
                   <th>可重试</th>
+                  <th>人工介入</th>
+                  <th>映射版本</th>
+                  <th>归档状态</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th>操作</th>
@@ -533,6 +536,9 @@ onMounted(loadOverview);
                   <td>{{ mapping.standardizedMessage }}</td>
                   <td class="flow-summary-cell">{{ mapping.handlingSuggestion }}</td>
                   <td>{{ mapping.retryable }}</td>
+                  <td>{{ mapping.manualInterventionRequired }}</td>
+                  <td>{{ mapping.mappingVersion }}</td>
+                  <td><span :class="['badge', mapping.archiveStatusType]">{{ mapping.archiveStatus }}</span></td>
                   <td><span :class="['badge', mapping.statusType]">{{ mapping.status }}</span></td>
                   <td>{{ mapping.updatedAt }}</td>
                   <td>
