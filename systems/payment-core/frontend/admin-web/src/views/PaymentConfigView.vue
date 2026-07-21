@@ -5,6 +5,7 @@ import { paymentConfigApi } from "../api/client";
 const channels = ref([]);
 const routeRules = ref([]);
 const protocols = ref([]);
+const protocolTypeOptions = ref([]);
 const returnCodeMappings = ref([]);
 const gateways = ref([]);
 const isLoading = ref(true);
@@ -19,6 +20,7 @@ function createProtocolForm() {
     protocolCode: "",
     protocolName: "",
     protocolType: "",
+    protocolTypeName: "",
     templateCode: "",
     templateName: "",
     templateVersion: "",
@@ -29,6 +31,7 @@ function createProtocolForm() {
     channelScope: "",
     merchantAckRequired: "需要",
     riskControlTag: "",
+    protocolBody: "",
     priority: 99,
     enabled: true
   };
@@ -42,6 +45,7 @@ async function loadOverview() {
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
+    protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
   } catch (error) {
@@ -105,6 +109,7 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
+    protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
@@ -123,6 +128,7 @@ async function toggleMappingConfig(configCode, subCode, enabled, configType, tog
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
+    protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
     actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
@@ -145,6 +151,7 @@ function startEditProtocol(protocol) {
     protocolCode: protocol.protocolCode,
     protocolName: protocol.protocolName,
     protocolType: protocol.protocolType,
+    protocolTypeName: protocol.protocolTypeName,
     templateCode: protocol.templateCode,
     templateName: protocol.templateName,
     templateVersion: protocol.templateVersion,
@@ -155,6 +162,7 @@ function startEditProtocol(protocol) {
     channelScope: protocol.channelScope,
     merchantAckRequired: protocol.merchantAckRequired,
     riskControlTag: protocol.riskControlTag,
+    protocolBody: protocol.protocolBody,
     priority: protocol.priority,
     enabled: protocol.status === "ENABLED"
   };
@@ -175,6 +183,7 @@ async function submitProtocolForm() {
     channels.value = overview.channels;
     routeRules.value = overview.routeRules;
     protocols.value = overview.protocols;
+    protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
     actionMessage.value = editingProtocolCode.value
@@ -343,7 +352,12 @@ onMounted(loadOverview);
               </label>
               <label>
                 协议类型
-                <input v-model.trim="protocolForm.protocolType" placeholder="PAYMENT_SIGN / PREAUTH / WITHHOLD" />
+                <select v-model="protocolForm.protocolType">
+                  <option value="">请选择协议类型</option>
+                  <option v-for="option in protocolTypeOptions" :key="option.protocolType" :value="option.protocolType">
+                    {{ option.protocolType }} / {{ option.protocolTypeName }}
+                  </option>
+                </select>
               </label>
               <label>
                 模板编码
@@ -388,6 +402,14 @@ onMounted(loadOverview);
                 风控标签
                 <input v-model.trim="protocolForm.riskControlTag" placeholder="实名+重复签约校验" />
               </label>
+              <label class="wide-field">
+                协议正文
+                <textarea
+                  v-model.trim="protocolForm.protocolBody"
+                  rows="6"
+                  placeholder="请输入协议正文，建议按条款分段维护"
+                />
+              </label>
               <label>
                 优先级
                 <input v-model.number="protocolForm.priority" type="number" min="0" />
@@ -420,6 +442,7 @@ onMounted(loadOverview);
                   <th>协议编码</th>
                   <th>协议名称</th>
                   <th>协议类型</th>
+                  <th>类型名称</th>
                   <th>模板编码</th>
                   <th>模板名称</th>
                   <th>模板版本</th>
@@ -430,6 +453,7 @@ onMounted(loadOverview);
                   <th>适用渠道</th>
                   <th>商户确认</th>
                   <th>风控标签</th>
+                  <th>协议正文</th>
                   <th>优先级</th>
                   <th>状态</th>
                   <th>更新时间</th>
@@ -441,6 +465,7 @@ onMounted(loadOverview);
                   <td>{{ protocol.protocolCode }}</td>
                   <td>{{ protocol.protocolName }}</td>
                   <td>{{ protocol.protocolType }}</td>
+                  <td>{{ protocol.protocolTypeName }}</td>
                   <td>{{ protocol.templateCode }}</td>
                   <td>{{ protocol.templateName }}</td>
                   <td>{{ protocol.templateVersion }}</td>
@@ -451,6 +476,7 @@ onMounted(loadOverview);
                   <td>{{ protocol.channelScope }}</td>
                   <td>{{ protocol.merchantAckRequired }}</td>
                   <td class="flow-summary-cell">{{ protocol.riskControlTag }}</td>
+                  <td class="flow-summary-cell">{{ protocol.protocolBody }}</td>
                   <td>{{ protocol.priority }}</td>
                   <td><span :class="['badge', protocol.statusType]">{{ protocol.status }}</span></td>
                   <td>{{ protocol.updatedAt }}</td>

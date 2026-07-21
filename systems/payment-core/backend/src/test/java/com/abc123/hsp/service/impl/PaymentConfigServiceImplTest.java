@@ -4,12 +4,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,6 +34,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
 
@@ -56,6 +60,7 @@ class PaymentConfigServiceImplTest {
     void shouldCreateProtocol() {
         PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
         when(paymentConfigMapper.findProtocolByCode("PROTO_TEST_V1")).thenReturn(null);
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
@@ -64,7 +69,10 @@ class PaymentConfigServiceImplTest {
 
         new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request);
 
-        verify(paymentConfigMapper).insertProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+        ArgumentCaptor<PaymentProtocolConfigEntity> entityCaptor = ArgumentCaptor.forClass(PaymentProtocolConfigEntity.class);
+        verify(paymentConfigMapper).insertProtocol(entityCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("支付签约协议", entityCaptor.getValue().getProtocolTypeName());
+        org.junit.jupiter.api.Assertions.assertTrue(entityCaptor.getValue().getProtocolBody().contains("平台按订单金额发起收款"));
     }
 
     @Test
@@ -73,6 +81,7 @@ class PaymentConfigServiceImplTest {
         PaymentProtocolConfigEntity entity = new PaymentProtocolConfigEntity();
         entity.setProtocolCode("PROTO_TEST_V1");
         when(paymentConfigMapper.findProtocolByCode("PROTO_TEST_V1")).thenReturn(entity);
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
@@ -87,6 +96,7 @@ class PaymentConfigServiceImplTest {
     @Test
     void shouldRejectDuplicateProtocolCode() {
         PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
         when(paymentConfigMapper.findProtocolByCode("PROTO_TEST_V1")).thenReturn(new PaymentProtocolConfigEntity());
 
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -106,11 +116,35 @@ class PaymentConfigServiceImplTest {
         );
     }
 
+    @Test
+    void shouldRejectProtocolWhenBodyMissing() {
+        PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
+        request.setProtocolBody(" ");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+        );
+    }
+
+    @Test
+    void shouldRejectProtocolWhenTypeNotInDictionary() {
+        PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
+        request.setProtocolType("UNSUPPORTED_PROTOCOL");
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.<PaymentProtocolTypeOptionDTO>emptyList());
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+        );
+    }
+
     private PaymentProtocolUpsertRequestDTO buildProtocolRequest() {
         PaymentProtocolUpsertRequestDTO request = new PaymentProtocolUpsertRequestDTO();
         request.setProtocolCode("PROTO_TEST_V1");
         request.setProtocolName("测试协议");
         request.setProtocolType("PAYMENT_SIGN");
+        request.setProtocolTypeName("支付签约协议");
         request.setTemplateCode("TPL_TEST_V1");
         request.setTemplateName("测试协议模板");
         request.setTemplateVersion("v1.0.0");
@@ -121,8 +155,17 @@ class PaymentConfigServiceImplTest {
         request.setChannelScope("wx_h5,alipay_h5");
         request.setMerchantAckRequired("需要");
         request.setRiskControlTag("实名校验");
+        request.setProtocolBody("1. 用户授权平台按订单金额发起收款。\n2. 平台提供账单与服务记录。");
         request.setPriority(5);
         request.setEnabled(true);
         return request;
+    }
+
+    private PaymentProtocolTypeOptionDTO buildProtocolTypeOption() {
+        PaymentProtocolTypeOptionDTO option = new PaymentProtocolTypeOptionDTO();
+        option.setProtocolType("PAYMENT_SIGN");
+        option.setProtocolTypeName("支付签约协议");
+        option.setDescription("适用于正向支付签约场景");
+        return option;
     }
 }

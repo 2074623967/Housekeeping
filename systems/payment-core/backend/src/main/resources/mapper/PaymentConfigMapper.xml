@@ -43,6 +43,7 @@
         SELECT protocol_code AS protocolCode,
                protocol_name AS protocolName,
                protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
                template_code AS templateCode,
                template_name AS templateName,
                template_version AS templateVersion,
@@ -53,6 +54,7 @@
                channel_scope AS channelScope,
                merchant_ack_required AS merchantAckRequired,
                risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
                priority,
                status,
                status_type AS statusType,
@@ -61,10 +63,25 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findProtocolTypeOptions" resultType="com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO">
+        SELECT 'PAYMENT_SIGN' AS protocolType,
+               '支付签约协议' AS protocolTypeName,
+               '适用于正向支付签约、扣款授权和实名确认场景' AS description
+        UNION ALL
+        SELECT 'PREAUTH' AS protocolType,
+               '预授权协议' AS protocolTypeName,
+               '适用于企业客户预授权、押金冻结和后续确认扣款场景' AS description
+        UNION ALL
+        SELECT 'WITHHOLD' AS protocolType,
+               '代扣协议' AS protocolTypeName,
+               '适用于会员续费、周期扣款和静默代扣授权场景' AS description
+    </select>
+
     <select id="findProtocolByCode" resultType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
         SELECT protocol_code AS protocolCode,
                protocol_name AS protocolName,
                protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
                template_code AS templateCode,
                template_name AS templateName,
                template_version AS templateVersion,
@@ -75,6 +92,7 @@
                channel_scope AS channelScope,
                merchant_ack_required AS merchantAckRequired,
                risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
                status,
                status_type AS statusType,
                priority
@@ -178,6 +196,7 @@
             protocol_code,
             protocol_name,
             protocol_type,
+            protocol_type_name,
             template_code,
             template_name,
             template_version,
@@ -188,6 +207,7 @@
             channel_scope,
             merchant_ack_required,
             risk_control_tag,
+            protocol_body,
             status,
             status_type,
             priority,
@@ -196,6 +216,7 @@
             #{protocolCode},
             #{protocolName},
             #{protocolType},
+            #{protocolTypeName},
             #{templateCode},
             #{templateName},
             #{templateVersion},
@@ -206,6 +227,7 @@
             #{channelScope},
             #{merchantAckRequired},
             #{riskControlTag},
+            #{protocolBody},
             #{status},
             #{statusType},
             #{priority},
@@ -217,6 +239,7 @@
         UPDATE t_payment_protocol_config
         SET protocol_name = #{protocolName},
             protocol_type = #{protocolType},
+            protocol_type_name = #{protocolTypeName},
             template_code = #{templateCode},
             template_name = #{templateName},
             template_version = #{templateVersion},
@@ -227,6 +250,7 @@
             channel_scope = #{channelScope},
             merchant_ack_required = #{merchantAckRequired},
             risk_control_tag = #{riskControlTag},
+            protocol_body = #{protocolBody},
             status = #{status},
             status_type = #{statusType},
             priority = #{priority},

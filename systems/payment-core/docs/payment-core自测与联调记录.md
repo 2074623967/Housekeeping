@@ -726,7 +726,24 @@
 ### 26.3 当前判断
 
 1. 这一版已经把支付协议管理从“基础启停配置”推进到了“协议台账管理”。
-2. 后续若继续补协议种类字典、协议正文版本管理、模板富文本编辑和电子签章联调，可以在这批字段基础上继续扩展，而不需要推翻当前结构。
+2. 后续若继续补协议正文版本管理、模板富文本编辑和电子签章联调，可以在这批字段基础上继续扩展，而不需要推翻当前结构。
+
+### 26.4 2026-07-21 支付协议管理 V1.2 复核
+
+本轮围绕“协议管理还缺协议种类字典和协议正文维护”的问题继续补强，确认协议台账已经从“模板与签章信息维护”升级到“协议种类 + 正文内容 + 模板信息一体化维护”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `77` 个并全部通过，覆盖协议类型字典匹配、协议正文必填校验和实体回填 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-protocol-v13 --emptyOutDir` | 通过 | 协议管理表单已新增协议类型下拉和协议正文文本域，并通过生产构建 |
+
+本轮补齐项：
+
+1. 扩展 `t_payment_protocol_config`，新增 `protocol_type_name` 和 `protocol_body` 字段及注释。
+2. 通过 `findProtocolTypeOptions` 将协议种类字典纳入支付配置总览接口，避免前端写死枚举。
+3. 升级协议 DTO、请求对象、实体对象和 MyBatis 映射，保证协议正文查询、新增、编辑口径一致。
+4. 升级 `PaymentConfigServiceImpl`，在保存协议时按字典反查协议类型名称，并校验协议正文必填。
+5. 升级支付配置中心前端协议表单和列表，支持协议类型选择、协议正文录入和协议类型名称展示。
 
 ## 20. 2026-07-20 支付监控 drill-down 增强复核
 

@@ -2,10 +2,12 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -31,6 +33,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setChannels(paymentConfigMapper.findChannels());
         overview.setRouteRules(paymentConfigMapper.findRouteRules());
         overview.setProtocols(paymentConfigMapper.findProtocols());
+        overview.setProtocolTypeOptions(paymentConfigMapper.findProtocolTypeOptions());
         overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
         overview.setGateways(paymentConfigMapper.findGateways());
         return overview;
@@ -161,6 +164,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 : requireText(request.getProtocolCode(), "协议编码不能为空"));
         entity.setProtocolName(requireText(request.getProtocolName(), "协议名称不能为空"));
         entity.setProtocolType(requireText(request.getProtocolType(), "协议类型不能为空"));
+        entity.setProtocolTypeName(resolveProtocolTypeName(request.getProtocolType(), request.getProtocolTypeName()));
         entity.setTemplateCode(requireText(request.getTemplateCode(), "协议模板编码不能为空"));
         entity.setTemplateName(requireText(request.getTemplateName(), "协议模板名称不能为空"));
         entity.setTemplateVersion(requireText(request.getTemplateVersion(), "模板版本不能为空"));
@@ -171,6 +175,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setChannelScope(requireText(request.getChannelScope(), "适用渠道不能为空"));
         entity.setMerchantAckRequired(requireText(request.getMerchantAckRequired(), "商户确认要求不能为空"));
         entity.setRiskControlTag(requireText(request.getRiskControlTag(), "风控标签不能为空"));
+        entity.setProtocolBody(requireText(request.getProtocolBody(), "协议正文不能为空"));
         entity.setPriority(resolvePriority(request.getPriority()));
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
@@ -192,6 +197,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("协议优先级不能小于0");
         }
         return priority;
+    }
+
+    private String resolveProtocolTypeName(String protocolType, String requestProtocolTypeName) {
+        String normalizedProtocolType = requireText(protocolType, "协议类型不能为空");
+        List<PaymentProtocolTypeOptionDTO> protocolTypeOptions = paymentConfigMapper.findProtocolTypeOptions();
+        for (PaymentProtocolTypeOptionDTO protocolTypeOption : protocolTypeOptions) {
+            if (normalizedProtocolType.equals(protocolTypeOption.getProtocolType())) {
+                return protocolTypeOption.getProtocolTypeName();
+            }
+        }
+        throw new IllegalArgumentException("协议类型未在字典中定义");
     }
 
     private String resolveStatus(Boolean enabled) {

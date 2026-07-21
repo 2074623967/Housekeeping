@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
+import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
@@ -30,6 +31,11 @@ public interface PaymentConfigMapper {
      * 查询支付协议配置。
      */
     List<PaymentProtocolConfigDTO> findProtocols();
+
+    /**
+     * 查询支付协议类型字典。
+     */
+    List<PaymentProtocolTypeOptionDTO> findProtocolTypeOptions();
 
     /**
      * 按协议编码查询支付协议配置。

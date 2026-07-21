@@ -14,6 +14,8 @@ public class PaymentProtocolConfigEntity {
     private String protocolName;
     /** 协议类型。 */
     private String protocolType;
+    /** 协议类型名称。 */
+    private String protocolTypeName;
     /** 协议模板编码。 */
     private String templateCode;
     /** 协议模板名称。 */
@@ -34,6 +36,8 @@ public class PaymentProtocolConfigEntity {
     private String merchantAckRequired;
     /** 风控标签。 */
     private String riskControlTag;
+    /** 协议正文。 */
+    private String protocolBody;
     /** 状态。 */
     private String status;
     /** 状态样式类型。 */
