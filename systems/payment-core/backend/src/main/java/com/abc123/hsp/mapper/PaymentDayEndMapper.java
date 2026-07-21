@@ -43,6 +43,36 @@ public interface PaymentDayEndMapper {
     Integer countSuccessRefundsByDate(@Param("bizDate") String bizDate);
 
     /**
+     * 查询指定业务日渠道侧已成功收口的单量。
+     */
+    Integer countChannelSuccessByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日渠道侧已成功收口的金额。
+     */
+    BigDecimal sumChannelSuccessAmountByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日内部事件已成功发布的单量。
+     */
+    Integer countInternalSuccessByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日内部事件已成功发布的金额。
+     */
+    BigDecimal sumInternalSuccessAmountByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日支付成功但仍存在差异的单量。
+     */
+    Integer countPaymentSuccessGapByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日支付成功但仍存在差异的金额。
+     */
+    BigDecimal sumPaymentSuccessGapAmountByDate(@Param("bizDate") String bizDate);
+
+    /**
      * 查询指定业务日的退款成功金额。
      */
     BigDecimal sumSuccessRefundAmountByDate(@Param("bizDate") String bizDate);
@@ -61,6 +91,11 @@ public interface PaymentDayEndMapper {
      * 查询指定业务日的待收口退款数。
      */
     Integer countPendingRefundByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日的待收口退款金额。
+     */
+    BigDecimal sumPendingRefundAmountByDate(@Param("bizDate") String bizDate);
 
     /**
      * 新增支付日终批次。

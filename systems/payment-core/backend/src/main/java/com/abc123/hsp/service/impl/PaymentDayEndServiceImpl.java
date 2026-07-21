@@ -59,11 +59,18 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         entity.setPaymentTotalCount(defaultZero(paymentDayEndMapper.countPaymentsByDate(bizDate)));
         entity.setPaymentSuccessCount(defaultZero(paymentDayEndMapper.countSuccessPaymentsByDate(bizDate)));
         entity.setPaymentSuccessAmount(defaultAmount(paymentDayEndMapper.sumSuccessPaymentAmountByDate(bizDate)));
+        entity.setChannelSuccessCount(defaultZero(paymentDayEndMapper.countChannelSuccessByDate(bizDate)));
+        entity.setChannelSuccessAmount(defaultAmount(paymentDayEndMapper.sumChannelSuccessAmountByDate(bizDate)));
+        entity.setInternalSuccessCount(defaultZero(paymentDayEndMapper.countInternalSuccessByDate(bizDate)));
+        entity.setInternalSuccessAmount(defaultAmount(paymentDayEndMapper.sumInternalSuccessAmountByDate(bizDate)));
+        entity.setPaymentSuccessGapCount(defaultZero(paymentDayEndMapper.countPaymentSuccessGapByDate(bizDate)));
+        entity.setPaymentSuccessGapAmount(defaultAmount(paymentDayEndMapper.sumPaymentSuccessGapAmountByDate(bizDate)));
         entity.setRefundSuccessCount(defaultZero(paymentDayEndMapper.countSuccessRefundsByDate(bizDate)));
         entity.setRefundSuccessAmount(defaultAmount(paymentDayEndMapper.sumSuccessRefundAmountByDate(bizDate)));
         entity.setChannelAbnormalCount(defaultZero(paymentDayEndMapper.countChannelAbnormalByDate(bizDate)));
         entity.setInternalAbnormalCount(defaultZero(paymentDayEndMapper.countInternalAbnormalByDate(bizDate)));
         entity.setPendingRefundCount(defaultZero(paymentDayEndMapper.countPendingRefundByDate(bizDate)));
+        entity.setPendingRefundAmount(defaultAmount(paymentDayEndMapper.sumPendingRefundAmountByDate(bizDate)));
         entity.setTriggeredBy(resolveTriggeredBy(request));
         entity.setSummaryComment(buildSummaryComment(entity));
         entity.setBatchStatus(resolveBatchStatus(entity));
@@ -102,13 +109,16 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         if (entity.getChannelAbnormalCount() == 0
                 && entity.getInternalAbnormalCount() == 0
                 && entity.getPendingRefundCount() == 0) {
-            return "支付、渠道回调、内部事件和退款状态均已完成日终收口。";
+            return "支付成功、渠道回调、内部事件和退款状态均已完成日终收口，可进入次日对账。";
         }
         return String.format(
-                "渠道异常%d笔，内部事件异常%d笔，待收口退款%d笔，需在对账与差错环节继续跟进。",
+                "成功差异%d笔（%s），渠道异常%d笔，内部事件异常%d笔，待收口退款%d笔（%s），需在对账与差错环节继续跟进。",
+                entity.getPaymentSuccessGapCount(),
+                formatAmount(entity.getPaymentSuccessGapAmount()),
                 entity.getChannelAbnormalCount(),
                 entity.getInternalAbnormalCount(),
-                entity.getPendingRefundCount()
+                entity.getPendingRefundCount(),
+                formatAmount(entity.getPendingRefundAmount())
         );
     }
 
@@ -191,5 +201,9 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     private BigDecimal defaultAmount(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private String formatAmount(BigDecimal amount) {
+        return "¥" + defaultAmount(amount).setScale(2, BigDecimal.ROUND_HALF_UP).toPlainString();
     }
 }

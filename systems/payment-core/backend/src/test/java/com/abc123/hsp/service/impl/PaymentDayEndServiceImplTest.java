@@ -31,6 +31,7 @@ class PaymentDayEndServiceImplTest {
         overview.setCompletedBatchCount(1);
         overview.setAbnormalBatchCount(0);
         overview.setLatestBatchStatus("COMPLETED");
+        overview.setLatestChannelSuccessAmount("¥268.00");
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
         when(paymentDayEndMapper.findRecentBatches()).thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
 
@@ -48,11 +49,18 @@ class PaymentDayEndServiceImplTest {
         when(paymentDayEndMapper.countPaymentsByDate(bizDate)).thenReturn(2);
         when(paymentDayEndMapper.countSuccessPaymentsByDate(bizDate)).thenReturn(1);
         when(paymentDayEndMapper.sumSuccessPaymentAmountByDate(bizDate)).thenReturn(new BigDecimal("268.00"));
+        when(paymentDayEndMapper.countChannelSuccessByDate(bizDate)).thenReturn(1);
+        when(paymentDayEndMapper.sumChannelSuccessAmountByDate(bizDate)).thenReturn(new BigDecimal("268.00"));
+        when(paymentDayEndMapper.countInternalSuccessByDate(bizDate)).thenReturn(0);
+        when(paymentDayEndMapper.sumInternalSuccessAmountByDate(bizDate)).thenReturn(BigDecimal.ZERO);
+        when(paymentDayEndMapper.countPaymentSuccessGapByDate(bizDate)).thenReturn(1);
+        when(paymentDayEndMapper.sumPaymentSuccessGapAmountByDate(bizDate)).thenReturn(new BigDecimal("268.00"));
         when(paymentDayEndMapper.countSuccessRefundsByDate(bizDate)).thenReturn(0);
         when(paymentDayEndMapper.sumSuccessRefundAmountByDate(bizDate)).thenReturn(BigDecimal.ZERO);
         when(paymentDayEndMapper.countChannelAbnormalByDate(bizDate)).thenReturn(0);
         when(paymentDayEndMapper.countInternalAbnormalByDate(bizDate)).thenReturn(0);
         when(paymentDayEndMapper.countPendingRefundByDate(bizDate)).thenReturn(1);
+        when(paymentDayEndMapper.sumPendingRefundAmountByDate(bizDate)).thenReturn(new BigDecimal("68.00"));
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(new PaymentDayEndOverviewDTO());
         when(paymentDayEndMapper.findRecentBatches()).thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
 
@@ -68,5 +76,7 @@ class PaymentDayEndServiceImplTest {
         verify(paymentDayEndMapper).insertBatch(captor.capture());
         org.junit.jupiter.api.Assertions.assertEquals("WARNING", captor.getValue().getBatchStatus());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), captor.getValue().getPaymentTotalCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getPaymentSuccessGapCount());
+        org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("68.00"), captor.getValue().getPendingRefundAmount());
     }
 }

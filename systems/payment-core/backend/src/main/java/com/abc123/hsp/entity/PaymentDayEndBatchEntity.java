@@ -25,6 +25,18 @@ public class PaymentDayEndBatchEntity {
     private Integer paymentSuccessCount;
     /** 支付成功金额。 */
     private BigDecimal paymentSuccessAmount;
+    /** 渠道成功单量。 */
+    private Integer channelSuccessCount;
+    /** 渠道成功金额。 */
+    private BigDecimal channelSuccessAmount;
+    /** 内部事件成功单量。 */
+    private Integer internalSuccessCount;
+    /** 内部事件成功金额。 */
+    private BigDecimal internalSuccessAmount;
+    /** 支付成功差异单量。 */
+    private Integer paymentSuccessGapCount;
+    /** 支付成功差异金额。 */
+    private BigDecimal paymentSuccessGapAmount;
     /** 退款成功单量。 */
     private Integer refundSuccessCount;
     /** 退款成功金额。 */
@@ -35,6 +47,8 @@ public class PaymentDayEndBatchEntity {
     private Integer internalAbnormalCount;
     /** 待收口退款数。 */
     private Integer pendingRefundCount;
+    /** 待收口退款金额。 */
+    private BigDecimal pendingRefundAmount;
     /** 执行备注。 */
     private String summaryComment;
     /** 触发人。 */

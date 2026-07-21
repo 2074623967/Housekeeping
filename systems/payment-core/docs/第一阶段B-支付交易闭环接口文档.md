@@ -952,14 +952,17 @@ POST /api/payment-config/gateways/toggle
 
 1. `totalBatchCount / completedBatchCount / abnormalBatchCount / latestBizDate`：日终批次汇总。
 2. `openChannelAbnormalCount / openInternalAbnormalCount / openPendingRefundCount`：当前未收口差异计数。
-3. `alerts`：当前差异告警，至少覆盖渠道回调未收口、内部事件未收口、退款待收口三类。
-4. `recentBatches`：最近日终批次列表，供财务和运营回看业务日执行结果。
+3. `latestChannelSuccessCount / latestChannelSuccessAmount / latestInternalSuccessCount / latestInternalSuccessAmount`：最近批次渠道成功与内部事件成功事实。
+4. `latestPaymentSuccessGapCount / latestPaymentSuccessGapAmount / latestPendingRefundAmount`：最近批次支付成功差异和待收口退款金额事实。
+5. `alerts`：当前差异告警，至少覆盖渠道回调未收口、内部事件未收口、退款待收口三类。
+6. `recentBatches`：最近日终批次列表，供财务和运营回看业务日执行结果。
 
 业务说明：
 
 1. 当前接口定位是“对账前置事实收口”，不是正式财务对账差异闭环系统。
-2. 差异告警的 `actionRoute` 直接指向异常中心、事件出站页或退款页，便于次日快速排查。
-3. 后续如果接入渠道对账文件和账务分录核对，可继续在该接口上扩展更细粒度差异事实。
+2. 当前日终批次会同时沉淀支付成功事实、渠道成功收口事实、内部事件成功事实、成功差异事实和待收口退款金额。
+3. 差异告警的 `actionRoute` 直接指向异常中心、事件出站页或退款页，便于次日快速排查。
+4. 后续如果接入渠道对账文件和账务分录核对，可继续在该接口上扩展更细粒度差异事实。
 
 ## 14. 错误与边界说明
 

@@ -32,7 +32,49 @@
                    FROM t_payment_day_end_batch
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
-               ), 0) AS openPendingRefundCount
+               ), 0) AS openPendingRefundCount,
+               COALESCE((
+                   SELECT channel_success_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), 0) AS latestChannelSuccessCount,
+               COALESCE((
+                   SELECT CONCAT('¥', FORMAT(channel_success_amount, 2))
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), '¥0.00') AS latestChannelSuccessAmount,
+               COALESCE((
+                   SELECT internal_success_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), 0) AS latestInternalSuccessCount,
+               COALESCE((
+                   SELECT CONCAT('¥', FORMAT(internal_success_amount, 2))
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), '¥0.00') AS latestInternalSuccessAmount,
+               COALESCE((
+                   SELECT payment_success_gap_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), 0) AS latestPaymentSuccessGapCount,
+               COALESCE((
+                   SELECT CONCAT('¥', FORMAT(payment_success_gap_amount, 2))
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), '¥0.00') AS latestPaymentSuccessGapAmount,
+               COALESCE((
+                   SELECT CONCAT('¥', FORMAT(pending_refund_amount, 2))
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ), '¥0.00') AS latestPendingRefundAmount
         FROM t_payment_day_end_batch
     </select>
 
@@ -45,11 +87,18 @@
                payment_total_count AS paymentTotalCount,
                payment_success_count AS paymentSuccessCount,
                CONCAT('¥', FORMAT(payment_success_amount, 2)) AS paymentSuccessAmount,
+               channel_success_count AS channelSuccessCount,
+               CONCAT('¥', FORMAT(channel_success_amount, 2)) AS channelSuccessAmount,
+               internal_success_count AS internalSuccessCount,
+               CONCAT('¥', FORMAT(internal_success_amount, 2)) AS internalSuccessAmount,
+               payment_success_gap_count AS paymentSuccessGapCount,
+               CONCAT('¥', FORMAT(payment_success_gap_amount, 2)) AS paymentSuccessGapAmount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                channel_abnormal_count AS channelAbnormalCount,
                internal_abnormal_count AS internalAbnormalCount,
                pending_refund_count AS pendingRefundCount,
+               CONCAT('¥', FORMAT(pending_refund_amount, 2)) AS pendingRefundAmount,
                summary_comment AS summaryComment,
                triggered_by AS triggeredBy,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
@@ -86,6 +135,108 @@
           AND status = 'SUCCESS'
     </select>
 
+    <select id="countChannelSuccessByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_notify_log notify_log
+              WHERE notify_log.payment_order_id = payment_order.payment_order_id
+                AND notify_log.notify_type = 'SUCCESS'
+                AND notify_log.notify_status IN ('已收口', 'SUCCESS')
+          )
+    </select>
+
+    <select id="sumChannelSuccessAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(payment_order.amount), 0)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_notify_log notify_log
+              WHERE notify_log.payment_order_id = payment_order.payment_order_id
+                AND notify_log.notify_type = 'SUCCESS'
+                AND notify_log.notify_status IN ('已收口', 'SUCCESS')
+          )
+    </select>
+
+    <select id="countInternalSuccessByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_event payment_event
+              WHERE payment_event.payment_order_id = payment_order.payment_order_id
+                AND payment_event.event_type = 'PAYMENT_SUCCESS'
+                AND payment_event.publish_status = 'SUCCESS'
+          )
+    </select>
+
+    <select id="sumInternalSuccessAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(payment_order.amount), 0)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_event payment_event
+              WHERE payment_event.payment_order_id = payment_order.payment_order_id
+                AND payment_event.event_type = 'PAYMENT_SUCCESS'
+                AND payment_event.publish_status = 'SUCCESS'
+          )
+    </select>
+
+    <select id="countPaymentSuccessGapByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND (
+              NOT EXISTS (
+                  SELECT 1
+                  FROM t_payment_notify_log notify_log
+                  WHERE notify_log.payment_order_id = payment_order.payment_order_id
+                    AND notify_log.notify_type = 'SUCCESS'
+                    AND notify_log.notify_status IN ('已收口', 'SUCCESS')
+              )
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM t_payment_event payment_event
+                  WHERE payment_event.payment_order_id = payment_order.payment_order_id
+                    AND payment_event.event_type = 'PAYMENT_SUCCESS'
+                    AND payment_event.publish_status = 'SUCCESS'
+              )
+          )
+    </select>
+
+    <select id="sumPaymentSuccessGapAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(payment_order.amount), 0)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND (
+              NOT EXISTS (
+                  SELECT 1
+                  FROM t_payment_notify_log notify_log
+                  WHERE notify_log.payment_order_id = payment_order.payment_order_id
+                    AND notify_log.notify_type = 'SUCCESS'
+                    AND notify_log.notify_status IN ('已收口', 'SUCCESS')
+              )
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM t_payment_event payment_event
+                  WHERE payment_event.payment_order_id = payment_order.payment_order_id
+                    AND payment_event.event_type = 'PAYMENT_SUCCESS'
+                    AND payment_event.publish_status = 'SUCCESS'
+              )
+          )
+    </select>
+
     <select id="sumSuccessRefundAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
@@ -102,7 +253,8 @@
               SELECT 1
               FROM t_payment_notify_log notify_log
               WHERE notify_log.payment_order_id = payment_order.payment_order_id
-                AND notify_log.notify_status = 'SUCCESS'
+                AND notify_log.notify_type = 'SUCCESS'
+                AND notify_log.notify_status IN ('已收口', 'SUCCESS')
           )
     </select>
 
@@ -127,6 +279,13 @@
           AND status NOT IN ('SUCCESS', 'FAIL')
     </select>
 
+    <select id="sumPendingRefundAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(refund_amount), 0)
+        FROM t_refund_order
+        WHERE DATE(applied_at) = #{bizDate}
+          AND status NOT IN ('SUCCESS', 'FAIL')
+    </select>
+
     <insert id="insertBatch" parameterType="com.abc123.hsp.entity.PaymentDayEndBatchEntity">
         INSERT INTO t_payment_day_end_batch (
             batch_no,
@@ -137,11 +296,18 @@
             payment_total_count,
             payment_success_count,
             payment_success_amount,
+            channel_success_count,
+            channel_success_amount,
+            internal_success_count,
+            internal_success_amount,
+            payment_success_gap_count,
+            payment_success_gap_amount,
             refund_success_count,
             refund_success_amount,
             channel_abnormal_count,
             internal_abnormal_count,
             pending_refund_count,
+            pending_refund_amount,
             summary_comment,
             triggered_by,
             created_at,
@@ -155,11 +321,18 @@
             #{paymentTotalCount},
             #{paymentSuccessCount},
             #{paymentSuccessAmount},
+            #{channelSuccessCount},
+            #{channelSuccessAmount},
+            #{internalSuccessCount},
+            #{internalSuccessAmount},
+            #{paymentSuccessGapCount},
+            #{paymentSuccessGapAmount},
             #{refundSuccessCount},
             #{refundSuccessAmount},
             #{channelAbnormalCount},
             #{internalAbnormalCount},
             #{pendingRefundCount},
+            #{pendingRefundAmount},
             #{summaryComment},
             #{triggeredBy},
             NOW(),

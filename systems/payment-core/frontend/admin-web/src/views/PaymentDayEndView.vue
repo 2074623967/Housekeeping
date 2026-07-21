@@ -96,6 +96,37 @@ onMounted(loadOverview);
           当前未收口：渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，待收口退款 {{ overview.openPendingRefundCount }} 笔。
         </div>
 
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>最近批次对账前置事实</h3>
+              <p class="meta">用于财务和运营先确认支付成功、渠道收口、内部事件收口是否一致，再决定是否进入正式对账。</p>
+            </div>
+          </div>
+          <div class="detail-card-grid">
+            <div class="detail-card">
+              <div class="detail-label">渠道成功收口</div>
+              <div class="detail-value">{{ overview.latestChannelSuccessCount ?? 0 }}</div>
+              <div class="detail-hint">金额 {{ overview.latestChannelSuccessAmount || "¥0.00" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">内部事件成功</div>
+              <div class="detail-value">{{ overview.latestInternalSuccessCount ?? 0 }}</div>
+              <div class="detail-hint">金额 {{ overview.latestInternalSuccessAmount || "¥0.00" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">支付成功差异</div>
+              <div class="detail-value">{{ overview.latestPaymentSuccessGapCount ?? 0 }}</div>
+              <div class="detail-hint">金额 {{ overview.latestPaymentSuccessGapAmount || "¥0.00" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">待收口退款金额</div>
+              <div class="detail-value">{{ overview.latestPendingRefundAmount || "¥0.00" }}</div>
+              <div class="detail-hint">对应 {{ overview.openPendingRefundCount ?? 0 }} 笔退款</div>
+            </div>
+          </div>
+        </div>
+
         <div class="detail-card-grid">
           <div v-for="alert in overview.alerts" :key="alert.alertType" class="detail-card">
             <div class="detail-label">{{ alert.alertTitle }}</div>
@@ -152,11 +183,18 @@ onMounted(loadOverview);
                   <th>支付总单量</th>
                   <th>支付成功单量</th>
                   <th>支付成功金额</th>
+                  <th>渠道成功单量</th>
+                  <th>渠道成功金额</th>
+                  <th>内部成功单量</th>
+                  <th>内部成功金额</th>
+                  <th>成功差异单量</th>
+                  <th>成功差异金额</th>
                   <th>退款成功单量</th>
                   <th>退款成功金额</th>
                   <th>渠道异常</th>
                   <th>内部异常</th>
                   <th>待收口退款</th>
+                  <th>待收口退款金额</th>
                   <th>备注</th>
                   <th>触发人</th>
                   <th>完成时间</th>
@@ -171,11 +209,18 @@ onMounted(loadOverview);
                   <td>{{ item.paymentTotalCount }}</td>
                   <td>{{ item.paymentSuccessCount }}</td>
                   <td>{{ item.paymentSuccessAmount }}</td>
+                  <td>{{ item.channelSuccessCount }}</td>
+                  <td>{{ item.channelSuccessAmount }}</td>
+                  <td>{{ item.internalSuccessCount }}</td>
+                  <td>{{ item.internalSuccessAmount }}</td>
+                  <td>{{ item.paymentSuccessGapCount }}</td>
+                  <td>{{ item.paymentSuccessGapAmount }}</td>
                   <td>{{ item.refundSuccessCount }}</td>
                   <td>{{ item.refundSuccessAmount }}</td>
                   <td>{{ item.channelAbnormalCount }}</td>
                   <td>{{ item.internalAbnormalCount }}</td>
                   <td>{{ item.pendingRefundCount }}</td>
+                  <td>{{ item.pendingRefundAmount }}</td>
                   <td class="flow-summary-cell">{{ item.summaryComment }}</td>
                   <td>{{ item.triggeredBy }}</td>
                   <td>{{ item.completedAt }}</td>

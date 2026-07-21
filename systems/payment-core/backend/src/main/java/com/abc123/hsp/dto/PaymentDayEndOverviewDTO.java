@@ -25,6 +25,20 @@ public class PaymentDayEndOverviewDTO {
     private Integer openInternalAbnormalCount;
     /** 当前待收口退款数。 */
     private Integer openPendingRefundCount;
+    /** 最近批次渠道成功单量。 */
+    private Integer latestChannelSuccessCount;
+    /** 最近批次渠道成功金额。 */
+    private String latestChannelSuccessAmount;
+    /** 最近批次内部事件成功单量。 */
+    private Integer latestInternalSuccessCount;
+    /** 最近批次内部事件成功金额。 */
+    private String latestInternalSuccessAmount;
+    /** 最近批次支付成功差异单量。 */
+    private Integer latestPaymentSuccessGapCount;
+    /** 最近批次支付成功差异金额。 */
+    private String latestPaymentSuccessGapAmount;
+    /** 最近批次待收口退款金额。 */
+    private String latestPendingRefundAmount;
     /** 当前差异告警。 */
     private List<PaymentDayEndAlertItemDTO> alerts;
     /** 最近批次列表。 */
