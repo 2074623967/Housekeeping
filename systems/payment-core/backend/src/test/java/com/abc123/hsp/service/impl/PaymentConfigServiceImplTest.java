@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
@@ -24,6 +25,34 @@ class PaymentConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @Test
+    void shouldExposeChannelFormalizationFieldsInOverview() {
+        PaymentChannelConfigDTO channel = new PaymentChannelConfigDTO();
+        channel.setChannelCode("wx_h5");
+        channel.setMerchantAppId("wx-app-h5-001");
+        channel.setCertificateProfile("wx-cert-profile-v2026.07");
+        channel.setNotifySignWindow("300s");
+        channel.setRefundWindow("180天");
+        channel.setRiskControlTag("实名校验+重复支付监控");
+        when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(channel));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+
+        PaymentChannelConfigDTO actualChannel = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .overview()
+                .getChannels()
+                .get(0);
+
+        org.junit.jupiter.api.Assertions.assertEquals("wx-app-h5-001", actualChannel.getMerchantAppId());
+        org.junit.jupiter.api.Assertions.assertEquals("wx-cert-profile-v2026.07", actualChannel.getCertificateProfile());
+        org.junit.jupiter.api.Assertions.assertEquals("300s", actualChannel.getNotifySignWindow());
+        org.junit.jupiter.api.Assertions.assertEquals("180天", actualChannel.getRefundWindow());
+        org.junit.jupiter.api.Assertions.assertTrue(actualChannel.getRiskControlTag().contains("实名校验"));
+    }
 
     @Test
     void shouldToggleChannelStatus() {

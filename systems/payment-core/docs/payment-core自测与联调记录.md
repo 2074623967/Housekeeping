@@ -246,7 +246,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `78` 个并全部通过，覆盖网关治理字段总览回归 |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `79` 个并全部通过，覆盖网关治理字段总览回归 |
 | 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-gateway-v11 --emptyOutDir` | 通过 | `PaymentConfigView` 新增环境、证书、灰度、白名单和适配器编排列后构建通过 |
 
 ### 28.2 本轮修复项
@@ -255,6 +255,24 @@
 2. 为 `PaymentGatewayConfigDTO`、`PaymentConfigMapper.xml`、样例数据和前端页面同步补齐对应字段。
 3. 为支付配置中心后台页面补齐网关治理视角列，便于产品、测试和研发统一评审接入事实。
 4. 为 `PaymentGatewayConfigServiceImplTest` 补齐网关治理字段在配置总览中的断言，避免后续字段被悄悄删减。
+
+## 29. 2026-07-21 支付渠道管理增强验证
+
+### 29.1 本轮验证结论
+
+本轮围绕支付配置中心中的“支付渠道配置”继续正式化，确认后台已从“渠道基础台账”升级为“渠道参数治理台账”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `79` 个并全部通过，覆盖渠道治理字段总览回归 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-channel-v11 --emptyOutDir` | 通过 | `PaymentConfigView` 新增应用标识、退款时效、验签时间窗和证书档案列后构建通过 |
+
+### 29.2 本轮修复项
+
+1. 为 `t_payment_channel_config` 补齐商户应用标识、证书档案、回调验签时间窗、原路退款时效和风控标签字段。
+2. 为 `PaymentChannelConfigDTO`、`PaymentConfigMapper.xml`、样例数据和前端页面同步补齐对应字段。
+3. 为支付配置中心后台页面补齐渠道参数治理视角列，便于产品、测试和研发统一评审退款时效与验签事实。
+4. 为 `PaymentConfigServiceImplTest` 补齐渠道治理字段在配置总览中的断言，避免后续字段被悄悄删减。
 
 ## 10. 2026-07-20 支付日终处理 V1 验证
 
@@ -752,7 +770,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `78` 个并全部通过，覆盖协议类型字典匹配、协议正文必填校验和实体回填 |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `79` 个并全部通过，覆盖协议类型字典匹配、协议正文必填校验和实体回填 |
 | 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-protocol-v13 --emptyOutDir` | 通过 | 协议管理表单已新增协议类型下拉和协议正文文本域，并通过生产构建 |
 
 本轮补齐项：
@@ -771,7 +789,7 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `78` 个并全部通过，返回码映射增强后主流程无回归 |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `79` 个并全部通过，返回码映射增强后主流程无回归 |
 | 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-return-code-v11 --emptyOutDir` | 通过 | 返回码映射表格新增版本、归档状态和人工介入列后可稳定生产构建 |
 
 ### 27.2 本轮补齐项

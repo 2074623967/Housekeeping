@@ -237,8 +237,13 @@ onMounted(loadOverview);
                 <th>渠道名称</th>
                 <th>支付方式</th>
                 <th>商户号</th>
+                <th>应用标识</th>
                 <th>回调地址</th>
                 <th>验签密钥</th>
+                <th>证书档案</th>
+                <th>验签时间窗</th>
+                <th>退款时效</th>
+                <th>风控标签</th>
                 <th>适用场景</th>
                 <th>单日限额</th>
                 <th>优先级</th>
@@ -253,8 +258,13 @@ onMounted(loadOverview);
                 <td>{{ channel.channelName }}</td>
                 <td>{{ channel.paymentMethod }}</td>
                 <td>{{ channel.merchantNo }}</td>
+                <td>{{ channel.merchantAppId }}</td>
                 <td class="flow-summary-cell">{{ channel.callbackNotifyUrl }}</td>
                 <td>{{ channel.callbackSecretMasked }}</td>
+                <td>{{ channel.certificateProfile }}</td>
+                <td>{{ channel.notifySignWindow }}</td>
+                <td>{{ channel.refundWindow }}</td>
+                <td class="flow-summary-cell">{{ channel.riskControlTag }}</td>
                 <td>{{ channel.sceneScope }}</td>
                 <td>{{ channel.dailyLimit }}</td>
                 <td>{{ channel.priority }}</td>
