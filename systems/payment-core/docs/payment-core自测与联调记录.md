@@ -669,6 +669,31 @@
 1. 这一版已经把“标准化适配层”从单实现推进到了多渠道分适配器结构。
 2. 后续接真实微信、支付宝和线下银行时，可以直接在对应适配器内替换成本地 SDK、HTTP 网关或证书验签逻辑，而不需要再次拆服务骨架。
 
+## 26. 2026-07-21 支付协议管理 V1.1 复核
+
+### 26.1 本轮验证结论
+
+本轮围绕“支付协议当前只有基础协议字段，协议模板、签约要素和电子签章信息不完整”的问题进行了补齐，确认协议管理已经从“基础配置维护”升级为更接近真实支付产品的协议台账。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 全量后端测试共 `73` 个并全部通过 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-protocol-v12 --emptyOutDir` | 通过 | 协议管理表单和表格扩展后可稳定生产构建 |
+| 协议配置校验 | `PaymentConfigServiceImplTest` | 通过 | 已新增协议模板编码必填校验 |
+
+### 26.2 本轮补齐项
+
+1. 扩展 `t_payment_protocol_config`，新增 `template_code`、`template_name`、`sign_element_spec`、`e_signature_provider` 四个字段及注释。
+2. 扩展协议 DTO、请求对象、实体对象和 MyBatis 映射，保证查询、新增、编辑口径一致。
+3. 升级 `PaymentConfigServiceImpl`，新增协议模板编码、模板名称、签约要素和电子签章服务商必填校验。
+4. 升级支付配置中心前端协议表单和协议列表，支持模板与签章信息维护和展示。
+5. 同步更新样例数据，保证本地初始化后的协议配置更贴近真实业务。
+
+### 26.3 当前判断
+
+1. 这一版已经把支付协议管理从“基础启停配置”推进到了“协议台账管理”。
+2. 后续若继续补协议种类字典、协议正文版本管理、模板富文本编辑和电子签章联调，可以在这批字段基础上继续扩展，而不需要推翻当前结构。
+
 ## 20. 2026-07-20 支付监控 drill-down 增强复核
 
 ### 20.1 本轮验证结论

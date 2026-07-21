@@ -95,13 +95,28 @@ class PaymentConfigServiceImplTest {
         );
     }
 
+    @Test
+    void shouldRejectProtocolWhenTemplateCodeMissing() {
+        PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
+        request.setTemplateCode(" ");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+        );
+    }
+
     private PaymentProtocolUpsertRequestDTO buildProtocolRequest() {
         PaymentProtocolUpsertRequestDTO request = new PaymentProtocolUpsertRequestDTO();
         request.setProtocolCode("PROTO_TEST_V1");
         request.setProtocolName("测试协议");
         request.setProtocolType("PAYMENT_SIGN");
+        request.setTemplateCode("TPL_TEST_V1");
+        request.setTemplateName("测试协议模板");
         request.setTemplateVersion("v1.0.0");
         request.setSignMode("线上签约");
+        request.setSignElementSpec("姓名/身份证/手机号");
+        request.setESignatureProvider("E-SIGN-CLOUD");
         request.setSceneScope("家政服务");
         request.setChannelScope("wx_h5,alipay_h5");
         request.setMerchantAckRequired("需要");

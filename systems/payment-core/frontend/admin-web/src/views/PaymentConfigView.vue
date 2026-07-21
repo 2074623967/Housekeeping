@@ -19,8 +19,12 @@ function createProtocolForm() {
     protocolCode: "",
     protocolName: "",
     protocolType: "",
+    templateCode: "",
+    templateName: "",
     templateVersion: "",
     signMode: "",
+    signElementSpec: "",
+    eSignatureProvider: "",
     sceneScope: "",
     channelScope: "",
     merchantAckRequired: "需要",
@@ -141,8 +145,12 @@ function startEditProtocol(protocol) {
     protocolCode: protocol.protocolCode,
     protocolName: protocol.protocolName,
     protocolType: protocol.protocolType,
+    templateCode: protocol.templateCode,
+    templateName: protocol.templateName,
     templateVersion: protocol.templateVersion,
     signMode: protocol.signMode,
+    signElementSpec: protocol.signElementSpec,
+    eSignatureProvider: protocol.eSignatureProvider,
     sceneScope: protocol.sceneScope,
     channelScope: protocol.channelScope,
     merchantAckRequired: protocol.merchantAckRequired,
@@ -338,12 +346,28 @@ onMounted(loadOverview);
                 <input v-model.trim="protocolForm.protocolType" placeholder="PAYMENT_SIGN / PREAUTH / WITHHOLD" />
               </label>
               <label>
+                模板编码
+                <input v-model.trim="protocolForm.templateCode" placeholder="TPL_HK_SIGN_STD" />
+              </label>
+              <label>
+                模板名称
+                <input v-model.trim="protocolForm.templateName" placeholder="家政标准收单模板" />
+              </label>
+              <label>
                 模板版本
                 <input v-model.trim="protocolForm.templateVersion" placeholder="v1.0.0" />
               </label>
               <label>
                 签约模式
                 <input v-model.trim="protocolForm.signMode" />
+              </label>
+              <label>
+                签约要素
+                <input v-model.trim="protocolForm.signElementSpec" placeholder="姓名/身份证/手机号/授权确认" />
+              </label>
+              <label>
+                电子签章
+                <input v-model.trim="protocolForm.eSignatureProvider" placeholder="E-SIGN-CLOUD" />
               </label>
               <label>
                 商户确认
@@ -396,8 +420,12 @@ onMounted(loadOverview);
                   <th>协议编码</th>
                   <th>协议名称</th>
                   <th>协议类型</th>
+                  <th>模板编码</th>
+                  <th>模板名称</th>
                   <th>模板版本</th>
                   <th>签约模式</th>
+                  <th>签约要素</th>
+                  <th>电子签章</th>
                   <th>适用场景</th>
                   <th>适用渠道</th>
                   <th>商户确认</th>
@@ -413,8 +441,12 @@ onMounted(loadOverview);
                   <td>{{ protocol.protocolCode }}</td>
                   <td>{{ protocol.protocolName }}</td>
                   <td>{{ protocol.protocolType }}</td>
+                  <td>{{ protocol.templateCode }}</td>
+                  <td>{{ protocol.templateName }}</td>
                   <td>{{ protocol.templateVersion }}</td>
                   <td>{{ protocol.signMode }}</td>
+                  <td class="flow-summary-cell">{{ protocol.signElementSpec }}</td>
+                  <td>{{ protocol.eSignatureProvider }}</td>
                   <td>{{ protocol.sceneScope }}</td>
                   <td>{{ protocol.channelScope }}</td>
                   <td>{{ protocol.merchantAckRequired }}</td>

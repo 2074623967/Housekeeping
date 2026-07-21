@@ -14,10 +14,10 @@ INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, matc
 ('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
 ('RULE_ENTERPRISE_BANK', '企业大额订单走线下银行', 'ENTERPRISE/PC', 'amount>5000 OR customerType=ENTERPRISE', 'offline_bank', 'alipay_h5', 'ENABLED', 'success', 3, '2026-07-20 22:40:00');
 
-INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_type, template_version, sign_mode, scene_scope, channel_scope, merchant_ack_required, risk_control_tag, status, status_type, priority, updated_at) VALUES
-('PROTO_HOUSEKEEPING_SIGN_V1', '家政服务标准收单协议', 'PAYMENT_SIGN', 'v1.0.0', '线上签约+实名校验', '保洁/月嫂/到家服务', 'wx_h5,alipay_h5', '需要', '实名+重复签约校验', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
-('PROTO_ENTERPRISE_PREAUTH_V1', '企业客户预授权协议', 'PREAUTH', 'v1.2.0', '线下审核+线上确认', '企业保洁/长期合同', 'offline_bank,alipay_h5', '需要', '企业白名单+大额限额', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
-('PROTO_MEMBER_DEDUCT_V1', '会员代扣协议', 'WITHHOLD', 'v0.9.3', '短信确认+静默续扣', '包月保洁/会员续费', 'wx_h5', '不需要', '签约时效+扣款频控', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
+INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_type, template_code, template_name, template_version, sign_mode, sign_element_spec, e_signature_provider, scene_scope, channel_scope, merchant_ack_required, risk_control_tag, status, status_type, priority, updated_at) VALUES
+('PROTO_HOUSEKEEPING_SIGN_V1', '家政服务标准收单协议', 'PAYMENT_SIGN', 'TPL_HK_SIGN_STD', '家政标准收单模板', 'v1.0.0', '线上签约+实名校验', '姓名/身份证/手机号/服务地址/授权扣款确认', 'E-SIGN-CLOUD', '保洁/月嫂/到家服务', 'wx_h5,alipay_h5', '需要', '实名+重复签约校验', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('PROTO_ENTERPRISE_PREAUTH_V1', '企业客户预授权协议', 'PREAUTH', 'TPL_ENT_PREAUTH', '企业预授权协议模板', 'v1.2.0', '线下审核+线上确认', '企业主体/统一社会信用代码/授权人签字/预授权额度', 'E-SIGN-ENTERPRISE', '企业保洁/长期合同', 'offline_bank,alipay_h5', '需要', '企业白名单+大额限额', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('PROTO_MEMBER_DEDUCT_V1', '会员代扣协议', 'WITHHOLD', 'TPL_MEMBER_WITHHOLD', '会员代扣模板', 'v0.9.3', '短信确认+静默续扣', '会员ID/手机号/扣款周期/续扣授权', 'E-SIGN-LITE', '包月保洁/会员续费', 'wx_h5', '不需要', '签约时效+扣款频控', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
 
 INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code, standardized_code, standardized_message, handling_suggestion, retryable, status, status_type, priority, updated_at) VALUES
 ('wx_h5', 'USERPAYING', 'PAYMENT-CHANNEL-1001', '用户支付中，需继续轮询或等待回调', '展示处理中并触发主动查单', '是', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),

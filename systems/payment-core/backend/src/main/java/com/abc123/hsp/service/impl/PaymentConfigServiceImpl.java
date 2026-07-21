@@ -161,8 +161,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 : requireText(request.getProtocolCode(), "协议编码不能为空"));
         entity.setProtocolName(requireText(request.getProtocolName(), "协议名称不能为空"));
         entity.setProtocolType(requireText(request.getProtocolType(), "协议类型不能为空"));
+        entity.setTemplateCode(requireText(request.getTemplateCode(), "协议模板编码不能为空"));
+        entity.setTemplateName(requireText(request.getTemplateName(), "协议模板名称不能为空"));
         entity.setTemplateVersion(requireText(request.getTemplateVersion(), "模板版本不能为空"));
         entity.setSignMode(requireText(request.getSignMode(), "签约模式不能为空"));
+        entity.setSignElementSpec(requireText(request.getSignElementSpec(), "签约要素配置不能为空"));
+        entity.setESignatureProvider(requireText(request.getESignatureProvider(), "电子签章服务商不能为空"));
         entity.setSceneScope(requireText(request.getSceneScope(), "适用场景不能为空"));
         entity.setChannelScope(requireText(request.getChannelScope(), "适用渠道不能为空"));
         entity.setMerchantAckRequired(requireText(request.getMerchantAckRequired(), "商户确认要求不能为空"));

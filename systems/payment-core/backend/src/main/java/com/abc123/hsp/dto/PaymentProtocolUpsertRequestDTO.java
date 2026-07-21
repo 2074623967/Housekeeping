@@ -14,10 +14,18 @@ public class PaymentProtocolUpsertRequestDTO {
     private String protocolName;
     /** 协议类型。 */
     private String protocolType;
+    /** 协议模板编码。 */
+    private String templateCode;
+    /** 协议模板名称。 */
+    private String templateName;
     /** 模板版本。 */
     private String templateVersion;
     /** 签约模式。 */
     private String signMode;
+    /** 签约要素配置。 */
+    private String signElementSpec;
+    /** 电子签章服务商。 */
+    private String eSignatureProvider;
     /** 适用场景。 */
     private String sceneScope;
     /** 适用渠道范围。 */
