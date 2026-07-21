@@ -7,15 +7,17 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地兜底渠道查单适配器。
+ * 微信 H5 支付渠道模拟查单适配器。
  */
 @Component
-@Order(1000)
-public class LocalPaymentChannelQueryAdapter implements PaymentChannelQueryAdapter {
+@Order(10)
+public class WechatH5PaymentChannelQueryAdapter implements PaymentChannelQueryAdapter {
+
+    private static final String CHANNEL_CODE = "wx_h5";
 
     @Override
     public boolean supports(String channelCode) {
-        return true;
+        return CHANNEL_CODE.equalsIgnoreCase(channelCode);
     }
 
     @Override
@@ -23,7 +25,7 @@ public class LocalPaymentChannelQueryAdapter implements PaymentChannelQueryAdapt
         PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
         result.setTradeStatus(paymentDetail.getStatus());
         result.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
-        result.setQuerySource("LOCAL_SIMULATION_FALLBACK");
+        result.setQuerySource("WECHAT_SIMULATION");
         return result;
     }
 }

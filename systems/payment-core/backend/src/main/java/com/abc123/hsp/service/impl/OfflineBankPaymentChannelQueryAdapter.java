@@ -7,15 +7,17 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地兜底渠道查单适配器。
+ * 线下银行转账渠道模拟查单适配器。
  */
 @Component
-@Order(1000)
-public class LocalPaymentChannelQueryAdapter implements PaymentChannelQueryAdapter {
+@Order(30)
+public class OfflineBankPaymentChannelQueryAdapter implements PaymentChannelQueryAdapter {
+
+    private static final String CHANNEL_CODE = "offline_bank";
 
     @Override
     public boolean supports(String channelCode) {
-        return true;
+        return CHANNEL_CODE.equalsIgnoreCase(channelCode);
     }
 
     @Override
@@ -23,7 +25,7 @@ public class LocalPaymentChannelQueryAdapter implements PaymentChannelQueryAdapt
         PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
         result.setTradeStatus(paymentDetail.getStatus());
         result.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
-        result.setQuerySource("LOCAL_SIMULATION_FALLBACK");
+        result.setQuerySource("OFFLINE_BANK_SIMULATION");
         return result;
     }
 }

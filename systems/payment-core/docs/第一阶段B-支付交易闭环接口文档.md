@@ -505,13 +505,13 @@
 
 说明：
 
-当前版本已经抽象渠道查单适配器，但默认使用 `LOCAL_SIMULATION` 本地模拟适配器；
+当前版本已经抽象渠道查单适配器，并按 `wx_h5 / alipay_h5 / offline_bank / local-fallback` 做了第一版拆分；
 真实微信、支付宝、银行查单适配器由 `gateway-access` 接入后注册，不改变本接口契约。
 
 返回要点：
 
 1. `channelTransactionNo` 会返回本次查单得到的渠道流水号。
-2. `querySource` 会返回查单结果来源，例如 `LOCAL_SIMULATION`、`WECHAT`、`ALIPAY`。
+2. `querySource` 会返回查单结果来源，例如 `WECHAT_SIMULATION`、`ALIPAY_SIMULATION`、`OFFLINE_BANK_SIMULATION`、`LOCAL_SIMULATION_FALLBACK`。
 
 ## 8. 关闭支付单
 

@@ -7,28 +7,30 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地兜底渠道下单适配器。
+ * 微信 H5 支付渠道模拟适配器。
  */
 @Component
-@Order(1000)
-public class LocalPaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+@Order(10)
+public class WechatH5PaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+
+    private static final String CHANNEL_CODE = "wx_h5";
 
     @Override
     public boolean supports(String channelCode) {
-        return true;
+        return CHANNEL_CODE.equalsIgnoreCase(channelCode);
     }
 
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
-        result.setChannelTransactionNo("CHN-" + System.currentTimeMillis());
+        result.setChannelTransactionNo("WX-" + System.currentTimeMillis());
         result.setAttemptStatus("处理中");
         result.setAttemptStatusType("info");
         result.setResponsePayload(ChannelPayloadSupport.buildSuccessPayload(
-                request.getResolvedChannelCode(),
+                CHANNEL_CODE,
                 result.getChannelTransactionNo(),
-                "local-fallback-gateway",
-                "ACCEPTED"));
+                "wechat-gateway",
+                "USERPAYING"));
         return result;
     }
 }

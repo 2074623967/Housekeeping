@@ -12,6 +12,6 @@ public class PaymentChannelQueryResultDTO {
     private String tradeStatus;
     /** 渠道交易流水号。 */
     private String channelTransactionNo;
-    /** 查单来源，例如 LOCAL_SIMULATION、WECHAT、ALIPAY。 */
+    /** 查单来源，例如 WECHAT_SIMULATION、ALIPAY_SIMULATION、LOCAL_SIMULATION_FALLBACK。 */
     private String querySource;
 }

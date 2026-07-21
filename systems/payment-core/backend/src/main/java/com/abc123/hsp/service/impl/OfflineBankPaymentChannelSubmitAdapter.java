@@ -7,28 +7,30 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地兜底渠道下单适配器。
+ * 线下银行转账渠道模拟适配器。
  */
 @Component
-@Order(1000)
-public class LocalPaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+@Order(30)
+public class OfflineBankPaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+
+    private static final String CHANNEL_CODE = "offline_bank";
 
     @Override
     public boolean supports(String channelCode) {
-        return true;
+        return CHANNEL_CODE.equalsIgnoreCase(channelCode);
     }
 
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
-        result.setChannelTransactionNo("CHN-" + System.currentTimeMillis());
-        result.setAttemptStatus("处理中");
-        result.setAttemptStatusType("info");
+        result.setChannelTransactionNo("BANK-" + System.currentTimeMillis());
+        result.setAttemptStatus("待人工确认");
+        result.setAttemptStatusType("warn");
         result.setResponsePayload(ChannelPayloadSupport.buildSuccessPayload(
-                request.getResolvedChannelCode(),
+                CHANNEL_CODE,
                 result.getChannelTransactionNo(),
-                "local-fallback-gateway",
-                "ACCEPTED"));
+                "offline-bank-gateway",
+                "BANK_TRANSFER_PENDING"));
         return result;
     }
 }

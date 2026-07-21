@@ -644,6 +644,31 @@
 1. 这一版把“支付提交幂等”从逻辑层推进到了并发占位层。
 2. 后续如果接真实渠道，还可以继续补提交令牌、商户级并发配额和更细粒度的接口限流。
 
+## 25. 2026-07-21 真实渠道接入抽象 V1.2 复核
+
+### 25.1 本轮验证结论
+
+本轮围绕“支付渠道已经有适配层，但还停留在单一兜底模拟器”的问题进行了补齐，确认下单和查单都已升级为“按渠道拆适配器 + 本地兜底适配器”的结构。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 全量后端测试共 `72` 个并全部通过 |
+| 下单适配器选择 | `PaymentChannelSubmitServiceImplTest` | 通过 | 已覆盖 `wx_h5`、`offline_bank` 和未知渠道兜底选择 |
+| 查单适配器选择 | `PaymentChannelQueryServiceImplTest` | 通过 | 已覆盖 `wx_h5`、`alipay_h5` 和未知渠道兜底选择 |
+
+### 25.2 本轮补齐项
+
+1. 新增 `WechatH5PaymentChannelSubmitAdapter`、`AlipayH5PaymentChannelSubmitAdapter`、`OfflineBankPaymentChannelSubmitAdapter`。
+2. 新增 `WechatH5PaymentChannelQueryAdapter`、`AlipayH5PaymentChannelQueryAdapter`、`OfflineBankPaymentChannelQueryAdapter`。
+3. 本地模拟适配器调整为兜底适配器，并通过 `@Order(1000)` 保证在专用适配器之后兜底。
+4. 抽出 `ChannelPayloadSupport` 统一拼装模拟响应报文，降低后续接真实网关时的改造成本。
+5. 为渠道下单与查单服务补齐专门的适配器选择测试。
+
+### 25.3 当前判断
+
+1. 这一版已经把“标准化适配层”从单实现推进到了多渠道分适配器结构。
+2. 后续接真实微信、支付宝和线下银行时，可以直接在对应适配器内替换成本地 SDK、HTTP 网关或证书验签逻辑，而不需要再次拆服务骨架。
+
 ## 20. 2026-07-20 支付监控 drill-down 增强复核
 
 ### 20.1 本轮验证结论

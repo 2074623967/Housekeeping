@@ -7,27 +7,29 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 /**
- * 本地兜底渠道下单适配器。
+ * 支付宝 H5 支付渠道模拟适配器。
  */
 @Component
-@Order(1000)
-public class LocalPaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+@Order(20)
+public class AlipayH5PaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
+
+    private static final String CHANNEL_CODE = "alipay_h5";
 
     @Override
     public boolean supports(String channelCode) {
-        return true;
+        return CHANNEL_CODE.equalsIgnoreCase(channelCode);
     }
 
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
-        result.setChannelTransactionNo("CHN-" + System.currentTimeMillis());
+        result.setChannelTransactionNo("ALI-" + System.currentTimeMillis());
         result.setAttemptStatus("处理中");
         result.setAttemptStatusType("info");
         result.setResponsePayload(ChannelPayloadSupport.buildSuccessPayload(
-                request.getResolvedChannelCode(),
+                CHANNEL_CODE,
                 result.getChannelTransactionNo(),
-                "local-fallback-gateway",
+                "alipay-gateway",
                 "ACCEPTED"));
         return result;
     }
