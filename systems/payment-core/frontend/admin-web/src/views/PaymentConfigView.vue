@@ -112,6 +112,26 @@ async function toggleControlPolicy(policy) {
   );
 }
 
+async function runControlPolicySelfCheck(policy) {
+  activeConfigCode.value = policy.sourceAppId;
+  actionMessage.value = "";
+  try {
+    const overview = await paymentConfigApi.runControlPolicySelfCheck(policy.sourceAppId);
+    channels.value = overview.channels;
+    routeRules.value = overview.routeRules;
+    protocols.value = overview.protocols || [];
+    protocolTypeOptions.value = overview.protocolTypeOptions || [];
+    returnCodeMappings.value = overview.returnCodeMappings;
+    gateways.value = overview.gateways;
+    controlPolicies.value = overview.controlPolicies || [];
+    actionMessage.value = `支付控制策略 ${policy.sourceAppId} 自检已完成。`;
+  } catch (error) {
+    actionMessage.value = `支付控制策略 ${policy.sourceAppId} 自检失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
 async function toggleConfig(configCode, enabled, configType, toggleRunner) {
   activeConfigCode.value = configCode;
   actionMessage.value = "";
@@ -692,6 +712,13 @@ onMounted(loadOverview);
                       @click="toggleControlPolicy(policy)"
                     >
                       {{ policy.status === "ENABLED" ? "停用" : "启用" }}
+                    </button>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === policy.sourceAppId"
+                      @click="runControlPolicySelfCheck(policy)"
+                    >
+                      执行自检
                     </button>
                   </td>
                 </tr>

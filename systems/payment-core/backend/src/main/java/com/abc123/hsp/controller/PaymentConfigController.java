@@ -98,4 +98,12 @@ public class PaymentConfigController {
     public ApiResponse<PaymentConfigOverviewDTO> toggleControlPolicy(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleControlPolicy(request));
     }
+
+    /**
+     * 执行支付控制策略自检。
+     */
+    @PostMapping("/control-policies/self-check")
+    public ApiResponse<PaymentConfigOverviewDTO> runControlPolicySelfCheck(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.runControlPolicySelfCheck(request));
+    }
 }

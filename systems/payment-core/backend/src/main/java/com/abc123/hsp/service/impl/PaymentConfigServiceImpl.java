@@ -1,13 +1,20 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.StringJoiner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -155,6 +162,91 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return overview();
     }
 
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO runControlPolicySelfCheck(PaymentConfigToggleRequestDTO request) {
+        String sourceAppId = requireConfigCode(request);
+        PaymentControlPolicyDTO controlPolicy = paymentConfigMapper.findControlPolicyBySourceAppId(sourceAppId);
+        if (controlPolicy == null) {
+            throw new IllegalArgumentException("支付控制策略配置不存在");
+        }
+        SelfCheckResult selfCheckResult = evaluateControlPolicy(controlPolicy);
+        paymentConfigMapper.updateControlPolicySelfCheck(
+                sourceAppId,
+                selfCheckResult.status,
+                selfCheckResult.statusType,
+                selfCheckResult.message
+        );
+        return overview();
+    }
+
+    private SelfCheckResult evaluateControlPolicy(PaymentControlPolicyDTO controlPolicy) {
+        Set<String> allowedChannels = splitToSet(controlPolicy.getAllowedChannelCodes());
+        Set<String> allowedMethods = splitToSet(controlPolicy.getAllowedPaymentMethods());
+        if (allowedMethods.isEmpty() || allowedChannels.isEmpty()) {
+            return new SelfCheckResult("FAIL", "danger", "支付方式或渠道授权为空，禁止进入严格模式提交");
+        }
+
+        List<PaymentChannelConfigDTO> channels = paymentConfigMapper.findChannels();
+        Set<String> enabledChannelCodes = new HashSet<String>();
+        Set<String> enabledPaymentMethods = new HashSet<String>();
+        for (PaymentChannelConfigDTO channel : channels) {
+            if ("ENABLED".equals(channel.getStatus()) && allowedChannels.contains(channel.getChannelCode())) {
+                enabledChannelCodes.add(channel.getChannelCode());
+                enabledPaymentMethods.add(channel.getPaymentMethod());
+            }
+        }
+
+        StringJoiner warningJoiner = new StringJoiner("；");
+        if (!enabledChannelCodes.containsAll(allowedChannels)) {
+            warningJoiner.add("存在未启用或不存在的授权渠道");
+        }
+        if (!enabledPaymentMethods.containsAll(allowedMethods)) {
+            warningJoiner.add("存在未被启用渠道覆盖的支付方式");
+        }
+        if (!hasEnabledGatewayForAnyChannel(allowedChannels)) {
+            warningJoiner.add("未找到覆盖授权渠道的启用网关");
+        }
+
+        if (warningJoiner.length() > 0) {
+            return new SelfCheckResult("WARN", "warn", warningJoiner.toString());
+        }
+        return new SelfCheckResult("PASS", "success", "支付方式、渠道和网关接入均已通过自检");
+    }
+
+    private boolean hasEnabledGatewayForAnyChannel(Set<String> allowedChannels) {
+        List<PaymentGatewayConfigDTO> gateways = paymentConfigMapper.findGateways();
+        for (PaymentGatewayConfigDTO gateway : gateways) {
+            if ("ENABLED".equals(gateway.getStatus())
+                    && hasAnyConfiguredValue(gateway.getChannelScope(), allowedChannels)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasAnyConfiguredValue(String configuredValues, Set<String> expectedValues) {
+        for (String configuredValue : splitToSet(configuredValues)) {
+            if (expectedValues.contains(configuredValue)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Set<String> splitToSet(String configuredValues) {
+        Set<String> result = new HashSet<String>();
+        if (!StringUtils.hasText(configuredValues)) {
+            return result;
+        }
+        for (String configuredValue : Arrays.asList(configuredValues.split(","))) {
+            if (StringUtils.hasText(configuredValue)) {
+                result.add(configuredValue.trim());
+            }
+        }
+        return result;
+    }
+
     private String requireConfigCode(PaymentConfigToggleRequestDTO request) {
         if (request == null || !StringUtils.hasText(request.getConfigCode())) {
             throw new IllegalArgumentException("配置编码不能为空");
@@ -232,5 +324,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private String resolveStatusType(Boolean enabled) {
         return Boolean.FALSE.equals(enabled) ? "danger" : "success";
+    }
+
+    private static final class SelfCheckResult {
+        private final String status;
+        private final String statusType;
+        private final String message;
+
+        private SelfCheckResult(String status, String statusType, String message) {
+            this.status = status;
+            this.statusType = statusType;
+            this.message = message;
+        }
     }
 }

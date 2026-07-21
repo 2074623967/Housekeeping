@@ -932,3 +932,27 @@
 1. 当前支付控制管理已经从“台账展示 V1”升级为“进入提交主链路的正式化 V1.1”。
 2. 当前仍未完成商户级授权、接口级令牌鉴权、分布式限流和自检任务自动联动，这些仍属于后续 P0/P1 缺口。
 3. 在这些缺口补齐前，不应因为本轮测试通过就提前将 `feature/payment-core-phase-b` 合入 `master` 或创建 `release/*`。
+
+## 31. 2026-07-22 支付控制策略自检回写验证
+
+### 31.1 本轮验证结论
+
+本轮围绕“支付控制策略自检状态不能长期依赖静态样例数据”的问题进行了补齐，确认后台已支持人工触发来源应用级自检，并将自检结果回写到控制策略台账。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `84` 个并全部通过，新增覆盖自检 `PASS/WARN` 回写 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-control-self-check-v1 --emptyOutDir` | 通过 | 支付配置中心新增“执行自检”动作后可稳定构建 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 31.2 本轮补齐项
+
+1. 新增 `POST /api/payment-config/control-policies/self-check`，支持按来源应用触发控制策略自检。
+2. 新增 `PaymentConfigMapper.findControlPolicyBySourceAppId` 和 `updateControlPolicySelfCheck`，保证自检读取和回写口径明确。
+3. `PaymentConfigServiceImpl` 根据授权支付方式、授权渠道、启用渠道和启用网关判断 `PASS/WARN/FAIL`。
+4. 后台支付配置中心新增“执行自检”按钮，触发后刷新控制策略台账。
+
+### 31.3 当前判断
+
+1. 当前支付控制管理已经具备“配置展示 -> 人工自检 -> 主链路阻断”的闭环雏形。
+2. 仍未补齐自动巡检调度、商户级授权、令牌鉴权和分布式限流，因此仍不满足 `master/release` 冻结门槛。

@@ -53,4 +53,9 @@ public interface PaymentConfigService {
      * 启停支付控制策略配置。
      */
     PaymentConfigOverviewDTO toggleControlPolicy(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 执行支付控制策略自检并回写准入结果。
+     */
+    PaymentConfigOverviewDTO runControlPolicySelfCheck(PaymentConfigToggleRequestDTO request);
 }

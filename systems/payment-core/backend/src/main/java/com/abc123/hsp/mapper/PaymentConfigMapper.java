@@ -59,6 +59,11 @@ public interface PaymentConfigMapper {
     List<PaymentControlPolicyDTO> findControlPolicies();
 
     /**
+     * 按来源应用标识查询支付控制策略配置。
+     */
+    PaymentControlPolicyDTO findControlPolicyBySourceAppId(@Param("sourceAppId") String sourceAppId);
+
+    /**
      * 查询已启用的渠道配置，供支付路由执行使用。
      */
     List<PaymentChannelRoutingConfigDTO> findEnabledChannelsForRouting();
@@ -125,4 +130,12 @@ public interface PaymentConfigMapper {
     int updateControlPolicyStatus(@Param("sourceAppId") String sourceAppId,
                                   @Param("status") String status,
                                   @Param("statusType") String statusType);
+
+    /**
+     * 更新支付控制策略自检结果。
+     */
+    int updateControlPolicySelfCheck(@Param("sourceAppId") String sourceAppId,
+                                     @Param("selfCheckStatus") String selfCheckStatus,
+                                     @Param("selfCheckStatusType") String selfCheckStatusType,
+                                     @Param("selfCheckMessage") String selfCheckMessage);
 }
