@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
@@ -25,6 +26,7 @@ import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.StringJoiner;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -155,9 +157,11 @@ public class PaymentServiceImpl implements PaymentService {
         }
         String terminal = StringUtils.hasText(request.getTerminal()) ? request.getTerminal().trim() : "UNKNOWN";
         String clientIp = StringUtils.hasText(request.getClientIp()) ? request.getClientIp().trim() : "UNKNOWN";
+        String sourceAppId = resolveSourceAppId(request);
         PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
                 buildRouteContext(request, currentPrepay, terminal));
         String resolvedChannelCode = routeDecision.getChannelCode();
+        validateSubmitControlPolicy(sourceAppId, request.getPaymentMethod(), resolvedChannelCode);
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
@@ -179,12 +183,13 @@ public class PaymentServiceImpl implements PaymentService {
         }
         PaymentChannelSubmitResultDTO submitResult = paymentChannelSubmitService.submit(
                 buildSubmitAdapterRequest(
-                        request,
-                        currentPrepay,
-                        paymentOrderId,
-                        resolvedChannelCode,
-                        terminal,
-                        clientIp,
+                request,
+                currentPrepay,
+                paymentOrderId,
+                sourceAppId,
+                resolvedChannelCode,
+                terminal,
+                clientIp,
                         idempotencyKey));
         // 收银台提交后，补齐支付单上的支付方式和渠道。
         paymentMapper.updatePaymentMethodAndChannel(
@@ -206,10 +211,11 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentOrderId,
                 resolvedChannelCode,
                 request.getPaymentMethod(),
+                sourceAppId,
                 terminal,
                 clientIp,
                 idempotencyKey,
-                buildSubmitRequestPayload(request, terminal, clientIp, idempotencyKey, resolvedChannelCode),
+                buildSubmitRequestPayload(request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode),
                 submitResult.getResponsePayload(),
                 submitResult.getAttemptStatus(),
                 submitResult.getAttemptStatusType()
@@ -337,6 +343,53 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     /**
+     * 来源应用优先使用显式透传值，未透传时回退到默认收银台应用。
+     */
+    private String resolveSourceAppId(PaymentSubmitRequestDTO request) {
+        if (StringUtils.hasText(request.getSourceAppId())) {
+            return request.getSourceAppId().trim();
+        }
+        return "default-app";
+    }
+
+    /**
+     * 正式版支付提交流程需要经过来源应用控制策略校验，避免无权限应用、异常自检状态和瞬时洪峰直接进入渠道。
+     */
+    private void validateSubmitControlPolicy(String sourceAppId, String paymentMethod, String resolvedChannelCode) {
+        PaymentControlPolicyDTO controlPolicy = paymentMapper.findActiveControlPolicyBySourceAppId(sourceAppId);
+        if (controlPolicy == null) {
+            return;
+        }
+        if (!containsConfiguredValue(controlPolicy.getAllowedPaymentMethods(), paymentMethod)) {
+            throw new BusinessException(ErrorCode.PAYMENT_SOURCE_APP_NOT_ALLOWED, "当前来源应用未开通该支付方式");
+        }
+        if (!containsConfiguredValue(controlPolicy.getAllowedChannelCodes(), resolvedChannelCode)) {
+            throw new BusinessException(ErrorCode.PAYMENT_SOURCE_APP_NOT_ALLOWED, "当前来源应用未开通该支付渠道");
+        }
+        if ("开启".equals(controlPolicy.getStrictMode())
+                && !"PASS".equalsIgnoreCase(controlPolicy.getSelfCheckStatus())) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_SELF_CHECK_BLOCKED, controlPolicy.getSelfCheckMessage());
+        }
+        Integer minuteSubmitLimit = controlPolicy.getMinuteSubmitLimit();
+        if (minuteSubmitLimit != null && minuteSubmitLimit.intValue() > 0
+                && paymentMapper.countRecentAttemptsBySourceAppAndMethod(sourceAppId, paymentMethod) >= minuteSubmitLimit.intValue()) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_RATE_LIMITED, "当前来源应用支付提交过于频繁，请稍后重试");
+        }
+    }
+
+    private boolean containsConfiguredValue(String configuredValues, String actualValue) {
+        if (!StringUtils.hasText(configuredValues) || !StringUtils.hasText(actualValue)) {
+            return false;
+        }
+        String normalizedActualValue = actualValue.trim().toLowerCase(Locale.ROOT);
+        return Arrays.stream(configuredValues.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .anyMatch(normalizedActualValue::equals);
+    }
+
+    /**
      * 提交支付前统一收口路由上下文，避免路由规则读取到的口径在不同入口下不一致。
      */
     private PaymentRouteContextDTO buildRouteContext(
@@ -360,6 +413,7 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentSubmitRequestDTO request,
             PrepayOrderDTO currentPrepay,
             String paymentOrderId,
+            String sourceAppId,
             String resolvedChannelCode,
             String terminal,
             String clientIp,
@@ -372,6 +426,7 @@ public class PaymentServiceImpl implements PaymentService {
         submitRequest.setCustomerName(currentPrepay.getCustomerName());
         submitRequest.setAmount(parseAmount(currentPrepay.getAmount()));
         submitRequest.setPaymentMethod(request.getPaymentMethod());
+        submitRequest.setSourceAppId(sourceAppId);
         submitRequest.setRequestedChannelCode(request.getChannelCode());
         submitRequest.setResolvedChannelCode(resolvedChannelCode);
         submitRequest.setTerminal(terminal);
@@ -385,6 +440,7 @@ public class PaymentServiceImpl implements PaymentService {
      */
     private String buildSubmitRequestPayload(
             PaymentSubmitRequestDTO request,
+            String sourceAppId,
             String terminal,
             String clientIp,
             String idempotencyKey,
@@ -392,6 +448,7 @@ public class PaymentServiceImpl implements PaymentService {
         return new StringJoiner(",", "{", "}")
                 .add("\"method\":\"" + request.getPaymentMethod() + "\"")
                 .add("\"channelCode\":\"" + request.getChannelCode() + "\"")
+                .add("\"sourceAppId\":\"" + sourceAppId + "\"")
                 .add("\"resolvedChannelCode\":\"" + resolvedChannelCode + "\"")
                 .add("\"terminal\":\"" + terminal + "\"")
                 .add("\"clientIp\":\"" + clientIp + "\"")

@@ -479,5 +479,6 @@ export const paymentConfigApi = {
   updateProtocol: (protocolCode, payload) => request(`/api/payment-config/protocols/${protocolCode}`, buildJsonRequestOptions("PUT", payload)),
   toggleProtocol: (configCode, enabled) => postJson("/api/payment-config/protocols/toggle", { configCode, enabled }),
   toggleReturnCodeMapping: (configCode, subCode, enabled) => postJson("/api/payment-config/return-codes/toggle", { configCode, subCode, enabled }),
-  toggleGateway: (configCode, enabled) => postJson("/api/payment-config/gateways/toggle", { configCode, enabled })
+  toggleGateway: (configCode, enabled) => postJson("/api/payment-config/gateways/toggle", { configCode, enabled }),
+  toggleControlPolicy: (configCode, enabled) => postJson("/api/payment-config/control-policies/toggle", { configCode, enabled })
 };

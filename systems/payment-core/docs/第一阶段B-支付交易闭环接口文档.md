@@ -45,6 +45,7 @@
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
+| `/api/payment-config/control-policies/toggle` | `POST` | 启停支付控制策略 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 | `/api/payment-day-end/overview` | `GET` | 查询支付日终处理总览与差异告警 |
 | `/api/payment-day-end/run` | `POST` | 手动触发支付日终处理 |
@@ -753,6 +754,7 @@ POST /api/refunds/retry
 3. `protocols`：支付协议配置，包含协议编码、协议名称、协议类型、模板版本、签约模式、适用场景、适用渠道、商户确认要求、风控标签、状态。
 4. `returnCodeMappings`：渠道返回码映射，包含渠道编码、渠道返回码、标准错误码、标准错误文案、处理建议、是否可重试、是否需要人工介入、映射版本、归档状态和启停状态。
 5. `gateways`：支付网关接入配置，包含网关编码、网关名称、接入模式、适用渠道、环境范围、网关基础地址、报文协议、签名算法、证书别名、证书状态、发布阶段、灰度策略、回调白名单、适配器编排、超时时间、重试策略和状态。
+6. `controlPolicies`：支付控制策略配置，包含来源应用标识、来源应用名称、允许支付方式、允许渠道、分钟级限流阈值、严格模式、自检状态、自检提示和启停状态。
 
 ### 12.2 启停渠道或路由规则
 
@@ -786,6 +788,12 @@ POST /api/payment-config/return-codes/toggle
 POST /api/payment-config/gateways/toggle
 ```
 
+启停支付控制策略：
+
+```http
+POST /api/payment-config/control-policies/toggle
+```
+
 请求示例：
 
 ```json
@@ -804,7 +812,8 @@ POST /api/payment-config/gateways/toggle
 5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示；后续继续补返回码批量导入、渠道差异比对和真正自动归档动作。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
-8. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
+8. 支付控制策略启停时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态和严格模式展示，后续继续补运营编辑、自检任务联动和更细粒度商户权限。
+9. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
 
 ## 13. 支付监控分析接口
 

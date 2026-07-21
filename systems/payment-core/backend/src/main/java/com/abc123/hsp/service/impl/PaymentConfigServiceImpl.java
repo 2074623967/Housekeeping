@@ -36,6 +36,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setProtocolTypeOptions(paymentConfigMapper.findProtocolTypeOptions());
         overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
         overview.setGateways(paymentConfigMapper.findGateways());
+        overview.setControlPolicies(paymentConfigMapper.findControlPolicies());
         return overview;
     }
 
@@ -135,6 +136,21 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         );
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付网关接入配置不存在");
+        }
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO toggleControlPolicy(PaymentConfigToggleRequestDTO request) {
+        String configCode = requireConfigCode(request);
+        int affectedRows = paymentConfigMapper.updateControlPolicyStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("支付控制策略配置不存在");
         }
         return overview();
     }

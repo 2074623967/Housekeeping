@@ -48,4 +48,9 @@ public interface PaymentConfigService {
      * 启停支付网关接入配置。
      */
     PaymentConfigOverviewDTO toggleGateway(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 启停支付控制策略配置。
+     */
+    PaymentConfigOverviewDTO toggleControlPolicy(PaymentConfigToggleRequestDTO request);
 }

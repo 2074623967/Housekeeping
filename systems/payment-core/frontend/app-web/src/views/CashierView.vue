@@ -129,6 +129,15 @@ onMounted(loadCashier);
 onBeforeUnmount(stopCountdown);
 
 const terminalMeta = computed(() => TERMINAL_META[props.terminalVariant] || TERMINAL_META.app);
+const sourceAppId = computed(() => {
+  if (props.terminalVariant === "pc") {
+    return "housekeeping-pc-web";
+  }
+  if (props.terminalVariant === "h5") {
+    return "housekeeping-h5-web";
+  }
+  return "housekeeping-app-web";
+});
 const isPcVariant = computed(() => props.terminalVariant === "pc");
 const channels = computed(() => cashier.value?.channels || []);
 const hasChannels = computed(() => channels.value.length > 0);
@@ -235,6 +244,7 @@ async function pay() {
       prepayOrderNo: cashier.value.prepayOrderNo,
       paymentMethod: selectedPaymentMethod.value,
       channelCode: resolvePaymentChannelCode(selectedPaymentMethod.value),
+      sourceAppId: sourceAppId.value,
       terminal: terminalMeta.value.terminalCode,
       idempotencyKey: idempotencyKey.value
     });

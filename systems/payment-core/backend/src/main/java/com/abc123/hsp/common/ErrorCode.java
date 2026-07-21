@@ -27,4 +27,7 @@ public final class ErrorCode {
     public static final String PAYMENT_CHANNEL_UNAVAILABLE = "PAYMENT-1010";
     public static final String PAYMENT_ORDER_SOURCE_MISSING = "PAYMENT-1011";
     public static final String PAYMENT_SUBMIT_IN_PROGRESS = "PAYMENT-1016";
+    public static final String PAYMENT_SOURCE_APP_NOT_ALLOWED = "PAYMENT-1017";
+    public static final String PAYMENT_SUBMIT_RATE_LIMITED = "PAYMENT-1018";
+    public static final String PAYMENT_SUBMIT_SELF_CHECK_BLOCKED = "PAYMENT-1019";
 }

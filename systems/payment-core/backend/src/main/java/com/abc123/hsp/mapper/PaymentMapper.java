@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.ExpiredPaymentDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
@@ -211,6 +212,7 @@ public interface PaymentMapper {
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
             @Param("paymentMethod") String paymentMethod,
+            @Param("sourceAppId") String sourceAppId,
             @Param("terminal") String terminal,
             @Param("clientIp") String clientIp,
             @Param("idempotencyKey") String idempotencyKey,
@@ -223,6 +225,17 @@ public interface PaymentMapper {
      * 判断幂等键对应的支付尝试是否已经存在。
      */
     boolean existsPaymentAttemptByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
+    /**
+     * 查询来源应用对应的生效控制策略。
+     */
+    PaymentControlPolicyDTO findActiveControlPolicyBySourceAppId(@Param("sourceAppId") String sourceAppId);
+
+    /**
+     * 查询来源应用在最近一分钟内按支付方式提交的尝试次数。
+     */
+    int countRecentAttemptsBySourceAppAndMethod(@Param("sourceAppId") String sourceAppId,
+                                                @Param("paymentMethod") String paymentMethod);
 
     /**
      * 查询指定渠道当天已受理的交易金额，用于支付控制限额校验。

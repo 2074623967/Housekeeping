@@ -149,6 +149,23 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findControlPolicies" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
+        SELECT source_app_id AS sourceAppId,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               minute_submit_limit AS minuteSubmitLimit,
+               strict_mode AS strictMode,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_control_policy
+        ORDER BY id ASC
+    </select>
+
     <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
         SELECT channel_code AS channelCode,
                payment_method AS paymentMethod,
@@ -290,5 +307,13 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE gateway_code = #{gatewayCode}
+    </update>
+
+    <update id="updateControlPolicyStatus">
+        UPDATE t_payment_control_policy
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE source_app_id = #{sourceAppId}
     </update>
 </mapper>

@@ -8,6 +8,7 @@ const protocols = ref([]);
 const protocolTypeOptions = ref([]);
 const returnCodeMappings = ref([]);
 const gateways = ref([]);
+const controlPolicies = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
@@ -48,6 +49,7 @@ async function loadOverview() {
     protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
+    controlPolicies.value = overview.controlPolicies || [];
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -101,6 +103,15 @@ async function toggleGateway(gateway) {
   );
 }
 
+async function toggleControlPolicy(policy) {
+  await toggleConfig(
+    policy.sourceAppId,
+    policy.status !== "ENABLED",
+    "支付控制策略",
+    paymentConfigApi.toggleControlPolicy
+  );
+}
+
 async function toggleConfig(configCode, enabled, configType, toggleRunner) {
   activeConfigCode.value = configCode;
   actionMessage.value = "";
@@ -112,6 +123,7 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
     protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
+    controlPolicies.value = overview.controlPolicies || [];
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
@@ -131,6 +143,7 @@ async function toggleMappingConfig(configCode, subCode, enabled, configType, tog
     protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
+    controlPolicies.value = overview.controlPolicies || [];
     actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode}/${subCode} 操作失败：${error.message}`;
@@ -186,6 +199,7 @@ async function submitProtocolForm() {
     protocolTypeOptions.value = overview.protocolTypeOptions || [];
     returnCodeMappings.value = overview.returnCodeMappings;
     gateways.value = overview.gateways;
+    controlPolicies.value = overview.controlPolicies || [];
     actionMessage.value = editingProtocolCode.value
       ? `支付协议 ${editingProtocolCode.value} 已更新。`
       : `支付协议 ${protocolForm.value.protocolCode} 已新增。`;
@@ -626,6 +640,58 @@ onMounted(loadOverview);
                       @click="toggleGateway(gateway)"
                     >
                       {{ gateway.status === "ENABLED" ? "停用" : "启用" }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>支付控制策略</h3>
+              <p class="meta">统一维护来源应用的支付方式权限、渠道权限、分钟级限流与自检准入，控制正向支付主链路风险</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>来源应用标识</th>
+                  <th>来源应用名称</th>
+                  <th>允许支付方式</th>
+                  <th>允许渠道</th>
+                  <th>分钟限流</th>
+                  <th>严格模式</th>
+                  <th>自检状态</th>
+                  <th>自检提示</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="policy in controlPolicies" :key="policy.sourceAppId">
+                  <td>{{ policy.sourceAppId }}</td>
+                  <td>{{ policy.sourceAppName }}</td>
+                  <td class="flow-summary-cell">{{ policy.allowedPaymentMethods }}</td>
+                  <td class="flow-summary-cell">{{ policy.allowedChannelCodes }}</td>
+                  <td>{{ policy.minuteSubmitLimit }}</td>
+                  <td>{{ policy.strictMode }}</td>
+                  <td><span :class="['badge', policy.selfCheckStatusType]">{{ policy.selfCheckStatus }}</span></td>
+                  <td class="flow-summary-cell">{{ policy.selfCheckMessage }}</td>
+                  <td><span :class="['badge', policy.statusType]">{{ policy.status }}</span></td>
+                  <td>{{ policy.updatedAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === policy.sourceAppId"
+                      @click="toggleControlPolicy(policy)"
+                    >
+                      {{ policy.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
                   </td>
                 </tr>

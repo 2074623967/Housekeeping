@@ -23,6 +23,8 @@ public class PaymentChannelSubmitRequestDTO {
     private BigDecimal amount;
     /** 支付方式。 */
     private String paymentMethod;
+    /** 来源应用标识。 */
+    private String sourceAppId;
     /** 前端请求的渠道编码。 */
     private String requestedChannelCode;
     /** 路由后真实渠道编码。 */

@@ -906,3 +906,29 @@
 1. 当前退款 V1 已从“列表页可操作”升级到“详情页可复盘”。
 2. 当前仍是本地模拟退款闭环，真实渠道退款请求、退款回调验签、退款渠道流水和退款差错补偿仍需后续渠道网关阶段补齐。
 3. 若后续单独拆出 `refund-center`，本轮沉淀的表、接口和页面结构可直接平移复用。
+
+## 30. 2026-07-21 支付控制管理 V1.1 正式化验证
+
+### 30.1 本轮验证结论
+
+本轮围绕“支付控制管理不能只停留在配置展示，必须真实进入支付提交主链路”的问题进行了正式化补齐，确认当前支付提交已经接入来源应用级治理。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `82` 个并全部通过，覆盖来源应用支付方式权限、自检阻断和分钟级限流场景 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-control-policy-v12 --emptyOutDir` | 通过 | `PaymentConfigView` 已新增支付控制策略台账，构建通过 |
+| 用户端前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-control-policy-v12 --emptyOutDir` | 通过 | `CashierView` 已向提交接口透传 `sourceAppId`，构建通过 |
+
+### 30.2 本轮补齐项
+
+1. 新增 `t_payment_control_policy`，统一沉淀来源应用支付方式权限、渠道权限、分钟级限流、严格模式、自检状态和启停状态。
+2. 为 `t_payment_attempt` 增加 `source_app_id`，保证每次提交都能追溯到来源应用口径。
+3. 扩展 `PaymentConfigMapper / PaymentConfigService / PaymentConfigController`，让支付配置中心支持查询和启停支付控制策略。
+4. 扩展 `PaymentServiceImpl`，在提交支付前接入来源应用策略校验，覆盖支付方式权限、渠道权限、自检阻断和分钟级限流。
+5. 扩展 `PaymentServiceImplTest` 与 `PaymentConfigServiceImplTest`，避免后续有人把控制策略从主链路里悄悄删回“纯展示配置”。
+
+### 30.3 当前判断
+
+1. 当前支付控制管理已经从“台账展示 V1”升级为“进入提交主链路的正式化 V1.1”。
+2. 当前仍未完成商户级授权、接口级令牌鉴权、分布式限流和自检任务自动联动，这些仍属于后续 P0/P1 缺口。
+3. 在这些缺口补齐前，不应因为本轮测试通过就提前将 `feature/payment-core-phase-b` 合入 `master` 或创建 `release/*`。

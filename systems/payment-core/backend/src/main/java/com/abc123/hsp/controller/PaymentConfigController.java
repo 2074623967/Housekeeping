@@ -90,4 +90,12 @@ public class PaymentConfigController {
     public ApiResponse<PaymentConfigOverviewDTO> toggleGateway(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleGateway(request));
     }
+
+    /**
+     * 启停支付控制策略配置。
+     */
+    @PostMapping("/control-policies/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleControlPolicy(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleControlPolicy(request));
+    }
 }

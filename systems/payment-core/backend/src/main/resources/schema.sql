@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_gateway_config;
+DROP TABLE IF EXISTS t_payment_control_policy;
 DROP TABLE IF EXISTS t_payment_protocol_config;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
@@ -158,6 +159,25 @@ CREATE TABLE t_payment_gateway_config (
     KEY idx_gateway_status_priority (status, priority)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付网关接入配置表';
 
+CREATE TABLE t_payment_control_policy (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识',
+    source_app_name VARCHAR(128) NOT NULL COMMENT '来源应用名称',
+    allowed_payment_methods VARCHAR(255) NOT NULL COMMENT '允许支付方式列表，逗号分隔',
+    allowed_channel_codes VARCHAR(255) NOT NULL COMMENT '允许渠道编码列表，逗号分隔',
+    minute_submit_limit INT NOT NULL DEFAULT 60 COMMENT '分钟级提交限流阈值',
+    strict_mode VARCHAR(32) NOT NULL COMMENT '是否启用严格控制模式',
+    self_check_status VARCHAR(32) NOT NULL COMMENT '自检状态',
+    self_check_status_type VARCHAR(32) NOT NULL COMMENT '自检状态样式类型',
+    self_check_message VARCHAR(255) NOT NULL COMMENT '自检提示文案',
+    status VARCHAR(32) NOT NULL COMMENT '策略状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '策略状态样式类型',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_source_app_id (source_app_id),
+    KEY idx_control_policy_status (status, source_app_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付控制策略表';
+
 CREATE TABLE t_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     order_no VARCHAR(64) NOT NULL COMMENT '订单号',
@@ -236,6 +256,7 @@ CREATE TABLE t_payment_attempt (
     payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
     payment_method VARCHAR(32) NOT NULL COMMENT '支付方式',
+    source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识',
     terminal VARCHAR(32) NOT NULL COMMENT '发起终端',
     client_ip VARCHAR(64) NOT NULL COMMENT '客户端IP',
     idempotency_key VARCHAR(128) NOT NULL COMMENT '幂等键',

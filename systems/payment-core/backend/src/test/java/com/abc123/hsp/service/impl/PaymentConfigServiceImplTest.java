@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
@@ -41,6 +42,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
 
         PaymentChannelConfigDTO actualChannel = new PaymentConfigServiceImpl(paymentConfigMapper)
                 .overview()
@@ -66,6 +68,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).toggleChannel(request);
 
@@ -83,6 +86,33 @@ class PaymentConfigServiceImplTest {
                 IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper).toggleRouteRule(request)
         );
+    }
+
+    @Test
+    void shouldExposeControlPolicyFieldsInOverview() {
+        PaymentControlPolicyDTO policy = new PaymentControlPolicyDTO();
+        policy.setSourceAppId("housekeeping-app-web");
+        policy.setMinuteSubmitLimit(40);
+        policy.setStrictMode("开启");
+        policy.setSelfCheckStatus("PASS");
+        policy.setAllowedPaymentMethods("微信支付,支付宝");
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Arrays.asList(policy));
+
+        PaymentControlPolicyDTO actualPolicy = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .overview()
+                .getControlPolicies()
+                .get(0);
+
+        org.junit.jupiter.api.Assertions.assertEquals("housekeeping-app-web", actualPolicy.getSourceAppId());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(40), actualPolicy.getMinuteSubmitLimit());
+        org.junit.jupiter.api.Assertions.assertEquals("开启", actualPolicy.getStrictMode());
+        org.junit.jupiter.api.Assertions.assertTrue(actualPolicy.getAllowedPaymentMethods().contains("微信支付"));
     }
 
     @Test
