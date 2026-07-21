@@ -2,10 +2,13 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.service.PaymentIssueService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,5 +49,13 @@ public class PaymentIssueController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentIssueService.list(query));
+    }
+
+    /**
+     * 批量分派、跟进或备注支付交易异常。
+     */
+    @PostMapping("/actions")
+    public ApiResponse<PageResultDTO<PaymentIssueRowDTO>> batchAction(@RequestBody PaymentIssueActionRequestDTO request) {
+        return ApiResponse.success(paymentIssueService.batchAction(request));
     }
 }

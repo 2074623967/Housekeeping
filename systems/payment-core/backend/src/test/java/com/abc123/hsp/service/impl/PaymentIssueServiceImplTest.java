@@ -1,12 +1,17 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -51,5 +56,50 @@ class PaymentIssueServiceImplTest {
         assertEquals("支付宝", normalized.getPaymentMethod());
         assertEquals(1, normalized.getPageNo());
         assertEquals(100, normalized.getPageSize());
+    }
+
+    @Test
+    void shouldBatchAssignIssueAndWriteActionLog() {
+        PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
+        issue.setIssueNo("ISSUE-WAIT-PAY-001");
+        issue.setPaymentOrderId("PAY-001");
+        issue.setIssueType("待回调未收口");
+        when(paymentIssueMapper.findByIssueNo("ISSUE-WAIT-PAY-001")).thenReturn(issue);
+        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
+        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(0L);
+
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Arrays.asList("ISSUE-WAIT-PAY-001"));
+        request.setActionType("分派处理人");
+        request.setAssignee("后端值班");
+        request.setOperator("支付运营");
+        request.setRemark("请先主动查单并核对回调");
+
+        new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request);
+
+        verify(paymentIssueMapper).insertActionLog(
+                anyString(),
+                org.mockito.ArgumentMatchers.eq("ISSUE-WAIT-PAY-001"),
+                org.mockito.ArgumentMatchers.eq("PAY-001"),
+                org.mockito.ArgumentMatchers.eq("待回调未收口"),
+                org.mockito.ArgumentMatchers.eq("分派处理人"),
+                org.mockito.ArgumentMatchers.eq("后端值班"),
+                org.mockito.ArgumentMatchers.eq("已分派"),
+                org.mockito.ArgumentMatchers.eq("info"),
+                org.mockito.ArgumentMatchers.eq("请先主动查单并核对回调"),
+                org.mockito.ArgumentMatchers.eq("支付运营"));
+    }
+
+    @Test
+    void shouldRejectUnsupportedIssueAction() {
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Arrays.asList("ISSUE-WAIT-PAY-001"));
+        request.setActionType("未知动作");
+        request.setAssignee("后端值班");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request)
+        );
     }
 }

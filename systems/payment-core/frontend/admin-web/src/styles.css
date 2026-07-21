@@ -351,6 +351,15 @@ th {
   border: 1px solid #a7f3d0;
 }
 
+.notice-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
 .sub-panel {
   margin-bottom: 18px;
   padding: 16px;

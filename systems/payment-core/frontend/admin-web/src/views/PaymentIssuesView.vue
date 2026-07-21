@@ -11,6 +11,14 @@ const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
 const errorMessage = ref("");
+const actionMessage = ref("");
+const selectedIssueNos = ref([]);
+const actionForm = ref({
+  actionType: "分派处理人",
+  assignee: "支付运营",
+  operator: "支付运营",
+  remark: "请按建议动作完成排查并回写处理结果"
+});
 const filters = ref({
   paymentOrderId: route.query.paymentOrderId || "",
   orderNo: route.query.orderNo || "",
@@ -54,6 +62,9 @@ async function loadIssues() {
     });
     items.value = result.items;
     total.value = result.total;
+    selectedIssueNos.value = selectedIssueNos.value.filter((issueNo) =>
+      result.items.some((item) => item.issueNo === issueNo)
+    );
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -77,6 +88,39 @@ function openIssue(item) {
   router.push(`/payments/${item.paymentOrderId}`);
 }
 
+function toggleIssueSelection(issueNo, checked) {
+  if (checked && !selectedIssueNos.value.includes(issueNo)) {
+    selectedIssueNos.value = [...selectedIssueNos.value, issueNo];
+    return;
+  }
+  if (!checked) {
+    selectedIssueNos.value = selectedIssueNos.value.filter((selectedIssueNo) => selectedIssueNo !== issueNo);
+  }
+}
+
+async function submitBatchAction() {
+  if (!selectedIssueNos.value.length) {
+    actionMessage.value = "请先选择需要处理的异常。";
+    return;
+  }
+  actionMessage.value = "";
+  try {
+    const result = await paymentIssueApi.batchAction({
+      issueNos: selectedIssueNos.value,
+      actionType: actionForm.value.actionType,
+      assignee: actionForm.value.assignee,
+      operator: actionForm.value.operator,
+      remark: actionForm.value.remark
+    });
+    items.value = result.items;
+    total.value = result.total;
+    selectedIssueNos.value = [];
+    actionMessage.value = "批量处理动作已记录，异常中心列表已刷新。";
+  } catch (error) {
+    actionMessage.value = `批量处理失败：${error.message}`;
+  }
+}
+
 onMounted(loadIssues);
 </script>
 
@@ -93,6 +137,9 @@ onMounted(loadIssues);
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
         支付交易异常加载失败：{{ errorMessage }}
+      </div>
+      <div v-if="actionMessage" class="notice-banner">
+        {{ actionMessage }}
       </div>
 
       <div class="toolbar">
@@ -145,6 +192,33 @@ onMounted(loadIssues);
         </div>
       </div>
 
+      <div class="toolbar">
+        <div class="field">
+          <label>批量动作</label>
+          <select v-model="actionForm.actionType">
+            <option>分派处理人</option>
+            <option>标记跟进中</option>
+            <option>标记已处理</option>
+            <option>补充备注</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>处理人</label>
+          <input v-model="actionForm.assignee" placeholder="如 支付运营 / 后端值班" />
+        </div>
+        <div class="field">
+          <label>操作人</label>
+          <input v-model="actionForm.operator" placeholder="请输入操作人" />
+        </div>
+        <div class="field wide-field">
+          <label>处理备注</label>
+          <input v-model="actionForm.remark" placeholder="请写清楚处理结论、排查方向或交接说明" />
+        </div>
+        <div class="toolbar-actions">
+          <button class="button primary" @click="submitBatchAction">批量处理选中异常</button>
+        </div>
+      </div>
+
       <div v-if="isLoading" class="state-box">支付交易异常加载中...</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付交易异常</div>
@@ -153,6 +227,7 @@ onMounted(loadIssues);
         <table>
           <thead>
             <tr>
+              <th>选择</th>
               <th>异常编号</th>
               <th>支付单号</th>
               <th>订单号</th>
@@ -165,12 +240,22 @@ onMounted(loadIssues);
               <th>异常摘要</th>
               <th>根因提示</th>
               <th>建议动作</th>
+              <th>处理状态</th>
+              <th>当前处理人</th>
+              <th>最近动作</th>
               <th>异常时间</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in items" :key="item.issueNo">
+              <td>
+                <input
+                  type="checkbox"
+                  :checked="selectedIssueNos.includes(item.issueNo)"
+                  @change="toggleIssueSelection(item.issueNo, $event.target.checked)"
+                />
+              </td>
               <td>{{ item.issueNo }}</td>
               <td>
                 <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
@@ -187,6 +272,9 @@ onMounted(loadIssues);
               <td class="flow-summary-cell">{{ item.issueSummary }}</td>
               <td class="flow-summary-cell">{{ item.rootCauseHint }}</td>
               <td class="flow-summary-cell">{{ item.recommendedAction }}</td>
+              <td><span :class="['badge', item.handlingStatusType]">{{ item.handlingStatus }}</span></td>
+              <td>{{ item.assignee }}</td>
+              <td class="flow-summary-cell">{{ item.latestActionSummary }}</td>
               <td>{{ item.createdAt }}</td>
               <td>
                 <button class="link-button" @click="openIssue(item)">立即排查</button>

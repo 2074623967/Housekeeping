@@ -956,3 +956,27 @@
 
 1. 当前支付控制管理已经具备“配置展示 -> 人工自检 -> 主链路阻断”的闭环雏形。
 2. 仍未补齐自动巡检调度、商户级授权、令牌鉴权和分布式限流，因此仍不满足 `master/release` 冻结门槛。
+
+## 32. 2026-07-22 支付交易异常中心批量处理验证
+
+### 32.1 本轮验证结论
+
+本轮围绕“异常中心不能只是只读列表，必须支持运营处理闭环”的问题进行了补齐，确认支付交易异常中心已支持批量分派、标记跟进、标记已处理和备注留痕。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `86` 个并全部通过，新增覆盖批量分派与非法动作拦截 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-issue-actions-v1 --emptyOutDir` | 通过 | 异常中心新增勾选、批量动作、处理状态列和最近动作列后可稳定构建 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 32.2 本轮补齐项
+
+1. 新增 `t_payment_issue_action_log`，用于记录异常处理动作、处理人、处理状态、备注和操作人。
+2. 新增 `PaymentIssueActionRequestDTO` 与 `POST /api/payment-issues/actions`。
+3. 异常列表新增处理状态、当前处理人、最近动作和最近动作时间字段。
+4. 后台异常中心支持勾选异常并批量分派、跟进、已处理或备注。
+
+### 32.3 当前判断
+
+1. 当前异常中心已经从“监控跳转后的只读排障页”升级为“轻量处理台”。
+2. 后续仍需补 SLA 计时、责任组统计、自动升级和与真实告警通道联动，因此仍不满足最终 `release/*` 冻结门槛。

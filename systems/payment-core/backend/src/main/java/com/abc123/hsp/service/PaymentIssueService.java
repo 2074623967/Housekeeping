@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 
@@ -13,4 +14,9 @@ public interface PaymentIssueService {
      * 查询支付交易异常列表。
      */
     PageResultDTO<PaymentIssueRowDTO> list(PaymentIssueQueryDTO query);
+
+    /**
+     * 批量记录支付交易异常处理动作。
+     */
+    PageResultDTO<PaymentIssueRowDTO> batchAction(PaymentIssueActionRequestDTO request);
 }

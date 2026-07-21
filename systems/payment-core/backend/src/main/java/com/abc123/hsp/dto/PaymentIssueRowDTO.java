@@ -40,6 +40,16 @@ public class PaymentIssueRowDTO {
     private String recommendedAction;
     /** 推荐跳转路由。 */
     private String recommendedRoute;
+    /** 处理状态。 */
+    private String handlingStatus;
+    /** 处理状态样式。 */
+    private String handlingStatusType;
+    /** 当前处理人。 */
+    private String assignee;
+    /** 最近处理动作摘要。 */
+    private String latestActionSummary;
+    /** 最近处理时间。 */
+    private String latestActionAt;
     /** 异常时间。 */
     private String createdAt;
 }

@@ -19,4 +19,23 @@ public interface PaymentIssueMapper {
      * 统计支付交易异常数量。
      */
     long count(@Param("query") PaymentIssueQueryDTO query);
+
+    /**
+     * 按异常编号查询当前聚合异常。
+     */
+    PaymentIssueRowDTO findByIssueNo(@Param("issueNo") String issueNo);
+
+    /**
+     * 写入支付交易异常处理动作。
+     */
+    void insertActionLog(@Param("actionNo") String actionNo,
+                         @Param("issueNo") String issueNo,
+                         @Param("paymentOrderId") String paymentOrderId,
+                         @Param("issueType") String issueType,
+                         @Param("actionType") String actionType,
+                         @Param("assignee") String assignee,
+                         @Param("handlingStatus") String handlingStatus,
+                         @Param("handlingStatusType") String handlingStatusType,
+                         @Param("actionRemark") String actionRemark,
+                         @Param("operator") String operator);
 }

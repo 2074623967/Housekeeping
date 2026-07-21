@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_task_run_log;
+DROP TABLE IF EXISTS t_payment_issue_action_log;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_gateway_config;
@@ -353,6 +354,25 @@ CREATE TABLE t_refund_operation_log (
     UNIQUE KEY uk_refund_operation_log_no (log_no),
     KEY idx_refund_operation_refund_created (refund_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款操作日志表';
+
+CREATE TABLE t_payment_issue_action_log (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    action_no VARCHAR(64) NOT NULL COMMENT '异常处理动作编号',
+    issue_no VARCHAR(128) NOT NULL COMMENT '异常编号',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
+    issue_type VARCHAR(64) NOT NULL COMMENT '异常类型',
+    action_type VARCHAR(32) NOT NULL COMMENT '处理动作类型',
+    assignee VARCHAR(64) NOT NULL COMMENT '当前处理人',
+    handling_status VARCHAR(32) NOT NULL COMMENT '处理状态',
+    handling_status_type VARCHAR(32) NOT NULL COMMENT '处理状态样式类型',
+    action_remark VARCHAR(255) NOT NULL COMMENT '处理备注',
+    operator VARCHAR(64) NOT NULL COMMENT '操作人',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_issue_action_no (action_no),
+    KEY idx_issue_action_issue (issue_no, created_at),
+    KEY idx_issue_action_payment (payment_order_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常处理动作日志表';
 
 CREATE TABLE t_worker_settlement_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

@@ -126,10 +126,22 @@
                root_cause_hint AS rootCauseHint,
                recommended_action AS recommendedAction,
                recommended_route AS recommendedRoute,
-               created_at AS createdAt
+               COALESCE(latest_action.handling_status, '待分派') AS handlingStatus,
+               COALESCE(latest_action.handling_status_type, 'warn') AS handlingStatusType,
+               COALESCE(latest_action.assignee, '未分派') AS assignee,
+               COALESCE(CONCAT(latest_action.action_type, '：', latest_action.action_remark), '暂无处理动作') AS latestActionSummary,
+               DATE_FORMAT(latest_action.created_at, '%Y-%m-%d %H:%i:%s') AS latestActionAt,
+               payment_issue_union.created_at AS createdAt
         FROM (
             <include refid="issueUnion"/>
         ) payment_issue_union
+                 LEFT JOIN t_payment_issue_action_log latest_action ON latest_action.id = (
+                    SELECT action_log.id
+                    FROM t_payment_issue_action_log action_log
+                    WHERE action_log.issue_no = payment_issue_union.issue_no
+                    ORDER BY action_log.created_at DESC, action_log.id DESC
+                    LIMIT 1
+                )
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
@@ -150,9 +162,62 @@
                 AND payment_method = #{query.paymentMethod}
             </if>
         </where>
-        ORDER BY created_at DESC, issue_no DESC
+        ORDER BY payment_issue_union.created_at DESC, issue_no DESC
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
+
+    <select id="findByIssueNo" resultType="com.abc123.hsp.dto.PaymentIssueRowDTO">
+        SELECT issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               payment_method AS paymentMethod,
+               channel_code AS channelCode,
+               issue_type AS issueType,
+               issue_type_tag AS issueTypeTag,
+               severity,
+               severity_type AS severityType,
+               payment_status AS paymentStatus,
+               payment_status_type AS paymentStatusType,
+               issue_summary AS issueSummary,
+               root_cause_hint AS rootCauseHint,
+               recommended_action AS recommendedAction,
+               recommended_route AS recommendedRoute,
+               created_at AS createdAt
+        FROM (
+            <include refid="issueUnion"/>
+        ) payment_issue_union
+        WHERE issue_no = #{issueNo}
+        LIMIT 1
+    </select>
+
+    <insert id="insertActionLog">
+        INSERT INTO t_payment_issue_action_log (
+            action_no,
+            issue_no,
+            payment_order_id,
+            issue_type,
+            action_type,
+            assignee,
+            handling_status,
+            handling_status_type,
+            action_remark,
+            operator,
+            created_at
+        ) VALUES (
+            #{actionNo},
+            #{issueNo},
+            #{paymentOrderId},
+            #{issueType},
+            #{actionType},
+            #{assignee},
+            #{handlingStatus},
+            #{handlingStatusType},
+            #{actionRemark},
+            #{operator},
+            NOW()
+        )
+    </insert>
 
     <select id="count" resultType="long">
         SELECT COUNT(1)

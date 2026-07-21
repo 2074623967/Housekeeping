@@ -85,7 +85,8 @@ export const paymentIssueApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-issues?${params.toString()}`);
-  }
+  },
+  batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };
 
 export const paymentDayEndApi = {

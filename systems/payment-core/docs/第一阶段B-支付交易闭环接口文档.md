@@ -905,7 +905,7 @@ POST /api/payment-config/control-policies/self-check
 返回内容：
 
 1. 聚合 `待回调未收口`、`回调处理待跟进`、`下游事件发布失败`、`命中停用渠道` 四类异常。
-2. 每条异常返回支付单、订单、客户、支付方式、渠道、异常类型、严重等级、支付状态、异常摘要、根因提示、建议动作和推荐跳转路由。
+2. 每条异常返回支付单、订单、客户、支付方式、渠道、异常类型、严重等级、支付状态、异常摘要、根因提示、建议动作、推荐跳转路由、处理状态、当前处理人和最近处理动作。
 3. 前端通过 `recommendedRoute` 直接进入支付单详情、支付处理日志、支付事件出站或支付配置页。
 
 返回示例：
@@ -930,6 +930,11 @@ POST /api/payment-config/control-policies/self-check
       "rootCauseHint": "最近支付尝试=等待回调；建议优先主动查单并核对回调验签与状态收口。",
       "recommendedAction": "查看支付单并核对回调、日志和查单结果",
       "recommendedRoute": "/payments/PAY202607190002",
+      "handlingStatus": "待分派",
+      "handlingStatusType": "warn",
+      "assignee": "未分派",
+      "latestActionSummary": "暂无处理动作",
+      "latestActionAt": null,
       "createdAt": "2026-07-19 10:03:01"
     }
   ],
@@ -939,7 +944,39 @@ POST /api/payment-config/control-policies/self-check
 }
 ```
 
-### 13.3 查询支付任务中心总览
+### 13.3 批量处理支付交易异常
+
+接口：`POST /api/payment-issues/actions`
+
+请求示例：
+
+```json
+{
+  "issueNos": ["ISSUE-WAIT-PAY202607190002"],
+  "actionType": "分派处理人",
+  "assignee": "后端值班",
+  "operator": "支付运营",
+  "remark": "请先主动查单并核对回调验签结果"
+}
+```
+
+字段说明：
+
+| 字段 | 是否必填 | 说明 |
+| --- | --- | --- |
+| `issueNos` | 是 | 待处理异常编号列表 |
+| `actionType` | 是 | 支持 `分派处理人 / 标记跟进中 / 标记已处理 / 补充备注` |
+| `assignee` | 是 | 当前处理人 |
+| `operator` | 否 | 操作人，不传时默认等于处理人 |
+| `remark` | 否 | 处理备注，不传时默认 `批量处理` |
+
+处理说明：
+
+1. 后端会按 `issueNo` 回查当前聚合异常，异常不存在时拒绝处理，避免对已消失的异常写入误导性动作。
+2. 处理动作会写入 `t_payment_issue_action_log`，不直接修改支付单状态，避免把运营排障动作和交易状态机混在一起。
+3. 接口返回刷新后的异常中心列表，前端可直接更新页面。
+
+### 13.4 查询支付任务中心总览
 
 接口：`GET /api/payment-task-center/overview`
 
@@ -953,7 +990,7 @@ POST /api/payment-config/control-policies/self-check
 6. `focusAlerts`：重点任务告警，包含告警标题、告警等级、影响数量和建议跳转路由。
 7. `recentTaskRuns`：最近 10 条任务执行日志。
 
-### 13.4 查询支付任务执行日志
+### 13.5 查询支付任务执行日志
 
 接口：`GET /api/payment-task-center/task-runs`
 
