@@ -1,9 +1,12 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
+import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
+import com.abc123.hsp.entity.RefundOperationLogEntity;
 import java.math.BigDecimal;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -29,6 +32,16 @@ public interface RefundMapper {
      * 查询退款单详情。
      */
     RefundListItemDTO findByRefundOrderId(String refundOrderId);
+
+    /**
+     * 查询退款详情聚合信息。
+     */
+    RefundDetailDTO findDetailByRefundOrderId(@Param("refundOrderId") String refundOrderId);
+
+    /**
+     * 查询退款操作日志。
+     */
+    List<RefundOperationLogItemDTO> findOperationLogs(@Param("refundOrderId") String refundOrderId);
 
     /**
      * 查询可退款的原支付单快照。
@@ -57,4 +70,9 @@ public interface RefundMapper {
                            @Param("status") String status,
                            @Param("statusType") String statusType,
                            @Param("success") boolean success);
+
+    /**
+     * 新增退款操作日志。
+     */
+    int insertOperationLog(RefundOperationLogEntity entity);
 }

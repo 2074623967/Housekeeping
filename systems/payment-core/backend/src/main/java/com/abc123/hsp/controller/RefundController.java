@@ -4,9 +4,11 @@ import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.service.RefundService;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +42,14 @@ public class RefundController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(refundService.list(query));
+    }
+
+    /**
+     * 查询退款详情。
+     */
+    @GetMapping("/{refundOrderId}")
+    public ApiResponse<RefundDetailDTO> detail(@PathVariable String refundOrderId) {
+        return ApiResponse.success(refundService.detail(refundOrderId));
     }
 
     /**

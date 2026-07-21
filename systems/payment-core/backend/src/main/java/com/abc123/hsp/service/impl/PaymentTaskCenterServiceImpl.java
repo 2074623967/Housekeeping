@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
@@ -121,7 +122,20 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         List<String> failedRefundOrderIds = refundMapper.findFailedRefundOrderIds();
         int successCount = 0;
         for (String refundOrderId : failedRefundOrderIds) {
-            successCount += refundMapper.updateRefundStatus(refundOrderId, "FAIL", "PROCESSING", "warn", false);
+            int affectedRows = refundMapper.updateRefundStatus(refundOrderId, "FAIL", "PROCESSING", "warn", false);
+            successCount += affectedRows;
+            if (affectedRows > 0) {
+                RefundOperationLogEntity logEntity = RefundServiceImpl.buildOperationLog(
+                        refundOrderId,
+                        "TASK_RETRY",
+                        "任务中心失败退款重试",
+                        "FAIL",
+                        "PROCESSING",
+                        triggeredBy,
+                        "任务中心批量重试失败退款"
+                );
+                refundMapper.insertOperationLog(logEntity);
+            }
         }
         int failCount = Math.max(failedRefundOrderIds.size() - successCount, 0);
         return buildAndRecordResult(

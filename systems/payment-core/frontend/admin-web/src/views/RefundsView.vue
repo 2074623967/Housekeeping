@@ -237,6 +237,7 @@ onMounted(loadRefunds);
               <td>{{ item.successAt }}</td>
               <td>
                 <div class="list-actions">
+                  <RouterLink class="link-button" :to="`/refunds/${item.refundOrderId}`">详情</RouterLink>
                   <button
                     class="link-button"
                     :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'REVIEWING'"

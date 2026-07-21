@@ -70,10 +70,20 @@ INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, dow
 ('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', 'payment-core-ops', 'payment.trade.pending.v1', 'PENDING', 'warn', 0, NULL, '2026-07-20 10:08:19', '{"amount":6800.00}', '2026-07-19 10:03:19'),
 ('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 2, '2026-07-18 18:41:30', '2026-07-20 09:00:00', '{"amount":3600.00}', '2026-07-18 18:41:21');
 
-INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, status, status_type, applied_at, success_at) VALUES
-('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
-('REF202607180019', 'PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
-('REF202607170088', 'PAY202607160031', 'ORD202607160071', '赵女士', 200.00, '退转付', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
+INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES
+('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
+('REF202607180019', 'PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
+('REF202607170088', 'PAY202607160031', 'ORD202607160071', '赵女士', 200.00, '退转付', '用户重复支付', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
+
+INSERT INTO t_refund_operation_log (log_no, refund_order_id, action_code, action_name, from_status, to_status, operator_name, operation_remark, created_at) VALUES
+('ROL202607190001', 'REF202607190001', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '客户取消服务', '2026-07-19 11:05:10'),
+('ROL202607190002', 'REF202607190001', 'APPROVE', '审核通过', 'REVIEWING', 'PROCESSING', 'payment-core-admin', '审核通过，进入渠道退款处理', '2026-07-19 11:08:20'),
+('ROL202607180001', 'REF202607180019', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '服务未按约履行', '2026-07-18 19:00:11'),
+('ROL202607180002', 'REF202607180019', 'APPROVE', '审核通过', 'REVIEWING', 'PROCESSING', 'payment-core-admin', '企业客户退款审核通过', '2026-07-18 19:01:10'),
+('ROL202607180003', 'REF202607180019', 'SUCCESS', '退款成功回调', 'PROCESSING', 'SUCCESS', 'channel-callback', '渠道侧退款成功回调', '2026-07-18 19:03:26'),
+('ROL202607170001', 'REF202607170088', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '用户重复支付', '2026-07-17 15:10:32'),
+('ROL202607170002', 'REF202607170088', 'APPROVE', '审核通过', 'REVIEWING', 'PROCESSING', 'payment-core-admin', '审核通过后进入退款处理', '2026-07-17 15:12:00'),
+('ROL202607170003', 'REF202607170088', 'FAIL', '退款失败回调', 'PROCESSING', 'FAIL', 'channel-callback', '渠道侧返回账户异常', '2026-07-17 15:18:21');
 
 INSERT INTO t_worker_settlement_order (settlement_order_id, worker_name, period_start, period_end, amount_should_settle, deduct_amount, amount_net_settle, deposit_impact_amount, status, status_type, payout_status, payout_status_type, created_at) VALUES
 ('SETW202607190001', '李阿姨', '2026-07-14', '2026-07-19', 4260.00, 120.00, 4140.00, 0.00, '待审核', 'warn', '待出款', 'info', '2026-07-19 12:10:00'),

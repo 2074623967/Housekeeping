@@ -3,9 +3,11 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
+import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundService;
 import java.math.BigDecimal;
@@ -24,6 +26,8 @@ public class RefundServiceImpl implements RefundService {
     private static final String STATUS_FAIL = "FAIL";
     private static final String PAYMENT_STATUS_SUCCESS = "SUCCESS";
     private static final DateTimeFormatter REFUND_NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final String DEFAULT_OPERATOR = "payment-core-admin";
+    private static final String CALLBACK_OPERATOR = "channel-callback";
 
     private final RefundMapper refundMapper;
 
@@ -40,6 +44,17 @@ public class RefundServiceImpl implements RefundService {
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    @Override
+    public RefundDetailDTO detail(String refundOrderId) {
+        String requiredRefundOrderId = requireRefundOrderId(refundOrderId);
+        RefundDetailDTO detail = refundMapper.findDetailByRefundOrderId(requiredRefundOrderId);
+        if (detail == null) {
+            throw new IllegalArgumentException("退款单不存在");
+        }
+        detail.setOperationLogs(refundMapper.findOperationLogs(requiredRefundOrderId));
+        return detail;
     }
 
     @Override
@@ -60,6 +75,15 @@ public class RefundServiceImpl implements RefundService {
         }
         String refundOrderId = "REF" + LocalDateTime.now().format(REFUND_NO_FORMATTER);
         refundMapper.insertRefund(refundOrderId, source, request, STATUS_REVIEWING, "warn");
+        refundMapper.insertOperationLog(buildOperationLog(
+                refundOrderId,
+                "APPLY",
+                "发起退款申请",
+                "INIT",
+                STATUS_REVIEWING,
+                DEFAULT_OPERATOR,
+                StringUtils.hasText(request.getRefundReason()) ? request.getRefundReason().trim() : "发起退款申请"
+        ));
         return refundMapper.findByRefundOrderId(refundOrderId);
     }
 
@@ -127,6 +151,15 @@ public class RefundServiceImpl implements RefundService {
         if (affectedRows == 0) {
             throw new IllegalArgumentException("退款单状态不允许执行当前操作");
         }
+        refundMapper.insertOperationLog(buildOperationLog(
+                refundOrderId,
+                resolveActionCode(fromStatus, status),
+                resolveActionName(fromStatus, status),
+                fromStatus,
+                status,
+                resolveOperator(status),
+                StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : resolveDefaultRemark(fromStatus, status)
+        ));
         return refundMapper.findByRefundOrderId(refundOrderId);
     }
 
@@ -135,5 +168,74 @@ public class RefundServiceImpl implements RefundService {
             throw new IllegalArgumentException("退款单号不能为空");
         }
         return request.getRefundOrderId().trim();
+    }
+
+    public static RefundOperationLogEntity buildOperationLog(String refundOrderId,
+                                                             String actionCode,
+                                                             String actionName,
+                                                             String fromStatus,
+                                                             String toStatus,
+                                                             String operatorName,
+                                                             String operationRemark) {
+        RefundOperationLogEntity entity = new RefundOperationLogEntity();
+        entity.setLogNo("ROL" + LocalDateTime.now().format(REFUND_NO_FORMATTER));
+        entity.setRefundOrderId(refundOrderId);
+        entity.setActionCode(actionCode);
+        entity.setActionName(actionName);
+        entity.setFromStatus(fromStatus);
+        entity.setToStatus(toStatus);
+        entity.setOperatorName(operatorName);
+        entity.setOperationRemark(operationRemark);
+        return entity;
+    }
+
+    private String requireRefundOrderId(String refundOrderId) {
+        if (!StringUtils.hasText(refundOrderId)) {
+            throw new IllegalArgumentException("退款单号不能为空");
+        }
+        return refundOrderId.trim();
+    }
+
+    private String resolveActionCode(String fromStatus, String toStatus) {
+        if (STATUS_REVIEWING.equals(fromStatus) && STATUS_PROCESSING.equals(toStatus)) {
+            return "APPROVE";
+        }
+        if (STATUS_PROCESSING.equals(fromStatus) && STATUS_SUCCESS.equals(toStatus)) {
+            return "SUCCESS";
+        }
+        if (STATUS_PROCESSING.equals(fromStatus) && STATUS_FAIL.equals(toStatus)) {
+            return "FAIL";
+        }
+        if (STATUS_FAIL.equals(fromStatus) && STATUS_PROCESSING.equals(toStatus)) {
+            return "RETRY";
+        }
+        return "UPDATE";
+    }
+
+    private String resolveActionName(String fromStatus, String toStatus) {
+        if (STATUS_REVIEWING.equals(fromStatus) && STATUS_PROCESSING.equals(toStatus)) {
+            return "审核通过";
+        }
+        if (STATUS_PROCESSING.equals(fromStatus) && STATUS_SUCCESS.equals(toStatus)) {
+            return "退款成功回调";
+        }
+        if (STATUS_PROCESSING.equals(fromStatus) && STATUS_FAIL.equals(toStatus)) {
+            return "退款失败回调";
+        }
+        if (STATUS_FAIL.equals(fromStatus) && STATUS_PROCESSING.equals(toStatus)) {
+            return "退款失败重试";
+        }
+        return "退款状态更新";
+    }
+
+    private String resolveOperator(String toStatus) {
+        if (STATUS_SUCCESS.equals(toStatus) || STATUS_FAIL.equals(toStatus)) {
+            return CALLBACK_OPERATOR;
+        }
+        return DEFAULT_OPERATOR;
+    }
+
+    private String resolveDefaultRemark(String fromStatus, String toStatus) {
+        return resolveActionName(fromStatus, toStatus);
     }
 }

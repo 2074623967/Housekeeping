@@ -124,6 +124,7 @@ class PaymentTaskCenterServiceImplTest {
         ).runAutoRetryFailedRefunds();
 
         verify(refundMapper).findFailedRefundOrderIds();
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.any());
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "refund-retry-scheduler".equals(entity.getTriggeredBy())
         ));

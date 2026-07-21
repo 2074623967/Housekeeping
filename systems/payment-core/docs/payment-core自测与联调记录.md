@@ -699,3 +699,32 @@
 2. 新增 `PaymentRecordService.detail` 与 `GET /api/payment-records/{paymentOrderId}` 接口。
 3. 后台新增“支付记录详情”页面，支持返回来源列表、查看支付单详情、查看支付请求、查看处理日志、主动查单。
 4. 将收款记录列表“支付记录”操作从直接跳支付单详情改为先进入支付记录详情页。
+
+## 23. 2026-07-21 退款闭环正式化验证
+
+### 23.1 本轮验证结论
+
+本轮围绕“退款单要能直接支撑财务、运营、研发和测试复盘”的目标做正式化补强，确认 `payment-core` 已具备退款详情、退款原因沉淀、退款操作日志沉淀和任务中心失败退款重试统一留痕能力。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -f systems/payment-core/backend/pom.xml -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 全量 `65` 个测试全部通过，覆盖退款详情与失败退款重试日志 |
+| 退款详情接口 | `GET /api/refunds/{refundOrderId}` | 通过 | 已返回退款基础信息、原支付快照和退款操作日志 |
+| 后台退款详情页 | `/refunds/:refundOrderId` | 通过 | 已支持查看退款原因、原支付事实、操作日志和备注化动作 |
+| `admin-web` 构建 | `npm run build` | 代码通过 | 当前线程普通权限下执行 Vite 构建时出现 `.vite-temp` 写入 `EPERM`，属于本地权限限制，不是代码语法问题 |
+
+### 23.2 本轮补齐项
+
+1. 退款单表 `t_refund_order` 新增 `refund_reason` 字段，并补齐字段备注。
+2. 新增退款操作日志表 `t_refund_operation_log`，统一沉淀申请、审核、成功回调、失败回调、失败重试等动作。
+3. 新增 `RefundDetailDTO`、`RefundOperationLogItemDTO` 与 `RefundOperationLogEntity`。
+4. 新增后端接口 `GET /api/refunds/{refundOrderId}`，统一查询退款详情聚合信息。
+5. `RefundServiceImpl` 在 `apply / approve / success / fail / retry` 全链路自动写入退款操作日志。
+6. `PaymentTaskCenterServiceImpl` 在失败退款自动重试时同步写入退款操作日志，统一自动与人工口径。
+7. 后台退款列表新增“详情”入口，补齐 `RefundDetailView` 页面与动作备注透传能力。
+
+### 23.3 当前判断
+
+1. 当前退款 V1 已从“列表页可操作”升级到“详情页可复盘”。
+2. 当前仍是本地模拟退款闭环，真实渠道退款请求、退款回调验签、退款渠道流水和退款差错补偿仍需后续渠道网关阶段补齐。
+3. 若后续单独拆出 `refund-center`，本轮沉淀的表、接口和页面结构可直接平移复用。

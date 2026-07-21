@@ -15,6 +15,7 @@ import PaymentRecordDetailView from "../views/PaymentRecordDetailView.vue";
 import PaymentsView from "../views/PaymentsView.vue";
 import PaymentDetailView from "../views/PaymentDetailView.vue";
 import RefundsView from "../views/RefundsView.vue";
+import RefundDetailView from "../views/RefundDetailView.vue";
 import WorkerSettlementsView from "../views/WorkerSettlementsView.vue";
 import PaymentConfigView from "../views/PaymentConfigView.vue";
 import PaymentMonitorView from "../views/PaymentMonitorView.vue";
@@ -65,6 +66,7 @@ const routes = [
       { path: "payments", component: PaymentsView },
       { path: "payments/:paymentOrderId", component: PaymentDetailView },
       { path: "refunds", component: RefundsView },
+      { path: "refunds/:refundOrderId", component: RefundDetailView },
       { path: "payment-config", component: PaymentConfigView },
       { path: "payment-monitor", component: PaymentMonitorView },
       { path: "payment-task-center", component: PaymentTaskCenterView },

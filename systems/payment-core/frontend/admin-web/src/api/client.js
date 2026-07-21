@@ -442,11 +442,12 @@ export const refundApi = {
     });
     return request(`/api/refunds?${params.toString()}`);
   },
+  getDetail: (refundOrderId) => request(`/api/refunds/${refundOrderId}`),
   apply: (payload) => postJson("/api/refunds/apply", payload),
-  approve: (refundOrderId) => postJson("/api/refunds/approve", { refundOrderId }),
-  markSuccess: (refundOrderId) => postJson("/api/refunds/success", { refundOrderId }),
-  markFail: (refundOrderId) => postJson("/api/refunds/fail", { refundOrderId }),
-  retry: (refundOrderId) => postJson("/api/refunds/retry", { refundOrderId })
+  approve: (refundOrderId, remark = "") => postJson("/api/refunds/approve", { refundOrderId, remark }),
+  markSuccess: (refundOrderId, remark = "") => postJson("/api/refunds/success", { refundOrderId, remark }),
+  markFail: (refundOrderId, remark = "") => postJson("/api/refunds/fail", { refundOrderId, remark }),
+  retry: (refundOrderId, remark = "") => postJson("/api/refunds/retry", { refundOrderId, remark })
 };
 
 export const settlementApi = {

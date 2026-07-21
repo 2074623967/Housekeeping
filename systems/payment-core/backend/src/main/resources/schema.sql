@@ -285,6 +285,7 @@ CREATE TABLE t_refund_order (
     customer_name VARCHAR(128) NOT NULL COMMENT '客户名称',
     refund_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款金额',
     refund_method VARCHAR(32) NOT NULL COMMENT '退款方式',
+    refund_reason VARCHAR(255) NOT NULL DEFAULT '' COMMENT '退款原因',
     status VARCHAR(32) NOT NULL COMMENT '退款状态',
     status_type VARCHAR(32) NOT NULL COMMENT '退款状态样式类型',
     applied_at DATETIME NOT NULL COMMENT '申请时间',
@@ -292,6 +293,22 @@ CREATE TABLE t_refund_order (
     PRIMARY KEY (id),
     UNIQUE KEY uk_refund_order_id (refund_order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
+
+CREATE TABLE t_refund_operation_log (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    log_no VARCHAR(64) NOT NULL COMMENT '退款操作日志号',
+    refund_order_id VARCHAR(64) NOT NULL COMMENT '关联退款单号',
+    action_code VARCHAR(64) NOT NULL COMMENT '动作编码',
+    action_name VARCHAR(128) NOT NULL COMMENT '动作名称',
+    from_status VARCHAR(32) NOT NULL COMMENT '原状态',
+    to_status VARCHAR(32) NOT NULL COMMENT '目标状态',
+    operator_name VARCHAR(64) NOT NULL COMMENT '操作人',
+    operation_remark VARCHAR(255) NOT NULL DEFAULT '' COMMENT '操作备注',
+    created_at DATETIME NOT NULL COMMENT '操作时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_refund_operation_log_no (log_no),
+    KEY idx_refund_operation_refund_created (refund_order_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款操作日志表';
 
 CREATE TABLE t_worker_settlement_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

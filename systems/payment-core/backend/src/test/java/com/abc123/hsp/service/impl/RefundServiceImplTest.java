@@ -3,12 +3,15 @@ package com.abc123.hsp.service.impl;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.RefundDetailDTO;
+import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.mapper.RefundMapper;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -69,6 +72,7 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("REVIEWING"),
                 org.mockito.ArgumentMatchers.eq("warn")
         );
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -99,7 +103,25 @@ class RefundServiceImplTest {
 
         new RefundServiceImpl(refundMapper).approve(request);
 
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.any());
         verify(refundMapper).findByRefundOrderId("REF-001");
+    }
+
+    @Test
+    void shouldLoadRefundDetailWithOperationLogs() {
+        RefundDetailDTO detail = new RefundDetailDTO();
+        detail.setRefundOrderId("REF-001");
+        RefundOperationLogItemDTO logItem = new RefundOperationLogItemDTO();
+        logItem.setLogNo("ROL-001");
+        when(refundMapper.findDetailByRefundOrderId("REF-001")).thenReturn(detail);
+        when(refundMapper.findOperationLogs("REF-001")).thenReturn(Arrays.asList(logItem));
+
+        RefundDetailDTO result = new RefundServiceImpl(refundMapper).detail("REF-001");
+
+        org.junit.jupiter.api.Assertions.assertEquals("REF-001", result.getRefundOrderId());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getOperationLogs().size());
+        verify(refundMapper).findDetailByRefundOrderId("REF-001");
+        verify(refundMapper).findOperationLogs("REF-001");
     }
 
     @Test
