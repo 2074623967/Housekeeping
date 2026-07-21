@@ -73,6 +73,26 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRunAutoRepublishFailedEvents() {
+        when(paymentEventMapper.findFailedEventNos()).thenReturn(Collections.singletonList("EVT-AUTO-1"));
+        when(paymentEventMapper.markRepublished("EVT-AUTO-1")).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper
+        ).runAutoRepublishFailedEvents();
+
+        verify(paymentEventMapper).findFailedEventNos();
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "AUTO".equals(entity.getRunMode()) && "payment-event-scheduler".equals(entity.getTriggeredBy())
+        ));
+    }
+
+    @Test
     void shouldRunAutoCloseExpiredPayments() {
         when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
@@ -87,6 +107,26 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRunAutoRetryFailedRefunds() {
+        when(refundMapper.findFailedRefundOrderIds()).thenReturn(Collections.singletonList("REF-AUTO-1"));
+        when(refundMapper.updateRefundStatus("REF-AUTO-1", "FAIL", "PROCESSING", "warn", false)).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper
+        ).runAutoRetryFailedRefunds();
+
+        verify(refundMapper).findFailedRefundOrderIds();
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "AUTO".equals(entity.getRunMode()) && "refund-retry-scheduler".equals(entity.getTriggeredBy())
+        ));
     }
 
     @Test

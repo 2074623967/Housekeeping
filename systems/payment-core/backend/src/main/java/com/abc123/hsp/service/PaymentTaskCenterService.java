@@ -37,7 +37,17 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runRepublishFailedEvents();
 
     /**
+     * 自动执行失败事件重发。
+     */
+    PaymentTaskActionResultDTO runAutoRepublishFailedEvents();
+
+    /**
      * 手动执行失败退款重试。
      */
     PaymentTaskActionResultDTO runRetryFailedRefunds();
+
+    /**
+     * 自动执行失败退款重试。
+     */
+    PaymentTaskActionResultDTO runAutoRetryFailedRefunds();
 }

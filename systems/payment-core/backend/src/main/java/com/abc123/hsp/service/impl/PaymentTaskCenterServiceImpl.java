@@ -75,6 +75,28 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runRepublishFailedEvents() {
+        return runRepublishFailedEventsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoRepublishFailedEvents() {
+        return runRepublishFailedEventsByMode(RUN_MODE_AUTO, "payment-event-scheduler");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runRetryFailedRefunds() {
+        return runRetryFailedRefundsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoRetryFailedRefunds() {
+        return runRetryFailedRefundsByMode(RUN_MODE_AUTO, "refund-retry-scheduler");
+    }
+
+    private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
         List<String> failedEventNos = paymentEventMapper.findFailedEventNos();
         int successCount = 0;
         for (String eventNo : failedEventNos) {
@@ -84,8 +106,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         return buildAndRecordResult(
                 "PAYMENT_EVENT_RETRY",
                 "失败事件重发",
-                RUN_MODE_MANUAL,
-                "payment-core-admin",
+                runMode,
+                triggeredBy,
                 failedEventNos.size(),
                 successCount,
                 failCount,
@@ -95,9 +117,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         );
     }
 
-    @Override
-    @Transactional
-    public PaymentTaskActionResultDTO runRetryFailedRefunds() {
+    private PaymentTaskActionResultDTO runRetryFailedRefundsByMode(String runMode, String triggeredBy) {
         List<String> failedRefundOrderIds = refundMapper.findFailedRefundOrderIds();
         int successCount = 0;
         for (String refundOrderId : failedRefundOrderIds) {
@@ -107,8 +127,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         return buildAndRecordResult(
                 "REFUND_FAIL_RETRY",
                 "失败退款重试",
-                RUN_MODE_MANUAL,
-                "payment-core-admin",
+                runMode,
+                triggeredBy,
                 failedRefundOrderIds.size(),
                 successCount,
                 failCount,

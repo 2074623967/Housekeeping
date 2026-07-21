@@ -28,3 +28,7 @@ payment:
     nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:600}
   expiry-close:
     fixed-delay-ms: ${HSP_PAYMENT_EXPIRY_CLOSE_DELAY_MS:60000}
+  event-retry:
+    fixed-delay-ms: ${HSP_PAYMENT_EVENT_RETRY_DELAY_MS:300000}
+  refund-retry:
+    fixed-delay-ms: ${HSP_PAYMENT_REFUND_RETRY_DELAY_MS:300000}

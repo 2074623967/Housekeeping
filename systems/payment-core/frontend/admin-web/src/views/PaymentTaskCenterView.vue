@@ -99,7 +99,7 @@ onMounted(loadOverview);
     <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看超时关单、失败事件重发、失败退款重试和日终告警，形成可操作的支付运维处理台</p>
+        <p>统一查看超时关单、失败事件重发、失败退款重试和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -150,9 +150,9 @@ onMounted(loadOverview);
           <section class="panel mini">
             <div class="section-title">
               <div>
-                <h3>核心自动化任务</h3>
-                <p class="meta">本页触发的是正式版 V1 的统一操作，不再分散到各个页面里单独点击</p>
-              </div>
+              <h3>核心自动化任务</h3>
+              <p class="meta">本页触发的是正式版 V1.6 的统一操作；超时关单、失败事件重发、失败退款重试均已纳入自动调度与人工补偿双通道</p>
+            </div>
             </div>
 
             <div class="sub-panel">
