@@ -218,6 +218,7 @@
         SET cashier_status = '支付中',
             cashier_status_type = 'info'
         WHERE prepay_order_no = #{prepayOrderNo}
+          AND cashier_status = '待支付'
     </update>
 
     <update id="updatePrepayStatusByPaymentOrderId">

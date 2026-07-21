@@ -621,6 +621,29 @@
 1. 这一版已经把“支付控制管理”从纯文档能力推进到真实主链路能力，但仍只是 V1。
 2. 后续还需要继续补商户权限、接口级限流、并发令牌、重试策略、自检巡检和更复杂的风控分层。
 
+## 24. 2026-07-21 支付提交并发防重复核
+
+### 24.1 本轮验证结论
+
+本轮围绕“提交支付存在逻辑幂等，但并发窗口仍可能重复路由和重复下单”的问题进行了补强，确认收银台提交已升级为“条件占位 + 并发防重”的实现。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端单元测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | 全量后端测试共 `66` 个并全部通过 |
+| 提交幂等控制 | `PaymentServiceImplTest` | 通过 | 已覆盖幂等键存在、重复提交占位、正常提交三类情况 |
+
+### 24.2 本轮补齐项
+
+1. `updatePrepayToPaying` 改为条件更新，仅允许 `待支付` 状态进入 `支付中`。
+2. `PaymentServiceImpl.submit` 在路由、渠道适配器调用前先执行预付单占位。
+3. 如果并发提交发现预付单已被占位，则直接返回当前/最新预付单，不再重复下发支付请求。
+4. 新增 `PAYMENT_SUBMIT_IN_PROGRESS` 错误码，用于无法判定为已成功时的占位冲突场景。
+
+### 24.3 当前判断
+
+1. 这一版把“支付提交幂等”从逻辑层推进到了并发占位层。
+2. 后续如果接真实渠道，还可以继续补提交令牌、商户级并发配额和更细粒度的接口限流。
+
 ## 20. 2026-07-20 支付监控 drill-down 增强复核
 
 ### 20.1 本轮验证结论

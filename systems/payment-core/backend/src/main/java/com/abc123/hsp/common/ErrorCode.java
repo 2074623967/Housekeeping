@@ -26,4 +26,5 @@ public final class ErrorCode {
     public static final String PAYMENT_CALLBACK_CHANNEL_MISSING = "PAYMENT-1009";
     public static final String PAYMENT_CHANNEL_UNAVAILABLE = "PAYMENT-1010";
     public static final String PAYMENT_ORDER_SOURCE_MISSING = "PAYMENT-1011";
+    public static final String PAYMENT_SUBMIT_IN_PROGRESS = "PAYMENT-1016";
 }

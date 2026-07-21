@@ -133,7 +133,7 @@ public interface PaymentMapper {
     /**
      * 更新预付单为支付中状态。
      */
-    void updatePrepayToPaying(@Param("prepayOrderNo") String prepayOrderNo);
+    int updatePrepayToPaying(@Param("prepayOrderNo") String prepayOrderNo);
 
     /**
      * 按支付单更新收银台状态。

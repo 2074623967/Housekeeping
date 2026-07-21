@@ -163,6 +163,20 @@ public class PaymentServiceImpl implements PaymentService {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
             return currentPrepay;
         }
+        int occupiedRows = paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
+        if (occupiedRows == 0) {
+            PrepayOrderDTO latestPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
+            if (latestDetail != null && ("WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus())
+                    || "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
+                    || "CLOSED".equalsIgnoreCase(latestDetail.getStatus()))) {
+                return latestPrepay == null ? currentPrepay : latestPrepay;
+            }
+            if (latestPrepay != null && "支付中".equals(latestPrepay.getCashierStatus())) {
+                return latestPrepay;
+            }
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
+        }
         PaymentChannelSubmitResultDTO submitResult = paymentChannelSubmitService.submit(
                 buildSubmitAdapterRequest(
                         request,
@@ -172,8 +186,7 @@ public class PaymentServiceImpl implements PaymentService {
                         terminal,
                         clientIp,
                         idempotencyKey));
-        // 收银台提交后，先把预付单状态收口，再补齐支付单上的支付方式和渠道。
-        paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
+        // 收银台提交后，补齐支付单上的支付方式和渠道。
         paymentMapper.updatePaymentMethodAndChannel(
                 paymentOrderId,
                 request.getPaymentMethod(),
