@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
 import com.abc123.hsp.dto.PaymentDayEndAlertItemDTO;
+import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 import com.abc123.hsp.entity.PaymentDayEndBatchEntity;
 import com.abc123.hsp.mapper.PaymentDayEndMapper;
 import com.abc123.hsp.service.PaymentDayEndService;
@@ -42,9 +43,13 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             overview.setOpenInternalAbnormalCount(0);
             overview.setOpenPendingRefundCount(0);
             overview.setLatestBatchStatus("未跑批");
+            overview.setLatestPaymentSuccessGapCount(0);
+            overview.setLatestPaymentSuccessGapAmount("¥0.00");
+            overview.setLatestPendingRefundAmount("¥0.00");
         }
         overview.setAlerts(buildAlerts(overview));
-        overview.setRecentBatches(paymentDayEndMapper.findRecentBatches());
+        overview.setRecentBatches(enrichRecentBatches(paymentDayEndMapper.findRecentBatches()));
+        applyReconciliationReadiness(overview);
         return overview;
     }
 
@@ -150,7 +155,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 defaultZero(overview.getOpenChannelAbnormalCount()),
                 "存在支付成功但渠道回调未成功收口的交易，需要优先核对通知日志和渠道结果。",
                 "进入支付交易异常中心核对待回调与通知日志",
-                "/payment-issues?issueType=待回调未收口"
+                "/payment-issues?issueType=待回调未收口",
+                3
         ));
         alerts.add(buildAlert(
                 "INTERNAL_ABNORMAL",
@@ -158,7 +164,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 defaultZero(overview.getOpenInternalAbnormalCount()),
                 "存在支付成功但内部事件未正常发布的交易，需要核对事件出站和下游收口。",
                 "进入支付事件出站页重发失败事件并确认下游消费结果",
-                "/payment-events?publishStatus=FAILED"
+                "/payment-events?publishStatus=FAILED",
+                2
         ));
         alerts.add(buildAlert(
                 "PENDING_REFUND",
@@ -166,7 +173,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 defaultZero(overview.getOpenPendingRefundCount()),
                 "存在退款处理中或待审核记录，需要继续推进逆向资金收口。",
                 "进入退款单管理页核对失败与处理中退款单",
-                "/refunds?refundStatus=PROCESSING"
+                "/refunds?refundStatus=PROCESSING",
+                2
         ));
         return alerts;
     }
@@ -176,7 +184,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                                                  Integer affectedCount,
                                                  String alertMessage,
                                                  String suggestedAction,
-                                                 String actionRoute) {
+                                                 String actionRoute,
+                                                 int p1Threshold) {
         PaymentDayEndAlertItemDTO alert = new PaymentDayEndAlertItemDTO();
         int count = defaultZero(affectedCount);
         alert.setAlertType(alertType);
@@ -186,13 +195,88 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         alert.setSuggestedAction(suggestedAction);
         alert.setActionRoute(actionRoute);
         if (count > 0) {
-            alert.setSeverityLevel(count > 5 ? "P1" : "P2");
-            alert.setSeverityLevelType(count > 5 ? "danger" : "warn");
+            alert.setSeverityLevel(count >= p1Threshold ? "P1" : "P2");
+            alert.setSeverityLevelType(count >= p1Threshold ? "danger" : "warn");
         } else {
             alert.setSeverityLevel("P3");
             alert.setSeverityLevelType("success");
         }
         return alert;
+    }
+
+    /**
+     * 为总览生成“是否可进入正式对账”的统一判断口径。
+     */
+    private void applyReconciliationReadiness(PaymentDayEndOverviewDTO overview) {
+        int channelAbnormalCount = defaultZero(overview.getOpenChannelAbnormalCount());
+        int internalAbnormalCount = defaultZero(overview.getOpenInternalAbnormalCount());
+        int successGapCount = defaultZero(overview.getLatestPaymentSuccessGapCount());
+        int pendingRefundCount = defaultZero(overview.getOpenPendingRefundCount());
+        if (!StringUtils.hasText(overview.getLatestBizDate())) {
+            overview.setReconciliationReadinessStatus("未生成日终事实");
+            overview.setReconciliationReadinessType("danger");
+            overview.setReconciliationReadinessSummary("尚未生成最近业务日的日终事实快照，当前不能进入正式对账。");
+            overview.setReconciliationSuggestedAction("先执行支付日终处理跑批，补齐渠道成功、内部事件成功和差异事实快照。");
+            overview.setReconciliationBlockingOwner("支付研发 / 财务值班");
+            return;
+        }
+        if (channelAbnormalCount > 0 || internalAbnormalCount > 0 || successGapCount > 0) {
+            overview.setReconciliationReadinessStatus("禁止进入对账");
+            overview.setReconciliationReadinessType("danger");
+            overview.setReconciliationReadinessSummary(String.format(
+                    "最近业务日仍有渠道异常 %d 笔、内部事件异常 %d 笔、支付成功差异 %d 笔，继续进入正式对账会放大差错范围。",
+                    channelAbnormalCount,
+                    internalAbnormalCount,
+                    successGapCount
+            ));
+            overview.setReconciliationSuggestedAction("优先处理渠道回调、事件出站和支付成功差异，确认主链路事实收口后再推进对账。");
+            overview.setReconciliationBlockingOwner("支付研发 / 渠道运营 / 财务值班");
+            return;
+        }
+        if (pendingRefundCount > 0) {
+            overview.setReconciliationReadinessStatus("有条件进入对账");
+            overview.setReconciliationReadinessType("warn");
+            overview.setReconciliationReadinessSummary(String.format(
+                    "主链路支付事实已收口，但仍有 %d 笔退款待收口，需要财务在对账时同步关注逆向资金差异。",
+                    pendingRefundCount
+            ));
+            overview.setReconciliationSuggestedAction("允许进入正式对账，但需同步跟踪退款处理中、待审核和失败补退记录。");
+            overview.setReconciliationBlockingOwner("退款运营 / 财务值班");
+            return;
+        }
+        overview.setReconciliationReadinessStatus("可进入对账");
+        overview.setReconciliationReadinessType("success");
+        overview.setReconciliationReadinessSummary("最近业务日的渠道成功、内部事件成功和支付成功差异事实已完成前置收口，可进入正式对账。");
+        overview.setReconciliationSuggestedAction("进入正式对账流程，并继续关注次日新增的退款和补单动作。");
+        overview.setReconciliationBlockingOwner("财务值班");
+    }
+
+    /**
+     * 为最近批次补齐对账准入结论，方便按批次复盘。
+     */
+    private java.util.List<PaymentDayEndBatchListItemDTO> enrichRecentBatches(java.util.List<PaymentDayEndBatchListItemDTO> batches) {
+        for (PaymentDayEndBatchListItemDTO batch : batches) {
+            int channelAbnormalCount = defaultZero(batch.getChannelAbnormalCount());
+            int internalAbnormalCount = defaultZero(batch.getInternalAbnormalCount());
+            int successGapCount = defaultZero(batch.getPaymentSuccessGapCount());
+            int pendingRefundCount = defaultZero(batch.getPendingRefundCount());
+            if (channelAbnormalCount > 0 || internalAbnormalCount > 0 || successGapCount > 0) {
+                batch.setReconciliationReadinessStatus("BLOCKED");
+                batch.setReconciliationReadinessType("danger");
+                batch.setReconciliationReadinessSummary("存在主链路未收口事实，不能直接进入正式对账。");
+                continue;
+            }
+            if (pendingRefundCount > 0) {
+                batch.setReconciliationReadinessStatus("CONDITIONAL");
+                batch.setReconciliationReadinessType("warn");
+                batch.setReconciliationReadinessSummary("主链路已收口，但仍需跟踪逆向退款差异。");
+                continue;
+            }
+            batch.setReconciliationReadinessStatus("READY");
+            batch.setReconciliationReadinessType("success");
+            batch.setReconciliationReadinessSummary("前置事实已收口，可进入正式对账。");
+        }
+        return batches;
     }
 
     private Integer defaultZero(Integer value) {

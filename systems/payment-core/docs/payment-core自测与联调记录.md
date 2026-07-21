@@ -289,6 +289,23 @@
 3. 为支付日终总览补齐最近批次渠道成功金额、内部成功金额、支付成功差异金额和待收口退款金额。
 4. 为后台支付日终页补齐“最近批次对账前置事实”区块和更完整的批次事实列，方便财务和运营先看事实再进对账。
 
+### 10.5 2026-07-21 支付日终处理对账准入正式化
+
+本轮围绕“日终处理不能只展示差异，还要明确告诉财务是否可进入正式对账”的问题继续补强，确认当前 `payment-core` 已从“事实快照 + 差异告警台”升级到“带对账准入判断的前置收口台”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `75` 个并全部通过，新增 `PaymentDayEndServiceImplTest` 断言覆盖“禁止进入对账”和“有条件进入对账”两类口径 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260721-day-end-v17 --emptyOutDir` | 通过 | `PaymentDayEndView` 已补充对账准入判断区和批次级准入列，并通过生产构建 |
+
+本轮修复项：
+
+1. 为支付日终总览补齐 `reconciliationReadinessStatus`、`reconciliationReadinessSummary`、`reconciliationSuggestedAction` 和责任归口字段。
+2. 将日终准入口径统一为三档：`禁止进入对账 / 有条件进入对账 / 可进入对账`。
+3. 只要存在渠道异常、内部事件异常或支付成功差异，就直接判定“禁止进入对账”，避免财务在事实未收口时提前对账。
+4. 为后台页面补齐“对账准入判断”区块，明确当前结论、建议动作和责任方。
+5. 为最近批次表补齐批次级准入状态，方便财务复盘历史业务日是否具备进入对账的条件。
+
 ## 11. 2026-07-20 支付运营筛选排序增强验证
 
 ### 11.1 本轮验证结论

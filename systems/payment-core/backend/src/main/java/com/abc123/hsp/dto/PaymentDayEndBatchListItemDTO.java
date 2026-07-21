@@ -48,6 +48,12 @@ public class PaymentDayEndBatchListItemDTO {
     private Integer pendingRefundCount;
     /** 待收口退款金额。 */
     private String pendingRefundAmount;
+    /** 对账准入状态。 */
+    private String reconciliationReadinessStatus;
+    /** 对账准入状态样式。 */
+    private String reconciliationReadinessType;
+    /** 对账准入说明。 */
+    private String reconciliationReadinessSummary;
     /** 执行备注。 */
     private String summaryComment;
     /** 触发人。 */

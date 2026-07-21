@@ -39,6 +39,16 @@ public class PaymentDayEndOverviewDTO {
     private String latestPaymentSuccessGapAmount;
     /** 最近批次待收口退款金额。 */
     private String latestPendingRefundAmount;
+    /** 当前对账准入状态。 */
+    private String reconciliationReadinessStatus;
+    /** 当前对账准入状态样式。 */
+    private String reconciliationReadinessType;
+    /** 当前对账准入结论说明。 */
+    private String reconciliationReadinessSummary;
+    /** 当前对账准入建议动作。 */
+    private String reconciliationSuggestedAction;
+    /** 当前对账准入责任方。 */
+    private String reconciliationBlockingOwner;
     /** 当前差异告警。 */
     private List<PaymentDayEndAlertItemDTO> alerts;
     /** 最近批次列表。 */

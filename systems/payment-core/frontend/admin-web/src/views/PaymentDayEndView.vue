@@ -99,6 +99,35 @@ onMounted(loadOverview);
         <div class="detail-panel">
           <div class="section-title">
             <div>
+              <h3>对账准入判断</h3>
+              <p class="meta">日终处理 V1.7 已给出统一准入口径，先判断是否能进入正式对账，再安排差错处理顺序</p>
+            </div>
+          </div>
+          <div class="detail-card-grid">
+            <div class="detail-card">
+              <div class="detail-label">当前结论</div>
+              <div class="detail-value">
+                <span :class="['badge', overview.reconciliationReadinessType]">
+                  {{ overview.reconciliationReadinessStatus || "未生成日终事实" }}
+                </span>
+              </div>
+              <div class="detail-hint">{{ overview.reconciliationReadinessSummary }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">建议动作</div>
+              <div class="detail-hint">{{ overview.reconciliationSuggestedAction || "先执行日终跑批并补齐事实快照" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">责任方</div>
+              <div class="detail-value">{{ overview.reconciliationBlockingOwner || "支付研发 / 财务值班" }}</div>
+              <div class="detail-hint">用于安排次日对账前的责任归口</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
               <h3>最近批次对账前置事实</h3>
               <p class="meta">用于财务和运营先确认支付成功、渠道收口、内部事件收口是否一致，再决定是否进入正式对账。</p>
             </div>
@@ -195,6 +224,7 @@ onMounted(loadOverview);
                   <th>内部异常</th>
                   <th>待收口退款</th>
                   <th>待收口退款金额</th>
+                  <th>对账准入</th>
                   <th>备注</th>
                   <th>触发人</th>
                   <th>完成时间</th>
@@ -221,6 +251,10 @@ onMounted(loadOverview);
                   <td>{{ item.internalAbnormalCount }}</td>
                   <td>{{ item.pendingRefundCount }}</td>
                   <td>{{ item.pendingRefundAmount }}</td>
+                  <td class="flow-summary-cell">
+                    <span :class="['badge', item.reconciliationReadinessType]">{{ item.reconciliationReadinessStatus }}</span>
+                    <div class="detail-hint">{{ item.reconciliationReadinessSummary }}</div>
+                  </td>
                   <td class="flow-summary-cell">{{ item.summaryComment }}</td>
                   <td>{{ item.triggeredBy }}</td>
                   <td>{{ item.completedAt }}</td>
