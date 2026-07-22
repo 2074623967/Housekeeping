@@ -242,6 +242,9 @@ onMounted(loadIssues);
               <th>建议动作</th>
               <th>处理状态</th>
               <th>当前处理人</th>
+              <th>SLA 状态</th>
+              <th>升级状态</th>
+              <th>升级建议</th>
               <th>最近动作</th>
               <th>异常时间</th>
               <th>操作</th>
@@ -274,6 +277,12 @@ onMounted(loadIssues);
               <td class="flow-summary-cell">{{ item.recommendedAction }}</td>
               <td><span :class="['badge', item.handlingStatusType]">{{ item.handlingStatus }}</span></td>
               <td>{{ item.assignee }}</td>
+              <td>
+                <span :class="['badge', item.slaStatusType]">{{ item.slaStatus }}</span>
+                <div class="muted-text">{{ item.slaTimeLeft }}</div>
+              </td>
+              <td><span :class="['badge', item.escalationStatusType]">{{ item.escalationStatus }}</span></td>
+              <td class="flow-summary-cell">{{ item.escalationSuggestion }}</td>
               <td class="flow-summary-cell">{{ item.latestActionSummary }}</td>
               <td>{{ item.createdAt }}</td>
               <td>

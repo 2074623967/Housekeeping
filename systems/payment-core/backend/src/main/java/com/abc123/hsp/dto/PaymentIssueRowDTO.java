@@ -46,6 +46,18 @@ public class PaymentIssueRowDTO {
     private String handlingStatusType;
     /** 当前处理人。 */
     private String assignee;
+    /** SLA 状态。 */
+    private String slaStatus;
+    /** SLA 状态样式。 */
+    private String slaStatusType;
+    /** SLA 剩余或超时说明。 */
+    private String slaTimeLeft;
+    /** 升级状态。 */
+    private String escalationStatus;
+    /** 升级状态样式。 */
+    private String escalationStatusType;
+    /** 升级建议。 */
+    private String escalationSuggestion;
     /** 最近处理动作摘要。 */
     private String latestActionSummary;
     /** 最近处理时间。 */

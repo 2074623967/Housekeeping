@@ -980,3 +980,26 @@
 
 1. 当前异常中心已经从“监控跳转后的只读排障页”升级为“轻量处理台”。
 2. 后续仍需补 SLA 计时、责任组统计、自动升级和与真实告警通道联动，因此仍不满足最终 `release/*` 冻结门槛。
+
+## 33. 2026-07-22 支付交易异常中心 SLA 升级口径验证
+
+### 33.1 本轮验证结论
+
+本轮围绕“异常处理需要有时效压力和升级口径”的问题进行了补齐，确认异常中心列表已支持 SLA 状态、升级状态和升级建议展示。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `86` 个并全部通过 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-issue-sla-v1 --emptyOutDir` | 通过 | 异常中心新增 SLA 状态、升级状态和升级建议列后可稳定构建 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 33.2 本轮补齐项
+
+1. `PaymentIssueRowDTO` 新增 `slaStatus / slaStatusType / slaTimeLeft / escalationStatus / escalationStatusType / escalationSuggestion`。
+2. `PaymentIssueMapper.xml` 按异常严重等级计算 SLA：`P1` 30 分钟，`P2` 120 分钟。
+3. 后台异常中心新增 SLA 状态、升级状态和升级建议展示。
+
+### 33.3 当前判断
+
+1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 升级建议”的轻量闭环。
+2. 后续仍需补自动升级任务、真实 IM/短信/邮件告警和责任组统计，仍不满足最终 `release/*` 冻结门槛。

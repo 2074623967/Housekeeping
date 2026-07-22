@@ -129,6 +129,35 @@
                COALESCE(latest_action.handling_status, '待分派') AS handlingStatus,
                COALESCE(latest_action.handling_status_type, 'warn') AS handlingStatusType,
                COALESCE(latest_action.assignee, '未分派') AS assignee,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '已超时'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '已超时'
+                   ELSE 'SLA内'
+               END AS slaStatus,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN 'danger'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN 'danger'
+                   ELSE 'success'
+               END AS slaStatusType,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' THEN CONCAT('P1 SLA 30分钟，已耗时', TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()), '分钟')
+                   ELSE CONCAT('P2 SLA 120分钟，已耗时', TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()), '分钟')
+               END AS slaTimeLeft,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '升级值班负责人'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '升级支付运营负责人'
+                   ELSE '当班跟进'
+               END AS escalationStatus,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN 'danger'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN 'danger'
+                   ELSE 'info'
+               END AS escalationStatusType,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '立即同步支付后端、渠道值班和运营负责人'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '同步支付运营负责人并确认补偿结果'
+                   ELSE '由当前处理人按建议动作继续跟进'
+               END AS escalationSuggestion,
                COALESCE(CONCAT(latest_action.action_type, '：', latest_action.action_remark), '暂无处理动作') AS latestActionSummary,
                DATE_FORMAT(latest_action.created_at, '%Y-%m-%d %H:%i:%s') AS latestActionAt,
                payment_issue_union.created_at AS createdAt

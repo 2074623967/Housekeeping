@@ -360,6 +360,13 @@ th {
   border: 1px solid #bfdbfe;
 }
 
+.muted-text {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .sub-panel {
   margin-bottom: 18px;
   padding: 16px;
