@@ -126,9 +126,26 @@
                customer_name AS customerName,
                amount AS paidAmount,
                status,
-               payment_method AS paymentMethod
+               payment_method AS paymentMethod,
+               channel_code AS channelCode
         FROM t_payment_order
         WHERE payment_order_id = #{paymentOrderId}
+    </select>
+
+    <select id="findChannelSubmitRequestByRefundOrderId" resultType="com.abc123.hsp.dto.RefundChannelSubmitRequestDTO">
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.payment_order_id AS paymentOrderId,
+               refund_order.order_no AS orderNo,
+               refund_order.customer_name AS customerName,
+               refund_order.refund_amount AS refundAmount,
+               refund_order.refund_method AS refundMethod,
+               refund_order.refund_reason AS refundReason,
+               payment_order.channel_code AS channelCode
+        FROM t_refund_order refund_order
+        INNER JOIN t_payment_order payment_order
+            ON payment_order.payment_order_id = refund_order.payment_order_id
+        WHERE refund_order.refund_order_id = #{refundOrderId}
+        LIMIT 1
     </select>
 
     <select id="sumActiveRefundAmount" resultType="java.math.BigDecimal">

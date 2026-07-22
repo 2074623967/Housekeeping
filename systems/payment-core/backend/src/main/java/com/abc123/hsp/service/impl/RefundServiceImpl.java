@@ -1,6 +1,8 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
@@ -9,6 +11,7 @@ import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
+import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.abc123.hsp.service.RefundService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -30,9 +33,12 @@ public class RefundServiceImpl implements RefundService {
     private static final String CALLBACK_OPERATOR = "channel-callback";
 
     private final RefundMapper refundMapper;
+    private final RefundChannelSubmitService refundChannelSubmitService;
 
-    public RefundServiceImpl(RefundMapper refundMapper) {
+    public RefundServiceImpl(RefundMapper refundMapper,
+                             RefundChannelSubmitService refundChannelSubmitService) {
         this.refundMapper = refundMapper;
+        this.refundChannelSubmitService = refundChannelSubmitService;
     }
 
     @Override
@@ -160,7 +166,27 @@ public class RefundServiceImpl implements RefundService {
                 resolveOperator(status),
                 StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : resolveDefaultRemark(fromStatus, status)
         ));
+        if (STATUS_PROCESSING.equals(status)) {
+            triggerChannelSubmit(refundOrderId);
+        }
         return refundMapper.findByRefundOrderId(refundOrderId);
+    }
+
+    private void triggerChannelSubmit(String refundOrderId) {
+        RefundChannelSubmitRequestDTO channelSubmitRequest = refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
+        if (channelSubmitRequest == null) {
+            throw new IllegalArgumentException("退款单不存在或缺少渠道下发信息");
+        }
+        RefundChannelSubmitResultDTO submitResult = refundChannelSubmitService.submit(channelSubmitRequest);
+        refundMapper.insertOperationLog(buildOperationLog(
+                refundOrderId,
+                "CHANNEL_SUBMIT",
+                "提交退款渠道",
+                STATUS_PROCESSING,
+                STATUS_PROCESSING,
+                DEFAULT_OPERATOR,
+                buildChannelSubmitRemark(channelSubmitRequest, submitResult)
+        ));
     }
 
     private String requireRefundOrderId(RefundActionRequestDTO request) {
@@ -237,5 +263,19 @@ public class RefundServiceImpl implements RefundService {
 
     private String resolveDefaultRemark(String fromStatus, String toStatus) {
         return resolveActionName(fromStatus, toStatus);
+    }
+
+    private String buildChannelSubmitRemark(RefundChannelSubmitRequestDTO request,
+                                            RefundChannelSubmitResultDTO result) {
+        return "已提交退款渠道 channel="
+                + safeText(request.getChannelCode())
+                + ", channelRefundNo="
+                + safeText(result == null ? null : result.getChannelRefundNo())
+                + ", response="
+                + safeText(result == null ? null : result.getResponsePayload());
+    }
+
+    private String safeText(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "-";
     }
 }

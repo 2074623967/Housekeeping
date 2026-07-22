@@ -21,4 +21,6 @@ public class RefundPaymentSourceDTO {
     private String status;
     /** 原支付方式。 */
     private String paymentMethod;
+    /** 原支付渠道编码。 */
+    private String channelCode;
 }

@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
@@ -47,6 +48,11 @@ public interface RefundMapper {
      * 查询可退款的原支付单快照。
      */
     RefundPaymentSourceDTO findPaymentSource(String paymentOrderId);
+
+    /**
+     * 查询退款渠道下发请求快照。
+     */
+    RefundChannelSubmitRequestDTO findChannelSubmitRequestByRefundOrderId(@Param("refundOrderId") String refundOrderId);
 
     /**
      * 汇总原支付单已申请且未终止的退款金额。

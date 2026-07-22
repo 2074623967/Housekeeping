@@ -923,7 +923,7 @@
 ### 23.3 当前判断
 
 1. 当前退款 V1 已从“列表页可操作”升级到“详情页可复盘”。
-2. 当前仍是本地模拟退款闭环，真实渠道退款请求、退款回调验签、退款渠道流水和退款差错补偿仍需后续渠道网关阶段补齐。
+2. 当前已升级为本地退款渠道下发闭环，审核通过或失败重试后会自动提交本地退款适配器；真实渠道退款请求、退款回调验签、退款渠道流水和退款差错补偿仍需后续渠道网关阶段补齐。
 3. 若后续单独拆出 `refund-center`，本轮沉淀的表、接口和页面结构可直接平移复用。
 
 ## 30. 2026-07-21 支付控制管理 V1.1 正式化验证
@@ -937,6 +937,28 @@
 | 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `82` 个并全部通过，覆盖来源应用支付方式权限、自检阻断和分钟级限流场景 |
 | 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-control-policy-v12 --emptyOutDir` | 通过 | `PaymentConfigView` 已新增支付控制策略台账，构建通过 |
 | 用户端前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-control-policy-v12 --emptyOutDir` | 通过 | `CashierView` 已向提交接口透传 `sourceAppId`，构建通过 |
+
+## 35. 2026-07-22 退款渠道下发编排验证
+
+### 35.1 本轮验证结论
+
+本轮围绕“退款审核后不能只停留在状态变更，必须具备渠道下发动作和失败重试重提能力”的问题进行了补强，确认 `payment-core` 的退款链路已经从“纯手工状态流转”升级到“审核/重试后自动下发本地退款渠道适配器并写入操作日志”。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=RefundServiceImplTest test` | 通过 | `7` 个退款服务测试全部通过，新增覆盖审核后自动下发和失败重试重新下发 |
+
+### 35.2 本轮修复项
+
+1. 新增 `RefundChannelSubmitService` 与本地退款渠道实现 `LocalRefundChannelSubmitServiceImpl`
+2. 新增退款渠道下发请求/响应 DTO，统一退款编排与渠道交互上下文
+3. `RefundServiceImpl` 在退款单从 `REVIEWING -> PROCESSING`、`FAIL -> PROCESSING` 时自动触发渠道下发
+4. 退款操作日志新增“提交退款渠道”留痕，补齐审核动作后的渠道请求回执记录
+
+### 35.3 当前判断
+
+1. 当前退款链路已不再只是手工演示状态机，而是具备了本地退款渠道编排骨架。
+2. 后续仍需补真实渠道退款请求、退款回调验签、退款渠道流水与退款差错补偿，因此仍不满足最终 `master/release` 冻结门槛。
 
 ### 30.2 本轮补齐项
 
