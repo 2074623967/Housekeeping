@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import java.math.BigDecimal;
 import java.util.List;
@@ -236,6 +237,40 @@ public interface PaymentMapper {
      */
     int countRecentAttemptsBySourceAppAndMethod(@Param("sourceAppId") String sourceAppId,
                                                 @Param("paymentMethod") String paymentMethod);
+
+    /**
+     * 查询支付提交并发令牌。
+     */
+    PaymentSubmitConcurrencyTokenDTO findSubmitConcurrencyToken(@Param("prepayOrderNo") String prepayOrderNo,
+                                                                @Param("sourceAppId") String sourceAppId);
+
+    /**
+     * 新增支付提交并发令牌。
+     */
+    int insertSubmitConcurrencyToken(@Param("prepayOrderNo") String prepayOrderNo,
+                                     @Param("paymentOrderId") String paymentOrderId,
+                                     @Param("sourceAppId") String sourceAppId,
+                                     @Param("holderIdempotencyKey") String holderIdempotencyKey,
+                                     @Param("holderTerminal") String holderTerminal,
+                                     @Param("holderClientIp") String holderClientIp,
+                                     @Param("expireAfterSeconds") int expireAfterSeconds);
+
+    /**
+     * 占用已存在的支付提交并发令牌。
+     */
+    int occupySubmitConcurrencyToken(@Param("prepayOrderNo") String prepayOrderNo,
+                                     @Param("paymentOrderId") String paymentOrderId,
+                                     @Param("sourceAppId") String sourceAppId,
+                                     @Param("holderIdempotencyKey") String holderIdempotencyKey,
+                                     @Param("holderTerminal") String holderTerminal,
+                                     @Param("holderClientIp") String holderClientIp,
+                                     @Param("expireAfterSeconds") int expireAfterSeconds);
+
+    /**
+     * 释放支付提交并发令牌。
+     */
+    int releaseSubmitConcurrencyToken(@Param("paymentOrderId") String paymentOrderId,
+                                      @Param("releaseReason") String releaseReason);
 
     /**
      * 查询指定渠道当天已受理的交易金额，用于支付控制限额校验。

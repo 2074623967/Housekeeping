@@ -16,6 +16,7 @@ import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
@@ -34,6 +35,8 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class PaymentServiceImpl implements PaymentService {
+
+    private static final int SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS = 120;
 
     private final PaymentMapper paymentMapper;
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
@@ -172,8 +175,16 @@ public class PaymentServiceImpl implements PaymentService {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
             return currentPrepay;
         }
+        occupySubmitConcurrencyToken(
+                currentPrepay.getPrepayOrderNo(),
+                paymentOrderId,
+                sourceAppId,
+                terminal,
+                clientIp,
+                idempotencyKey);
         int occupiedRows = paymentMapper.updatePrepayToPaying(request.getPrepayOrderNo());
         if (occupiedRows == 0) {
+            paymentMapper.releaseSubmitConcurrencyToken(paymentOrderId, "PREPAY_ALREADY_PAYING");
             PrepayOrderDTO latestPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
             if (latestDetail != null && ("WAIT_CALLBACK".equalsIgnoreCase(latestDetail.getStatus())
@@ -186,63 +197,69 @@ public class PaymentServiceImpl implements PaymentService {
             }
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
         }
-        PaymentChannelSubmitResultDTO submitResult = paymentChannelSubmitService.submit(
-                buildSubmitAdapterRequest(
-                request,
-                currentPrepay,
-                paymentOrderId,
-                sourceAppId,
-                resolvedChannelCode,
-                terminal,
-                clientIp,
-                        idempotencyKey));
-        // 收银台提交后，补齐支付单上的支付方式和渠道。
-        paymentMapper.updatePaymentMethodAndChannel(
-                paymentOrderId,
-                request.getPaymentMethod(),
-                resolvedChannelCode,
-                submitResult.getChannelTransactionNo());
-        String routeNo = "RTR" + System.currentTimeMillis();
-        paymentMapper.insertRouteRecord(
-                routeNo,
-                paymentOrderId,
-                resolvedChannelCode,
-                routeDecision.getRouteRule(),
-                routeDecision.getRouteResult());
-        String attemptNo = "ATT" + System.currentTimeMillis();
-        paymentMapper.insertPaymentAttempt(
-                attemptNo,
-                request.getPrepayOrderNo(),
-                paymentOrderId,
-                resolvedChannelCode,
-                request.getPaymentMethod(),
-                sourceAppId,
-                terminal,
-                clientIp,
-                idempotencyKey,
-                buildSubmitRequestPayload(request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode),
-                submitResult.getResponsePayload(),
-                submitResult.getAttemptStatus(),
-                submitResult.getAttemptStatusType()
-        );
-        paymentMapper.insertEvent(
-                "EVT" + System.currentTimeMillis(),
-                "PAYMENT_SUBMIT",
-                paymentOrderId,
-                paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo()),
-                "{\"channel\":\"" + resolvedChannelCode + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}"
-        );
-        paymentMapper.insertNotifyLog(
-                "NTF" + System.currentTimeMillis(),
-                paymentOrderId,
-                resolvedChannelCode,
-                "SUBMIT",
-                "{\"method\":\"" + request.getPaymentMethod() + "\"}",
-                submitResult.getResponsePayload(),
-                "待回调",
-                "warn"
-        );
-        return paymentMapper.findPrepay(request.getPrepayOrderNo());
+        try {
+            PaymentChannelSubmitResultDTO submitResult = paymentChannelSubmitService.submit(
+                    buildSubmitAdapterRequest(
+                            request,
+                            currentPrepay,
+                            paymentOrderId,
+                            sourceAppId,
+                            resolvedChannelCode,
+                            terminal,
+                            clientIp,
+                            idempotencyKey));
+            // 收银台提交后，补齐支付单上的支付方式和渠道。
+            paymentMapper.updatePaymentMethodAndChannel(
+                    paymentOrderId,
+                    request.getPaymentMethod(),
+                    resolvedChannelCode,
+                    submitResult.getChannelTransactionNo());
+            String routeNo = "RTR" + System.currentTimeMillis();
+            paymentMapper.insertRouteRecord(
+                    routeNo,
+                    paymentOrderId,
+                    resolvedChannelCode,
+                    routeDecision.getRouteRule(),
+                    routeDecision.getRouteResult());
+            String attemptNo = "ATT" + System.currentTimeMillis();
+            paymentMapper.insertPaymentAttempt(
+                    attemptNo,
+                    request.getPrepayOrderNo(),
+                    paymentOrderId,
+                    resolvedChannelCode,
+                    request.getPaymentMethod(),
+                    sourceAppId,
+                    terminal,
+                    clientIp,
+                    idempotencyKey,
+                    buildSubmitRequestPayload(request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode),
+                    submitResult.getResponsePayload(),
+                    submitResult.getAttemptStatus(),
+                    submitResult.getAttemptStatusType()
+            );
+            paymentMapper.insertEvent(
+                    "EVT" + System.currentTimeMillis(),
+                    "PAYMENT_SUBMIT",
+                    paymentOrderId,
+                    paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo()),
+                    "{\"channel\":\"" + resolvedChannelCode + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}"
+            );
+            paymentMapper.insertNotifyLog(
+                    "NTF" + System.currentTimeMillis(),
+                    paymentOrderId,
+                    resolvedChannelCode,
+                    "SUBMIT",
+                    "{\"method\":\"" + request.getPaymentMethod() + "\"}",
+                    submitResult.getResponsePayload(),
+                    "待回调",
+                    "warn"
+            );
+            return paymentMapper.findPrepay(request.getPrepayOrderNo());
+        } catch (RuntimeException exception) {
+            paymentMapper.releaseSubmitConcurrencyToken(paymentOrderId, "SUBMIT_EXCEPTION");
+            paymentMapper.updatePrepayStatusByPaymentOrderId(paymentOrderId, "待支付", "warn");
+            throw exception;
+        }
     }
 
     @Transactional
@@ -262,6 +279,7 @@ public class PaymentServiceImpl implements PaymentService {
         // 已经成功或关闭的支付单不允许被迟到回调重新打开，保证回调幂等和状态单向收敛。
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+            paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return enrichDetail(detail);
         }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
@@ -304,6 +322,9 @@ public class PaymentServiceImpl implements PaymentService {
                 detail.getOrderNo(),
                 "{\"channel\":\"" + channel + "\"}"
         );
+        if (paySuccess) {
+            paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_SUCCESS");
+        }
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
@@ -324,6 +345,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus()) || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+            paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
             return enrichDetail(detail);
         }
         // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
@@ -331,6 +353,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.insertEvent("EVT" + System.currentTimeMillis(), "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), "{\"close\":\"manual\"}");
+        paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "MANUAL_CLOSE");
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
@@ -355,6 +378,46 @@ public class PaymentServiceImpl implements PaymentService {
             return request.getSourceAppId().trim();
         }
         return "default-app";
+    }
+
+    /**
+     * 提交并发令牌用于限制同一预付单在短时间内被不同终端或不同请求同时打入支付链路。
+     */
+    private void occupySubmitConcurrencyToken(String prepayOrderNo,
+                                              String paymentOrderId,
+                                              String sourceAppId,
+                                              String terminal,
+                                              String clientIp,
+                                              String idempotencyKey) {
+        PaymentSubmitConcurrencyTokenDTO currentToken = paymentMapper.findSubmitConcurrencyToken(prepayOrderNo, sourceAppId);
+        if (currentToken == null) {
+            paymentMapper.insertSubmitConcurrencyToken(
+                    prepayOrderNo,
+                    paymentOrderId,
+                    sourceAppId,
+                    idempotencyKey,
+                    terminal,
+                    clientIp,
+                    SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS
+            );
+            return;
+        }
+        if (idempotencyKey.equals(currentToken.getHolderIdempotencyKey())) {
+            return;
+        }
+        int affectedRows = paymentMapper.occupySubmitConcurrencyToken(
+                prepayOrderNo,
+                paymentOrderId,
+                sourceAppId,
+                idempotencyKey,
+                terminal,
+                clientIp,
+                SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS
+        );
+        if (affectedRows > 0) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, "当前预付单已存在并发支付提交，请稍后刷新收银台状态");
     }
 
     /**

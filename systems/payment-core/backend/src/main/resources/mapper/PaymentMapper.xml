@@ -176,6 +176,21 @@
         LIMIT 1
     </select>
 
+    <select id="findSubmitConcurrencyToken" resultType="com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO">
+        SELECT prepay_order_no AS prepayOrderNo,
+               payment_order_id AS paymentOrderId,
+               source_app_id AS sourceAppId,
+               token_status AS tokenStatus,
+               holder_idempotency_key AS holderIdempotencyKey,
+               holder_terminal AS holderTerminal,
+               holder_client_ip AS holderClientIp,
+               DATE_FORMAT(expire_at, '%Y-%m-%d %H:%i:%s') AS expireAt
+        FROM t_payment_submit_concurrency_token
+        WHERE prepay_order_no = #{prepayOrderNo}
+          AND source_app_id = #{sourceAppId}
+        LIMIT 1
+    </select>
+
     <select id="findNotifyLogs" resultType="string">
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', notify_type, ' | ', notify_status) AS item
         FROM t_payment_notify_log
@@ -243,6 +258,65 @@
         SET attempt_status = #{attemptStatus},
             attempt_status_type = #{attemptStatusType}
         WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <insert id="insertSubmitConcurrencyToken">
+        INSERT INTO t_payment_submit_concurrency_token(
+            prepay_order_no,
+            payment_order_id,
+            source_app_id,
+            token_status,
+            holder_idempotency_key,
+            holder_terminal,
+            holder_client_ip,
+            release_reason,
+            last_occupied_at,
+            released_at,
+            expire_at,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{prepayOrderNo},
+            #{paymentOrderId},
+            #{sourceAppId},
+            'ACTIVE',
+            #{holderIdempotencyKey},
+            #{holderTerminal},
+            #{holderClientIp},
+            NULL,
+            NOW(),
+            NULL,
+            DATE_ADD(NOW(), INTERVAL #{expireAfterSeconds} SECOND),
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <update id="occupySubmitConcurrencyToken">
+        UPDATE t_payment_submit_concurrency_token
+        SET payment_order_id = #{paymentOrderId},
+            token_status = 'ACTIVE',
+            holder_idempotency_key = #{holderIdempotencyKey},
+            holder_terminal = #{holderTerminal},
+            holder_client_ip = #{holderClientIp},
+            release_reason = NULL,
+            last_occupied_at = NOW(),
+            released_at = NULL,
+            expire_at = DATE_ADD(NOW(), INTERVAL #{expireAfterSeconds} SECOND),
+            updated_at = NOW()
+        WHERE prepay_order_no = #{prepayOrderNo}
+          AND source_app_id = #{sourceAppId}
+          AND (token_status <> 'ACTIVE' OR expire_at &lt; NOW())
+    </update>
+
+    <update id="releaseSubmitConcurrencyToken">
+        UPDATE t_payment_submit_concurrency_token
+        SET token_status = 'RELEASED',
+            release_reason = #{releaseReason},
+            released_at = NOW(),
+            updated_at = NOW()
+        WHERE payment_order_id = #{paymentOrderId}
+          AND token_status = 'ACTIVE'
     </update>
 
     <update id="updateOrderAfterPayment">

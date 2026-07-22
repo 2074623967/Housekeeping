@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS t_payment_callback_nonce;
 DROP TABLE IF EXISTS t_payment_route_record;
 DROP TABLE IF EXISTS t_payment_notify_log;
 DROP TABLE IF EXISTS t_payment_attempt;
+DROP TABLE IF EXISTS t_payment_submit_concurrency_token;
 DROP TABLE IF EXISTS t_prepay_order;
 DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
@@ -275,6 +276,27 @@ CREATE TABLE t_payment_attempt (
     UNIQUE KEY uk_attempt_idempotency (idempotency_key),
     KEY idx_attempt_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付尝试表';
+
+CREATE TABLE t_payment_submit_concurrency_token (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    prepay_order_no VARCHAR(64) NOT NULL COMMENT '关联预付单号',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
+    source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识',
+    token_status VARCHAR(32) NOT NULL COMMENT '令牌状态',
+    holder_idempotency_key VARCHAR(128) NOT NULL COMMENT '当前占用幂等键',
+    holder_terminal VARCHAR(32) NOT NULL COMMENT '当前占用终端',
+    holder_client_ip VARCHAR(64) NOT NULL COMMENT '当前占用客户端IP',
+    release_reason VARCHAR(128) DEFAULT NULL COMMENT '最近释放原因',
+    last_occupied_at DATETIME NOT NULL COMMENT '最近占用时间',
+    released_at DATETIME DEFAULT NULL COMMENT '最近释放时间',
+    expire_at DATETIME NOT NULL COMMENT '令牌过期时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_submit_token_scope (prepay_order_no, source_app_id),
+    KEY idx_submit_token_payment_status (payment_order_id, token_status),
+    KEY idx_submit_token_expire_at (expire_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付提交并发令牌表';
 
 CREATE TABLE t_payment_notify_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

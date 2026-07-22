@@ -14,6 +14,7 @@ import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -333,6 +334,7 @@ class PaymentServiceImplTest {
         routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
         when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
         when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-250")).thenReturn(false);
+        when(paymentMapper.findSubmitConcurrencyToken("PRE-250", "default-app")).thenReturn(null);
         when(paymentMapper.updatePrepayToPaying("PRE-250")).thenReturn(0);
 
         PrepayOrderDTO latestPrepay = new PrepayOrderDTO();
@@ -396,6 +398,7 @@ class PaymentServiceImplTest {
         controlPolicy.setSelfCheckStatus("PASS");
         when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-pc-web")).thenReturn(controlPolicy);
         when(paymentMapper.countRecentAttemptsBySourceAppAndMethod("housekeeping-pc-web", "银行转账")).thenReturn(0);
+        when(paymentMapper.findSubmitConcurrencyToken("PRE-300", "housekeeping-pc-web")).thenReturn(null);
         PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
         submitResult.setChannelTransactionNo("CHANNEL-300");
         submitResult.setAttemptStatus("处理中");
@@ -423,6 +426,14 @@ class PaymentServiceImplTest {
                 .submit(request);
 
         verify(paymentMapper, times(1)).updatePaymentMethodAndChannel("PAY-300", "银行转账", "offline_bank", "CHANNEL-300");
+        verify(paymentMapper, times(1)).insertSubmitConcurrencyToken(
+                org.mockito.ArgumentMatchers.eq("PRE-300"),
+                org.mockito.ArgumentMatchers.eq("PAY-300"),
+                org.mockito.ArgumentMatchers.eq("housekeeping-pc-web"),
+                org.mockito.ArgumentMatchers.eq("IDEMP-300"),
+                org.mockito.ArgumentMatchers.eq("PC"),
+                org.mockito.ArgumentMatchers.eq("10.0.0.3"),
+                org.mockito.ArgumentMatchers.anyInt());
         verify(paymentMapper, times(1)).insertRouteRecord(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("PAY-300"),
@@ -665,6 +676,107 @@ class PaymentServiceImplTest {
         );
 
         org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_SUBMIT_SELF_CHECK_BLOCKED, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectSubmitWhenConcurrencyTokenStillActive() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-330");
+        prepay.setPaymentOrderId("PAY-330");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        prepay.setCustomerName("张女士");
+        when(paymentMapper.findPrepay("PRE-330")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-330");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-330")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+
+        PaymentControlPolicyDTO controlPolicy = new PaymentControlPolicyDTO();
+        controlPolicy.setSourceAppId("housekeeping-app-web");
+        controlPolicy.setAllowedPaymentMethods("微信支付");
+        controlPolicy.setAllowedChannelCodes("wx_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_APP");
+        controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setTokenAuthRequired("关闭");
+        controlPolicy.setStrictMode("关闭");
+        controlPolicy.setSelfCheckStatus("PASS");
+        when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
+        when(paymentMapper.countRecentAttemptsBySourceAppAndMethod("housekeeping-app-web", "微信支付")).thenReturn(0);
+        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-330")).thenReturn(false);
+
+        PaymentSubmitConcurrencyTokenDTO token = new PaymentSubmitConcurrencyTokenDTO();
+        token.setPrepayOrderNo("PRE-330");
+        token.setPaymentOrderId("PAY-330");
+        token.setSourceAppId("housekeeping-app-web");
+        token.setTokenStatus("ACTIVE");
+        token.setHolderIdempotencyKey("IDEMP-OLD-330");
+        when(paymentMapper.findSubmitConcurrencyToken("PRE-330", "housekeeping-app-web")).thenReturn(token);
+        when(paymentMapper.occupySubmitConcurrencyToken(
+                "PRE-330",
+                "PAY-330",
+                "housekeeping-app-web",
+                "IDEMP-330",
+                "H5",
+                "10.0.0.10",
+                120)).thenReturn(0);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-330");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+        request.setSourceAppId("housekeeping-app-web");
+        request.setMerchantNo("MCH_HOME_APP");
+        request.setTerminal("H5");
+        request.setClientIp("10.0.0.10");
+        request.setIdempotencyKey("IDEMP-330");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .submit(request)
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_SUBMIT_CONCURRENCY_BLOCKED, exception.getCode());
+        verify(paymentMapper, never()).updatePrepayToPaying("PRE-330");
+    }
+
+    @Test
+    void shouldReleaseSubmitConcurrencyTokenWhenClosePayment() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CLOSE-1");
+        detail.setOrderNo("ORD-CLOSE-1");
+        detail.setChannelTransactionNo("CHANNEL-CLOSE-1");
+        detail.setStatus("WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CLOSE-1")).thenReturn(detail, detail);
+        when(paymentMapper.findRouteLogs("PAY-CLOSE-1")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-CLOSE-1")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-CLOSE-1")).thenReturn(Collections.emptyList());
+
+        com.abc123.hsp.dto.PaymentCloseRequestDTO request = new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        request.setPaymentOrderId("PAY-CLOSE-1");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .close(request);
+
+        verify(paymentMapper, times(1)).releaseSubmitConcurrencyToken("PAY-CLOSE-1", "MANUAL_CLOSE");
     }
 
     @Test
