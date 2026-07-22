@@ -78,4 +78,12 @@ public class PaymentTaskCenterController {
     public ApiResponse<PaymentTaskActionResultDTO> runRetryFailedRefunds() {
         return ApiResponse.success(paymentTaskCenterService.runRetryFailedRefunds());
     }
+
+    /**
+     * 手动执行异常 SLA 升级巡检。
+     */
+    @PostMapping("/escalate-overdue-issues")
+    public ApiResponse<PaymentTaskActionResultDTO> runEscalateOverdueIssues() {
+        return ApiResponse.success(paymentTaskCenterService.runEscalateOverdueIssues());
+    }
 }

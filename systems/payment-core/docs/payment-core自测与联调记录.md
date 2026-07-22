@@ -1003,3 +1003,28 @@
 
 1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 升级建议”的轻量闭环。
 2. 后续仍需补自动升级任务、真实 IM/短信/邮件告警和责任组统计，仍不满足最终 `release/*` 冻结门槛。
+
+## 34. 2026-07-22 异常 SLA 自动升级巡检验证
+
+### 34.1 本轮验证结论
+
+本轮围绕“异常中心已有 SLA 展示，但还需要自动巡检和任务留痕”的问题进行了补齐，确认任务中心已支持异常 SLA 升级巡检的手动补跑、自动调度和任务日志记录。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `89` 个并全部通过，新增覆盖手动/自动异常 SLA 升级巡检和调度器委托 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-issue-auto-escalate-v1 --emptyOutDir` | 通过 | 任务中心新增 SLA 超时异常指标、手动巡检按钮和严重等级说明后可稳定构建 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 34.2 本轮补齐项
+
+1. 任务中心总览新增 `overdueIssueCount`，统计已超过 SLA 的支付交易异常。
+2. 新增 `POST /api/payment-task-center/escalate-overdue-issues`，支持人工补跑异常 SLA 升级巡检。
+3. `PaymentCompensationScheduler` 新增自动巡检入口，定期调用 `runAutoEscalateOverdueIssues()`。
+4. 任务中心页面新增 SLA 超时异常指标、运维关注项和“异常 SLA 升级巡检”按钮。
+5. 任务日志新增 `PAYMENT_ISSUE_ESCALATE` 任务编码，发现超时异常即判定 `P1 / 升级值班负责人`。
+
+### 34.3 当前判断
+
+1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 任务留痕”的轻量闭环。
+2. 后续仍需补真实 IM/短信/邮件告警、责任组统计和告警确认回执，因此仍不满足最终 `release/*` 冻结门槛。

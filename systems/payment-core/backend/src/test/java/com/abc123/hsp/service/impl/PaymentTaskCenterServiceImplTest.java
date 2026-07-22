@@ -138,6 +138,46 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRunIssueSlaEscalationTask() {
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(3);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper
+        ).runEscalateOverdueIssues();
+
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_ISSUE_ESCALATE".equals(entity.getTaskCode())
+                        && "P1".equals(entity.getSeverityLevel())
+                        && "升级值班负责人".equals(entity.getEscalationStatus())
+                        && entity.getSuggestedAction().contains("异常中心")
+        ));
+    }
+
+    @Test
+    void shouldRunAutoIssueSlaEscalationTask() {
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper
+        ).runAutoEscalateOverdueIssues();
+
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "AUTO".equals(entity.getRunMode())
+                        && "payment-issue-sla-scheduler".equals(entity.getTriggeredBy())
+        ));
+    }
+
+    @Test
     void shouldListTaskRunsWithDerivedFields() {
         PaymentTaskRunLogItemDTO item = new PaymentTaskRunLogItemDTO();
         item.setTaskCode("PAYMENT_EVENT_RETRY");

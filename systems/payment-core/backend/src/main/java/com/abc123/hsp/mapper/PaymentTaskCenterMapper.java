@@ -32,6 +32,11 @@ public interface PaymentTaskCenterMapper {
     long countTaskRunLogs(PaymentTaskRunLogQueryDTO query);
 
     /**
+     * 统计已经超过 SLA 的支付交易异常数量。
+     */
+    int countOverduePaymentIssues();
+
+    /**
      * 新增任务执行日志。
      */
     int insertTaskRunLog(PaymentTaskRunLogEntity entity);

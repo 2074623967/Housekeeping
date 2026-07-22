@@ -54,6 +54,7 @@
 | `/api/payment-task-center/close-expired-payments` | `POST` | 手动执行超时关单 |
 | `/api/payment-task-center/republish-failed-events` | `POST` | 手动执行失败事件重发 |
 | `/api/payment-task-center/retry-failed-refunds` | `POST` | 手动执行失败退款重试 |
+| `/api/payment-task-center/escalate-overdue-issues` | `POST` | 手动执行异常 SLA 升级巡检 |
 
 ## 3. 支付流水排障台查询
 
@@ -994,7 +995,8 @@ POST /api/payment-config/control-policies/self-check
 4. `failedRefundCount`：失败退款数量。
 5. `warningDayEndBatchCount`：日终告警批次数。
 6. `focusAlerts`：重点任务告警，包含告警标题、告警等级、影响数量和建议跳转路由。
-7. `recentTaskRuns`：最近 10 条任务执行日志。
+7. `overdueIssueCount`：超过 SLA 的支付交易异常数。
+8. `recentTaskRuns`：最近 10 条任务执行日志。
 
 ### 13.5 查询支付任务执行日志
 
@@ -1019,7 +1021,17 @@ POST /api/payment-config/control-policies/self-check
    - `PAYMENT_EXPIRE_CLOSE`：失败 `>= 5` 或处理量 `>= 30` 判定 `P1 / 升级值班负责人`；失败 `1-4` 或处理量 `10-29` 判定 `P2 / 纳入当班跟进`
    - `PAYMENT_EVENT_RETRY`：失败 `>= 3` 或处理量 `>= 10` 判定 `P1 / 升级值班负责人`；失败 `1-2` 或存在成功重发则判定 `P2 / 纳入当班跟进`
    - `REFUND_FAIL_RETRY`：失败 `>= 2` 或处理量 `>= 8` 判定 `P1 / 升级值班负责人`；失败 `1` 笔或存在成功重试则判定 `P2 / 纳入当班跟进`
-4. 当前超时关单、失败事件重发、失败退款重试都由该页统一留痕，且失败事件和失败退款已接入后台自动补偿调度，后续可继续扩展更多支付运维任务。
+4. 当前超时关单、失败事件重发、失败退款重试、异常 SLA 升级巡检都由该页统一留痕，且失败事件、失败退款和异常 SLA 升级巡检已接入后台自动补偿调度，后续可继续扩展更多支付运维任务。
+
+### 13.6 手动执行异常 SLA 升级巡检
+
+接口：`POST /api/payment-task-center/escalate-overdue-issues`
+
+处理说明：
+
+1. 任务会统计当前已超过 SLA 的支付交易异常：`P1` 30 分钟、`P2` 120 分钟。
+2. 任务不直接修改支付单交易状态，而是写入任务日志，推动运营和值班负责人在异常中心完成处理动作。
+3. 若存在超时异常，本次任务严重等级会判定为 `P1`，升级状态为 `升级值班负责人`。
 
 ### 13.5 查询支付日终处理总览
 

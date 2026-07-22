@@ -32,7 +32,54 @@
                 SELECT COUNT(1)
                 FROM t_payment_day_end_batch
                 WHERE batch_status = 'WARNING'
-            ), 0) AS warningDayEndBatchCount
+            ), 0) AS warningDayEndBatchCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM (
+                    SELECT po.created_at, 'P1' AS severity
+                    FROM t_payment_order po
+                    WHERE po.status = 'WAIT_CALLBACK'
+                    UNION ALL
+                    SELECT pnl.created_at, 'P1' AS severity
+                    FROM t_payment_notify_log pnl
+                    WHERE pnl.notify_status = '待处理'
+                    UNION ALL
+                    SELECT pe.created_at, 'P2' AS severity
+                    FROM t_payment_event pe
+                    WHERE pe.publish_status = 'FAILED'
+                    UNION ALL
+                    SELECT po.created_at, 'P2' AS severity
+                    FROM t_payment_order po
+                             INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                    WHERE pcc.status = 'DISABLED'
+                ) issue_sla
+                WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+                   OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
+            ), 0) AS overdueIssueCount
+    </select>
+
+    <select id="countOverduePaymentIssues" resultType="int">
+        SELECT COUNT(1)
+        FROM (
+            SELECT po.created_at, 'P1' AS severity
+            FROM t_payment_order po
+            WHERE po.status = 'WAIT_CALLBACK'
+            UNION ALL
+            SELECT pnl.created_at, 'P1' AS severity
+            FROM t_payment_notify_log pnl
+            WHERE pnl.notify_status = '待处理'
+            UNION ALL
+            SELECT pe.created_at, 'P2' AS severity
+            FROM t_payment_event pe
+            WHERE pe.publish_status = 'FAILED'
+            UNION ALL
+            SELECT po.created_at, 'P2' AS severity
+            FROM t_payment_order po
+                     INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+            WHERE pcc.status = 'DISABLED'
+        ) issue_sla
+        WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+           OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
     </select>
 
     <select id="findRecentTaskRuns" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">

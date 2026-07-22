@@ -32,6 +32,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
+    private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
@@ -98,6 +99,34 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Transactional
     public PaymentTaskActionResultDTO runAutoRetryFailedRefunds() {
         return runRetryFailedRefundsByMode(RUN_MODE_AUTO, "refund-retry-scheduler");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runEscalateOverdueIssues() {
+        return runEscalateOverdueIssuesByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoEscalateOverdueIssues() {
+        return runEscalateOverdueIssuesByMode(RUN_MODE_AUTO, "payment-issue-sla-scheduler");
+    }
+
+    private PaymentTaskActionResultDTO runEscalateOverdueIssuesByMode(String runMode, String triggeredBy) {
+        int overdueIssueCount = paymentTaskCenterMapper.countOverduePaymentIssues();
+        return buildAndRecordResult(
+                TASK_CODE_ISSUE_ESCALATE,
+                "异常 SLA 升级巡检",
+                runMode,
+                triggeredBy,
+                overdueIssueCount,
+                overdueIssueCount,
+                0,
+                overdueIssueCount == 0
+                        ? "当前没有超过 SLA 的支付交易异常。"
+                        : String.format("发现 %d 条超过 SLA 的支付交易异常，已生成升级巡检日志。", overdueIssueCount)
+        );
     }
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
@@ -241,6 +270,16 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 failedEventCount > 5 ? "P1" : "P2",
                 failedEventCount > 5 ? "danger" : "warn"
         ));
+        int overdueIssueCount = valueOrZero(overview.getOverdueIssueCount());
+        alerts.add(buildAlert(
+                "PAYMENT_ISSUE_SLA",
+                "异常 SLA 超时",
+                overdueIssueCount,
+                overdueIssueCount > 0 ? "存在超过 SLA 的支付交易异常，建议执行升级巡检并分派责任人" : "暂无 SLA 超时异常",
+                "/payment-issues",
+                overdueIssueCount > 0 ? "P1" : "P3",
+                overdueIssueCount > 0 ? "danger" : "success"
+        ));
         return alerts;
     }
 
@@ -325,6 +364,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             }
             return processedCount > 0 ? "重试后需继续跟踪退款回调与用户到账结果" : "暂无失败退款待处理";
         }
+        if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
+            return processedCount > 0 ? "立即进入异常中心，按 SLA 超时列表分派值班负责人并补充处理备注" : "暂无 SLA 超时异常";
+        }
         return processedCount > 0 ? "优先处理异常明细并确认下游收口" : "暂无待处理任务";
     }
 
@@ -337,6 +379,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_REFUND_RETRY.equals(taskCode)) {
             return "/refunds";
+        }
+        if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
+            return "/payment-issues";
         }
         return "/payment-task-center";
     }
@@ -357,6 +402,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
      * 根据任务类型、失败量和处理规模推导是否需要立即升级。
      */
     private boolean shouldEscalateImmediately(String taskCode, int failCount, int processedCount) {
+        if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
+            return processedCount > 0;
+        }
         if (failCount <= 0) {
             return false;
         }
@@ -390,6 +438,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return processedCount >= 10;
+        }
+        if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
+            return false;
         }
         return processedCount > 0;
     }

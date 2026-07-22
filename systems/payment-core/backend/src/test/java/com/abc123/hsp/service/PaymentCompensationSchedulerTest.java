@@ -29,4 +29,11 @@ class PaymentCompensationSchedulerTest {
 
         verify(paymentTaskCenterService).runAutoRetryFailedRefunds();
     }
+
+    @Test
+    void shouldDelegateToAutoEscalateOverdueIssues() {
+        new PaymentCompensationScheduler(paymentTaskCenterService).escalateOverdueIssues();
+
+        verify(paymentTaskCenterService).runAutoEscalateOverdueIssues();
+    }
 }

@@ -33,4 +33,12 @@ public class PaymentCompensationScheduler {
     public void retryFailedRefunds() {
         paymentTaskCenterService.runAutoRetryFailedRefunds();
     }
+
+    /**
+     * 定期巡检超过 SLA 的支付交易异常，推动值班升级和运营跟进。
+     */
+    @Scheduled(fixedDelayString = "${payment.issue-sla.fixed-delay-ms:300000}")
+    public void escalateOverdueIssues() {
+        paymentTaskCenterService.runAutoEscalateOverdueIssues();
+    }
 }

@@ -116,7 +116,8 @@ export const paymentTaskCenterApi = {
   },
   runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
   runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
-  runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {})
+  runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {}),
+  runEscalateOverdueIssues: () => postJson("/api/payment-task-center/escalate-overdue-issues", {})
 };
 
 export const orderApi = {

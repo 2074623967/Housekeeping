@@ -50,4 +50,14 @@ public interface PaymentTaskCenterService {
      * 自动执行失败退款重试。
      */
     PaymentTaskActionResultDTO runAutoRetryFailedRefunds();
+
+    /**
+     * 手动执行异常 SLA 升级巡检。
+     */
+    PaymentTaskActionResultDTO runEscalateOverdueIssues();
+
+    /**
+     * 自动执行异常 SLA 升级巡检。
+     */
+    PaymentTaskActionResultDTO runAutoEscalateOverdueIssues();
 }

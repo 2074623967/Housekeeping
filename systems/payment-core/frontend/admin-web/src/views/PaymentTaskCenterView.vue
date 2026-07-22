@@ -8,6 +8,7 @@ const overview = ref({
   failedEventCount: 0,
   failedRefundCount: 0,
   warningDayEndBatchCount: 0,
+  overdueIssueCount: 0,
   focusAlerts: [],
   recentTaskRuns: []
 });
@@ -140,6 +141,10 @@ onMounted(loadOverview);
             <div class="detail-label">失败退款</div>
             <div class="detail-value">{{ overview.failedRefundCount }}</div>
           </div>
+          <div class="detail-card">
+            <div class="detail-label">SLA 超时异常</div>
+            <div class="detail-value">{{ overview.overdueIssueCount }}</div>
+          </div>
         </div>
 
         <div class="risk-banner">
@@ -181,6 +186,12 @@ onMounted(loadOverview);
                   <td>失败 ≥ 2 或单次处理量 ≥ 8</td>
                   <td>失败 1 笔或有退款被批量重试</td>
                   <td>无失败退款待处理</td>
+                </tr>
+                <tr>
+                  <td>异常 SLA 升级巡检</td>
+                  <td>存在 SLA 超时异常</td>
+                  <td>不适用，发现即升级</td>
+                  <td>无 SLA 超时异常</td>
                 </tr>
               </tbody>
             </table>
@@ -231,6 +242,18 @@ onMounted(loadOverview);
                 {{ activeTaskCode === "REFUND_FAIL_RETRY" ? "执行中..." : "执行退款重试" }}
               </button>
             </div>
+
+            <div class="sub-panel">
+              <h3>异常 SLA 升级巡检</h3>
+              <p>巡检超过 SLA 的支付交易异常，将结果写入任务日志，推动运营和值班负责人跟进。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'PAYMENT_ISSUE_ESCALATE'"
+                @click="runTask('PAYMENT_ISSUE_ESCALATE', '异常 SLA 升级巡检', paymentTaskCenterApi.runEscalateOverdueIssues)"
+              >
+                {{ activeTaskCode === "PAYMENT_ISSUE_ESCALATE" ? "执行中..." : "执行 SLA 升级巡检" }}
+              </button>
+            </div>
           </section>
 
           <section class="panel mini">
@@ -273,6 +296,11 @@ onMounted(loadOverview);
                   <td>日终告警批次</td>
                   <td>{{ overview.warningDayEndBatchCount }}</td>
                   <td>为下一步对账和差错处理提供排查入口</td>
+                </tr>
+                <tr>
+                  <td>SLA 超时异常</td>
+                  <td>{{ overview.overdueIssueCount }}</td>
+                  <td>需要分派值班负责人并进入异常中心跟进</td>
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
