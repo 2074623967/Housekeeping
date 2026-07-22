@@ -265,6 +265,70 @@
         )
     </insert>
 
+    <select id="responsibilitySummary" resultType="com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO">
+        SELECT responsibility_group AS groupName,
+               CASE
+                   WHEN SUM(overdue_flag) > 0 THEN 'danger'
+                   ELSE MAX(responsibility_group_type)
+               END AS groupType,
+               COUNT(1) AS totalCount,
+               SUM(overdue_flag) AS overdueCount,
+               SUM(CASE WHEN severity = 'P1' THEN 1 ELSE 0 END) AS p1Count,
+               SUM(CASE WHEN severity = 'P2' THEN 1 ELSE 0 END) AS p2Count,
+               MAX(responsibility_hint) AS suggestedAction
+        FROM (
+            SELECT issue_no,
+                   severity,
+                   CASE
+                       WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
+                       WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '账务清结算联动组'
+                       WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '渠道配置运营组'
+                       ELSE '支付运营组'
+                   END AS responsibility_group,
+                   CASE
+                       WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN 'danger'
+                       WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN 'warn'
+                       ELSE 'info'
+                   END AS responsibility_group_type,
+                   CASE
+                       WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
+                       WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '优先核对事件重发、下游订阅和账务/清分/结算消费结果'
+                       WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
+                       ELSE '由支付运营确认责任方并补充处理备注'
+                   END AS responsibility_hint,
+                   CASE
+                       WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN 1
+                       WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN 1
+                       ELSE 0
+                   END AS overdue_flag
+            FROM (
+                <include refid="issueUnion"/>
+            ) payment_issue_union
+            <where>
+                <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                    payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                </if>
+                <if test="query.orderNo != null and query.orderNo != ''">
+                    AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                </if>
+                <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
+                    AND issue_type = #{query.issueType}
+                </if>
+                <if test="query.severity != null and query.severity != '' and query.severity != '全部'">
+                    AND severity = #{query.severity}
+                </if>
+                <if test="query.channelCode != null and query.channelCode != ''">
+                    AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                </if>
+                <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                    AND payment_method = #{query.paymentMethod}
+                </if>
+            </where>
+        ) responsibility_group_summary
+        GROUP BY responsibility_group
+        ORDER BY overdueCount DESC, totalCount DESC, responsibility_group ASC
+    </select>
+
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM (

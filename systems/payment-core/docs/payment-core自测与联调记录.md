@@ -1052,3 +1052,27 @@
 
 1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 责任组识别”的轻量闭环。
 2. 责任组统计当前仍是前端当前页聚合，后续正式版应补后端全量聚合接口、真实告警触达、告警确认回执和责任人值班表联动，因此仍不满足最终 `release/*` 冻结门槛。
+
+## 36. 2026-07-22 异常责任组全量统计验证
+
+### 36.1 本轮验证结论
+
+本轮围绕“责任组卡片不能只统计当前页，否则运营翻页后会误判责任集中点”的问题进行了补齐，确认支付交易异常中心已支持按当前筛选条件查询后端全量责任组统计。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueServiceImplTest test` | 通过 | `PaymentIssueServiceImplTest` 当前 `4` 个用例全部通过，新增覆盖责任组统计筛选条件规范化 |
+| 后端完整测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `90` 个并全部通过 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-issue-responsibility-summary-v1 --emptyOutDir` | 通过 | 异常中心改为调用后端责任组全量统计接口后可稳定构建 |
+
+### 36.2 本轮补齐项
+
+1. 新增 `PaymentIssueResponsibilitySummaryDTO`，承载责任组、总量、超时量、P1/P2 分布和建议动作。
+2. 新增 `GET /api/payment-issues/responsibility-summary`，复用异常中心筛选条件查询责任组全量统计。
+3. `PaymentIssueMapper.xml` 新增责任组聚合查询，统计口径与异常列表保持一致。
+4. 后台异常中心责任组卡片改为读取后端全量统计，展示当前筛选条件下的总数、SLA 超时数、P1/P2 数量和建议处理动作。
+
+### 36.3 当前判断
+
+1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 责任组识别 -> 后端全量责任组统计”的轻量闭环。
+2. 后续仍需补真实 IM/短信/邮件告警、告警确认回执和值班表联动，因此仍不满足最终 `release/*` 冻结门槛。

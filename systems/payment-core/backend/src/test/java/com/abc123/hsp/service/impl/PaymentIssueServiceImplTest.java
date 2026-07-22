@@ -59,6 +59,27 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeFiltersWhenQueryResponsibilitySummary() {
+        when(paymentIssueMapper.responsibilitySummary(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
+
+        PaymentIssueQueryDTO query = new PaymentIssueQueryDTO();
+        query.setPaymentOrderId(" PAY-002 ");
+        query.setIssueType(" P1异常 ");
+        query.setPageNo(-1);
+        query.setPageSize(0);
+
+        new PaymentIssueServiceImpl(paymentIssueMapper).responsibilitySummary(query);
+
+        ArgumentCaptor<PaymentIssueQueryDTO> captor = ArgumentCaptor.forClass(PaymentIssueQueryDTO.class);
+        verify(paymentIssueMapper).responsibilitySummary(captor.capture());
+        PaymentIssueQueryDTO normalized = captor.getValue();
+        assertEquals("PAY-002", normalized.getPaymentOrderId());
+        assertEquals("P1异常", normalized.getIssueType());
+        assertEquals(1, normalized.getPageNo());
+        assertEquals(1, normalized.getPageSize());
+    }
+
+    @Test
     void shouldBatchAssignIssueAndWriteActionLog() {
         PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
         issue.setIssueNo("ISSUE-WAIT-PAY-001");

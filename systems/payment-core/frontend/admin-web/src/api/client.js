@@ -86,6 +86,24 @@ export const paymentIssueApi = {
     });
     return request(`/api/payment-issues?${params.toString()}`);
   },
+  getResponsibilitySummary: ({
+    paymentOrderId = "",
+    orderNo = "",
+    issueType = "全部",
+    severity = "全部",
+    channelCode = "",
+    paymentMethod = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      issueType,
+      severity,
+      channelCode,
+      paymentMethod
+    });
+    return request(`/api/payment-issues/responsibility-summary?${params.toString()}`);
+  },
   batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };
 

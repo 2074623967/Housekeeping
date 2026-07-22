@@ -954,7 +954,44 @@ POST /api/payment-config/control-policies/self-check
 }
 ```
 
-### 13.3 批量处理支付交易异常
+### 13.3 查询支付交易异常责任组统计
+
+接口：`GET /api/payment-issues/responsibility-summary`
+
+请求参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `paymentOrderId` | `string` | 支付单号，模糊查询 |
+| `orderNo` | `string` | 订单号，模糊查询 |
+| `issueType` | `string` | 异常类型，默认 `全部` |
+| `severity` | `string` | 严重等级，默认 `全部` |
+| `channelCode` | `string` | 渠道编码，模糊查询 |
+| `paymentMethod` | `string` | 支付方式，默认 `全部` |
+
+返回内容：
+
+1. 统计口径与 `GET /api/payment-issues` 使用同一组异常来源和筛选条件。
+2. 返回每个责任组的异常总数、SLA 超时数、P1 数、P2 数和建议处理动作。
+3. 该接口用于替代前端当前页聚合，运营翻页后责任组卡片仍保持当前筛选条件下的全量口径。
+
+返回示例：
+
+```json
+[
+  {
+    "groupName": "支付后端值班组",
+    "groupType": "danger",
+    "totalCount": 8,
+    "overdueCount": 3,
+    "p1Count": 8,
+    "p2Count": 0,
+    "suggestedAction": "优先核对查单、回调验签、幂等和状态机收口"
+  }
+]
+```
+
+### 13.4 批量处理支付交易异常
 
 接口：`POST /api/payment-issues/actions`
 
@@ -986,7 +1023,7 @@ POST /api/payment-config/control-policies/self-check
 2. 处理动作会写入 `t_payment_issue_action_log`，不直接修改支付单状态，避免把运营排障动作和交易状态机混在一起。
 3. 接口返回刷新后的异常中心列表，前端可直接更新页面。
 
-### 13.4 查询支付任务中心总览
+### 13.5 查询支付任务中心总览
 
 接口：`GET /api/payment-task-center/overview`
 
@@ -1001,7 +1038,7 @@ POST /api/payment-config/control-policies/self-check
 7. `overdueIssueCount`：超过 SLA 的支付交易异常数。
 8. `recentTaskRuns`：最近 10 条任务执行日志。
 
-### 13.5 查询支付任务执行日志
+### 13.6 查询支付任务执行日志
 
 接口：`GET /api/payment-task-center/task-runs`
 
@@ -1026,7 +1063,7 @@ POST /api/payment-config/control-policies/self-check
    - `REFUND_FAIL_RETRY`：失败 `>= 2` 或处理量 `>= 8` 判定 `P1 / 升级值班负责人`；失败 `1` 笔或存在成功重试则判定 `P2 / 纳入当班跟进`
 4. 当前超时关单、失败事件重发、失败退款重试、异常 SLA 升级巡检都由该页统一留痕，且失败事件、失败退款和异常 SLA 升级巡检已接入后台自动补偿调度，后续可继续扩展更多支付运维任务。
 
-### 13.6 手动执行异常 SLA 升级巡检
+### 13.7 手动执行异常 SLA 升级巡检
 
 接口：`POST /api/payment-task-center/escalate-overdue-issues`
 
@@ -1036,7 +1073,7 @@ POST /api/payment-config/control-policies/self-check
 2. 任务不直接修改支付单交易状态，而是写入任务日志，推动运营和值班负责人在异常中心完成处理动作。
 3. 若存在超时异常，本次任务严重等级会判定为 `P1`，升级状态为 `升级值班负责人`。
 
-### 13.5 查询支付日终处理总览
+### 13.8 查询支付日终处理总览
 
 接口：`GET /api/payment-day-end/overview`
 

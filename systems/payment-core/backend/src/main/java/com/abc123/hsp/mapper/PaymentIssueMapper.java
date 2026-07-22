@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -19,6 +20,11 @@ public interface PaymentIssueMapper {
      * 统计支付交易异常数量。
      */
     long count(@Param("query") PaymentIssueQueryDTO query);
+
+    /**
+     * 按责任组统计当前筛选条件下的异常总量和超时量。
+     */
+    List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(@Param("query") PaymentIssueQueryDTO query);
 
     /**
      * 按异常编号查询当前聚合异常。

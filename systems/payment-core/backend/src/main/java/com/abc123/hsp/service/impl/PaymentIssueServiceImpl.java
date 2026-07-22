@@ -3,9 +3,11 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
 import com.abc123.hsp.service.PaymentIssueService;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,11 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                 normalizedQuery.getPageNo(),
                 normalizedQuery.getPageSize()
         );
+    }
+
+    @Override
+    public List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(PaymentIssueQueryDTO query) {
+        return paymentIssueMapper.responsibilitySummary(normalizeQuery(query));
     }
 
     @Override

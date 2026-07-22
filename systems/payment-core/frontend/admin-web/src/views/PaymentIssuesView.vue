@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 
@@ -10,9 +10,11 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
+const isSummaryLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const selectedIssueNos = ref([]);
+const responsibilitySummaries = ref([]);
 const actionForm = ref({
   actionType: "分派处理人",
   assignee: "支付运营",
@@ -26,26 +28,6 @@ const filters = ref({
   severity: route.query.severity || "全部",
   channelCode: route.query.channelCode || "",
   paymentMethod: route.query.paymentMethod || "全部"
-});
-
-const responsibilitySummaries = computed(() => {
-  const summaryMap = new Map();
-  items.value.forEach((item) => {
-    const groupName = item.responsibilityGroup || "未识别责任组";
-    const current = summaryMap.get(groupName) || {
-      groupName,
-      groupType: item.responsibilityGroupType || "info",
-      count: 0,
-      overdueCount: 0
-    };
-    current.count += 1;
-    if (item.slaStatus === "已超时") {
-      current.overdueCount += 1;
-      current.groupType = "danger";
-    }
-    summaryMap.set(groupName, current);
-  });
-  return Array.from(summaryMap.values());
 });
 
 function resetFilters() {
@@ -68,9 +50,18 @@ function applyFilters() {
 
 async function loadIssues() {
   isLoading.value = true;
+  isSummaryLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await paymentIssueApi.getList({
+    const summaryPromise = paymentIssueApi.getResponsibilitySummary({
+      paymentOrderId: filters.value.paymentOrderId,
+      orderNo: filters.value.orderNo,
+      issueType: filters.value.issueType,
+      severity: filters.value.severity,
+      channelCode: filters.value.channelCode,
+      paymentMethod: filters.value.paymentMethod
+    });
+    const listPromise = paymentIssueApi.getList({
       paymentOrderId: filters.value.paymentOrderId,
       orderNo: filters.value.orderNo,
       issueType: filters.value.issueType,
@@ -80,6 +71,8 @@ async function loadIssues() {
       pageNo: pageNo.value,
       pageSize
     });
+    const [summaryResult, result] = await Promise.all([summaryPromise, listPromise]);
+    responsibilitySummaries.value = summaryResult;
     items.value = result.items;
     total.value = result.total;
     selectedIssueNos.value = selectedIssueNos.value.filter((issueNo) =>
@@ -89,6 +82,7 @@ async function loadIssues() {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
+    isSummaryLoading.value = false;
   }
 }
 
@@ -239,12 +233,19 @@ onMounted(loadIssues);
         </div>
       </div>
 
-      <div v-if="responsibilitySummaries.length" class="detail-card-grid">
+      <div v-if="isSummaryLoading" class="state-box">责任组统计加载中...</div>
+      <div v-else-if="responsibilitySummaries.length" class="detail-card-grid">
         <div v-for="summary in responsibilitySummaries" :key="summary.groupName" class="detail-card">
           <div class="detail-label">责任组</div>
           <div class="detail-value">{{ summary.groupName }}</div>
           <div class="detail-hint">
-            当前页 {{ summary.count }} 条，SLA 超时 {{ summary.overdueCount }} 条
+            当前筛选 {{ summary.totalCount }} 条，SLA 超时 {{ summary.overdueCount }} 条
+          </div>
+          <div class="detail-hint">
+            P1 {{ summary.p1Count }} 条，P2 {{ summary.p2Count }} 条
+          </div>
+          <div class="detail-hint">
+            {{ summary.suggestedAction }}
           </div>
         </div>
       </div>

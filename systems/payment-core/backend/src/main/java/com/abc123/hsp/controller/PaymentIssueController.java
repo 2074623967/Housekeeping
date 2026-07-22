@@ -4,8 +4,10 @@ import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.service.PaymentIssueService;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,6 +51,27 @@ public class PaymentIssueController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentIssueService.list(query));
+    }
+
+    /**
+     * 查询当前筛选条件下的责任组全量统计，供运营判断异常处理归口。
+     */
+    @GetMapping("/responsibility-summary")
+    public ApiResponse<List<PaymentIssueResponsibilitySummaryDTO>> responsibilitySummary(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(defaultValue = "全部") String issueType,
+            @RequestParam(defaultValue = "全部") String severity,
+            @RequestParam(required = false) String channelCode,
+            @RequestParam(defaultValue = "全部") String paymentMethod) {
+        PaymentIssueQueryDTO query = new PaymentIssueQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setIssueType(issueType);
+        query.setSeverity(severity);
+        query.setChannelCode(channelCode);
+        query.setPaymentMethod(paymentMethod);
+        return ApiResponse.success(paymentIssueService.responsibilitySummary(query));
     }
 
     /**
