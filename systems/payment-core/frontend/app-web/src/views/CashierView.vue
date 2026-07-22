@@ -112,6 +112,7 @@ async function loadCashier() {
   loading.value = true;
   message.value = "";
   try {
+    syncAccessToken();
     cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
     idempotencyKey.value = generateIdempotencyKey();
     if (cashier.value?.channels?.length > 0) {
@@ -138,6 +139,14 @@ const sourceAppId = computed(() => {
   }
   return "housekeeping-app-web";
 });
+const merchantNo = computed(() => {
+  if (props.terminalVariant === "pc") {
+    return "MCH_HOME_PC";
+  }
+  return "MCH_HOME_APP";
+});
+const accessTokenStorageKey = computed(() => `hsp.accessToken.${sourceAppId.value}`);
+const accessTokenAvailable = ref(false);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
 const channels = computed(() => cashier.value?.channels || []);
 const hasChannels = computed(() => channels.value.length > 0);
@@ -245,6 +254,8 @@ async function pay() {
       paymentMethod: selectedPaymentMethod.value,
       channelCode: resolvePaymentChannelCode(selectedPaymentMethod.value),
       sourceAppId: sourceAppId.value,
+      merchantNo: merchantNo.value,
+      accessToken: resolveAccessToken(),
       terminal: terminalMeta.value.terminalCode,
       idempotencyKey: idempotencyKey.value
     });
@@ -283,6 +294,17 @@ async function closeCurrentPayment() {
 function regenerateIdempotencyKey() {
   idempotencyKey.value = generateIdempotencyKey();
   message.value = "已重新生成本次支付的幂等键，可用于重新联调当前支付方式。";
+}
+
+function resolveAccessToken() {
+  if (typeof route.query.accessToken === "string") {
+    return route.query.accessToken.trim();
+  }
+  return "";
+}
+
+function syncAccessToken() {
+  accessTokenAvailable.value = Boolean(resolveAccessToken());
 }
 
 watch(selectedPaymentMethod, () => {
@@ -479,6 +501,8 @@ watch(selectedPaymentMethod, () => {
         <div class="ops-card">
           <div class="ops-title">联调留痕</div>
           <div class="ops-row"><span>终端标识</span><span>{{ terminalMeta.terminalCode }}</span></div>
+          <div class="ops-row"><span>商户号</span><span>{{ merchantNo }}</span></div>
+          <div class="ops-row"><span>访问令牌</span><span>{{ accessTokenAvailable ? "已注入" : "未注入" }}</span></div>
           <div class="ops-row"><span>幂等键</span><span class="mono-text">{{ idempotencyKey || "-" }}</span></div>
           <div class="ops-row"><span>可选渠道</span><span>{{ channels.join(" / ") || "-" }}</span></div>
         </div>

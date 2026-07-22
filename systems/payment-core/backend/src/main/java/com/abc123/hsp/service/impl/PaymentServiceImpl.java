@@ -161,7 +161,12 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
                 buildRouteContext(request, currentPrepay, terminal));
         String resolvedChannelCode = routeDecision.getChannelCode();
-        validateSubmitControlPolicy(sourceAppId, request.getPaymentMethod(), resolvedChannelCode);
+        validateSubmitControlPolicy(
+                sourceAppId,
+                request.getMerchantNo(),
+                request.getAccessToken(),
+                request.getPaymentMethod(),
+                resolvedChannelCode);
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
@@ -355,7 +360,12 @@ public class PaymentServiceImpl implements PaymentService {
     /**
      * 正式版支付提交流程需要经过来源应用控制策略校验，避免无权限应用、异常自检状态和瞬时洪峰直接进入渠道。
      */
-    private void validateSubmitControlPolicy(String sourceAppId, String paymentMethod, String resolvedChannelCode) {
+    private void validateSubmitControlPolicy(
+            String sourceAppId,
+            String merchantNo,
+            String accessToken,
+            String paymentMethod,
+            String resolvedChannelCode) {
         PaymentControlPolicyDTO controlPolicy = paymentMapper.findActiveControlPolicyBySourceAppId(sourceAppId);
         if (controlPolicy == null) {
             return;
@@ -365,6 +375,13 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (!containsConfiguredValue(controlPolicy.getAllowedChannelCodes(), resolvedChannelCode)) {
             throw new BusinessException(ErrorCode.PAYMENT_SOURCE_APP_NOT_ALLOWED, "当前来源应用未开通该支付渠道");
+        }
+        if (!containsConfiguredValue(controlPolicy.getAllowedMerchantNos(), merchantNo)) {
+            throw new BusinessException(ErrorCode.PAYMENT_MERCHANT_NOT_ALLOWED, "当前来源应用未开通该商户号");
+        }
+        if ("开启".equals(controlPolicy.getTokenAuthRequired())
+                && !matchesAccessToken(controlPolicy.getAccessTokenValue(), accessToken)) {
+            throw new BusinessException(ErrorCode.PAYMENT_ACCESS_TOKEN_INVALID, "当前请求的访问令牌无效或已失效");
         }
         if ("开启".equals(controlPolicy.getStrictMode())
                 && !"PASS".equalsIgnoreCase(controlPolicy.getSelfCheckStatus())) {
@@ -387,6 +404,13 @@ public class PaymentServiceImpl implements PaymentService {
                 .filter(StringUtils::hasText)
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .anyMatch(normalizedActualValue::equals);
+    }
+
+    private boolean matchesAccessToken(String configuredAccessToken, String actualAccessToken) {
+        if (!StringUtils.hasText(configuredAccessToken) || !StringUtils.hasText(actualAccessToken)) {
+            return false;
+        }
+        return configuredAccessToken.trim().equals(actualAccessToken.trim());
     }
 
     /**

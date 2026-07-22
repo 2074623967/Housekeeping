@@ -352,6 +352,9 @@
   "prepayOrderNo": "PRE1752912345678",
   "paymentMethod": "微信支付",
   "channelCode": "WX_H5",
+  "sourceAppId": "housekeeping-app-web",
+  "merchantNo": "MCH_HOME_APP",
+  "accessToken": "runtime-injected-token",
   "terminal": "APP_WEB",
   "clientIp": "127.0.0.1",
   "idempotencyKey": "PRE1752912345678|微信支付|WX_H5"
@@ -398,6 +401,7 @@
 4. 记录支付尝试日志
 5. 记录提交事件
 6. 预写一条待回调日志
+7. 提交前执行来源应用、渠道、商户号、访问令牌、自检状态和分钟级限流校验
 
 路由说明：
 
@@ -408,6 +412,7 @@
    - 按支付方式匹配默认启用渠道
 3. 路由执行前会校验渠道适用场景，当前按 `payScene / terminal / customerType` 与渠道 `sceneScope` 做匹配，不匹配的渠道不会进入本次提交。
 4. 路由执行前会校验渠道单日限额，当前按“当日已受理金额 + 本次请求金额 <= dailyLimit”判断，超限渠道不会进入本次提交。
+5. 提交前还会校验 `merchantNo` 是否在来源应用授权范围内；若该来源应用开启了令牌鉴权，则 `accessToken` 必须与控制策略中的运行时口令一致。
 5. 若前端强制指定的渠道已停用、场景不匹配或超过单日限额，接口会直接返回业务错误，不再静默降级到其他渠道。
 6. 若规则目标渠道被停用、场景不匹配或超过单日限额，则自动尝试规则配置的兜底渠道。
 7. 当前内置规则示例：

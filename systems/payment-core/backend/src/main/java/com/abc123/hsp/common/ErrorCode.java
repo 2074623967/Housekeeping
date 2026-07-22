@@ -30,4 +30,6 @@ public final class ErrorCode {
     public static final String PAYMENT_SOURCE_APP_NOT_ALLOWED = "PAYMENT-1017";
     public static final String PAYMENT_SUBMIT_RATE_LIMITED = "PAYMENT-1018";
     public static final String PAYMENT_SUBMIT_SELF_CHECK_BLOCKED = "PAYMENT-1019";
+    public static final String PAYMENT_MERCHANT_NOT_ALLOWED = "PAYMENT-1020";
+    public static final String PAYMENT_ACCESS_TOKEN_INVALID = "PAYMENT-1021";
 }

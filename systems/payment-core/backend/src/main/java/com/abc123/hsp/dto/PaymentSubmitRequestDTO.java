@@ -16,6 +16,10 @@ public class PaymentSubmitRequestDTO {
     private String channelCode;
     /** 来源应用标识。 */
     private String sourceAppId;
+    /** 商户号。 */
+    private String merchantNo;
+    /** 接口访问令牌。 */
+    private String accessToken;
     /** 发起终端。 */
     private String terminal;
     /** 客户端 IP。 */

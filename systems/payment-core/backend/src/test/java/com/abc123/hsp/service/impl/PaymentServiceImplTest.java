@@ -388,7 +388,10 @@ class PaymentServiceImplTest {
         controlPolicy.setSourceAppId("housekeeping-pc-web");
         controlPolicy.setAllowedPaymentMethods("银行转账");
         controlPolicy.setAllowedChannelCodes("offline_bank");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_PC");
         controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setTokenAuthRequired("开启");
+        controlPolicy.setAccessTokenValue("token-housekeeping-pc-web");
         controlPolicy.setStrictMode("关闭");
         controlPolicy.setSelfCheckStatus("PASS");
         when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-pc-web")).thenReturn(controlPolicy);
@@ -405,6 +408,8 @@ class PaymentServiceImplTest {
         request.setPaymentMethod("银行转账");
         request.setChannelCode("BANK_CARD");
         request.setSourceAppId("housekeeping-pc-web");
+        request.setMerchantNo("MCH_HOME_PC");
+        request.setAccessToken("token-housekeeping-pc-web");
         request.setTerminal("PC");
         request.setClientIp("10.0.0.3");
         request.setIdempotencyKey("IDEMP-300");
@@ -469,7 +474,9 @@ class PaymentServiceImplTest {
         controlPolicy.setSourceAppId("housekeeping-app-web");
         controlPolicy.setAllowedPaymentMethods("微信支付");
         controlPolicy.setAllowedChannelCodes("wx_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_APP");
         controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setTokenAuthRequired("关闭");
         controlPolicy.setStrictMode("关闭");
         controlPolicy.setSelfCheckStatus("PASS");
         when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
@@ -479,6 +486,7 @@ class PaymentServiceImplTest {
         request.setPaymentMethod("支付宝");
         request.setChannelCode("ALI_H5");
         request.setSourceAppId("housekeeping-app-web");
+        request.setMerchantNo("MCH_HOME_APP");
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -493,6 +501,116 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_SOURCE_APP_NOT_ALLOWED, exception.getCode());
         verify(paymentMapper, never()).updatePrepayToPaying("PRE-310");
+    }
+
+    @Test
+    void shouldRejectSubmitWhenMerchantNotAllowed() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-315");
+        prepay.setPaymentOrderId("PAY-315");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        prepay.setCustomerName("张女士");
+        when(paymentMapper.findPrepay("PRE-315")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-315");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-315")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+
+        PaymentControlPolicyDTO controlPolicy = new PaymentControlPolicyDTO();
+        controlPolicy.setSourceAppId("housekeeping-app-web");
+        controlPolicy.setAllowedPaymentMethods("微信支付,支付宝");
+        controlPolicy.setAllowedChannelCodes("wx_h5,alipay_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_APP");
+        controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setTokenAuthRequired("关闭");
+        controlPolicy.setStrictMode("关闭");
+        controlPolicy.setSelfCheckStatus("PASS");
+        when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-315");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+        request.setSourceAppId("housekeeping-app-web");
+        request.setMerchantNo("MCH_BAD");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .submit(request)
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_MERCHANT_NOT_ALLOWED, exception.getCode());
+        verify(paymentMapper, never()).updatePrepayToPaying("PRE-315");
+    }
+
+    @Test
+    void shouldRejectSubmitWhenAccessTokenInvalid() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-316");
+        prepay.setPaymentOrderId("PAY-316");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        prepay.setCustomerName("张女士");
+        when(paymentMapper.findPrepay("PRE-316")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-316");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-316")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+
+        PaymentControlPolicyDTO controlPolicy = new PaymentControlPolicyDTO();
+        controlPolicy.setSourceAppId("housekeeping-app-web");
+        controlPolicy.setAllowedPaymentMethods("微信支付,支付宝");
+        controlPolicy.setAllowedChannelCodes("wx_h5,alipay_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_APP");
+        controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setTokenAuthRequired("开启");
+        controlPolicy.setAccessTokenValue("token-housekeeping-app-web");
+        controlPolicy.setStrictMode("关闭");
+        controlPolicy.setSelfCheckStatus("PASS");
+        when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-316");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+        request.setSourceAppId("housekeeping-app-web");
+        request.setMerchantNo("MCH_HOME_APP");
+        request.setAccessToken("bad-token");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .submit(request)
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_ACCESS_TOKEN_INVALID, exception.getCode());
+        verify(paymentMapper, never()).updatePrepayToPaying("PRE-316");
     }
 
     @Test
@@ -520,7 +638,9 @@ class PaymentServiceImplTest {
         controlPolicy.setSourceAppId("housekeeping-h5-web");
         controlPolicy.setAllowedPaymentMethods("微信支付,支付宝");
         controlPolicy.setAllowedChannelCodes("wx_h5,alipay_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_APP");
         controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setTokenAuthRequired("关闭");
         controlPolicy.setStrictMode("开启");
         controlPolicy.setSelfCheckStatus("WARN");
         controlPolicy.setSelfCheckMessage("H5 收银台自检未通过，请先处理探活异常");
@@ -531,6 +651,7 @@ class PaymentServiceImplTest {
         request.setPaymentMethod("微信支付");
         request.setChannelCode("WX_H5");
         request.setSourceAppId("housekeeping-h5-web");
+        request.setMerchantNo("MCH_HOME_APP");
 
         BusinessException exception = assertThrows(
                 BusinessException.class,

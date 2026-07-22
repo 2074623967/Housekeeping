@@ -183,8 +183,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     private SelfCheckResult evaluateControlPolicy(PaymentControlPolicyDTO controlPolicy) {
         Set<String> allowedChannels = splitToSet(controlPolicy.getAllowedChannelCodes());
         Set<String> allowedMethods = splitToSet(controlPolicy.getAllowedPaymentMethods());
-        if (allowedMethods.isEmpty() || allowedChannels.isEmpty()) {
-            return new SelfCheckResult("FAIL", "danger", "支付方式或渠道授权为空，禁止进入严格模式提交");
+        Set<String> allowedMerchants = splitToSet(controlPolicy.getAllowedMerchantNos());
+        if (allowedMethods.isEmpty() || allowedChannels.isEmpty() || allowedMerchants.isEmpty()) {
+            return new SelfCheckResult("FAIL", "danger", "支付方式、渠道或商户授权为空，禁止进入严格模式提交");
         }
 
         List<PaymentChannelConfigDTO> channels = paymentConfigMapper.findChannels();
@@ -204,8 +205,15 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!enabledPaymentMethods.containsAll(allowedMethods)) {
             warningJoiner.add("存在未被启用渠道覆盖的支付方式");
         }
+        if (!hasConfiguredMerchants(allowedMerchants, channels)) {
+            warningJoiner.add("存在未配置到启用渠道的授权商户号");
+        }
         if (!hasEnabledGatewayForAnyChannel(allowedChannels)) {
             warningJoiner.add("未找到覆盖授权渠道的启用网关");
+        }
+        if ("开启".equals(controlPolicy.getTokenAuthRequired())
+                && !StringUtils.hasText(controlPolicy.getAccessTokenValue())) {
+            warningJoiner.add("令牌鉴权已开启但访问令牌为空");
         }
 
         if (warningJoiner.length() > 0) {
@@ -223,6 +231,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         return false;
+    }
+
+    private boolean hasConfiguredMerchants(Set<String> allowedMerchants, List<PaymentChannelConfigDTO> channels) {
+        Set<String> configuredMerchants = new HashSet<String>();
+        for (PaymentChannelConfigDTO channel : channels) {
+            if ("ENABLED".equals(channel.getStatus()) && StringUtils.hasText(channel.getMerchantNo())) {
+                configuredMerchants.add(channel.getMerchantNo().trim());
+            }
+        }
+        return configuredMerchants.containsAll(allowedMerchants);
     }
 
     private boolean hasAnyConfiguredValue(String configuredValues, Set<String> expectedValues) {

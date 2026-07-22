@@ -16,8 +16,14 @@ public class PaymentControlPolicyDTO {
     private String allowedPaymentMethods;
     /** 允许渠道。 */
     private String allowedChannelCodes;
+    /** 允许商户号。 */
+    private String allowedMerchantNos;
     /** 分钟级限流阈值。 */
     private Integer minuteSubmitLimit;
+    /** 是否要求接口令牌鉴权。 */
+    private String tokenAuthRequired;
+    /** 接口访问令牌。 */
+    private String accessTokenValue;
     /** 严格控制模式。 */
     private String strictMode;
     /** 自检状态。 */

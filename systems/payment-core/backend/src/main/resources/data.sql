@@ -30,11 +30,11 @@ INSERT INTO t_payment_gateway_config (gateway_code, gateway_name, access_mode, c
 ('GATEWAY_ALI_ACQ', '支付宝收单网关', '直连', 'alipay_h5', '生产+预发', 'https://gateway.housekeeping.local/alipay/acquire', 'HTTP+FORM', 'RSA2', 'ali-mch-cert-v2026.06', 'EXPIRING_SOON', 'warn', '全量', '已全量开放，预发保留联调商户', '110.75.0.0/16,110.76.0.0/16', 'submit=alipay-h5,query=alipay-query,refund=alipay-refund', 3500, '失败重试1次+异步回调兜底', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
 ('GATEWAY_BANK_OFFLINE', '线下银行清算网关', '银行服务商', 'offline_bank', '生产+演练', 'https://gateway.housekeeping.local/bank/offline', 'SFTP+文件', 'RSA2048', 'bank-batch-cert-v2026.05', 'ARCHIVED', 'danger', '只读演练', '仅保留对公线下演练，不接新单', '10.8.1.0/24', 'submit=offline-bank,query=bank-batch-query,refund=manual-offline', 8000, '人工复核+批次补传', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
 
-INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes, minute_submit_limit, strict_mode, self_check_status, self_check_status_type, self_check_message, status, status_type, updated_at) VALUES
-('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 120, '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 40, '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 25, '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 15, '开启', 'WARN', 'warn', 'PC 端银行卡链路处于观察期，大额订单请优先人工复核', 'ENABLED', 'success', '2026-07-21 09:00:00');
+INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes, allowed_merchant_nos, minute_submit_limit, token_auth_required, access_token_value, strict_mode, self_check_status, self_check_status_type, self_check_message, status, status_type, updated_at) VALUES
+('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 'MCH_DEFAULT,MCH_HOME_APP,MCH_HOME_PC', 120, '关闭', 'token-default-app', '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 40, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 25, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_HOME_PC', 15, '开启', 'token-housekeeping-pc-web', '开启', 'WARN', 'warn', 'PC 端银行卡链路处于观察期，大额订单请优先人工复核', 'ENABLED', 'success', '2026-07-21 09:00:00');
 
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),

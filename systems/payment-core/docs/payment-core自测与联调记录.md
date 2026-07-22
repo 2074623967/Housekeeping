@@ -930,7 +930,7 @@
 ### 30.3 当前判断
 
 1. 当前支付控制管理已经从“台账展示 V1”升级为“进入提交主链路的正式化 V1.1”。
-2. 当前仍未完成商户级授权、接口级令牌鉴权、分布式限流和自检任务自动联动，这些仍属于后续 P0/P1 缺口。
+2. 当前已补齐商户级授权和接口访问令牌鉴权；分布式限流和自检任务自动联动仍属于后续 P0/P1 缺口。
 3. 在这些缺口补齐前，不应因为本轮测试通过就提前将 `feature/payment-core-phase-b` 合入 `master` 或创建 `release/*`。
 
 ## 31. 2026-07-22 支付控制策略自检回写验证
@@ -955,7 +955,32 @@
 ### 31.3 当前判断
 
 1. 当前支付控制管理已经具备“配置展示 -> 人工自检 -> 主链路阻断”的闭环雏形。
-2. 仍未补齐自动巡检调度、商户级授权、令牌鉴权和分布式限流，因此仍不满足 `master/release` 冻结门槛。
+2. 仍未补齐自动巡检调度和分布式限流，因此仍不满足 `master/release` 冻结门槛。
+
+## 38. 2026-07-22 商户级权限与令牌鉴权验证
+
+### 38.1 本轮验证结论
+
+本轮围绕“支付控制策略只管来源应用和渠道，还缺商户维度与接口访问令牌校验”的问题进行了补齐，确认提交支付主链路已支持商户号权限校验和接口访问令牌鉴权。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentServiceImplTest,PaymentConfigServiceImplTest test` | 通过 | 两组测试合计 `28` 个用例全部通过，新增覆盖商户未授权与令牌无效拦截 |
+| 后端完整测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `93` 个并全部通过 |
+| App 收银台构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-token-auth-v1 --emptyOutDir` | 通过 | 收银台新增商户号透传和运行时令牌注入状态展示后可稳定构建 |
+| 后台管理构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-token-auth-v1 --emptyOutDir` | 通过 | 支付控制策略台账新增商户号和令牌鉴权列后可稳定构建 |
+
+### 38.2 本轮补齐项
+
+1. 扩展 `t_payment_control_policy`，新增 `allowed_merchant_nos`、`token_auth_required`、`access_token_value`。
+2. `PaymentServiceImpl` 在提交支付前新增商户号权限校验和接口访问令牌鉴权，并返回独立错误码 `PAYMENT-1020 / PAYMENT-1021`。
+3. `PaymentConfigServiceImpl` 自检口径新增商户号配置校验和令牌配置完整性校验。
+4. 三端共享收银台组件改为透传 `merchantNo`，并只从运行时参数读取访问令牌，不把敏感值持久化到前端代码或浏览器存储。
+
+### 38.3 当前判断
+
+1. 当前支付控制管理已经具备“来源应用 -> 渠道 -> 商户号 -> 令牌 -> 自检 -> 分钟级限流”的正式拦截链路。
+2. 后续仍需补分布式限流、并发令牌和自检自动巡检，因此仍不满足最终 `release/*` 冻结门槛。
 
 ## 32. 2026-07-22 支付交易异常中心批量处理验证
 
