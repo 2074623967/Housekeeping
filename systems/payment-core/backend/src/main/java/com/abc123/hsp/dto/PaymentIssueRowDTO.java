@@ -46,6 +46,12 @@ public class PaymentIssueRowDTO {
     private String handlingStatusType;
     /** 当前处理人。 */
     private String assignee;
+    /** 责任组。 */
+    private String responsibilityGroup;
+    /** 责任组样式。 */
+    private String responsibilityGroupType;
+    /** 责任组处理说明。 */
+    private String responsibilityHint;
     /** SLA 状态。 */
     private String slaStatus;
     /** SLA 状态样式。 */

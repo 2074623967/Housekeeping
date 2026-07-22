@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 
@@ -26,6 +26,26 @@ const filters = ref({
   severity: route.query.severity || "全部",
   channelCode: route.query.channelCode || "",
   paymentMethod: route.query.paymentMethod || "全部"
+});
+
+const responsibilitySummaries = computed(() => {
+  const summaryMap = new Map();
+  items.value.forEach((item) => {
+    const groupName = item.responsibilityGroup || "未识别责任组";
+    const current = summaryMap.get(groupName) || {
+      groupName,
+      groupType: item.responsibilityGroupType || "info",
+      count: 0,
+      overdueCount: 0
+    };
+    current.count += 1;
+    if (item.slaStatus === "已超时") {
+      current.overdueCount += 1;
+      current.groupType = "danger";
+    }
+    summaryMap.set(groupName, current);
+  });
+  return Array.from(summaryMap.values());
 });
 
 function resetFilters() {
@@ -219,6 +239,16 @@ onMounted(loadIssues);
         </div>
       </div>
 
+      <div v-if="responsibilitySummaries.length" class="detail-card-grid">
+        <div v-for="summary in responsibilitySummaries" :key="summary.groupName" class="detail-card">
+          <div class="detail-label">责任组</div>
+          <div class="detail-value">{{ summary.groupName }}</div>
+          <div class="detail-hint">
+            当前页 {{ summary.count }} 条，SLA 超时 {{ summary.overdueCount }} 条
+          </div>
+        </div>
+      </div>
+
       <div v-if="isLoading" class="state-box">支付交易异常加载中...</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付交易异常</div>
@@ -242,6 +272,7 @@ onMounted(loadIssues);
               <th>建议动作</th>
               <th>处理状态</th>
               <th>当前处理人</th>
+              <th>责任组</th>
               <th>SLA 状态</th>
               <th>升级状态</th>
               <th>升级建议</th>
@@ -277,6 +308,10 @@ onMounted(loadIssues);
               <td class="flow-summary-cell">{{ item.recommendedAction }}</td>
               <td><span :class="['badge', item.handlingStatusType]">{{ item.handlingStatus }}</span></td>
               <td>{{ item.assignee }}</td>
+              <td>
+                <span :class="['badge', item.responsibilityGroupType]">{{ item.responsibilityGroup }}</span>
+                <div class="muted-text">{{ item.responsibilityHint }}</div>
+              </td>
               <td>
                 <span :class="['badge', item.slaStatusType]">{{ item.slaStatus }}</span>
                 <div class="muted-text">{{ item.slaTimeLeft }}</div>

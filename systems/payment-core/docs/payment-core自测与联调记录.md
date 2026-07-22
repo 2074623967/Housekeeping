@@ -1028,3 +1028,27 @@
 
 1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 任务留痕”的轻量闭环。
 2. 后续仍需补真实 IM/短信/邮件告警、责任组统计和告警确认回执，因此仍不满足最终 `release/*` 冻结门槛。
+
+## 35. 2026-07-22 异常责任组识别验证
+
+### 35.1 本轮验证结论
+
+本轮围绕“异常中心虽然能看到 SLA，但运营仍需要知道问题归谁处理”的问题进行了补齐，确认支付交易异常中心已支持责任组识别、责任提示和当前页责任组统计。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试保持 `89` 个并全部通过 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-issue-responsibility-v1 --emptyOutDir` | 通过 | 异常中心新增责任组卡片、责任组列和责任提示后可稳定构建 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 35.2 本轮补齐项
+
+1. `PaymentIssueRowDTO` 新增 `responsibilityGroup / responsibilityGroupType / responsibilityHint`。
+2. `PaymentIssueMapper.xml` 按异常类型给出责任组归属：回调类归支付后端值班组，事件发布失败归账务清结算联动组，停用渠道命中归渠道配置运营组，其他归支付运营组。
+3. 后台异常中心新增当前页责任组统计卡片，展示每个责任组的异常数和 SLA 超时数。
+4. 异常列表新增责任组列，展示责任组标签和建议处理提示。
+
+### 35.3 当前判断
+
+1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 责任组识别”的轻量闭环。
+2. 责任组统计当前仍是前端当前页聚合，后续正式版应补后端全量聚合接口、真实告警触达、告警确认回执和责任人值班表联动，因此仍不满足最终 `release/*` 冻结门槛。

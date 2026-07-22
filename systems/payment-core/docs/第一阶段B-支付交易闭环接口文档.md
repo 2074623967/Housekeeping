@@ -906,7 +906,7 @@ POST /api/payment-config/control-policies/self-check
 返回内容：
 
 1. 聚合 `待回调未收口`、`回调处理待跟进`、`下游事件发布失败`、`命中停用渠道` 四类异常。
-2. 每条异常返回支付单、订单、客户、支付方式、渠道、异常类型、严重等级、支付状态、异常摘要、根因提示、建议动作、推荐跳转路由、处理状态、当前处理人、SLA 状态、升级状态、升级建议和最近处理动作。
+2. 每条异常返回支付单、订单、客户、支付方式、渠道、异常类型、严重等级、支付状态、异常摘要、根因提示、建议动作、推荐跳转路由、处理状态、当前处理人、责任组、责任组处理提示、SLA 状态、升级状态、升级建议和最近处理动作。
 3. 前端通过 `recommendedRoute` 直接进入支付单详情、支付处理日志、支付事件出站或支付配置页。
 
 返回示例：
@@ -934,6 +934,9 @@ POST /api/payment-config/control-policies/self-check
       "handlingStatus": "待分派",
       "handlingStatusType": "warn",
       "assignee": "未分派",
+      "responsibilityGroup": "支付后端值班组",
+      "responsibilityGroupType": "danger",
+      "responsibilityHint": "优先核对查单、回调验签、幂等和状态机收口",
       "slaStatus": "已超时",
       "slaStatusType": "danger",
       "slaTimeLeft": "P1 SLA 30分钟，已耗时45分钟",

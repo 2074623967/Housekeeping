@@ -130,6 +130,23 @@
                COALESCE(latest_action.handling_status_type, 'warn') AS handlingStatusType,
                COALESCE(latest_action.assignee, '未分派') AS assignee,
                CASE
+                   WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
+                   WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '账务清结算联动组'
+                   WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '渠道配置运营组'
+                   ELSE '支付运营组'
+               END AS responsibilityGroup,
+               CASE
+                   WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN 'danger'
+                   WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN 'warn'
+                   ELSE 'info'
+               END AS responsibilityGroupType,
+               CASE
+                   WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
+                   WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '优先核对事件重发、下游订阅和账务/清分/结算消费结果'
+                   WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
+                   ELSE '由支付运营确认责任方并补充处理备注'
+               END AS responsibilityHint,
+               CASE
                    WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '已超时'
                    WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '已超时'
                    ELSE 'SLA内'
