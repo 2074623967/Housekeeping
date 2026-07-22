@@ -112,6 +112,29 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldAcknowledgeAlertWhenMarkedProcessed() {
+        PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
+        issue.setIssueNo("ISSUE-WAIT-PAY-002");
+        issue.setPaymentOrderId("PAY-002");
+        issue.setIssueType("待回调未收口");
+        when(paymentIssueMapper.findByIssueNo("ISSUE-WAIT-PAY-002")).thenReturn(issue);
+        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
+        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(0L);
+        when(paymentIssueMapper.acknowledgePendingAlerts("ISSUE-WAIT-PAY-002", "支付运营")).thenReturn(1);
+
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Collections.singletonList("ISSUE-WAIT-PAY-002"));
+        request.setActionType("标记已处理");
+        request.setAssignee("后端值班");
+        request.setOperator("支付运营");
+        request.setRemark("异常已收口");
+
+        new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request);
+
+        verify(paymentIssueMapper).acknowledgePendingAlerts("ISSUE-WAIT-PAY-002", "支付运营");
+    }
+
+    @Test
     void shouldRejectUnsupportedIssueAction() {
         PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
         request.setIssueNos(Arrays.asList("ISSUE-WAIT-PAY-001"));

@@ -30,6 +30,8 @@
 6. `t_payment_notify_log`
 7. `t_payment_route_record`
 8. `t_payment_event`
+9. `t_payment_issue_action_log`
+10. `t_payment_issue_alert_log`
 
 ## 3. 对象关系
 
@@ -42,6 +44,8 @@ t_order
         -> t_payment_route_record
         -> t_payment_notify_log
         -> t_payment_event
+        -> t_payment_issue_action_log
+        -> t_payment_issue_alert_log
 ```
 
 关系说明：
@@ -50,6 +54,7 @@ t_order
 2. 一张账单可创建一个预付单。
 3. 一个预付单关联一个支付单。
 4. 一个支付单可有多次尝试、多条回调、多条事件。
+5. 异常处理动作和告警通知日志不改变支付单状态，只沉淀运营排障、告警通知和确认回执证据。
 
 ## 4. 核心表设计
 
@@ -205,6 +210,46 @@ t_order
 | `payment_order_id` | 支付单号 |
 | `biz_no` | 业务单号 |
 | `event_payload` | 事件内容 |
+
+### 4.9 支付交易异常处理动作日志表 `t_payment_issue_action_log`
+
+作用：沉淀运营在异常中心执行的分派、跟进、已处理和备注动作，避免把人工排障动作混入支付交易状态机。
+
+关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `action_no` | 异常处理动作编号 |
+| `issue_no` | 异常编号 |
+| `payment_order_id` | 支付单号 |
+| `issue_type` | 异常类型 |
+| `action_type` | 处理动作类型 |
+| `assignee` | 当前处理人 |
+| `handling_status` | 处理状态 |
+| `action_remark` | 处理备注 |
+| `operator` | 操作人 |
+
+### 4.10 支付交易异常告警通知日志表 `t_payment_issue_alert_log`
+
+作用：沉淀异常 SLA 巡检生成的告警 outbox、责任组、接收人和确认回执。当前作为本地可审计 outbox，后续可由真实 IM、短信、邮件网关消费。
+
+关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `alert_no` | 告警通知编号 |
+| `issue_no` | 异常编号 |
+| `payment_order_id` | 支付单号 |
+| `severity` | 严重等级 |
+| `responsibility_group` | 责任组 |
+| `alert_channel` | 通知通道，当前为 `IN_APP_OUTBOX` |
+| `receiver` | 告警接收人 |
+| `alert_status` | 告警发送状态 |
+| `ack_status` | 告警回执状态 |
+| `alert_content` | 告警内容 |
+| `triggered_by` | 触发来源 |
+| `ack_operator` | 回执确认人 |
+| `ack_at` | 回执确认时间 |
 
 ## 5. 状态建议
 

@@ -32,6 +32,7 @@
 | `/api/payment-events` | `GET` | 查询支付事件出站台账 |
 | `/api/payment-events/republish` | `POST` | 手动重发支付事件 |
 | `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
+| `/api/payment-issues/responsibility-summary` | `GET` | 查询支付交易异常责任组统计 |
 | `/api/refunds` | `GET` | 分页查询退款单 |
 | `/api/refunds/{refundOrderId}` | `GET` | 查询退款详情与操作日志 |
 | `/api/refunds/apply` | `POST` | 发起退款申请 |
@@ -937,6 +938,11 @@ POST /api/payment-config/control-policies/self-check
       "responsibilityGroup": "支付后端值班组",
       "responsibilityGroupType": "danger",
       "responsibilityHint": "优先核对查单、回调验签、幂等和状态机收口",
+      "alertStatus": "已生成",
+      "alertStatusType": "warn",
+      "alertAckStatus": "待确认",
+      "alertAckStatusType": "warn",
+      "alertReceiver": "支付后端值班",
       "slaStatus": "已超时",
       "slaStatusType": "danger",
       "slaTimeLeft": "P1 SLA 30分钟，已耗时45分钟",
@@ -1021,7 +1027,8 @@ POST /api/payment-config/control-policies/self-check
 
 1. 后端会按 `issueNo` 回查当前聚合异常，异常不存在时拒绝处理，避免对已消失的异常写入误导性动作。
 2. 处理动作会写入 `t_payment_issue_action_log`，不直接修改支付单状态，避免把运营排障动作和交易状态机混在一起。
-3. 接口返回刷新后的异常中心列表，前端可直接更新页面。
+3. 当 `actionType=标记已处理` 时，后端会同步确认该异常下仍处于 `待确认` 的告警回执。
+4. 接口返回刷新后的异常中心列表，前端可直接更新页面。
 
 ### 13.5 查询支付任务中心总览
 
@@ -1072,6 +1079,7 @@ POST /api/payment-config/control-policies/self-check
 1. 任务会统计当前已超过 SLA 的支付交易异常：`P1` 30 分钟、`P2` 120 分钟。
 2. 任务不直接修改支付单交易状态，而是写入任务日志，推动运营和值班负责人在异常中心完成处理动作。
 3. 若存在超时异常，本次任务严重等级会判定为 `P1`，升级状态为 `升级值班负责人`。
+4. 任务会为超过 SLA 且没有待确认告警的异常生成 `IN_APP_OUTBOX` 告警通知日志，后续可由真实 IM/短信/邮件通道消费。
 
 ### 13.8 查询支付日终处理总览
 

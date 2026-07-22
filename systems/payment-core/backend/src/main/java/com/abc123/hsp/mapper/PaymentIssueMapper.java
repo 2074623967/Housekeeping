@@ -44,4 +44,10 @@ public interface PaymentIssueMapper {
                          @Param("handlingStatusType") String handlingStatusType,
                          @Param("actionRemark") String actionRemark,
                          @Param("operator") String operator);
+
+    /**
+     * 确认支付交易异常未回执告警。
+     */
+    int acknowledgePendingAlerts(@Param("issueNo") String issueNo,
+                                 @Param("operator") String operator);
 }

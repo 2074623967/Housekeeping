@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_task_run_log;
+DROP TABLE IF EXISTS t_payment_issue_alert_log;
 DROP TABLE IF EXISTS t_payment_issue_action_log;
 DROP TABLE IF EXISTS t_payment_order;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
@@ -373,6 +374,31 @@ CREATE TABLE t_payment_issue_action_log (
     KEY idx_issue_action_issue (issue_no, created_at),
     KEY idx_issue_action_payment (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常处理动作日志表';
+
+CREATE TABLE t_payment_issue_alert_log (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    alert_no VARCHAR(64) NOT NULL COMMENT '告警通知编号',
+    issue_no VARCHAR(128) NOT NULL COMMENT '异常编号',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
+    issue_type VARCHAR(64) NOT NULL COMMENT '异常类型',
+    severity VARCHAR(32) NOT NULL COMMENT '严重等级',
+    responsibility_group VARCHAR(64) NOT NULL COMMENT '责任组',
+    alert_channel VARCHAR(32) NOT NULL COMMENT '通知通道',
+    receiver VARCHAR(64) NOT NULL COMMENT '告警接收人',
+    alert_status VARCHAR(32) NOT NULL COMMENT '告警发送状态',
+    alert_status_type VARCHAR(32) NOT NULL COMMENT '告警发送状态样式',
+    ack_status VARCHAR(32) NOT NULL COMMENT '告警回执状态',
+    ack_status_type VARCHAR(32) NOT NULL COMMENT '告警回执状态样式',
+    alert_content VARCHAR(512) NOT NULL COMMENT '告警内容',
+    triggered_by VARCHAR(64) NOT NULL COMMENT '触发来源',
+    ack_operator VARCHAR(64) DEFAULT NULL COMMENT '回执确认人',
+    ack_at DATETIME DEFAULT NULL COMMENT '回执确认时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_issue_alert_no (alert_no),
+    KEY idx_issue_alert_issue (issue_no, created_at),
+    KEY idx_issue_alert_ack (ack_status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警通知日志表';
 
 CREATE TABLE t_worker_settlement_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

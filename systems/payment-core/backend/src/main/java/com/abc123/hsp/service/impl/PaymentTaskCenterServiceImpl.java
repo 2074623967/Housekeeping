@@ -4,8 +4,10 @@ import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
@@ -115,18 +117,42 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO runEscalateOverdueIssuesByMode(String runMode, String triggeredBy) {
         int overdueIssueCount = paymentTaskCenterMapper.countOverduePaymentIssues();
+        List<PaymentIssueAlertCandidateDTO> alertCandidates = paymentTaskCenterMapper.findOverdueIssueAlertCandidates();
+        int generatedAlertCount = 0;
+        for (PaymentIssueAlertCandidateDTO candidate : alertCandidates) {
+            generatedAlertCount += paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy));
+        }
         return buildAndRecordResult(
                 TASK_CODE_ISSUE_ESCALATE,
                 "异常 SLA 升级巡检",
                 runMode,
                 triggeredBy,
                 overdueIssueCount,
-                overdueIssueCount,
+                generatedAlertCount,
                 0,
                 overdueIssueCount == 0
                         ? "当前没有超过 SLA 的支付交易异常。"
-                        : String.format("发现 %d 条超过 SLA 的支付交易异常，已生成升级巡检日志。", overdueIssueCount)
+                        : String.format("发现 %d 条超过 SLA 的支付交易异常，本次生成 %d 条告警通知。", overdueIssueCount, generatedAlertCount)
         );
+    }
+
+    private PaymentIssueAlertLogEntity buildIssueAlertLog(PaymentIssueAlertCandidateDTO candidate, String triggeredBy) {
+        PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
+        entity.setAlertNo(buildAlertLogNo());
+        entity.setIssueNo(candidate.getIssueNo());
+        entity.setPaymentOrderId(candidate.getPaymentOrderId());
+        entity.setIssueType(candidate.getIssueType());
+        entity.setSeverity(candidate.getSeverity());
+        entity.setResponsibilityGroup(candidate.getResponsibilityGroup());
+        entity.setAlertChannel("IN_APP_OUTBOX");
+        entity.setReceiver(candidate.getReceiver());
+        entity.setAlertStatus("已生成");
+        entity.setAlertStatusType("warn");
+        entity.setAckStatus("待确认");
+        entity.setAckStatusType("warn");
+        entity.setAlertContent(candidate.getAlertContent());
+        entity.setTriggeredBy(triggeredBy);
+        return entity;
     }
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
@@ -465,5 +491,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private String buildTaskLogNo() {
         return "PTL" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
+    }
+
+    private String buildAlertLogNo() {
+        return "PIA" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
     }
 }

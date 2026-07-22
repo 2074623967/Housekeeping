@@ -52,6 +52,16 @@ public class PaymentIssueRowDTO {
     private String responsibilityGroupType;
     /** 责任组处理说明。 */
     private String responsibilityHint;
+    /** 最新告警状态。 */
+    private String alertStatus;
+    /** 最新告警状态样式。 */
+    private String alertStatusType;
+    /** 最新告警回执状态。 */
+    private String alertAckStatus;
+    /** 最新告警回执状态样式。 */
+    private String alertAckStatusType;
+    /** 最新告警接收人。 */
+    private String alertReceiver;
     /** SLA 状态。 */
     private String slaStatus;
     /** SLA 状态样式。 */

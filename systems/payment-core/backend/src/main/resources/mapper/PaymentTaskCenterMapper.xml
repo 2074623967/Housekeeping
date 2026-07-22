@@ -82,6 +82,69 @@
            OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
     </select>
 
+    <select id="findOverdueIssueAlertCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
+        SELECT issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               CASE
+                   WHEN issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
+                   WHEN issue_type = '下游事件发布失败' THEN '账务清结算联动组'
+                   WHEN issue_type = '命中停用渠道' THEN '渠道配置运营组'
+                   ELSE '支付运营组'
+               END AS responsibilityGroup,
+               CASE
+                   WHEN issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班'
+                   WHEN issue_type = '下游事件发布失败' THEN '账清结算联动值班'
+                   WHEN issue_type = '命中停用渠道' THEN '渠道配置运营'
+                   ELSE '支付运营'
+               END AS receiver,
+               CONCAT('支付异常 ', issue_no, ' 已超过 ', severity, ' SLA，请进入异常中心处理。') AS alertContent
+        FROM (
+            SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
+                   po.payment_order_id,
+                   '待回调未收口' AS issue_type,
+                   'P1' AS severity,
+                   po.created_at
+            FROM t_payment_order po
+            WHERE po.status = 'WAIT_CALLBACK'
+            UNION ALL
+            SELECT CONCAT('ISSUE-NOTIFY-', pnl.notify_no) AS issue_no,
+                   pnl.payment_order_id,
+                   '回调处理待跟进' AS issue_type,
+                   'P1' AS severity,
+                   pnl.created_at
+            FROM t_payment_notify_log pnl
+            WHERE pnl.notify_status = '待处理'
+            UNION ALL
+            SELECT CONCAT('ISSUE-EVENT-', pe.event_no) AS issue_no,
+                   pe.payment_order_id,
+                   '下游事件发布失败' AS issue_type,
+                   'P2' AS severity,
+                   pe.created_at
+            FROM t_payment_event pe
+            WHERE pe.publish_status = 'FAILED'
+            UNION ALL
+            SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
+                   po.payment_order_id,
+                   '命中停用渠道' AS issue_type,
+                   'P2' AS severity,
+                   po.created_at
+            FROM t_payment_order po
+                     INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+            WHERE pcc.status = 'DISABLED'
+        ) issue_sla
+        WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+            OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_issue_alert_log alert_log
+              WHERE alert_log.issue_no = issue_sla.issue_no
+                AND alert_log.ack_status = '待确认'
+          )
+        ORDER BY issue_sla.created_at ASC, issue_no ASC
+    </select>
+
     <select id="findRecentTaskRuns" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
         SELECT task_log_no AS taskLogNo,
                task_code AS taskCode,
@@ -200,6 +263,42 @@
             #{recommendedRoute},
             #{triggeredBy},
             NOW(),
+            NOW()
+        )
+    </insert>
+
+    <insert id="insertIssueAlertLog" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        INSERT INTO t_payment_issue_alert_log (
+            alert_no,
+            issue_no,
+            payment_order_id,
+            issue_type,
+            severity,
+            responsibility_group,
+            alert_channel,
+            receiver,
+            alert_status,
+            alert_status_type,
+            ack_status,
+            ack_status_type,
+            alert_content,
+            triggered_by,
+            created_at
+        ) VALUES (
+            #{alertNo},
+            #{issueNo},
+            #{paymentOrderId},
+            #{issueType},
+            #{severity},
+            #{responsibilityGroup},
+            #{alertChannel},
+            #{receiver},
+            #{alertStatus},
+            #{alertStatusType},
+            #{ackStatus},
+            #{ackStatusType},
+            #{alertContent},
+            #{triggeredBy},
             NOW()
         )
     </insert>

@@ -1,8 +1,10 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import java.util.List;
 
@@ -37,7 +39,17 @@ public interface PaymentTaskCenterMapper {
     int countOverduePaymentIssues();
 
     /**
+     * 查询需要生成告警通知的超时异常。
+     */
+    List<PaymentIssueAlertCandidateDTO> findOverdueIssueAlertCandidates();
+
+    /**
      * 新增任务执行日志。
      */
     int insertTaskRunLog(PaymentTaskRunLogEntity entity);
+
+    /**
+     * 新增支付交易异常告警通知日志。
+     */
+    int insertIssueAlertLog(PaymentIssueAlertLogEntity entity);
 }

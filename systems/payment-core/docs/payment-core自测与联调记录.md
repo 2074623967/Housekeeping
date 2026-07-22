@@ -1076,3 +1076,27 @@
 
 1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 责任组识别 -> 后端全量责任组统计”的轻量闭环。
 2. 后续仍需补真实 IM/短信/邮件告警、告警确认回执和值班表联动，因此仍不满足最终 `release/*` 冻结门槛。
+
+## 37. 2026-07-22 异常告警 outbox 与回执验证
+
+### 37.1 本轮验证结论
+
+本轮围绕“异常巡检不能只停留在升级说明，必须有可审计的通知日志和回执确认”的问题进行了补齐，确认任务中心已支持异常告警 outbox 生成，异常中心已支持最新告警状态展示和已处理回执确认。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentTaskCenterServiceImplTest,PaymentIssueServiceImplTest test` | 通过 | `PaymentTaskCenterServiceImplTest` 和 `PaymentIssueServiceImplTest` 合计 `14` 个用例全部通过，覆盖告警 outbox 生成与回执确认 |
+| 后端完整测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 当前全量后端测试提升为 `91` 个并全部通过 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-issue-alert-outbox-v1 --emptyOutDir` | 通过 | 异常中心新增告警通知列后可稳定构建 |
+
+### 37.2 本轮补齐项
+
+1. 新增 `t_payment_issue_alert_log`，用于记录异常告警通知、责任组、接收人、发送状态和确认回执。
+2. 任务中心异常 SLA 升级巡检会为超时且未回执的异常生成 `IN_APP_OUTBOX` 告警通知日志。
+3. 异常中心列表新增告警通知状态、接收人和回执状态展示。
+4. 异常处理动作在标记已处理时会同步确认待确认告警回执。
+
+### 37.3 当前判断
+
+1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 责任组识别 -> 后端全量责任组统计 -> 告警 outbox -> 回执确认”的轻量闭环。
+2. 后续仍需补真实 IM/短信/邮件发送网关和值班表联动，因此仍不满足最终 `release/*` 冻结门槛。

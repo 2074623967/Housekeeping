@@ -70,6 +70,9 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                     remark,
                     operator
             );
+            if ("已处理".equals(handlingStatus.status)) {
+                paymentIssueMapper.acknowledgePendingAlerts(normalizedIssueNo, operator);
+            }
         }
         return list(new PaymentIssueQueryDTO());
     }

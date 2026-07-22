@@ -274,6 +274,7 @@ onMounted(loadIssues);
               <th>处理状态</th>
               <th>当前处理人</th>
               <th>责任组</th>
+              <th>告警通知</th>
               <th>SLA 状态</th>
               <th>升级状态</th>
               <th>升级建议</th>
@@ -312,6 +313,12 @@ onMounted(loadIssues);
               <td>
                 <span :class="['badge', item.responsibilityGroupType]">{{ item.responsibilityGroup }}</span>
                 <div class="muted-text">{{ item.responsibilityHint }}</div>
+              </td>
+              <td>
+                <span :class="['badge', item.alertStatusType]">{{ item.alertStatus }}</span>
+                <div class="muted-text">
+                  {{ item.alertReceiver }} / {{ item.alertAckStatus }}
+                </div>
               </td>
               <td>
                 <span :class="['badge', item.slaStatusType]">{{ item.slaStatus }}</span>

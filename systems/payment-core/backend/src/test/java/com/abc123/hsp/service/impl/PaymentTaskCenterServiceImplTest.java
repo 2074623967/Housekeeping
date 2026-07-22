@@ -4,9 +4,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
@@ -140,6 +142,16 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldRunIssueSlaEscalationTask() {
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(3);
+        PaymentIssueAlertCandidateDTO candidate = new PaymentIssueAlertCandidateDTO();
+        candidate.setIssueNo("ISSUE-WAIT-PAY-001");
+        candidate.setPaymentOrderId("PAY-001");
+        candidate.setIssueType("待回调未收口");
+        candidate.setSeverity("P1");
+        candidate.setResponsibilityGroup("支付后端值班组");
+        candidate.setReceiver("支付后端值班");
+        candidate.setAlertContent("支付异常 ISSUE-WAIT-PAY-001 已超过 P1 SLA，请进入异常中心处理。");
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.singletonList(candidate));
+        when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -156,11 +168,17 @@ class PaymentTaskCenterServiceImplTest {
                         && "升级值班负责人".equals(entity.getEscalationStatus())
                         && entity.getSuggestedAction().contains("异常中心")
         ));
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PIA".equals(entity.getAlertNo().substring(0, 3))
+                        && "待确认".equals(entity.getAckStatus())
+                        && "IN_APP_OUTBOX".equals(entity.getAlertChannel())
+        ));
     }
 
     @Test
     void shouldRunAutoIssueSlaEscalationTask() {
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
