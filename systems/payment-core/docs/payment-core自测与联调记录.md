@@ -1125,3 +1125,31 @@
 
 1. 当前异常中心已经具备“聚合异常 -> 分派处理 -> SLA 识别 -> 自动巡检 -> 责任组识别 -> 后端全量责任组统计 -> 告警 outbox -> 回执确认”的轻量闭环。
 2. 后续仍需补真实 IM/短信/邮件发送网关和值班表联动，因此仍不满足最终 `release/*` 冻结门槛。
+
+## 38. 2026-07-22 支付控制策略自动巡检验证
+
+### 38.1 本轮验证结论
+
+本轮围绕“支付控制策略不能只支持人工逐条自检，必须纳入任务中心自动巡检和统一留痕”的问题进行了补齐，确认任务中心已支持支付控制策略批量巡检、自动调度、任务日志留痕和后台统一展示。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentTaskCenterServiceImplTest,PaymentCompensationSchedulerTest,PaymentConfigServiceImplTest test` | 受当前线程文件写权限限制未完成 | Maven 在复制资源到 `systems/payment-core/backend/target/classes/application.yml` 时被沙箱阻断，非代码失败；需在有写权限的环境再次执行 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-control-self-check-v2 --emptyOutDir` | 通过 | 任务中心新增控制策略告警指标、控制策略巡检动作和告警数列后可稳定构建 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 38.2 本轮补齐项
+
+1. 新增 `PaymentControlPolicySelfCheckSummaryDTO` 和 `PaymentControlPolicySelfCheckItemDTO`，沉淀支付控制策略批量巡检摘要和条目口径。
+2. `PaymentConfigService` 新增 `runAllEnabledControlPolicySelfChecks()`，批量扫描启用中的来源应用策略，并回写 `PASS / WARN / FAIL` 结果。
+3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
+4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
+5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。
+6. 任务日志口径扩展为“处理数 / 成功数 / 告警数 / 失败数”，避免控制策略巡检只有 `WARN` 时被误判为失败。
+7. 后台任务中心页面新增控制策略巡检按钮、控制策略告警指标和任务日志告警数展示。
+
+### 38.3 当前判断
+
+1. 当前支付控制治理已经具备“来源应用配置 -> 人工自检 -> 自动巡检 -> 任务留痕 -> 主链路阻断”的正式化雏形。
+2. 受当前线程写权限限制，本轮后端定向测试还需要在可写 `target/` 目录的环境再次执行，但从前端构建、补丁格式和代码联动口径看，本轮改造已达到可继续集成的状态。
+3. 后续仍需补接口级分布式限流、并发令牌、防重试编排和真实运维告警触达，因此仍不满足最终 `master/release` 冻结门槛。

@@ -41,4 +41,12 @@ public class PaymentCompensationScheduler {
     public void escalateOverdueIssues() {
         paymentTaskCenterService.runAutoEscalateOverdueIssues();
     }
+
+    /**
+     * 定期巡检启用中的支付控制策略，提前发现渠道、商户号、网关和令牌配置漂移。
+     */
+    @Scheduled(fixedDelayString = "${payment.control-self-check.fixed-delay-ms:600000}")
+    public void runControlPolicySelfChecks() {
+        paymentTaskCenterService.runAutoControlPolicySelfChecks();
+    }
 }

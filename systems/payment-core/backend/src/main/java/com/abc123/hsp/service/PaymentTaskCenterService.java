@@ -60,4 +60,14 @@ public interface PaymentTaskCenterService {
      * 自动执行异常 SLA 升级巡检。
      */
     PaymentTaskActionResultDTO runAutoEscalateOverdueIssues();
+
+    /**
+     * 手动执行支付控制策略自动巡检。
+     */
+    PaymentTaskActionResultDTO runControlPolicySelfChecks();
+
+    /**
+     * 自动执行支付控制策略自动巡检。
+     */
+    PaymentTaskActionResultDTO runAutoControlPolicySelfChecks();
 }

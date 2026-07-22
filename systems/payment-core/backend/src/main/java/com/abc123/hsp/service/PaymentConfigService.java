@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 
@@ -58,4 +59,9 @@ public interface PaymentConfigService {
      * 执行支付控制策略自检并回写准入结果。
      */
     PaymentConfigOverviewDTO runControlPolicySelfCheck(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 批量执行启用中支付控制策略自检并回写准入结果。
+     */
+    PaymentControlPolicySelfCheckSummaryDTO runAllEnabledControlPolicySelfChecks();
 }

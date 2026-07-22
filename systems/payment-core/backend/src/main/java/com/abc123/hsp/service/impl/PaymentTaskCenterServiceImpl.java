@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
@@ -14,6 +15,7 @@ import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
+import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,20 +37,24 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
+    private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
     private final PaymentEventMapper paymentEventMapper;
     private final RefundMapper refundMapper;
+    private final PaymentConfigService paymentConfigService;
 
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                         PaymentExpiryTaskService paymentExpiryTaskService,
                                         PaymentEventMapper paymentEventMapper,
-                                        RefundMapper refundMapper) {
+                                        RefundMapper refundMapper,
+                                        PaymentConfigService paymentConfigService) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
         this.refundMapper = refundMapper;
+        this.paymentConfigService = paymentConfigService;
     }
 
     @Override
@@ -115,6 +121,39 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         return runEscalateOverdueIssuesByMode(RUN_MODE_AUTO, "payment-issue-sla-scheduler");
     }
 
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runControlPolicySelfChecks() {
+        return runControlPolicySelfChecksByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoControlPolicySelfChecks() {
+        return runControlPolicySelfChecksByMode(RUN_MODE_AUTO, "payment-control-self-check-scheduler");
+    }
+
+    private PaymentTaskActionResultDTO runControlPolicySelfChecksByMode(String runMode, String triggeredBy) {
+        PaymentControlPolicySelfCheckSummaryDTO summary = paymentConfigService.runAllEnabledControlPolicySelfChecks();
+        int processedCount = valueOrZero(summary.getProcessedCount());
+        int successCount = valueOrZero(summary.getPassCount());
+        int warnCount = valueOrZero(summary.getWarnCount());
+        int failCount = valueOrZero(summary.getFailCount());
+        return buildAndRecordResult(
+                TASK_CODE_CONTROL_SELF_CHECK,
+                "支付控制策略自动巡检",
+                runMode,
+                triggeredBy,
+                processedCount,
+                successCount,
+                warnCount,
+                failCount,
+                processedCount == 0
+                        ? "当前没有启用中的支付控制策略需要巡检。"
+                        : String.format("已巡检 %d 条支付控制策略，通过 %d 条，告警 %d 条，失败 %d 条。", processedCount, successCount, warnCount, failCount)
+        );
+    }
+
     private PaymentTaskActionResultDTO runEscalateOverdueIssuesByMode(String runMode, String triggeredBy) {
         int overdueIssueCount = paymentTaskCenterMapper.countOverduePaymentIssues();
         List<PaymentIssueAlertCandidateDTO> alertCandidates = paymentTaskCenterMapper.findOverdueIssueAlertCandidates();
@@ -129,6 +168,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 triggeredBy,
                 overdueIssueCount,
                 generatedAlertCount,
+                0,
                 0,
                 overdueIssueCount == 0
                         ? "当前没有超过 SLA 的支付交易异常。"
@@ -169,6 +209,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 triggeredBy,
                 failedEventNos.size(),
                 successCount,
+                0,
                 failCount,
                 failedEventNos.isEmpty()
                         ? "当前没有失败事件需要重发。"
@@ -203,6 +244,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 triggeredBy,
                 failedRefundOrderIds.size(),
                 successCount,
+                0,
                 failCount,
                 failedRefundOrderIds.isEmpty()
                         ? "当前没有失败退款需要重试。"
@@ -216,6 +258,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                             String triggeredBy,
                                                             int processedCount,
                                                             int successCount,
+                                                            int warningCount,
                                                             int failCount,
                                                             String summaryComment) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
@@ -223,17 +266,18 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
         entity.setRunMode(runMode);
-        entity.setTaskStatus(failCount > 0 ? TASK_STATUS_WARN : TASK_STATUS_SUCCESS);
-        entity.setTaskStatusType(failCount > 0 ? "warn" : "success");
-        entity.setSeverityLevel(resolveSeverityLevel(taskCode, failCount, processedCount));
-        entity.setSeverityLevelType(resolveSeverityType(taskCode, failCount, processedCount));
-        entity.setEscalationStatus(resolveEscalationStatus(taskCode, failCount, processedCount));
-        entity.setEscalationStatusType(resolveEscalationType(taskCode, failCount, processedCount));
+        entity.setTaskStatus(failCount > 0 || warningCount > 0 ? TASK_STATUS_WARN : TASK_STATUS_SUCCESS);
+        entity.setTaskStatusType(failCount > 0 || warningCount > 0 ? "warn" : "success");
+        entity.setSeverityLevel(resolveSeverityLevel(taskCode, warningCount, failCount, processedCount));
+        entity.setSeverityLevelType(resolveSeverityType(taskCode, warningCount, failCount, processedCount));
+        entity.setEscalationStatus(resolveEscalationStatus(taskCode, warningCount, failCount, processedCount));
+        entity.setEscalationStatusType(resolveEscalationType(taskCode, warningCount, failCount, processedCount));
         entity.setProcessedCount(processedCount);
         entity.setSuccessCount(successCount);
+        entity.setWarningCount(warningCount);
         entity.setFailCount(failCount);
         entity.setSummaryComment(summaryComment);
-        entity.setSuggestedAction(resolveSuggestedAction(taskCode, failCount, processedCount));
+        entity.setSuggestedAction(resolveSuggestedAction(taskCode, warningCount, failCount, processedCount));
         entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
         entity.setTriggeredBy(triggeredBy);
         paymentTaskCenterMapper.insertTaskRunLog(entity);
@@ -243,6 +287,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         result.setTaskName(taskName);
         result.setProcessedCount(processedCount);
         result.setSuccessCount(successCount);
+        result.setWarningCount(warningCount);
         result.setFailCount(failCount);
         result.setSummaryComment(summaryComment);
         result.setOverview(overview());
@@ -259,6 +304,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 triggeredBy,
                 processedCount,
                 successCount,
+                0,
                 0,
                 successCount == 0 ? "当前没有待关闭的超时支付单。" : String.format("%s已关闭 %d 笔超时支付单。", modeLabel, successCount)
         );
@@ -297,6 +343,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 failedEventCount > 5 ? "danger" : "warn"
         ));
         int overdueIssueCount = valueOrZero(overview.getOverdueIssueCount());
+        int controlPolicyWarningCount = valueOrZero(overview.getControlPolicyWarningCount());
         alerts.add(buildAlert(
                 "PAYMENT_ISSUE_SLA",
                 "异常 SLA 超时",
@@ -305,6 +352,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "/payment-issues",
                 overdueIssueCount > 0 ? "P1" : "P3",
                 overdueIssueCount > 0 ? "danger" : "success"
+        ));
+        alerts.add(buildAlert(
+                "PAYMENT_CONTROL_POLICY",
+                "支付控制策略待收敛",
+                controlPolicyWarningCount,
+                controlPolicyWarningCount > 0 ? "存在未通过自检的控制策略，建议立即执行巡检并回配置中心收敛" : "暂无未通过自检的控制策略",
+                "/payment-task-center",
+                controlPolicyWarningCount > 0 ? "P2" : "P3",
+                controlPolicyWarningCount > 0 ? "warn" : "success"
         ));
         return alerts;
     }
@@ -328,47 +384,47 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         return alert;
     }
 
-    private String resolveSeverityLevel(String taskCode, int failCount, int processedCount) {
-        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+    private String resolveSeverityLevel(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return "P1";
         }
-        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
+        if (shouldFocusOnDuty(taskCode, warningCount, failCount, processedCount)) {
             return "P2";
         }
         return "P3";
     }
 
-    private String resolveSeverityType(String taskCode, int failCount, int processedCount) {
-        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+    private String resolveSeverityType(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return "danger";
         }
-        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
+        if (shouldFocusOnDuty(taskCode, warningCount, failCount, processedCount)) {
             return "warn";
         }
         return "success";
     }
 
-    private String resolveEscalationStatus(String taskCode, int failCount, int processedCount) {
-        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+    private String resolveEscalationStatus(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return "升级值班负责人";
         }
-        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
+        if (shouldFocusOnDuty(taskCode, warningCount, failCount, processedCount)) {
             return "纳入当班跟进";
         }
         return "正常";
     }
 
-    private String resolveEscalationType(String taskCode, int failCount, int processedCount) {
-        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+    private String resolveEscalationType(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return "danger";
         }
-        if (shouldFocusOnDuty(taskCode, failCount, processedCount)) {
+        if (shouldFocusOnDuty(taskCode, warningCount, failCount, processedCount)) {
             return "warn";
         }
         return "success";
     }
 
-    private String resolveSuggestedAction(String taskCode, int failCount, int processedCount) {
+    private String resolveSuggestedAction(String taskCode, int warningCount, int failCount, int processedCount) {
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             if (failCount > 0) {
                 return "先核对超时支付单状态机与收银台过期时间，再补关单原因并复跑任务";
@@ -393,6 +449,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
             return processedCount > 0 ? "立即进入异常中心，按 SLA 超时列表分派值班负责人并补充处理备注" : "暂无 SLA 超时异常";
         }
+        if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先进入支付配置中心收敛渠道、网关、商户号或令牌配置，再复跑控制策略巡检";
+            }
+            if (warningCount > 0) {
+                return "存在控制策略告警，建议先核对渠道覆盖、网关启用状态和令牌完整性，再复跑巡检";
+            }
+            return processedCount > 0 ? "本轮控制策略已完成巡检，建议继续观察新接入应用和渠道变更" : "暂无启用中的支付控制策略待巡检";
+        }
         return processedCount > 0 ? "优先处理异常明细并确认下游收口" : "暂无待处理任务";
     }
 
@@ -409,16 +474,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
             return "/payment-issues";
         }
+        if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
+            return "/payment-config";
+        }
         return "/payment-task-center";
     }
 
     private List<PaymentTaskRunLogItemDTO> enrichTaskRuns(List<PaymentTaskRunLogItemDTO> items) {
         for (PaymentTaskRunLogItemDTO item : items) {
-            item.setSeverityLevel(resolveSeverityLevel(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setSeverityLevelType(resolveSeverityType(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setEscalationStatus(resolveEscalationStatus(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setEscalationStatusType(resolveEscalationType(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
-            item.setSuggestedAction(resolveSuggestedAction(item.getTaskCode(), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setSeverityLevel(resolveSeverityLevel(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setSeverityLevelType(resolveSeverityType(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setEscalationStatus(resolveEscalationStatus(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setEscalationStatusType(resolveEscalationType(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
+            item.setSuggestedAction(resolveSuggestedAction(item.getTaskCode(), valueOrZero(item.getWarningCount()), valueOrZero(item.getFailCount()), valueOrZero(item.getProcessedCount())));
             item.setRecommendedRoute(resolveRecommendedRoute(item.getTaskCode()));
         }
         return items;
@@ -427,9 +495,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     /**
      * 根据任务类型、失败量和处理规模推导是否需要立即升级。
      */
-    private boolean shouldEscalateImmediately(String taskCode, int failCount, int processedCount) {
+    private boolean shouldEscalateImmediately(String taskCode, int warningCount, int failCount, int processedCount) {
         if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
             return processedCount > 0;
+        }
+        if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
+            return failCount > 0;
         }
         if (failCount <= 0) {
             return false;
@@ -449,9 +520,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     /**
      * 根据任务类型判断是否需要纳入当班关注。
      */
-    private boolean shouldFocusOnDuty(String taskCode, int failCount, int processedCount) {
-        if (shouldEscalateImmediately(taskCode, failCount, processedCount)) {
+    private boolean shouldFocusOnDuty(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return false;
+        }
+        if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
+            return warningCount > 0;
         }
         if (failCount > 0) {
             return true;

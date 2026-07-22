@@ -467,6 +467,7 @@ CREATE TABLE t_payment_task_run_log (
     escalation_status_type VARCHAR(32) NOT NULL DEFAULT 'success' COMMENT '任务升级状态样式',
     processed_count INT NOT NULL DEFAULT 0 COMMENT '处理总数',
     success_count INT NOT NULL DEFAULT 0 COMMENT '成功数',
+    warning_count INT NOT NULL DEFAULT 0 COMMENT '告警数',
     fail_count INT NOT NULL DEFAULT 0 COMMENT '失败数',
     summary_comment VARCHAR(512) NOT NULL COMMENT '执行摘要',
     suggested_action VARCHAR(255) NOT NULL DEFAULT '' COMMENT '建议动作',

@@ -4,6 +4,7 @@ import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
@@ -62,6 +63,11 @@ public interface PaymentConfigMapper {
      * 按来源应用标识查询支付控制策略配置。
      */
     PaymentControlPolicyDTO findControlPolicyBySourceAppId(@Param("sourceAppId") String sourceAppId);
+
+    /**
+     * 查询启用中的支付控制策略自检批次。
+     */
+    List<PaymentControlPolicySelfCheckItemDTO> findEnabledControlPolicySelfCheckItems();
 
     /**
      * 查询已启用的渠道配置，供支付路由执行使用。

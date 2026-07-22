@@ -190,6 +190,16 @@
         LIMIT 1
     </select>
 
+    <select id="findEnabledControlPolicySelfCheckItems" resultType="com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO">
+        SELECT source_app_id AS sourceAppId,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage
+        FROM t_payment_control_policy
+        WHERE status = 'ENABLED'
+        ORDER BY id ASC
+    </select>
+
     <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
         SELECT channel_code AS channelCode,
                payment_method AS paymentMethod,

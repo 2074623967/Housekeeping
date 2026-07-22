@@ -35,6 +35,12 @@
             ), 0) AS warningDayEndBatchCount,
             COALESCE((
                 SELECT COUNT(1)
+                FROM t_payment_control_policy
+                WHERE status = 'ENABLED'
+                  AND COALESCE(self_check_status, 'WARN') <> 'PASS'
+            ), 0) AS controlPolicyWarningCount,
+            COALESCE((
+                SELECT COUNT(1)
                 FROM (
                     SELECT po.created_at, 'P1' AS severity
                     FROM t_payment_order po
@@ -154,6 +160,7 @@
                task_status_type AS taskStatusType,
                processed_count AS processedCount,
                success_count AS successCount,
+               warning_count AS warningCount,
                fail_count AS failCount,
                summary_comment AS summaryComment,
                triggered_by AS triggeredBy,
@@ -178,6 +185,7 @@
                escalation_status_type AS escalationStatusType,
                processed_count AS processedCount,
                success_count AS successCount,
+               warning_count AS warningCount,
                fail_count AS failCount,
                summary_comment AS summaryComment,
                suggested_action AS suggestedAction,
@@ -237,6 +245,7 @@
             escalation_status_type,
             processed_count,
             success_count,
+            warning_count,
             fail_count,
             summary_comment,
             suggested_action,
@@ -257,6 +266,7 @@
             #{escalationStatusType},
             #{processedCount},
             #{successCount},
+            #{warningCount},
             #{failCount},
             #{summaryComment},
             #{suggestedAction},

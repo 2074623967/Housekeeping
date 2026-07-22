@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -13,6 +14,7 @@ import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.mapper.RefundMapper;
+import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,6 +40,8 @@ class PaymentTaskCenterServiceImplTest {
     private PaymentEventMapper paymentEventMapper;
     @Mock
     private RefundMapper refundMapper;
+    @Mock
+    private PaymentConfigService paymentConfigService;
 
     @Test
     void shouldRunCloseExpiredPayments() {
@@ -49,7 +53,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runCloseExpiredPayments();
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
@@ -68,7 +73,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runRepublishFailedEvents();
 
         verify(paymentEventMapper).findFailedEventNos();
@@ -92,7 +98,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runAutoRepublishFailedEvents();
 
         verify(paymentEventMapper).findFailedEventNos();
@@ -111,7 +118,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runAutoCloseExpiredPayments();
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
@@ -129,7 +137,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runAutoRetryFailedRefunds();
 
         verify(refundMapper).findFailedRefundOrderIds();
@@ -159,7 +168,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runEscalateOverdueIssues();
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -186,7 +196,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runAutoEscalateOverdueIssues();
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -211,7 +222,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).listTaskRuns(query);
 
         Assertions.assertEquals(1L, result.getTotal());
@@ -234,7 +246,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper
+                refundMapper,
+                paymentConfigService
         ).runRetryFailedRefunds();
 
         ArgumentCaptor<PaymentTaskRunLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentTaskRunLogEntity.class);
@@ -242,5 +255,59 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals("P1", logCaptor.getValue().getSeverityLevel());
         Assertions.assertEquals("升级值班负责人", logCaptor.getValue().getEscalationStatus());
         Assertions.assertTrue(logCaptor.getValue().getSuggestedAction().contains("优先核对退款渠道响应"));
+    }
+
+    @Test
+    void shouldRunControlPolicySelfCheckTask() {
+        PaymentControlPolicySelfCheckSummaryDTO summary = new PaymentControlPolicySelfCheckSummaryDTO();
+        summary.setProcessedCount(3);
+        summary.setPassCount(2);
+        summary.setWarnCount(1);
+        summary.setFailCount(0);
+        when(paymentConfigService.runAllEnabledControlPolicySelfChecks()).thenReturn(summary);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService
+        ).runControlPolicySelfChecks();
+
+        verify(paymentConfigService).runAllEnabledControlPolicySelfChecks();
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_CONTROL_SELF_CHECK".equals(entity.getTaskCode())
+                        && "P2".equals(entity.getSeverityLevel())
+                        && "纳入当班跟进".equals(entity.getEscalationStatus())
+                        && entity.getSuggestedAction().contains("控制策略告警")
+        ));
+    }
+
+    @Test
+    void shouldRunAutoControlPolicySelfCheckTask() {
+        PaymentControlPolicySelfCheckSummaryDTO summary = new PaymentControlPolicySelfCheckSummaryDTO();
+        summary.setProcessedCount(1);
+        summary.setPassCount(1);
+        summary.setWarnCount(0);
+        summary.setFailCount(0);
+        when(paymentConfigService.runAllEnabledControlPolicySelfChecks()).thenReturn(summary);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService
+        ).runAutoControlPolicySelfChecks();
+
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "AUTO".equals(entity.getRunMode())
+                        && "payment-control-self-check-scheduler".equals(entity.getTriggeredBy())
+                        && "/payment-config".equals(entity.getRecommendedRoute())
+        ));
     }
 }

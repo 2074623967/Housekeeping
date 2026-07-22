@@ -36,4 +36,11 @@ class PaymentCompensationSchedulerTest {
 
         verify(paymentTaskCenterService).runAutoEscalateOverdueIssues();
     }
+
+    @Test
+    void shouldDelegateToAutoControlPolicySelfChecks() {
+        new PaymentCompensationScheduler(paymentTaskCenterService).runControlPolicySelfChecks();
+
+        verify(paymentTaskCenterService).runAutoControlPolicySelfChecks();
+    }
 }

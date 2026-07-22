@@ -32,6 +32,8 @@ public class PaymentTaskRunLogEntity {
     private Integer processedCount;
     /** 成功数。 */
     private Integer successCount;
+    /** 告警数。 */
+    private Integer warningCount;
     /** 失败数。 */
     private Integer failCount;
     /** 执行摘要。 */

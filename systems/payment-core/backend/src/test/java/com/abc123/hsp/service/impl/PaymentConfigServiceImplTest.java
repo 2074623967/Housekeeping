@@ -5,6 +5,8 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
@@ -191,6 +193,49 @@ class PaymentConfigServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("WARN"),
                 org.mockito.ArgumentMatchers.eq("warn"),
                 org.mockito.ArgumentMatchers.contains("未找到覆盖授权渠道的启用网关"));
+    }
+
+    @Test
+    void shouldRunAllEnabledControlPolicySelfChecks() {
+        PaymentControlPolicySelfCheckItemDTO item1 = new PaymentControlPolicySelfCheckItemDTO();
+        item1.setSourceAppId("housekeeping-app-web");
+        PaymentControlPolicySelfCheckItemDTO item2 = new PaymentControlPolicySelfCheckItemDTO();
+        item2.setSourceAppId("housekeeping-h5-web");
+        when(paymentConfigMapper.findEnabledControlPolicySelfCheckItems()).thenReturn(Arrays.asList(item1, item2));
+
+        PaymentControlPolicyDTO passPolicy = new PaymentControlPolicyDTO();
+        passPolicy.setSourceAppId("housekeeping-app-web");
+        passPolicy.setAllowedPaymentMethods("微信支付");
+        passPolicy.setAllowedChannelCodes("wx_h5");
+        passPolicy.setAllowedMerchantNos("MCH_HOME_APP");
+        passPolicy.setTokenAuthRequired("关闭");
+        PaymentControlPolicyDTO warnPolicy = new PaymentControlPolicyDTO();
+        warnPolicy.setSourceAppId("housekeeping-h5-web");
+        warnPolicy.setAllowedPaymentMethods("支付宝");
+        warnPolicy.setAllowedChannelCodes("alipay_h5");
+        warnPolicy.setAllowedMerchantNos("MCH_HOME_H5");
+        warnPolicy.setTokenAuthRequired("开启");
+        warnPolicy.setAccessTokenValue("");
+        when(paymentConfigMapper.findControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(passPolicy);
+        when(paymentConfigMapper.findControlPolicyBySourceAppId("housekeeping-h5-web")).thenReturn(warnPolicy);
+
+        PaymentChannelConfigDTO wxChannel = buildChannel("wx_h5", "微信支付", "MCH_HOME_APP", "ENABLED");
+        PaymentChannelConfigDTO aliChannel = buildChannel("alipay_h5", "支付宝", "MCH_HOME_H5", "ENABLED");
+        when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(wxChannel, aliChannel));
+        when(paymentConfigMapper.findGateways()).thenReturn(Arrays.asList(buildGateway("wx_h5,alipay_h5", "ENABLED")));
+
+        PaymentControlPolicySelfCheckSummaryDTO summary = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .runAllEnabledControlPolicySelfChecks();
+
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), summary.getProcessedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), summary.getPassCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), summary.getWarnCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), summary.getFailCount());
+        verify(paymentConfigMapper, org.mockito.Mockito.times(2)).updateControlPolicySelfCheck(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test

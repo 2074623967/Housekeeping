@@ -86,4 +86,12 @@ public class PaymentTaskCenterController {
     public ApiResponse<PaymentTaskActionResultDTO> runEscalateOverdueIssues() {
         return ApiResponse.success(paymentTaskCenterService.runEscalateOverdueIssues());
     }
+
+    /**
+     * 手动执行支付控制策略自动巡检。
+     */
+    @PostMapping("/control-policy-self-checks")
+    public ApiResponse<PaymentTaskActionResultDTO> runControlPolicySelfChecks() {
+        return ApiResponse.success(paymentTaskCenterService.runControlPolicySelfChecks());
+    }
 }

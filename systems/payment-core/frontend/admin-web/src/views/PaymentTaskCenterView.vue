@@ -8,6 +8,7 @@ const overview = ref({
   failedEventCount: 0,
   failedRefundCount: 0,
   warningDayEndBatchCount: 0,
+  controlPolicyWarningCount: 0,
   overdueIssueCount: 0,
   focusAlerts: [],
   recentTaskRuns: []
@@ -84,7 +85,7 @@ async function runTask(taskCode, taskName, actionRunner) {
   try {
     const result = await actionRunner();
     overview.value = result.overview;
-    actionMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，失败 ${result.failCount} 条。`;
+    actionMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，告警 ${result.warningCount || 0} 条，失败 ${result.failCount} 条。`;
   } catch (error) {
     actionMessage.value = `${taskName}执行失败：${error.message}`;
   } finally {
@@ -100,7 +101,7 @@ onMounted(loadOverview);
     <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看超时关单、失败事件重发、失败退款重试和日终告警，并承接自动调度与人工处理的统一留痕</p>
+        <p>统一查看超时关单、失败事件重发、失败退款重试、控制策略巡检和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -140,6 +141,10 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">失败退款</div>
             <div class="detail-value">{{ overview.failedRefundCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">控制策略告警</div>
+            <div class="detail-value">{{ overview.controlPolicyWarningCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">SLA 超时异常</div>
@@ -188,6 +193,12 @@ onMounted(loadOverview);
                   <td>无失败退款待处理</td>
                 </tr>
                 <tr>
+                  <td>支付控制策略巡检</td>
+                  <td>存在 FAIL</td>
+                  <td>存在 WARN</td>
+                  <td>全部 PASS 或无启用策略</td>
+                </tr>
+                <tr>
                   <td>异常 SLA 升级巡检</td>
                   <td>存在 SLA 超时异常</td>
                   <td>不适用，发现即升级</td>
@@ -203,7 +214,7 @@ onMounted(loadOverview);
             <div class="section-title">
               <div>
               <h3>核心自动化任务</h3>
-              <p class="meta">本页触发的是正式版 V1.6 的统一操作；超时关单、失败事件重发、失败退款重试均已纳入自动调度与人工补偿双通道</p>
+              <p class="meta">本页触发的是正式版 V1.7 的统一操作；超时关单、失败事件重发、失败退款重试、控制策略巡检均已纳入自动调度与人工补偿双通道</p>
             </div>
             </div>
 
@@ -240,6 +251,18 @@ onMounted(loadOverview);
                 @click="runTask('REFUND_FAIL_RETRY', '失败退款重试', paymentTaskCenterApi.runRetryFailedRefunds)"
               >
                 {{ activeTaskCode === "REFUND_FAIL_RETRY" ? "执行中..." : "执行退款重试" }}
+              </button>
+            </div>
+
+            <div class="sub-panel">
+              <h3>支付控制策略自动巡检</h3>
+              <p>批量扫描启用中的来源应用支付控制策略，回写渠道、网关、商户号和令牌配置是否满足当前准入要求。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'PAYMENT_CONTROL_SELF_CHECK'"
+                @click="runTask('PAYMENT_CONTROL_SELF_CHECK', '支付控制策略自动巡检', paymentTaskCenterApi.runControlPolicySelfChecks)"
+              >
+                {{ activeTaskCode === "PAYMENT_CONTROL_SELF_CHECK" ? "执行中..." : "执行控制策略巡检" }}
               </button>
             </div>
 
@@ -296,6 +319,11 @@ onMounted(loadOverview);
                   <td>日终告警批次</td>
                   <td>{{ overview.warningDayEndBatchCount }}</td>
                   <td>为下一步对账和差错处理提供排查入口</td>
+                </tr>
+                <tr>
+                  <td>控制策略告警</td>
+                  <td>{{ overview.controlPolicyWarningCount }}</td>
+                  <td>表示存在自检未通过的来源应用，需要优先修正配置漂移</td>
                 </tr>
                 <tr>
                   <td>SLA 超时异常</td>
@@ -367,6 +395,7 @@ onMounted(loadOverview);
                   <th>升级状态</th>
                   <th>处理总数</th>
                   <th>成功数</th>
+                  <th>告警数</th>
                   <th>失败数</th>
                   <th>执行摘要</th>
                   <th>建议动作</th>
@@ -387,6 +416,7 @@ onMounted(loadOverview);
                   <td><span :class="['badge', item.escalationStatusType]">{{ item.escalationStatus }}</span></td>
                   <td>{{ item.processedCount }}</td>
                   <td>{{ item.successCount }}</td>
+                  <td>{{ item.warningCount }}</td>
                   <td>{{ item.failCount }}</td>
                   <td class="flow-summary-cell">{{ item.summaryComment }}</td>
                   <td class="flow-summary-cell">{{ item.suggestedAction }}</td>

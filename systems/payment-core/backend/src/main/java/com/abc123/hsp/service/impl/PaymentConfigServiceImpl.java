@@ -4,6 +4,8 @@ import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
@@ -178,6 +180,42 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 selfCheckResult.message
         );
         return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentControlPolicySelfCheckSummaryDTO runAllEnabledControlPolicySelfChecks() {
+        List<PaymentControlPolicySelfCheckItemDTO> items = paymentConfigMapper.findEnabledControlPolicySelfCheckItems();
+        int passCount = 0;
+        int warnCount = 0;
+        int failCount = 0;
+        for (PaymentControlPolicySelfCheckItemDTO item : items) {
+            PaymentControlPolicyDTO controlPolicy = paymentConfigMapper.findControlPolicyBySourceAppId(item.getSourceAppId());
+            if (controlPolicy == null) {
+                failCount++;
+                continue;
+            }
+            SelfCheckResult selfCheckResult = evaluateControlPolicy(controlPolicy);
+            paymentConfigMapper.updateControlPolicySelfCheck(
+                    item.getSourceAppId(),
+                    selfCheckResult.status,
+                    selfCheckResult.statusType,
+                    selfCheckResult.message
+            );
+            if ("PASS".equals(selfCheckResult.status)) {
+                passCount++;
+            } else if ("WARN".equals(selfCheckResult.status)) {
+                warnCount++;
+            } else {
+                failCount++;
+            }
+        }
+        PaymentControlPolicySelfCheckSummaryDTO summary = new PaymentControlPolicySelfCheckSummaryDTO();
+        summary.setProcessedCount(items.size());
+        summary.setPassCount(passCount);
+        summary.setWarnCount(warnCount);
+        summary.setFailCount(failCount);
+        return summary;
     }
 
     private SelfCheckResult evaluateControlPolicy(PaymentControlPolicyDTO controlPolicy) {
