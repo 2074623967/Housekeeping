@@ -42,6 +42,8 @@ CREATE TABLE t_payment_channel_config (
     merchant_no VARCHAR(128) NOT NULL COMMENT '渠道商户号',
     merchant_app_id VARCHAR(128) NOT NULL COMMENT '渠道商户应用标识，如 appId 或子商户应用号',
     callback_secret VARCHAR(256) NOT NULL COMMENT '渠道回调验签密钥',
+    callback_sign_algorithm VARCHAR(32) NOT NULL DEFAULT 'HMAC-SHA256' COMMENT '渠道回调签名算法',
+    callback_public_key TEXT NULL COMMENT '渠道回调验签公钥',
     callback_notify_url VARCHAR(256) NOT NULL COMMENT '渠道回调通知地址',
     certificate_profile VARCHAR(128) NOT NULL COMMENT '渠道证书档案或证书别名',
     notify_sign_window_sec INT NOT NULL DEFAULT 300 COMMENT '回调验签允许时间窗秒数',

@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentCallbackSecurityProfileDTO;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -11,6 +12,11 @@ public interface PaymentCallbackSecurityMapper {
      * 查询渠道回调验签密钥。
      */
     String findCallbackSecretByChannelCode(@Param("channelCode") String channelCode);
+
+    /**
+     * 查询渠道回调验签安全配置。
+     */
+    PaymentCallbackSecurityProfileDTO findCallbackSecurityProfileByChannelCode(@Param("channelCode") String channelCode);
 
     /**
      * 插入回调 nonce，依赖唯一索引保证防重放。

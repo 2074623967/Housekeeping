@@ -266,15 +266,16 @@ onMounted(loadOverview);
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>渠道编码</th>
-                <th>渠道名称</th>
-                <th>支付方式</th>
-                <th>商户号</th>
-                <th>应用标识</th>
-                <th>回调地址</th>
-                <th>验签密钥</th>
-                <th>证书档案</th>
+                <tr>
+                  <th>渠道编码</th>
+                  <th>渠道名称</th>
+                  <th>支付方式</th>
+                  <th>商户号</th>
+                  <th>应用标识</th>
+                  <th>回调地址</th>
+                  <th>签名算法</th>
+                  <th>验签密钥</th>
+                  <th>证书档案</th>
                 <th>验签时间窗</th>
                 <th>退款时效</th>
                 <th>风控标签</th>
@@ -287,14 +288,15 @@ onMounted(loadOverview);
               </tr>
             </thead>
             <tbody>
-              <tr v-for="channel in channels" :key="channel.channelCode">
-                <td>{{ channel.channelCode }}</td>
-                <td>{{ channel.channelName }}</td>
-                <td>{{ channel.paymentMethod }}</td>
-                <td>{{ channel.merchantNo }}</td>
-                <td>{{ channel.merchantAppId }}</td>
-                <td class="flow-summary-cell">{{ channel.callbackNotifyUrl }}</td>
-                <td>{{ channel.callbackSecretMasked }}</td>
+                <tr v-for="channel in channels" :key="channel.channelCode">
+                  <td>{{ channel.channelCode }}</td>
+                  <td>{{ channel.channelName }}</td>
+                  <td>{{ channel.paymentMethod }}</td>
+                  <td>{{ channel.merchantNo }}</td>
+                  <td>{{ channel.merchantAppId }}</td>
+                  <td class="flow-summary-cell">{{ channel.callbackNotifyUrl }}</td>
+                  <td>{{ channel.callbackSignAlgorithm }}</td>
+                  <td>{{ channel.callbackSecretMasked }}</td>
                 <td>{{ channel.certificateProfile }}</td>
                 <td>{{ channel.notifySignWindow }}</td>
                 <td>{{ channel.refundWindow }}</td>

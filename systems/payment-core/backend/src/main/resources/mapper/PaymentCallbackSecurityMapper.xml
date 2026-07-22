@@ -11,6 +11,18 @@
         LIMIT 1
     </select>
 
+    <select id="findCallbackSecurityProfileByChannelCode" resultType="com.abc123.hsp.dto.PaymentCallbackSecurityProfileDTO">
+        SELECT LOWER(channel_code) AS channelCode,
+               callback_sign_algorithm AS callbackSignAlgorithm,
+               callback_secret AS callbackSecret,
+               callback_public_key AS callbackPublicKey,
+               callback_notify_url AS callbackNotifyUrl,
+               notify_sign_window_sec AS notifySignWindowSec
+        FROM t_payment_channel_config
+        WHERE LOWER(channel_code) = LOWER(#{channelCode})
+        LIMIT 1
+    </select>
+
     <insert id="insertCallbackNonce">
         INSERT INTO t_payment_callback_nonce(channel_code, nonce, payment_order_id, expires_at, created_at)
         VALUES (LOWER(#{channelCode}), #{nonce}, #{paymentOrderId}, DATE_ADD(NOW(), INTERVAL #{expireSeconds} SECOND), NOW())

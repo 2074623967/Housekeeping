@@ -11,6 +11,7 @@
                merchant_no AS merchantNo,
                merchant_app_id AS merchantAppId,
                callback_notify_url AS callbackNotifyUrl,
+               callback_sign_algorithm AS callbackSignAlgorithm,
                CASE
                    WHEN callback_secret IS NULL OR callback_secret = '' THEN '未配置'
                    ELSE '已配置'

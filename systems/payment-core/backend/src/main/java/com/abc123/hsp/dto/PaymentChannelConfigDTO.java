@@ -20,6 +20,8 @@ public class PaymentChannelConfigDTO {
     private String merchantAppId;
     /** 渠道回调通知地址。 */
     private String callbackNotifyUrl;
+    /** 回调签名算法。 */
+    private String callbackSignAlgorithm;
     /** 验签密钥配置情况。 */
     private String callbackSecretMasked;
     /** 证书档案。 */
