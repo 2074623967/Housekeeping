@@ -20,6 +20,8 @@ public class PaymentControlPolicyDTO {
     private String allowedMerchantNos;
     /** 分钟级限流阈值。 */
     private Integer minuteSubmitLimit;
+    /** 接口级分钟限流阈值。 */
+    private Integer interfaceMinuteSubmitLimit;
     /** 是否要求接口令牌鉴权。 */
     private String tokenAuthRequired;
     /** 接口访问令牌。 */

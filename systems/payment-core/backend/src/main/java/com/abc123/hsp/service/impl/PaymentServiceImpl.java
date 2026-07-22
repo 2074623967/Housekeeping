@@ -169,7 +169,9 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getMerchantNo(),
                 request.getAccessToken(),
                 request.getPaymentMethod(),
-                resolvedChannelCode);
+                resolvedChannelCode,
+                terminal,
+                clientIp);
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
@@ -428,7 +430,9 @@ public class PaymentServiceImpl implements PaymentService {
             String merchantNo,
             String accessToken,
             String paymentMethod,
-            String resolvedChannelCode) {
+            String resolvedChannelCode,
+            String terminal,
+            String clientIp) {
         PaymentControlPolicyDTO controlPolicy = paymentMapper.findActiveControlPolicyBySourceAppId(sourceAppId);
         if (controlPolicy == null) {
             return;
@@ -445,6 +449,11 @@ public class PaymentServiceImpl implements PaymentService {
         if ("开启".equals(controlPolicy.getTokenAuthRequired())
                 && !matchesAccessToken(controlPolicy.getAccessTokenValue(), accessToken)) {
             throw new BusinessException(ErrorCode.PAYMENT_ACCESS_TOKEN_INVALID, "当前请求的访问令牌无效或已失效");
+        }
+        Integer interfaceMinuteSubmitLimit = controlPolicy.getInterfaceMinuteSubmitLimit();
+        if (interfaceMinuteSubmitLimit != null && interfaceMinuteSubmitLimit.intValue() > 0
+                && paymentMapper.countRecentAttemptsBySubmitScope(sourceAppId, terminal, clientIp) >= interfaceMinuteSubmitLimit.intValue()) {
+            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED, "当前接口提交过于频繁，请稍后重试");
         }
         if ("开启".equals(controlPolicy.getStrictMode())
                 && !"PASS".equalsIgnoreCase(controlPolicy.getSelfCheckStatus())) {

@@ -170,6 +170,7 @@ CREATE TABLE t_payment_control_policy (
     allowed_channel_codes VARCHAR(255) NOT NULL COMMENT '允许渠道编码列表，逗号分隔',
     allowed_merchant_nos VARCHAR(255) NOT NULL COMMENT '允许商户号列表，逗号分隔',
     minute_submit_limit INT NOT NULL DEFAULT 60 COMMENT '分钟级提交限流阈值',
+    interface_minute_submit_limit INT NOT NULL DEFAULT 30 COMMENT '接口级分钟提交限流阈值',
     token_auth_required VARCHAR(32) NOT NULL COMMENT '是否要求接口令牌鉴权',
     access_token_value VARCHAR(128) NOT NULL COMMENT '接口访问令牌',
     strict_mode VARCHAR(32) NOT NULL COMMENT '是否启用严格控制模式',

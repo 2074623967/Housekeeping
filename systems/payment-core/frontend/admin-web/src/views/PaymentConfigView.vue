@@ -686,6 +686,7 @@ onMounted(loadOverview);
                   <th>允许渠道</th>
                   <th>允许商户号</th>
                   <th>分钟限流</th>
+                  <th>接口限流</th>
                   <th>令牌鉴权</th>
                   <th>严格模式</th>
                   <th>自检状态</th>
@@ -703,6 +704,7 @@ onMounted(loadOverview);
                   <td class="flow-summary-cell">{{ policy.allowedChannelCodes }}</td>
                   <td class="flow-summary-cell">{{ policy.allowedMerchantNos }}</td>
                   <td>{{ policy.minuteSubmitLimit }}</td>
+                  <td>{{ policy.interfaceMinuteSubmitLimit }}</td>
                   <td>{{ policy.tokenAuthRequired }}</td>
                   <td>{{ policy.strictMode }}</td>
                   <td><span :class="['badge', policy.selfCheckStatusType]">{{ policy.selfCheckStatus }}</span></td>

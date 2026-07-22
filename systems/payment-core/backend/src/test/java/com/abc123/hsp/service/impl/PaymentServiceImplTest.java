@@ -625,6 +625,64 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectSubmitWhenInterfaceMinuteRateLimitExceeded() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-318");
+        prepay.setPaymentOrderId("PAY-318");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        prepay.setCustomerName("张女士");
+        when(paymentMapper.findPrepay("PRE-318")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-318");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-318")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+
+        PaymentControlPolicyDTO controlPolicy = new PaymentControlPolicyDTO();
+        controlPolicy.setSourceAppId("housekeeping-app-web");
+        controlPolicy.setAllowedPaymentMethods("微信支付");
+        controlPolicy.setAllowedChannelCodes("wx_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_HOME_APP");
+        controlPolicy.setMinuteSubmitLimit(10);
+        controlPolicy.setInterfaceMinuteSubmitLimit(2);
+        controlPolicy.setTokenAuthRequired("关闭");
+        controlPolicy.setStrictMode("关闭");
+        controlPolicy.setSelfCheckStatus("PASS");
+        when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
+        when(paymentMapper.countRecentAttemptsBySubmitScope("housekeeping-app-web", "H5", "10.0.0.20")).thenReturn(2);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-318");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("WX_H5");
+        request.setSourceAppId("housekeeping-app-web");
+        request.setMerchantNo("MCH_HOME_APP");
+        request.setTerminal("H5");
+        request.setClientIp("10.0.0.20");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .submit(request)
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED, exception.getCode());
+        verify(paymentMapper, never()).updatePrepayToPaying("PRE-318");
+    }
+
+    @Test
     void shouldRejectSubmitWhenStrictSelfCheckNotPassed() {
         PrepayOrderDTO prepay = new PrepayOrderDTO();
         prepay.setPrepayOrderNo("PRE-320");

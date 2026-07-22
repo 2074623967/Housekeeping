@@ -407,6 +407,7 @@
                allowed_channel_codes AS allowedChannelCodes,
                allowed_merchant_nos AS allowedMerchantNos,
                minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
                token_auth_required AS tokenAuthRequired,
                access_token_value AS accessTokenValue,
                strict_mode AS strictMode,
@@ -426,6 +427,15 @@
         FROM t_payment_attempt
         WHERE source_app_id = #{sourceAppId}
           AND payment_method = #{paymentMethod}
+          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
+    </select>
+
+    <select id="countRecentAttemptsBySubmitScope" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_attempt
+        WHERE source_app_id = #{sourceAppId}
+          AND terminal = #{terminal}
+          AND client_ip = #{clientIp}
           AND created_at &gt;= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
     </select>
 
