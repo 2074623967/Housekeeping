@@ -146,11 +146,23 @@
                    WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
                    ELSE '由支付运营确认责任方并补充处理备注'
                END AS responsibilityHint,
-               COALESCE(latest_alert.alert_status, '未通知') AS alertStatus,
-               COALESCE(latest_alert.alert_status_type, 'info') AS alertStatusType,
-               COALESCE(latest_alert.ack_status, '无需回执') AS alertAckStatus,
-               COALESCE(latest_alert.ack_status_type, 'info') AS alertAckStatusType,
-               COALESCE(latest_alert.receiver, '未分配') AS alertReceiver,
+               COALESCE(latest_source_alert.alert_status, '未通知') AS alertStatus,
+               COALESCE(latest_source_alert.alert_status_type, 'info') AS alertStatusType,
+               COALESCE(latest_source_alert.ack_status, '无需回执') AS alertAckStatus,
+               COALESCE(latest_source_alert.ack_status_type, 'info') AS alertAckStatusType,
+               COALESCE(latest_source_alert.receiver, '未分配') AS alertReceiver,
+               COALESCE(channel_delivery_summary.alertChannelSummary, '未派发') AS alertChannelSummary,
+               CASE
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '已派发'
+                       THEN CONCAT('已派发通道：', COALESCE(channel_delivery_summary.successChannels, '无'))
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '部分失败'
+                       THEN CONCAT('成功通道：', COALESCE(channel_delivery_summary.successChannels, '无'), '；失败通道：', COALESCE(channel_delivery_summary.failedChannels, '无'))
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '派发失败'
+                       THEN CONCAT('失败通道：', COALESCE(channel_delivery_summary.failedChannels, '无'))
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '已生成'
+                       THEN '待派发通道：IM / SMS / EMAIL'
+                   ELSE '暂无派发明细'
+               END AS alertDeliverySummary,
                CASE
                    WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '已超时'
                    WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '已超时'
@@ -193,13 +205,22 @@
                     ORDER BY action_log.created_at DESC, action_log.id DESC
                     LIMIT 1
                 )
-                 LEFT JOIN t_payment_issue_alert_log latest_alert ON latest_alert.id = (
+                 LEFT JOIN t_payment_issue_alert_log latest_source_alert ON latest_source_alert.id = (
                     SELECT alert_log.id
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND alert_log.alert_channel = 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
                 )
+                 LEFT JOIN (
+                    SELECT issue_no AS summaryIssueNo,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '未派发') AS alertChannelSummary,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' AND alert_status = '已派发' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS successChannels,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' AND alert_status = '派发失败' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS failedChannels
+                    FROM t_payment_issue_alert_log
+                    GROUP BY issue_no
+                ) channel_delivery_summary ON channel_delivery_summary.summaryIssueNo = payment_issue_union.issue_no
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')

@@ -1254,6 +1254,8 @@
 7. `admin-web` 任务中心新增“异常告警派发”操作卡片，并完成 `npm run build` 通过。
 8. 异常告警派发进一步补齐 IM / SMS / EMAIL 多通道独立留痕，原始 outbox 回写 `已派发 / 部分失败 / 派发失败`。
 9. `PaymentIssueAlertDeliveryServiceImplTest` 新增成功派发与部分失败场景，和任务中心测试一起通过 `15` 个用例。
+10. 异常中心列表补齐告警总状态与通道派发摘要展示，避免单条通道日志覆盖整体告警认知。
+11. `PaymentIssueServiceImplTest + PaymentIssueAlertDeliveryServiceImplTest + PaymentTaskCenterServiceImplTest` 于 `2026-07-23` 合计通过 `20` 个用例。
 
 ### 40.4 当前判断
 

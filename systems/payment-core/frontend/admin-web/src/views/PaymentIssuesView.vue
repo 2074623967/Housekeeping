@@ -319,6 +319,12 @@ onMounted(loadIssues);
                 <div class="muted-text">
                   {{ item.alertReceiver }} / {{ item.alertAckStatus }}
                 </div>
+                <div class="muted-text">
+                  {{ item.alertChannelSummary }}
+                </div>
+                <div class="muted-text">
+                  {{ item.alertDeliverySummary }}
+                </div>
               </td>
               <td>
                 <span :class="['badge', item.slaStatusType]">{{ item.slaStatus }}</span>
