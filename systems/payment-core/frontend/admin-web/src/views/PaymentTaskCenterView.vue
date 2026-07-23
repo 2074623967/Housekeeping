@@ -101,7 +101,7 @@ onMounted(loadOverview);
     <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看超时关单、失败事件重发、失败退款重试、控制策略巡检和日终告警，并承接自动调度与人工处理的统一留痕</p>
+        <p>统一查看超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -160,7 +160,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.7 已按任务类型、失败笔数和处理规模统一严重等级，避免只要失败就一律标红</p>
+              <p class="meta">任务中心 V1.9 已按任务类型、失败笔数和处理规模统一严重等级，并将异常告警派发纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -204,6 +204,12 @@ onMounted(loadOverview);
                   <td>不适用，发现即升级</td>
                   <td>无 SLA 超时异常</td>
                 </tr>
+                <tr>
+                  <td>异常告警派发</td>
+                  <td>派发失败且存在高优先级异常待外部触达</td>
+                  <td>存在告警已生成但待派发或部分通道失败</td>
+                  <td>无待派发异常告警</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -214,7 +220,7 @@ onMounted(loadOverview);
             <div class="section-title">
               <div>
               <h3>核心自动化任务</h3>
-              <p class="meta">本页触发的是正式版 V1.7 的统一操作；超时关单、失败事件重发、失败退款重试、控制策略巡检均已纳入自动调度与人工补偿双通道</p>
+              <p class="meta">本页触发的是正式版 V1.9 的统一操作；超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发均已纳入自动调度与人工补偿双通道</p>
             </div>
             </div>
 
@@ -277,6 +283,18 @@ onMounted(loadOverview);
                 {{ activeTaskCode === "PAYMENT_ISSUE_ESCALATE" ? "执行中..." : "执行 SLA 升级巡检" }}
               </button>
             </div>
+
+            <div class="sub-panel">
+              <h3>异常告警派发</h3>
+              <p>将已生成的异常告警 outbox 派发到本地 IM、短信、邮件骨架通道，并回写派发状态，作为后续接入真实通知网关的统一入口。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'PAYMENT_ISSUE_ALERT_DISPATCH'"
+                @click="runTask('PAYMENT_ISSUE_ALERT_DISPATCH', '异常告警派发', paymentTaskCenterApi.runDispatchIssueAlerts)"
+              >
+                {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_DISPATCH" ? "执行中..." : "执行异常告警派发" }}
+              </button>
+            </div>
           </section>
 
           <section class="panel mini">
@@ -331,9 +349,14 @@ onMounted(loadOverview);
                   <td>需要分派值班负责人并进入异常中心跟进</td>
                 </tr>
                 <tr>
+                  <td>异常告警派发链路</td>
+                  <td>V1.9</td>
+                  <td>已具备 outbox、本地 IM/SMS/EMAIL 派发骨架与状态回写，后续补真实通知网关</td>
+                </tr>
+                <tr>
                   <td>升级判定口径</td>
-                  <td>V1.7</td>
-                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3</td>
+                  <td>V1.9</td>
+                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发纳入统一任务矩阵</td>
                 </tr>
               </tbody>
             </table>

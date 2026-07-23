@@ -1251,6 +1251,7 @@
 4. `PaymentTaskCenterController` 新增 `POST /api/payment-task-center/dispatch-issue-alerts`。
 5. `PaymentTaskCenterMapper.xml` 新增待派发 `outbox` 告警查询和派发状态回写。
 6. `PaymentTaskCenterServiceImplTest` 扩展到派发入口验证，并完成定向单测通过。
+7. `admin-web` 任务中心新增“异常告警派发”操作卡片，并完成 `npm run build` 通过。
 
 ### 40.4 当前判断
 

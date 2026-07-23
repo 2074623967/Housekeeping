@@ -136,6 +136,7 @@ export const paymentTaskCenterApi = {
   runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
   runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {}),
   runEscalateOverdueIssues: () => postJson("/api/payment-task-center/escalate-overdue-issues", {}),
+  runDispatchIssueAlerts: () => postJson("/api/payment-task-center/dispatch-issue-alerts", {}),
   runControlPolicySelfChecks: () => postJson("/api/payment-task-center/control-policy-self-checks", {})
 };
 
