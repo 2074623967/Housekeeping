@@ -1,59 +1,23 @@
 package com.abc123.hsp.dto;
 
+import lombok.Data;
+
+/**
+ * 支付回调通知日志行模型。
+ */
+@Data
 public class PaymentNotifyItemDTO {
 
+    /** 通知流水号。 */
     private String notifyNo;
+    /** 渠道编码。 */
     private String channelCode;
+    /** 通知类型。 */
     private String notifyType;
+    /** 通知状态。 */
     private String notifyStatus;
+    /** 通知状态样式。 */
     private String notifyStatusType;
+    /** 创建时间。 */
     private String createdAt;
-
-    public String getNotifyNo() {
-        return notifyNo;
-    }
-
-    public void setNotifyNo(String notifyNo) {
-        this.notifyNo = notifyNo;
-    }
-
-    public String getChannelCode() {
-        return channelCode;
-    }
-
-    public void setChannelCode(String channelCode) {
-        this.channelCode = channelCode;
-    }
-
-    public String getNotifyType() {
-        return notifyType;
-    }
-
-    public void setNotifyType(String notifyType) {
-        this.notifyType = notifyType;
-    }
-
-    public String getNotifyStatus() {
-        return notifyStatus;
-    }
-
-    public void setNotifyStatus(String notifyStatus) {
-        this.notifyStatus = notifyStatus;
-    }
-
-    public String getNotifyStatusType() {
-        return notifyStatusType;
-    }
-
-    public void setNotifyStatusType(String notifyStatusType) {
-        this.notifyStatusType = notifyStatusType;
-    }
-
-    public String getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(String createdAt) {
-        this.createdAt = createdAt;
-    }
 }

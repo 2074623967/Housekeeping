@@ -1,122 +1,37 @@
 package com.abc123.hsp.dto;
 
+import lombok.Data;
+
+/**
+ * 预付单展示模型。
+ */
+@Data
 public class PrepayOrderDTO {
 
+    /** 预付单号。 */
     private String prepayOrderNo;
+    /** 账单号。 */
     private String billNo;
+    /** 订单号。 */
     private String orderNo;
+    /** 客户名称。 */
     private String customerName;
+    /** 待支付金额。 */
     private String amount;
+    /** 支付场景。 */
     private String payScene;
+    /** 收银台标题。 */
     private String cashierTitle;
+    /** 收银台状态。 */
     private String cashierStatus;
+    /** 收银台状态样式。 */
     private String cashierStatusType;
+    /** 关联支付单号。 */
     private String paymentOrderId;
+    /** 支付状态。 */
     private String paymentStatus;
+    /** 创建时间。 */
     private String createdAt;
+    /** 过期时间。 */
     private String expiresAt;
-
-    public String getPrepayOrderNo() {
-        return prepayOrderNo;
-    }
-
-    public void setPrepayOrderNo(String prepayOrderNo) {
-        this.prepayOrderNo = prepayOrderNo;
-    }
-
-    public String getBillNo() {
-        return billNo;
-    }
-
-    public void setBillNo(String billNo) {
-        this.billNo = billNo;
-    }
-
-    public String getOrderNo() {
-        return orderNo;
-    }
-
-    public void setOrderNo(String orderNo) {
-        this.orderNo = orderNo;
-    }
-
-    public String getCustomerName() {
-        return customerName;
-    }
-
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
-    }
-
-    public String getAmount() {
-        return amount;
-    }
-
-    public void setAmount(String amount) {
-        this.amount = amount;
-    }
-
-    public String getPayScene() {
-        return payScene;
-    }
-
-    public void setPayScene(String payScene) {
-        this.payScene = payScene;
-    }
-
-    public String getCashierTitle() {
-        return cashierTitle;
-    }
-
-    public void setCashierTitle(String cashierTitle) {
-        this.cashierTitle = cashierTitle;
-    }
-
-    public String getCashierStatus() {
-        return cashierStatus;
-    }
-
-    public void setCashierStatus(String cashierStatus) {
-        this.cashierStatus = cashierStatus;
-    }
-
-    public String getCashierStatusType() {
-        return cashierStatusType;
-    }
-
-    public void setCashierStatusType(String cashierStatusType) {
-        this.cashierStatusType = cashierStatusType;
-    }
-
-    public String getPaymentOrderId() {
-        return paymentOrderId;
-    }
-
-    public void setPaymentOrderId(String paymentOrderId) {
-        this.paymentOrderId = paymentOrderId;
-    }
-
-    public String getPaymentStatus() {
-        return paymentStatus;
-    }
-
-    public void setPaymentStatus(String paymentStatus) {
-        this.paymentStatus = paymentStatus;
-    }
-
-    public String getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(String createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getExpiresAt() {
-        return expiresAt;
-    }
-
-    public void setExpiresAt(String expiresAt) {
-        this.expiresAt = expiresAt;
-    }
 }

@@ -171,6 +171,38 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findIssueDutyRosters" resultType="com.abc123.hsp.dto.PaymentIssueDutyRosterDTO">
+        SELECT roster_code AS rosterCode,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               receiver,
+               notify_channels AS notifyChannels,
+               escalation_level AS escalationLevel,
+               schedule_tag AS scheduleTag,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_issue_duty_roster
+        ORDER BY issue_type ASC, severity ASC, id ASC
+    </select>
+
+    <select id="findIssueDutyRosterByCode" resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+        SELECT roster_code AS rosterCode,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               receiver,
+               notify_channels AS notifyChannels,
+               escalation_level AS escalationLevel,
+               schedule_tag AS scheduleTag,
+               status,
+               status_type AS statusType
+        FROM t_payment_issue_duty_roster
+        WHERE roster_code = #{rosterCode}
+        LIMIT 1
+    </select>
+
     <select id="findControlPolicyBySourceAppId" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
         SELECT source_app_id AS sourceAppId,
                source_app_name AS sourceAppName,
@@ -329,6 +361,49 @@
         WHERE protocol_code = #{protocolCode}
     </update>
 
+    <insert id="insertIssueDutyRoster" parameterType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+        INSERT INTO t_payment_issue_duty_roster (
+            roster_code,
+            issue_type,
+            severity,
+            responsibility_group,
+            receiver,
+            notify_channels,
+            escalation_level,
+            schedule_tag,
+            status,
+            status_type,
+            updated_at
+        ) VALUES (
+            #{rosterCode},
+            #{issueType},
+            #{severity},
+            #{responsibilityGroup},
+            #{receiver},
+            #{notifyChannels},
+            #{escalationLevel},
+            #{scheduleTag},
+            #{status},
+            #{statusType},
+            NOW()
+        )
+    </insert>
+
+    <update id="updateIssueDutyRoster" parameterType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+        UPDATE t_payment_issue_duty_roster
+        SET issue_type = #{issueType},
+            severity = #{severity},
+            responsibility_group = #{responsibilityGroup},
+            receiver = #{receiver},
+            notify_channels = #{notifyChannels},
+            escalation_level = #{escalationLevel},
+            schedule_tag = #{scheduleTag},
+            status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE roster_code = #{rosterCode}
+    </update>
+
     <update id="updateReturnCodeMappingStatus">
         UPDATE t_payment_channel_return_code_map
         SET status = #{status},
@@ -352,6 +427,14 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE source_app_id = #{sourceAppId}
+    </update>
+
+    <update id="updateIssueDutyRosterStatus">
+        UPDATE t_payment_issue_duty_roster
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE roster_code = #{rosterCode}
     </update>
 
     <update id="updateControlPolicySelfCheck">

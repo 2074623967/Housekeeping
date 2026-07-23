@@ -6,10 +6,12 @@ import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -58,6 +60,16 @@ public interface PaymentConfigMapper {
      * 查询支付控制策略配置。
      */
     List<PaymentControlPolicyDTO> findControlPolicies();
+
+    /**
+     * 查询异常告警值班路由配置。
+     */
+    List<PaymentIssueDutyRosterDTO> findIssueDutyRosters();
+
+    /**
+     * 按路由编码查询异常告警值班路由配置。
+     */
+    PaymentIssueDutyRosterEntity findIssueDutyRosterByCode(@Param("rosterCode") String rosterCode);
 
     /**
      * 按来源应用标识查询支付控制策略配置。
@@ -116,6 +128,16 @@ public interface PaymentConfigMapper {
     int updateProtocol(PaymentProtocolConfigEntity entity);
 
     /**
+     * 新增异常告警值班路由配置。
+     */
+    int insertIssueDutyRoster(PaymentIssueDutyRosterEntity entity);
+
+    /**
+     * 更新异常告警值班路由配置。
+     */
+    int updateIssueDutyRoster(PaymentIssueDutyRosterEntity entity);
+
+    /**
      * 更新渠道返回码映射启停状态。
      */
     int updateReturnCodeMappingStatus(@Param("channelCode") String channelCode,
@@ -144,4 +166,11 @@ public interface PaymentConfigMapper {
                                      @Param("selfCheckStatus") String selfCheckStatus,
                                      @Param("selfCheckStatusType") String selfCheckStatusType,
                                      @Param("selfCheckMessage") String selfCheckMessage);
+
+    /**
+     * 更新异常告警值班路由启停状态。
+     */
+    int updateIssueDutyRosterStatus(@Param("rosterCode") String rosterCode,
+                                    @Param("status") String status,
+                                    @Param("statusType") String statusType);
 }

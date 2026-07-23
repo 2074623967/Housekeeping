@@ -9,8 +9,11 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
@@ -46,6 +49,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
 
         PaymentChannelConfigDTO actualChannel = new PaymentConfigServiceImpl(paymentConfigMapper)
                 .overview()
@@ -57,6 +61,33 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("300s", actualChannel.getNotifySignWindow());
         org.junit.jupiter.api.Assertions.assertEquals("180天", actualChannel.getRefundWindow());
         org.junit.jupiter.api.Assertions.assertTrue(actualChannel.getRiskControlTag().contains("实名校验"));
+    }
+
+    @Test
+    void shouldExposeIssueDutyRosterInOverview() {
+        PaymentIssueDutyRosterDTO roster = new PaymentIssueDutyRosterDTO();
+        roster.setRosterCode("DUTY_WAIT_CALLBACK_P1");
+        roster.setIssueType("待回调未收口");
+        roster.setSeverity("P1");
+        roster.setResponsibilityGroup("支付后端值班组");
+        roster.setReceiver("支付后端值班");
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Arrays.asList(roster));
+
+        PaymentIssueDutyRosterDTO actualRoster = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .overview()
+                .getIssueDutyRosters()
+                .get(0);
+
+        org.junit.jupiter.api.Assertions.assertEquals("DUTY_WAIT_CALLBACK_P1", actualRoster.getRosterCode());
+        org.junit.jupiter.api.Assertions.assertEquals("待回调未收口", actualRoster.getIssueType());
+        org.junit.jupiter.api.Assertions.assertEquals("支付后端值班", actualRoster.getReceiver());
     }
 
     @Test
@@ -72,10 +103,59 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).toggleChannel(request);
 
         verify(paymentConfigMapper).updateChannelStatus("wx_h5", "DISABLED", "danger");
+    }
+
+    @Test
+    void shouldToggleIssueDutyRosterStatus() {
+        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
+        request.setConfigCode("DUTY_WAIT_CALLBACK_P1");
+        request.setEnabled(false);
+        when(paymentConfigMapper.updateIssueDutyRosterStatus("DUTY_WAIT_CALLBACK_P1", "DISABLED", "danger")).thenReturn(1);
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).toggleIssueDutyRoster(request);
+
+        verify(paymentConfigMapper).updateIssueDutyRosterStatus("DUTY_WAIT_CALLBACK_P1", "DISABLED", "danger");
+    }
+
+    @Test
+    void shouldCreateIssueDutyRoster() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(null);
+        mockOverviewDependencies();
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request);
+
+        ArgumentCaptor<PaymentIssueDutyRosterEntity> entityCaptor = ArgumentCaptor.forClass(PaymentIssueDutyRosterEntity.class);
+        verify(paymentConfigMapper).insertIssueDutyRoster(entityCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("待回调未收口", entityCaptor.getValue().getIssueType());
+        org.junit.jupiter.api.Assertions.assertEquals("P1", entityCaptor.getValue().getSeverity());
+        org.junit.jupiter.api.Assertions.assertEquals("支付后端值班组", entityCaptor.getValue().getResponsibilityGroup());
+    }
+
+    @Test
+    void shouldUpdateIssueDutyRoster() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        PaymentIssueDutyRosterEntity entity = new PaymentIssueDutyRosterEntity();
+        entity.setRosterCode("DUTY_NEW_P1");
+        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(entity);
+        mockOverviewDependencies();
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).updateIssueDutyRoster("DUTY_NEW_P1", request);
+
+        verify(paymentConfigMapper).updateIssueDutyRoster(org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterEntity.class));
     }
 
     @Test
@@ -108,6 +188,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findControlPolicies()).thenReturn(Arrays.asList(policy));
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
 
         PaymentControlPolicyDTO actualPolicy = new PaymentConfigServiceImpl(paymentConfigMapper)
                 .overview()
@@ -150,6 +231,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findControlPolicies()).thenReturn(Arrays.asList(policy));
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).runControlPolicySelfCheck(request);
 
@@ -248,6 +330,8 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request);
 
@@ -269,6 +353,8 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).updateProtocol("PROTO_TEST_V1", request);
 
@@ -343,6 +429,20 @@ class PaymentConfigServiceImplTest {
         return request;
     }
 
+    private PaymentIssueDutyRosterUpsertRequestDTO buildIssueDutyRosterRequest() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = new PaymentIssueDutyRosterUpsertRequestDTO();
+        request.setRosterCode("DUTY_NEW_P1");
+        request.setIssueType("待回调未收口");
+        request.setSeverity("P1");
+        request.setResponsibilityGroup("支付后端值班组");
+        request.setReceiver("支付后端值班");
+        request.setNotifyChannels("IN_APP,IM,SMS");
+        request.setEscalationLevel("L1");
+        request.setScheduleTag("交易链路白班");
+        request.setEnabled(true);
+        return request;
+    }
+
     private PaymentProtocolTypeOptionDTO buildProtocolTypeOption() {
         PaymentProtocolTypeOptionDTO option = new PaymentProtocolTypeOptionDTO();
         option.setProtocolType("PAYMENT_SIGN");
@@ -365,5 +465,16 @@ class PaymentConfigServiceImplTest {
         gateway.setChannelScope(channelScope);
         gateway.setStatus(status);
         return gateway;
+    }
+
+    private void mockOverviewDependencies() {
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
     }
 }

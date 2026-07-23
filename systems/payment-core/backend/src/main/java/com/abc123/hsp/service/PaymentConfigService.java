@@ -3,6 +3,7 @@ package com.abc123.hsp.service;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 
 /**
@@ -41,6 +42,16 @@ public interface PaymentConfigService {
     PaymentConfigOverviewDTO updateProtocol(String protocolCode, PaymentProtocolUpsertRequestDTO request);
 
     /**
+     * 新增异常告警值班路由配置。
+     */
+    PaymentConfigOverviewDTO createIssueDutyRoster(PaymentIssueDutyRosterUpsertRequestDTO request);
+
+    /**
+     * 编辑异常告警值班路由配置。
+     */
+    PaymentConfigOverviewDTO updateIssueDutyRoster(String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request);
+
+    /**
      * 启停渠道返回码映射配置。
      */
     PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request);
@@ -59,6 +70,11 @@ public interface PaymentConfigService {
      * 执行支付控制策略自检并回写准入结果。
      */
     PaymentConfigOverviewDTO runControlPolicySelfCheck(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 启停异常告警值班路由配置。
+     */
+    PaymentConfigOverviewDTO toggleIssueDutyRoster(PaymentConfigToggleRequestDTO request);
 
     /**
      * 批量执行启用中支付控制策略自检并回写准入结果。

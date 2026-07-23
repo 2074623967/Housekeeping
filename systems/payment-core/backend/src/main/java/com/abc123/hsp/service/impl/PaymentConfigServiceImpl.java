@@ -7,8 +7,10 @@ import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
@@ -46,6 +48,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
         overview.setGateways(paymentConfigMapper.findGateways());
         overview.setControlPolicies(paymentConfigMapper.findControlPolicies());
+        overview.setIssueDutyRosters(paymentConfigMapper.findIssueDutyRosters());
         return overview;
     }
 
@@ -119,6 +122,29 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
+    public PaymentConfigOverviewDTO createIssueDutyRoster(PaymentIssueDutyRosterUpsertRequestDTO request) {
+        PaymentIssueDutyRosterEntity entity = buildIssueDutyRosterEntity(request, null);
+        if (paymentConfigMapper.findIssueDutyRosterByCode(entity.getRosterCode()) != null) {
+            throw new IllegalArgumentException("异常告警值班路由编码已存在");
+        }
+        paymentConfigMapper.insertIssueDutyRoster(entity);
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO updateIssueDutyRoster(String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request) {
+        String normalizedRosterCode = requireText(rosterCode, "值班路由编码不能为空");
+        if (paymentConfigMapper.findIssueDutyRosterByCode(normalizedRosterCode) == null) {
+            throw new IllegalArgumentException("异常告警值班路由配置不存在");
+        }
+        PaymentIssueDutyRosterEntity entity = buildIssueDutyRosterEntity(request, normalizedRosterCode);
+        paymentConfigMapper.updateIssueDutyRoster(entity);
+        return overview();
+    }
+
+    @Override
+    @Transactional
     public PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request) {
         String configCode = requireConfigCode(request);
         String subCode = requireSubCode(request);
@@ -179,6 +205,21 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 selfCheckResult.statusType,
                 selfCheckResult.message
         );
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO toggleIssueDutyRoster(PaymentConfigToggleRequestDTO request) {
+        String configCode = requireConfigCode(request);
+        int affectedRows = paymentConfigMapper.updateIssueDutyRosterStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("异常告警值班路由配置不存在");
+        }
         return overview();
     }
 
@@ -346,6 +387,27 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return entity;
     }
 
+    private PaymentIssueDutyRosterEntity buildIssueDutyRosterEntity(PaymentIssueDutyRosterUpsertRequestDTO request,
+                                                                    String overrideRosterCode) {
+        if (request == null) {
+            throw new IllegalArgumentException("异常告警值班路由请求不能为空");
+        }
+        PaymentIssueDutyRosterEntity entity = new PaymentIssueDutyRosterEntity();
+        entity.setRosterCode(StringUtils.hasText(overrideRosterCode)
+                ? overrideRosterCode.trim()
+                : requireText(request.getRosterCode(), "值班路由编码不能为空"));
+        entity.setIssueType(requireText(request.getIssueType(), "异常类型不能为空"));
+        entity.setSeverity(resolveSeverity(request.getSeverity()));
+        entity.setResponsibilityGroup(requireText(request.getResponsibilityGroup(), "责任组不能为空"));
+        entity.setReceiver(requireText(request.getReceiver(), "值班接收人不能为空"));
+        entity.setNotifyChannels(requireText(request.getNotifyChannels(), "通知通道不能为空"));
+        entity.setEscalationLevel(requireText(request.getEscalationLevel(), "升级等级不能为空"));
+        entity.setScheduleTag(requireText(request.getScheduleTag(), "班次标签不能为空"));
+        entity.setStatus(resolveStatus(request.getEnabled()));
+        entity.setStatusType(resolveStatusType(request.getEnabled()));
+        return entity;
+    }
+
     private String requireText(String text, String message) {
         if (!StringUtils.hasText(text)) {
             throw new IllegalArgumentException(message);
@@ -361,6 +423,14 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("协议优先级不能小于0");
         }
         return priority;
+    }
+
+    private String resolveSeverity(String severity) {
+        String normalizedSeverity = requireText(severity, "严重等级不能为空");
+        if (!"P1".equals(normalizedSeverity) && !"P2".equals(normalizedSeverity) && !"P3".equals(normalizedSeverity)) {
+            throw new IllegalArgumentException("严重等级仅支持 P1/P2/P3");
+        }
+        return normalizedSeverity;
     }
 
     private String resolveProtocolTypeName(String protocolType, String requestProtocolTypeName) {

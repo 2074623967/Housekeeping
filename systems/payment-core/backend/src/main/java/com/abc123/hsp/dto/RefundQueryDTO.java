@@ -1,64 +1,25 @@
 package com.abc123.hsp.dto;
 
+import lombok.Data;
+
 /**
  * 退款单列表查询条件。
  */
+@Data
 public class RefundQueryDTO {
 
+    /** 退款单号。 */
     private String refundOrderId;
+    /** 支付单号。 */
     private String paymentOrderId;
+    /** 退款状态。 */
     private String refundStatus;
+    /** 退款方式。 */
     private String refundMethod;
+    /** 页码。 */
     private int pageNo = 1;
+    /** 每页条数。 */
     private int pageSize = 20;
-
-    public String getRefundOrderId() {
-        return refundOrderId;
-    }
-
-    public void setRefundOrderId(String refundOrderId) {
-        this.refundOrderId = refundOrderId;
-    }
-
-    public String getPaymentOrderId() {
-        return paymentOrderId;
-    }
-
-    public void setPaymentOrderId(String paymentOrderId) {
-        this.paymentOrderId = paymentOrderId;
-    }
-
-    public String getRefundStatus() {
-        return refundStatus;
-    }
-
-    public void setRefundStatus(String refundStatus) {
-        this.refundStatus = refundStatus;
-    }
-
-    public String getRefundMethod() {
-        return refundMethod;
-    }
-
-    public void setRefundMethod(String refundMethod) {
-        this.refundMethod = refundMethod;
-    }
-
-    public int getPageNo() {
-        return pageNo;
-    }
-
-    public void setPageNo(int pageNo) {
-        this.pageNo = pageNo;
-    }
-
-    public int getPageSize() {
-        return pageSize;
-    }
-
-    public void setPageSize(int pageSize) {
-        this.pageSize = pageSize;
-    }
 
     public int getOffset() {
         return (Math.max(pageNo, 1) - 1) * Math.min(Math.max(pageSize, 1), 100);

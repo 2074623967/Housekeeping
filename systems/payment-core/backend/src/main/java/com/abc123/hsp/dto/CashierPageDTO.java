@@ -1,106 +1,34 @@
 package com.abc123.hsp.dto;
 
 import java.util.List;
+import lombok.Data;
 
+/**
+ * 收银台页面展示模型。
+ */
+@Data
 public class CashierPageDTO {
 
+    /** 预付单号。 */
     private String prepayOrderNo;
+    /** 订单号。 */
     private String orderNo;
+    /** 账单号。 */
     private String billNo;
+    /** 客户名称。 */
     private String customerName;
+    /** 待支付金额。 */
     private String amount;
+    /** 支付场景。 */
     private String payScene;
+    /** 收银台标题。 */
     private String title;
+    /** 收银台状态。 */
     private String status;
+    /** 收银台状态样式。 */
     private String statusType;
+    /** 过期时间。 */
     private String expiresAt;
+    /** 可选支付渠道列表。 */
     private List<String> channels;
-
-    public String getPrepayOrderNo() {
-        return prepayOrderNo;
-    }
-
-    public void setPrepayOrderNo(String prepayOrderNo) {
-        this.prepayOrderNo = prepayOrderNo;
-    }
-
-    public String getOrderNo() {
-        return orderNo;
-    }
-
-    public void setOrderNo(String orderNo) {
-        this.orderNo = orderNo;
-    }
-
-    public String getBillNo() {
-        return billNo;
-    }
-
-    public void setBillNo(String billNo) {
-        this.billNo = billNo;
-    }
-
-    public String getCustomerName() {
-        return customerName;
-    }
-
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
-    }
-
-    public String getAmount() {
-        return amount;
-    }
-
-    public void setAmount(String amount) {
-        this.amount = amount;
-    }
-
-    public String getPayScene() {
-        return payScene;
-    }
-
-    public void setPayScene(String payScene) {
-        this.payScene = payScene;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getStatusType() {
-        return statusType;
-    }
-
-    public void setStatusType(String statusType) {
-        this.statusType = statusType;
-    }
-
-    public String getExpiresAt() {
-        return expiresAt;
-    }
-
-    public void setExpiresAt(String expiresAt) {
-        this.expiresAt = expiresAt;
-    }
-
-    public List<String> getChannels() {
-        return channels;
-    }
-
-    public void setChannels(List<String> channels) {
-        this.channels = channels;
-    }
 }

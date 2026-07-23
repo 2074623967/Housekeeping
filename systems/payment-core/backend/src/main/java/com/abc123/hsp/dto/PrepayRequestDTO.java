@@ -1,23 +1,15 @@
 package com.abc123.hsp.dto;
 
+import lombok.Data;
+
+/**
+ * 创建预付单请求。
+ */
+@Data
 public class PrepayRequestDTO {
 
+    /** 业务订单号。 */
     private String orderNo;
+    /** 支付场景。 */
     private String payScene;
-
-    public String getOrderNo() {
-        return orderNo;
-    }
-
-    public void setOrderNo(String orderNo) {
-        this.orderNo = orderNo;
-    }
-
-    public String getPayScene() {
-        return payScene;
-    }
-
-    public void setPayScene(String payScene) {
-        this.payScene = payScene;
-    }
 }

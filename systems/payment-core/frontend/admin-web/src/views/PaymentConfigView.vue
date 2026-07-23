@@ -9,12 +9,15 @@ const protocolTypeOptions = ref([]);
 const returnCodeMappings = ref([]);
 const gateways = ref([]);
 const controlPolicies = ref([]);
+const issueDutyRosters = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeConfigCode = ref("");
 const editingProtocolCode = ref("");
+const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
+const rosterForm = ref(createRosterForm());
 
 function createProtocolForm() {
   return {
@@ -38,23 +41,41 @@ function createProtocolForm() {
   };
 }
 
+function createRosterForm() {
+  return {
+    rosterCode: "",
+    issueType: "",
+    severity: "P1",
+    responsibilityGroup: "",
+    receiver: "",
+    notifyChannels: "IN_APP,IM",
+    escalationLevel: "L1",
+    scheduleTag: "",
+    enabled: true
+  };
+}
+
 async function loadOverview() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const overview = await paymentConfigApi.getOverview();
-    channels.value = overview.channels;
-    routeRules.value = overview.routeRules;
-    protocols.value = overview.protocols;
-    protocolTypeOptions.value = overview.protocolTypeOptions || [];
-    returnCodeMappings.value = overview.returnCodeMappings;
-    gateways.value = overview.gateways;
-    controlPolicies.value = overview.controlPolicies || [];
+    applyOverview(await paymentConfigApi.getOverview());
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function applyOverview(overview) {
+  channels.value = overview.channels || [];
+  routeRules.value = overview.routeRules || [];
+  protocols.value = overview.protocols || [];
+  protocolTypeOptions.value = overview.protocolTypeOptions || [];
+  returnCodeMappings.value = overview.returnCodeMappings || [];
+  gateways.value = overview.gateways || [];
+  controlPolicies.value = overview.controlPolicies || [];
+  issueDutyRosters.value = overview.issueDutyRosters || [];
 }
 
 async function toggleChannel(channel) {
@@ -116,14 +137,7 @@ async function runControlPolicySelfCheck(policy) {
   activeConfigCode.value = policy.sourceAppId;
   actionMessage.value = "";
   try {
-    const overview = await paymentConfigApi.runControlPolicySelfCheck(policy.sourceAppId);
-    channels.value = overview.channels;
-    routeRules.value = overview.routeRules;
-    protocols.value = overview.protocols || [];
-    protocolTypeOptions.value = overview.protocolTypeOptions || [];
-    returnCodeMappings.value = overview.returnCodeMappings;
-    gateways.value = overview.gateways;
-    controlPolicies.value = overview.controlPolicies || [];
+    applyOverview(await paymentConfigApi.runControlPolicySelfCheck(policy.sourceAppId));
     actionMessage.value = `支付控制策略 ${policy.sourceAppId} 自检已完成。`;
   } catch (error) {
     actionMessage.value = `支付控制策略 ${policy.sourceAppId} 自检失败：${error.message}`;
@@ -136,14 +150,7 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
   activeConfigCode.value = configCode;
   actionMessage.value = "";
   try {
-    const overview = await toggleRunner(configCode, enabled);
-    channels.value = overview.channels;
-    routeRules.value = overview.routeRules;
-    protocols.value = overview.protocols;
-    protocolTypeOptions.value = overview.protocolTypeOptions || [];
-    returnCodeMappings.value = overview.returnCodeMappings;
-    gateways.value = overview.gateways;
-    controlPolicies.value = overview.controlPolicies || [];
+    applyOverview(await toggleRunner(configCode, enabled));
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
@@ -156,14 +163,7 @@ async function toggleMappingConfig(configCode, subCode, enabled, configType, tog
   activeConfigCode.value = `${configCode}:${subCode}`;
   actionMessage.value = "";
   try {
-    const overview = await toggleRunner(configCode, subCode, enabled);
-    channels.value = overview.channels;
-    routeRules.value = overview.routeRules;
-    protocols.value = overview.protocols;
-    protocolTypeOptions.value = overview.protocolTypeOptions || [];
-    returnCodeMappings.value = overview.returnCodeMappings;
-    gateways.value = overview.gateways;
-    controlPolicies.value = overview.controlPolicies || [];
+    applyOverview(await toggleRunner(configCode, subCode, enabled));
     actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode}/${subCode} 操作失败：${error.message}`;
@@ -213,19 +213,63 @@ async function submitProtocolForm() {
     const overview = editingProtocolCode.value
       ? await paymentConfigApi.updateProtocol(editingProtocolCode.value, payload)
       : await paymentConfigApi.createProtocol(payload);
-    channels.value = overview.channels;
-    routeRules.value = overview.routeRules;
-    protocols.value = overview.protocols;
-    protocolTypeOptions.value = overview.protocolTypeOptions || [];
-    returnCodeMappings.value = overview.returnCodeMappings;
-    gateways.value = overview.gateways;
-    controlPolicies.value = overview.controlPolicies || [];
+    applyOverview(overview);
     actionMessage.value = editingProtocolCode.value
       ? `支付协议 ${editingProtocolCode.value} 已更新。`
       : `支付协议 ${protocolForm.value.protocolCode} 已新增。`;
     startCreateProtocol();
   } catch (error) {
     actionMessage.value = `支付协议保存失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function toggleIssueDutyRoster(roster) {
+  await toggleConfig(
+    roster.rosterCode,
+    roster.status !== "ENABLED",
+    "异常告警值班路由",
+    paymentConfigApi.toggleIssueDutyRoster
+  );
+}
+
+function startCreateRoster() {
+  editingRosterCode.value = "";
+  rosterForm.value = createRosterForm();
+  actionMessage.value = "";
+}
+
+function startEditRoster(roster) {
+  editingRosterCode.value = roster.rosterCode;
+  rosterForm.value = {
+    rosterCode: roster.rosterCode,
+    issueType: roster.issueType,
+    severity: roster.severity,
+    responsibilityGroup: roster.responsibilityGroup,
+    receiver: roster.receiver,
+    notifyChannels: roster.notifyChannels,
+    escalationLevel: roster.escalationLevel,
+    scheduleTag: roster.scheduleTag,
+    enabled: roster.status === "ENABLED"
+  };
+  actionMessage.value = `正在编辑值班路由 ${roster.rosterCode}`;
+}
+
+async function submitRosterForm() {
+  activeConfigCode.value = editingRosterCode.value || rosterForm.value.rosterCode;
+  actionMessage.value = "";
+  try {
+    const overview = editingRosterCode.value
+      ? await paymentConfigApi.updateIssueDutyRoster(editingRosterCode.value, rosterForm.value)
+      : await paymentConfigApi.createIssueDutyRoster(rosterForm.value);
+    applyOverview(overview);
+    actionMessage.value = editingRosterCode.value
+      ? `异常告警值班路由 ${editingRosterCode.value} 已更新。`
+      : `异常告警值班路由 ${rosterForm.value.rosterCode} 已新增。`;
+    startCreateRoster();
+  } catch (error) {
+    actionMessage.value = `异常告警值班路由保存失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -727,6 +771,132 @@ onMounted(loadOverview);
                       @click="runControlPolicySelfCheck(policy)"
                     >
                       执行自检
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>异常告警值班路由</h3>
+              <p class="meta">按异常类型和严重等级配置责任组、值班接收人、通知通道与班次标签，支撑任务中心自动派发异常告警</p>
+            </div>
+            <button class="button secondary" @click="startCreateRoster">新建值班路由</button>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ editingRosterCode ? "编辑值班路由" : "新增值班路由" }}</h3>
+                <p class="meta">维护异常类型与严重等级对应的责任组、接收人、通知通道和升级班次，供任务中心自动派发使用</p>
+              </div>
+            </div>
+
+            <div class="filter-grid">
+              <label>
+                路由编码
+                <input v-model.trim="rosterForm.rosterCode" :disabled="Boolean(editingRosterCode)" />
+              </label>
+              <label>
+                异常类型
+                <input v-model.trim="rosterForm.issueType" placeholder="待回调未收口" />
+              </label>
+              <label>
+                严重等级
+                <select v-model="rosterForm.severity">
+                  <option value="P1">P1</option>
+                  <option value="P2">P2</option>
+                  <option value="P3">P3</option>
+                </select>
+              </label>
+              <label>
+                责任组
+                <input v-model.trim="rosterForm.responsibilityGroup" placeholder="支付后端值班组" />
+              </label>
+              <label>
+                值班接收人
+                <input v-model.trim="rosterForm.receiver" placeholder="支付后端值班" />
+              </label>
+              <label>
+                通知通道
+                <input v-model.trim="rosterForm.notifyChannels" placeholder="IN_APP,IM,SMS" />
+              </label>
+              <label>
+                升级等级
+                <input v-model.trim="rosterForm.escalationLevel" placeholder="L1" />
+              </label>
+              <label>
+                班次标签
+                <input v-model.trim="rosterForm.scheduleTag" placeholder="交易链路白班" />
+              </label>
+              <label>
+                启用状态
+                <select v-model="rosterForm.enabled">
+                  <option :value="true">启用</option>
+                  <option :value="false">停用</option>
+                </select>
+              </label>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button
+                class="button primary"
+                :disabled="activeConfigCode === (editingRosterCode || rosterForm.rosterCode)"
+                @click="submitRosterForm"
+              >
+                {{ editingRosterCode ? "保存修改" : "新增路由" }}
+              </button>
+              <button class="button secondary" @click="startCreateRoster">重置表单</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>路由编码</th>
+                  <th>异常类型</th>
+                  <th>严重等级</th>
+                  <th>责任组</th>
+                  <th>值班接收人</th>
+                  <th>通知通道</th>
+                  <th>升级等级</th>
+                  <th>班次标签</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="roster in issueDutyRosters" :key="roster.rosterCode">
+                  <td>{{ roster.rosterCode }}</td>
+                  <td>{{ roster.issueType }}</td>
+                  <td>{{ roster.severity }}</td>
+                  <td>{{ roster.responsibilityGroup }}</td>
+                  <td>{{ roster.receiver }}</td>
+                  <td>{{ roster.notifyChannels }}</td>
+                  <td>{{ roster.escalationLevel }}</td>
+                  <td>{{ roster.scheduleTag }}</td>
+                  <td><span :class="['badge', roster.statusType]">{{ roster.status }}</span></td>
+                  <td>{{ roster.updatedAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === roster.rosterCode"
+                      @click="startEditRoster(roster)"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === roster.rosterCode"
+                      @click="toggleIssueDutyRoster(roster)"
+                    >
+                      {{ roster.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
                   </td>
                 </tr>

@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import org.springframework.web.bind.annotation.PathVariable;
 import com.abc123.hsp.service.PaymentConfigService;
@@ -76,6 +77,25 @@ public class PaymentConfigController {
     }
 
     /**
+     * 新增异常告警值班路由配置。
+     */
+    @PostMapping("/issue-duty-rosters")
+    public ApiResponse<PaymentConfigOverviewDTO> createIssueDutyRoster(
+            @RequestBody PaymentIssueDutyRosterUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.createIssueDutyRoster(request));
+    }
+
+    /**
+     * 编辑异常告警值班路由配置。
+     */
+    @PutMapping("/issue-duty-rosters/{rosterCode}")
+    public ApiResponse<PaymentConfigOverviewDTO> updateIssueDutyRoster(
+            @PathVariable("rosterCode") String rosterCode,
+            @RequestBody PaymentIssueDutyRosterUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.updateIssueDutyRoster(rosterCode, request));
+    }
+
+    /**
      * 启停渠道返回码映射配置。
      */
     @PostMapping("/return-codes/toggle")
@@ -105,5 +125,13 @@ public class PaymentConfigController {
     @PostMapping("/control-policies/self-check")
     public ApiResponse<PaymentConfigOverviewDTO> runControlPolicySelfCheck(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.runControlPolicySelfCheck(request));
+    }
+
+    /**
+     * 启停异常告警值班路由配置。
+     */
+    @PostMapping("/issue-duty-rosters/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleIssueDutyRoster(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleIssueDutyRoster(request));
     }
 }

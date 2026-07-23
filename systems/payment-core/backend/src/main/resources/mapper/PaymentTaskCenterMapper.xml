@@ -89,23 +89,13 @@
     </select>
 
     <select id="findOverdueIssueAlertCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
-        SELECT issue_no AS issueNo,
-               payment_order_id AS paymentOrderId,
-               issue_type AS issueType,
-               severity,
-               CASE
-                   WHEN issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
-                   WHEN issue_type = '下游事件发布失败' THEN '账务清结算联动组'
-                   WHEN issue_type = '命中停用渠道' THEN '渠道配置运营组'
-                   ELSE '支付运营组'
-               END AS responsibilityGroup,
-               CASE
-                   WHEN issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班'
-                   WHEN issue_type = '下游事件发布失败' THEN '账清结算联动值班'
-                   WHEN issue_type = '命中停用渠道' THEN '渠道配置运营'
-                   ELSE '支付运营'
-               END AS receiver,
-               CONCAT('支付异常 ', issue_no, ' 已超过 ', severity, ' SLA，请进入异常中心处理。') AS alertContent
+        SELECT issue_sla.issue_no AS issueNo,
+               issue_sla.payment_order_id AS paymentOrderId,
+               issue_sla.issue_type AS issueType,
+               issue_sla.severity AS severity,
+               COALESCE(roster.responsibility_group, '支付运营组') AS responsibilityGroup,
+               COALESCE(roster.receiver, '支付运营') AS receiver,
+               CONCAT('支付异常 ', issue_sla.issue_no, ' 已超过 ', issue_sla.severity, ' SLA，请进入异常中心处理。') AS alertContent
         FROM (
             SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
                    po.payment_order_id,
@@ -140,6 +130,10 @@
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
             WHERE pcc.status = 'DISABLED'
         ) issue_sla
+        LEFT JOIN t_payment_issue_duty_roster roster
+            ON roster.issue_type = issue_sla.issue_type
+           AND roster.severity = issue_sla.severity
+           AND roster.status = 'ENABLED'
         WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
             OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
           AND NOT EXISTS (

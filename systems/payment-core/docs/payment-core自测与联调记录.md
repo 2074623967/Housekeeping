@@ -1183,6 +1183,58 @@
 
 1. 新增 `PaymentControlPolicySelfCheckSummaryDTO` 和 `PaymentControlPolicySelfCheckItemDTO`，沉淀支付控制策略批量巡检摘要和条目口径。
 2. `PaymentConfigService` 新增 `runAllEnabledControlPolicySelfChecks()`，批量扫描启用中的来源应用策略，并回写 `PASS / WARN / FAIL` 结果。
+
+## 39. 2026-07-23 晚间值班路由配置化与 DTO 规范验证
+
+### 39.1 本轮验证结论
+
+本轮围绕“异常责任路由不能长期硬编码在 SQL 中，DTO/请求对象也不能继续混用手写 `getter/setter` 风格”的问题进行了补齐，确认支付配置中心、任务中心和工程规范已经向冻结版标准进一步收敛。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentIssueServiceImplTest test` | 通过 | 合计 `35` 个用例全部通过，覆盖值班路由配置中心、任务中心、异常中心和告警派发骨架 |
+| 后台前端构建 | `npm run build` | 通过 | `admin-web` 新增“异常告警值班路由”配置区块后可稳定构建 |
+| DTO 规范检查 | `rg -l "public .* get[A-Z]\|public void set[A-Z]" systems/payment-core/backend/src/main/java/com/abc123/hsp/dto -g "*.java"` | 符合预期 | 剩余结果均为查询对象上的 `getOffset/getLimit` 派生方法，不再包含基础字段的手写 `getter/setter` |
+
+### 39.2 本轮补齐项
+
+1. 配置中心总览新增 `issueDutyRosters` 数据输出。
+2. 配置中心新增 `POST /api/payment-config/issue-duty-rosters/toggle`，支持值班路由启停。
+3. `t_payment_issue_duty_roster` 新增初始化数据，沉淀四类支付异常责任路由。
+4. 任务中心超时异常候选查询切换为 `值班路由表配置优先 + 默认兜底`。
+5. `PaymentConfigServiceImplTest` 新增值班路由总览与启停用例。
+6. 多个历史 DTO 已收敛为 `Lombok + 字段中文注释` 风格，统一工程口径。
+
+### 39.3 当前判断
+
+1. 当前 `payment-core` 在异常治理维度已经具备“异常识别 -> SLA 巡检 -> 值班路由识别 -> 本地告警派发 -> 状态回写”的轻量闭环。
+2. 当前工程规范已进一步接近可交付开发文档与 AI 直读代码标准。
+3. 仍需继续补真实值班表编辑能力、真实通知网关、跨系统联动与更多支付核心页面/接口，暂不满足 `master / release` 门槛。
+
+## 41. 2026-07-23 夜间值班路由新增/编辑验证
+
+### 41.1 本轮验证结论
+
+本轮围绕“值班路由不能只支持查看与启停，配置中心必须支持运营直接新增和编辑”的问题进行了补齐，确认支付配置中心已经具备值班路由的轻量维护能力。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentIssueServiceImplTest test` | 通过 | 合计 `37` 个用例全部通过，`PaymentConfigServiceImplTest` 已提升到 `17` 个用例 |
+| 后台前端构建 | `npm run build` | 通过 | 新增“值班路由新增/编辑表单”后可稳定构建 |
+
+### 41.2 本轮补齐项
+
+1. 新增 `PaymentIssueDutyRosterUpsertRequestDTO`，统一承载值班路由新增/编辑请求。
+2. 新增 `PaymentIssueDutyRosterEntity`，统一承载值班路由持久化对象。
+3. `PaymentConfigController` 新增值班路由创建、编辑接口。
+4. `PaymentConfigServiceImpl` 新增编码重复校验、严重等级校验和新增/编辑编排逻辑。
+5. `PaymentConfigMapper.xml` 新增按编码查询、新增和更新值班路由 SQL。
+6. `admin-web` 新增值班路由表单与编辑动作。
+
+### 41.3 当前判断
+
+1. 当前值班路由模块已经从“只读配置表”升级为“后台可维护配置模块”。
+2. 后续仍需补值班日历、升级链路、真实通知网关与审计留痕扩展，才可能接近最终冻结版门槛。
 3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
 4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
 5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。

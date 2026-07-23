@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_task_run_log;
+DROP TABLE IF EXISTS t_payment_issue_duty_roster;
 DROP TABLE IF EXISTS t_payment_issue_alert_log;
 DROP TABLE IF EXISTS t_payment_issue_action_log;
 DROP TABLE IF EXISTS t_payment_order;
@@ -402,6 +403,24 @@ CREATE TABLE t_payment_issue_action_log (
     KEY idx_issue_action_issue (issue_no, created_at),
     KEY idx_issue_action_payment (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常处理动作日志表';
+
+CREATE TABLE t_payment_issue_duty_roster (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    roster_code VARCHAR(64) NOT NULL COMMENT '值班路由编码',
+    issue_type VARCHAR(64) NOT NULL COMMENT '适用异常类型',
+    severity VARCHAR(32) NOT NULL COMMENT '适用严重等级',
+    responsibility_group VARCHAR(64) NOT NULL COMMENT '责任组',
+    receiver VARCHAR(64) NOT NULL COMMENT '默认值班接收人',
+    notify_channels VARCHAR(64) NOT NULL COMMENT '默认通知通道列表',
+    escalation_level VARCHAR(32) NOT NULL COMMENT '升级等级',
+    schedule_tag VARCHAR(64) NOT NULL COMMENT '值班班次标签',
+    status VARCHAR(32) NOT NULL COMMENT '配置状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '配置状态样式类型',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_issue_duty_roster_code (roster_code),
+    KEY idx_issue_duty_type_severity (issue_type, severity, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警值班路由表';
 
 CREATE TABLE t_payment_issue_alert_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

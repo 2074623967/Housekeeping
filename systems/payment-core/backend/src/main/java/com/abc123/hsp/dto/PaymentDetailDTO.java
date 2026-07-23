@@ -1,214 +1,58 @@
 package com.abc123.hsp.dto;
 
 import java.util.List;
+import lombok.Data;
 
+/**
+ * 支付单详情展示模型。
+ */
+@Data
 public class PaymentDetailDTO {
 
+    /** 支付单号。 */
     private String paymentOrderId;
+    /** 预付单号。 */
     private String prepayOrderNo;
+    /** 账单号。 */
     private String billNo;
+    /** 订单号。 */
     private String orderNo;
+    /** 客户名称。 */
     private String customerName;
+    /** 支付金额。 */
     private String amount;
+    /** 支付方式。 */
     private String paymentMethod;
+    /** 支付渠道。 */
     private String channel;
+    /** 渠道交易号。 */
     private String channelTransactionNo;
+    /** 最近一次请求终端。 */
     private String latestTerminal;
+    /** 最近一次请求客户端 IP。 */
     private String latestClientIp;
+    /** 最近一次幂等键。 */
     private String latestIdempotencyKey;
+    /** 最近一次尝试状态。 */
     private String latestAttemptStatus;
+    /** 最近一次尝试状态样式。 */
     private String latestAttemptStatusType;
+    /** 最近一次请求报文。 */
     private String latestRequestPayload;
+    /** 最近一次响应报文。 */
     private String latestResponsePayload;
+    /** 查单结果来源。 */
     private String querySource;
+    /** 支付状态。 */
     private String status;
+    /** 支付状态样式。 */
     private String statusType;
+    /** 创建时间。 */
     private String createdAt;
+    /** 路由日志列表。 */
     private List<String> routeLogs;
+    /** 回调日志列表。 */
     private List<String> notifyLogs;
+    /** 事件日志列表。 */
     private List<String> eventLogs;
-
-    public String getPaymentOrderId() {
-        return paymentOrderId;
-    }
-
-    public void setPaymentOrderId(String paymentOrderId) {
-        this.paymentOrderId = paymentOrderId;
-    }
-
-    public String getPrepayOrderNo() {
-        return prepayOrderNo;
-    }
-
-    public void setPrepayOrderNo(String prepayOrderNo) {
-        this.prepayOrderNo = prepayOrderNo;
-    }
-
-    public String getBillNo() {
-        return billNo;
-    }
-
-    public void setBillNo(String billNo) {
-        this.billNo = billNo;
-    }
-
-    public String getOrderNo() {
-        return orderNo;
-    }
-
-    public void setOrderNo(String orderNo) {
-        this.orderNo = orderNo;
-    }
-
-    public String getCustomerName() {
-        return customerName;
-    }
-
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
-    }
-
-    public String getAmount() {
-        return amount;
-    }
-
-    public void setAmount(String amount) {
-        this.amount = amount;
-    }
-
-    public String getPaymentMethod() {
-        return paymentMethod;
-    }
-
-    public void setPaymentMethod(String paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
-
-    public String getChannel() {
-        return channel;
-    }
-
-    public void setChannel(String channel) {
-        this.channel = channel;
-    }
-
-    public String getChannelTransactionNo() {
-        return channelTransactionNo;
-    }
-
-    public void setChannelTransactionNo(String channelTransactionNo) {
-        this.channelTransactionNo = channelTransactionNo;
-    }
-
-    public String getLatestTerminal() {
-        return latestTerminal;
-    }
-
-    public void setLatestTerminal(String latestTerminal) {
-        this.latestTerminal = latestTerminal;
-    }
-
-    public String getLatestClientIp() {
-        return latestClientIp;
-    }
-
-    public void setLatestClientIp(String latestClientIp) {
-        this.latestClientIp = latestClientIp;
-    }
-
-    public String getLatestIdempotencyKey() {
-        return latestIdempotencyKey;
-    }
-
-    public void setLatestIdempotencyKey(String latestIdempotencyKey) {
-        this.latestIdempotencyKey = latestIdempotencyKey;
-    }
-
-    public String getLatestAttemptStatus() {
-        return latestAttemptStatus;
-    }
-
-    public void setLatestAttemptStatus(String latestAttemptStatus) {
-        this.latestAttemptStatus = latestAttemptStatus;
-    }
-
-    public String getLatestAttemptStatusType() {
-        return latestAttemptStatusType;
-    }
-
-    public void setLatestAttemptStatusType(String latestAttemptStatusType) {
-        this.latestAttemptStatusType = latestAttemptStatusType;
-    }
-
-    public String getLatestRequestPayload() {
-        return latestRequestPayload;
-    }
-
-    public void setLatestRequestPayload(String latestRequestPayload) {
-        this.latestRequestPayload = latestRequestPayload;
-    }
-
-    public String getLatestResponsePayload() {
-        return latestResponsePayload;
-    }
-
-    public void setLatestResponsePayload(String latestResponsePayload) {
-        this.latestResponsePayload = latestResponsePayload;
-    }
-
-    public String getQuerySource() {
-        return querySource;
-    }
-
-    public void setQuerySource(String querySource) {
-        this.querySource = querySource;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getStatusType() {
-        return statusType;
-    }
-
-    public void setStatusType(String statusType) {
-        this.statusType = statusType;
-    }
-
-    public String getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(String createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public List<String> getNotifyLogs() {
-        return notifyLogs;
-    }
-
-    public void setNotifyLogs(List<String> notifyLogs) {
-        this.notifyLogs = notifyLogs;
-    }
-
-    public List<String> getRouteLogs() {
-        return routeLogs;
-    }
-
-    public void setRouteLogs(List<String> routeLogs) {
-        this.routeLogs = routeLogs;
-    }
-
-    public List<String> getEventLogs() {
-        return eventLogs;
-    }
-
-    public void setEventLogs(List<String> eventLogs) {
-        this.eventLogs = eventLogs;
-    }
 }
