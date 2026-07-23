@@ -122,7 +122,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runDispatchIssueAlerts() {
-        return paymentIssueAlertDeliveryService.dispatchPendingAlerts();
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.dispatchPendingAlerts();
+        result.setOverview(overview());
+        return result;
     }
 
     @Override
@@ -134,7 +136,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoDispatchIssueAlerts() {
-        return paymentIssueAlertDeliveryService.autoDispatchPendingAlerts();
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.autoDispatchPendingAlerts();
+        result.setOverview(overview());
+        return result;
     }
 
     @Override

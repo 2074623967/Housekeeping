@@ -85,6 +85,7 @@ async function runTask(taskCode, taskName, actionRunner) {
   try {
     const result = await actionRunner();
     overview.value = result.overview;
+    await loadTaskRuns();
     actionMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，告警 ${result.warningCount || 0} 条，失败 ${result.failCount} 条。`;
   } catch (error) {
     actionMessage.value = `${taskName}执行失败：${error.message}`;

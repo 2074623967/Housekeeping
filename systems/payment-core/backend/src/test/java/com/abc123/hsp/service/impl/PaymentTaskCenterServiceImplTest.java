@@ -327,8 +327,10 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldDispatchIssueAlerts() {
         when(paymentIssueAlertDeliveryService.dispatchPendingAlerts()).thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
-        new PaymentTaskCenterServiceImpl(
+        com.abc123.hsp.dto.PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
@@ -338,13 +340,16 @@ class PaymentTaskCenterServiceImplTest {
         ).runDispatchIssueAlerts();
 
         verify(paymentIssueAlertDeliveryService).dispatchPendingAlerts();
+        Assertions.assertNotNull(result.getOverview());
     }
 
     @Test
     void shouldAutoDispatchIssueAlerts() {
         when(paymentIssueAlertDeliveryService.autoDispatchPendingAlerts()).thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
-        new PaymentTaskCenterServiceImpl(
+        com.abc123.hsp.dto.PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
@@ -354,5 +359,6 @@ class PaymentTaskCenterServiceImplTest {
         ).runAutoDispatchIssueAlerts();
 
         verify(paymentIssueAlertDeliveryService).autoDispatchPendingAlerts();
+        Assertions.assertNotNull(result.getOverview());
     }
 }
