@@ -1219,3 +1219,41 @@
 
 1. 当前支付主链路已经具备“幂等键 -> 收银台占位 -> 并发令牌 -> 渠道路由 -> 渠道提交 -> 成功/关闭释放”的正式化雏形。
 2. 后续仍需补接口级分布式限流和更细粒度重试编排，因此仍不满足最终 `master/release` 冻结门槛。
+
+## 40. 2026-07-23 异常告警派发骨架验证
+
+### 40.1 本轮验证范围
+
+本轮围绕支付任务中心中的“异常告警派发”能力进行了验证，目标是确认当前代码已从“只生成 outbox 告警”升级为“可由任务中心触发本地告警派发骨架并回写状态”。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertDeliveryService` 手动/自动派发入口
+2. `PaymentTaskCenterService` 与 `PaymentTaskCenterController` 的派发任务挂接
+3. `PaymentTaskCenterMapper.xml` 的待派发 outbox 查询与派发状态回写
+4. 本地 IM / SMS / Email 三类通知器骨架
+5. `PaymentTaskCenterServiceImplTest` 的派发入口测试
+
+### 40.2 验证过程
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 第一次测试执行 | `mvn -Dtest=PaymentTaskCenterServiceImplTest test` | 失败 | 环境使用的是 `JRE`，缺少编译器，报错 `No compiler is provided in this environment` |
+| 环境切换 | 设置 `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home` | 成功 | 切换到本机可用 JDK |
+| 第二次测试执行 | `/Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentTaskCenterServiceImplTest test` | 初次失败 | `Mockito` 严格模式下发现两个无效 stubbing |
+| 测试修复后再次执行 | 同上 | 通过 | `13` 个测试全部通过 |
+
+### 40.3 本轮补齐项
+
+1. 新增 `PaymentIssueAlertDeliveryService` 与默认实现，统一承接异常告警派发任务。
+2. 新增 `PaymentIssueAlertNotifier` 抽象，并补齐本地 `IM / SMS / EMAIL` 三类通知器骨架。
+3. `PaymentTaskCenterService` 新增“异常告警派发”手动与自动执行入口。
+4. `PaymentTaskCenterController` 新增 `POST /api/payment-task-center/dispatch-issue-alerts`。
+5. `PaymentTaskCenterMapper.xml` 新增待派发 `outbox` 告警查询和派发状态回写。
+6. `PaymentTaskCenterServiceImplTest` 扩展到派发入口验证，并完成定向单测通过。
+
+### 40.4 当前判断
+
+1. 当前 `payment-core` 已具备异常 SLA 告警 `outbox -> 本地派发骨架 -> 状态回写` 的后端闭环。
+2. 本轮通过的是本地骨架与任务中心编排，不代表已经完成企业微信 / 钉钉 / 短信 / 邮件供应商的生产级对接。
+3. 因此本轮提升的是冻结版成熟度，而不是发布门槛；`master / release` 判断仍需继续看真实通知网关、值班路由和回执流水等能力。

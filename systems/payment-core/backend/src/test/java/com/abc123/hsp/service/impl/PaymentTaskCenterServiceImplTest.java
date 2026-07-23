@@ -15,10 +15,10 @@ import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +42,8 @@ class PaymentTaskCenterServiceImplTest {
     private RefundMapper refundMapper;
     @Mock
     private PaymentConfigService paymentConfigService;
+    @Mock
+    private PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
 
     @Test
     void shouldRunCloseExpiredPayments() {
@@ -54,7 +56,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runCloseExpiredPayments();
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
@@ -74,7 +77,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runRepublishFailedEvents();
 
         verify(paymentEventMapper).findFailedEventNos();
@@ -99,7 +103,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runAutoRepublishFailedEvents();
 
         verify(paymentEventMapper).findFailedEventNos();
@@ -119,7 +124,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runAutoCloseExpiredPayments();
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
@@ -138,7 +144,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runAutoRetryFailedRefunds();
 
         verify(refundMapper).findFailedRefundOrderIds();
@@ -169,7 +176,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runEscalateOverdueIssues();
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -197,7 +205,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runAutoEscalateOverdueIssues();
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -223,7 +232,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).listTaskRuns(query);
 
         Assertions.assertEquals(1L, result.getTotal());
@@ -247,7 +257,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runRetryFailedRefunds();
 
         ArgumentCaptor<PaymentTaskRunLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentTaskRunLogEntity.class);
@@ -273,7 +284,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runControlPolicySelfChecks();
 
         verify(paymentConfigService).runAllEnabledControlPolicySelfChecks();
@@ -301,7 +313,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentExpiryTaskService,
                 paymentEventMapper,
                 refundMapper,
-                paymentConfigService
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
         ).runAutoControlPolicySelfChecks();
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -309,5 +322,37 @@ class PaymentTaskCenterServiceImplTest {
                         && "payment-control-self-check-scheduler".equals(entity.getTriggeredBy())
                         && "/payment-config".equals(entity.getRecommendedRoute())
         ));
+    }
+
+    @Test
+    void shouldDispatchIssueAlerts() {
+        when(paymentIssueAlertDeliveryService.dispatchPendingAlerts()).thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runDispatchIssueAlerts();
+
+        verify(paymentIssueAlertDeliveryService).dispatchPendingAlerts();
+    }
+
+    @Test
+    void shouldAutoDispatchIssueAlerts() {
+        when(paymentIssueAlertDeliveryService.autoDispatchPendingAlerts()).thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runAutoDispatchIssueAlerts();
+
+        verify(paymentIssueAlertDeliveryService).autoDispatchPendingAlerts();
     }
 }

@@ -57,9 +57,19 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runEscalateOverdueIssues();
 
     /**
+     * 手动执行异常告警派发。
+     */
+    PaymentTaskActionResultDTO runDispatchIssueAlerts();
+
+    /**
      * 自动执行异常 SLA 升级巡检。
      */
     PaymentTaskActionResultDTO runAutoEscalateOverdueIssues();
+
+    /**
+     * 自动执行异常告警派发。
+     */
+    PaymentTaskActionResultDTO runAutoDispatchIssueAlerts();
 
     /**
      * 手动执行支付控制策略自动巡检。

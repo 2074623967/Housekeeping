@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
@@ -44,6 +45,11 @@ public interface PaymentTaskCenterMapper {
     List<PaymentIssueAlertCandidateDTO> findOverdueIssueAlertCandidates();
 
     /**
+     * 查询待从站内 outbox 派发到真实通知通道的告警。
+     */
+    List<PaymentIssueAlertDispatchItemDTO> findPendingOutboxAlerts();
+
+    /**
      * 新增任务执行日志。
      */
     int insertTaskRunLog(PaymentTaskRunLogEntity entity);
@@ -52,4 +58,9 @@ public interface PaymentTaskCenterMapper {
      * 新增支付交易异常告警通知日志。
      */
     int insertIssueAlertLog(PaymentIssueAlertLogEntity entity);
+
+    /**
+     * 回写站内 outbox 告警的派发状态。
+     */
+    int updateIssueAlertDeliveryStatus(PaymentIssueAlertLogEntity entity);
 }

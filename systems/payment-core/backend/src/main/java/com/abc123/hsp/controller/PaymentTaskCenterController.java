@@ -88,6 +88,14 @@ public class PaymentTaskCenterController {
     }
 
     /**
+     * 手动执行异常告警派发。
+     */
+    @PostMapping("/dispatch-issue-alerts")
+    public ApiResponse<PaymentTaskActionResultDTO> runDispatchIssueAlerts() {
+        return ApiResponse.success(paymentTaskCenterService.runDispatchIssueAlerts());
+    }
+
+    /**
      * 手动执行支付控制策略自动巡检。
      */
     @PostMapping("/control-policy-self-checks")

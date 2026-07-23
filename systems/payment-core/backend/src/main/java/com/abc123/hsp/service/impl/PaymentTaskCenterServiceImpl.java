@@ -16,6 +16,7 @@ import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentConfigService;
+import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,17 +45,20 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentEventMapper paymentEventMapper;
     private final RefundMapper refundMapper;
     private final PaymentConfigService paymentConfigService;
+    private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
 
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                         PaymentExpiryTaskService paymentExpiryTaskService,
                                         PaymentEventMapper paymentEventMapper,
                                         RefundMapper refundMapper,
-                                        PaymentConfigService paymentConfigService) {
+                                        PaymentConfigService paymentConfigService,
+                                        PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
         this.refundMapper = refundMapper;
         this.paymentConfigService = paymentConfigService;
+        this.paymentIssueAlertDeliveryService = paymentIssueAlertDeliveryService;
     }
 
     @Override
@@ -117,8 +121,20 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
+    public PaymentTaskActionResultDTO runDispatchIssueAlerts() {
+        return paymentIssueAlertDeliveryService.dispatchPendingAlerts();
+    }
+
+    @Override
+    @Transactional
     public PaymentTaskActionResultDTO runAutoEscalateOverdueIssues() {
         return runEscalateOverdueIssuesByMode(RUN_MODE_AUTO, "payment-issue-sla-scheduler");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoDispatchIssueAlerts() {
+        return paymentIssueAlertDeliveryService.autoDispatchPendingAlerts();
     }
 
     @Override
