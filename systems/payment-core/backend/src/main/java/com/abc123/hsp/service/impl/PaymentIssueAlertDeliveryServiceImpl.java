@@ -7,12 +7,16 @@ import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 支付交易异常告警派发服务默认实现。
@@ -24,6 +28,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RUN_MODE_AUTO = "AUTO";
     private static final String TASK_CODE_ISSUE_ALERT_DISPATCH = "PAYMENT_ISSUE_ALERT_DISPATCH";
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
+    private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
@@ -73,26 +78,37 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 successCount,
                 warningCount,
                 failCount,
-                buildSummaryComment(pendingAlerts.size(), successCount, warningCount, failCount)
+                buildSummaryComment(pendingAlerts.size(), successCount, warningCount, failCount),
+                resolveHighestEscalationLevel(pendingAlerts)
         );
     }
 
     private DispatchOutcome dispatchToAllChannels(PaymentIssueAlertDispatchItemDTO item,
                                                   Map<String, PaymentIssueAlertNotifier> notifierMap,
                                                   String triggeredBy) {
+        List<String> configuredChannels = resolveConfiguredChannels(item.getNotifyChannels());
+        if (configuredChannels.isEmpty()) {
+            return DispatchOutcome.noExternalDispatch();
+        }
         int successCount = 0;
         int failCount = 0;
-        for (PaymentIssueAlertNotifier notifier : notifierMap.values()) {
+        for (String channelCode : configuredChannels) {
+            PaymentIssueAlertNotifier notifier = notifierMap.get(channelCode);
+            if (notifier == null) {
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
+                failCount++;
+                continue;
+            }
             try {
                 notifier.send(item);
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, notifier.channelCode(), "已派发", "success"));
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "已派发", "success"));
                 successCount++;
             } catch (RuntimeException ex) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, notifier.channelCode(), "派发失败", "danger"));
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
                 failCount++;
             }
         }
-        return new DispatchOutcome(successCount, failCount, notifierMap.size());
+        return new DispatchOutcome(successCount, failCount, configuredChannels.size(), false);
     }
 
     private PaymentIssueAlertLogEntity buildSourceAlertStatus(PaymentIssueAlertDispatchItemDTO item,
@@ -148,6 +164,42 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         return entity;
     }
 
+    private List<String> resolveConfiguredChannels(String notifyChannels) {
+        List<String> channels = new ArrayList<String>();
+        if (!StringUtils.hasText(notifyChannels)) {
+            return channels;
+        }
+        for (String channel : Arrays.asList(notifyChannels.split(","))) {
+            if (!StringUtils.hasText(channel)) {
+                continue;
+            }
+            String normalizedChannel = channel.trim().toUpperCase();
+            if (ROUTE_CHANNEL_IN_APP.equals(normalizedChannel)) {
+                continue;
+            }
+            channels.add(normalizedChannel);
+        }
+        return channels;
+    }
+
+    private String resolveHighestEscalationLevel(List<PaymentIssueAlertDispatchItemDTO> pendingAlerts) {
+        Map<String, Integer> levelWeight = new HashMap<String, Integer>();
+        levelWeight.put("L1", Integer.valueOf(1));
+        levelWeight.put("L2", Integer.valueOf(2));
+        levelWeight.put("L3", Integer.valueOf(3));
+        String highestLevel = "L1";
+        for (PaymentIssueAlertDispatchItemDTO pendingAlert : pendingAlerts) {
+            String level = StringUtils.hasText(pendingAlert.getEscalationLevel())
+                    ? pendingAlert.getEscalationLevel().trim().toUpperCase()
+                    : "L1";
+            if (levelWeight.containsKey(level)
+                    && levelWeight.get(level).intValue() > levelWeight.get(highestLevel).intValue()) {
+                highestLevel = level;
+            }
+        }
+        return highestLevel;
+    }
+
     private String buildDeliveryAlertLogNo(String channelCode) {
         return "PIA-" + channelCode + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
     }
@@ -171,7 +223,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                    int successCount,
                                                    int warningCount,
                                                    int failCount,
-                                                   String summaryComment) {
+                                                   String summaryComment,
+                                                   String highestEscalationLevel) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
         entity.setTaskLogNo("TL" + System.currentTimeMillis());
         entity.setTaskCode(TASK_CODE_ISSUE_ALERT_DISPATCH);
@@ -181,7 +234,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setTaskStatusType(failCount > 0 || warningCount > 0 ? "warn" : "success");
         entity.setSeverityLevel(failCount > 0 ? "P1" : warningCount > 0 ? "P2" : "P3");
         entity.setSeverityLevelType(failCount > 0 ? "danger" : warningCount > 0 ? "warn" : "success");
-        entity.setEscalationStatus(failCount > 0 ? "升级值班负责人" : warningCount > 0 ? "纳入当班跟进" : "正常");
+        entity.setEscalationStatus(failCount > 0
+                ? "升级至" + highestEscalationLevel + "值班负责人"
+                : warningCount > 0
+                ? "纳入" + highestEscalationLevel + "当班跟进"
+                : "正常");
         entity.setEscalationStatusType(failCount > 0 ? "danger" : warningCount > 0 ? "warn" : "success");
         entity.setProcessedCount(processedCount);
         entity.setSuccessCount(successCount);
@@ -215,19 +272,25 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         private final int successCount;
         private final int failCount;
         private final int totalChannels;
+        private final boolean noExternalDispatchRequired;
 
-        DispatchOutcome(int successCount, int failCount, int totalChannels) {
+        DispatchOutcome(int successCount, int failCount, int totalChannels, boolean noExternalDispatchRequired) {
             this.successCount = successCount;
             this.failCount = failCount;
             this.totalChannels = totalChannels;
+            this.noExternalDispatchRequired = noExternalDispatchRequired;
         }
 
         boolean isAllSucceeded() {
-            return totalChannels > 0 && successCount == totalChannels;
+            return noExternalDispatchRequired || (totalChannels > 0 && successCount == totalChannels);
         }
 
         boolean hasAnySuccess() {
-            return successCount > 0;
+            return noExternalDispatchRequired || successCount > 0;
+        }
+
+        static DispatchOutcome noExternalDispatch() {
+            return new DispatchOutcome(0, 0, 0, true);
         }
     }
 }

@@ -22,6 +22,12 @@ public class PaymentIssueAlertDispatchItemDTO {
     private String responsibilityGroup;
     /** 接收人。 */
     private String receiver;
+    /** 路由配置的通知通道列表。 */
+    private String notifyChannels;
+    /** 路由配置的升级等级。 */
+    private String escalationLevel;
+    /** 路由配置的班次标签。 */
+    private String scheduleTag;
     /** 告警内容。 */
     private String alertContent;
     /** 触发来源。 */

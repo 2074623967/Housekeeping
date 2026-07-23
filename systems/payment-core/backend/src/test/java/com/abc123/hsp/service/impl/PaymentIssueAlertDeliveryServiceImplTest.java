@@ -38,6 +38,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     @Test
     void shouldDispatchAllChannelsSuccessfully() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");
         when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
@@ -61,11 +62,54 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     @Test
     void shouldMarkPartialFailureWhenOneChannelFails() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");
         when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         doThrow(new RuntimeException("sms down")).when(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> sourceCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(sourceCaptor.capture());
+        Assertions.assertEquals("部分失败", sourceCaptor.getValue().getAlertStatus());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldDispatchOnlyConfiguredChannels() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(smsNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(emailNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+    }
+
+    @Test
+    void shouldMarkUnsupportedChannelAsFailure() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,VOICE");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
 
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -90,6 +134,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         item.setSeverity("P1");
         item.setResponsibilityGroup("支付后端值班组");
         item.setReceiver("支付后端值班");
+        item.setEscalationLevel("L2");
+        item.setScheduleTag("交易链路白班");
         item.setAlertContent("支付异常 ISSUE-001 已超过 P1 SLA，请进入异常中心处理。");
         item.setTriggeredBy("payment-issue-sla-scheduler");
         return item;

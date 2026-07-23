@@ -1235,6 +1235,31 @@
 
 1. 当前值班路由模块已经从“只读配置表”升级为“后台可维护配置模块”。
 2. 后续仍需补值班日历、升级链路、真实通知网关与审计留痕扩展，才可能接近最终冻结版门槛。
+
+## 42. 2026-07-23 深夜通知通道配置化派发验证
+
+### 42.1 本轮验证结论
+
+本轮围绕“值班路由中的通知通道和升级等级不能只用于展示，必须真正参与告警派发执行”的问题进行了补齐，确认异常告警派发已从固定全通道广播升级为配置驱动派发。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentConfigServiceImplTest,PaymentIssueServiceImplTest test` | 通过 | 合计 `39` 个用例全部通过，`PaymentIssueAlertDeliveryServiceImplTest` 提升到 `4` 个用例 |
+
+### 42.2 本轮补齐项
+
+1. `PaymentIssueAlertDispatchItemDTO` 新增 `notifyChannels / escalationLevel / scheduleTag`。
+2. `PaymentTaskCenterMapper.xml` 在待派发 outbox 查询阶段联动值班路由表，补齐路由配置字段。
+3. `PaymentIssueAlertDeliveryServiceImpl` 改为仅对配置的通知通道执行派发。
+4. `IN_APP` 作为源 outbox 通道不再重复进入实际通知器派发列表。
+5. 不支持的通知通道会显式记为失败留痕。
+6. 任务日志升级状态开始携带最高升级等级口径。
+7. 测试新增“仅派发配置通道”和“不支持通道记失败”覆盖。
+
+### 42.3 当前判断
+
+1. 当前异常告警派发已经具备“值班路由配置 -> 通知通道选择 -> 派发执行 -> 失败留痕 -> 任务升级文案”的轻量闭环。
+2. 后续仍需补真实通知供应商、发送回执、失败补发和通道限流，才可能接近最终冻结版门槛。
 3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
 4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
 5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。
