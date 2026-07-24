@@ -63,4 +63,9 @@ public interface PaymentTaskCenterMapper {
      * 回写站内 outbox 告警的派发状态。
      */
     int updateIssueAlertDeliveryStatus(PaymentIssueAlertLogEntity entity);
+
+    /**
+     * 判断某个异常在指定通知通道上是否已经成功派发过。
+     */
+    boolean hasSuccessfulIssueAlertChannelDelivery(String issueNo, String alertChannel);
 }

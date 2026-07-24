@@ -1260,6 +1260,32 @@
 
 1. 当前异常告警派发已经具备“值班路由配置 -> 通知通道选择 -> 派发执行 -> 失败留痕 -> 任务升级文案”的轻量闭环。
 2. 后续仍需补真实通知供应商、发送回执、失败补发和通道限流，才可能接近最终冻结版门槛。
+ 
+## 43. 2026-07-24 告警失败补发与对象规范收口验证
+
+### 43.1 本轮验证结论
+
+本轮围绕“异常告警失败后能否重新进入派发队列、补发时能否避免重复轰炸已成功通道，以及对象模型是否仍然存在历史规范尾巴”进行了补强与验证，确认 `payment-core` 在任务中心和 DTO 规范层面都进一步向冻结版交付包靠拢。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentConfigServiceImplTest,PaymentIssueServiceImplTest,PaymentServiceImplTest test` | 通过 | 合计 `59` 个用例全部通过，其中 `PaymentIssueAlertDeliveryServiceImplTest` 为 `5` 个用例，新增补发去重覆盖 |
+| DTO/VO/Entity 规范审计 | `python3` 读库扫描 | 通过 | 自动审计结果 `TOTAL_PROBLEMS=0`，当前 `payment-core` 对象层已无遗漏的 Lombok/字段注释缺口 |
+
+### 43.2 本轮补齐项
+
+1. `PaymentTaskCenterMapper.xml` 待派发 outbox 查询口径扩展为 `已生成 / 部分失败 / 派发失败`。
+2. `PaymentTaskCenterMapper` 新增按 `issueNo + alertChannel` 查询历史成功派发记录的方法。
+3. `PaymentIssueAlertDeliveryServiceImpl` 在补发阶段会跳过已成功通道，仅重试仍未成功的通知通道。
+4. 任务执行文案调整为“待派发/补发”，更贴近真实任务中心表达。
+5. `PaymentIssueAlertDeliveryServiceImplTest` 新增“补发时跳过已成功通道”覆盖。
+6. `PaymentDetailDTO`、`RefundListItemDTO` 等历史对象补齐类注释与字段中文语义注释，完成本轮 DTO 收口。
+
+### 43.3 当前判断
+
+1. 当前异常告警派发已经具备“首次派发 + 失败补发 + 成功通道去重”的最小生产化雏形。
+2. 当前 `payment-core` 对象层已完成一轮统一规范收口，后续新增 DTO/VO/Entity 应延续同一标准，避免再次回退。
+3. 真实通知供应商、发送回执明细、补发上限与补发节流仍未补齐，因此本轮提升的是成熟度，不是最终 `master / release` 触发条件。
 3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
 4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
 5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。

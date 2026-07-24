@@ -93,6 +93,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         int successCount = 0;
         int failCount = 0;
         for (String channelCode : configuredChannels) {
+            if (paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery(item.getIssueNo(), channelCode)) {
+                successCount++;
+                continue;
+            }
             PaymentIssueAlertNotifier notifier = notifierMap.get(channelCode);
             if (notifier == null) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
@@ -209,7 +213,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             return "当前没有待派发的异常告警。";
         }
         return String.format(
-                "待派发 %d 条异常告警，完全成功 %d 条，部分失败 %d 条，全部失败 %d 条。",
+                "待派发/补发 %d 条异常告警，完全成功 %d 条，部分失败 %d 条，全部失败 %d 条。",
                 processedCount,
                 successCount,
                 warningCount,
@@ -249,7 +253,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 ? "优先核对通知通道适配器、消息模板和责任人路由，再补发失败通道"
                 : warningCount > 0
                 ? "存在部分通道派发失败，建议核对失败通道配置并执行补发"
-                : "继续保持派发队列巡检");
+                : "继续保持派发/补发队列巡检");
         entity.setRecommendedRoute("/payment-issues");
         entity.setTriggeredBy(triggeredBy);
         paymentTaskCenterMapper.insertTaskRunLog(entity);

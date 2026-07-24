@@ -326,8 +326,16 @@
               AND roster.severity = outbox.severity
               AND roster.status = 'ENABLED'
         WHERE alert_channel = 'IN_APP_OUTBOX'
-          AND alert_status = '已生成'
+          AND alert_status IN ('已生成', '部分失败', '派发失败')
         ORDER BY outbox.created_at ASC, outbox.id ASC
+    </select>
+
+    <select id="hasSuccessfulIssueAlertChannelDelivery" resultType="boolean">
+        SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
+        FROM t_payment_issue_alert_log
+        WHERE issue_no = #{param1}
+          AND alert_channel = #{param2}
+          AND alert_status = '已派发'
     </select>
 
     <update id="updateIssueAlertDeliveryStatus" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
