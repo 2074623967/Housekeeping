@@ -28,6 +28,14 @@ public class PaymentIssueAlertDispatchItemDTO {
     private String escalationLevel;
     /** 路由配置的班次标签。 */
     private String scheduleTag;
+    /** 实际命中的供应商配置编码。 */
+    private String providerCode;
+    /** 实际命中的供应商名称。 */
+    private String providerName;
+    /** 实际命中的供应商接入端点。 */
+    private String endpointAlias;
+    /** 实际命中的消息模板编码。 */
+    private String templateCode;
     /** 告警内容。 */
     private String alertContent;
     /** 触发来源。 */

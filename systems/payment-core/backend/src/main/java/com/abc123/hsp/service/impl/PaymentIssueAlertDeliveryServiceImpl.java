@@ -1,5 +1,6 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
@@ -97,7 +98,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 successCount++;
                 continue;
             }
-            if (!paymentTaskCenterMapper.hasEnabledAlertProviderForChannel(channelCode)) {
+            PaymentAlertProviderConfigDTO providerConfig = paymentTaskCenterMapper.findEnabledAlertProviderByChannel(channelCode);
+            if (providerConfig == null) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
                 failCount++;
                 continue;
@@ -108,12 +110,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 failCount++;
                 continue;
             }
+            PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             try {
-                notifier.send(item);
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "已派发", "success"));
+                notifier.send(deliveryItem);
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(deliveryItem, triggeredBy, channelCode, "已派发", "success"));
                 successCount++;
             } catch (RuntimeException ex) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(deliveryItem, triggeredBy, channelCode, "派发失败", "danger"));
                 failCount++;
             }
         }
@@ -168,9 +171,59 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setSeverity(item.getSeverity());
         entity.setResponsibilityGroup(item.getResponsibilityGroup());
         entity.setReceiver(item.getReceiver());
-        entity.setAlertContent(item.getAlertContent());
+        entity.setAlertContent(buildAlertContent(item));
         entity.setTriggeredBy(triggeredBy);
         return entity;
+    }
+
+    private PaymentIssueAlertDispatchItemDTO buildDeliveryItem(PaymentIssueAlertDispatchItemDTO item,
+                                                               PaymentAlertProviderConfigDTO providerConfig) {
+        PaymentIssueAlertDispatchItemDTO deliveryItem = new PaymentIssueAlertDispatchItemDTO();
+        deliveryItem.setAlertNo(item.getAlertNo());
+        deliveryItem.setIssueNo(item.getIssueNo());
+        deliveryItem.setPaymentOrderId(item.getPaymentOrderId());
+        deliveryItem.setIssueType(item.getIssueType());
+        deliveryItem.setSeverity(item.getSeverity());
+        deliveryItem.setResponsibilityGroup(item.getResponsibilityGroup());
+        deliveryItem.setReceiver(item.getReceiver());
+        deliveryItem.setNotifyChannels(item.getNotifyChannels());
+        deliveryItem.setEscalationLevel(item.getEscalationLevel());
+        deliveryItem.setScheduleTag(item.getScheduleTag());
+        deliveryItem.setAlertContent(item.getAlertContent());
+        deliveryItem.setTriggeredBy(item.getTriggeredBy());
+        deliveryItem.setProviderCode(providerConfig.getProviderCode());
+        deliveryItem.setProviderName(providerConfig.getProviderName());
+        deliveryItem.setEndpointAlias(providerConfig.getEndpointAlias());
+        deliveryItem.setTemplateCode(providerConfig.getTemplateCode());
+        return deliveryItem;
+    }
+
+    private String buildAlertContent(PaymentIssueAlertDispatchItemDTO item) {
+        String alertContent = item.getAlertContent();
+        if (!StringUtils.hasText(item.getProviderCode()) && !StringUtils.hasText(item.getTemplateCode())) {
+            return alertContent;
+        }
+        StringBuilder builder = new StringBuilder(alertContent == null ? "" : alertContent);
+        builder.append("【");
+        if (StringUtils.hasText(item.getProviderName())) {
+            builder.append("供应商：").append(item.getProviderName());
+        } else if (StringUtils.hasText(item.getProviderCode())) {
+            builder.append("供应商编码：").append(item.getProviderCode());
+        }
+        if (StringUtils.hasText(item.getTemplateCode())) {
+            if (builder.charAt(builder.length() - 1) != '【') {
+                builder.append("，");
+            }
+            builder.append("模板：").append(item.getTemplateCode());
+        }
+        if (StringUtils.hasText(item.getEndpointAlias())) {
+            if (builder.charAt(builder.length() - 1) != '【') {
+                builder.append("，");
+            }
+            builder.append("端点：").append(item.getEndpointAlias());
+        }
+        builder.append("】");
+        return builder.toString();
     }
 
     private List<String> resolveConfiguredChannels(String notifyChannels) {

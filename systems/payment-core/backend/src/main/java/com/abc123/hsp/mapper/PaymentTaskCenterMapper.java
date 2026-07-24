@@ -1,5 +1,6 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
@@ -70,7 +71,7 @@ public interface PaymentTaskCenterMapper {
     boolean hasSuccessfulIssueAlertChannelDelivery(String issueNo, String alertChannel);
 
     /**
-     * 判断指定通知通道是否存在启用中的供应商配置。
+     * 查询指定通知通道当前启用中的供应商配置。
      */
-    boolean hasEnabledAlertProviderForChannel(String alertChannel);
+    PaymentAlertProviderConfigDTO findEnabledAlertProviderByChannel(String alertChannel);
 }

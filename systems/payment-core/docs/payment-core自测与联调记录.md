@@ -1335,6 +1335,29 @@
 1. 当前异常告警派发已经从“本地通知器骨架”升级为“供应商配置中心 + 通道启停治理 + 派发前供应商校验”的轻量通知中心雏形。
 2. 这让系统更接近真实企业里的通知治理方式。
 3. 但真实供应商调用、模板变量渲染、发送回执明细和多供应商路由仍未完成，因此当前仍不满足 `master / release` 冻结门槛。
+
+## 46. 2026-07-24 供应商配置进入派发执行与留痕验证
+
+### 46.1 本轮验证结论
+
+本轮围绕“供应商配置不能只在配置中心可见，而要真正进入派发执行链路，并把供应商/模板/端点信息沉淀进派发留痕”的问题进行了补强，确认 `payment-core` 的告警通知中心已进一步走向生产化。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 共 `6` 个用例全部通过，覆盖供应商配置进入派发项、派发日志留痕和缺失配置失败场景 |
+
+### 46.2 本轮补齐项
+
+1. `PaymentIssueAlertDispatchItemDTO` 新增 `providerCode / providerName / endpointAlias / templateCode` 运行时字段。
+2. `PaymentTaskCenterMapper` 新增按通知通道查询启用中供应商配置的方法。
+3. `PaymentIssueAlertDeliveryServiceImpl` 改为先加载当前通道供应商配置，再把供应商、模板和端点信息注入派发项。
+4. 派发日志留痕增强，当前会在告警内容中保留供应商、模板和端点信息，便于后续排查。
+
+### 46.3 当前判断
+
+1. 当前异常告警通知中心已经从“供应商配置存在”升级为“供应商配置真正参与派发执行和审计留痕”。
+2. 这为后续真实企业微信、短信网关和邮件平台接入提供了稳定主链路。
+3. 但真实供应商调用、模板变量渲染、发送回执明细和多供应商路由仍未完成，因此当前仍不满足 `master / release` 冻结门槛。
 3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
 4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
 5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。
