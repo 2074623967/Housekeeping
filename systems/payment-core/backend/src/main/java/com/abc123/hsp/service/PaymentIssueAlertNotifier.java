@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 
 /**
  * 支付交易异常告警通知器。
@@ -15,5 +16,5 @@ public interface PaymentIssueAlertNotifier {
     /**
      * 发送告警。
      */
-    void send(PaymentIssueAlertDispatchItemDTO item);
+    PaymentIssueAlertDeliveryResultDTO send(PaymentIssueAlertDispatchItemDTO item);
 }

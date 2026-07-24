@@ -290,6 +290,14 @@
             ack_status,
             ack_status_type,
             alert_content,
+            provider_code,
+            provider_name,
+            endpoint_alias,
+            template_code,
+            provider_receipt_no,
+            provider_delivery_status,
+            provider_delivery_message,
+            rendered_content_snapshot,
             triggered_by,
             created_at
         ) VALUES (
@@ -306,6 +314,14 @@
             #{ackStatus},
             #{ackStatusType},
             #{alertContent},
+            #{providerCode},
+            #{providerName},
+            #{endpointAlias},
+            #{templateCode},
+            #{providerReceiptNo},
+            #{providerDeliveryStatus},
+            #{providerDeliveryMessage},
+            #{renderedContentSnapshot},
             #{triggeredBy},
             NOW()
         )

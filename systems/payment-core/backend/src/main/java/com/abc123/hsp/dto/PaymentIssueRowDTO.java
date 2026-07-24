@@ -66,6 +66,10 @@ public class PaymentIssueRowDTO {
     private String alertChannelSummary;
     /** 告警派发结果摘要。 */
     private String alertDeliverySummary;
+    /** 最新供应商投递摘要。 */
+    private String latestAlertProviderSummary;
+    /** 最新供应商回执摘要。 */
+    private String latestAlertReceiptSummary;
     /** SLA 状态。 */
     private String slaStatus;
     /** SLA 状态样式。 */

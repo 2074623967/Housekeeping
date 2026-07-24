@@ -34,6 +34,22 @@ public class PaymentIssueAlertLogEntity {
     private String ackStatusType;
     /** 告警内容。 */
     private String alertContent;
+    /** 命中的供应商编码。 */
+    private String providerCode;
+    /** 命中的供应商名称。 */
+    private String providerName;
+    /** 命中的供应商接入端点。 */
+    private String endpointAlias;
+    /** 命中的消息模板编码。 */
+    private String templateCode;
+    /** 供应商侧回执号。 */
+    private String providerReceiptNo;
+    /** 供应商侧投递状态。 */
+    private String providerDeliveryStatus;
+    /** 供应商侧投递说明。 */
+    private String providerDeliveryMessage;
+    /** 渲染后的告警内容快照。 */
+    private String renderedContentSnapshot;
     /** 触发来源。 */
     private String triggeredBy;
 }

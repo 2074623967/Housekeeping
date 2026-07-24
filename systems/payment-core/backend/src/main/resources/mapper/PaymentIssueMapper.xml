@@ -164,6 +164,24 @@
                    ELSE '暂无派发明细'
                END AS alertDeliverySummary,
                CASE
+                   WHEN latest_external_alert.id IS NULL THEN '暂无供应商派发记录'
+                   WHEN latest_external_alert.provider_name IS NOT NULL AND latest_external_alert.template_code IS NOT NULL
+                       THEN CONCAT('供应商：', latest_external_alert.provider_name, ' / 模板：', latest_external_alert.template_code)
+                   WHEN latest_external_alert.provider_name IS NOT NULL
+                       THEN CONCAT('供应商：', latest_external_alert.provider_name)
+                   WHEN latest_external_alert.provider_code IS NOT NULL
+                       THEN CONCAT('供应商编码：', latest_external_alert.provider_code)
+                   ELSE '供应商信息待补齐'
+               END AS latestAlertProviderSummary,
+               CASE
+                   WHEN latest_external_alert.id IS NULL THEN '暂无投递回执'
+                   WHEN latest_external_alert.provider_receipt_no IS NOT NULL AND latest_external_alert.provider_delivery_status IS NOT NULL
+                       THEN CONCAT('回执：', latest_external_alert.provider_receipt_no, ' / 状态：', latest_external_alert.provider_delivery_status)
+                   WHEN latest_external_alert.provider_delivery_message IS NOT NULL
+                       THEN CONCAT('投递说明：', latest_external_alert.provider_delivery_message)
+                   ELSE '回执信息待补齐'
+               END AS latestAlertReceiptSummary,
+               CASE
                    WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '已超时'
                    WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '已超时'
                    ELSE 'SLA内'
@@ -210,6 +228,14 @@
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
                       AND alert_log.alert_channel = 'IN_APP_OUTBOX'
+                    ORDER BY alert_log.created_at DESC, alert_log.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_issue_alert_log latest_external_alert ON latest_external_alert.id = (
+                    SELECT alert_log.id
+                    FROM t_payment_issue_alert_log alert_log
+                    WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND alert_log.alert_channel <> 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
                 )

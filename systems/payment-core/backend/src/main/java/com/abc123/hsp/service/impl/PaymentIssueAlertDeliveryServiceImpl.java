@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
@@ -100,23 +101,51 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             }
             PaymentAlertProviderConfigDTO providerConfig = paymentTaskCenterMapper.findEnabledAlertProviderByChannel(channelCode);
             if (providerConfig == null) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                        item,
+                        triggeredBy,
+                        channelCode,
+                        "派发失败",
+                        "danger",
+                        buildFailureResult("CONFIG_MISSING", "告警供应商配置缺失", item)
+                ));
                 failCount++;
                 continue;
             }
             PaymentIssueAlertNotifier notifier = notifierMap.get(channelCode);
             if (notifier == null) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                        buildDeliveryItem(item, providerConfig),
+                        triggeredBy,
+                        channelCode,
+                        "派发失败",
+                        "danger",
+                        buildFailureResult("NOTIFIER_MISSING", "未找到对应通知器实现", item)
+                ));
                 failCount++;
                 continue;
             }
             PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             try {
-                notifier.send(deliveryItem);
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(deliveryItem, triggeredBy, channelCode, "已派发", "success"));
+                PaymentIssueAlertDeliveryResultDTO deliveryResult = notifier.send(deliveryItem);
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                        deliveryItem,
+                        triggeredBy,
+                        channelCode,
+                        "已派发",
+                        "success",
+                        normalizeDeliveryResult(deliveryItem, deliveryResult, "ACCEPTED", "供应商已受理告警")
+                ));
                 successCount++;
             } catch (RuntimeException ex) {
-                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(deliveryItem, triggeredBy, channelCode, "派发失败", "danger"));
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                        deliveryItem,
+                        triggeredBy,
+                        channelCode,
+                        "派发失败",
+                        "danger",
+                        buildFailureResult("SEND_EXCEPTION", ex.getMessage(), deliveryItem)
+                ));
                 failCount++;
             }
         }
@@ -152,7 +181,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                         String triggeredBy,
                                                         String channelCode,
                                                         String alertStatus,
-                                                        String alertStatusType) {
+                                                        String alertStatusType,
+                                                        PaymentIssueAlertDeliveryResultDTO deliveryResult) {
         PaymentIssueAlertLogEntity entity = buildBaseAlertLog(item, triggeredBy);
         entity.setAlertNo(buildDeliveryAlertLogNo(channelCode));
         entity.setAlertChannel(channelCode);
@@ -160,6 +190,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setAlertStatusType(alertStatusType);
         entity.setAckStatus("无需回执");
         entity.setAckStatusType("info");
+        entity.setProviderReceiptNo(deliveryResult.getProviderReceiptNo());
+        entity.setProviderDeliveryStatus(deliveryResult.getProviderDeliveryStatus());
+        entity.setProviderDeliveryMessage(deliveryResult.getProviderDeliveryMessage());
+        entity.setRenderedContentSnapshot(deliveryResult.getRenderedContentSnapshot());
         return entity;
     }
 
@@ -172,8 +206,41 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setResponsibilityGroup(item.getResponsibilityGroup());
         entity.setReceiver(item.getReceiver());
         entity.setAlertContent(buildAlertContent(item));
+        entity.setProviderCode(item.getProviderCode());
+        entity.setProviderName(item.getProviderName());
+        entity.setEndpointAlias(item.getEndpointAlias());
+        entity.setTemplateCode(item.getTemplateCode());
         entity.setTriggeredBy(triggeredBy);
         return entity;
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO normalizeDeliveryResult(PaymentIssueAlertDispatchItemDTO item,
+                                                                       PaymentIssueAlertDeliveryResultDTO deliveryResult,
+                                                                       String defaultStatus,
+                                                                       String defaultMessage) {
+        PaymentIssueAlertDeliveryResultDTO normalizedResult = deliveryResult == null
+                ? new PaymentIssueAlertDeliveryResultDTO()
+                : deliveryResult;
+        if (!StringUtils.hasText(normalizedResult.getProviderDeliveryStatus())) {
+            normalizedResult.setProviderDeliveryStatus(defaultStatus);
+        }
+        if (!StringUtils.hasText(normalizedResult.getProviderDeliveryMessage())) {
+            normalizedResult.setProviderDeliveryMessage(defaultMessage);
+        }
+        if (!StringUtils.hasText(normalizedResult.getRenderedContentSnapshot())) {
+            normalizedResult.setRenderedContentSnapshot(buildAlertContent(item));
+        }
+        return normalizedResult;
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO buildFailureResult(String status,
+                                                                  String message,
+                                                                  PaymentIssueAlertDispatchItemDTO item) {
+        PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderDeliveryStatus(status);
+        result.setProviderDeliveryMessage(StringUtils.hasText(message) ? message : "未知异常");
+        result.setRenderedContentSnapshot(buildAlertContent(item));
+        return result;
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDeliveryItem(PaymentIssueAlertDispatchItemDTO item,

@@ -1437,3 +1437,40 @@
 1. 当前 `payment-core` 已具备异常 SLA 告警 `outbox -> 本地派发骨架 -> 状态回写` 的后端闭环。
 2. 本轮通过的是本地骨架与任务中心编排，不代表已经完成企业微信 / 钉钉 / 短信 / 邮件供应商的生产级对接。
 3. 因此本轮提升的是冻结版成熟度，而不是发布门槛；`master / release` 判断仍需继续看真实通知网关、值班路由和回执流水等能力。
+
+## 41. 2026-07-24 告警供应商回执与异常中心审计补强验证
+
+### 41.1 本轮验证范围
+
+本轮围绕“异常告警派发虽然已接入供应商配置，但日志层和异常中心仍看不到供应商回执结果”的问题进行了补强验证，目标是确认当前代码已从“供应商配置进入执行链路”升级为“供应商执行回执可审计、可在异常中心查看”。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertNotifier` 返回标准化投递结果对象
+2. 本地 `IM / SMS / EMAIL` 通知器统一模拟供应商回执
+3. `PaymentIssueAlertDeliveryServiceImpl` 在成功/失败场景下写入供应商投递明细
+4. `t_payment_issue_alert_log` 审计字段扩展
+5. 异常中心列表补齐供应商投递摘要与回执摘要展示
+
+### 41.2 验证过程
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `6` 个测试全部通过，覆盖成功派发、部分失败、配置缺失、成功通道去重等场景 |
+| 前端构建 | `npm run build` | 通过 | `admin-web` 生产构建成功，异常中心新增供应商/回执信息未引入前端回归 |
+| 格式检查 | `git diff --check` | 通过 | 未发现空白或补丁格式问题 |
+
+### 41.3 本轮补齐项
+
+1. 新增 `PaymentIssueAlertDeliveryResultDTO`，统一承接通知器的供应商回执信息。
+2. 新增 `AbstractLocalPaymentIssueAlertNotifier`，让本地 IM / SMS / EMAIL 通知器共用一致的回执生成逻辑。
+3. `PaymentIssueAlertNotifier.send()` 从 `void` 升级为返回投递结果，主链路不再丢失供应商执行信息。
+4. `PaymentIssueAlertDeliveryServiceImpl` 会把供应商编码、供应商名称、端点、模板、回执号、投递状态、投递说明和渲染快照统一写入告警日志。
+5. 当供应商配置缺失、通知器缺失或发送异常时，系统会把失败原因以标准化投递状态写入日志，而不是只留一个失败状态。
+6. `PaymentIssueMapper.xml` 与异常中心列表新增“最新供应商投递摘要 / 最新供应商回执摘要”展示。
+
+### 41.4 当前判断
+
+1. 当前 `payment-core` 的异常告警链路已经具备“配置进入执行 -> 执行返回回执 -> 日志可审计 -> 异常中心可联查”的更完整闭环。
+2. 本轮通过的是本地供应商回执模拟与审计链路，不代表已经完成真实企业微信/短信/邮件网关的生产级对接。
+3. 因此本轮提升的是告警治理成熟度，而不是最终发布门槛；`master / release` 判断仍需继续看真实网关接入、模板变量渲染和多供应商路由策略。
