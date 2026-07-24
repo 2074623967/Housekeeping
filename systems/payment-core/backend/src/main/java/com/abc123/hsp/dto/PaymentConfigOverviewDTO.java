@@ -23,6 +23,8 @@ public class PaymentConfigOverviewDTO {
     private List<PaymentGatewayConfigDTO> gateways;
     /** 支付控制策略列表。 */
     private List<PaymentControlPolicyDTO> controlPolicies;
+    /** 告警通知供应商配置列表。 */
+    private List<PaymentAlertProviderConfigDTO> alertProviders;
     /** 异常告警值班路由列表。 */
     private List<PaymentIssueDutyRosterDTO> issueDutyRosters;
 }

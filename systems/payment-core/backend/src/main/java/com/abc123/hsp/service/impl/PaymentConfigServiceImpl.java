@@ -48,6 +48,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setReturnCodeMappings(paymentConfigMapper.findReturnCodeMappings());
         overview.setGateways(paymentConfigMapper.findGateways());
         overview.setControlPolicies(paymentConfigMapper.findControlPolicies());
+        overview.setAlertProviders(paymentConfigMapper.findAlertProviders());
         overview.setIssueDutyRosters(paymentConfigMapper.findIssueDutyRosters());
         return overview;
     }
@@ -186,6 +187,21 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         );
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付控制策略配置不存在");
+        }
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO toggleAlertProvider(PaymentConfigToggleRequestDTO request) {
+        String configCode = requireConfigCode(request);
+        int affectedRows = paymentConfigMapper.updateAlertProviderStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("告警通知供应商配置不存在");
         }
         return overview();
     }

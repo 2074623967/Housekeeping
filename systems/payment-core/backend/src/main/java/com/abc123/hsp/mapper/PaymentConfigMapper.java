@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
@@ -60,6 +61,11 @@ public interface PaymentConfigMapper {
      * 查询支付控制策略配置。
      */
     List<PaymentControlPolicyDTO> findControlPolicies();
+
+    /**
+     * 查询告警通知供应商配置。
+     */
+    List<PaymentAlertProviderConfigDTO> findAlertProviders();
 
     /**
      * 查询异常告警值班路由配置。
@@ -156,6 +162,13 @@ public interface PaymentConfigMapper {
      * 更新支付控制策略启停状态。
      */
     int updateControlPolicyStatus(@Param("sourceAppId") String sourceAppId,
+                                  @Param("status") String status,
+                                  @Param("statusType") String statusType);
+
+    /**
+     * 更新告警通知供应商配置启停状态。
+     */
+    int updateAlertProviderStatus(@Param("providerCode") String providerCode,
                                   @Param("status") String status,
                                   @Param("statusType") String statusType);
 

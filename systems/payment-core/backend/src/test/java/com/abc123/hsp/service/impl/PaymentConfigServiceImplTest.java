@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
@@ -95,6 +96,32 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldExposeAlertProviderInOverview() {
+        PaymentAlertProviderConfigDTO provider = new PaymentAlertProviderConfigDTO();
+        provider.setProviderCode("ALERT_IM_WECOM");
+        provider.setChannelCode("IM");
+        provider.setTemplateCode("TPL_PAYMENT_ISSUE_IM_V1");
+        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findAlertProviders()).thenReturn(Arrays.asList(provider));
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
+
+        PaymentAlertProviderConfigDTO actualProvider = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .overview()
+                .getAlertProviders()
+                .get(0);
+
+        org.junit.jupiter.api.Assertions.assertEquals("ALERT_IM_WECOM", actualProvider.getProviderCode());
+        org.junit.jupiter.api.Assertions.assertEquals("IM", actualProvider.getChannelCode());
+        org.junit.jupiter.api.Assertions.assertEquals("TPL_PAYMENT_ISSUE_IM_V1", actualProvider.getTemplateCode());
+    }
+
+    @Test
     void shouldToggleChannelStatus() {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("wx_h5");
@@ -132,6 +159,19 @@ class PaymentConfigServiceImplTest {
         new PaymentConfigServiceImpl(paymentConfigMapper).toggleIssueDutyRoster(request);
 
         verify(paymentConfigMapper).updateIssueDutyRosterStatus("DUTY_WAIT_CALLBACK_P1", "DISABLED", "danger");
+    }
+
+    @Test
+    void shouldToggleAlertProviderStatus() {
+        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
+        request.setConfigCode("ALERT_IM_WECOM");
+        request.setEnabled(false);
+        when(paymentConfigMapper.updateAlertProviderStatus("ALERT_IM_WECOM", "DISABLED", "danger")).thenReturn(1);
+        mockOverviewDependencies();
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).toggleAlertProvider(request);
+
+        verify(paymentConfigMapper).updateAlertProviderStatus("ALERT_IM_WECOM", "DISABLED", "danger");
     }
 
     @Test
@@ -481,6 +521,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findAlertProviders()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
     }
 }

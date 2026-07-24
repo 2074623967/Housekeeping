@@ -9,6 +9,7 @@ const protocolTypeOptions = ref([]);
 const returnCodeMappings = ref([]);
 const gateways = ref([]);
 const controlPolicies = ref([]);
+const alertProviders = ref([]);
 const issueDutyRosters = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
@@ -77,6 +78,7 @@ function applyOverview(overview) {
   returnCodeMappings.value = overview.returnCodeMappings || [];
   gateways.value = overview.gateways || [];
   controlPolicies.value = overview.controlPolicies || [];
+  alertProviders.value = overview.alertProviders || [];
   issueDutyRosters.value = overview.issueDutyRosters || [];
 }
 
@@ -132,6 +134,15 @@ async function toggleControlPolicy(policy) {
     policy.status !== "ENABLED",
     "支付控制策略",
     paymentConfigApi.toggleControlPolicy
+  );
+}
+
+async function toggleAlertProvider(provider) {
+  await toggleConfig(
+    provider.providerCode,
+    provider.status !== "ENABLED",
+    "告警通知供应商",
+    paymentConfigApi.toggleAlertProvider
   );
 }
 
@@ -775,6 +786,56 @@ onMounted(loadOverview);
                       @click="runControlPolicySelfCheck(policy)"
                     >
                       执行自检
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>告警通知供应商配置</h3>
+              <p class="meta">统一维护 IM / 短信 / 邮件告警的供应商端点、模板编码、重试和限流策略，作为真实通知中心接入的正式配置入口</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>供应商编码</th>
+                  <th>供应商名称</th>
+                  <th>通知通道</th>
+                  <th>接入端点</th>
+                  <th>模板编码</th>
+                  <th>重试策略</th>
+                  <th>限流策略</th>
+                  <th>状态</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="provider in alertProviders" :key="provider.providerCode">
+                  <td>{{ provider.providerCode }}</td>
+                  <td>{{ provider.providerName }}</td>
+                  <td>{{ provider.channelCode }}</td>
+                  <td>{{ provider.endpointAlias }}</td>
+                  <td>{{ provider.templateCode }}</td>
+                  <td class="flow-summary-cell">{{ provider.retryPolicy }}</td>
+                  <td class="flow-summary-cell">{{ provider.rateLimitPolicy }}</td>
+                  <td><span :class="['badge', provider.statusType]">{{ provider.status }}</span></td>
+                  <td>{{ provider.updatedAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === provider.providerCode"
+                      @click="toggleAlertProvider(provider)"
+                    >
+                      {{ provider.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
                   </td>
                 </tr>

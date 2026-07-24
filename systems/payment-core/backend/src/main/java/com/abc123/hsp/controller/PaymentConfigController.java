@@ -120,6 +120,14 @@ public class PaymentConfigController {
     }
 
     /**
+     * 启停告警通知供应商配置。
+     */
+    @PostMapping("/alert-providers/toggle")
+    public ApiResponse<PaymentConfigOverviewDTO> toggleAlertProvider(@RequestBody PaymentConfigToggleRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.toggleAlertProvider(request));
+    }
+
+    /**
      * 执行支付控制策略自检。
      */
     @PostMapping("/control-policies/self-check")

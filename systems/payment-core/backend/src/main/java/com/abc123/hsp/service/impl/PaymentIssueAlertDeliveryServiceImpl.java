@@ -97,6 +97,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 successCount++;
                 continue;
             }
+            if (!paymentTaskCenterMapper.hasEnabledAlertProviderForChannel(channelCode)) {
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));
+                failCount++;
+                continue;
+            }
             PaymentIssueAlertNotifier notifier = notifierMap.get(channelCode);
             if (notifier == null) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(item, triggeredBy, channelCode, "派发失败", "danger"));

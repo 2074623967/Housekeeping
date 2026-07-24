@@ -1310,6 +1310,31 @@
 1. 当前值班路由已从“纯配置项”升级为“可按时间窗生效的值班配置”。
 2. 这使异常 SLA 升级更贴近真实值班班表的操作方式。
 3. 但值班日历、跨日班次、升级链路和真实外部通知供应商仍未完成，因此当前仍不满足 `master / release` 冻结门槛。
+
+## 45. 2026-07-24 告警通知供应商配置验证
+
+### 45.1 本轮验证结论
+
+本轮围绕“本地 IM / SMS / Email 通知器不能只有代码骨架，还需要正式的供应商配置、模板配置和启停治理”进行了补强，确认 `payment-core` 已具备轻量通知中心配置入口。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 共 `25` 个用例全部通过，覆盖供应商配置总览、启停和派发前校验 |
+| 后台前端构建 | `npm run build` | 通过 | `admin-web` 新增“告警通知供应商配置”区块后可稳定构建 |
+
+### 45.2 本轮补齐项
+
+1. 新增 `t_payment_alert_provider_config`，沉淀告警通知供应商配置。
+2. 新增 `PaymentAlertProviderConfigDTO`，并将 `alertProviders` 纳入支付配置中心总览返回。
+3. `PaymentConfigServiceImpl / PaymentConfigController / PaymentConfigMapper.xml` 新增供应商配置启停能力。
+4. `PaymentIssueAlertDeliveryServiceImpl` 新增“派发前校验指定通道是否存在启用中的供应商配置”逻辑。
+5. `PaymentConfigView.vue` 新增告警通知供应商配置区块，统一展示通道、端点、模板、重试和限流策略。
+
+### 45.3 当前判断
+
+1. 当前异常告警派发已经从“本地通知器骨架”升级为“供应商配置中心 + 通道启停治理 + 派发前供应商校验”的轻量通知中心雏形。
+2. 这让系统更接近真实企业里的通知治理方式。
+3. 但真实供应商调用、模板变量渲染、发送回执明细和多供应商路由仍未完成，因此当前仍不满足 `master / release` 冻结门槛。
 3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
 4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
 5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。

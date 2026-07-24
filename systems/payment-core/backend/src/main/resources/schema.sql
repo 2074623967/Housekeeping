@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster;
+DROP TABLE IF EXISTS t_payment_alert_provider_config;
 DROP TABLE IF EXISTS t_payment_issue_alert_log;
 DROP TABLE IF EXISTS t_payment_issue_action_log;
 DROP TABLE IF EXISTS t_payment_order;
@@ -423,6 +424,23 @@ CREATE TABLE t_payment_issue_duty_roster (
     UNIQUE KEY uk_issue_duty_roster_code (roster_code),
     KEY idx_issue_duty_type_severity (issue_type, severity, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警值班路由表';
+
+CREATE TABLE t_payment_alert_provider_config (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    provider_code VARCHAR(64) NOT NULL COMMENT '供应商配置编码',
+    provider_name VARCHAR(64) NOT NULL COMMENT '供应商名称',
+    channel_code VARCHAR(32) NOT NULL COMMENT '通知通道',
+    endpoint_alias VARCHAR(64) NOT NULL COMMENT '接入端点标识',
+    template_code VARCHAR(64) NOT NULL COMMENT '模板编码',
+    retry_policy VARCHAR(128) NOT NULL COMMENT '重试策略',
+    rate_limit_policy VARCHAR(128) NOT NULL COMMENT '限流策略',
+    status VARCHAR(32) NOT NULL COMMENT '配置状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '配置状态样式类型',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_alert_provider_code (provider_code),
+    KEY idx_alert_provider_channel_status (channel_code, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警通知供应商配置表';
 
 CREATE TABLE t_payment_issue_alert_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

@@ -46,6 +46,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "SMS")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "EMAIL")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("IM")).thenReturn(true);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("SMS")).thenReturn(true);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("EMAIL")).thenReturn(true);
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -73,6 +76,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "SMS")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "EMAIL")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("IM")).thenReturn(true);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("SMS")).thenReturn(true);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("EMAIL")).thenReturn(true);
         doThrow(new RuntimeException("sms down")).when(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
 
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
@@ -98,6 +104,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("IM")).thenReturn(true);
 
         new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -119,6 +126,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "VOICE")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("IM")).thenReturn(true);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("VOICE")).thenReturn(false);
 
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -144,6 +153,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(true);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "SMS")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("SMS")).thenReturn(true);
 
         new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -152,6 +162,28 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         verify(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+    }
+
+    @Test
+    void shouldMarkFailureWhenProviderConfigMissingForChannel() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasEnabledAlertProviderForChannel("IM")).thenReturn(false);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

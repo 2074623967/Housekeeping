@@ -171,6 +171,21 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findAlertProviders" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
+        SELECT provider_code AS providerCode,
+               provider_name AS providerName,
+               channel_code AS channelCode,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               retry_policy AS retryPolicy,
+               rate_limit_policy AS rateLimitPolicy,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_alert_provider_config
+        ORDER BY channel_code ASC, id ASC
+    </select>
+
     <select id="findIssueDutyRosters" resultType="com.abc123.hsp.dto.PaymentIssueDutyRosterDTO">
         SELECT roster_code AS rosterCode,
                issue_type AS issueType,
@@ -438,6 +453,14 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE source_app_id = #{sourceAppId}
+    </update>
+
+    <update id="updateAlertProviderStatus">
+        UPDATE t_payment_alert_provider_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE provider_code = #{providerCode}
     </update>
 
     <update id="updateIssueDutyRosterStatus">

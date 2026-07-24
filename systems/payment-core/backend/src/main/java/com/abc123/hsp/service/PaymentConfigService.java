@@ -67,6 +67,11 @@ public interface PaymentConfigService {
     PaymentConfigOverviewDTO toggleControlPolicy(PaymentConfigToggleRequestDTO request);
 
     /**
+     * 启停告警通知供应商配置。
+     */
+    PaymentConfigOverviewDTO toggleAlertProvider(PaymentConfigToggleRequestDTO request);
+
+    /**
      * 执行支付控制策略自检并回写准入结果。
      */
     PaymentConfigOverviewDTO runControlPolicySelfCheck(PaymentConfigToggleRequestDTO request);

@@ -68,4 +68,9 @@ public interface PaymentTaskCenterMapper {
      * 判断某个异常在指定通知通道上是否已经成功派发过。
      */
     boolean hasSuccessfulIssueAlertChannelDelivery(String issueNo, String alertChannel);
+
+    /**
+     * 判断指定通知通道是否存在启用中的供应商配置。
+     */
+    boolean hasEnabledAlertProviderForChannel(String alertChannel);
 }
