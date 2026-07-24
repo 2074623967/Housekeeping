@@ -403,6 +403,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setNotifyChannels(requireText(request.getNotifyChannels(), "通知通道不能为空"));
         entity.setEscalationLevel(requireText(request.getEscalationLevel(), "升级等级不能为空"));
         entity.setScheduleTag(requireText(request.getScheduleTag(), "班次标签不能为空"));
+        int effectiveStartHour = resolveDutyRosterHour(request.getEffectiveStartHour(), 0, "班次生效开始小时不能为空");
+        int effectiveEndHour = resolveDutyRosterHour(request.getEffectiveEndHour(), 23, "班次生效结束小时不能为空");
+        if (effectiveStartHour > effectiveEndHour) {
+            throw new IllegalArgumentException("班次生效开始小时不能大于结束小时");
+        }
+        entity.setEffectiveStartHour(Integer.valueOf(effectiveStartHour));
+        entity.setEffectiveEndHour(Integer.valueOf(effectiveEndHour));
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
         return entity;
@@ -423,6 +430,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("协议优先级不能小于0");
         }
         return priority;
+    }
+
+    private int resolveDutyRosterHour(Integer hour, int defaultHour, String message) {
+        if (hour == null) {
+            return defaultHour;
+        }
+        int normalizedHour = hour.intValue();
+        if (normalizedHour < 0 || normalizedHour > 23) {
+            throw new IllegalArgumentException(message);
+        }
+        return normalizedHour;
     }
 
     private String resolveSeverity(String severity) {

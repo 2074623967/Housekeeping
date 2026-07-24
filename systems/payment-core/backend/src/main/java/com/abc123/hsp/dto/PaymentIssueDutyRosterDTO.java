@@ -24,6 +24,12 @@ public class PaymentIssueDutyRosterDTO {
     private String escalationLevel;
     /** 值班班次说明。 */
     private String scheduleTag;
+    /** 班次生效开始小时。 */
+    private Integer effectiveStartHour;
+    /** 班次生效结束小时。 */
+    private Integer effectiveEndHour;
+    /** 班次生效时间窗。 */
+    private String effectiveWindow;
     /** 配置状态。 */
     private String status;
     /** 配置状态样式。 */

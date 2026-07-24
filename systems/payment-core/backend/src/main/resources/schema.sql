@@ -414,6 +414,8 @@ CREATE TABLE t_payment_issue_duty_roster (
     notify_channels VARCHAR(64) NOT NULL COMMENT '默认通知通道列表',
     escalation_level VARCHAR(32) NOT NULL COMMENT '升级等级',
     schedule_tag VARCHAR(64) NOT NULL COMMENT '值班班次标签',
+    effective_start_hour TINYINT NOT NULL DEFAULT 0 COMMENT '班次生效开始小时',
+    effective_end_hour TINYINT NOT NULL DEFAULT 23 COMMENT '班次生效结束小时',
     status VARCHAR(32) NOT NULL COMMENT '配置状态',
     status_type VARCHAR(32) NOT NULL COMMENT '配置状态样式类型',
     updated_at DATETIME NOT NULL COMMENT '更新时间',

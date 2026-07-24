@@ -20,6 +20,10 @@ public class PaymentIssueAlertCandidateDTO {
     private String responsibilityGroup;
     /** 接收人。 */
     private String receiver;
+    /** 班次标签。 */
+    private String scheduleTag;
+    /** 班次生效时间窗。 */
+    private String effectiveWindow;
     /** 告警内容。 */
     private String alertContent;
 }

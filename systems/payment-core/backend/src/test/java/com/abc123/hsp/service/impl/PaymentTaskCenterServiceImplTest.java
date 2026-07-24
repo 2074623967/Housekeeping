@@ -165,6 +165,8 @@ class PaymentTaskCenterServiceImplTest {
         candidate.setSeverity("P1");
         candidate.setResponsibilityGroup("支付后端值班组");
         candidate.setReceiver("支付后端值班");
+        candidate.setScheduleTag("交易链路白班");
+        candidate.setEffectiveWindow("00:00-23:00");
         candidate.setAlertContent("支付异常 ISSUE-WAIT-PAY-001 已超过 P1 SLA，请进入异常中心处理。");
         when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.singletonList(candidate));
         when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
@@ -190,6 +192,8 @@ class PaymentTaskCenterServiceImplTest {
                 entity -> "PIA".equals(entity.getAlertNo().substring(0, 3))
                         && "待确认".equals(entity.getAckStatus())
                         && "IN_APP_OUTBOX".equals(entity.getAlertChannel())
+                        && entity.getAlertContent().contains("交易链路白班")
+                        && entity.getAlertContent().contains("00:00-23:00")
         ));
     }
 

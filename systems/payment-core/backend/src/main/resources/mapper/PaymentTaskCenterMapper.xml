@@ -95,6 +95,9 @@
                issue_sla.severity AS severity,
                COALESCE(roster.responsibility_group, '支付运营组') AS responsibilityGroup,
                COALESCE(roster.receiver, '支付运营') AS receiver,
+               COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
+               CONCAT(LPAD(COALESCE(roster.effective_start_hour, 0), 2, '0'), ':00-',
+                      LPAD(COALESCE(roster.effective_end_hour, 23), 2, '0'), ':00') AS effectiveWindow,
                CONCAT('支付异常 ', issue_sla.issue_no, ' 已超过 ', issue_sla.severity, ' SLA，请进入异常中心处理。') AS alertContent
         FROM (
             SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
@@ -134,6 +137,7 @@
             ON roster.issue_type = issue_sla.issue_type
            AND roster.severity = issue_sla.severity
            AND roster.status = 'ENABLED'
+           AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour
         WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
             OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
           AND NOT EXISTS (

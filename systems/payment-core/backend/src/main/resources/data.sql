@@ -36,11 +36,11 @@ INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_pa
 ('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_HOME_PC', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'WARN', 'warn', 'PC 端银行卡链路处于观察期，大额订单请优先人工复核', 'ENABLED', 'success', '2026-07-21 09:00:00');
 
-INSERT INTO t_payment_issue_duty_roster (roster_code, issue_type, severity, responsibility_group, receiver, notify_channels, escalation_level, schedule_tag, status, status_type, updated_at) VALUES
-('DUTY_WAIT_CALLBACK_P1', '待回调未收口', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '交易链路白班', 'ENABLED', 'success', '2026-07-21 09:10:00'),
-('DUTY_NOTIFY_PENDING_P1', '回调处理待跟进', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '回调补偿白班', 'ENABLED', 'success', '2026-07-21 09:10:00'),
-('DUTY_EVENT_FAILED_P2', '下游事件发布失败', 'P2', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,EMAIL', 'L2', '账务联动晚班', 'ENABLED', 'success', '2026-07-21 09:10:00'),
-('DUTY_DISABLED_CHANNEL_P2', '命中停用渠道', 'P2', '渠道配置运营组', '渠道配置运营', 'IN_APP,IM', 'L2', '渠道运营白班', 'ENABLED', 'success', '2026-07-21 09:10:00');
+INSERT INTO t_payment_issue_duty_roster (roster_code, issue_type, severity, responsibility_group, receiver, notify_channels, escalation_level, schedule_tag, effective_start_hour, effective_end_hour, status, status_type, updated_at) VALUES
+('DUTY_WAIT_CALLBACK_P1', '待回调未收口', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '交易链路白班', 0, 23, 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_NOTIFY_PENDING_P1', '回调处理待跟进', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '回调补偿白班', 0, 23, 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_EVENT_FAILED_P2', '下游事件发布失败', 'P2', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,EMAIL', 'L2', '账务联动晚班', 0, 23, 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_DISABLED_CHANNEL_P2', '命中停用渠道', 'P2', '渠道配置运营组', '渠道配置运营', 'IN_APP,IM', 'L2', '渠道运营白班', 0, 23, 'ENABLED', 'success', '2026-07-21 09:10:00');
 
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),

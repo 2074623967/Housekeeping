@@ -210,9 +210,31 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setAlertStatusType("warn");
         entity.setAckStatus("待确认");
         entity.setAckStatusType("warn");
-        entity.setAlertContent(candidate.getAlertContent());
+        entity.setAlertContent(buildScheduledAlertContent(candidate));
         entity.setTriggeredBy(triggeredBy);
         return entity;
+    }
+
+    private String buildScheduledAlertContent(PaymentIssueAlertCandidateDTO candidate) {
+        String alertContent = candidate.getAlertContent();
+        String scheduleTag = candidate.getScheduleTag();
+        String effectiveWindow = candidate.getEffectiveWindow();
+        if (!hasText(scheduleTag) && !hasText(effectiveWindow)) {
+            return alertContent;
+        }
+        StringBuilder builder = new StringBuilder(alertContent == null ? "" : alertContent);
+        builder.append("【");
+        if (hasText(scheduleTag)) {
+            builder.append("班次：").append(scheduleTag);
+        }
+        if (hasText(scheduleTag) && hasText(effectiveWindow)) {
+            builder.append("，");
+        }
+        if (hasText(effectiveWindow)) {
+            builder.append("时段：").append(effectiveWindow);
+        }
+        builder.append("】");
+        return builder.toString();
     }
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
@@ -589,5 +611,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private String buildAlertLogNo() {
         return "PIA" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && value.trim().length() > 0;
     }
 }

@@ -51,6 +51,8 @@ function createRosterForm() {
     notifyChannels: "IN_APP,IM",
     escalationLevel: "L1",
     scheduleTag: "",
+    effectiveStartHour: 0,
+    effectiveEndHour: 23,
     enabled: true
   };
 }
@@ -251,6 +253,8 @@ function startEditRoster(roster) {
     notifyChannels: roster.notifyChannels,
     escalationLevel: roster.escalationLevel,
     scheduleTag: roster.scheduleTag,
+    effectiveStartHour: roster.effectiveStartHour,
+    effectiveEndHour: roster.effectiveEndHour,
     enabled: roster.status === "ENABLED"
   };
   actionMessage.value = `正在编辑值班路由 ${roster.rosterCode}`;
@@ -834,6 +838,14 @@ onMounted(loadOverview);
                 <input v-model.trim="rosterForm.scheduleTag" placeholder="交易链路白班" />
               </label>
               <label>
+                生效开始小时
+                <input v-model.number="rosterForm.effectiveStartHour" type="number" min="0" max="23" />
+              </label>
+              <label>
+                生效结束小时
+                <input v-model.number="rosterForm.effectiveEndHour" type="number" min="0" max="23" />
+              </label>
+              <label>
                 启用状态
                 <select v-model="rosterForm.enabled">
                   <option :value="true">启用</option>
@@ -866,6 +878,7 @@ onMounted(loadOverview);
                   <th>通知通道</th>
                   <th>升级等级</th>
                   <th>班次标签</th>
+                  <th>生效时间窗</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th>操作</th>
@@ -881,6 +894,7 @@ onMounted(loadOverview);
                   <td>{{ roster.notifyChannels }}</td>
                   <td>{{ roster.escalationLevel }}</td>
                   <td>{{ roster.scheduleTag }}</td>
+                  <td>{{ roster.effectiveWindow }}</td>
                   <td><span :class="['badge', roster.statusType]">{{ roster.status }}</span></td>
                   <td>{{ roster.updatedAt }}</td>
                   <td>

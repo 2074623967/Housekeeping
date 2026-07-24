@@ -71,6 +71,8 @@ class PaymentConfigServiceImplTest {
         roster.setSeverity("P1");
         roster.setResponsibilityGroup("支付后端值班组");
         roster.setReceiver("支付后端值班");
+        roster.setEffectiveStartHour(0);
+        roster.setEffectiveEndHour(23);
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
@@ -88,6 +90,8 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("DUTY_WAIT_CALLBACK_P1", actualRoster.getRosterCode());
         org.junit.jupiter.api.Assertions.assertEquals("待回调未收口", actualRoster.getIssueType());
         org.junit.jupiter.api.Assertions.assertEquals("支付后端值班", actualRoster.getReceiver());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), actualRoster.getEffectiveStartHour());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(23), actualRoster.getEffectiveEndHour());
     }
 
     @Test
@@ -439,6 +443,8 @@ class PaymentConfigServiceImplTest {
         request.setNotifyChannels("IN_APP,IM,SMS");
         request.setEscalationLevel("L1");
         request.setScheduleTag("交易链路白班");
+        request.setEffectiveStartHour(0);
+        request.setEffectiveEndHour(23);
         request.setEnabled(true);
         return request;
     }

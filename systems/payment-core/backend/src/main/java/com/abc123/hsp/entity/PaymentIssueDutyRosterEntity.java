@@ -24,6 +24,10 @@ public class PaymentIssueDutyRosterEntity {
     private String escalationLevel;
     /** 班次标签。 */
     private String scheduleTag;
+    /** 班次生效开始小时。 */
+    private Integer effectiveStartHour;
+    /** 班次生效结束小时。 */
+    private Integer effectiveEndHour;
     /** 状态。 */
     private String status;
     /** 状态样式类型。 */

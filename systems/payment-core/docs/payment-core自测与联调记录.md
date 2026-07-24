@@ -1286,6 +1286,30 @@
 1. 当前异常告警派发已经具备“首次派发 + 失败补发 + 成功通道去重”的最小生产化雏形。
 2. 当前 `payment-core` 对象层已完成一轮统一规范收口，后续新增 DTO/VO/Entity 应延续同一标准，避免再次回退。
 3. 真实通知供应商、发送回执明细、补发上限与补发节流仍未补齐，因此本轮提升的是成熟度，不是最终 `master / release` 触发条件。
+
+## 44. 2026-07-24 值班班次生效窗联动验证
+
+### 44.1 本轮验证结论
+
+本轮围绕“值班路由不只是责任组和通知通道，还要有生效班次，任务中心要按当前小时匹配当前班次”进行了补强，确认 `payment-core` 在异常升级链路上进一步具备了真实值班配置的味道。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 共 `35` 个用例全部通过，覆盖值班路由生效窗、任务中心异常升级与告警派发 |
+
+### 44.2 本轮补齐项
+
+1. `t_payment_issue_duty_roster` 新增 `effective_start_hour / effective_end_hour`。
+2. `PaymentIssueDutyRosterDTO / PaymentIssueDutyRosterEntity / PaymentIssueDutyRosterUpsertRequestDTO` 同步新增班次生效小时字段。
+3. 配置中心前端的值班路由表单和表格展示新增班次生效小时与时间窗字段。
+4. 任务中心异常升级候选按当前小时匹配值班路由，并将班次标签、时间窗同步写入告警内容。
+5. `PaymentTaskCenterServiceImplTest` 新增对“班次标签/时间窗进入告警内容”的验证。
+
+### 44.3 当前判断
+
+1. 当前值班路由已从“纯配置项”升级为“可按时间窗生效的值班配置”。
+2. 这使异常 SLA 升级更贴近真实值班班表的操作方式。
+3. 但值班日历、跨日班次、升级链路和真实外部通知供应商仍未完成，因此当前仍不满足 `master / release` 冻结门槛。
 3. `PaymentTaskCenterService` 新增“支付控制策略自动巡检”手动与自动执行入口，任务编码为 `PAYMENT_CONTROL_SELF_CHECK`。
 4. `PaymentCompensationScheduler` 新增控制策略自动巡检调度入口，避免控制策略长期依赖人工点击。
 5. 任务中心总览新增 `controlPolicyWarningCount` 指标，统一展示未通过自检的控制策略数量。

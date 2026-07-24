@@ -180,6 +180,9 @@
                notify_channels AS notifyChannels,
                escalation_level AS escalationLevel,
                schedule_tag AS scheduleTag,
+               effective_start_hour AS effectiveStartHour,
+               effective_end_hour AS effectiveEndHour,
+               CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-', LPAD(effective_end_hour, 2, '0'), ':00') AS effectiveWindow,
                status,
                status_type AS statusType,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
@@ -196,6 +199,8 @@
                notify_channels AS notifyChannels,
                escalation_level AS escalationLevel,
                schedule_tag AS scheduleTag,
+               effective_start_hour AS effectiveStartHour,
+               effective_end_hour AS effectiveEndHour,
                status,
                status_type AS statusType
         FROM t_payment_issue_duty_roster
@@ -371,6 +376,8 @@
             notify_channels,
             escalation_level,
             schedule_tag,
+            effective_start_hour,
+            effective_end_hour,
             status,
             status_type,
             updated_at
@@ -383,6 +390,8 @@
             #{notifyChannels},
             #{escalationLevel},
             #{scheduleTag},
+            #{effectiveStartHour},
+            #{effectiveEndHour},
             #{status},
             #{statusType},
             NOW()
@@ -398,6 +407,8 @@
             notify_channels = #{notifyChannels},
             escalation_level = #{escalationLevel},
             schedule_tag = #{scheduleTag},
+            effective_start_hour = #{effectiveStartHour},
+            effective_end_hour = #{effectiveEndHour},
             status = #{status},
             status_type = #{statusType},
             updated_at = NOW()
