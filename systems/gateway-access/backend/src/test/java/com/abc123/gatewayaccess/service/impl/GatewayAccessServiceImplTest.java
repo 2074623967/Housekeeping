@@ -8,8 +8,10 @@ import static org.mockito.Mockito.when;
 import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
+import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
+import java.time.LocalDate;
 import java.util.Collections;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -71,6 +73,23 @@ class GatewayAccessServiceImplTest {
         assertEquals("wechat", captor.getValue().getKeyword());
         assertEquals("WECHAT", captor.getValue().getChannelType());
         assertEquals("ENABLED", captor.getValue().getStatus());
+    }
+
+    @Test
+    void shouldClassifyCertificateRiskByExpireDate() {
+        GatewayCertificateDTO certificate = new GatewayCertificateDTO();
+        certificate.setCertificateCode("CERT-001");
+        certificate.setExpireAt(LocalDate.now().plusDays(5).toString());
+        when(gatewayAccessMapper.findCertificates()).thenReturn(Collections.singletonList(certificate));
+
+        GatewayCertificateDTO result = new GatewayAccessServiceImpl(gatewayAccessMapper)
+                .certificates()
+                .getRecords()
+                .get(0);
+
+        assertEquals("7天内到期", result.getRiskLevel());
+        assertEquals("danger", result.getRiskLevelType());
+        assertEquals(5L, result.getRemainingDays());
     }
 
     @Test

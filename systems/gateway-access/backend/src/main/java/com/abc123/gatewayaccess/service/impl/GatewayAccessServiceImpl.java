@@ -11,6 +11,9 @@ import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -61,6 +64,7 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     @Override
     public PageResultDTO<GatewayCertificateDTO> certificates() {
         List<GatewayCertificateDTO> records = gatewayAccessMapper.findCertificates();
+        records.forEach(this::enrichCertificateRisk);
         return page(records, 1, 20);
     }
 
@@ -145,6 +149,45 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private <T> PageResultDTO<T> page(List<T> records, int pageNo, int pageSize) {
         return new PageResultDTO<>(records, records.size(), pageNo, pageSize);
+    }
+
+    /**
+     * 基于证书到期日补齐剩余天数和风险分层，便于运营优先关注临期或已过期证书。
+     */
+    private void enrichCertificateRisk(GatewayCertificateDTO certificate) {
+        if (certificate == null || !StringUtils.hasText(certificate.getExpireAt())) {
+            return;
+        }
+        try {
+            LocalDate expireDate = LocalDate.parse(certificate.getExpireAt().trim());
+            long remainingDays = ChronoUnit.DAYS.between(LocalDate.now(), expireDate);
+            certificate.setRemainingDays(remainingDays);
+            if (remainingDays < 0) {
+                certificate.setRiskLevel("已过期");
+                certificate.setRiskLevelType("danger");
+                certificate.setRiskHint("证书已过期，需立即更换并验证回调验签链路");
+                return;
+            }
+            if (remainingDays <= 7) {
+                certificate.setRiskLevel("7天内到期");
+                certificate.setRiskLevelType("danger");
+                certificate.setRiskHint("证书将在 7 天内到期，建议立即安排轮换");
+                return;
+            }
+            if (remainingDays <= 30) {
+                certificate.setRiskLevel("30天内到期");
+                certificate.setRiskLevelType("warn");
+                certificate.setRiskHint("证书进入临期窗口，需排入轮换计划并完成联调");
+                return;
+            }
+            certificate.setRiskLevel("正常");
+            certificate.setRiskLevelType("success");
+            certificate.setRiskHint("证书有效期充足，可按常规节奏维护");
+        } catch (DateTimeParseException exception) {
+            certificate.setRiskLevel("日期异常");
+            certificate.setRiskLevelType("warn");
+            certificate.setRiskHint("证书到期日格式异常，请尽快核对台账");
+        }
     }
 
     private GatewayChannelQueryDTO normalizeGatewayQuery(GatewayChannelQueryDTO query) {

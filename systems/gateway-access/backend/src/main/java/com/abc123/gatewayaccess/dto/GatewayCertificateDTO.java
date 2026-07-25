@@ -16,6 +16,14 @@ public class GatewayCertificateDTO {
     private String certificateVersion;
     /** 到期日。 */
     private String expireAt;
+    /** 剩余天数。 */
+    private Long remainingDays;
+    /** 风险等级。 */
+    private String riskLevel;
+    /** 风险等级样式。 */
+    private String riskLevelType;
+    /** 风险提示。 */
+    private String riskHint;
     /** 状态。 */
     private String status;
     /** 状态样式。 */

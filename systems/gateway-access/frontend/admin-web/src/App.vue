@@ -219,6 +219,7 @@ onMounted(loadAll);
                 <th>网关</th>
                 <th>版本</th>
                 <th>到期日</th>
+                <th>风险等级</th>
                 <th>状态</th>
                 <th>更新时间</th>
                 <th>操作</th>
@@ -229,7 +230,14 @@ onMounted(loadAll);
                 <td>{{ item.certificateCode }}</td>
                 <td>{{ item.gatewayCode }}</td>
                 <td>{{ item.certificateVersion }}</td>
-                <td>{{ item.expireAt }}</td>
+                <td>
+                  <div>{{ item.expireAt }}</div>
+                  <div class="muted">{{ item.remainingDays }} 天</div>
+                </td>
+                <td>
+                  <span class="tag" :class="item.riskLevelType">{{ item.riskLevel }}</span>
+                  <div class="muted">{{ item.riskHint }}</div>
+                </td>
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td>{{ item.updatedAt }}</td>
                 <td>
