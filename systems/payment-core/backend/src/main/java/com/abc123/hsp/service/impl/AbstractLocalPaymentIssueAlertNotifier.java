@@ -4,7 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Map;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -34,13 +38,29 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
      */
     protected HttpEntity<Map<String, Object>> buildWebhookRequestEntity(Map<String, Object> payload,
                                                                         String authHeaderName,
-                                                                        String authHeaderValue) {
+                                                                        String authHeaderValue,
+                                                                        String signatureHeaderName,
+                                                                        String signatureSecret) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (StringUtils.hasText(authHeaderName) && StringUtils.hasText(authHeaderValue)) {
             headers.set(authHeaderName.trim(), authHeaderValue.trim());
         }
+        if (StringUtils.hasText(signatureHeaderName) && StringUtils.hasText(signatureSecret)) {
+            headers.set(signatureHeaderName.trim(), signPayload(payload, signatureSecret));
+        }
         return new HttpEntity<Map<String, Object>>(payload, headers);
+    }
+
+    private String signPayload(Map<String, Object> payload, String signatureSecret) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(signatureSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(OBJECT_MAPPER.writeValueAsBytes(payload));
+            return Base64.getEncoder().encodeToString(digest);
+        } catch (Exception exception) {
+            throw new IllegalStateException("网关签名计算失败：" + exception.getMessage(), exception);
+        }
     }
 
     /**

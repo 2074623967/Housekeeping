@@ -27,6 +27,8 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
     private final String receiptNoJsonPointer;
     private final String authHeaderName;
     private final String authHeaderValue;
+    private final String signatureHeaderName;
+    private final String signatureSecret;
 
     public LocalEmailPaymentIssueAlertNotifier(@Value("${payment.issue-alert.email.webhook-url:}") String webhookUrl,
                                                @Value("${payment.issue-alert.email.timeout-ms:3000}") int timeoutMs,
@@ -34,12 +36,15 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                                                @Value("${payment.issue-alert.email.success-code-expected-value:}") String successExpectedValue,
                                                @Value("${payment.issue-alert.email.receipt-no-json-pointer:}") String receiptNoJsonPointer,
                                                @Value("${payment.issue-alert.email.auth-header-name:}") String authHeaderName,
-                                               @Value("${payment.issue-alert.email.auth-header-value:}") String authHeaderValue) {
-        this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer, authHeaderName, authHeaderValue, null);
+                                               @Value("${payment.issue-alert.email.auth-header-value:}") String authHeaderValue,
+                                               @Value("${payment.issue-alert.email.signature-header-name:}") String signatureHeaderName,
+                                               @Value("${payment.issue-alert.email.signature-secret:}") String signatureSecret) {
+        this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer,
+                authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, null);
     }
 
     LocalEmailPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
-        this(restTemplate, webhookUrl, 3000, "", "", "", "", "");
+        this(restTemplate, webhookUrl, 3000, "", "", "", "", "", "", "");
     }
 
     LocalEmailPaymentIssueAlertNotifier(String webhookUrl,
@@ -49,6 +54,8 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                                         String receiptNoJsonPointer,
                                         String authHeaderName,
                                         String authHeaderValue,
+                                        String signatureHeaderName,
+                                        String signatureSecret,
                                         RestTemplate restTemplate) {
         this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate,
                 webhookUrl,
@@ -57,7 +64,9 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                 successExpectedValue,
                 receiptNoJsonPointer,
                 authHeaderName,
-                authHeaderValue);
+                authHeaderValue,
+                signatureHeaderName,
+                signatureSecret);
     }
 
     LocalEmailPaymentIssueAlertNotifier(RestTemplate restTemplate,
@@ -67,7 +76,9 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                                         String successExpectedValue,
                                         String receiptNoJsonPointer,
                                         String authHeaderName,
-                                        String authHeaderValue) {
+                                        String authHeaderValue,
+                                        String signatureHeaderName,
+                                        String signatureSecret) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
         this.timeoutMs = timeoutMs;
@@ -76,6 +87,8 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
         this.receiptNoJsonPointer = receiptNoJsonPointer;
         this.authHeaderName = authHeaderName;
         this.authHeaderValue = authHeaderValue;
+        this.signatureHeaderName = signatureHeaderName;
+        this.signatureSecret = signatureSecret;
     }
 
     @Override
@@ -95,7 +108,7 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(
                     webhookUrl,
-                    buildWebhookRequestEntity(buildWebhookPayload(item), authHeaderName, authHeaderValue),
+                    buildWebhookRequestEntity(buildWebhookPayload(item), authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret),
                     String.class
             );
             return buildWebhookDeliveryResult(

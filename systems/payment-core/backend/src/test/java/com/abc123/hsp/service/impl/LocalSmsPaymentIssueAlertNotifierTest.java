@@ -45,7 +45,9 @@ class LocalSmsPaymentIssueAlertNotifierTest {
                 "SUCCESS",
                 "/data/smsId",
                 "X-Access-Key",
-                "sms-key-001"
+                "sms-key-001",
+                "X-Sms-Signature",
+                "sms-secret"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -60,6 +62,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=5200ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
         Assertions.assertEquals("sms-key-001", payloadCaptor.getValue().getHeaders().getFirst("X-Access-Key"));
+        Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Sms-Signature"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {
