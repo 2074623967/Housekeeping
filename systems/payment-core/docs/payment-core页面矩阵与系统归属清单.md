@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文档用于在 `Monday, July 20, 2026` 这个基线时点冻结 `payment-core` 的真实页面边界，并将四类资料中出现的相关页面、模块和运营能力，明确归属到后续独立系统，避免继续把完整支付平台的全部内容误堆到 `payment-core`。
+本文档用于在 `2026-07-25` 这个基线时点冻结 `payment-core` 的真实页面边界，并将四类资料中出现的相关页面、模块和运营能力，明确归属到后续独立系统，避免继续把完整支付平台的全部内容误堆到 `payment-core`。
 
 本文档是以下文档的进一步细化：
 
@@ -32,6 +32,17 @@
 
 ## 3. payment-core 保留边界
 
+### 3.0 当前真实路由盘点
+
+截至 `2026-07-25`，`payment-core/frontend` 不是单一后台，而是已经存在四套实际工程：
+
+1. `admin-web`：当前真实路由包括 `/dashboard`、`/orders`、`/bills`、`/payment-flows`、`/payment-routes`、`/payment-events`、`/payment-issues`、`/payment-issue-alerts`、`/cashier-sessions`、`/payment-requests`、`/payment-logs`、`/payment-records/*`、`/payments/*`、`/refunds/*`、`/payment-config`、`/payment-monitor`、`/payment-task-center`、`/payment-day-end`、`/worker-settlements`
+2. `app-web`：当前真实路由包括 `/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+3. `h5-web`：当前真实路由包括 `/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+4. `pc-web`：当前真实路由包括 `/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+
+因此后续做边界判定时，不能只看资料里的“目标页面”，还要同时看当前仓库里“已经先落在 payment-core”的实际页面。下面的归属结论，都是在这个真实路由事实之上做的。
+
 ### 3.1 保留页面
 
 | 页面/模块 | 端类型 | 归属系统 | 当前状态 | 说明 |
@@ -47,7 +58,7 @@
 | 支付请求管理 | PC 后台 | `payment-core` | 已实现 | 当前已完成支付尝试、请求报文、响应报文、路由结果以及请求编号/支付单号/订单号/终端/IP/请求状态筛选与排序，并支持分页 |
 | 支付处理日志 | PC 后台 | `payment-core` | 已实现 | 当前已完成支付提交、路由、回调、业务事件四类处理日志查询，支持来源、关键字筛选与排序，并支持分页 |
 | 支付事件出站 | PC 后台 | `payment-core` | 已实现 V1 | 当前已完成支付事件出站台账、下游系统、事件主题、发布状态、排序和手动重发入口 |
-| 支付交易异常中心 | PC 后台 | `payment-core` | 已实现 V1 | 当前已完成待回调未收口、回调待处理、下游事件失败和命中停用渠道四类异常聚合与跳转 |
+| 支付交易异常中心 | PC 后台 | `payment-core` | 已实现 V1 | 当前已完成待回调未收口、回调待处理、下游事件失败和命中停用渠道四类异常聚合与跳转，并已补齐告警派发明细、供应商回执快照和人工确认回执 |
 | 支付监控分析 | PC 后台 | `payment-core` | 已实现 V1 | 当前已提供支付趋势、渠道表现和异常告警独立页面与 `/api/payment-monitor/overview` 接口 |
 | 支付任务中心 | PC 后台 | `payment-core` | 已实现 V1.6 | 当前已提供超时关单、失败事件重发、失败退款重试、自动/手动来源留痕、重点告警卡片、任务日志筛选分页和自动补偿调度统一处理台 |
 | 支付日终处理 | PC 后台 | `payment-core` | 已实现 V1.6 | 当前已提供日终批次总览、手动触发、批次留痕、成功事实快照和差异告警卡片，不承接财务对账主流程 |
@@ -112,6 +123,10 @@
 | 退款详情 | PC 后台 | `payment-core`（过渡承载） / `refund-center`（长期归属） | 当前是 | 当前已补齐退款原因、原支付快照和退款操作日志，长期可平移到独立退款中心 |
 | 退款异常处理台 | PC 后台 | `refund-center` | 否 | 属于差错闭环和逆向处理域 |
 
+补充说明：
+
+- 当前仓库里 `admin-web:/refunds` 与 `admin-web:/refunds/:refundOrderId` 已经真实运行，因此这里不是“未来是否要做”的问题，而是“何时从 payment-core 平移到独立 `refund-center`”的问题。
+
 ### 4.3 账户账务域
 
 | 来源页面/模块 | 端类型 | 目标归属系统 | 是否继续在 `payment-core` 实现 | 归属原因 |
@@ -136,6 +151,10 @@
 | 结算失败记录 | PC 后台 | `settlement-system` | 否 | 属于出款失败与补偿处理 |
 | 服务者结算查询入口 | PC 后台 | `payment-core` | 保留轻入口 | 可保留只读入口或跳转，不继续在本系统扩写完整页面 |
 
+补充说明：
+
+- 当前仓库里 `admin-web:/worker-settlements` 已经存在，因此这块应按“过渡查询入口”管理，后续迁移优先级高，不应继续在 `payment-core` 内扩展更多结算作业动作。
+
 ### 4.5 对账、保证金、钱包与配置域
 
 | 来源页面/模块 | 端类型 | 目标归属系统 | 是否继续在 `payment-core` 实现 | 归属原因 |
@@ -146,6 +165,11 @@
 | 配置中心 | PC 后台 | `ops-config-system` | 否 | 协议、路由、渠道、交易类型、限额属于运营配置域 |
 | 权限与审批 | PC 后台 | `ops-config-system` | 否 | 通常与运营后台平台能力一并建设 |
 | 风控拦截与监控台 | PC 后台 | `risk-control-system` | 否 | 风险策略、拦截、告警是独立风险域 |
+
+补充说明：
+
+- 当前仓库里 `admin-web:/payment-config` 已经真实存在，它承担的是“先把渠道、路由、协议、返回码、网关和值班路由治理台账跑起来”的过渡职责。
+- 后续不应继续把所有配置都沉到 `payment-core`；其中网关接入治理优先拆向 `gateway-access`，更泛化的运营配置再拆向独立配置域。
 
 ## 5. payment-core 后续仍需补齐的正式范围
 
@@ -181,15 +205,15 @@
 
 基于本矩阵，后续应按以下顺序推进，而不是继续把全部页面堆在 `payment-core`：
 
-1. 先完成 `payment-core` 保留范围的全量交付
-2. 再进入 `accounting-system`
-3. 再进入 `clearing-system`
-4. 再进入 `settlement-system`
-5. 再进入 `refund-center`
-6. 再进入 `reconciliation-system`
-7. 再进入 `deposit-system`
-8. 再进入 `wallet-system`
-9. 再进入 `ops-config-system`
+1. 先完成 `payment-core` 保留范围的全量交付，并继续收口 `admin-web / app-web / h5-web / pc-web` 的真实边界
+2. 再把 `payment-config` 中偏接入治理的能力拆向 `gateway-access`
+3. 再把 `worker-settlements` 这类过渡查询页迁入 `settlement-system`
+4. 再把退款能力从 `payment-core` 平移到独立 `refund-center`
+5. 再进入 `accounting-system`
+6. 再进入 `clearing-system`
+7. 再进入 `reconciliation-system`
+8. 再进入 `deposit-system`
+9. 再进入 `wallet-system`
 10. 最后完善 `risk-control-system` 与财务桥接能力
 
 ## 7. 对后续开发的强约束
