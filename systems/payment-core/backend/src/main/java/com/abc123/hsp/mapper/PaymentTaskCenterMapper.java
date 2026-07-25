@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 支付任务中心 Mapper。
@@ -89,6 +90,13 @@ public interface PaymentTaskCenterMapper {
      * 查询某个异常在指定通道上的最近一次派发日志。
      */
     PaymentIssueAlertLogEntity findLatestIssueAlertChannelDeliveryLog(String issueNo, String alertChannel);
+
+    /**
+     * 统计某个供应商在指定时间窗口内的派发次数。
+     */
+    int countIssueAlertProviderDeliveriesSince(@Param("providerCode") String providerCode,
+                                               @Param("alertChannel") String alertChannel,
+                                               @Param("sinceTime") String sinceTime);
 
     /**
      * 查询指定通知通道当前启用中的供应商配置。

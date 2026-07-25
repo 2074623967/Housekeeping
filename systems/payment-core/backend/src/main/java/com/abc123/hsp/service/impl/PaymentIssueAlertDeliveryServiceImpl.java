@@ -40,6 +40,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Pattern RETRY_COUNT_PATTERN = Pattern.compile("失败重试(\\d+)次");
     private static final Pattern RETRY_COOLDOWN_PATTERN = Pattern.compile("间隔(\\d+)分钟");
+    private static final Pattern RATE_LIMIT_PATTERN = Pattern.compile("每(?:(\\d+)分钟|分钟)\\s*(\\d+)\\s*条");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
@@ -149,11 +150,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 failCount++;
                 continue;
             }
-            if (shouldBlockRetry(providerConfig, item, channelCode)) {
+            PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
+            PaymentIssueAlertDeliveryResultDTO guardFailure = resolveDispatchGuardFailure(providerConfig, deliveryItem, channelCode);
+            if (guardFailure != null) {
+                paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                        deliveryItem,
+                        triggeredBy,
+                        channelCode,
+                        "派发失败",
+                        "danger",
+                        guardFailure
+                ));
                 failCount++;
                 continue;
             }
-            PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             try {
                 PaymentIssueAlertDeliveryResultDTO deliveryResult = notifier.send(deliveryItem);
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
@@ -181,28 +191,57 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     /**
-     * 根据供应商配置中的重试策略控制补发频率，避免短时间内重复轰炸同一通道。
+     * 根据供应商配置中的重试策略与限流策略控制补发频率，避免短时间内重复轰炸同一通道。
      */
-    private boolean shouldBlockRetry(PaymentAlertProviderConfigDTO providerConfig,
-                                     PaymentIssueAlertDispatchItemDTO item,
-                                     String channelCode) {
+    private PaymentIssueAlertDeliveryResultDTO resolveDispatchGuardFailure(PaymentAlertProviderConfigDTO providerConfig,
+                                                                           PaymentIssueAlertDispatchItemDTO item,
+                                                                           String channelCode) {
         RetryGuard retryGuard = parseRetryGuard(providerConfig.getRetryPolicy());
         if (!retryGuard.isEnabled()) {
-            return false;
+            return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
         int failedAttemptCount = paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries(item.getIssueNo(), channelCode);
         if (retryGuard.hasRetryLimit() && failedAttemptCount > retryGuard.getRetryCount()) {
-            return true;
+            return buildFailureResult("RETRY_LIMIT_REACHED", "已达到失败补发上限，等待人工介入处理", item);
         }
         if (!retryGuard.hasCooldownMinutes()) {
-            return false;
+            return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
         PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getIssueNo(), channelCode);
         if (latestLog == null || !"派发失败".equals(latestLog.getAlertStatus())) {
-            return false;
+            return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
         LocalDateTime latestCreatedAt = parseAlertCreatedAt(latestLog.getCreatedAt());
-        return latestCreatedAt != null && LocalDateTime.now().isBefore(latestCreatedAt.plusMinutes(retryGuard.getCooldownMinutes()));
+        if (latestCreatedAt != null && LocalDateTime.now().isBefore(latestCreatedAt.plusMinutes(retryGuard.getCooldownMinutes()))) {
+            return buildFailureResult("RETRY_COOLDOWN_ACTIVE", "补发冷却时间未到，请等待后再重试", item);
+        }
+        return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+    }
+
+    /**
+     * 按供应商配置中的限流策略控制单位时间内的派发次数。
+     */
+    private PaymentIssueAlertDeliveryResultDTO resolveRateLimitGuardFailure(PaymentAlertProviderConfigDTO providerConfig,
+                                                                            PaymentIssueAlertDispatchItemDTO item,
+                                                                            String channelCode) {
+        RateLimitGuard rateLimitGuard = parseRateLimitGuard(providerConfig.getRateLimitPolicy());
+        if (!rateLimitGuard.isEnabled()) {
+            return null;
+        }
+        String providerCode = providerConfig.getProviderCode();
+        if (!StringUtils.hasText(providerCode)) {
+            return null;
+        }
+        String sinceTime = LocalDateTime.now().minusMinutes(rateLimitGuard.getWindowMinutes()).format(ALERT_LOG_TIME_FORMATTER);
+        int currentDeliveryCount = paymentTaskCenterMapper.countIssueAlertProviderDeliveriesSince(providerCode, channelCode, sinceTime);
+        if (currentDeliveryCount >= rateLimitGuard.getThreshold()) {
+            return buildFailureResult(
+                    "RATE_LIMITED",
+                    String.format("命中供应商限流策略：%d 分钟内最多 %d 条", rateLimitGuard.getWindowMinutes(), rateLimitGuard.getThreshold()),
+                    item
+            );
+        }
+        return null;
     }
 
     private PaymentIssueAlertLogEntity buildSourceAlertStatus(PaymentIssueAlertDispatchItemDTO item,
@@ -420,6 +459,22 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             retryGuard.setCooldownMinutes(parseInteger(cooldownMatcher.group(1)));
         }
         return retryGuard;
+    }
+
+    private RateLimitGuard parseRateLimitGuard(String rateLimitPolicy) {
+        RateLimitGuard rateLimitGuard = new RateLimitGuard();
+        if (!StringUtils.hasText(rateLimitPolicy)) {
+            return rateLimitGuard;
+        }
+        Matcher matcher = RATE_LIMIT_PATTERN.matcher(rateLimitPolicy.replaceAll("\\s+", ""));
+        if (!matcher.find()) {
+            return rateLimitGuard;
+        }
+        String windowText = matcher.group(1);
+        Integer windowMinutes = parseInteger(windowText);
+        rateLimitGuard.setWindowMinutes(windowMinutes == null ? Integer.valueOf(1) : windowMinutes);
+        rateLimitGuard.setThreshold(parseInteger(matcher.group(2)));
+        return rateLimitGuard;
     }
 
     private Integer parseInteger(String value) {
@@ -688,6 +743,35 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
         void setCooldownMinutes(Integer cooldownMinutes) {
             this.cooldownMinutes = cooldownMinutes;
+        }
+    }
+
+    /**
+     * 告警通道级限流护栏配置，来源于供应商配置中的限流策略。
+     */
+    static class RateLimitGuard {
+        private Integer windowMinutes;
+        private Integer threshold;
+
+        boolean isEnabled() {
+            return windowMinutes != null && windowMinutes.intValue() > 0
+                    && threshold != null && threshold.intValue() > 0;
+        }
+
+        Integer getWindowMinutes() {
+            return windowMinutes;
+        }
+
+        void setWindowMinutes(Integer windowMinutes) {
+            this.windowMinutes = windowMinutes;
+        }
+
+        Integer getThreshold() {
+            return threshold;
+        }
+
+        void setThreshold(Integer threshold) {
+            this.threshold = threshold;
         }
     }
 }

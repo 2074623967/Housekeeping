@@ -1588,3 +1588,33 @@
 1. 当前 `payment-core` 的异常告警补偿能力已从“失败补发骨架”进一步推进到“带补发护栏的轻量正式化版本”。
 2. 本轮提升的是执行层面的稳定性，不代表真实通知供应商、通道级限流和跨实例分布式协调已经完成。
 3. 因此本轮同样属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 46. 2026-07-25 异常告警通道级限流护栏验证
+
+### 46.1 本轮验证范围
+
+本轮围绕“异常告警补发已经具备重试护栏，但供应商通道仍缺少单位时间内的派发限流保护”的问题进行了补强验证，目标是确认当前代码会按供应商限流策略阻断超量派发。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 按 `rateLimitPolicy` 解析时间窗口与派发阈值
+2. `PaymentTaskCenterMapper` 新增按供应商 + 通道 + 时间窗口统计派发次数能力
+3. `PaymentIssueAlertDeliveryServiceImplTest` 新增通道级限流护栏覆盖
+
+### 46.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖正常派发、补发护栏、回执回查和通道级限流 |
+
+### 46.3 本轮补齐项
+
+1. `PaymentTaskCenterMapper.xml` 新增按供应商配置编码和通知通道统计窗口内成功派发量的 SQL。
+2. 派发服务在真正调用通知器前会先校验 `rateLimitPolicy`，如“每分钟 60 条”。
+3. 当命中限流阈值时，本轮派发会被阻断，并落一条标准化失败日志，供异常明细台和后续排查联查。
+
+### 46.4 当前判断
+
+1. 当前 `payment-core` 的异常告警执行链路已从“补发护栏”进一步推进到“补发护栏 + 通道级限流护栏”的轻量正式化版本。
+2. 本轮提升的是派发执行层面的限流保护，不代表真实通知供应商、跨实例分布式协调和更复杂的令牌桶/漏桶模型已经完成。
+3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。

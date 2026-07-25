@@ -397,6 +397,15 @@
         LIMIT 1
     </select>
 
+    <select id="countIssueAlertProviderDeliveriesSince" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE provider_code = #{providerCode}
+          AND alert_channel = #{alertChannel}
+          AND created_at &gt;= STR_TO_DATE(#{sinceTime}, '%Y-%m-%d %H:%i:%s')
+          AND alert_status = '已派发'
+    </select>
+
     <select id="findEnabledAlertProvidersByChannel" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
         SELECT provider_code AS providerCode,
                provider_name AS providerName,

@@ -259,6 +259,31 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldBlockDispatchWhenProviderRateLimitReached() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, null, "每分钟 1 条")
+        ));
+        when(paymentTaskCenterMapper.countIssueAlertProviderDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_WECOM"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(1);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
     void shouldReconcileAcceptedDeliveryReceiptsSuccessfully() {
         PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
         acceptedLog.setAlertNo("PIA-IM-001");
@@ -316,7 +341,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                                                         String templateCode,
                                                         String routeRule,
                                                         Integer routePriority) {
-        return buildProvider(providerCode, providerName, endpointAlias, templateCode, routeRule, routePriority, null);
+        return buildProvider(providerCode, providerName, endpointAlias, templateCode, routeRule, routePriority, null, null);
     }
 
     private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
@@ -326,6 +351,17 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                                                         String routeRule,
                                                         Integer routePriority,
                                                         String retryPolicy) {
+        return buildProvider(providerCode, providerName, endpointAlias, templateCode, routeRule, routePriority, retryPolicy, null);
+    }
+
+    private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
+                                                        String providerName,
+                                                        String endpointAlias,
+                                                        String templateCode,
+                                                        String routeRule,
+                                                        Integer routePriority,
+                                                        String retryPolicy,
+                                                        String rateLimitPolicy) {
         PaymentAlertProviderConfigDTO provider = new PaymentAlertProviderConfigDTO();
         provider.setProviderCode(providerCode);
         provider.setProviderName(providerName);
@@ -335,6 +371,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         provider.setRouteRule(routeRule);
         provider.setRoutePriority(routePriority);
         provider.setRetryPolicy(retryPolicy);
+        provider.setRateLimitPolicy(rateLimitPolicy);
         return provider;
     }
 
