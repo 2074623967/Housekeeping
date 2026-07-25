@@ -10,6 +10,11 @@ const permissions = ref([]);
 const loading = ref(true);
 const message = ref("");
 const active = ref("");
+const gatewayFilters = ref({
+  keyword: "",
+  channelType: "全部",
+  status: "全部"
+});
 
 async function loadAll() {
   loading.value = true;
@@ -18,7 +23,7 @@ async function loadAll() {
     const [summaryData, appData, gatewayData, certData, permissionData] = await Promise.all([
       gatewayAccessApi.getSummary(),
       gatewayAccessApi.getApplications(),
-      gatewayAccessApi.getGateways(),
+      gatewayAccessApi.getGateways(gatewayFilters.value),
       gatewayAccessApi.getCertificates(),
       gatewayAccessApi.getPermissions()
     ]);
@@ -34,13 +39,36 @@ async function loadAll() {
   }
 }
 
+async function loadGateways() {
+  const gatewayData = await gatewayAccessApi.getGateways(gatewayFilters.value);
+  gateways.value = gatewayData.records;
+}
+
+async function applyGatewayFilters() {
+  message.value = "";
+  try {
+    await loadGateways();
+  } catch (error) {
+    message.value = `网关筛选失败：${error.message}`;
+  }
+}
+
+async function resetGatewayFilters() {
+  gatewayFilters.value = {
+    keyword: "",
+    channelType: "全部",
+    status: "全部"
+  };
+  await applyGatewayFilters();
+}
+
 async function toggle(run, code, enabled, label) {
   active.value = code;
   try {
     const summaryData = await run(code, enabled);
     summary.value = summaryData;
     const appData = await gatewayAccessApi.getApplications();
-    const gatewayData = await gatewayAccessApi.getGateways();
+    const gatewayData = await gatewayAccessApi.getGateways(gatewayFilters.value);
     const certData = await gatewayAccessApi.getCertificates();
     const permissionData = await gatewayAccessApi.getPermissions();
     applications.value = appData.records;
@@ -130,6 +158,22 @@ onMounted(loadAll);
       <section class="card">
         <div class="section-head">
           <h2>渠道网关</h2>
+        </div>
+        <div class="toolbar">
+          <input v-model="gatewayFilters.keyword" placeholder="搜索网关编码 / 名称 / 接入地址" />
+          <select v-model="gatewayFilters.channelType">
+            <option>全部</option>
+            <option>WECHAT</option>
+            <option>ALIPAY</option>
+            <option>BANK</option>
+          </select>
+          <select v-model="gatewayFilters.status">
+            <option>全部</option>
+            <option>ENABLED</option>
+            <option>DISABLED</option>
+          </select>
+          <button class="button secondary" @click="applyGatewayFilters">查询</button>
+          <button class="button secondary" @click="resetGatewayFilters">重置</button>
         </div>
         <table>
           <thead>

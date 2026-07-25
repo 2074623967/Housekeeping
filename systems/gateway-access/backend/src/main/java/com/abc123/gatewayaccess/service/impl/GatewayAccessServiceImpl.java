@@ -5,6 +5,7 @@ import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
@@ -52,8 +53,8 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     }
 
     @Override
-    public PageResultDTO<GatewayChannelDTO> gateways() {
-        List<GatewayChannelDTO> records = gatewayAccessMapper.findGateways();
+    public PageResultDTO<GatewayChannelDTO> gateways(GatewayChannelQueryDTO query) {
+        List<GatewayChannelDTO> records = gatewayAccessMapper.findGateways(normalizeGatewayQuery(query));
         return page(records, 1, 20);
     }
 
@@ -144,6 +145,14 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private <T> PageResultDTO<T> page(List<T> records, int pageNo, int pageSize) {
         return new PageResultDTO<>(records, records.size(), pageNo, pageSize);
+    }
+
+    private GatewayChannelQueryDTO normalizeGatewayQuery(GatewayChannelQueryDTO query) {
+        GatewayChannelQueryDTO normalizedQuery = query == null ? new GatewayChannelQueryDTO() : query;
+        normalizedQuery.setKeyword(normalizedQuery.getKeyword() == null ? null : normalizedQuery.getKeyword().trim());
+        normalizedQuery.setChannelType(normalizedQuery.getChannelType() == null ? "全部" : normalizedQuery.getChannelType().trim());
+        normalizedQuery.setStatus(normalizedQuery.getStatus() == null ? "全部" : normalizedQuery.getStatus().trim());
+        return normalizedQuery;
     }
 
     private void togglePermissionRequest(ToggleRequestDTO request) {

@@ -3,6 +3,7 @@ package com.abc123.gatewayaccess.mapper;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -20,7 +21,7 @@ public interface GatewayAccessMapper {
     /**
      * 查询网关渠道列表。
      */
-    List<GatewayChannelDTO> findGateways();
+    List<GatewayChannelDTO> findGateways(@Param("query") GatewayChannelQueryDTO query);
 
     /**
      * 查询证书列表。

@@ -5,6 +5,7 @@ import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -39,8 +41,15 @@ public class GatewayAccessController {
     }
 
     @GetMapping("/gateways")
-    public ApiResponse<PageResultDTO<GatewayChannelDTO>> gateways() {
-        return ApiResponse.success(service.gateways());
+    public ApiResponse<PageResultDTO<GatewayChannelDTO>> gateways(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "全部") String channelType,
+            @RequestParam(defaultValue = "全部") String status) {
+        GatewayChannelQueryDTO query = new GatewayChannelQueryDTO();
+        query.setKeyword(keyword);
+        query.setChannelType(channelType);
+        query.setStatus(status);
+        return ApiResponse.success(service.gateways(query));
     }
 
     @GetMapping("/certificates")

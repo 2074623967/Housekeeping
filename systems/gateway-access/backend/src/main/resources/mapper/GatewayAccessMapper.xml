@@ -29,6 +29,21 @@
                status_type,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_gateway_channel
+        <where>
+            <if test="query.keyword != null and query.keyword != ''">
+                (
+                    gateway_code LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR gateway_name LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR endpoint LIKE CONCAT('%', #{query.keyword}, '%')
+                )
+            </if>
+            <if test="query.channelType != null and query.channelType != '' and query.channelType != '全部'">
+                AND channel_type = #{query.channelType}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND status = #{query.status}
+            </if>
+        </where>
         ORDER BY id ASC
     </select>
 

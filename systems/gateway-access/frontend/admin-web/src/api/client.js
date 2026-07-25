@@ -15,7 +15,10 @@ const postJson = (url, payload) => request(url, { method: "POST", body: JSON.str
 export const gatewayAccessApi = {
   getSummary: () => request("/api/gateway-access/summary"),
   getApplications: () => request("/api/gateway-access/applications"),
-  getGateways: () => request("/api/gateway-access/gateways"),
+  getGateways: ({ keyword = "", channelType = "全部", status = "全部" } = {}) => {
+    const params = new URLSearchParams({ keyword, channelType, status });
+    return request(`/api/gateway-access/gateways?${params.toString()}`);
+  },
   getCertificates: () => request("/api/gateway-access/certificates"),
   getPermissions: () => request("/api/gateway-access/permissions"),
   toggleApplication: (configCode, enabled) => postJson("/api/gateway-access/applications/toggle", { configCode, enabled }),

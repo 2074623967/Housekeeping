@@ -4,6 +4,7 @@ import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
@@ -17,7 +18,7 @@ public interface GatewayAccessService {
 
     PageResultDTO<GatewayAppDTO> applications();
 
-    PageResultDTO<GatewayChannelDTO> gateways();
+    PageResultDTO<GatewayChannelDTO> gateways(GatewayChannelQueryDTO query);
 
     PageResultDTO<GatewayCertificateDTO> certificates();
 
