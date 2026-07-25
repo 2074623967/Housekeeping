@@ -1,9 +1,14 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.mapper.PaymentRequestMapper;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,7 +32,7 @@ class PaymentRequestServiceImplTest {
         query.setChannelCode(" wx_h5 ");
         query.setTerminal(" H5 ");
         query.setClientIp(" 127.0.0.1 ");
-        query.setRequestStatus("处理中");
+        query.setRequestStatus(" 请求已发起 ");
         query.setSortField(" channelCode ");
         query.setSortOrder(" ASC ");
         query.setPageNo(2);
@@ -35,13 +40,35 @@ class PaymentRequestServiceImplTest {
 
         new PaymentRequestServiceImpl(paymentRequestMapper).list(query);
 
-        org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
-        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getChannelCode());
-        org.junit.jupiter.api.Assertions.assertEquals("H5", query.getTerminal());
-        org.junit.jupiter.api.Assertions.assertEquals("127.0.0.1", query.getClientIp());
-        org.junit.jupiter.api.Assertions.assertEquals("channelCode", query.getSortField());
-        org.junit.jupiter.api.Assertions.assertEquals("asc", query.getSortOrder());
+        assertEquals("ORD-001", query.getOrderNo());
+        assertEquals("wx_h5", query.getChannelCode());
+        assertEquals("H5", query.getTerminal());
+        assertEquals("127.0.0.1", query.getClientIp());
+        assertEquals("处理中", query.getRequestStatus());
+        assertEquals("channelCode", query.getSortField());
+        assertEquals("asc", query.getSortOrder());
         verify(paymentRequestMapper).findAll(query);
         verify(paymentRequestMapper).count(query);
+    }
+
+    @Test
+    void shouldExportCsvWithNormalizedStatusAndEscapedPayload() {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        query.setRequestStatus("请求成功");
+        PaymentRequestListItemDTO item = new PaymentRequestListItemDTO();
+        item.setRequestNo("REQ-001");
+        item.setPaymentOrderId("PAY-001");
+        item.setRequestStatus("成功");
+        item.setRequestPayload("{\"amount\":\"88\"}");
+        item.setResponsePayload("{\"message\":\"ok\"}");
+        when(paymentRequestMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
+
+        String csv = new PaymentRequestServiceImpl(paymentRequestMapper).exportCsv(query);
+
+        assertEquals("成功", query.getRequestStatus());
+        assertTrue(csv.contains("REQ-001"));
+        assertTrue(csv.contains("\"{\"\"amount\"\":\"\"88\"\"}\""));
+        assertTrue(csv.contains("\"{\"\"message\"\":\"\"ok\"\"}\""));
+        verify(paymentRequestMapper).findAllForExport(query);
     }
 }

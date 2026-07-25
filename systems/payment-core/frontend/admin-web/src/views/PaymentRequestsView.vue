@@ -76,6 +76,21 @@ function applyFilters() {
   loadPaymentRequests();
 }
 
+function exportRequests() {
+  const exportUrl = paymentRequestApi.buildExportUrl({
+    requestNo: filters.value.requestNo,
+    paymentOrderId: filters.value.paymentOrderId,
+    orderNo: filters.value.orderNo,
+    channelCode: filters.value.channelCode,
+    terminal: filters.value.terminal,
+    clientIp: filters.value.clientIp,
+    requestStatus: filters.value.requestStatus,
+    sortField: filters.value.sortField,
+    sortOrder: filters.value.sortOrder
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 function goToPage(nextPage) {
   if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
@@ -95,7 +110,7 @@ onMounted(loadPaymentRequests);
         <h2>支付请求管理</h2>
         <p>查看支付尝试的请求报文、响应报文、渠道和路由结果，支撑联调与问题定位</p>
       </div>
-      <button class="button primary">导出请求</button>
+      <button class="button primary" @click="exportRequests">导出请求</button>
     </div>
 
     <section class="panel">
@@ -138,9 +153,9 @@ onMounted(loadPaymentRequests);
           <label>请求状态</label>
           <select v-model="filters.requestStatus">
             <option>全部</option>
-            <option>处理中</option>
-            <option>等待回调</option>
-            <option>成功</option>
+            <option>请求已发起</option>
+            <option>请求成功</option>
+            <option>请求失败</option>
             <option>已关闭</option>
           </select>
         </div>

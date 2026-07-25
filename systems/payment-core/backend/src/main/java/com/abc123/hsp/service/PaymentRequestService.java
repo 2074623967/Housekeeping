@@ -15,4 +15,11 @@ public interface PaymentRequestService {
      * @return 支付请求列表
      */
     PageResultDTO<PaymentRequestListItemDTO> list(PaymentRequestQueryDTO query);
+
+    /**
+     * 导出支付请求列表，供联调、排障和留痕使用。
+     *
+     * @return CSV 文本内容
+     */
+    String exportCsv(PaymentRequestQueryDTO query);
 }

@@ -5,6 +5,10 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.service.PaymentRequestService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -52,5 +56,36 @@ public class PaymentRequestController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRequestService.list(query));
+    }
+
+    /**
+     * 导出支付请求列表，输出当前筛选条件下的 CSV 快照。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String requestNo,
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String channelCode,
+            @RequestParam(required = false) String terminal,
+            @RequestParam(required = false) String clientIp,
+            @RequestParam(defaultValue = "全部") String requestStatus,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        query.setRequestNo(requestNo);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setChannelCode(channelCode);
+        query.setTerminal(terminal);
+        query.setClientIp(clientIp);
+        query.setRequestStatus(requestStatus);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        byte[] csvBytes = paymentRequestService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-requests.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 }

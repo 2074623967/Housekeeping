@@ -18,6 +18,13 @@ public interface PaymentRequestMapper {
     List<PaymentRequestListItemDTO> findAll(@Param("query") PaymentRequestQueryDTO query);
 
     /**
+     * 查询导出使用的支付请求列表，不分页。
+     *
+     * @return 支付请求列表
+     */
+    List<PaymentRequestListItemDTO> findAllForExport(@Param("query") PaymentRequestQueryDTO query);
+
+    /**
      * 统计符合条件的支付请求总数。
      */
     long count(@Param("query") PaymentRequestQueryDTO query);

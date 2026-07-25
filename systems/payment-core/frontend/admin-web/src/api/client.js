@@ -379,6 +379,30 @@ export const paymentRequestApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-requests?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    requestNo = "",
+    paymentOrderId = "",
+    orderNo = "",
+    channelCode = "",
+    terminal = "全部",
+    clientIp = "",
+    requestStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      requestNo,
+      paymentOrderId,
+      orderNo,
+      channelCode,
+      terminal,
+      clientIp,
+      requestStatus,
+      sortField,
+      sortOrder
+    });
+    return `/api/payment-requests/export?${params.toString()}`;
   }
 };
 
