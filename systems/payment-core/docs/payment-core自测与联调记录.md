@@ -2037,3 +2037,28 @@
 1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备供应商原始回执状态提取、统一状态映射和失败码标准化拼接能力。
 2. 当主供应商明确返回失败态时，异常告警派发服务已能将该次投递判为失败并继续尝试后备供应商。
 3. 服务端时间窗校验联动、统一防重放编排、供应商签名算法切换和更细粒度重试退避策略仍待补齐，因此当前仍不触发 `master / release`。
+
+## 63. 2026-07-25 异常告警外部网关 RSA2 签名算法切换验证
+
+### 63.1 本轮验证范围
+
+本轮围绕“外部 HTTP/Webhook 通知器已支持 HMAC，但尚不能按供应商要求切换到 RSA2 签名算法”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. 告警通知器签名能力从单一 HMAC 扩展为按配置切换 `HMAC_SHA256 / HMAC_SHA1 / HMAC_MD5 / RSA2`
+2. 当配置 `RSA2` 时，通知器会按 PKCS8 私钥对请求体执行 `SHA256withRSA` 签名
+3. 现有 HMAC 签名链路保持兼容，不影响 IM/SMS/EMAIL 原有测试
+4. `LocalImPaymentIssueAlertNotifierTest` 新增 RSA2 场景验证，确认签名头可正常生成
+
+### 63.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `24` 个用例通过 |
+
+### 63.3 当前判断
+
+1. 当前 `payment-core` 的异常告警外部网关签名能力已从“HMAC 固定实现”升级为“按供应商配置切换 HMAC / RSA2”。
+2. 这一步补齐了外部通知供应商常见的非对称签名接入要求，提升了真实供应商接入可行性。
+3. 服务端时间窗校验联动、统一防重放编排和更细粒度重试退避策略仍待补齐，因此当前仍不触发 `master / release`。

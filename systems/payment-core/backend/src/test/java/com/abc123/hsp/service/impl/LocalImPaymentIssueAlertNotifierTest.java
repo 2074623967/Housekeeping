@@ -7,6 +7,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.Signature;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -25,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 class LocalImPaymentIssueAlertNotifierTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String RSA_PRIVATE_KEY = generateRsaPrivateKeyPem();
 
     @Test
     void shouldFallbackToLocalReceiptWhenWebhookNotConfigured() {
@@ -158,6 +162,47 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("failureCode=IM_429"));
     }
 
+    @Test
+    void shouldSignWebhookPayloadWithRsaAlgorithmWhenConfigured() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-003\"}}", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "/code",
+                "0",
+                "/data/receiptNo",
+                "",
+                "",
+                "X-Signature",
+                RSA_PRIVATE_KEY,
+                "RSA2",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                payloadCaptor.capture(),
+                Mockito.eq(String.class)
+        );
+        Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Signature"));
+        Assertions.assertFalse(payloadCaptor.getValue().getHeaders().getFirst("X-Signature").isEmpty());
+    }
+
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {
         PaymentIssueAlertDispatchItemDTO item = new PaymentIssueAlertDispatchItemDTO();
         item.setAlertNo("PIA-OUTBOX-001");
@@ -179,6 +224,18 @@ class LocalImPaymentIssueAlertNotifierTest {
             Mac mac = Mac.getInstance(algorithm);
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), algorithm));
             return Base64.getEncoder().encodeToString(mac.doFinal(OBJECT_MAPPER.writeValueAsBytes(entity.getBody())));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private static String generateRsaPrivateKeyPem() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(1024);
+            KeyPair keyPair = generator.generateKeyPair();
+            String base64 = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
+            return "-----BEGIN PRIVATE KEY-----\n" + base64 + "\n-----END PRIVATE KEY-----";
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
         }

@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.Signature;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
@@ -64,31 +68,74 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
 
     private String signPayload(Map<String, Object> payload, String signatureSecret, String signatureAlgorithm) {
         try {
-            String normalizedAlgorithm = resolveSignatureAlgorithm(signatureAlgorithm);
-            Mac mac = Mac.getInstance(normalizedAlgorithm);
-            mac.init(new SecretKeySpec(signatureSecret.getBytes(StandardCharsets.UTF_8), normalizedAlgorithm));
-            byte[] digest = mac.doFinal(OBJECT_MAPPER.writeValueAsBytes(payload));
-            return Base64.getEncoder().encodeToString(digest);
+            SignatureAlgorithmConfig config = resolveSignatureAlgorithm(signatureAlgorithm);
+            byte[] payloadBytes = OBJECT_MAPPER.writeValueAsBytes(payload);
+            if (config.isMacAlgorithm()) {
+                Mac mac = Mac.getInstance(config.getJcaName());
+                mac.init(new SecretKeySpec(signatureSecret.getBytes(StandardCharsets.UTF_8), config.getJcaName()));
+                return Base64.getEncoder().encodeToString(mac.doFinal(payloadBytes));
+            }
+            Signature signature = Signature.getInstance(config.getJcaName());
+            signature.initSign(buildPrivateKey(signatureSecret));
+            signature.update(payloadBytes);
+            return Base64.getEncoder().encodeToString(signature.sign());
         } catch (Exception exception) {
             throw new IllegalStateException("网关签名计算失败：" + exception.getMessage(), exception);
         }
     }
 
-    private String resolveSignatureAlgorithm(String signatureAlgorithm) {
+    private SignatureAlgorithmConfig resolveSignatureAlgorithm(String signatureAlgorithm) {
         if (!StringUtils.hasText(signatureAlgorithm)) {
-            return "HmacSHA256";
+            return new SignatureAlgorithmConfig("HmacSHA256", true);
         }
         String normalizedAlgorithm = signatureAlgorithm.trim().toUpperCase().replace('-', '_');
         if ("HMAC_SHA256".equals(normalizedAlgorithm)) {
-            return "HmacSHA256";
+            return new SignatureAlgorithmConfig("HmacSHA256", true);
         }
         if ("HMAC_SHA1".equals(normalizedAlgorithm)) {
-            return "HmacSHA1";
+            return new SignatureAlgorithmConfig("HmacSHA1", true);
         }
         if ("HMAC_MD5".equals(normalizedAlgorithm)) {
-            return "HmacMD5";
+            return new SignatureAlgorithmConfig("HmacMD5", true);
+        }
+        if ("RSA2".equals(normalizedAlgorithm) || "SHA256WITHRSA".equals(normalizedAlgorithm)) {
+            return new SignatureAlgorithmConfig("SHA256withRSA", false);
         }
         throw new IllegalArgumentException("不支持的网关签名算法：" + signatureAlgorithm);
+    }
+
+    private PrivateKey buildPrivateKey(String privateKeyContent) throws Exception {
+        if (!StringUtils.hasText(privateKeyContent)) {
+            throw new IllegalArgumentException("RSA 签名私钥不能为空");
+        }
+        String normalizedKey = privateKeyContent
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replace("-----BEGIN RSA PRIVATE KEY-----", "")
+                .replace("-----END RSA PRIVATE KEY-----", "")
+                .replaceAll("\\s+", "");
+        byte[] keyBytes = Base64.getDecoder().decode(normalizedKey);
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
+        return KeyFactory.getInstance("RSA").generatePrivate(keySpec);
+    }
+
+    private static final class SignatureAlgorithmConfig {
+
+        private final String jcaName;
+        private final boolean macAlgorithm;
+
+        private SignatureAlgorithmConfig(String jcaName, boolean macAlgorithm) {
+            this.jcaName = jcaName;
+            this.macAlgorithm = macAlgorithm;
+        }
+
+        private String getJcaName() {
+            return jcaName;
+        }
+
+        private boolean isMacAlgorithm() {
+            return macAlgorithm;
+        }
     }
 
     /**
