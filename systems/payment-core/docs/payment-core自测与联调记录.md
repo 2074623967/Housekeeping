@@ -1649,3 +1649,33 @@
 1. 当前 `payment-core` 的值班路由能力已从“单日时段配置”进一步推进到“支持跨日夜班”的轻量正式化版本。
 2. 本轮提升的是值班编排层面的准确性，不代表值班日历、节假日排班和真实通知供应商联动已经完成。
 3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 48. 2026-07-25 异常告警多供应商失败切换验证
+
+### 48.1 本轮验证范围
+
+本轮围绕“异常告警派发已经具备重试、限流和回执能力，但首选供应商失败后仍会导致整条通道直接失败”的问题进行了补强验证，目标是确认当前代码已支持候选供应商自动切换。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 按候选供应商优先级依次尝试派发
+2. 当首选供应商失败时自动切换下一候选供应商
+3. `PaymentIssueAlertDeliveryServiceImplTest` 新增主备供应商切换覆盖
+
+### 48.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖正常派发、护栏、回执回查和供应商失败切换 |
+
+### 48.3 本轮补齐项
+
+1. 同一通知通道命中的多个供应商候选已支持按优先级依次尝试。
+2. 每个供应商尝试都会单独写告警日志，便于后续复盘主备切换过程。
+3. 只有全部候选供应商都失败时，该通道才会判定为失败。
+
+### 48.4 当前判断
+
+1. 当前 `payment-core` 的异常告警派发能力已从“单供应商命中”进一步推进到“多供应商自动失败切换”的轻量正式化版本。
+2. 本轮提升的是通知编排层面的弹性，不代表真实供应商 SDK/HTTP 接入、熔断降级和跨实例协同已经完成。
+3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。

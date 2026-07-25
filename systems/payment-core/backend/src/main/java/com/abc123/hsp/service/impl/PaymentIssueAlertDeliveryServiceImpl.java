@@ -121,11 +121,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 successCount++;
                 continue;
             }
-            PaymentAlertProviderConfigDTO providerConfig = selectProviderConfig(
+            List<PaymentAlertProviderConfigDTO> candidateProviders = selectProviderConfigs(
                     paymentTaskCenterMapper.findEnabledAlertProvidersByChannel(channelCode),
                     item
             );
-            if (providerConfig == null) {
+            if (candidateProviders.isEmpty()) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
                         item,
                         triggeredBy,
@@ -140,7 +140,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             PaymentIssueAlertNotifier notifier = notifierMap.get(channelCode);
             if (notifier == null) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
-                        buildDeliveryItem(item, providerConfig),
+                        buildDeliveryItem(item, candidateProviders.get(0)),
                         triggeredBy,
                         channelCode,
                         "派发失败",
@@ -150,6 +150,24 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 failCount++;
                 continue;
             }
+            if (dispatchByProviderFallback(item, triggeredBy, channelCode, notifier, candidateProviders)) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+        return new DispatchOutcome(successCount, failCount, configuredChannels.size(), false);
+    }
+
+    /**
+     * 针对同一通知通道依次尝试多个候选供应商，前一个失败时自动切换到下一个候选。
+     */
+    private boolean dispatchByProviderFallback(PaymentIssueAlertDispatchItemDTO item,
+                                               String triggeredBy,
+                                               String channelCode,
+                                               PaymentIssueAlertNotifier notifier,
+                                               List<PaymentAlertProviderConfigDTO> candidateProviders) {
+        for (PaymentAlertProviderConfigDTO providerConfig : candidateProviders) {
             PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             PaymentIssueAlertDeliveryResultDTO guardFailure = resolveDispatchGuardFailure(providerConfig, deliveryItem, channelCode);
             if (guardFailure != null) {
@@ -161,7 +179,6 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         "danger",
                         guardFailure
                 ));
-                failCount++;
                 continue;
             }
             try {
@@ -174,20 +191,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         "success",
                         normalizeDeliveryResult(deliveryItem, deliveryResult, "ACCEPTED", "供应商已受理告警")
                 ));
-                successCount++;
+                return true;
             } catch (RuntimeException ex) {
+                PaymentIssueAlertDeliveryResultDTO failureResult = buildFailureResult("SEND_EXCEPTION", ex.getMessage(), deliveryItem);
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
                         deliveryItem,
                         triggeredBy,
                         channelCode,
                         "派发失败",
                         "danger",
-                        buildFailureResult("SEND_EXCEPTION", ex.getMessage(), deliveryItem)
+                        failureResult
                 ));
-                failCount++;
             }
         }
-        return new DispatchOutcome(successCount, failCount, configuredChannels.size(), false);
+        return false;
     }
 
     /**
@@ -390,17 +407,18 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         return builder.toString();
     }
 
-    private PaymentAlertProviderConfigDTO selectProviderConfig(List<PaymentAlertProviderConfigDTO> providerConfigs,
-                                                               PaymentIssueAlertDispatchItemDTO item) {
+    private List<PaymentAlertProviderConfigDTO> selectProviderConfigs(List<PaymentAlertProviderConfigDTO> providerConfigs,
+                                                                      PaymentIssueAlertDispatchItemDTO item) {
+        List<PaymentAlertProviderConfigDTO> matchedProviders = new ArrayList<PaymentAlertProviderConfigDTO>();
         if (providerConfigs == null || providerConfigs.isEmpty()) {
-            return null;
+            return matchedProviders;
         }
         for (PaymentAlertProviderConfigDTO providerConfig : providerConfigs) {
             if (matchesRouteRule(providerConfig.getRouteRule(), item)) {
-                return providerConfig;
+                matchedProviders.add(providerConfig);
             }
         }
-        return null;
+        return matchedProviders;
     }
 
     private boolean matchesRouteRule(String routeRule, PaymentIssueAlertDispatchItemDTO item) {
