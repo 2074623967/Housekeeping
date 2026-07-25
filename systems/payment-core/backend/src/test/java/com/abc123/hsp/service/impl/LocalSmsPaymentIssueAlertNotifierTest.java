@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
@@ -42,10 +43,12 @@ class LocalSmsPaymentIssueAlertNotifierTest {
                 5200,
                 "/code",
                 "SUCCESS",
-                "/data/smsId"
+                "/data/smsId",
+                "X-Access-Key",
+                "sms-key-001"
         ).send(buildDispatchItem());
 
-        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForEntity(
                 Mockito.eq("https://sms.example.com/payment-alert"),
                 payloadCaptor.capture(),
@@ -56,6 +59,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=5200ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
+        Assertions.assertEquals("sms-key-001", payloadCaptor.getValue().getHeaders().getFirst("X-Access-Key"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

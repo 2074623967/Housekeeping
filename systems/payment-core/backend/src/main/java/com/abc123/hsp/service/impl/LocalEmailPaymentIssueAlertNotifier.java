@@ -25,17 +25,21 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
     private final String successJsonPointer;
     private final String successExpectedValue;
     private final String receiptNoJsonPointer;
+    private final String authHeaderName;
+    private final String authHeaderValue;
 
     public LocalEmailPaymentIssueAlertNotifier(@Value("${payment.issue-alert.email.webhook-url:}") String webhookUrl,
                                                @Value("${payment.issue-alert.email.timeout-ms:3000}") int timeoutMs,
                                                @Value("${payment.issue-alert.email.success-code-json-pointer:}") String successJsonPointer,
                                                @Value("${payment.issue-alert.email.success-code-expected-value:}") String successExpectedValue,
-                                               @Value("${payment.issue-alert.email.receipt-no-json-pointer:}") String receiptNoJsonPointer) {
-        this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer, null);
+                                               @Value("${payment.issue-alert.email.receipt-no-json-pointer:}") String receiptNoJsonPointer,
+                                               @Value("${payment.issue-alert.email.auth-header-name:}") String authHeaderName,
+                                               @Value("${payment.issue-alert.email.auth-header-value:}") String authHeaderValue) {
+        this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer, authHeaderName, authHeaderValue, null);
     }
 
     LocalEmailPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
-        this(restTemplate, webhookUrl, 3000, "", "", "");
+        this(restTemplate, webhookUrl, 3000, "", "", "", "", "");
     }
 
     LocalEmailPaymentIssueAlertNotifier(String webhookUrl,
@@ -43,13 +47,17 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                                         String successJsonPointer,
                                         String successExpectedValue,
                                         String receiptNoJsonPointer,
+                                        String authHeaderName,
+                                        String authHeaderValue,
                                         RestTemplate restTemplate) {
         this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate,
                 webhookUrl,
                 timeoutMs,
                 successJsonPointer,
                 successExpectedValue,
-                receiptNoJsonPointer);
+                receiptNoJsonPointer,
+                authHeaderName,
+                authHeaderValue);
     }
 
     LocalEmailPaymentIssueAlertNotifier(RestTemplate restTemplate,
@@ -57,13 +65,17 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                                         int timeoutMs,
                                         String successJsonPointer,
                                         String successExpectedValue,
-                                        String receiptNoJsonPointer) {
+                                        String receiptNoJsonPointer,
+                                        String authHeaderName,
+                                        String authHeaderValue) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
         this.timeoutMs = timeoutMs;
         this.successJsonPointer = successJsonPointer;
         this.successExpectedValue = successExpectedValue;
         this.receiptNoJsonPointer = receiptNoJsonPointer;
+        this.authHeaderName = authHeaderName;
+        this.authHeaderValue = authHeaderValue;
     }
 
     @Override
@@ -81,7 +93,11 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
 
     private PaymentIssueAlertDeliveryResultDTO sendWebhookAlert(PaymentIssueAlertDispatchItemDTO item) {
         try {
-            ResponseEntity<String> response = restTemplate.postForEntity(webhookUrl, buildWebhookPayload(item), String.class);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    webhookUrl,
+                    buildWebhookRequestEntity(buildWebhookPayload(item), authHeaderName, authHeaderValue),
+                    String.class
+            );
             return buildWebhookDeliveryResult(
                     item,
                     "EMAIL",

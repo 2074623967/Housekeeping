@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import java.util.Map;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -23,6 +27,20 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         requestFactory.setConnectTimeout(timeoutMs);
         requestFactory.setReadTimeout(timeoutMs);
         return new RestTemplate(requestFactory);
+    }
+
+    /**
+     * 构造外部网关调用请求体，统一设置 JSON 请求头，并按需附加认证头。
+     */
+    protected HttpEntity<Map<String, Object>> buildWebhookRequestEntity(Map<String, Object> payload,
+                                                                        String authHeaderName,
+                                                                        String authHeaderValue) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (StringUtils.hasText(authHeaderName) && StringUtils.hasText(authHeaderValue)) {
+            headers.set(authHeaderName.trim(), authHeaderValue.trim());
+        }
+        return new HttpEntity<Map<String, Object>>(payload, headers);
     }
 
     /**

@@ -1939,3 +1939,27 @@
 
 1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备业务成功码校验和回执号提取能力。
 2. 签名、统一回执状态映射、重试退避和供应商失败码标准化仍待补齐，因此仍不触发 `master / release`。
+
+## 59. 2026-07-25 异常告警外部网关认证头配置验证
+
+### 59.1 本轮验证范围
+
+本轮围绕“外部 HTTP/Webhook 通知器虽然可以打网关，但缺少可配置认证头，难以对接真实供应商鉴权”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `application.yml` 新增 IM/SMS/EMAIL 三类通道的认证头名称配置
+2. `application.yml` 新增 IM/SMS/EMAIL 三类通道的认证头取值配置
+3. 三类通知器统一把认证头写入 HTTP 请求头
+4. 三类通知器测试补齐认证头断言
+
+### 59.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalEmailPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalImPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `21` 个用例通过 |
+
+### 59.3 当前判断
+
+1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备外部网关认证头配置能力。
+2. 签名、统一回执状态映射、重试退避和供应商失败码标准化仍待补齐，因此仍不触发 `master / release`。

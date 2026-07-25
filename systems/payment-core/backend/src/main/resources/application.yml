@@ -40,6 +40,8 @@ payment:
       success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_SUCCESS_CODE_JSON_POINTER:}
       success-code-expected-value: ${HSP_PAYMENT_ISSUE_ALERT_IM_SUCCESS_CODE_EXPECTED_VALUE:}
       receipt-no-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_RECEIPT_NO_JSON_POINTER:}
+      auth-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_AUTH_HEADER_NAME:}
+      auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_IM_AUTH_HEADER_VALUE:}
     sms:
       # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
@@ -47,6 +49,8 @@ payment:
       success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SUCCESS_CODE_JSON_POINTER:}
       success-code-expected-value: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SUCCESS_CODE_EXPECTED_VALUE:}
       receipt-no-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_RECEIPT_NO_JSON_POINTER:}
+      auth-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_AUTH_HEADER_NAME:}
+      auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_SMS_AUTH_HEADER_VALUE:}
     email:
       # 配置后邮件告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_WEBHOOK_URL:}
@@ -54,3 +58,5 @@ payment:
       success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SUCCESS_CODE_JSON_POINTER:}
       success-code-expected-value: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SUCCESS_CODE_EXPECTED_VALUE:}
       receipt-no-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_RECEIPT_NO_JSON_POINTER:}
+      auth-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_AUTH_HEADER_NAME:}
+      auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_AUTH_HEADER_VALUE:}
