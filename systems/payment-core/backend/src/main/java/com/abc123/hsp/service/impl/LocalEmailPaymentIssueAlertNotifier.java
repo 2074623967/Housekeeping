@@ -21,14 +21,25 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
 
     private final RestTemplate restTemplate;
     private String webhookUrl;
+    private final int timeoutMs;
 
-    public LocalEmailPaymentIssueAlertNotifier(@Value("${payment.issue-alert.email.webhook-url:}") String webhookUrl) {
-        this(new RestTemplate(), webhookUrl);
+    public LocalEmailPaymentIssueAlertNotifier(@Value("${payment.issue-alert.email.webhook-url:}") String webhookUrl,
+                                               @Value("${payment.issue-alert.email.timeout-ms:3000}") int timeoutMs) {
+        this(webhookUrl, timeoutMs, null);
     }
 
     LocalEmailPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
+        this(restTemplate, webhookUrl, 3000);
+    }
+
+    LocalEmailPaymentIssueAlertNotifier(String webhookUrl, int timeoutMs, RestTemplate restTemplate) {
+        this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate, webhookUrl, timeoutMs);
+    }
+
+    LocalEmailPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl, int timeoutMs) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
+        this.timeoutMs = timeoutMs;
     }
 
     @Override
@@ -50,7 +61,7 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
             PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
             result.setProviderReceiptNo(buildWebhookReceiptNo(item));
             result.setProviderDeliveryStatus("ACCEPTED");
-            result.setProviderDeliveryMessage("EMAIL HTTP 网关已受理，HTTP=" + response.getStatusCodeValue());
+            result.setProviderDeliveryMessage("EMAIL HTTP 网关已受理，HTTP=" + response.getStatusCodeValue() + "，timeout=" + timeoutMs + "ms");
             result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
                     ? item.getRenderedAlertContent()
                     : item.getAlertContent());

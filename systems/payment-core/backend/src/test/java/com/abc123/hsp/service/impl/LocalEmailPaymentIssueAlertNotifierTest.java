@@ -38,7 +38,8 @@ class LocalEmailPaymentIssueAlertNotifierTest {
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
                 restTemplate,
-                "https://email.example.com/payment-alert"
+                "https://email.example.com/payment-alert",
+                6100
         ).send(buildDispatchItem());
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -50,6 +51,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("EMAIL-HTTP-PIAOUTBOX001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=6100ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
     }
 

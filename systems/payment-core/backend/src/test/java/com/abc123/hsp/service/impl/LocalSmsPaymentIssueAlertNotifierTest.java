@@ -38,7 +38,8 @@ class LocalSmsPaymentIssueAlertNotifierTest {
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalSmsPaymentIssueAlertNotifier(
                 restTemplate,
-                "https://sms.example.com/payment-alert"
+                "https://sms.example.com/payment-alert",
+                5200
         ).send(buildDispatchItem());
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -50,6 +51,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("SMS-HTTP-PIAOUTBOX001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=5200ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
     }
 

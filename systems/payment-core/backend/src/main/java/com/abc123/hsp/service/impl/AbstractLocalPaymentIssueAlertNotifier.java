@@ -2,12 +2,24 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * 本地告警通知器抽象基类，统一生成供应商投递回执。
  */
 abstract class AbstractLocalPaymentIssueAlertNotifier {
+
+    /**
+     * 为外部 HTTP/Webhook 通知器配置统一的连接与读取超时，避免网关长时间阻塞任务线程。
+     */
+    protected static RestTemplate buildRestTemplate(int timeoutMs) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(timeoutMs);
+        requestFactory.setReadTimeout(timeoutMs);
+        return new RestTemplate(requestFactory);
+    }
 
     /**
      * 构造本地模拟告警供应商投递结果。

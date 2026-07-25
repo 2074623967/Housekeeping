@@ -38,7 +38,8 @@ class LocalImPaymentIssueAlertNotifierTest {
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
                 restTemplate,
-                "https://hooks.example.com/payment-alert"
+                "https://hooks.example.com/payment-alert",
+                4500
         ).send(buildDispatchItem());
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -50,6 +51,7 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("IM-WEBHOOK-PIAOUTBOX001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=4500ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
     }
 

@@ -21,14 +21,25 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
 
     private final RestTemplate restTemplate;
     private String webhookUrl;
+    private final int timeoutMs;
 
-    public LocalSmsPaymentIssueAlertNotifier(@Value("${payment.issue-alert.sms.webhook-url:}") String webhookUrl) {
-        this(new RestTemplate(), webhookUrl);
+    public LocalSmsPaymentIssueAlertNotifier(@Value("${payment.issue-alert.sms.webhook-url:}") String webhookUrl,
+                                             @Value("${payment.issue-alert.sms.timeout-ms:3000}") int timeoutMs) {
+        this(webhookUrl, timeoutMs, null);
     }
 
     LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
+        this(restTemplate, webhookUrl, 3000);
+    }
+
+    LocalSmsPaymentIssueAlertNotifier(String webhookUrl, int timeoutMs, RestTemplate restTemplate) {
+        this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate, webhookUrl, timeoutMs);
+    }
+
+    LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl, int timeoutMs) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
+        this.timeoutMs = timeoutMs;
     }
 
     @Override
@@ -50,7 +61,7 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
             PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
             result.setProviderReceiptNo(buildWebhookReceiptNo(item));
             result.setProviderDeliveryStatus("ACCEPTED");
-            result.setProviderDeliveryMessage("SMS HTTP 网关已受理，HTTP=" + response.getStatusCodeValue());
+            result.setProviderDeliveryMessage("SMS HTTP 网关已受理，HTTP=" + response.getStatusCodeValue() + "，timeout=" + timeoutMs + "ms");
             result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
                     ? item.getRenderedAlertContent()
                     : item.getAlertContent());
