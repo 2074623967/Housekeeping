@@ -3,6 +3,8 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
@@ -72,6 +74,33 @@ public class PaymentIssueController {
         query.setChannelCode(channelCode);
         query.setPaymentMethod(paymentMethod);
         return ApiResponse.success(paymentIssueService.responsibilitySummary(query));
+    }
+
+    /**
+     * 查询支付异常告警通知明细，供运营、测试和研发联查供应商投递与回执状态。
+     */
+    @GetMapping("/alerts")
+    public ApiResponse<PageResultDTO<PaymentIssueAlertLogRowDTO>> listAlertLogs(
+            @RequestParam(required = false) String alertNo,
+            @RequestParam(required = false) String issueNo,
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(defaultValue = "全部") String alertChannel,
+            @RequestParam(defaultValue = "全部") String alertStatus,
+            @RequestParam(defaultValue = "全部") String ackStatus,
+            @RequestParam(defaultValue = "全部") String providerDeliveryStatus,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+        query.setAlertNo(alertNo);
+        query.setIssueNo(issueNo);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setAlertChannel(alertChannel);
+        query.setAlertStatus(alertStatus);
+        query.setAckStatus(ackStatus);
+        query.setProviderDeliveryStatus(providerDeliveryStatus);
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        return ApiResponse.success(paymentIssueService.listAlertLogs(query));
     }
 
     /**

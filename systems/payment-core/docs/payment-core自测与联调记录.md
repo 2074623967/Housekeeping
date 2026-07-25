@@ -1524,3 +1524,36 @@
 1. 当前 `payment-core` 的异常告警链路已从“outbox -> 外部派发 -> 供应商受理”进一步推进到“任务中心回查 -> 送达确认”的第二段闭环。
 2. 本轮仍属于本地供应商回执骨架，不代表已经接入真实 IM / SMS / EMAIL 供应商回执 API。
 3. 这一步显著提升了冻结版完整性，但是否进入 `master / release` 仍要继续看真实通知网关、值班路由、跨系统联动和更大范围回归。
+
+## 44. 2026-07-25 异常告警明细台验证
+
+### 44.1 本轮验证范围
+
+本轮围绕“异常告警已经支持 outbox、派发和回执回查，但运营和测试仍缺少可直接联查的明细台”的问题进行了补强验证，目标是确认当前代码已具备统一查询异常告警通知日志的后端接口和后台页面。
+
+本轮覆盖内容：
+
+1. `PaymentIssueService / PaymentIssueController / PaymentIssueMapper` 新增告警明细分页查询能力
+2. `admin-web` 新增“异常告警明细台”页面与菜单入口
+3. 异常中心中的告警通知区域新增“查看明细”跳转入口
+4. `PaymentIssueServiceImplTest` 新增告警明细查询口径规范化覆盖
+
+### 44.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueServiceImplTest test` | 通过 | 覆盖异常中心动作和告警明细查询 |
+| 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 确认新增页面、菜单和跳转入口不会引入构建回归 |
+
+### 44.3 本轮补齐项
+
+1. 新增 `PaymentIssueAlertLogQueryDTO / PaymentIssueAlertLogRowDTO`，统一承接告警明细查询参数和返回结构。
+2. 新增 `/api/payment-issues/alerts`，支持按告警编号、异常编号、支付单号、通道、告警状态、回执状态和供应商投递状态分页查询。
+3. 后台页面可直接查看供应商、模板、回执号、投递状态、投递说明、渲染快照、确认人和确认时间。
+4. 异常中心列表中的“告警通知”单元格新增“查看明细”入口，形成“聚合异常 -> 告警明细”的排障路径。
+
+### 44.4 当前判断
+
+1. 当前 `payment-core` 在异常治理维度已具备“异常聚合视图 + 任务中心补偿视图 + 告警执行明细视图”的三层观察面。
+2. 本轮提升的是运维、产品和测试的联查效率，不代表真实通知供应商、补发上限和通道节流已经正式化。
+3. 因此本轮依旧属于冻结版补强，而不是 `master / release` 的触发条件。

@@ -388,6 +388,88 @@
         ORDER BY overdueCount DESC, totalCount DESC, responsibility_group ASC
     </select>
 
+    <select id="findAlertLogs" resultType="com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO">
+        SELECT alert_no AS alertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               triggered_by AS triggeredBy,
+               ack_operator AS ackOperator,
+               DATE_FORMAT(ack_at, '%Y-%m-%d %H:%i:%s') AS ackAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_issue_alert_log
+        <where>
+            <if test="query.alertNo != null and query.alertNo != ''">
+                alert_no LIKE CONCAT('%', #{query.alertNo}, '%')
+            </if>
+            <if test="query.issueNo != null and query.issueNo != ''">
+                AND issue_no LIKE CONCAT('%', #{query.issueNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
+                AND alert_channel = #{query.alertChannel}
+            </if>
+            <if test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
+                AND alert_status = #{query.alertStatus}
+            </if>
+            <if test="query.ackStatus != null and query.ackStatus != '' and query.ackStatus != '全部'">
+                AND ack_status = #{query.ackStatus}
+            </if>
+            <if test="query.providerDeliveryStatus != null and query.providerDeliveryStatus != '' and query.providerDeliveryStatus != '全部'">
+                AND provider_delivery_status = #{query.providerDeliveryStatus}
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{query.limit} OFFSET #{query.offset}
+    </select>
+
+    <select id="countAlertLogs" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        <where>
+            <if test="query.alertNo != null and query.alertNo != ''">
+                alert_no LIKE CONCAT('%', #{query.alertNo}, '%')
+            </if>
+            <if test="query.issueNo != null and query.issueNo != ''">
+                AND issue_no LIKE CONCAT('%', #{query.issueNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
+                AND alert_channel = #{query.alertChannel}
+            </if>
+            <if test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
+                AND alert_status = #{query.alertStatus}
+            </if>
+            <if test="query.ackStatus != null and query.ackStatus != '' and query.ackStatus != '全部'">
+                AND ack_status = #{query.ackStatus}
+            </if>
+            <if test="query.providerDeliveryStatus != null and query.providerDeliveryStatus != '' and query.providerDeliveryStatus != '全部'">
+                AND provider_delivery_status = #{query.providerDeliveryStatus}
+            </if>
+        </where>
+    </select>
+
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM (

@@ -2,6 +2,8 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
@@ -39,6 +41,17 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Override
     public List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(PaymentIssueQueryDTO query) {
         return paymentIssueMapper.responsibilitySummary(normalizeQuery(query));
+    }
+
+    @Override
+    public PageResultDTO<PaymentIssueAlertLogRowDTO> listAlertLogs(PaymentIssueAlertLogQueryDTO query) {
+        PaymentIssueAlertLogQueryDTO normalizedQuery = normalizeAlertLogQuery(query);
+        return new PageResultDTO<>(
+                paymentIssueMapper.findAlertLogs(normalizedQuery),
+                paymentIssueMapper.countAlertLogs(normalizedQuery),
+                normalizedQuery.getPageNo(),
+                normalizedQuery.getPageSize()
+        );
     }
 
     @Override
@@ -87,6 +100,22 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         query.setSeverity(query.getSeverity() == null ? "全部" : query.getSeverity().trim());
         query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
         query.setPaymentMethod(query.getPaymentMethod() == null ? "全部" : query.getPaymentMethod().trim());
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
+    }
+
+    private PaymentIssueAlertLogQueryDTO normalizeAlertLogQuery(PaymentIssueAlertLogQueryDTO query) {
+        if (query == null) {
+            query = new PaymentIssueAlertLogQueryDTO();
+        }
+        query.setAlertNo(query.getAlertNo() == null ? null : query.getAlertNo().trim());
+        query.setIssueNo(query.getIssueNo() == null ? null : query.getIssueNo().trim());
+        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setAlertChannel(query.getAlertChannel() == null ? "全部" : query.getAlertChannel().trim());
+        query.setAlertStatus(query.getAlertStatus() == null ? "全部" : query.getAlertStatus().trim());
+        query.setAckStatus(query.getAckStatus() == null ? "全部" : query.getAckStatus().trim());
+        query.setProviderDeliveryStatus(query.getProviderDeliveryStatus() == null ? "全部" : query.getProviderDeliveryStatus().trim());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return query;

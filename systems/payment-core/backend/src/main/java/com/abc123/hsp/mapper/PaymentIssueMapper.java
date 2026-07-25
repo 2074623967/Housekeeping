@@ -1,5 +1,7 @@
 package com.abc123.hsp.mapper;
 
+import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
@@ -25,6 +27,16 @@ public interface PaymentIssueMapper {
      * 按责任组统计当前筛选条件下的异常总量和超时量。
      */
     List<PaymentIssueResponsibilitySummaryDTO> responsibilitySummary(@Param("query") PaymentIssueQueryDTO query);
+
+    /**
+     * 查询支付异常告警明细。
+     */
+    List<PaymentIssueAlertLogRowDTO> findAlertLogs(@Param("query") PaymentIssueAlertLogQueryDTO query);
+
+    /**
+     * 统计支付异常告警明细数量。
+     */
+    long countAlertLogs(@Param("query") PaymentIssueAlertLogQueryDTO query);
 
     /**
      * 按异常编号查询当前聚合异常。

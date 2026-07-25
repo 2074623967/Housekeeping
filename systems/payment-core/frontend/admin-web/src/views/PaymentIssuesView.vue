@@ -331,6 +331,9 @@ onMounted(loadIssues);
                 <div class="muted-text">
                   {{ item.latestAlertReceiptSummary }}
                 </div>
+                <RouterLink class="link-button" :to="`/payment-issue-alerts?issueNo=${item.issueNo}`">
+                  查看明细
+                </RouterLink>
               </td>
               <td>
                 <span :class="['badge', item.slaStatusType]">{{ item.slaStatus }}</span>

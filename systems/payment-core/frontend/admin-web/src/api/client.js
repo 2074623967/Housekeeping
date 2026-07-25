@@ -104,6 +104,30 @@ export const paymentIssueApi = {
     });
     return request(`/api/payment-issues/responsibility-summary?${params.toString()}`);
   },
+  getAlertLogs: ({
+    alertNo = "",
+    issueNo = "",
+    paymentOrderId = "",
+    alertChannel = "全部",
+    alertStatus = "全部",
+    ackStatus = "全部",
+    providerDeliveryStatus = "全部",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      alertNo,
+      issueNo,
+      paymentOrderId,
+      alertChannel,
+      alertStatus,
+      ackStatus,
+      providerDeliveryStatus,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-issues/alerts?${params.toString()}`);
+  },
   batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };
 

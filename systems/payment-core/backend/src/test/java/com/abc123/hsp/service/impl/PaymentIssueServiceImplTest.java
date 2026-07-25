@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
@@ -77,6 +79,52 @@ class PaymentIssueServiceImplTest {
         assertEquals("P1异常", normalized.getIssueType());
         assertEquals(1, normalized.getPageNo());
         assertEquals(1, normalized.getPageSize());
+    }
+
+    @Test
+    void shouldTrimAndNormalizeAlertLogQuery() {
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.emptyList());
+        when(paymentIssueMapper.countAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(0L);
+
+        PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+        query.setAlertNo("  PIA-001  ");
+        query.setIssueNo("  ISSUE-001  ");
+        query.setPaymentOrderId("  PAY-001  ");
+        query.setAlertChannel("  IM  ");
+        query.setAlertStatus("  已派发  ");
+        query.setAckStatus("  待确认  ");
+        query.setProviderDeliveryStatus("  ACCEPTED  ");
+        query.setPageNo(0);
+        query.setPageSize(200);
+
+        new PaymentIssueServiceImpl(paymentIssueMapper).listAlertLogs(query);
+
+        ArgumentCaptor<PaymentIssueAlertLogQueryDTO> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogQueryDTO.class);
+        verify(paymentIssueMapper).findAlertLogs(captor.capture());
+        PaymentIssueAlertLogQueryDTO normalized = captor.getValue();
+        assertEquals("PIA-001", normalized.getAlertNo());
+        assertEquals("ISSUE-001", normalized.getIssueNo());
+        assertEquals("PAY-001", normalized.getPaymentOrderId());
+        assertEquals("IM", normalized.getAlertChannel());
+        assertEquals("已派发", normalized.getAlertStatus());
+        assertEquals("待确认", normalized.getAckStatus());
+        assertEquals("ACCEPTED", normalized.getProviderDeliveryStatus());
+        assertEquals(1, normalized.getPageNo());
+        assertEquals(100, normalized.getPageSize());
+    }
+
+    @Test
+    void shouldReturnAlertLogPageResult() {
+        PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
+        row.setAlertNo("PIA-002");
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
+        when(paymentIssueMapper.countAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(1L);
+
+        PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+        query.setPageNo(2);
+        query.setPageSize(10);
+
+        assertEquals(1, new PaymentIssueServiceImpl(paymentIssueMapper).listAlertLogs(query).getItems().size());
     }
 
     @Test
