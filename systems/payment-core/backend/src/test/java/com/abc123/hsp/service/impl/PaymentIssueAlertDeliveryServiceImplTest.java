@@ -48,9 +48,12 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "SMS")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "EMAIL")).thenReturn(false);
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("IM")).thenReturn(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1"));
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("SMS")).thenReturn(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1"));
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("EMAIL")).thenReturn(buildProvider("ALERT_EMAIL_SENDCLOUD", "SendCloud 邮件告警", "sendcloud-payment-alerts", "TPL_PAYMENT_ISSUE_EMAIL_V1"));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_WECOM_P1", "企业微信告警机器人-P1", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_P1_V1", "severity=P1", 10),
+                buildProvider("ALERT_IM_WECOM_DEFAULT", "企业微信告警机器人-默认", "wecom-bot-alerts-default", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)
+        ));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("SMS")).thenReturn(Collections.singletonList(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1", "DEFAULT", 100)));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("EMAIL")).thenReturn(Collections.singletonList(buildProvider("ALERT_EMAIL_SENDCLOUD", "SendCloud 邮件告警", "sendcloud-payment-alerts", "TPL_PAYMENT_ISSUE_EMAIL_V1", "DEFAULT", 100)));
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
         when(smsNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("SMS-RECEIPT-001", "ACCEPTED", "短信供应商已接单", "[SMS] ISSUE-001"));
         when(emailNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("EMAIL-RECEIPT-001", "ACCEPTED", "邮件供应商已接单", "[EMAIL] ISSUE-001"));
@@ -68,8 +71,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals(0, result.getWarningCount());
         Assertions.assertEquals(0, result.getFailCount());
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log -> "已派发".equals(log.getAlertStatus())));
-        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getAlertContent().contains("模板：TPL_PAYMENT_ISSUE_IM_V1")));
-        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "企业微信告警机器人".equals(log.getProviderName())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getAlertContent().contains("支付异常 ISSUE-001")));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "企业微信告警机器人-P1".equals(log.getProviderName())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "TPL_PAYMENT_ISSUE_IM_P1_V1".equals(log.getTemplateCode())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "ACCEPTED".equals(log.getProviderDeliveryStatus())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "IM-RECEIPT-001".equals(log.getProviderReceiptNo())));
     }
@@ -85,9 +89,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "SMS")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "EMAIL")).thenReturn(false);
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("IM")).thenReturn(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1"));
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("SMS")).thenReturn(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1"));
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("EMAIL")).thenReturn(buildProvider("ALERT_EMAIL_SENDCLOUD", "SendCloud 邮件告警", "sendcloud-payment-alerts", "TPL_PAYMENT_ISSUE_EMAIL_V1"));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("SMS")).thenReturn(Collections.singletonList(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1", "DEFAULT", 100)));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("EMAIL")).thenReturn(Collections.singletonList(buildProvider("ALERT_EMAIL_SENDCLOUD", "SendCloud 邮件告警", "sendcloud-payment-alerts", "TPL_PAYMENT_ISSUE_EMAIL_V1", "DEFAULT", 100)));
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
         when(emailNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("EMAIL-RECEIPT-001", "ACCEPTED", "邮件供应商已接单", "[EMAIL] ISSUE-001"));
         doThrow(new RuntimeException("sms down")).when(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
@@ -115,7 +119,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("IM")).thenReturn(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1"));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
 
         new PaymentIssueAlertDeliveryServiceImpl(
@@ -138,9 +142,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "VOICE")).thenReturn(false);
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("IM")).thenReturn(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1"));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("VOICE")).thenReturn(null);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("VOICE")).thenReturn(Collections.emptyList());
 
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -166,7 +170,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(true);
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "SMS")).thenReturn(false);
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("SMS")).thenReturn(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1"));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("SMS")).thenReturn(Collections.singletonList(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1", "DEFAULT", 100)));
         when(smsNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("SMS-RECEIPT-001", "ACCEPTED", "短信供应商已接单", "[SMS] ISSUE-001"));
 
         new PaymentIssueAlertDeliveryServiceImpl(
@@ -187,7 +191,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
         when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
-        when(paymentTaskCenterMapper.findEnabledAlertProviderByChannel("IM")).thenReturn(null);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.emptyList());
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -215,12 +219,17 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
                                                         String providerName,
                                                         String endpointAlias,
-                                                        String templateCode) {
+                                                        String templateCode,
+                                                        String routeRule,
+                                                        Integer routePriority) {
         PaymentAlertProviderConfigDTO provider = new PaymentAlertProviderConfigDTO();
         provider.setProviderCode(providerCode);
         provider.setProviderName(providerName);
         provider.setEndpointAlias(endpointAlias);
         provider.setTemplateCode(templateCode);
+        provider.setTemplateBody("[{{severity}}] {{issueType}} {{issueNo}} {{paymentOrderId}} {{alertContent}}");
+        provider.setRouteRule(routeRule);
+        provider.setRoutePriority(routePriority);
         return provider;
     }
 

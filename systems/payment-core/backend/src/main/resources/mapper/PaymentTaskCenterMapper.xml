@@ -358,12 +358,15 @@
           AND alert_status = '已派发'
     </select>
 
-    <select id="findEnabledAlertProviderByChannel" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
+    <select id="findEnabledAlertProvidersByChannel" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
         SELECT provider_code AS providerCode,
                provider_name AS providerName,
                channel_code AS channelCode,
                endpoint_alias AS endpointAlias,
                template_code AS templateCode,
+               template_body AS templateBody,
+               route_rule AS routeRule,
+               route_priority AS routePriority,
                retry_policy AS retryPolicy,
                rate_limit_policy AS rateLimitPolicy,
                status,
@@ -372,8 +375,7 @@
         FROM t_payment_alert_provider_config
         WHERE channel_code = #{param1}
           AND status = 'ENABLED'
-        ORDER BY updated_at DESC, id DESC
-        LIMIT 1
+        ORDER BY route_priority ASC, updated_at DESC, id DESC
     </select>
 
     <update id="updateIssueAlertDeliveryStatus" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">

@@ -811,6 +811,9 @@ onMounted(loadOverview);
                   <th>通知通道</th>
                   <th>接入端点</th>
                   <th>模板编码</th>
+                  <th>模板正文</th>
+                  <th>路由规则</th>
+                  <th>优先级</th>
                   <th>重试策略</th>
                   <th>限流策略</th>
                   <th>状态</th>
@@ -825,6 +828,9 @@ onMounted(loadOverview);
                   <td>{{ provider.channelCode }}</td>
                   <td>{{ provider.endpointAlias }}</td>
                   <td>{{ provider.templateCode }}</td>
+                  <td class="flow-summary-cell">{{ provider.templateBody }}</td>
+                  <td>{{ provider.routeRule }}</td>
+                  <td>{{ provider.routePriority }}</td>
                   <td class="flow-summary-cell">{{ provider.retryPolicy }}</td>
                   <td class="flow-summary-cell">{{ provider.rateLimitPolicy }}</td>
                   <td><span :class="['badge', provider.statusType]">{{ provider.status }}</span></td>

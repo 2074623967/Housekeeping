@@ -1474,3 +1474,18 @@
 1. 当前 `payment-core` 的异常告警链路已经具备“配置进入执行 -> 执行返回回执 -> 日志可审计 -> 异常中心可联查”的更完整闭环。
 2. 本轮通过的是本地供应商回执模拟与审计链路，不代表已经完成真实企业微信/短信/邮件网关的生产级对接。
 3. 因此本轮提升的是告警治理成熟度，而不是最终发布门槛；`master / release` 判断仍需继续看真实网关接入、模板变量渲染和多供应商路由策略。
+
+## 42. 2026-07-25 告警模板变量渲染与供应商路由验证
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `6` 个用例全部通过，覆盖 P1 专用模板命中、缺配置失败、部分失败和成功通道去重 |
+| 前端构建 | `npm run build` | 通过 | 配置中心展示模板正文、路由规则和优先级后构建成功 |
+| 格式检查 | `git diff --check` | 通过 | 未发现补丁格式问题 |
+
+本轮补齐项：
+
+1. 告警供应商配置增加 `template_body / route_rule / route_priority`。
+2. 派发服务按优先级匹配供应商路由规则，支持 `severity / issueType / responsibilityGroup / DEFAULT`。
+3. 派发服务渲染 `{{severity}} / {{issueType}} / {{issueNo}} / {{paymentOrderId}} / {{responsibilityGroup}} / {{receiver}} / {{scheduleTag}} / {{alertContent}} / {{triggeredBy}}` 模板变量。
+4. 本地通知器优先使用渲染后的内容快照，异常中心和告警日志可追溯最终文案。

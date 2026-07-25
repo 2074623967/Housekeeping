@@ -99,7 +99,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 successCount++;
                 continue;
             }
-            PaymentAlertProviderConfigDTO providerConfig = paymentTaskCenterMapper.findEnabledAlertProviderByChannel(channelCode);
+            PaymentAlertProviderConfigDTO providerConfig = selectProviderConfig(
+                    paymentTaskCenterMapper.findEnabledAlertProvidersByChannel(channelCode),
+                    item
+            );
             if (providerConfig == null) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
                         item,
@@ -262,10 +265,15 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         deliveryItem.setProviderName(providerConfig.getProviderName());
         deliveryItem.setEndpointAlias(providerConfig.getEndpointAlias());
         deliveryItem.setTemplateCode(providerConfig.getTemplateCode());
+        deliveryItem.setTemplateBody(providerConfig.getTemplateBody());
+        deliveryItem.setRenderedAlertContent(renderTemplate(providerConfig.getTemplateBody(), deliveryItem));
         return deliveryItem;
     }
 
     private String buildAlertContent(PaymentIssueAlertDispatchItemDTO item) {
+        if (StringUtils.hasText(item.getRenderedAlertContent())) {
+            return item.getRenderedAlertContent();
+        }
         String alertContent = item.getAlertContent();
         if (!StringUtils.hasText(item.getProviderCode()) && !StringUtils.hasText(item.getTemplateCode())) {
             return alertContent;
@@ -291,6 +299,61 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         }
         builder.append("】");
         return builder.toString();
+    }
+
+    private PaymentAlertProviderConfigDTO selectProviderConfig(List<PaymentAlertProviderConfigDTO> providerConfigs,
+                                                               PaymentIssueAlertDispatchItemDTO item) {
+        if (providerConfigs == null || providerConfigs.isEmpty()) {
+            return null;
+        }
+        for (PaymentAlertProviderConfigDTO providerConfig : providerConfigs) {
+            if (matchesRouteRule(providerConfig.getRouteRule(), item)) {
+                return providerConfig;
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesRouteRule(String routeRule, PaymentIssueAlertDispatchItemDTO item) {
+        if (!StringUtils.hasText(routeRule) || "DEFAULT".equalsIgnoreCase(routeRule.trim())) {
+            return true;
+        }
+        String[] ruleParts = routeRule.split("=");
+        if (ruleParts.length != 2) {
+            return false;
+        }
+        String ruleKey = ruleParts[0].trim();
+        String ruleValue = ruleParts[1].trim();
+        if ("severity".equalsIgnoreCase(ruleKey)) {
+            return ruleValue.equalsIgnoreCase(item.getSeverity());
+        }
+        if ("issueType".equalsIgnoreCase(ruleKey)) {
+            return ruleValue.equalsIgnoreCase(item.getIssueType());
+        }
+        if ("responsibilityGroup".equalsIgnoreCase(ruleKey)) {
+            return ruleValue.equalsIgnoreCase(item.getResponsibilityGroup());
+        }
+        return false;
+    }
+
+    private String renderTemplate(String templateBody, PaymentIssueAlertDispatchItemDTO item) {
+        if (!StringUtils.hasText(templateBody)) {
+            return buildAlertContent(item);
+        }
+        return templateBody
+                .replace("{{severity}}", safeText(item.getSeverity()))
+                .replace("{{issueType}}", safeText(item.getIssueType()))
+                .replace("{{issueNo}}", safeText(item.getIssueNo()))
+                .replace("{{paymentOrderId}}", safeText(item.getPaymentOrderId()))
+                .replace("{{responsibilityGroup}}", safeText(item.getResponsibilityGroup()))
+                .replace("{{receiver}}", safeText(item.getReceiver()))
+                .replace("{{scheduleTag}}", safeText(item.getScheduleTag()))
+                .replace("{{alertContent}}", safeText(item.getAlertContent()))
+                .replace("{{triggeredBy}}", safeText(item.getTriggeredBy()));
+    }
+
+    private String safeText(String value) {
+        return StringUtils.hasText(value) ? value : "-";
     }
 
     private List<String> resolveConfiguredChannels(String notifyChannels) {

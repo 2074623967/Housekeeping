@@ -73,5 +73,5 @@ public interface PaymentTaskCenterMapper {
     /**
      * 查询指定通知通道当前启用中的供应商配置。
      */
-    PaymentAlertProviderConfigDTO findEnabledAlertProviderByChannel(String alertChannel);
+    List<PaymentAlertProviderConfigDTO> findEnabledAlertProvidersByChannel(String alertChannel);
 }

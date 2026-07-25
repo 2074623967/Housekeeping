@@ -19,7 +19,9 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         result.setProviderReceiptNo(buildReceiptNo(channelLabel, item.getIssueNo()));
         result.setProviderDeliveryStatus(providerStatus);
         result.setProviderDeliveryMessage(buildDeliveryMessage(item, channelLabel));
-        result.setRenderedContentSnapshot(buildRenderedContent(item, channelLabel));
+        result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
+                ? item.getRenderedAlertContent()
+                : buildRenderedContent(item, channelLabel));
         return result;
     }
 

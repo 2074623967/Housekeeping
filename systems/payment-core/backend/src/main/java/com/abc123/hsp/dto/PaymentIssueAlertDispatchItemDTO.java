@@ -36,6 +36,10 @@ public class PaymentIssueAlertDispatchItemDTO {
     private String endpointAlias;
     /** 实际命中的消息模板编码。 */
     private String templateCode;
+    /** 实际命中的模板正文。 */
+    private String templateBody;
+    /** 实际渲染后的告警内容。 */
+    private String renderedAlertContent;
     /** 告警内容。 */
     private String alertContent;
     /** 触发来源。 */

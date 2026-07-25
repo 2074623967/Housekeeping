@@ -18,6 +18,12 @@ public class PaymentAlertProviderConfigDTO {
     private String endpointAlias;
     /** 模板编码。 */
     private String templateCode;
+    /** 模板正文。 */
+    private String templateBody;
+    /** 路由规则。 */
+    private String routeRule;
+    /** 路由优先级。 */
+    private Integer routePriority;
     /** 重试策略。 */
     private String retryPolicy;
     /** 限流策略。 */
