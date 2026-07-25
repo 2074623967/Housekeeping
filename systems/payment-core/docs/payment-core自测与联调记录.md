@@ -2138,3 +2138,28 @@
 1. 当前 `payment-core` 的异常告警派发链路已具备服务端时间窗与防重放编排，不再只依赖外部网关自行兜底。
 2. 这一步显著降低了同一异常在短时间内被重复重放到外部供应商的风险。
 3. 当前异常告警链路在“真实供应商接入”方向上的高优先级缺口已进一步缩小，但整体系统仍未达到 `master / release` 冻结门槛。
+
+## 67. 2026-07-25 告警供应商多条件路由规则验证
+
+### 67.1 本轮验证范围
+
+本轮围绕“告警供应商路由规则目前只支持单条件命中，难以支撑按班次、升级等级、接收人等维度进行更细分的多供应商分流”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. 供应商 `routeRule` 从单条件 `key=value` 扩展为多条件 `key=value&key2=value2`
+2. 命中字段从原有 `severity / issueType / responsibilityGroup` 扩展到 `scheduleTag / receiver / escalationLevel / triggeredBy`
+3. 派发服务会按多条件组合规则筛选更合适的候选供应商，再进入既有优先级与补发链路
+4. `PaymentIssueAlertDeliveryServiceImplTest` 新增“班次 + 升级等级”复合路由场景，验证白班机器人而非夜班或默认机器人被正确命中
+
+### 67.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `19` 个用例通过 |
+
+### 67.3 当前判断
+
+1. 当前 `payment-core` 的异常告警供应商路由能力已从“单条件命中”升级为“支持班次、升级等级、接收人等多条件组合匹配”。
+2. 这一步提升了多供应商在不同值班场景下的精细化分流能力，更接近真实公司内部的告警路由策略。
+3. 当前异常告警链路在“真实供应商接入”方向上的高优先级缺口已继续缩小，但整体系统仍未达到 `master / release` 冻结门槛。

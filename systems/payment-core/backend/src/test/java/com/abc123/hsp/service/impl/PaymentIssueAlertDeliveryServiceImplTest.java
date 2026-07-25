@@ -79,6 +79,36 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldMatchCompositeProviderRouteRuleByScheduleAndEscalationLevel() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        item.setEscalationLevel("L2");
+        item.setScheduleTag("交易链路白班");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_NIGHT", "企业微信夜班机器人", "wecom-bot-night", "TPL_PAYMENT_ISSUE_IM_NIGHT", "scheduleTag=交易链路夜班&escalationLevel=L2", 10),
+                buildProvider("ALERT_IM_DAY", "企业微信白班机器人", "wecom-bot-day", "TPL_PAYMENT_ISSUE_IM_DAY", "scheduleTag=交易链路白班&escalationLevel=L2", 20),
+                buildProvider("ALERT_IM_DEFAULT", "企业微信默认机器人", "wecom-bot-default", "TPL_PAYMENT_ISSUE_IM_DEFAULT", "DEFAULT", 100)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-DAY", "ACCEPTED", "白班机器人已接单", "[IM-DAY] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor = ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
+        verify(imNotifier).send(dispatchCaptor.capture());
+        Assertions.assertEquals("ALERT_IM_DAY", dispatchCaptor.getValue().getProviderCode());
+        Assertions.assertEquals("企业微信白班机器人", dispatchCaptor.getValue().getProviderName());
+        Assertions.assertEquals("TPL_PAYMENT_ISSUE_IM_DAY", dispatchCaptor.getValue().getTemplateCode());
+    }
+
+    @Test
     void shouldMarkPartialFailureWhenOneChannelFails() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");

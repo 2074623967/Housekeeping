@@ -534,22 +534,52 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(routeRule) || "DEFAULT".equalsIgnoreCase(routeRule.trim())) {
             return true;
         }
-        String[] ruleParts = routeRule.split("=");
+        String[] ruleSegments = routeRule.split("&");
+        for (String ruleSegment : ruleSegments) {
+            if (!matchesSingleRouteRule(ruleSegment, item)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesSingleRouteRule(String ruleSegment, PaymentIssueAlertDispatchItemDTO item) {
+        if (!StringUtils.hasText(ruleSegment)) {
+            return true;
+        }
+        String[] ruleParts = ruleSegment.split("=");
         if (ruleParts.length != 2) {
             return false;
         }
         String ruleKey = ruleParts[0].trim();
         String ruleValue = ruleParts[1].trim();
+        String actualValue = resolveRouteRuleFieldValue(ruleKey, item);
+        return StringUtils.hasText(actualValue) && ruleValue.equalsIgnoreCase(actualValue);
+    }
+
+    private String resolveRouteRuleFieldValue(String ruleKey, PaymentIssueAlertDispatchItemDTO item) {
         if ("severity".equalsIgnoreCase(ruleKey)) {
-            return ruleValue.equalsIgnoreCase(item.getSeverity());
+            return item.getSeverity();
         }
         if ("issueType".equalsIgnoreCase(ruleKey)) {
-            return ruleValue.equalsIgnoreCase(item.getIssueType());
+            return item.getIssueType();
         }
         if ("responsibilityGroup".equalsIgnoreCase(ruleKey)) {
-            return ruleValue.equalsIgnoreCase(item.getResponsibilityGroup());
+            return item.getResponsibilityGroup();
         }
-        return false;
+        if ("scheduleTag".equalsIgnoreCase(ruleKey)) {
+            return item.getScheduleTag();
+        }
+        if ("receiver".equalsIgnoreCase(ruleKey)) {
+            return item.getReceiver();
+        }
+        if ("escalationLevel".equalsIgnoreCase(ruleKey)) {
+            return item.getEscalationLevel();
+        }
+        if ("triggeredBy".equalsIgnoreCase(ruleKey)) {
+            return item.getTriggeredBy();
+        }
+        return null;
     }
 
     private String renderTemplate(String templateBody, PaymentIssueAlertDispatchItemDTO item) {
