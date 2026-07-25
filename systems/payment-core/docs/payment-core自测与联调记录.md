@@ -1557,3 +1557,34 @@
 1. 当前 `payment-core` 在异常治理维度已具备“异常聚合视图 + 任务中心补偿视图 + 告警执行明细视图”的三层观察面。
 2. 本轮提升的是运维、产品和测试的联查效率，不代表真实通知供应商、补发上限和通道节流已经正式化。
 3. 因此本轮依旧属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 45. 2026-07-25 异常告警补发护栏验证
+
+### 45.1 本轮验证范围
+
+本轮围绕“异常告警已经支持失败补发，但还缺少正式的补发上限和冷却护栏”的问题进行了补强验证，目标是确认当前代码不会在短时间内无限重试同一异常通道。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 按 `retryPolicy` 解析失败重试次数和冷却时间
+2. `PaymentTaskCenterMapper` 新增失败派发次数统计和最近通道日志查询
+3. `PaymentIssueAlertDeliveryServiceImplTest` 新增重试上限和冷却窗口护栏覆盖
+
+### 45.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖正常派发、补发去重、回执回查、重试上限和冷却窗口 |
+
+### 45.3 本轮补齐项
+
+1. `PaymentIssueAlertLogEntity` 新增 `createdAt` 字段，供补发冷却时间判断使用。
+2. `PaymentTaskCenterMapper.xml` 新增失败次数统计和最近派发日志查询 SQL。
+3. 当供应商配置中的 `retryPolicy` 命中“失败重试 X 次 / 间隔 Y 分钟”时，派发服务会在发送前先判断是否允许继续补发。
+4. 当失败次数已超出允许范围或冷却窗口未到时，本轮任务会直接阻断该通道补发。
+
+### 45.4 当前判断
+
+1. 当前 `payment-core` 的异常告警补偿能力已从“失败补发骨架”进一步推进到“带补发护栏的轻量正式化版本”。
+2. 本轮提升的是执行层面的稳定性，不代表真实通知供应商、通道级限流和跨实例分布式协调已经完成。
+3. 因此本轮同样属于冻结版补强，而不是 `master / release` 的触发条件。

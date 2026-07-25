@@ -50,6 +50,8 @@ public class PaymentIssueAlertLogEntity {
     private String providerDeliveryMessage;
     /** 渲染后的告警内容快照。 */
     private String renderedContentSnapshot;
+    /** 创建时间。 */
+    private String createdAt;
     /** 触发来源。 */
     private String triggeredBy;
 }

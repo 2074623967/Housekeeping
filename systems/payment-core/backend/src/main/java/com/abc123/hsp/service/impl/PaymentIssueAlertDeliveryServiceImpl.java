@@ -9,12 +9,17 @@ import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +37,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
     private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
+    private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Pattern RETRY_COUNT_PATTERN = Pattern.compile("失败重试(\\d+)次");
+    private static final Pattern RETRY_COOLDOWN_PATTERN = Pattern.compile("间隔(\\d+)分钟");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
@@ -141,6 +149,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 failCount++;
                 continue;
             }
+            if (shouldBlockRetry(providerConfig, item, channelCode)) {
+                failCount++;
+                continue;
+            }
             PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             try {
                 PaymentIssueAlertDeliveryResultDTO deliveryResult = notifier.send(deliveryItem);
@@ -166,6 +178,31 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             }
         }
         return new DispatchOutcome(successCount, failCount, configuredChannels.size(), false);
+    }
+
+    /**
+     * 根据供应商配置中的重试策略控制补发频率，避免短时间内重复轰炸同一通道。
+     */
+    private boolean shouldBlockRetry(PaymentAlertProviderConfigDTO providerConfig,
+                                     PaymentIssueAlertDispatchItemDTO item,
+                                     String channelCode) {
+        RetryGuard retryGuard = parseRetryGuard(providerConfig.getRetryPolicy());
+        if (!retryGuard.isEnabled()) {
+            return false;
+        }
+        int failedAttemptCount = paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries(item.getIssueNo(), channelCode);
+        if (retryGuard.hasRetryLimit() && failedAttemptCount > retryGuard.getRetryCount()) {
+            return true;
+        }
+        if (!retryGuard.hasCooldownMinutes()) {
+            return false;
+        }
+        PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getIssueNo(), channelCode);
+        if (latestLog == null || !"派发失败".equals(latestLog.getAlertStatus())) {
+            return false;
+        }
+        LocalDateTime latestCreatedAt = parseAlertCreatedAt(latestLog.getCreatedAt());
+        return latestCreatedAt != null && LocalDateTime.now().isBefore(latestCreatedAt.plusMinutes(retryGuard.getCooldownMinutes()));
     }
 
     private PaymentIssueAlertLogEntity buildSourceAlertStatus(PaymentIssueAlertDispatchItemDTO item,
@@ -367,6 +404,44 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private String safeText(String value) {
         return StringUtils.hasText(value) ? value : "-";
+    }
+
+    private RetryGuard parseRetryGuard(String retryPolicy) {
+        RetryGuard retryGuard = new RetryGuard();
+        if (!StringUtils.hasText(retryPolicy)) {
+            return retryGuard;
+        }
+        Matcher retryCountMatcher = RETRY_COUNT_PATTERN.matcher(retryPolicy);
+        if (retryCountMatcher.find()) {
+            retryGuard.setRetryCount(parseInteger(retryCountMatcher.group(1)));
+        }
+        Matcher cooldownMatcher = RETRY_COOLDOWN_PATTERN.matcher(retryPolicy);
+        if (cooldownMatcher.find()) {
+            retryGuard.setCooldownMinutes(parseInteger(cooldownMatcher.group(1)));
+        }
+        return retryGuard;
+    }
+
+    private Integer parseInteger(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private LocalDateTime parseAlertCreatedAt(String createdAt) {
+        if (!StringUtils.hasText(createdAt)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(createdAt.trim(), ALERT_LOG_TIME_FORMATTER);
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 
     private List<String> resolveConfiguredChannels(String notifyChannels) {
@@ -577,6 +652,42 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
         static DispatchOutcome noExternalDispatch() {
             return new DispatchOutcome(0, 0, 0, true);
+        }
+    }
+
+    /**
+     * 告警补发护栏配置，来源于供应商配置中的重试策略。
+     */
+    static class RetryGuard {
+        private Integer retryCount;
+        private Integer cooldownMinutes;
+
+        boolean isEnabled() {
+            return hasRetryLimit() || hasCooldownMinutes();
+        }
+
+        boolean hasRetryLimit() {
+            return retryCount != null && retryCount.intValue() >= 0;
+        }
+
+        boolean hasCooldownMinutes() {
+            return cooldownMinutes != null && cooldownMinutes.intValue() > 0;
+        }
+
+        Integer getRetryCount() {
+            return retryCount;
+        }
+
+        void setRetryCount(Integer retryCount) {
+            this.retryCount = retryCount;
+        }
+
+        Integer getCooldownMinutes() {
+            return cooldownMinutes;
+        }
+
+        void setCooldownMinutes(Integer cooldownMinutes) {
+            this.cooldownMinutes = cooldownMinutes;
         }
     }
 }

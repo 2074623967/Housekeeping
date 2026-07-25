@@ -81,6 +81,16 @@ public interface PaymentTaskCenterMapper {
     boolean hasSuccessfulIssueAlertChannelDelivery(String issueNo, String alertChannel);
 
     /**
+     * 统计某个异常在指定通道上的失败派发次数。
+     */
+    int countFailedIssueAlertChannelDeliveries(String issueNo, String alertChannel);
+
+    /**
+     * 查询某个异常在指定通道上的最近一次派发日志。
+     */
+    PaymentIssueAlertLogEntity findLatestIssueAlertChannelDeliveryLog(String issueNo, String alertChannel);
+
+    /**
      * 查询指定通知通道当前启用中的供应商配置。
      */
     List<PaymentAlertProviderConfigDTO> findEnabledAlertProvidersByChannel(String alertChannel);
