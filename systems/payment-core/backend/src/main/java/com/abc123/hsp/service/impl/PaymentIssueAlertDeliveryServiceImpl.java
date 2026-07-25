@@ -42,6 +42,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern RETRY_COOLDOWN_PATTERN = Pattern.compile("间隔(\\d+)分钟");
     private static final Pattern RETRY_BACKOFF_FACTOR_PATTERN = Pattern.compile("退避系数(\\d+)倍");
     private static final Pattern RETRY_MAX_COOLDOWN_PATTERN = Pattern.compile("最大间隔(\\d+)分钟");
+    private static final Pattern RETRY_REPLAY_WINDOW_PATTERN = Pattern.compile("防重放窗口(\\d+)分钟");
+    private static final Pattern RETRY_FRESHNESS_WINDOW_PATTERN = Pattern.compile("时间窗(\\d+)分钟");
     private static final Pattern RATE_LIMIT_PATTERN = Pattern.compile("每(?:(\\d+)分钟|分钟)\\s*(\\d+)\\s*条");
     private static final Pattern TEMPLATE_PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_]+)\\s*}}");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
@@ -241,6 +243,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             return circuitBreakerFailure;
         }
         RetryGuard retryGuard = parseRetryGuard(providerConfig.getRetryPolicy());
+        PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getAlertNo(), channelCode);
+        PaymentIssueAlertDeliveryResultDTO replayGuardFailure = resolveReplayGuardFailure(retryGuard, latestLog, item);
+        if (replayGuardFailure != null) {
+            return replayGuardFailure;
+        }
         if (!retryGuard.isEnabled()) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
@@ -251,7 +258,6 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!retryGuard.hasCooldownMinutes()) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
-        PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getAlertNo(), channelCode);
         if (latestLog == null || !"派发失败".equals(latestLog.getAlertStatus())) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
@@ -266,6 +272,40 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             );
         }
         return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO resolveReplayGuardFailure(RetryGuard retryGuard,
+                                                                         PaymentIssueAlertLogEntity latestLog,
+                                                                         PaymentIssueAlertDispatchItemDTO item) {
+        if (latestLog == null || !retryGuard.hasReplayProtectionWindow()) {
+            return null;
+        }
+        if (!isReplayProtectedDeliveryStatus(latestLog)) {
+            return null;
+        }
+        LocalDateTime latestCreatedAt = parseAlertCreatedAt(latestLog.getCreatedAt());
+        if (latestCreatedAt == null) {
+            return null;
+        }
+        int protectionWindowMinutes = retryGuard.resolveReplayProtectionWindowMinutes();
+        if (protectionWindowMinutes <= 0) {
+            return null;
+        }
+        if (LocalDateTime.now().isAfter(latestCreatedAt.plusMinutes(protectionWindowMinutes))) {
+            return null;
+        }
+        return buildFailureResult(
+                "REPLAY_WINDOW_ACTIVE",
+                String.format("命中服务端防重放窗口：最近一次成功派发仍在 %d 分钟保护期内", protectionWindowMinutes),
+                item
+        );
+    }
+
+    private boolean isReplayProtectedDeliveryStatus(PaymentIssueAlertLogEntity latestLog) {
+        if ("已派发".equals(latestLog.getAlertStatus())) {
+            return true;
+        }
+        return isSuccessfulProviderDeliveryStatus(latestLog.getProviderDeliveryStatus());
     }
 
     /**
@@ -583,6 +623,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (maxCooldownMatcher.find()) {
             retryGuard.setMaxCooldownMinutes(parseInteger(maxCooldownMatcher.group(1)));
         }
+        Matcher replayWindowMatcher = RETRY_REPLAY_WINDOW_PATTERN.matcher(retryPolicy);
+        if (replayWindowMatcher.find()) {
+            retryGuard.setReplayWindowMinutes(parseInteger(replayWindowMatcher.group(1)));
+        }
+        Matcher freshnessWindowMatcher = RETRY_FRESHNESS_WINDOW_PATTERN.matcher(retryPolicy);
+        if (freshnessWindowMatcher.find()) {
+            retryGuard.setFreshnessWindowMinutes(parseInteger(freshnessWindowMatcher.group(1)));
+        }
         return retryGuard;
     }
 
@@ -843,9 +891,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         private Integer cooldownMinutes;
         private Integer backoffFactor;
         private Integer maxCooldownMinutes;
+        private Integer replayWindowMinutes;
+        private Integer freshnessWindowMinutes;
 
         boolean isEnabled() {
-            return hasRetryLimit() || hasCooldownMinutes();
+            return hasRetryLimit() || hasCooldownMinutes() || hasReplayProtectionWindow();
         }
 
         boolean hasRetryLimit() {
@@ -886,6 +936,33 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
         void setMaxCooldownMinutes(Integer maxCooldownMinutes) {
             this.maxCooldownMinutes = maxCooldownMinutes;
+        }
+
+        Integer getReplayWindowMinutes() {
+            return replayWindowMinutes;
+        }
+
+        void setReplayWindowMinutes(Integer replayWindowMinutes) {
+            this.replayWindowMinutes = replayWindowMinutes;
+        }
+
+        Integer getFreshnessWindowMinutes() {
+            return freshnessWindowMinutes;
+        }
+
+        void setFreshnessWindowMinutes(Integer freshnessWindowMinutes) {
+            this.freshnessWindowMinutes = freshnessWindowMinutes;
+        }
+
+        boolean hasReplayProtectionWindow() {
+            return replayWindowMinutes != null && replayWindowMinutes.intValue() > 0
+                    || freshnessWindowMinutes != null && freshnessWindowMinutes.intValue() > 0;
+        }
+
+        int resolveReplayProtectionWindowMinutes() {
+            int replayWindow = replayWindowMinutes == null ? 0 : replayWindowMinutes.intValue();
+            int freshnessWindow = freshnessWindowMinutes == null ? 0 : freshnessWindowMinutes.intValue();
+            return Math.max(replayWindow, freshnessWindow);
         }
 
         int resolveEffectiveCooldownMinutes(int failedAttemptCount) {

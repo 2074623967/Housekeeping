@@ -2113,3 +2113,28 @@
 1. 当前 `payment-core` 的异常告警模板已从“固定字段替换”升级为“通用占位符解析 + 未知字段兜底”的实现。
 2. 这一步提升了真实供应商模板接入时的扩展性，也降低了模板配置不完整时的文案风险。
 3. 服务端时间窗校验联动和统一防重放编排仍待补齐，因此当前仍不触发 `master / release`。
+
+## 66. 2026-07-25 异常告警服务端时间窗与防重放验证
+
+### 66.1 本轮验证范围
+
+本轮围绕“异常告警虽然已经具备外部网关签名、时间戳和 nonce 头，但服务端仍缺少统一的时间窗/防重放拦截编排”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `retryPolicy` 新增 `防重放窗口N分钟 / 时间窗N分钟` 解析能力
+2. 派发服务在正式发送前，会读取同一告警同一通道的最近一次派发日志
+3. 若最近一次派发仍处于成功派发保护时间窗内，则直接拦截本次发送，避免把外部网关当作可重复重放入口
+4. `PaymentIssueAlertDeliveryServiceImplTest` 新增“最近一次已派发仍在 10 分钟保护期内”场景，验证通知器不会再次调用
+
+### 66.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `18` 个用例通过 |
+
+### 66.3 当前判断
+
+1. 当前 `payment-core` 的异常告警派发链路已具备服务端时间窗与防重放编排，不再只依赖外部网关自行兜底。
+2. 这一步显著降低了同一异常在短时间内被重复重放到外部供应商的风险。
+3. 当前异常告警链路在“真实供应商接入”方向上的高优先级缺口已进一步缩小，但整体系统仍未达到 `master / release` 冻结门槛。
