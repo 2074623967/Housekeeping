@@ -36,3 +36,6 @@ payment:
     im:
       # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_IM_WEBHOOK_URL:}
+    sms:
+      # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
+      webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
