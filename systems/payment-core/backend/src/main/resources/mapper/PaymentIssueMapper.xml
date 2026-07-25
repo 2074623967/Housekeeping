@@ -390,6 +390,7 @@
 
     <select id="findAlertLogs" resultType="com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO">
         SELECT alert_no AS alertNo,
+               source_alert_no AS sourceAlertNo,
                issue_no AS issueNo,
                payment_order_id AS paymentOrderId,
                issue_type AS issueType,

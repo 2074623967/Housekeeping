@@ -82,19 +82,19 @@ public interface PaymentTaskCenterMapper {
     int updateIssueAlertProviderReceipt(PaymentIssueAlertLogEntity entity);
 
     /**
-     * 判断某个异常在指定通知通道上是否已经成功派发过。
+     * 判断某个来源 outbox 在指定通知通道上是否已经成功派发过。
      */
-    boolean hasSuccessfulIssueAlertChannelDelivery(String issueNo, String alertChannel);
+    boolean hasSuccessfulIssueAlertChannelDelivery(String sourceAlertNo, String alertChannel);
 
     /**
-     * 统计某个异常在指定通道上的失败派发次数。
+     * 统计某个来源 outbox 在指定通道上的失败派发次数。
      */
-    int countFailedIssueAlertChannelDeliveries(String issueNo, String alertChannel);
+    int countFailedIssueAlertChannelDeliveries(String sourceAlertNo, String alertChannel);
 
     /**
-     * 查询某个异常在指定通道上的最近一次派发日志。
+     * 查询某个来源 outbox 在指定通道上的最近一次派发日志。
      */
-    PaymentIssueAlertLogEntity findLatestIssueAlertChannelDeliveryLog(String issueNo, String alertChannel);
+    PaymentIssueAlertLogEntity findLatestIssueAlertChannelDeliveryLog(String sourceAlertNo, String alertChannel);
 
     /**
      * 统计某个供应商在指定时间窗口内的派发次数。

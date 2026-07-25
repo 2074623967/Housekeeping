@@ -119,7 +119,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         int successCount = 0;
         int failCount = 0;
         for (String channelCode : configuredChannels) {
-            if (paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery(item.getIssueNo(), channelCode)) {
+            if (paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery(item.getAlertNo(), channelCode)) {
                 successCount++;
                 continue;
             }
@@ -223,14 +223,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!retryGuard.isEnabled()) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
-        int failedAttemptCount = paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries(item.getIssueNo(), channelCode);
+        int failedAttemptCount = paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries(item.getAlertNo(), channelCode);
         if (retryGuard.hasRetryLimit() && failedAttemptCount > retryGuard.getRetryCount()) {
             return buildFailureResult("RETRY_LIMIT_REACHED", "已达到失败补发上限，等待人工介入处理", item);
         }
         if (!retryGuard.hasCooldownMinutes()) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
-        PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getIssueNo(), channelCode);
+        PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getAlertNo(), channelCode);
         if (latestLog == null || !"派发失败".equals(latestLog.getAlertStatus())) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
@@ -327,6 +327,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                         PaymentIssueAlertDeliveryResultDTO deliveryResult) {
         PaymentIssueAlertLogEntity entity = buildBaseAlertLog(item, triggeredBy);
         entity.setAlertNo(buildDeliveryAlertLogNo(channelCode));
+        entity.setSourceAlertNo(item.getAlertNo());
         entity.setAlertChannel(channelCode);
         entity.setAlertStatus(alertStatus);
         entity.setAlertStatusType(alertStatusType);

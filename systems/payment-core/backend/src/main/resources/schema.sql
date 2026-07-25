@@ -453,6 +453,7 @@ CREATE TABLE t_payment_alert_provider_config (
 CREATE TABLE t_payment_issue_alert_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     alert_no VARCHAR(64) NOT NULL COMMENT '告警通知编号',
+    source_alert_no VARCHAR(64) DEFAULT NULL COMMENT '来源站内告警编号，外部派发日志用于关联原始 outbox',
     issue_no VARCHAR(128) NOT NULL COMMENT '异常编号',
     payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
     issue_type VARCHAR(64) NOT NULL COMMENT '异常类型',
@@ -479,6 +480,7 @@ CREATE TABLE t_payment_issue_alert_log (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_issue_alert_no (alert_no),
+    KEY idx_issue_alert_source_channel (source_alert_no, alert_channel, alert_status),
     KEY idx_issue_alert_issue (issue_no, created_at),
     KEY idx_issue_alert_ack (ack_status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警通知日志表';

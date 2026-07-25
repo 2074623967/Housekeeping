@@ -10,6 +10,8 @@ public class PaymentIssueAlertLogRowDTO {
 
     /** 告警编号。 */
     private String alertNo;
+    /** 来源站内告警编号。 */
+    private String sourceAlertNo;
     /** 异常编号。 */
     private String issueNo;
     /** 支付单号。 */

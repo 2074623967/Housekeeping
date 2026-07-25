@@ -1790,3 +1790,27 @@
 
 1. 当前 `payment-core` 的异常告警升级链路已具备“配置升级策略 -> 超时未确认 -> 自动生成升级 outbox”的轻量闭环。
 2. 本轮仍未实现真实外部通知网关、独立升级状态机和法定节假日排班中心，因此仍不触发 `master / release`。
+
+## 53. 2026-07-25 异常告警来源 outbox 级派发幂等验证
+
+### 53.1 本轮验证范围
+
+本轮围绕“升级 outbox 与原始 outbox 共用同一个 `issueNo`，可能被原始告警的通道成功记录误判为已派发”的问题进行了修正验证。
+
+本轮覆盖内容：
+
+1. `t_payment_issue_alert_log` 新增 `source_alert_no`
+2. 外部派发日志写入来源站内 outbox 编号
+3. 派发幂等、失败重试计数和最近失败查询改为按来源 outbox 编号判断
+4. 新增“同一异常下升级 outbox 仍可独立派发”的回归用例
+
+### 53.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `14` 个用例通过 |
+
+### 53.3 当前判断
+
+1. 当前 `payment-core` 的异常告警派发幂等边界已从异常单维度修正为来源 outbox 维度。
+2. 这一步确保原始告警和升级告警可以各自独立派发，同时仍保留同一来源 outbox 的通道级去重能力。
