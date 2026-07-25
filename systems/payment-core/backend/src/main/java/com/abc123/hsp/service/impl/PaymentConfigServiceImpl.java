@@ -421,9 +421,6 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setScheduleTag(requireText(request.getScheduleTag(), "班次标签不能为空"));
         int effectiveStartHour = resolveDutyRosterHour(request.getEffectiveStartHour(), 0, "班次生效开始小时不能为空");
         int effectiveEndHour = resolveDutyRosterHour(request.getEffectiveEndHour(), 23, "班次生效结束小时不能为空");
-        if (effectiveStartHour > effectiveEndHour) {
-            throw new IllegalArgumentException("班次生效开始小时不能大于结束小时");
-        }
         entity.setEffectiveStartHour(Integer.valueOf(effectiveStartHour));
         entity.setEffectiveEndHour(Integer.valueOf(effectiveEndHour));
         entity.setStatus(resolveStatus(request.getEnabled()));

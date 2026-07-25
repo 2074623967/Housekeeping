@@ -1618,3 +1618,34 @@
 1. 当前 `payment-core` 的异常告警执行链路已从“补发护栏”进一步推进到“补发护栏 + 通道级限流护栏”的轻量正式化版本。
 2. 本轮提升的是派发执行层面的限流保护，不代表真实通知供应商、跨实例分布式协调和更复杂的令牌桶/漏桶模型已经完成。
 3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 47. 2026-07-25 异常告警跨日班次路由验证
+
+### 47.1 本轮验证范围
+
+本轮围绕“值班路由已经有班次时段，但还不能表达 22:00-次日06:00 这类夜班跨日窗口”的问题进行了补强验证，目标是确认当前代码已支持跨日班次配置和路由命中。
+
+本轮覆盖内容：
+
+1. `PaymentConfigServiceImpl` 允许创建和更新跨日班次值班路由
+2. `PaymentTaskCenterMapper.xml` 在异常 SLA 巡检与 outbox 派发阶段支持跨日班次命中
+3. `PaymentConfigMapper.xml` 值班窗口展示升级为跨日可读文案
+4. `PaymentConfigServiceImplTest` 新增跨日班次配置覆盖
+
+### 47.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest test` | 通过 | 覆盖值班路由新增、编辑和跨日班次配置 |
+
+### 47.3 本轮补齐项
+
+1. 值班路由配置不再限制“开始小时必须小于等于结束小时”，正式支持跨日班次。
+2. 异常 SLA 巡检与 outbox 派发读取值班路由时，已支持夜班跨日窗口判断。
+3. 值班窗口文案在配置总览和异常升级内容中已可展示为 `22:00-次日06:00`。
+
+### 47.4 当前判断
+
+1. 当前 `payment-core` 的值班路由能力已从“单日时段配置”进一步推进到“支持跨日夜班”的轻量正式化版本。
+2. 本轮提升的是值班编排层面的准确性，不代表值班日历、节假日排班和真实通知供应商联动已经完成。
+3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。

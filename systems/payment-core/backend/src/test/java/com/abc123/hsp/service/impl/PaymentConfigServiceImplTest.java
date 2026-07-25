@@ -203,6 +203,22 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldAllowCrossDayIssueDutyRosterWindow() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        request.setEffectiveStartHour(22);
+        request.setEffectiveEndHour(6);
+        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(null);
+        mockOverviewDependencies();
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request);
+
+        ArgumentCaptor<PaymentIssueDutyRosterEntity> entityCaptor = ArgumentCaptor.forClass(PaymentIssueDutyRosterEntity.class);
+        verify(paymentConfigMapper).insertIssueDutyRoster(entityCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(22), entityCaptor.getValue().getEffectiveStartHour());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(6), entityCaptor.getValue().getEffectiveEndHour());
+    }
+
+    @Test
     void shouldRejectMissingRouteRule() {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("RULE_NONE");

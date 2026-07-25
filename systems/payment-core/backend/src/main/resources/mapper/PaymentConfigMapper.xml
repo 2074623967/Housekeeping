@@ -200,7 +200,11 @@
                schedule_tag AS scheduleTag,
                effective_start_hour AS effectiveStartHour,
                effective_end_hour AS effectiveEndHour,
-               CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-', LPAD(effective_end_hour, 2, '0'), ':00') AS effectiveWindow,
+               CASE
+                   WHEN effective_start_hour <= effective_end_hour
+                       THEN CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-', LPAD(effective_end_hour, 2, '0'), ':00')
+                   ELSE CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-次日', LPAD(effective_end_hour, 2, '0'), ':00')
+               END AS effectiveWindow,
                status,
                status_type AS statusType,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt

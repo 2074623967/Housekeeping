@@ -96,8 +96,15 @@
                COALESCE(roster.responsibility_group, '支付运营组') AS responsibilityGroup,
                COALESCE(roster.receiver, '支付运营') AS receiver,
                COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
-               CONCAT(LPAD(COALESCE(roster.effective_start_hour, 0), 2, '0'), ':00-',
-                      LPAD(COALESCE(roster.effective_end_hour, 23), 2, '0'), ':00') AS effectiveWindow,
+               CASE
+                   WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL
+                       THEN '00:00-23:00'
+                   WHEN roster.effective_start_hour <= roster.effective_end_hour
+                       THEN CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-',
+                                   LPAD(roster.effective_end_hour, 2, '0'), ':00')
+                   ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
+                               LPAD(roster.effective_end_hour, 2, '0'), ':00')
+               END AS effectiveWindow,
                CONCAT('支付异常 ', issue_sla.issue_no, ' 已超过 ', issue_sla.severity, ' SLA，请进入异常中心处理。') AS alertContent
         FROM (
             SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
@@ -137,7 +144,13 @@
             ON roster.issue_type = issue_sla.issue_type
            AND roster.severity = issue_sla.severity
            AND roster.status = 'ENABLED'
-           AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour
+           AND (
+               (roster.effective_start_hour <= roster.effective_end_hour
+                   AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
+               OR
+               (roster.effective_start_hour > roster.effective_end_hour
+                   AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+           )
         WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
             OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
           AND NOT EXISTS (
@@ -345,6 +358,13 @@
                ON roster.issue_type = outbox.issue_type
               AND roster.severity = outbox.severity
               AND roster.status = 'ENABLED'
+              AND (
+                  (roster.effective_start_hour <= roster.effective_end_hour
+                      AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
+                  OR
+                  (roster.effective_start_hour > roster.effective_end_hour
+                      AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+              )
         WHERE alert_channel = 'IN_APP_OUTBOX'
           AND alert_status IN ('已生成', '部分失败', '派发失败')
         ORDER BY outbox.created_at ASC, outbox.id ASC
