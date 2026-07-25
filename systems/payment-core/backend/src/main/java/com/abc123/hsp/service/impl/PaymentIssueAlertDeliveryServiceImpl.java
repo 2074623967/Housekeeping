@@ -41,6 +41,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern RETRY_COUNT_PATTERN = Pattern.compile("失败重试(\\d+)次");
     private static final Pattern RETRY_COOLDOWN_PATTERN = Pattern.compile("间隔(\\d+)分钟");
     private static final Pattern RATE_LIMIT_PATTERN = Pattern.compile("每(?:(\\d+)分钟|分钟)\\s*(\\d+)\\s*条");
+    private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
+    private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
@@ -213,6 +215,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private PaymentIssueAlertDeliveryResultDTO resolveDispatchGuardFailure(PaymentAlertProviderConfigDTO providerConfig,
                                                                            PaymentIssueAlertDispatchItemDTO item,
                                                                            String channelCode) {
+        PaymentIssueAlertDeliveryResultDTO circuitBreakerFailure = resolveProviderCircuitBreakerFailure(providerConfig, item, channelCode);
+        if (circuitBreakerFailure != null) {
+            return circuitBreakerFailure;
+        }
         RetryGuard retryGuard = parseRetryGuard(providerConfig.getRetryPolicy());
         if (!retryGuard.isEnabled()) {
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
@@ -233,6 +239,33 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             return buildFailureResult("RETRY_COOLDOWN_ACTIVE", "补发冷却时间未到，请等待后再重试", item);
         }
         return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+    }
+
+    /**
+     * 当某个供应商在短时间内连续失败过多时，先临时跳过它，交给后备供应商兜底。
+     */
+    private PaymentIssueAlertDeliveryResultDTO resolveProviderCircuitBreakerFailure(PaymentAlertProviderConfigDTO providerConfig,
+                                                                                    PaymentIssueAlertDispatchItemDTO item,
+                                                                                    String channelCode) {
+        if (!StringUtils.hasText(providerConfig.getProviderCode())) {
+            return null;
+        }
+        String sinceTime = LocalDateTime.now()
+                .minusMinutes(PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES)
+                .format(ALERT_LOG_TIME_FORMATTER);
+        int failedDeliveryCount = paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(
+                providerConfig.getProviderCode(),
+                channelCode,
+                sinceTime
+        );
+        if (failedDeliveryCount < PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD) {
+            return null;
+        }
+        return buildFailureResult(
+                "PROVIDER_CIRCUIT_OPEN",
+                String.format("供应商近 %d 分钟内失败 %d 次，已临时熔断并切换候选供应商", PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES, failedDeliveryCount),
+                item
+        );
     }
 
     /**

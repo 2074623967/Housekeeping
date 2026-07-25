@@ -317,6 +317,38 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldFallbackToBackupProviderWhenPrimaryProviderCircuitOpen() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("ISSUE-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_PRIMARY"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(3);
+        when(paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_BACKUP"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(0);
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-BACKUP", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-主".equals(log.getProviderName()) && "派发失败".equals(log.getAlertStatus())
+                        && "PROVIDER_CIRCUIT_OPEN".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-备".equals(log.getProviderName()) && "已派发".equals(log.getAlertStatus())));
+    }
+
+    @Test
     void shouldReconcileAcceptedDeliveryReceiptsSuccessfully() {
         PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
         acceptedLog.setAlertNo("PIA-IM-001");

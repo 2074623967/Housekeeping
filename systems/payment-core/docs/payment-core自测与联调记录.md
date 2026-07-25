@@ -1679,3 +1679,33 @@
 1. 当前 `payment-core` 的异常告警派发能力已从“单供应商命中”进一步推进到“多供应商自动失败切换”的轻量正式化版本。
 2. 本轮提升的是通知编排层面的弹性，不代表真实供应商 SDK/HTTP 接入、熔断降级和跨实例协同已经完成。
 3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 49. 2026-07-25 异常告警供应商熔断降级验证
+
+### 49.1 本轮验证范围
+
+本轮围绕“异常告警派发已经支持主备供应商切换，但主供应商在短时间连续失败时仍会被反复尝试”的问题进行了补强验证，目标是确认当前代码已支持轻量供应商熔断降级。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 新增供应商短时失败熔断判断
+2. 主供应商熔断时自动切到后备供应商
+3. `PaymentIssueAlertDeliveryServiceImplTest` 新增供应商熔断切换覆盖
+
+### 49.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖派发、护栏、主备切换和熔断降级 |
+
+### 49.3 本轮补齐项
+
+1. 当某个供应商在最近 `10` 分钟内失败达到 `3` 次时，会被临时熔断。
+2. 熔断命中后不会继续尝试该供应商，而是直接切到后备供应商。
+3. 熔断命中会落标准化失败日志，供异常明细台复盘。
+
+### 49.4 当前判断
+
+1. 当前 `payment-core` 的异常告警编排能力已从“多供应商失败切换”进一步推进到“带轻量熔断降级”的主备治理版本。
+2. 本轮提升的是通知编排层面的韧性，不代表真实供应商 SDK/HTTP 接入和跨实例熔断共享已经完成。
+3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。
