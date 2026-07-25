@@ -1814,3 +1814,28 @@
 
 1. 当前 `payment-core` 的异常告警派发幂等边界已从异常单维度修正为来源 outbox 维度。
 2. 这一步确保原始告警和升级告警可以各自独立派发，同时仍保留同一来源 outbox 的通道级去重能力。
+
+## 54. 2026-07-25 异常告警 IM Webhook 外部通知验证
+
+### 54.1 本轮验证范围
+
+本轮围绕“IM 告警仍是本地通知器骨架，缺少可接外部机器人/Webhook 的正式化入口”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `LocalImPaymentIssueAlertNotifier` 支持配置外部 Webhook
+2. 未配置 Webhook 时保留本地回执兜底
+3. 配置 Webhook 后通过 HTTP POST 投递告警 payload
+4. `application.yml` 新增 `payment.issue-alert.im.webhook-url`
+5. 新增 `LocalImPaymentIssueAlertNotifierTest`
+
+### 54.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalImPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `16` 个用例通过 |
+
+### 54.3 当前判断
+
+1. 当前 `payment-core` 的 IM 告警已经具备轻量外部 Webhook 接入能力。
+2. SMS/EMAIL、Webhook 签名、超时配置和响应体业务码解析仍待补齐，因此仍不触发 `master / release`。
