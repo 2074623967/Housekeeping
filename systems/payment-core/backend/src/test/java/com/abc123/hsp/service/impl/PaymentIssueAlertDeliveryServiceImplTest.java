@@ -76,6 +76,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "TPL_PAYMENT_ISSUE_IM_P1_V1".equals(log.getTemplateCode())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "ACCEPTED".equals(log.getProviderDeliveryStatus())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "IM-RECEIPT-001".equals(log.getProviderReceiptNo())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log -> org.springframework.util.StringUtils.hasText(log.getProviderReceiptSnapshot())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getProviderReceiptSnapshot().contains("ACCEPTED")));
     }
 
     @Test
@@ -590,6 +592,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                                                                    String deliveryMessage,
                                                                    String renderedContent) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot("LOCAL:TEST:" + deliveryStatus);
         result.setProviderReceiptNo(receiptNo);
         result.setProviderDeliveryStatus(deliveryStatus);
         result.setProviderDeliveryMessage(deliveryMessage);

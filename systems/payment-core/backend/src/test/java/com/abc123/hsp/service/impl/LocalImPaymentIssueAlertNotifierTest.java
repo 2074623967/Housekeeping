@@ -37,6 +37,7 @@ class LocalImPaymentIssueAlertNotifierTest {
 
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("本地IM通知器已受理"));
+        Assertions.assertEquals("LOCAL:IM:ACCEPTED", result.getProviderReceiptSnapshot());
     }
 
     @Test
@@ -77,6 +78,7 @@ class LocalImPaymentIssueAlertNotifierTest {
         );
         Assertions.assertEquals("DELIVERED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("IM-EXT-001", result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_RESPONSE:{\"code\":\"0\""));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("providerStatus=SENT"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=4500ms"));

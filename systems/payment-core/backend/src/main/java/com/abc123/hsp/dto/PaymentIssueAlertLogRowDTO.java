@@ -44,6 +44,8 @@ public class PaymentIssueAlertLogRowDTO {
     private String endpointAlias;
     /** 模板编码。 */
     private String templateCode;
+    /** 供应商原始回执快照。 */
+    private String providerReceiptSnapshot;
     /** 供应商回执号。 */
     private String providerReceiptNo;
     /** 供应商投递状态。 */

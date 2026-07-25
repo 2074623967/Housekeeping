@@ -407,6 +407,7 @@
                provider_name AS providerName,
                endpoint_alias AS endpointAlias,
                template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
                provider_receipt_no AS providerReceiptNo,
                provider_delivery_status AS providerDeliveryStatus,
                provider_delivery_message AS providerDeliveryMessage,

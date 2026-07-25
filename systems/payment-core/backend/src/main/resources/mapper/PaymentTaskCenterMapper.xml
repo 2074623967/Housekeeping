@@ -372,6 +372,7 @@
             provider_name,
             endpoint_alias,
             template_code,
+            provider_receipt_snapshot,
             provider_receipt_no,
             provider_delivery_status,
             provider_delivery_message,
@@ -397,6 +398,7 @@
             #{providerName},
             #{endpointAlias},
             #{templateCode},
+            #{providerReceiptSnapshot},
             #{providerReceiptNo},
             #{providerDeliveryStatus},
             #{providerDeliveryMessage},
@@ -477,6 +479,7 @@
                provider_name AS providerName,
                endpoint_alias AS endpointAlias,
                template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
                provider_receipt_no AS providerReceiptNo,
                provider_delivery_status AS providerDeliveryStatus,
                provider_delivery_message AS providerDeliveryMessage,
@@ -556,6 +559,7 @@
                provider_name AS providerName,
                endpoint_alias AS endpointAlias,
                template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
                provider_receipt_no AS providerReceiptNo,
                provider_delivery_status AS providerDeliveryStatus,
                provider_delivery_message AS providerDeliveryMessage,
@@ -570,7 +574,8 @@
 
     <update id="updateIssueAlertProviderReceipt" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
         UPDATE t_payment_issue_alert_log
-        SET provider_delivery_status = #{providerDeliveryStatus},
+        SET provider_receipt_snapshot = #{providerReceiptSnapshot},
+            provider_delivery_status = #{providerDeliveryStatus},
             provider_delivery_message = #{providerDeliveryMessage},
             ack_status = #{ackStatus},
             ack_status_type = #{ackStatusType},

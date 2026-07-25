@@ -470,6 +470,7 @@ CREATE TABLE t_payment_issue_alert_log (
     provider_name VARCHAR(128) DEFAULT NULL COMMENT '命中的供应商名称',
     endpoint_alias VARCHAR(128) DEFAULT NULL COMMENT '命中的供应商接入端点',
     template_code VARCHAR(128) DEFAULT NULL COMMENT '命中的消息模板编码',
+    provider_receipt_snapshot VARCHAR(2048) DEFAULT NULL COMMENT '供应商原始回执快照',
     provider_receipt_no VARCHAR(128) DEFAULT NULL COMMENT '供应商侧回执号',
     provider_delivery_status VARCHAR(64) DEFAULT NULL COMMENT '供应商侧投递状态',
     provider_delivery_message VARCHAR(255) DEFAULT NULL COMMENT '供应商侧投递说明',

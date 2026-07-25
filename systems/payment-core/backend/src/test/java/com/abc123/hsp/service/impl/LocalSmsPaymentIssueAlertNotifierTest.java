@@ -26,6 +26,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
 
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("本地SMS通知器已受理"));
+        Assertions.assertEquals("LOCAL:SMS:ACCEPTED", result.getProviderReceiptSnapshot());
     }
 
     @Test
@@ -66,6 +67,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         );
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("SMS-EXT-001", result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_RESPONSE:{\"code\":\"SUCCESS\""));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=5200ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));

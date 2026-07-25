@@ -27,6 +27,7 @@ import org.springframework.web.client.RestTemplate;
 abstract class AbstractLocalPaymentIssueAlertNotifier {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
 
     /**
      * 为外部 HTTP/Webhook 通知器配置统一的连接与读取超时，避免网关长时间阻塞任务线程。
@@ -145,6 +146,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                                          String providerStatus,
                                                                          String channelLabel) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot(buildSnapshot("LOCAL", channelLabel + ":" + providerStatus));
         result.setProviderReceiptNo(buildReceiptNo(channelLabel, item.getIssueNo()));
         result.setProviderDeliveryStatus(providerStatus);
         result.setProviderDeliveryMessage(buildDeliveryMessage(item, channelLabel));
@@ -179,6 +181,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 failedStatusValues);
         String failureCode = resolveWebhookPointerText(channelLabel, responseBody, failureCodeJsonPointer);
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot(buildSnapshot("HTTP_RESPONSE", responseBody));
         result.setProviderReceiptNo(resolveWebhookReceiptNo(item, receiptPrefix, responseBody, receiptNoJsonPointer));
         result.setProviderDeliveryStatus(normalizedDeliveryStatus);
         result.setProviderDeliveryMessage(buildWebhookDeliveryMessage(
@@ -212,6 +215,17 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
             builder.append("，failureCode=").append(failureCode);
         }
         return builder.toString();
+    }
+
+    private String buildSnapshot(String source, String content) {
+        if (!StringUtils.hasText(content)) {
+            return "";
+        }
+        String normalizedContent = content.trim();
+        if (normalizedContent.length() > PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH) {
+            normalizedContent = normalizedContent.substring(0, PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH);
+        }
+        return source + ":" + normalizedContent;
     }
 
     private void validateWebhookBusinessResponse(String channelLabel,

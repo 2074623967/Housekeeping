@@ -26,6 +26,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
 
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("本地EMAIL通知器已受理"));
+        Assertions.assertEquals("LOCAL:EMAIL:ACCEPTED", result.getProviderReceiptSnapshot());
     }
 
     @Test
@@ -66,6 +67,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         );
         Assertions.assertEquals("DELIVERED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("EMAIL-EXT-001", result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_RESPONSE:{\"status\":\"DELIVERED\""));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=6100ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));

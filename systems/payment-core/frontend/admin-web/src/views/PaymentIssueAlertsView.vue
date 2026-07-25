@@ -200,6 +200,7 @@ onMounted(loadAlertLogs);
                 <div>{{ item.providerDeliveryStatus || "-" }}</div>
                 <div class="muted-text">{{ item.providerReceiptNo || "-" }}</div>
                 <div class="muted-text">{{ item.providerDeliveryMessage || "-" }}</div>
+                <div class="muted-text">{{ item.providerReceiptSnapshot || "-" }}</div>
               </td>
               <td class="flow-summary-cell">{{ item.alertContent }}</td>
               <td class="flow-summary-cell">{{ item.renderedContentSnapshot || "-" }}</td>

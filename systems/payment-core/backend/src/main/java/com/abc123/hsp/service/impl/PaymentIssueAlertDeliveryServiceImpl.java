@@ -400,6 +400,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setAlertStatusType(alertStatusType);
         entity.setAckStatus("无需回执");
         entity.setAckStatusType("info");
+        entity.setProviderReceiptSnapshot(deliveryResult.getProviderReceiptSnapshot());
         entity.setProviderReceiptNo(deliveryResult.getProviderReceiptNo());
         entity.setProviderDeliveryStatus(deliveryResult.getProviderDeliveryStatus());
         entity.setProviderDeliveryMessage(deliveryResult.getProviderDeliveryMessage());
@@ -437,6 +438,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryMessage())) {
             normalizedResult.setProviderDeliveryMessage(defaultMessage);
         }
+        if (!StringUtils.hasText(normalizedResult.getProviderReceiptSnapshot())) {
+            normalizedResult.setProviderReceiptSnapshot("LOCAL_RESULT:" + defaultStatus);
+        }
         if (!StringUtils.hasText(normalizedResult.getRenderedContentSnapshot())) {
             normalizedResult.setRenderedContentSnapshot(buildAlertContent(item));
         }
@@ -447,6 +451,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                                   String message,
                                                                   PaymentIssueAlertDispatchItemDTO item) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot("LOCAL_FAILURE:" + status + ":" + (StringUtils.hasText(message) ? message : "未知异常"));
         result.setProviderDeliveryStatus(status);
         result.setProviderDeliveryMessage(StringUtils.hasText(message) ? message : "未知异常");
         result.setRenderedContentSnapshot(buildAlertContent(item));

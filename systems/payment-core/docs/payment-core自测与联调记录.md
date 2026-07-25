@@ -2163,3 +2163,30 @@
 1. 当前 `payment-core` 的异常告警供应商路由能力已从“单条件命中”升级为“支持班次、升级等级、接收人等多条件组合匹配”。
 2. 这一步提升了多供应商在不同值班场景下的精细化分流能力，更接近真实公司内部的告警路由策略。
 3. 当前异常告警链路在“真实供应商接入”方向上的高优先级缺口已继续缩小，但整体系统仍未达到 `master / release` 冻结门槛。
+
+## 68. 2026-07-25 异常告警供应商原始回执快照验证
+
+### 68.1 本轮验证范围
+
+本轮围绕“异常告警投递日志里只有归一化状态和简短说明，但缺少供应商原始回执快照，后续排查 webhook / 网关回执差异时证据不够完整”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. 告警投递结果 DTO、投递日志实体、异常明细行 DTO 新增 `providerReceiptSnapshot` 字段
+2. 本地通知器统一补充原始回执快照生成逻辑，本地模拟回执记录 `LOCAL:<channel>:<status>`，HTTP/Webhook 回执记录 `HTTP_RESPONSE:<rawBody>`
+3. 告警派发服务在落库时单独写入 `provider_receipt_snapshot`，失败兜底场景也会补默认快照
+4. 异常中心告警列表增加“供应商原始回执快照”展示，便于值班同学直接查看供应商原始返回
+5. 通知器与派发服务测试补充快照断言，验证“产出快照 -> 落库 -> 页面可读”链路闭环
+
+### 68.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `28` 个用例通过 |
+| 管理端构建验证 | `npm run build` | 通过 | `systems/payment-core/frontend/admin-web` 构建成功 |
+
+### 68.3 当前判断
+
+1. 当前 `payment-core` 的异常告警投递链路已经具备“归一化状态 + 原始供应商回执快照”双维度留痕能力，排查 webhook/供应商回执问题时证据更完整。
+2. 这一步把异常中心从“只能看摘要状态”提升到“可以直接看到原始回执片段”，更接近公司内部告警台账的可追溯要求。
+3. 当前补强仍聚焦在异常告警链路，`payment-core` 全系统仍未达到 `master / release` 冻结门槛，后续还需要继续补齐更广范围的业务闭环与联调验证。

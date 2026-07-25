@@ -44,6 +44,8 @@ public class PaymentIssueAlertLogEntity {
     private String endpointAlias;
     /** 命中的消息模板编码。 */
     private String templateCode;
+    /** 供应商原始回执快照。 */
+    private String providerReceiptSnapshot;
     /** 供应商侧回执号。 */
     private String providerReceiptNo;
     /** 供应商侧投递状态。 */
