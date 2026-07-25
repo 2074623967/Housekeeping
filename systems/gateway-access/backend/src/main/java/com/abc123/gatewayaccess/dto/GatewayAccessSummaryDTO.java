@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class GatewayAccessSummaryDTO {
 
+    /** 总览指标列表。 */
     private List<DashboardMetricDTO> metrics;
+    /** 总览说明列表。 */
     private List<String> highlights;
 }

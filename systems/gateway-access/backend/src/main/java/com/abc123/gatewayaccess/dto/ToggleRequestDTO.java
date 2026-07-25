@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class ToggleRequestDTO {
 
+    /** 配置编码。 */
     private String configCode;
+    /** 是否启用。 */
     private Boolean enabled;
 }
