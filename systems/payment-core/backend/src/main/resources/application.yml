@@ -39,3 +39,6 @@ payment:
     sms:
       # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
+    email:
+      # 配置后邮件告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
+      webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_WEBHOOK_URL:}

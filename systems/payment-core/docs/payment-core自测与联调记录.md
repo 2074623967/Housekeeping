@@ -1864,3 +1864,28 @@
 
 1. 当前 `payment-core` 的 SMS 告警已经具备轻量外部 HTTP 网关接入能力。
 2. EMAIL、短信签名、超时配置、响应体业务码解析和供应商级失败码标准化仍待补齐，因此仍不触发 `master / release`。
+
+## 56. 2026-07-25 异常告警 EMAIL HTTP 网关通知验证
+
+### 56.1 本轮验证范围
+
+本轮围绕“EMAIL 告警仍是本地通知器骨架，缺少可接外部邮件 HTTP 网关的正式化入口”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `LocalEmailPaymentIssueAlertNotifier` 支持配置外部邮件 HTTP 网关
+2. 未配置 HTTP 网关时保留本地回执兜底
+3. 配置 HTTP 网关后通过 HTTP POST 投递告警 payload
+4. `application.yml` 新增 `payment.issue-alert.email.webhook-url`
+5. 新增 `LocalEmailPaymentIssueAlertNotifierTest`
+
+### 56.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalEmailPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalImPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `20` 个用例通过 |
+
+### 56.3 当前判断
+
+1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备轻量外部 HTTP/Webhook 接入能力。
+2. 签名、超时、响应体业务码解析和供应商级失败码标准化仍待补齐，因此仍不触发 `master / release`。
