@@ -50,7 +50,12 @@ class LocalSmsPaymentIssueAlertNotifierTest {
                 "sms-secret",
                 "HMAC_SHA256",
                 "X-Sms-Timestamp",
-                "X-Sms-Nonce"
+                "X-Sms-Nonce",
+                "/data/deliveryStatus",
+                "SENT,DELIVERED",
+                "QUEUED,ACCEPTED",
+                "FAILED,REJECTED",
+                "/data/errorCode"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);

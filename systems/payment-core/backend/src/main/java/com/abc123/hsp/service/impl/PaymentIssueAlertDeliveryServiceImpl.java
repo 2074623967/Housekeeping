@@ -43,6 +43,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern RATE_LIMIT_PATTERN = Pattern.compile("每(?:(\\d+)分钟|分钟)\\s*(\\d+)\\s*条");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
+    private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
@@ -185,13 +186,30 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             }
             try {
                 PaymentIssueAlertDeliveryResultDTO deliveryResult = notifier.send(deliveryItem);
+                PaymentIssueAlertDeliveryResultDTO normalizedResult = normalizeDeliveryResult(
+                        deliveryItem,
+                        deliveryResult,
+                        "ACCEPTED",
+                        "供应商已受理告警"
+                );
+                if (!isSuccessfulProviderDeliveryStatus(normalizedResult.getProviderDeliveryStatus())) {
+                    paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
+                            deliveryItem,
+                            triggeredBy,
+                            channelCode,
+                            "派发失败",
+                            "danger",
+                            normalizedResult
+                    ));
+                    continue;
+                }
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
                         deliveryItem,
                         triggeredBy,
                         channelCode,
                         "已派发",
                         "success",
-                        normalizeDeliveryResult(deliveryItem, deliveryResult, "ACCEPTED", "供应商已受理告警")
+                        normalizedResult
                 ));
                 return true;
             } catch (RuntimeException ex) {
@@ -384,6 +402,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         result.setProviderDeliveryMessage(StringUtils.hasText(message) ? message : "未知异常");
         result.setRenderedContentSnapshot(buildAlertContent(item));
         return result;
+    }
+
+    private boolean isSuccessfulProviderDeliveryStatus(String providerDeliveryStatus) {
+        if (!StringUtils.hasText(providerDeliveryStatus)) {
+            return false;
+        }
+        return SUCCESSFUL_PROVIDER_DELIVERY_STATUSES.stream()
+                .anyMatch(status -> status.equalsIgnoreCase(providerDeliveryStatus.trim()));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDeliveryItem(PaymentIssueAlertDispatchItemDTO item,

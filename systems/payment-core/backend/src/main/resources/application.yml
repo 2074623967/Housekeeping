@@ -47,6 +47,11 @@ payment:
       signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_ALGORITHM:HMAC_SHA256}
       timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_TIMESTAMP_HEADER_NAME:}
       nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_NONCE_HEADER_NAME:}
+      delivery-status-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_DELIVERY_STATUS_JSON_POINTER:}
+      delivered-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_DELIVERED_STATUS_VALUES:}
+      accepted-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_ACCEPTED_STATUS_VALUES:}
+      failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_FAILED_STATUS_VALUES:}
+      failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_FAILURE_CODE_JSON_POINTER:}
     sms:
       # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
@@ -61,6 +66,11 @@ payment:
       signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_ALGORITHM:HMAC_SHA256}
       timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_TIMESTAMP_HEADER_NAME:}
       nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_NONCE_HEADER_NAME:}
+      delivery-status-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_DELIVERY_STATUS_JSON_POINTER:}
+      delivered-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_DELIVERED_STATUS_VALUES:}
+      accepted-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_ACCEPTED_STATUS_VALUES:}
+      failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_FAILED_STATUS_VALUES:}
+      failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_FAILURE_CODE_JSON_POINTER:}
     email:
       # 配置后邮件告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_WEBHOOK_URL:}
@@ -75,3 +85,8 @@ payment:
       signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_ALGORITHM:HMAC_SHA256}
       timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_TIMESTAMP_HEADER_NAME:}
       nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_NONCE_HEADER_NAME:}
+      delivery-status-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_DELIVERY_STATUS_JSON_POINTER:}
+      delivered-status-values: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_DELIVERED_STATUS_VALUES:}
+      accepted-status-values: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_ACCEPTED_STATUS_VALUES:}
+      failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_FAILED_STATUS_VALUES:}
+      failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_FAILURE_CODE_JSON_POINTER:}

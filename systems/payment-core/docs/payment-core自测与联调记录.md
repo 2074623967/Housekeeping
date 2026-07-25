@@ -2011,3 +2011,29 @@
 
 1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备时间戳头与 nonce 头配置能力。
 2. 服务端时间窗校验联动、统一防重放编排、供应商签名算法切换、统一回执状态映射、重试退避和供应商失败码标准化仍待补齐，因此仍不触发 `master / release`。
+
+## 62. 2026-07-25 异常告警外部网关统一回执状态映射验证
+
+### 62.1 本轮验证范围
+
+本轮围绕“外部 HTTP/Webhook 通知器虽然可以请求成功，但供应商返回的原始投递状态无法统一映射，导致任务中心无法准确判断是否需要切换候选供应商”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `application.yml` 新增 IM/SMS/EMAIL 三类通道的供应商投递状态提取指针配置
+2. `application.yml` 新增 IM/SMS/EMAIL 三类通道的 `DELIVERED / ACCEPTED / FAILED` 原始状态枚举映射配置
+3. `application.yml` 新增供应商失败码提取指针配置，统一拼接到投递说明中
+4. 通知器统一把供应商原始状态归一化到 `DELIVERED / ACCEPTED / FAILED`
+5. 当主供应商返回 `FAILED` 时，派发服务会将本次记录记为失败并继续切换下一候选供应商
+
+### 62.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `23` 个用例通过 |
+
+### 62.3 当前判断
+
+1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备供应商原始回执状态提取、统一状态映射和失败码标准化拼接能力。
+2. 当主供应商明确返回失败态时，异常告警派发服务已能将该次投递判为失败并继续尝试后备供应商。
+3. 服务端时间窗校验联动、统一防重放编排、供应商签名算法切换和更细粒度重试退避策略仍待补齐，因此当前仍不触发 `master / release`。

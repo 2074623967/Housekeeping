@@ -118,16 +118,53 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                                            int timeoutMs,
                                                                            String successJsonPointer,
                                                                            String successExpectedValue,
-                                                                           String receiptNoJsonPointer) {
+                                                                           String receiptNoJsonPointer,
+                                                                           String deliveryStatusJsonPointer,
+                                                                           String deliveredStatusValues,
+                                                                           String acceptedStatusValues,
+                                                                           String failedStatusValues,
+                                                                           String failureCodeJsonPointer) {
         validateWebhookBusinessResponse(channelLabel, responseBody, successJsonPointer, successExpectedValue);
+        String rawDeliveryStatus = resolveWebhookPointerText(channelLabel, responseBody, deliveryStatusJsonPointer);
+        String normalizedDeliveryStatus = resolveNormalizedDeliveryStatus(rawDeliveryStatus,
+                deliveredStatusValues,
+                acceptedStatusValues,
+                failedStatusValues);
+        String failureCode = resolveWebhookPointerText(channelLabel, responseBody, failureCodeJsonPointer);
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
         result.setProviderReceiptNo(resolveWebhookReceiptNo(item, receiptPrefix, responseBody, receiptNoJsonPointer));
-        result.setProviderDeliveryStatus("ACCEPTED");
-        result.setProviderDeliveryMessage(channelLabel + " HTTP 网关已受理，HTTP=" + statusCode + "，timeout=" + timeoutMs + "ms");
+        result.setProviderDeliveryStatus(normalizedDeliveryStatus);
+        result.setProviderDeliveryMessage(buildWebhookDeliveryMessage(
+                channelLabel,
+                statusCode,
+                timeoutMs,
+                rawDeliveryStatus,
+                failureCode,
+                normalizedDeliveryStatus
+        ));
         result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
                 ? item.getRenderedAlertContent()
                 : item.getAlertContent());
         return result;
+    }
+
+    private String buildWebhookDeliveryMessage(String channelLabel,
+                                              int statusCode,
+                                              int timeoutMs,
+                                              String rawDeliveryStatus,
+                                              String failureCode,
+                                              String normalizedDeliveryStatus) {
+        StringBuilder builder = new StringBuilder(channelLabel)
+                .append(" HTTP 网关已响应，HTTP=").append(statusCode)
+                .append("，timeout=").append(timeoutMs).append("ms")
+                .append("，normalizedStatus=").append(normalizedDeliveryStatus);
+        if (StringUtils.hasText(rawDeliveryStatus)) {
+            builder.append("，providerStatus=").append(rawDeliveryStatus);
+        }
+        if (StringUtils.hasText(failureCode)) {
+            builder.append("，failureCode=").append(failureCode);
+        }
+        return builder.toString();
     }
 
     private void validateWebhookBusinessResponse(String channelLabel,
@@ -159,6 +196,63 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
             return buildWebhookReceiptNo(receiptPrefix, item.getAlertNo());
         }
         return receiptNode.asText().trim();
+    }
+
+    private String resolveWebhookPointerText(String channelLabel,
+                                            String responseBody,
+                                            String jsonPointer) {
+        if (!StringUtils.hasText(jsonPointer)) {
+            return "";
+        }
+        JsonNode node = readJsonNode(channelLabel, responseBody);
+        JsonNode valueNode = node.at(jsonPointer);
+        if (valueNode.isMissingNode() || valueNode.isNull()) {
+            return "";
+        }
+        return valueNode.asText().trim();
+    }
+
+    private String resolveNormalizedDeliveryStatus(String rawDeliveryStatus,
+                                                   String deliveredStatusValues,
+                                                   String acceptedStatusValues,
+                                                   String failedStatusValues) {
+        if (!StringUtils.hasText(rawDeliveryStatus)) {
+            return "ACCEPTED";
+        }
+        if (matchesConfiguredStatus(rawDeliveryStatus, deliveredStatusValues)
+                || "DELIVERED".equalsIgnoreCase(rawDeliveryStatus)
+                || "SENT".equalsIgnoreCase(rawDeliveryStatus)
+                || "SUCCESS".equalsIgnoreCase(rawDeliveryStatus)) {
+            return "DELIVERED";
+        }
+        if (matchesConfiguredStatus(rawDeliveryStatus, failedStatusValues)
+                || "FAILED".equalsIgnoreCase(rawDeliveryStatus)
+                || "FAIL".equalsIgnoreCase(rawDeliveryStatus)
+                || "REJECTED".equalsIgnoreCase(rawDeliveryStatus)
+                || "ERROR".equalsIgnoreCase(rawDeliveryStatus)) {
+            return "FAILED";
+        }
+        if (matchesConfiguredStatus(rawDeliveryStatus, acceptedStatusValues)
+                || "ACCEPTED".equalsIgnoreCase(rawDeliveryStatus)
+                || "QUEUED".equalsIgnoreCase(rawDeliveryStatus)
+                || "PENDING".equalsIgnoreCase(rawDeliveryStatus)
+                || "PROCESSING".equalsIgnoreCase(rawDeliveryStatus)) {
+            return "ACCEPTED";
+        }
+        return "ACCEPTED";
+    }
+
+    private boolean matchesConfiguredStatus(String rawDeliveryStatus, String configuredValues) {
+        if (!StringUtils.hasText(rawDeliveryStatus) || !StringUtils.hasText(configuredValues)) {
+            return false;
+        }
+        String[] candidates = configuredValues.split("[,|]");
+        for (String candidate : candidates) {
+            if (rawDeliveryStatus.equalsIgnoreCase(candidate.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private JsonNode readJsonNode(String channelLabel, String responseBody) {

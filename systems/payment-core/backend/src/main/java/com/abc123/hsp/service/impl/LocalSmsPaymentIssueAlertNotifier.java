@@ -32,6 +32,11 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
     private final String signatureAlgorithm;
     private final String timestampHeaderName;
     private final String nonceHeaderName;
+    private final String deliveryStatusJsonPointer;
+    private final String deliveredStatusValues;
+    private final String acceptedStatusValues;
+    private final String failedStatusValues;
+    private final String failureCodeJsonPointer;
 
     public LocalSmsPaymentIssueAlertNotifier(@Value("${payment.issue-alert.sms.webhook-url:}") String webhookUrl,
                                              @Value("${payment.issue-alert.sms.timeout-ms:3000}") int timeoutMs,
@@ -44,15 +49,27 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                              @Value("${payment.issue-alert.sms.signature-secret:}") String signatureSecret,
                                              @Value("${payment.issue-alert.sms.signature-algorithm:HMAC_SHA256}") String signatureAlgorithm,
                                              @Value("${payment.issue-alert.sms.timestamp-header-name:}") String timestampHeaderName,
-                                             @Value("${payment.issue-alert.sms.nonce-header-name:}") String nonceHeaderName) {
+                                             @Value("${payment.issue-alert.sms.nonce-header-name:}") String nonceHeaderName,
+                                             @Value("${payment.issue-alert.sms.delivery-status-json-pointer:}") String deliveryStatusJsonPointer,
+                                             @Value("${payment.issue-alert.sms.delivered-status-values:}") String deliveredStatusValues,
+                                             @Value("${payment.issue-alert.sms.accepted-status-values:}") String acceptedStatusValues,
+                                             @Value("${payment.issue-alert.sms.failed-status-values:}") String failedStatusValues,
+                                             @Value("${payment.issue-alert.sms.failure-code-json-pointer:}") String failureCodeJsonPointer) {
         this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer,
-                authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, signatureAlgorithm, timestampHeaderName, nonceHeaderName, null);
+                authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, signatureAlgorithm,
+                timestampHeaderName, nonceHeaderName, deliveryStatusJsonPointer, deliveredStatusValues,
+                acceptedStatusValues, failedStatusValues, failureCodeJsonPointer, null);
     }
 
     LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
         this(
                 webhookUrl,
                 3000,
+                "",
+                "",
+                "",
+                "",
+                "",
                 "",
                 "",
                 "",
@@ -79,6 +96,11 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                       String signatureAlgorithm,
                                       String timestampHeaderName,
                                       String nonceHeaderName,
+                                      String deliveryStatusJsonPointer,
+                                      String deliveredStatusValues,
+                                      String acceptedStatusValues,
+                                      String failedStatusValues,
+                                      String failureCodeJsonPointer,
                                       RestTemplate restTemplate) {
         this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate,
                 webhookUrl,
@@ -92,7 +114,12 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                 signatureSecret,
                 signatureAlgorithm,
                 timestampHeaderName,
-                nonceHeaderName
+                nonceHeaderName,
+                deliveryStatusJsonPointer,
+                deliveredStatusValues,
+                acceptedStatusValues,
+                failedStatusValues,
+                failureCodeJsonPointer
         );
     }
 
@@ -108,7 +135,12 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                       String signatureSecret,
                                       String signatureAlgorithm,
                                       String timestampHeaderName,
-                                      String nonceHeaderName) {
+                                      String nonceHeaderName,
+                                      String deliveryStatusJsonPointer,
+                                      String deliveredStatusValues,
+                                      String acceptedStatusValues,
+                                      String failedStatusValues,
+                                      String failureCodeJsonPointer) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
         this.timeoutMs = timeoutMs;
@@ -122,6 +154,11 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
         this.signatureAlgorithm = signatureAlgorithm;
         this.timestampHeaderName = timestampHeaderName;
         this.nonceHeaderName = nonceHeaderName;
+        this.deliveryStatusJsonPointer = deliveryStatusJsonPointer;
+        this.deliveredStatusValues = deliveredStatusValues;
+        this.acceptedStatusValues = acceptedStatusValues;
+        this.failedStatusValues = failedStatusValues;
+        this.failureCodeJsonPointer = failureCodeJsonPointer;
     }
 
     @Override
@@ -153,7 +190,12 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                     timeoutMs,
                     successJsonPointer,
                     successExpectedValue,
-                    receiptNoJsonPointer
+                    receiptNoJsonPointer,
+                    deliveryStatusJsonPointer,
+                    deliveredStatusValues,
+                    acceptedStatusValues,
+                    failedStatusValues,
+                    failureCodeJsonPointer
             );
         } catch (RestClientException exception) {
             throw new IllegalStateException("SMS HTTP 网关通知失败：" + exception.getMessage(), exception);

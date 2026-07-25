@@ -50,7 +50,12 @@ class LocalEmailPaymentIssueAlertNotifierTest {
                 "email-secret",
                 "HMAC_SHA256",
                 "X-Email-Timestamp",
-                "X-Email-Nonce"
+                "X-Email-Nonce",
+                "/status",
+                "DELIVERED,SENT",
+                "ACCEPTED,QUEUED",
+                "FAILED,REJECTED",
+                "/result/errorCode"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -59,7 +64,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
                 payloadCaptor.capture(),
                 Mockito.eq(String.class)
         );
-        Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
+        Assertions.assertEquals("DELIVERED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("EMAIL-EXT-001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=6100ms"));

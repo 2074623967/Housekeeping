@@ -42,7 +42,7 @@ class LocalImPaymentIssueAlertNotifierTest {
                 Mockito.eq("https://hooks.example.com/payment-alert"),
                 Mockito.any(),
                 Mockito.eq(String.class)
-        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-001\"}}", HttpStatus.OK));
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-001\",\"deliveryStatus\":\"SENT\",\"errorCode\":\"0\"}}", HttpStatus.OK));
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
                 restTemplate,
@@ -57,7 +57,12 @@ class LocalImPaymentIssueAlertNotifierTest {
                 "im-secret",
                 "HMAC_SHA1",
                 "X-Timestamp",
-                "X-Nonce"
+                "X-Nonce",
+                "/data/deliveryStatus",
+                "SENT,DELIVERED",
+                "QUEUED,ACCEPTED",
+                "FAILED,REJECTED",
+                "/data/errorCode"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -66,9 +71,10 @@ class LocalImPaymentIssueAlertNotifierTest {
                 payloadCaptor.capture(),
                 Mockito.eq(String.class)
         );
-        Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
+        Assertions.assertEquals("DELIVERED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("IM-EXT-001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("providerStatus=SENT"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=4500ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
         Assertions.assertEquals("Bearer im-token", payloadCaptor.getValue().getHeaders().getFirst("Authorization"));
@@ -105,11 +111,51 @@ class LocalImPaymentIssueAlertNotifierTest {
                         "",
                         "",
                         "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
                         ""
                 ).send(buildDispatchItem())
         );
 
         Assertions.assertTrue(exception.getMessage().contains("业务响应未通过"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenWebhookProviderRejectsRequest() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-002\",\"deliveryStatus\":\"REJECTED\",\"errorCode\":\"IM_429\"}}", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "/code",
+                "0",
+                "/data/receiptNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/data/deliveryStatus",
+                "SENT,DELIVERED",
+                "QUEUED,ACCEPTED",
+                "FAILED,REJECTED",
+                "/data/errorCode"
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("providerStatus=REJECTED"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("failureCode=IM_429"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {
