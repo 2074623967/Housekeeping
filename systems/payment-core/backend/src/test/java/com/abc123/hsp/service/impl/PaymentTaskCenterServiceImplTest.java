@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
+import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
@@ -165,10 +166,14 @@ class PaymentTaskCenterServiceImplTest {
         candidate.setSeverity("P1");
         candidate.setResponsibilityGroup("支付后端值班组");
         candidate.setReceiver("支付后端值班");
+        candidate.setEscalationReceiver("支付技术负责人");
+        candidate.setEscalationPolicy("30分钟未确认升级支付技术负责人");
+        candidate.setEscalationTimeoutMinutes(30);
         candidate.setScheduleTag("交易链路白班");
         candidate.setEffectiveWindow("00:00-23:00");
         candidate.setAlertContent("支付异常 ISSUE-WAIT-PAY-001 已超过 P1 SLA，请进入异常中心处理。");
         when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.singletonList(candidate));
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -194,6 +199,50 @@ class PaymentTaskCenterServiceImplTest {
                         && "IN_APP_OUTBOX".equals(entity.getAlertChannel())
                         && entity.getAlertContent().contains("交易链路白班")
                         && entity.getAlertContent().contains("00:00-23:00")
+                        && entity.getAlertContent().contains("支付技术负责人")
+                        && entity.getAlertContent().contains("30分钟未确认升级")
+        ));
+    }
+
+    @Test
+    void shouldGenerateEscalationAlertWhenIssueAlertUnacknowledgedOverTimeout() {
+        PaymentIssueAlertCandidateDTO escalationCandidate = new PaymentIssueAlertCandidateDTO();
+        escalationCandidate.setIssueNo("ISSUE-WAIT-PAY-001");
+        escalationCandidate.setSourceAlertNo("PIA-SOURCE-001");
+        escalationCandidate.setPaymentOrderId("PAY-001");
+        escalationCandidate.setIssueType("待回调未收口");
+        escalationCandidate.setSeverity("P1");
+        escalationCandidate.setResponsibilityGroup("支付后端值班组");
+        escalationCandidate.setReceiver("支付技术负责人");
+        escalationCandidate.setEscalationReceiver("支付技术负责人");
+        escalationCandidate.setEscalationPolicy("30分钟未确认升级支付技术负责人");
+        escalationCandidate.setEscalationTimeoutMinutes(30);
+        escalationCandidate.setScheduleTag("交易链路白班");
+        escalationCandidate.setEffectiveWindow("00:00-23:00");
+        escalationCandidate.setAlertContent("升级来源告警 PIA-SOURCE-001 已超过 30 分钟未确认，请升级跟进。");
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(0);
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.singletonList(escalationCandidate));
+        when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runEscalateOverdueIssues();
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "支付技术负责人".equals(entity.getReceiver())
+                        && "待确认".equals(entity.getAckStatus())
+                        && entity.getAlertContent().contains("PIA-SOURCE-001")
+                        && entity.getAlertContent().contains("30分钟未确认升级")
         ));
     }
 
@@ -201,6 +250,7 @@ class PaymentTaskCenterServiceImplTest {
     void shouldRunAutoIssueSlaEscalationTask() {
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
         when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 

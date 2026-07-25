@@ -47,6 +47,11 @@ public interface PaymentTaskCenterMapper {
     List<PaymentIssueAlertCandidateDTO> findOverdueIssueAlertCandidates();
 
     /**
+     * 查询超过升级阈值但仍未确认的异常告警。
+     */
+    List<PaymentIssueAlertCandidateDTO> findUnacknowledgedIssueAlertEscalationCandidates();
+
+    /**
      * 查询待从站内 outbox 派发到真实通知通道的告警。
      */
     List<PaymentIssueAlertDispatchItemDTO> findPendingOutboxAlerts();

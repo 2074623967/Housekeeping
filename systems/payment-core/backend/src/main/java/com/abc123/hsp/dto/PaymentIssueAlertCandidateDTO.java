@@ -10,6 +10,8 @@ public class PaymentIssueAlertCandidateDTO {
 
     /** 异常编号。 */
     private String issueNo;
+    /** 来源告警编号。 */
+    private String sourceAlertNo;
     /** 支付单号。 */
     private String paymentOrderId;
     /** 异常类型。 */

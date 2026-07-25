@@ -194,22 +194,28 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private PaymentTaskActionResultDTO runEscalateOverdueIssuesByMode(String runMode, String triggeredBy) {
         int overdueIssueCount = paymentTaskCenterMapper.countOverduePaymentIssues();
         List<PaymentIssueAlertCandidateDTO> alertCandidates = paymentTaskCenterMapper.findOverdueIssueAlertCandidates();
+        List<PaymentIssueAlertCandidateDTO> escalationCandidates = paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates();
         int generatedAlertCount = 0;
         for (PaymentIssueAlertCandidateDTO candidate : alertCandidates) {
             generatedAlertCount += paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy));
         }
+        for (PaymentIssueAlertCandidateDTO candidate : escalationCandidates) {
+            generatedAlertCount += paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy));
+        }
+        int processedCount = overdueIssueCount + escalationCandidates.size();
         return buildAndRecordResult(
                 TASK_CODE_ISSUE_ESCALATE,
                 "异常 SLA 升级巡检",
                 runMode,
                 triggeredBy,
-                overdueIssueCount,
+                processedCount,
                 generatedAlertCount,
                 0,
                 0,
-                overdueIssueCount == 0
+                processedCount == 0
                         ? "当前没有超过 SLA 的支付交易异常。"
-                        : String.format("发现 %d 条超过 SLA 的支付交易异常，本次生成 %d 条告警通知。", overdueIssueCount, generatedAlertCount)
+                        : String.format("发现 %d 条超过 SLA 的支付交易异常，%d 条未确认告警触发升级，本次生成 %d 条告警通知。",
+                        overdueIssueCount, escalationCandidates.size(), generatedAlertCount)
         );
     }
 

@@ -171,6 +171,61 @@
         ORDER BY issue_sla.created_at ASC, issue_no ASC
     </select>
 
+    <select id="findUnacknowledgedIssueAlertEscalationCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
+        SELECT source_alert.issue_no AS issueNo,
+               source_alert.alert_no AS sourceAlertNo,
+               source_alert.payment_order_id AS paymentOrderId,
+               source_alert.issue_type AS issueType,
+               source_alert.severity AS severity,
+               source_alert.responsibility_group AS responsibilityGroup,
+               COALESCE(roster.escalation_receiver, source_alert.receiver) AS receiver,
+               COALESCE(roster.escalation_receiver, source_alert.receiver) AS escalationReceiver,
+               COALESCE(roster.escalation_policy, '超时未确认升级值班负责人') AS escalationPolicy,
+               COALESCE(roster.escalation_timeout_minutes, 30) AS escalationTimeoutMinutes,
+               COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
+               CASE
+                   WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL
+                       THEN '00:00-23:00'
+                   WHEN roster.effective_start_hour <= roster.effective_end_hour
+                       THEN CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-',
+                                   LPAD(roster.effective_end_hour, 2, '0'), ':00')
+                   ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
+                               LPAD(roster.effective_end_hour, 2, '0'), ':00')
+               END AS effectiveWindow,
+               CONCAT('升级来源告警 ', source_alert.alert_no, ' 已超过 ',
+                      COALESCE(roster.escalation_timeout_minutes, 30),
+                      ' 分钟未确认，请升级跟进。原告警：', source_alert.alert_content) AS alertContent
+        FROM t_payment_issue_alert_log source_alert
+        LEFT JOIN t_payment_issue_duty_roster roster
+               ON roster.issue_type = source_alert.issue_type
+              AND roster.severity = source_alert.severity
+              AND roster.status = 'ENABLED'
+              AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
+              AND (
+                  roster.holiday_strategy = 'ALL_DAYS'
+                  OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+                  OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+              )
+              AND (
+                  (roster.effective_start_hour <= roster.effective_end_hour
+                      AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
+                  OR
+                  (roster.effective_start_hour > roster.effective_end_hour
+                      AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+              )
+        WHERE source_alert.alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert.ack_status = '待确认'
+          AND TIMESTAMPDIFF(MINUTE, source_alert.created_at, NOW()) >= COALESCE(roster.escalation_timeout_minutes, 30)
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_issue_alert_log escalated_alert
+              WHERE escalated_alert.issue_no = source_alert.issue_no
+                AND escalated_alert.alert_channel = 'IN_APP_OUTBOX'
+                AND escalated_alert.alert_content LIKE CONCAT('%升级来源告警 ', source_alert.alert_no, '%')
+          )
+        ORDER BY source_alert.created_at ASC, source_alert.id ASC
+    </select>
+
     <select id="findRecentTaskRuns" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
         SELECT task_log_no AS taskLogNo,
                task_code AS taskCode,

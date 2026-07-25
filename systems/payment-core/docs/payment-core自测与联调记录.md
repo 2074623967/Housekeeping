@@ -1767,3 +1767,26 @@
 
 1. 当前 `payment-core` 的异常告警已具备轻量升级编排配置能力。
 2. 本轮仍未实现未确认自动二次派发、法定节假日排班中心和真实外部通知网关，因此仍不触发 `master / release`。
+
+## 52. 2026-07-25 异常告警未确认自动升级验证
+
+### 52.1 本轮验证范围
+
+本轮围绕“升级策略已经可配置，但超时未确认后没有自动生成升级 outbox”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `PaymentTaskCenterMapper` 新增未确认告警升级候选查询
+2. `PaymentTaskCenterServiceImpl` 的 SLA 升级巡检同步生成未确认升级 outbox
+3. `PaymentTaskCenterServiceImplTest` 新增未确认超时告警自动升级覆盖
+
+### 52.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentTaskCenterServiceImplTest test` | 通过 | `14` 个用例通过 |
+
+### 52.3 当前判断
+
+1. 当前 `payment-core` 的异常告警升级链路已具备“配置升级策略 -> 超时未确认 -> 自动生成升级 outbox”的轻量闭环。
+2. 本轮仍未实现真实外部通知网关、独立升级状态机和法定节假日排班中心，因此仍不触发 `master / release`。
