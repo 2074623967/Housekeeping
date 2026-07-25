@@ -16,4 +16,14 @@ public interface PaymentIssueAlertDeliveryService {
      * 自动派发待处理的异常告警。
      */
     PaymentTaskActionResultDTO autoDispatchPendingAlerts();
+
+    /**
+     * 手动回查已被供应商受理但尚未确认送达的异常告警。
+     */
+    PaymentTaskActionResultDTO reconcileDeliveryReceipts();
+
+    /**
+     * 自动回查已被供应商受理但尚未确认送达的异常告警。
+     */
+    PaymentTaskActionResultDTO autoReconcileDeliveryReceipts();
 }

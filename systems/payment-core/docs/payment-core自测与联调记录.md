@@ -1489,3 +1489,38 @@
 2. 派发服务按优先级匹配供应商路由规则，支持 `severity / issueType / responsibilityGroup / DEFAULT`。
 3. 派发服务渲染 `{{severity}} / {{issueType}} / {{issueNo}} / {{paymentOrderId}} / {{responsibilityGroup}} / {{receiver}} / {{scheduleTag}} / {{alertContent}} / {{triggeredBy}}` 模板变量。
 4. 本地通知器优先使用渲染后的内容快照，异常中心和告警日志可追溯最终文案。
+
+## 43. 2026-07-25 异常告警回执回查验证
+
+### 43.1 本轮验证范围
+
+本轮围绕“异常告警已经派发到供应商后，仍缺少送达回执收口闭环”的问题进行了补强验证，目标是确认当前代码已从“供应商已受理”升级为“任务中心可继续回查并回写送达结果”。
+
+本轮覆盖内容：
+
+1. `PaymentIssueAlertDeliveryService` 手动/自动回执回查入口
+2. `PaymentTaskCenterService` 与 `PaymentCompensationScheduler` 的回查任务挂接
+3. `PaymentTaskCenterMapper.xml` 的 `ACCEPTED -> DELIVERED` 回写能力
+4. `admin-web` 任务中心新增“异常告警回执回查”卡片和口径说明
+5. `PaymentIssueAlertDeliveryServiceImplTest` 的回执回查用例
+
+### 43.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖“有待回查日志”和“无待回查日志”两类场景 |
+| 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 确认任务中心新增卡片与文案不会引入构建回归 |
+
+### 43.3 本轮补齐项
+
+1. 新增“异常告警回执回查”任务码 `PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE`。
+2. 对外部通道中 `provider_delivery_status = ACCEPTED` 的异常告警日志执行统一回查。
+3. 回查成功后同步回写 `provider_delivery_status = DELIVERED`、`ack_status = 已确认`。
+4. 回查结果会进入任务执行日志，统一纳入严重等级、升级状态和建议动作口径。
+5. 自动补偿调度器新增“供应商回执回查”定时任务，减少人工逐条核对。
+
+### 43.4 当前判断
+
+1. 当前 `payment-core` 的异常告警链路已从“outbox -> 外部派发 -> 供应商受理”进一步推进到“任务中心回查 -> 送达确认”的第二段闭环。
+2. 本轮仍属于本地供应商回执骨架，不代表已经接入真实 IM / SMS / EMAIL 供应商回执 API。
+3. 这一步显著提升了冻结版完整性，但是否进入 `master / release` 仍要继续看真实通知网关、值班路由、跨系统联动和更大范围回归。

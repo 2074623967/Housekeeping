@@ -72,6 +72,16 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runAutoDispatchIssueAlerts();
 
     /**
+     * 手动执行异常告警供应商回执回查。
+     */
+    PaymentTaskActionResultDTO runReconcileIssueAlertReceipts();
+
+    /**
+     * 自动执行异常告警供应商回执回查。
+     */
+    PaymentTaskActionResultDTO runAutoReconcileIssueAlertReceipts();
+
+    /**
      * 手动执行支付控制策略自动巡检。
      */
     PaymentTaskActionResultDTO runControlPolicySelfChecks();

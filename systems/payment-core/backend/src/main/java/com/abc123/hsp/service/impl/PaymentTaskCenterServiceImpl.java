@@ -38,6 +38,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
+    private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
@@ -137,6 +138,22 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Transactional
     public PaymentTaskActionResultDTO runAutoDispatchIssueAlerts() {
         PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.autoDispatchPendingAlerts();
+        result.setOverview(overview());
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runReconcileIssueAlertReceipts() {
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipts();
+        result.setOverview(overview());
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoReconcileIssueAlertReceipts() {
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.autoReconcileDeliveryReceipts();
         result.setOverview(overview());
         return result;
     }
@@ -500,6 +517,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             }
             return processedCount > 0 ? "本轮控制策略已完成巡检，建议继续观察新接入应用和渠道变更" : "暂无启用中的支付控制策略待巡检";
         }
+        if (TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先核对供应商回执状态、告警日志并发更新结果，再执行回执回查补偿";
+            }
+            return processedCount > 0 ? "已完成供应商回执回查，建议继续观察异常中心的告警收口状态" : "暂无需要回查的供应商告警回执";
+        }
         return processedCount > 0 ? "优先处理异常明细并确认下游收口" : "暂无待处理任务";
     }
 
@@ -518,6 +541,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
             return "/payment-config";
+        }
+        if (TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE.equals(taskCode)) {
+            return "/payment-issues";
         }
         return "/payment-task-center";
     }
@@ -544,6 +570,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
             return failCount > 0;
         }
+        if (TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE.equals(taskCode)) {
+            return false;
+        }
         if (failCount <= 0) {
             return false;
         }
@@ -568,6 +597,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
             return warningCount > 0;
+        }
+        if (TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE.equals(taskCode)) {
+            return failCount > 0;
         }
         if (failCount > 0) {
             return true;

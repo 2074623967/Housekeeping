@@ -96,6 +96,14 @@ public class PaymentTaskCenterController {
     }
 
     /**
+     * 手动执行异常告警供应商回执回查。
+     */
+    @PostMapping("/reconcile-issue-alert-receipts")
+    public ApiResponse<PaymentTaskActionResultDTO> runReconcileIssueAlertReceipts() {
+        return ApiResponse.success(paymentTaskCenterService.runReconcileIssueAlertReceipts());
+    }
+
+    /**
      * 手动执行支付控制策略自动巡检。
      */
     @PostMapping("/control-policy-self-checks")

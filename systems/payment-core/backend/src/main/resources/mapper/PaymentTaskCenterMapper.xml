@@ -387,4 +387,45 @@
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
     </update>
+
+    <select id="findAcceptedIssueAlertDeliveryLogs" resultType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        SELECT alert_no AS alertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               triggered_by AS triggeredBy
+        FROM t_payment_issue_alert_log
+        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
+          AND provider_delivery_status = 'ACCEPTED'
+        ORDER BY created_at ASC, id ASC
+    </select>
+
+    <update id="updateIssueAlertProviderReceipt" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        UPDATE t_payment_issue_alert_log
+        SET provider_delivery_status = #{providerDeliveryStatus},
+            provider_delivery_message = #{providerDeliveryMessage},
+            ack_status = #{ackStatus},
+            ack_status_type = #{ackStatusType},
+            triggered_by = #{triggeredBy}
+        WHERE alert_no = #{alertNo}
+          AND provider_delivery_status = 'ACCEPTED'
+    </update>
 </mapper>

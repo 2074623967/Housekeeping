@@ -204,6 +204,46 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals(1, result.getFailCount());
     }
 
+    @Test
+    void shouldReconcileAcceptedDeliveryReceiptsSuccessfully() {
+        PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
+        acceptedLog.setAlertNo("PIA-IM-001");
+        acceptedLog.setIssueNo("ISSUE-001");
+        acceptedLog.setAlertChannel("IM");
+        acceptedLog.setProviderDeliveryStatus("ACCEPTED");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).reconcileDeliveryReceipts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).updateIssueAlertProviderReceipt(captor.capture());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
+        Assertions.assertEquals("已确认", captor.getValue().getAckStatus());
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldReturnZeroWhenNoAcceptedReceiptsNeedReconcile() {
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).reconcileDeliveryReceipts();
+
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
     private PaymentIssueAlertDeliveryResultDTO buildDeliveryResult(String receiptNo,
                                                                    String deliveryStatus,
                                                                    String deliveryMessage,

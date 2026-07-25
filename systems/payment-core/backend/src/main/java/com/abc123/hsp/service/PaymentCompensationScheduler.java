@@ -43,6 +43,14 @@ public class PaymentCompensationScheduler {
     }
 
     /**
+     * 定期回查供应商已受理但尚未确认送达的异常告警，减少人工逐条跟进。
+     */
+    @Scheduled(fixedDelayString = "${payment.issue-alert-receipt-reconcile.fixed-delay-ms:600000}")
+    public void reconcileIssueAlertReceipts() {
+        paymentTaskCenterService.runAutoReconcileIssueAlertReceipts();
+    }
+
+    /**
      * 定期巡检启用中的支付控制策略，提前发现渠道、商户号、网关和令牌配置漂移。
      */
     @Scheduled(fixedDelayString = "${payment.control-self-check.fixed-delay-ms:600000}")

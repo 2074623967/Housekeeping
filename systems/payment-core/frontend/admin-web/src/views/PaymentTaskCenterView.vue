@@ -99,10 +99,10 @@ onMounted(loadOverview);
 
 <template>
   <div>
-    <div class="topbar">
+      <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发和日终告警，并承接自动调度与人工处理的统一留痕</p>
+        <p>统一查看超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -161,7 +161,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.9 已按任务类型、失败笔数和处理规模统一严重等级，并将异常告警派发纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.9 已按任务类型、失败笔数和处理规模统一严重等级，并将异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -211,6 +211,12 @@ onMounted(loadOverview);
                   <td>存在告警已生成但待派发或部分通道失败</td>
                   <td>无待派发异常告警</td>
                 </tr>
+                <tr>
+                  <td>异常告警回执回查</td>
+                  <td>不适用，回写失败优先纳入人工跟进</td>
+                  <td>回查失败且存在高优先级异常未确认送达</td>
+                  <td>无待回查告警回执或已全部确认送达</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -221,7 +227,7 @@ onMounted(loadOverview);
             <div class="section-title">
               <div>
               <h3>核心自动化任务</h3>
-              <p class="meta">本页触发的是正式版 V1.9 的统一操作；超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发均已纳入自动调度与人工补偿双通道</p>
+              <p class="meta">本页触发的是正式版 V1.9 的统一操作；超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均已纳入自动调度与人工补偿双通道</p>
             </div>
             </div>
 
@@ -296,6 +302,18 @@ onMounted(loadOverview);
                 {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_DISPATCH" ? "执行中..." : "执行异常告警派发" }}
               </button>
             </div>
+
+            <div class="sub-panel">
+              <h3>异常告警回执回查</h3>
+              <p>对已派发且仍停留在供应商受理中的异常告警执行回执回查，统一回写送达结果，减少人工逐条核对。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE'"
+                @click="runTask('PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE', '异常告警回执回查', paymentTaskCenterApi.runReconcileIssueAlertReceipts)"
+              >
+                {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE" ? "执行中..." : "执行回执回查" }}
+              </button>
+            </div>
           </section>
 
           <section class="panel mini">
@@ -355,9 +373,14 @@ onMounted(loadOverview);
                   <td>已具备 outbox、本地 IM/SMS/EMAIL 派发骨架与状态回写，后续补真实通知网关</td>
                 </tr>
                 <tr>
+                  <td>异常告警回执回查</td>
+                  <td>V1.9</td>
+                  <td>已支持供应商受理状态回查与送达状态回写，后续补真实供应商回执接口</td>
+                </tr>
+                <tr>
                   <td>升级判定口径</td>
                   <td>V1.9</td>
-                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发纳入统一任务矩阵</td>
+                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>
             </table>

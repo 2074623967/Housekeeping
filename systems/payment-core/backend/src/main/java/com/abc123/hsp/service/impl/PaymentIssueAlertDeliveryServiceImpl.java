@@ -29,6 +29,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RUN_MODE_MANUAL = "MANUAL";
     private static final String RUN_MODE_AUTO = "AUTO";
     private static final String TASK_CODE_ISSUE_ALERT_DISPATCH = "PAYMENT_ISSUE_ALERT_DISPATCH";
+    private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
     private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
 
@@ -51,6 +52,18 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     @Transactional
     public PaymentTaskActionResultDTO autoDispatchPendingAlerts() {
         return dispatchPendingAlertsByMode(RUN_MODE_AUTO, "payment-issue-alert-scheduler");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO reconcileDeliveryReceipts() {
+        return reconcileDeliveryReceiptsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO autoReconcileDeliveryReceipts() {
+        return reconcileDeliveryReceiptsByMode(RUN_MODE_AUTO, "payment-issue-alert-receipt-scheduler");
     }
 
     private PaymentTaskActionResultDTO dispatchPendingAlertsByMode(String runMode, String triggeredBy) {
@@ -407,6 +420,87 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 warningCount,
                 failCount
         );
+    }
+
+    private PaymentTaskActionResultDTO reconcileDeliveryReceiptsByMode(String runMode, String triggeredBy) {
+        List<PaymentIssueAlertLogEntity> acceptedLogs = paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs();
+        int successCount = 0;
+        int failCount = 0;
+        for (PaymentIssueAlertLogEntity acceptedLog : acceptedLogs) {
+            PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, triggeredBy);
+            int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
+            if (affectedRows > 0) {
+                successCount++;
+            } else {
+                failCount++;
+            }
+        }
+        return buildReceiptReconcileResult(
+                runMode,
+                triggeredBy,
+                acceptedLogs.size(),
+                successCount,
+                failCount,
+                buildReceiptReconcileSummary(acceptedLogs.size(), successCount, failCount)
+        );
+    }
+
+    private PaymentIssueAlertLogEntity buildReceiptUpdate(PaymentIssueAlertLogEntity acceptedLog, String triggeredBy) {
+        PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
+        entity.setAlertNo(acceptedLog.getAlertNo());
+        entity.setProviderDeliveryStatus("DELIVERED");
+        entity.setProviderDeliveryMessage("供应商回执回查成功，消息已送达");
+        entity.setAckStatus("已确认");
+        entity.setAckStatusType("success");
+        entity.setTriggeredBy(triggeredBy);
+        return entity;
+    }
+
+    private String buildReceiptReconcileSummary(int processedCount, int successCount, int failCount) {
+        if (processedCount == 0) {
+            return "当前没有供应商已受理但未确认送达的异常告警。";
+        }
+        return String.format("已回查 %d 条供应商告警回执，确认送达 %d 条，回写失败 %d 条。", processedCount, successCount, failCount);
+    }
+
+    private PaymentTaskActionResultDTO buildReceiptReconcileResult(String runMode,
+                                                                   String triggeredBy,
+                                                                   int processedCount,
+                                                                   int successCount,
+                                                                   int failCount,
+                                                                   String summaryComment) {
+        PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
+        entity.setTaskLogNo("TL" + System.currentTimeMillis());
+        entity.setTaskCode(TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE);
+        entity.setTaskName("异常告警回执回查");
+        entity.setRunMode(runMode);
+        entity.setTaskStatus(failCount > 0 ? "WARNING" : "SUCCESS");
+        entity.setTaskStatusType(failCount > 0 ? "warn" : "success");
+        entity.setSeverityLevel(failCount > 0 ? "P2" : "P3");
+        entity.setSeverityLevelType(failCount > 0 ? "warn" : "success");
+        entity.setEscalationStatus(failCount > 0 ? "纳入当班跟进" : "正常");
+        entity.setEscalationStatusType(failCount > 0 ? "warn" : "success");
+        entity.setProcessedCount(processedCount);
+        entity.setSuccessCount(successCount);
+        entity.setWarningCount(0);
+        entity.setFailCount(failCount);
+        entity.setSummaryComment(summaryComment);
+        entity.setSuggestedAction(failCount > 0
+                ? "优先核对供应商回执接口、告警日志并发更新和通知通道状态"
+                : "继续保持供应商回执回查任务自动巡检");
+        entity.setRecommendedRoute("/payment-issues");
+        entity.setTriggeredBy(triggeredBy);
+        paymentTaskCenterMapper.insertTaskRunLog(entity);
+
+        PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
+        result.setTaskCode(TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE);
+        result.setTaskName("异常告警回执回查");
+        result.setProcessedCount(processedCount);
+        result.setSuccessCount(successCount);
+        result.setWarningCount(0);
+        result.setFailCount(failCount);
+        result.setSummaryComment(summaryComment);
+        return result;
     }
 
     private PaymentTaskActionResultDTO buildResult(String runMode,

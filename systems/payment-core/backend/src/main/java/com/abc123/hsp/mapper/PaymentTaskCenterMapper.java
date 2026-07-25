@@ -66,6 +66,16 @@ public interface PaymentTaskCenterMapper {
     int updateIssueAlertDeliveryStatus(PaymentIssueAlertLogEntity entity);
 
     /**
+     * 查询供应商已受理但尚未确认送达的异常告警派发日志。
+     */
+    List<PaymentIssueAlertLogEntity> findAcceptedIssueAlertDeliveryLogs();
+
+    /**
+     * 回写异常告警供应商回执状态。
+     */
+    int updateIssueAlertProviderReceipt(PaymentIssueAlertLogEntity entity);
+
+    /**
      * 判断某个异常在指定通知通道上是否已经成功派发过。
      */
     boolean hasSuccessfulIssueAlertChannelDelivery(String issueNo, String alertChannel);
