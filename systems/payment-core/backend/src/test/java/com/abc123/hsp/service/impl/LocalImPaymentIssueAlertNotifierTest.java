@@ -3,8 +3,13 @@ package com.abc123.hsp.service.impl;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -18,6 +23,8 @@ import org.springframework.web.client.RestTemplate;
  * IM 异常告警通知器测试。
  */
 class LocalImPaymentIssueAlertNotifierTest {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
     void shouldFallbackToLocalReceiptWhenWebhookNotConfigured() {
@@ -48,6 +55,7 @@ class LocalImPaymentIssueAlertNotifierTest {
                 "Bearer im-token",
                 "X-Signature",
                 "im-secret",
+                "HMAC_SHA1",
                 "X-Timestamp",
                 "X-Nonce"
         ).send(buildDispatchItem());
@@ -65,6 +73,10 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
         Assertions.assertEquals("Bearer im-token", payloadCaptor.getValue().getHeaders().getFirst("Authorization"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Signature"));
+        Assertions.assertEquals(
+                signPayload(payloadCaptor.getValue(), "im-secret", "HmacSHA1"),
+                payloadCaptor.getValue().getHeaders().getFirst("X-Signature")
+        );
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Timestamp"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Nonce"));
     }
@@ -92,6 +104,7 @@ class LocalImPaymentIssueAlertNotifierTest {
                         "",
                         "",
                         "",
+                        "",
                         ""
                 ).send(buildDispatchItem())
         );
@@ -113,5 +126,15 @@ class LocalImPaymentIssueAlertNotifierTest {
         item.setAlertContent("支付异常 ISSUE-001 已超过 P1 SLA，请进入异常中心处理。");
         item.setRenderedAlertContent("[P1] 待回调未收口 PAY-001");
         return item;
+    }
+
+    private String signPayload(HttpEntity entity, String secret, String algorithm) {
+        try {
+            Mac mac = Mac.getInstance(algorithm);
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), algorithm));
+            return Base64.getEncoder().encodeToString(mac.doFinal(OBJECT_MAPPER.writeValueAsBytes(entity.getBody())));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

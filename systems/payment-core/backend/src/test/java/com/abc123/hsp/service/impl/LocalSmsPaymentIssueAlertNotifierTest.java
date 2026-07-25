@@ -48,6 +48,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
                 "sms-key-001",
                 "X-Sms-Signature",
                 "sms-secret",
+                "HMAC_SHA256",
                 "X-Sms-Timestamp",
                 "X-Sms-Nonce"
         ).send(buildDispatchItem());

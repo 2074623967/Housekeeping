@@ -42,6 +42,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                                         String authHeaderValue,
                                                                         String signatureHeaderName,
                                                                         String signatureSecret,
+                                                                        String signatureAlgorithm,
                                                                         String timestampHeaderName,
                                                                         String nonceHeaderName) {
         HttpHeaders headers = new HttpHeaders();
@@ -50,7 +51,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
             headers.set(authHeaderName.trim(), authHeaderValue.trim());
         }
         if (StringUtils.hasText(signatureHeaderName) && StringUtils.hasText(signatureSecret)) {
-            headers.set(signatureHeaderName.trim(), signPayload(payload, signatureSecret));
+            headers.set(signatureHeaderName.trim(), signPayload(payload, signatureSecret, signatureAlgorithm));
         }
         if (StringUtils.hasText(timestampHeaderName)) {
             headers.set(timestampHeaderName.trim(), String.valueOf(System.currentTimeMillis()));
@@ -61,15 +62,33 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         return new HttpEntity<Map<String, Object>>(payload, headers);
     }
 
-    private String signPayload(Map<String, Object> payload, String signatureSecret) {
+    private String signPayload(Map<String, Object> payload, String signatureSecret, String signatureAlgorithm) {
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(signatureSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            String normalizedAlgorithm = resolveSignatureAlgorithm(signatureAlgorithm);
+            Mac mac = Mac.getInstance(normalizedAlgorithm);
+            mac.init(new SecretKeySpec(signatureSecret.getBytes(StandardCharsets.UTF_8), normalizedAlgorithm));
             byte[] digest = mac.doFinal(OBJECT_MAPPER.writeValueAsBytes(payload));
             return Base64.getEncoder().encodeToString(digest);
         } catch (Exception exception) {
             throw new IllegalStateException("网关签名计算失败：" + exception.getMessage(), exception);
         }
+    }
+
+    private String resolveSignatureAlgorithm(String signatureAlgorithm) {
+        if (!StringUtils.hasText(signatureAlgorithm)) {
+            return "HmacSHA256";
+        }
+        String normalizedAlgorithm = signatureAlgorithm.trim().toUpperCase().replace('-', '_');
+        if ("HMAC_SHA256".equals(normalizedAlgorithm)) {
+            return "HmacSHA256";
+        }
+        if ("HMAC_SHA1".equals(normalizedAlgorithm)) {
+            return "HmacSHA1";
+        }
+        if ("HMAC_MD5".equals(normalizedAlgorithm)) {
+            return "HmacMD5";
+        }
+        throw new IllegalArgumentException("不支持的网关签名算法：" + signatureAlgorithm);
     }
 
     /**

@@ -44,6 +44,7 @@ payment:
       auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_IM_AUTH_HEADER_VALUE:}
       signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_HEADER_NAME:}
       signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_SECRET:}
+      signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_ALGORITHM:HMAC_SHA256}
       timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_TIMESTAMP_HEADER_NAME:}
       nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_NONCE_HEADER_NAME:}
     sms:
@@ -57,6 +58,7 @@ payment:
       auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_SMS_AUTH_HEADER_VALUE:}
       signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_HEADER_NAME:}
       signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_SECRET:}
+      signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_ALGORITHM:HMAC_SHA256}
       timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_TIMESTAMP_HEADER_NAME:}
       nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_NONCE_HEADER_NAME:}
     email:
@@ -70,5 +72,6 @@ payment:
       auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_AUTH_HEADER_VALUE:}
       signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_HEADER_NAME:}
       signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_SECRET:}
+      signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_ALGORITHM:HMAC_SHA256}
       timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_TIMESTAMP_HEADER_NAME:}
       nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_NONCE_HEADER_NAME:}

@@ -48,6 +48,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
                 "email-token-001",
                 "X-Email-Signature",
                 "email-secret",
+                "HMAC_SHA256",
                 "X-Email-Timestamp",
                 "X-Email-Nonce"
         ).send(buildDispatchItem());
