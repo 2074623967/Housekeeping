@@ -2062,3 +2062,29 @@
 1. 当前 `payment-core` 的异常告警外部网关签名能力已从“HMAC 固定实现”升级为“按供应商配置切换 HMAC / RSA2”。
 2. 这一步补齐了外部通知供应商常见的非对称签名接入要求，提升了真实供应商接入可行性。
 3. 服务端时间窗校验联动、统一防重放编排和更细粒度重试退避策略仍待补齐，因此当前仍不触发 `master / release`。
+
+## 64. 2026-07-25 异常告警补发指数退避策略验证
+
+### 64.1 本轮验证范围
+
+本轮围绕“异常告警补发目前只有固定冷却时间，供应商连续失败时无法按更保守的节奏退避”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `retryPolicy` 在原有 `失败重试N次/间隔M分钟` 基础上，新增 `退避系数X倍/最大间隔Y分钟` 解析能力
+2. 告警派发服务会根据历史失败次数动态计算有效冷却时间，而不是始终使用固定间隔
+3. 当连续失败次数增大时，补发间隔可按指数增长，并在达到最大间隔后封顶
+4. `PaymentIssueAlertDeliveryServiceImplTest` 新增指数退避场景，验证 `5分钟 * 2倍` 并按 `12分钟` 上限封顶
+5. 旧有固定冷却测试同步去除日期依赖，确保回归测试稳定
+
+### 64.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest,LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest test` | 通过 | `25` 个用例通过 |
+
+### 64.3 当前判断
+
+1. 当前 `payment-core` 的异常告警补发策略已从“固定冷却”升级为“支持指数退避和最大间隔封顶”的生产化策略。
+2. 这一步补齐了真实供应商连续失败时的保守补发节奏控制，降低了短时间重复轰炸供应商网关的风险。
+3. 服务端时间窗校验联动和统一防重放编排仍待补齐，因此当前仍不触发 `master / release`。

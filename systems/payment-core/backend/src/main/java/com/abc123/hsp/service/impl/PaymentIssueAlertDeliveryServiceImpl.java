@@ -40,6 +40,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Pattern RETRY_COUNT_PATTERN = Pattern.compile("失败重试(\\d+)次");
     private static final Pattern RETRY_COOLDOWN_PATTERN = Pattern.compile("间隔(\\d+)分钟");
+    private static final Pattern RETRY_BACKOFF_FACTOR_PATTERN = Pattern.compile("退避系数(\\d+)倍");
+    private static final Pattern RETRY_MAX_COOLDOWN_PATTERN = Pattern.compile("最大间隔(\\d+)分钟");
     private static final Pattern RATE_LIMIT_PATTERN = Pattern.compile("每(?:(\\d+)分钟|分钟)\\s*(\\d+)\\s*条");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
@@ -253,8 +255,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
         }
         LocalDateTime latestCreatedAt = parseAlertCreatedAt(latestLog.getCreatedAt());
-        if (latestCreatedAt != null && LocalDateTime.now().isBefore(latestCreatedAt.plusMinutes(retryGuard.getCooldownMinutes()))) {
-            return buildFailureResult("RETRY_COOLDOWN_ACTIVE", "补发冷却时间未到，请等待后再重试", item);
+        int effectiveCooldownMinutes = retryGuard.resolveEffectiveCooldownMinutes(failedAttemptCount);
+        if (latestCreatedAt != null && effectiveCooldownMinutes > 0
+                && LocalDateTime.now().isBefore(latestCreatedAt.plusMinutes(effectiveCooldownMinutes))) {
+            return buildFailureResult(
+                    "RETRY_COOLDOWN_ACTIVE",
+                    String.format("补发冷却时间未到，请等待后再重试；当前要求间隔 %d 分钟", effectiveCooldownMinutes),
+                    item
+            );
         }
         return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
     }
@@ -536,6 +544,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (cooldownMatcher.find()) {
             retryGuard.setCooldownMinutes(parseInteger(cooldownMatcher.group(1)));
         }
+        Matcher backoffFactorMatcher = RETRY_BACKOFF_FACTOR_PATTERN.matcher(retryPolicy);
+        if (backoffFactorMatcher.find()) {
+            retryGuard.setBackoffFactor(parseInteger(backoffFactorMatcher.group(1)));
+        }
+        Matcher maxCooldownMatcher = RETRY_MAX_COOLDOWN_PATTERN.matcher(retryPolicy);
+        if (maxCooldownMatcher.find()) {
+            retryGuard.setMaxCooldownMinutes(parseInteger(maxCooldownMatcher.group(1)));
+        }
         return retryGuard;
     }
 
@@ -794,6 +810,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     static class RetryGuard {
         private Integer retryCount;
         private Integer cooldownMinutes;
+        private Integer backoffFactor;
+        private Integer maxCooldownMinutes;
 
         boolean isEnabled() {
             return hasRetryLimit() || hasCooldownMinutes();
@@ -821,6 +839,44 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
         void setCooldownMinutes(Integer cooldownMinutes) {
             this.cooldownMinutes = cooldownMinutes;
+        }
+
+        Integer getBackoffFactor() {
+            return backoffFactor;
+        }
+
+        void setBackoffFactor(Integer backoffFactor) {
+            this.backoffFactor = backoffFactor;
+        }
+
+        Integer getMaxCooldownMinutes() {
+            return maxCooldownMinutes;
+        }
+
+        void setMaxCooldownMinutes(Integer maxCooldownMinutes) {
+            this.maxCooldownMinutes = maxCooldownMinutes;
+        }
+
+        int resolveEffectiveCooldownMinutes(int failedAttemptCount) {
+            if (!hasCooldownMinutes()) {
+                return 0;
+            }
+            int effectiveCooldown = cooldownMinutes.intValue();
+            int normalizedBackoffFactor = backoffFactor == null || backoffFactor.intValue() < 2
+                    ? 1
+                    : backoffFactor.intValue();
+            int retryIndex = Math.max(failedAttemptCount - 1, 0);
+            for (int i = 0; i < retryIndex; i++) {
+                effectiveCooldown = effectiveCooldown * normalizedBackoffFactor;
+                if (maxCooldownMinutes != null && maxCooldownMinutes.intValue() > 0
+                        && effectiveCooldown >= maxCooldownMinutes.intValue()) {
+                    return maxCooldownMinutes.intValue();
+                }
+            }
+            if (maxCooldownMinutes != null && maxCooldownMinutes.intValue() > 0) {
+                return Math.min(effectiveCooldown, maxCooldownMinutes.intValue());
+            }
+            return effectiveCooldown;
         }
     }
 

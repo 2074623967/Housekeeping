@@ -274,7 +274,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries("PIA-OUTBOX-001", "IM")).thenReturn(1);
         PaymentIssueAlertLogEntity latestLog = new PaymentIssueAlertLogEntity();
         latestLog.setAlertStatus("派发失败");
-        latestLog.setCreatedAt("2026-07-25 23:59:59");
+        latestLog.setCreatedAt("2099-12-31 23:59:59");
         when(paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog("PIA-OUTBOX-001", "IM")).thenReturn(latestLog);
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
@@ -286,6 +286,40 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(0, result.getWarningCount());
         Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldApplyExponentialRetryCooldownWhenBackoffConfigured() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100,
+                        "失败重试3次/间隔5分钟/退避系数2倍/最大间隔12分钟")
+        ));
+        when(paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries("PIA-OUTBOX-001", "IM")).thenReturn(3);
+        PaymentIssueAlertLogEntity latestLog = new PaymentIssueAlertLogEntity();
+        latestLog.setAlertStatus("派发失败");
+        latestLog.setCreatedAt("2099-12-31 23:59:59");
+        when(paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog("PIA-OUTBOX-001", "IM")).thenReturn(latestLog);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertEquals("RETRY_COOLDOWN_ACTIVE", logCaptor.getValue().getProviderDeliveryStatus());
+        Assertions.assertTrue(logCaptor.getValue().getProviderDeliveryMessage().contains("12 分钟"));
     }
 
     @Test
