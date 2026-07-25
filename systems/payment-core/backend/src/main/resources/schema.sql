@@ -417,6 +417,8 @@ CREATE TABLE t_payment_issue_duty_roster (
     schedule_tag VARCHAR(64) NOT NULL COMMENT '值班班次标签',
     effective_start_hour TINYINT NOT NULL DEFAULT 0 COMMENT '班次生效开始小时',
     effective_end_hour TINYINT NOT NULL DEFAULT 23 COMMENT '班次生效结束小时',
+    weekday_scope VARCHAR(32) NOT NULL DEFAULT '1,2,3,4,5,6,7' COMMENT '适用星期范围，1-7 表示周一到周日',
+    holiday_strategy VARCHAR(32) NOT NULL DEFAULT 'ALL_DAYS' COMMENT '日期策略：ALL_DAYS/WORKDAY_ONLY/NON_WORKDAY_ONLY',
     status VARCHAR(32) NOT NULL COMMENT '配置状态',
     status_type VARCHAR(32) NOT NULL COMMENT '配置状态样式类型',
     updated_at DATETIME NOT NULL COMMENT '更新时间',

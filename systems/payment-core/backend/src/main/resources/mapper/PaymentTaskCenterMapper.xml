@@ -144,6 +144,12 @@
             ON roster.issue_type = issue_sla.issue_type
            AND roster.severity = issue_sla.severity
            AND roster.status = 'ENABLED'
+           AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
+           AND (
+               roster.holiday_strategy = 'ALL_DAYS'
+               OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+               OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+           )
            AND (
                (roster.effective_start_hour <= roster.effective_end_hour
                    AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
@@ -358,6 +364,12 @@
                ON roster.issue_type = outbox.issue_type
               AND roster.severity = outbox.severity
               AND roster.status = 'ENABLED'
+              AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
+              AND (
+                  roster.holiday_strategy = 'ALL_DAYS'
+                  OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+                  OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+              )
               AND (
                   (roster.effective_start_hour <= roster.effective_end_hour
                       AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)

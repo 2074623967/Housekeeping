@@ -423,6 +423,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         int effectiveEndHour = resolveDutyRosterHour(request.getEffectiveEndHour(), 23, "班次生效结束小时不能为空");
         entity.setEffectiveStartHour(Integer.valueOf(effectiveStartHour));
         entity.setEffectiveEndHour(Integer.valueOf(effectiveEndHour));
+        entity.setWeekdayScope(resolveWeekdayScope(request.getWeekdayScope()));
+        entity.setHolidayStrategy(resolveHolidayStrategy(request.getHolidayStrategy()));
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
         return entity;
@@ -462,6 +464,55 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("严重等级仅支持 P1/P2/P3");
         }
         return normalizedSeverity;
+    }
+
+    private String resolveWeekdayScope(String weekdayScope) {
+        if (!StringUtils.hasText(weekdayScope)) {
+            return "1,2,3,4,5,6,7";
+        }
+        String[] segments = weekdayScope.split(",");
+        boolean[] seen = new boolean[8];
+        StringBuilder builder = new StringBuilder();
+        for (String segment : segments) {
+            String trimmed = segment == null ? "" : segment.trim();
+            if (!StringUtils.hasText(trimmed)) {
+                continue;
+            }
+            int weekday;
+            try {
+                weekday = Integer.parseInt(trimmed);
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("适用星期范围仅支持 1-7");
+            }
+            if (weekday < 1 || weekday > 7) {
+                throw new IllegalArgumentException("适用星期范围仅支持 1-7");
+            }
+            if (seen[weekday]) {
+                continue;
+            }
+            seen[weekday] = true;
+            if (builder.length() > 0) {
+                builder.append(',');
+            }
+            builder.append(weekday);
+        }
+        if (builder.length() == 0) {
+            throw new IllegalArgumentException("适用星期范围不能为空");
+        }
+        return builder.toString();
+    }
+
+    private String resolveHolidayStrategy(String holidayStrategy) {
+        if (!StringUtils.hasText(holidayStrategy)) {
+            return "ALL_DAYS";
+        }
+        String normalizedHolidayStrategy = holidayStrategy.trim();
+        if (!"ALL_DAYS".equals(normalizedHolidayStrategy)
+                && !"WORKDAY_ONLY".equals(normalizedHolidayStrategy)
+                && !"NON_WORKDAY_ONLY".equals(normalizedHolidayStrategy)) {
+            throw new IllegalArgumentException("日期策略仅支持 ALL_DAYS/WORKDAY_ONLY/NON_WORKDAY_ONLY");
+        }
+        return normalizedHolidayStrategy;
     }
 
     private String resolveProtocolTypeName(String protocolType, String requestProtocolTypeName) {

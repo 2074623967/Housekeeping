@@ -74,6 +74,9 @@ class PaymentConfigServiceImplTest {
         roster.setReceiver("支付后端值班");
         roster.setEffectiveStartHour(0);
         roster.setEffectiveEndHour(23);
+        roster.setWeekdayScope("1,2,3,4,5");
+        roster.setHolidayStrategy("WORKDAY_ONLY");
+        roster.setApplicabilityDesc("仅工作日");
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
@@ -93,6 +96,9 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("支付后端值班", actualRoster.getReceiver());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), actualRoster.getEffectiveStartHour());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(23), actualRoster.getEffectiveEndHour());
+        org.junit.jupiter.api.Assertions.assertEquals("1,2,3,4,5", actualRoster.getWeekdayScope());
+        org.junit.jupiter.api.Assertions.assertEquals("WORKDAY_ONLY", actualRoster.getHolidayStrategy());
+        org.junit.jupiter.api.Assertions.assertEquals("仅工作日", actualRoster.getApplicabilityDesc());
     }
 
     @Test
@@ -187,6 +193,8 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("待回调未收口", entityCaptor.getValue().getIssueType());
         org.junit.jupiter.api.Assertions.assertEquals("P1", entityCaptor.getValue().getSeverity());
         org.junit.jupiter.api.Assertions.assertEquals("支付后端值班组", entityCaptor.getValue().getResponsibilityGroup());
+        org.junit.jupiter.api.Assertions.assertEquals("1,2,3,4,5", entityCaptor.getValue().getWeekdayScope());
+        org.junit.jupiter.api.Assertions.assertEquals("WORKDAY_ONLY", entityCaptor.getValue().getHolidayStrategy());
     }
 
     @Test
@@ -200,6 +208,31 @@ class PaymentConfigServiceImplTest {
         new PaymentConfigServiceImpl(paymentConfigMapper).updateIssueDutyRoster("DUTY_NEW_P1", request);
 
         verify(paymentConfigMapper).updateIssueDutyRoster(org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterEntity.class));
+    }
+
+    @Test
+    void shouldNormalizeIssueDutyRosterWeekdayScope() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        request.setWeekdayScope("5,1,3,3");
+        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(null);
+        mockOverviewDependencies();
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request);
+
+        ArgumentCaptor<PaymentIssueDutyRosterEntity> entityCaptor = ArgumentCaptor.forClass(PaymentIssueDutyRosterEntity.class);
+        verify(paymentConfigMapper).insertIssueDutyRoster(entityCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("5,1,3", entityCaptor.getValue().getWeekdayScope());
+    }
+
+    @Test
+    void shouldRejectInvalidIssueDutyRosterHolidayStrategy() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        request.setHolidayStrategy("HOLIDAY_ONLY");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request)
+        );
     }
 
     @Test
@@ -501,6 +534,8 @@ class PaymentConfigServiceImplTest {
         request.setScheduleTag("交易链路白班");
         request.setEffectiveStartHour(0);
         request.setEffectiveEndHour(23);
+        request.setWeekdayScope("1,2,3,4,5");
+        request.setHolidayStrategy("WORKDAY_ONLY");
         request.setEnabled(true);
         return request;
     }

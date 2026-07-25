@@ -54,8 +54,37 @@ function createRosterForm() {
     scheduleTag: "",
     effectiveStartHour: 0,
     effectiveEndHour: 23,
+    weekdayScope: "1,2,3,4,5",
+    holidayStrategy: "WORKDAY_ONLY",
     enabled: true
   };
+}
+
+function formatWeekdayScopeLabel(weekdayScope) {
+  const weekdayLabelMap = {
+    "1": "周一",
+    "2": "周二",
+    "3": "周三",
+    "4": "周四",
+    "5": "周五",
+    "6": "周六",
+    "7": "周日"
+  };
+  return (weekdayScope || "")
+    .split(",")
+    .map((item) => weekdayLabelMap[item.trim()])
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function formatHolidayStrategyLabel(holidayStrategy) {
+  if (holidayStrategy === "WORKDAY_ONLY") {
+    return "仅工作日";
+  }
+  if (holidayStrategy === "NON_WORKDAY_ONLY") {
+    return "仅非工作日";
+  }
+  return "全部日期";
 }
 
 async function loadOverview() {
@@ -266,6 +295,8 @@ function startEditRoster(roster) {
     scheduleTag: roster.scheduleTag,
     effectiveStartHour: roster.effectiveStartHour,
     effectiveEndHour: roster.effectiveEndHour,
+    weekdayScope: roster.weekdayScope || "1,2,3,4,5,6,7",
+    holidayStrategy: roster.holidayStrategy || "ALL_DAYS",
     enabled: roster.status === "ENABLED"
   };
   actionMessage.value = `正在编辑值班路由 ${roster.rosterCode}`;
@@ -913,6 +944,18 @@ onMounted(loadOverview);
                 <input v-model.number="rosterForm.effectiveEndHour" type="number" min="0" max="23" />
               </label>
               <label>
+                适用星期
+                <input v-model.trim="rosterForm.weekdayScope" placeholder="1,2,3,4,5" />
+              </label>
+              <label>
+                日期策略
+                <select v-model="rosterForm.holidayStrategy">
+                  <option value="ALL_DAYS">全部日期</option>
+                  <option value="WORKDAY_ONLY">仅工作日</option>
+                  <option value="NON_WORKDAY_ONLY">仅非工作日</option>
+                </select>
+              </label>
+              <label>
                 启用状态
                 <select v-model="rosterForm.enabled">
                   <option :value="true">启用</option>
@@ -946,6 +989,8 @@ onMounted(loadOverview);
                   <th>升级等级</th>
                   <th>班次标签</th>
                   <th>生效时间窗</th>
+                  <th>适用星期</th>
+                  <th>日期策略</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th>操作</th>
@@ -962,6 +1007,8 @@ onMounted(loadOverview);
                   <td>{{ roster.escalationLevel }}</td>
                   <td>{{ roster.scheduleTag }}</td>
                   <td>{{ roster.effectiveWindow }}</td>
+                  <td>{{ formatWeekdayScopeLabel(roster.weekdayScope) || roster.weekdayScope }}</td>
+                  <td>{{ roster.applicabilityDesc || formatHolidayStrategyLabel(roster.holidayStrategy) }}</td>
                   <td><span :class="['badge', roster.statusType]">{{ roster.status }}</span></td>
                   <td>{{ roster.updatedAt }}</td>
                   <td>

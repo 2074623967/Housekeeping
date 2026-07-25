@@ -28,6 +28,12 @@ public class PaymentIssueDutyRosterDTO {
     private Integer effectiveStartHour;
     /** 班次生效结束小时。 */
     private Integer effectiveEndHour;
+    /** 适用星期范围，1-7 对应周一到周日。 */
+    private String weekdayScope;
+    /** 日期策略：全部日期/仅工作日/仅非工作日。 */
+    private String holidayStrategy;
+    /** 日期适用说明。 */
+    private String applicabilityDesc;
     /** 班次生效时间窗。 */
     private String effectiveWindow;
     /** 配置状态。 */

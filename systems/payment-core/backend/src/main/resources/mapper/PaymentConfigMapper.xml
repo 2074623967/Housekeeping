@@ -200,6 +200,13 @@
                schedule_tag AS scheduleTag,
                effective_start_hour AS effectiveStartHour,
                effective_end_hour AS effectiveEndHour,
+               weekday_scope AS weekdayScope,
+               holiday_strategy AS holidayStrategy,
+               CASE holiday_strategy
+                   WHEN 'WORKDAY_ONLY' THEN '仅工作日'
+                   WHEN 'NON_WORKDAY_ONLY' THEN '仅非工作日'
+                   ELSE '全部日期'
+               END AS applicabilityDesc,
                CASE
                    WHEN effective_start_hour <= effective_end_hour
                        THEN CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-', LPAD(effective_end_hour, 2, '0'), ':00')
@@ -223,6 +230,8 @@
                schedule_tag AS scheduleTag,
                effective_start_hour AS effectiveStartHour,
                effective_end_hour AS effectiveEndHour,
+               weekday_scope AS weekdayScope,
+               holiday_strategy AS holidayStrategy,
                status,
                status_type AS statusType
         FROM t_payment_issue_duty_roster
@@ -400,6 +409,8 @@
             schedule_tag,
             effective_start_hour,
             effective_end_hour,
+            weekday_scope,
+            holiday_strategy,
             status,
             status_type,
             updated_at
@@ -414,6 +425,8 @@
             #{scheduleTag},
             #{effectiveStartHour},
             #{effectiveEndHour},
+            #{weekdayScope},
+            #{holidayStrategy},
             #{status},
             #{statusType},
             NOW()
@@ -431,6 +444,8 @@
             schedule_tag = #{scheduleTag},
             effective_start_hour = #{effectiveStartHour},
             effective_end_hour = #{effectiveEndHour},
+            weekday_scope = #{weekdayScope},
+            holiday_strategy = #{holidayStrategy},
             status = #{status},
             status_type = #{statusType},
             updated_at = NOW()

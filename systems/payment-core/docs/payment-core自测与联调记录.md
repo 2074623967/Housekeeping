@@ -1709,3 +1709,36 @@
 1. 当前 `payment-core` 的异常告警编排能力已从“多供应商失败切换”进一步推进到“带轻量熔断降级”的主备治理版本。
 2. 本轮提升的是通知编排层面的韧性，不代表真实供应商 SDK/HTTP 接入和跨实例熔断共享已经完成。
 3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 50. 2026-07-25 异常告警工作日/非工作日值班策略验证
+
+### 50.1 本轮验证范围
+
+本轮围绕“异常告警值班路由只有小时段，没有星期范围和工作日策略，难以表达真实白班/周末/全周兜底排班”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `t_payment_issue_duty_roster` 新增 `weekday_scope` 与 `holiday_strategy`
+2. `PaymentConfigServiceImpl` 新增值班路由日期策略校验与归一化
+3. `PaymentTaskCenterMapper.xml` 新增值班星期范围与工作日策略命中条件
+4. `admin-web` 支付配置中心补齐值班路由“适用星期/日期策略”配置与展示
+
+### 50.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖值班路由配置增强与异常告警派发不回退 |
+| 后台前端构建 | `npm run build` | 通过 | `systems/payment-core/frontend/admin-web` 值班路由表单新增字段后仍可生产构建 |
+
+### 50.3 本轮补齐项
+
+1. 值班路由可以按 `1-7` 配置生效星期，支持工作日白班与周末班拆分。
+2. 值班路由可以声明 `ALL_DAYS / WORKDAY_ONLY / NON_WORKDAY_ONLY` 三类日期策略。
+3. 巡检生成 outbox 和待派发 outbox 命中值班路由时，会同时校验小时窗口、星期范围和日期策略。
+4. 页面已展示日期策略和适用星期，避免运营只改后端、不知当前值班命中边界。
+
+### 50.4 当前判断
+
+1. 当前 `payment-core` 的异常告警值班编排能力已从“只有小时段”推进到“小时段 + 星期范围 + 工作日策略”的轻量正式化版本。
+2. 本轮提升的是值班路由编排能力，不代表法定节假日服务、真实排班中心或升级链路已经完成。
+3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。

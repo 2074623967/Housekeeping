@@ -28,6 +28,10 @@ public class PaymentIssueDutyRosterEntity {
     private Integer effectiveStartHour;
     /** 班次生效结束小时。 */
     private Integer effectiveEndHour;
+    /** 适用星期范围，1-7 对应周一到周日。 */
+    private String weekdayScope;
+    /** 日期策略：ALL_DAYS/WORKDAY_ONLY/NON_WORKDAY_ONLY。 */
+    private String holidayStrategy;
     /** 状态。 */
     private String status;
     /** 状态样式类型。 */
