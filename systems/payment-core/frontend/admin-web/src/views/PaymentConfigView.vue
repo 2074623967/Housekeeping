@@ -51,6 +51,9 @@ function createRosterForm() {
     receiver: "",
     notifyChannels: "IN_APP,IM",
     escalationLevel: "L1",
+    escalationReceiver: "",
+    escalationPolicy: "",
+    escalationTimeoutMinutes: 30,
     scheduleTag: "",
     effectiveStartHour: 0,
     effectiveEndHour: 23,
@@ -292,6 +295,9 @@ function startEditRoster(roster) {
     receiver: roster.receiver,
     notifyChannels: roster.notifyChannels,
     escalationLevel: roster.escalationLevel,
+    escalationReceiver: roster.escalationReceiver,
+    escalationPolicy: roster.escalationPolicy,
+    escalationTimeoutMinutes: roster.escalationTimeoutMinutes,
     scheduleTag: roster.scheduleTag,
     effectiveStartHour: roster.effectiveStartHour,
     effectiveEndHour: roster.effectiveEndHour,
@@ -932,6 +938,18 @@ onMounted(loadOverview);
                 <input v-model.trim="rosterForm.escalationLevel" placeholder="L1" />
               </label>
               <label>
+                升级接收人
+                <input v-model.trim="rosterForm.escalationReceiver" placeholder="支付技术负责人" />
+              </label>
+              <label>
+                升级策略
+                <input v-model.trim="rosterForm.escalationPolicy" placeholder="30分钟未确认升级支付技术负责人" />
+              </label>
+              <label>
+                升级超时分钟
+                <input v-model.number="rosterForm.escalationTimeoutMinutes" type="number" min="5" max="1440" />
+              </label>
+              <label>
                 班次标签
                 <input v-model.trim="rosterForm.scheduleTag" placeholder="交易链路白班" />
               </label>
@@ -987,6 +1005,8 @@ onMounted(loadOverview);
                   <th>值班接收人</th>
                   <th>通知通道</th>
                   <th>升级等级</th>
+                  <th>升级接收人</th>
+                  <th>升级策略</th>
                   <th>班次标签</th>
                   <th>生效时间窗</th>
                   <th>适用星期</th>
@@ -1005,6 +1025,8 @@ onMounted(loadOverview);
                   <td>{{ roster.receiver }}</td>
                   <td>{{ roster.notifyChannels }}</td>
                   <td>{{ roster.escalationLevel }}</td>
+                  <td>{{ roster.escalationReceiver }}</td>
+                  <td>{{ roster.escalationPolicy }} / {{ roster.escalationTimeoutMinutes }}分钟</td>
                   <td>{{ roster.scheduleTag }}</td>
                   <td>{{ roster.effectiveWindow }}</td>
                   <td>{{ formatWeekdayScopeLabel(roster.weekdayScope) || roster.weekdayScope }}</td>

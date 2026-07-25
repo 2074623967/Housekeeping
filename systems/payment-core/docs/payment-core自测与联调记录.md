@@ -1742,3 +1742,28 @@
 1. 当前 `payment-core` 的异常告警值班编排能力已从“只有小时段”推进到“小时段 + 星期范围 + 工作日策略”的轻量正式化版本。
 2. 本轮提升的是值班路由编排能力，不代表法定节假日服务、真实排班中心或升级链路已经完成。
 3. 因此本轮仍属于冻结版补强，而不是 `master / release` 的触发条件。
+
+## 51. 2026-07-25 异常告警升级编排验证
+
+### 51.1 本轮验证范围
+
+本轮围绕“值班路由只有升级等级，没有升级接收人、升级策略和超时阈值”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `t_payment_issue_duty_roster` 新增升级接收人、升级策略和升级超时分钟数
+2. `PaymentConfigServiceImpl` 新增升级字段必填和超时范围校验
+3. `PaymentTaskCenterServiceImpl` 生成 SLA 告警 outbox 时追加升级策略说明
+4. `admin-web` 支付配置中心补齐升级编排字段配置与展示
+
+### 51.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentConfigServiceImplTest,PaymentTaskCenterServiceImplTest test` | 通过 | `36` 个用例通过 |
+| 后台前端构建 | `npm run build` | 通过 | `systems/payment-core/frontend/admin-web` 构建通过 |
+
+### 51.3 当前判断
+
+1. 当前 `payment-core` 的异常告警已具备轻量升级编排配置能力。
+2. 本轮仍未实现未确认自动二次派发、法定节假日排班中心和真实外部通知网关，因此仍不触发 `master / release`。

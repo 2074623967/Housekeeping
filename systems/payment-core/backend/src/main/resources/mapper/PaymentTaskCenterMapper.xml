@@ -95,6 +95,9 @@
                issue_sla.severity AS severity,
                COALESCE(roster.responsibility_group, '支付运营组') AS responsibilityGroup,
                COALESCE(roster.receiver, '支付运营') AS receiver,
+               COALESCE(roster.escalation_receiver, '支付值班负责人') AS escalationReceiver,
+               COALESCE(roster.escalation_policy, '超时未确认升级值班负责人') AS escalationPolicy,
+               COALESCE(roster.escalation_timeout_minutes, 30) AS escalationTimeoutMinutes,
                COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
                CASE
                    WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL

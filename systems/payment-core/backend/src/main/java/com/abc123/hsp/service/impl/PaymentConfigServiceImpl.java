@@ -418,6 +418,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setReceiver(requireText(request.getReceiver(), "值班接收人不能为空"));
         entity.setNotifyChannels(requireText(request.getNotifyChannels(), "通知通道不能为空"));
         entity.setEscalationLevel(requireText(request.getEscalationLevel(), "升级等级不能为空"));
+        entity.setEscalationReceiver(requireText(request.getEscalationReceiver(), "升级接收人不能为空"));
+        entity.setEscalationPolicy(requireText(request.getEscalationPolicy(), "升级策略不能为空"));
+        entity.setEscalationTimeoutMinutes(resolveEscalationTimeoutMinutes(request.getEscalationTimeoutMinutes()));
         entity.setScheduleTag(requireText(request.getScheduleTag(), "班次标签不能为空"));
         int effectiveStartHour = resolveDutyRosterHour(request.getEffectiveStartHour(), 0, "班次生效开始小时不能为空");
         int effectiveEndHour = resolveDutyRosterHour(request.getEffectiveEndHour(), 23, "班次生效结束小时不能为空");
@@ -513,6 +516,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("日期策略仅支持 ALL_DAYS/WORKDAY_ONLY/NON_WORKDAY_ONLY");
         }
         return normalizedHolidayStrategy;
+    }
+
+    private Integer resolveEscalationTimeoutMinutes(Integer escalationTimeoutMinutes) {
+        if (escalationTimeoutMinutes == null) {
+            return Integer.valueOf(30);
+        }
+        int normalizedTimeoutMinutes = escalationTimeoutMinutes.intValue();
+        if (normalizedTimeoutMinutes < 5 || normalizedTimeoutMinutes > 1440) {
+            throw new IllegalArgumentException("升级超时分钟数必须在 5-1440 之间");
+        }
+        return Integer.valueOf(normalizedTimeoutMinutes);
     }
 
     private String resolveProtocolTypeName(String protocolType, String requestProtocolTypeName) {

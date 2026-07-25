@@ -43,11 +43,11 @@ INSERT INTO t_payment_alert_provider_config (provider_code, provider_name, chann
 ('ALERT_EMAIL_SENDCLOUD', 'SendCloud 邮件告警', 'EMAIL', 'sendcloud-payment-alerts', 'TPL_PAYMENT_ISSUE_EMAIL_V1', '主题：{{severity}} {{issueType}}\\n异常单号：{{issueNo}}\\n支付单号：{{paymentOrderId}}\\n责任组：{{responsibilityGroup}}\\n告警详情：{{alertContent}}\\n触发来源：{{triggeredBy}}', 'severity=P2', 20, '失败重试2次/间隔15分钟', '每分钟 20 封', 'ENABLED', 'success', '2026-07-24 15:20:00'),
 ('ALERT_EMAIL_SENDCLOUD_DEFAULT', 'SendCloud 邮件告警-默认', 'EMAIL', 'sendcloud-payment-alerts-default', 'TPL_PAYMENT_ISSUE_EMAIL_V2', '主题：{{severity}} {{issueType}}\\n支付单号：{{paymentOrderId}}\\n接收人：{{receiver}}\\n详情：{{alertContent}}', 'DEFAULT', 100, '失败重试2次/间隔15分钟', '每分钟 20 封', 'ENABLED', 'success', '2026-07-24 15:20:00');
 
-INSERT INTO t_payment_issue_duty_roster (roster_code, issue_type, severity, responsibility_group, receiver, notify_channels, escalation_level, schedule_tag, effective_start_hour, effective_end_hour, weekday_scope, holiday_strategy, status, status_type, updated_at) VALUES
-('DUTY_WAIT_CALLBACK_P1', '待回调未收口', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '交易链路白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
-('DUTY_NOTIFY_PENDING_P1', '回调处理待跟进', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '回调补偿白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
-('DUTY_EVENT_FAILED_P2', '下游事件发布失败', 'P2', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,EMAIL', 'L2', '账务联动晚班', 0, 23, '1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED', 'success', '2026-07-21 09:10:00'),
-('DUTY_DISABLED_CHANNEL_P2', '命中停用渠道', 'P2', '渠道配置运营组', '渠道配置运营', 'IN_APP,IM', 'L2', '渠道运营白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00');
+INSERT INTO t_payment_issue_duty_roster (roster_code, issue_type, severity, responsibility_group, receiver, notify_channels, escalation_level, escalation_receiver, escalation_policy, escalation_timeout_minutes, schedule_tag, effective_start_hour, effective_end_hour, weekday_scope, holiday_strategy, status, status_type, updated_at) VALUES
+('DUTY_WAIT_CALLBACK_P1', '待回调未收口', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '支付技术负责人', '30分钟未确认升级支付技术负责人', 30, '交易链路白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_NOTIFY_PENDING_P1', '回调处理待跟进', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '支付技术负责人', '30分钟未确认升级支付技术负责人', 30, '回调补偿白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_EVENT_FAILED_P2', '下游事件发布失败', 'P2', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,EMAIL', 'L2', '账清结算负责人', '60分钟未恢复升级账清结算负责人', 60, '账务联动晚班', 0, 23, '1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_DISABLED_CHANNEL_P2', '命中停用渠道', 'P2', '渠道配置运营组', '渠道配置运营', 'IN_APP,IM', 'L2', '渠道运营负责人', '60分钟未处理升级渠道运营负责人', 60, '渠道运营白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00');
 
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
 ('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),

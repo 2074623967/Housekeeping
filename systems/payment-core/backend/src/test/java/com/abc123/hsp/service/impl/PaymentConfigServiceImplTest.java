@@ -195,6 +195,9 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("支付后端值班组", entityCaptor.getValue().getResponsibilityGroup());
         org.junit.jupiter.api.Assertions.assertEquals("1,2,3,4,5", entityCaptor.getValue().getWeekdayScope());
         org.junit.jupiter.api.Assertions.assertEquals("WORKDAY_ONLY", entityCaptor.getValue().getHolidayStrategy());
+        org.junit.jupiter.api.Assertions.assertEquals("支付技术负责人", entityCaptor.getValue().getEscalationReceiver());
+        org.junit.jupiter.api.Assertions.assertEquals("30分钟未确认升级支付技术负责人", entityCaptor.getValue().getEscalationPolicy());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(30), entityCaptor.getValue().getEscalationTimeoutMinutes());
     }
 
     @Test
@@ -228,6 +231,17 @@ class PaymentConfigServiceImplTest {
     void shouldRejectInvalidIssueDutyRosterHolidayStrategy() {
         PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
         request.setHolidayStrategy("HOLIDAY_ONLY");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request)
+        );
+    }
+
+    @Test
+    void shouldRejectInvalidIssueDutyRosterEscalationTimeout() {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        request.setEscalationTimeoutMinutes(3);
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
@@ -531,6 +545,9 @@ class PaymentConfigServiceImplTest {
         request.setReceiver("支付后端值班");
         request.setNotifyChannels("IN_APP,IM,SMS");
         request.setEscalationLevel("L1");
+        request.setEscalationReceiver("支付技术负责人");
+        request.setEscalationPolicy("30分钟未确认升级支付技术负责人");
+        request.setEscalationTimeoutMinutes(30);
         request.setScheduleTag("交易链路白班");
         request.setEffectiveStartHour(0);
         request.setEffectiveEndHour(23);

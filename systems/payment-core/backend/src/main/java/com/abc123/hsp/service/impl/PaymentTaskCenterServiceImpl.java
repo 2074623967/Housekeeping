@@ -250,6 +250,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (hasText(effectiveWindow)) {
             builder.append("时段：").append(effectiveWindow);
         }
+        if (hasText(candidate.getEscalationReceiver())) {
+            builder.append("，升级接收人：").append(candidate.getEscalationReceiver());
+        }
+        if (candidate.getEscalationTimeoutMinutes() != null) {
+            builder.append("，").append(candidate.getEscalationTimeoutMinutes()).append("分钟未确认升级");
+        }
+        if (hasText(candidate.getEscalationPolicy())) {
+            builder.append("，策略：").append(candidate.getEscalationPolicy());
+        }
         builder.append("】");
         return builder.toString();
     }

@@ -22,6 +22,12 @@ public class PaymentIssueDutyRosterEntity {
     private String notifyChannels;
     /** 升级等级。 */
     private String escalationLevel;
+    /** 升级接收人。 */
+    private String escalationReceiver;
+    /** 升级策略说明。 */
+    private String escalationPolicy;
+    /** 升级超时分钟数。 */
+    private Integer escalationTimeoutMinutes;
     /** 班次标签。 */
     private String scheduleTag;
     /** 班次生效开始小时。 */
