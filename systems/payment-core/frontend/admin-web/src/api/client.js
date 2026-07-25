@@ -128,6 +128,7 @@ export const paymentIssueApi = {
     });
     return request(`/api/payment-issues/alerts?${params.toString()}`);
   },
+  acknowledgeAlert: (alertNo, payload) => postJson(`/api/payment-issues/alerts/${alertNo}/acknowledge`, payload),
   batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };
 

@@ -444,6 +444,39 @@
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
+    <select id="findAlertLogByAlertNo" resultType="com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO">
+        SELECT alert_no AS alertNo,
+               source_alert_no AS sourceAlertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               triggered_by AS triggeredBy,
+               ack_operator AS ackOperator,
+               DATE_FORMAT(ack_at, '%Y-%m-%d %H:%i:%s') AS ackAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_issue_alert_log
+        WHERE alert_no = #{alertNo}
+        LIMIT 1
+    </select>
+
     <select id="countAlertLogs" resultType="long">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
@@ -506,6 +539,16 @@
             ack_operator = #{operator},
             ack_at = NOW()
         WHERE issue_no = #{issueNo}
+          AND ack_status = '待确认'
+    </update>
+
+    <update id="acknowledgeAlertByAlertNo">
+        UPDATE t_payment_issue_alert_log
+        SET ack_status = '已确认',
+            ack_status_type = 'success',
+            ack_operator = #{operator},
+            ack_at = NOW()
+        WHERE alert_no = #{alertNo}
           AND ack_status = '待确认'
     </update>
 </mapper>

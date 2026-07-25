@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
@@ -52,6 +53,25 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                 normalizedQuery.getPageNo(),
                 normalizedQuery.getPageSize()
         );
+    }
+
+    @Override
+    @Transactional
+    public PaymentIssueAlertLogRowDTO acknowledgeAlert(String alertNo, PaymentIssueAlertAcknowledgeRequestDTO request) {
+        String normalizedAlertNo = requireText(alertNo, "告警编号不能为空");
+        PaymentIssueAlertLogRowDTO alertLog = paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
+        if (alertLog == null) {
+            throw new IllegalArgumentException("支付异常告警不存在：" + normalizedAlertNo);
+        }
+        if ("无需回执".equals(alertLog.getAckStatus())) {
+            throw new IllegalArgumentException("当前告警无需人工确认：" + normalizedAlertNo);
+        }
+        if ("已确认".equals(alertLog.getAckStatus())) {
+            return alertLog;
+        }
+        String operator = request == null ? null : request.getOperator();
+        paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, requireText(operator, "确认人不能为空"));
+        return paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
     }
 
     @Override

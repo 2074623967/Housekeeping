@@ -2190,3 +2190,30 @@
 1. 当前 `payment-core` 的异常告警投递链路已经具备“归一化状态 + 原始供应商回执快照”双维度留痕能力，排查 webhook/供应商回执问题时证据更完整。
 2. 这一步把异常中心从“只能看摘要状态”提升到“可以直接看到原始回执片段”，更接近公司内部告警台账的可追溯要求。
 3. 当前补强仍聚焦在异常告警链路，`payment-core` 全系统仍未达到 `master / release` 冻结门槛，后续还需要继续补齐更广范围的业务闭环与联调验证。
+
+## 69. 2026-07-25 异常告警人工确认回执闭环验证
+
+### 69.1 本轮验证范围
+
+本轮围绕“异常告警明细页虽然能看到回执状态，但运营在核对站内触达或外部供应商送达后，缺少独立的人工确认回执动作，导致‘异常已处理’与‘告警已确认’两种业务语义仍然耦合”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. 新增 `POST /api/payment-issues/alerts/{alertNo}/acknowledge` 独立确认接口，按告警编号收口人工确认回执
+2. 服务层补充“告警不存在 / 无需回执 / 已确认幂等返回 / 缺少确认人”校验，避免错误确认
+3. 异常告警明细页增加“默认确认人”和“确认回执”操作列，支持对 `待确认` 告警单独收口
+4. 人工确认成功后，页面会即时刷新当前行的 `ackStatus / ackOperator / ackAt`
+5. `PaymentIssueServiceImplTest` 新增人工确认回执用例，验证确认成功与“无需回执”拦截场景
+
+### 69.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueServiceImplTest test` | 通过 | `9` 个用例全部通过 |
+| 管理端构建验证 | `npm run build` | 通过 | `systems/payment-core/frontend/admin-web` 构建成功 |
+
+### 69.3 当前判断
+
+1. 当前 `payment-core` 的异常告警中心已经具备“系统自动派发留痕 + 人工确认回执收口”两段式闭环，业务语义比之前更清晰。
+2. 这一步让运营、研发和测试在排查告警时不再只能依赖“标记异常已处理”顺带确认告警，而是可以对触达本身独立留痕。
+3. 当前补强仍聚焦在异常治理维度，`payment-core` 依旧未达到 `master / release` 冻结门槛，后续还需要继续补更广的页面矩阵与支付主链路联调验证。

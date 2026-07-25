@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
@@ -11,6 +12,7 @@ import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.service.PaymentIssueService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -101,6 +103,15 @@ public class PaymentIssueController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentIssueService.listAlertLogs(query));
+    }
+
+    /**
+     * 人工确认支付异常告警回执，供运营在核对供应商或站内触达后手工收口。
+     */
+    @PostMapping("/alerts/{alertNo}/acknowledge")
+    public ApiResponse<PaymentIssueAlertLogRowDTO> acknowledgeAlert(@PathVariable String alertNo,
+                                                                    @RequestBody PaymentIssueAlertAcknowledgeRequestDTO request) {
+        return ApiResponse.success(paymentIssueService.acknowledgeAlert(alertNo, request));
     }
 
     /**

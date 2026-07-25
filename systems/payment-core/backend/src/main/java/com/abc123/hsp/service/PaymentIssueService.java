@@ -2,6 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
@@ -33,4 +34,9 @@ public interface PaymentIssueService {
      * 批量记录支付交易异常处理动作。
      */
     PageResultDTO<PaymentIssueRowDTO> batchAction(PaymentIssueActionRequestDTO request);
+
+    /**
+     * 人工确认支付异常告警回执。
+     */
+    PaymentIssueAlertLogRowDTO acknowledgeAlert(String alertNo, PaymentIssueAlertAcknowledgeRequestDTO request);
 }

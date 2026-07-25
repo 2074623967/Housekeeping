@@ -9,7 +9,10 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
+const activeAlertNo = ref("");
 const errorMessage = ref("");
+const successMessage = ref("");
+const ackOperator = ref("payment-core-admin");
 const filters = ref({
   alertNo: route.query.alertNo || "",
   issueNo: route.query.issueNo || "",
@@ -57,9 +60,30 @@ async function loadAlertLogs() {
     items.value = result.items;
     total.value = result.total;
   } catch (error) {
-    errorMessage.value = error.message;
+    errorMessage.value = `异常告警明细加载失败：${error.message}`;
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function acknowledgeAlert(alertNo) {
+  if (!ackOperator.value.trim()) {
+    errorMessage.value = "请先输入确认人";
+    return;
+  }
+  activeAlertNo.value = alertNo;
+  errorMessage.value = "";
+  successMessage.value = "";
+  try {
+    const updatedRow = await paymentIssueApi.acknowledgeAlert(alertNo, {
+      operator: ackOperator.value.trim()
+    });
+    items.value = items.value.map((item) => (item.alertNo === alertNo ? updatedRow : item));
+    successMessage.value = `告警 ${alertNo} 已确认回执`;
+  } catch (error) {
+    errorMessage.value = `确认回执失败：${error.message}`;
+  } finally {
+    activeAlertNo.value = "";
   }
 }
 
@@ -85,8 +109,9 @@ onMounted(loadAlertLogs);
     </div>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        异常告警明细加载失败：{{ errorMessage }}
+      <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+      <div v-if="successMessage" class="success-banner">
+        {{ successMessage }}
       </div>
 
       <div class="toolbar">
@@ -142,6 +167,10 @@ onMounted(loadAlertLogs);
             <option>SEND_EXCEPTION</option>
           </select>
         </div>
+        <div class="field">
+          <label>默认确认人</label>
+          <input v-model="ackOperator" placeholder="请输入确认人" />
+        </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
@@ -170,6 +199,7 @@ onMounted(loadAlertLogs);
               <th>渲染快照</th>
               <th>触发来源</th>
               <th>确认信息</th>
+              <th>操作</th>
               <th>创建时间</th>
             </tr>
           </thead>
@@ -208,6 +238,17 @@ onMounted(loadAlertLogs);
               <td class="flow-summary-cell">
                 <div>{{ item.ackOperator || "-" }}</div>
                 <div class="muted-text">{{ item.ackAt || "未确认" }}</div>
+              </td>
+              <td>
+                <button
+                  v-if="item.ackStatus === '待确认'"
+                  class="button secondary"
+                  :disabled="activeAlertNo === item.alertNo"
+                  @click="acknowledgeAlert(item.alertNo)"
+                >
+                  {{ activeAlertNo === item.alertNo ? "确认中..." : "确认回执" }}
+                </button>
+                <span v-else class="muted-text">无需操作</span>
               </td>
               <td>{{ item.createdAt }}</td>
             </tr>

@@ -39,6 +39,11 @@ public interface PaymentIssueMapper {
     long countAlertLogs(@Param("query") PaymentIssueAlertLogQueryDTO query);
 
     /**
+     * 按告警编号查询支付异常告警明细。
+     */
+    PaymentIssueAlertLogRowDTO findAlertLogByAlertNo(@Param("alertNo") String alertNo);
+
+    /**
      * 按异常编号查询当前聚合异常。
      */
     PaymentIssueRowDTO findByIssueNo(@Param("issueNo") String issueNo);
@@ -62,4 +67,10 @@ public interface PaymentIssueMapper {
      */
     int acknowledgePendingAlerts(@Param("issueNo") String issueNo,
                                  @Param("operator") String operator);
+
+    /**
+     * 按告警编号确认支付异常告警回执。
+     */
+    int acknowledgeAlertByAlertNo(@Param("alertNo") String alertNo,
+                                  @Param("operator") String operator);
 }

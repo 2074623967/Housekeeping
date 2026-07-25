@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
@@ -125,6 +126,45 @@ class PaymentIssueServiceImplTest {
         query.setPageSize(10);
 
         assertEquals(1, new PaymentIssueServiceImpl(paymentIssueMapper).listAlertLogs(query).getItems().size());
+    }
+
+    @Test
+    void shouldAcknowledgeAlertByAlertNo() {
+        PaymentIssueAlertLogRowDTO pendingRow = new PaymentIssueAlertLogRowDTO();
+        pendingRow.setAlertNo("PIA-ACK-001");
+        pendingRow.setAckStatus("待确认");
+        PaymentIssueAlertLogRowDTO acknowledgedRow = new PaymentIssueAlertLogRowDTO();
+        acknowledgedRow.setAlertNo("PIA-ACK-001");
+        acknowledgedRow.setAckStatus("已确认");
+        acknowledgedRow.setAckOperator("支付运营");
+        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-ACK-001")).thenReturn(pendingRow, acknowledgedRow);
+        when(paymentIssueMapper.acknowledgeAlertByAlertNo("PIA-ACK-001", "支付运营")).thenReturn(1);
+
+        PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
+        request.setOperator(" 支付运营 ");
+
+        PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .acknowledgeAlert(" PIA-ACK-001 ", request);
+
+        assertEquals("已确认", result.getAckStatus());
+        assertEquals("支付运营", result.getAckOperator());
+        verify(paymentIssueMapper).acknowledgeAlertByAlertNo("PIA-ACK-001", "支付运营");
+    }
+
+    @Test
+    void shouldRejectAcknowledgeWhenAlertDoesNotNeedAck() {
+        PaymentIssueAlertLogRowDTO noAckRow = new PaymentIssueAlertLogRowDTO();
+        noAckRow.setAlertNo("PIA-NOACK-001");
+        noAckRow.setAckStatus("无需回执");
+        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-NOACK-001")).thenReturn(noAckRow);
+
+        PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
+        request.setOperator("支付运营");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).acknowledgeAlert("PIA-NOACK-001", request)
+        );
     }
 
     @Test
