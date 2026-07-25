@@ -2088,3 +2088,28 @@
 1. 当前 `payment-core` 的异常告警补发策略已从“固定冷却”升级为“支持指数退避和最大间隔封顶”的生产化策略。
 2. 这一步补齐了真实供应商连续失败时的保守补发节奏控制，降低了短时间重复轰炸供应商网关的风险。
 3. 服务端时间窗校验联动和统一防重放编排仍待补齐，因此当前仍不触发 `master / release`。
+
+## 65. 2026-07-25 告警模板占位符扩展渲染验证
+
+### 65.1 本轮验证范围
+
+本轮围绕“告警模板渲染虽然已经支持少量固定字段，但扩展变量仍需改代码、未知占位符也缺少统一兜底”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. 模板渲染器从写死 `replace` 升级为占位符驱动解析，统一识别 `{{variableName}}`
+2. 新增对 `alertNo / notifyChannels / escalationLevel / providerCode / providerName / endpointAlias / templateCode / templateBody` 等变量的支持
+3. 未识别占位符统一兜底为 `-`，避免真实供应商模板漏配时直接原样透出占位符
+4. `PaymentIssueAlertDeliveryServiceImplTest` 新增扩展变量与未知占位符场景，验证渲染结果可直接进入通知器
+
+### 65.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `17` 个用例通过 |
+
+### 65.3 当前判断
+
+1. 当前 `payment-core` 的异常告警模板已从“固定字段替换”升级为“通用占位符解析 + 未知字段兜底”的实现。
+2. 这一步提升了真实供应商模板接入时的扩展性，也降低了模板配置不完整时的文案风险。
+3. 服务端时间窗校验联动和统一防重放编排仍待补齐，因此当前仍不触发 `master / release`。

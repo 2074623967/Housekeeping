@@ -133,6 +133,40 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldRenderExtendedTemplateVariablesAndFallbackUnknownPlaceholder() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        PaymentAlertProviderConfigDTO provider = buildProvider(
+                "ALERT_IM_WECOM",
+                "企业微信告警机器人",
+                "wecom-bot-alerts",
+                "TPL_PAYMENT_ISSUE_IM_V1",
+                "DEFAULT",
+                100
+        );
+        provider.setTemplateBody("{{providerName}}|{{endpointAlias}}|{{notifyChannels}}|{{escalationLevel}}|{{unknownField}}");
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(provider));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor = ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
+        verify(imNotifier).send(dispatchCaptor.capture());
+        Assertions.assertEquals(
+                "企业微信告警机器人|wecom-bot-alerts|IN_APP,IM,SMS|L2|-",
+                dispatchCaptor.getValue().getRenderedAlertContent()
+        );
+    }
+
+    @Test
     void shouldMarkUnsupportedChannelAsFailure() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,VOICE");

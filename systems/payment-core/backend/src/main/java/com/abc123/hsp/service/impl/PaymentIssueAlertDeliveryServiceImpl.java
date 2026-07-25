@@ -43,6 +43,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern RETRY_BACKOFF_FACTOR_PATTERN = Pattern.compile("退避系数(\\d+)倍");
     private static final Pattern RETRY_MAX_COOLDOWN_PATTERN = Pattern.compile("最大间隔(\\d+)分钟");
     private static final Pattern RATE_LIMIT_PATTERN = Pattern.compile("每(?:(\\d+)分钟|分钟)\\s*(\\d+)\\s*条");
+    private static final Pattern TEMPLATE_PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_]+)\\s*}}");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
@@ -515,16 +516,46 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(templateBody)) {
             return buildAlertContent(item);
         }
-        return templateBody
-                .replace("{{severity}}", safeText(item.getSeverity()))
-                .replace("{{issueType}}", safeText(item.getIssueType()))
-                .replace("{{issueNo}}", safeText(item.getIssueNo()))
-                .replace("{{paymentOrderId}}", safeText(item.getPaymentOrderId()))
-                .replace("{{responsibilityGroup}}", safeText(item.getResponsibilityGroup()))
-                .replace("{{receiver}}", safeText(item.getReceiver()))
-                .replace("{{scheduleTag}}", safeText(item.getScheduleTag()))
-                .replace("{{alertContent}}", safeText(item.getAlertContent()))
-                .replace("{{triggeredBy}}", safeText(item.getTriggeredBy()));
+        Map<String, String> variables = buildTemplateVariables(item);
+        Matcher matcher = TEMPLATE_PLACEHOLDER_PATTERN.matcher(templateBody);
+        StringBuffer buffer = new StringBuffer();
+        while (matcher.find()) {
+            String variableName = matcher.group(1);
+            String replacement = resolveTemplateVariableValue(variables, variableName);
+            matcher.appendReplacement(buffer, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(buffer);
+        return buffer.toString();
+    }
+
+    private Map<String, String> buildTemplateVariables(PaymentIssueAlertDispatchItemDTO item) {
+        Map<String, String> variables = new HashMap<String, String>();
+        variables.put("alertNo", safeText(item.getAlertNo()));
+        variables.put("issueNo", safeText(item.getIssueNo()));
+        variables.put("paymentOrderId", safeText(item.getPaymentOrderId()));
+        variables.put("issueType", safeText(item.getIssueType()));
+        variables.put("severity", safeText(item.getSeverity()));
+        variables.put("responsibilityGroup", safeText(item.getResponsibilityGroup()));
+        variables.put("receiver", safeText(item.getReceiver()));
+        variables.put("notifyChannels", safeText(item.getNotifyChannels()));
+        variables.put("escalationLevel", safeText(item.getEscalationLevel()));
+        variables.put("scheduleTag", safeText(item.getScheduleTag()));
+        variables.put("providerCode", safeText(item.getProviderCode()));
+        variables.put("providerName", safeText(item.getProviderName()));
+        variables.put("endpointAlias", safeText(item.getEndpointAlias()));
+        variables.put("templateCode", safeText(item.getTemplateCode()));
+        variables.put("templateBody", safeText(item.getTemplateBody()));
+        variables.put("alertContent", safeText(item.getAlertContent()));
+        variables.put("triggeredBy", safeText(item.getTriggeredBy()));
+        return variables;
+    }
+
+    private String resolveTemplateVariableValue(Map<String, String> variables, String variableName) {
+        if (!StringUtils.hasText(variableName)) {
+            return "-";
+        }
+        String value = variables.get(variableName.trim());
+        return StringUtils.hasText(value) ? value : "-";
     }
 
     private String safeText(String value) {
