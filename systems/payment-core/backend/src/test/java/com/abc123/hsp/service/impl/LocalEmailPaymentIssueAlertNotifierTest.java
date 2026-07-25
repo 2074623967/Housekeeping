@@ -34,12 +34,15 @@ class LocalEmailPaymentIssueAlertNotifierTest {
                 Mockito.eq("https://email.example.com/payment-alert"),
                 Mockito.any(),
                 Mockito.eq(String.class)
-        )).thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
+        )).thenReturn(new ResponseEntity<String>("{\"status\":\"DELIVERED\",\"result\":{\"mailNo\":\"EMAIL-EXT-001\"}}", HttpStatus.OK));
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
                 restTemplate,
                 "https://email.example.com/payment-alert",
-                6100
+                6100,
+                "/status",
+                "DELIVERED",
+                "/result/mailNo"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -49,7 +52,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
                 Mockito.eq(String.class)
         );
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
-        Assertions.assertEquals("EMAIL-HTTP-PIAOUTBOX001", result.getProviderReceiptNo());
+        Assertions.assertEquals("EMAIL-EXT-001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=6100ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));

@@ -1914,3 +1914,28 @@
 
 1. 当前 `payment-core` 的三类异常告警通道都已具备分通道超时配置能力。
 2. 签名、响应体业务码解析、重试退避和供应商级失败码标准化仍待补齐，因此仍不触发 `master / release`。
+
+## 58. 2026-07-25 异常告警外部网关业务成功码校验验证
+
+### 58.1 本轮验证范围
+
+本轮围绕“外部 HTTP/Webhook 通知器虽然可发请求，但仍只按 `HTTP 200` 判断成功，缺少业务成功码校验和回执号提取”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `application.yml` 新增 IM/SMS/EMAIL 三类通道的成功码 JSON Pointer 配置
+2. `application.yml` 新增 IM/SMS/EMAIL 三类通道的成功码期望值配置
+3. `application.yml` 新增 IM/SMS/EMAIL 三类通道的回执号 JSON Pointer 配置
+4. 三类通知器支持解析返回体并提取供应商回执号
+5. IM 通知器新增业务成功码不匹配拒绝用例
+
+### 58.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalEmailPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalImPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `21` 个用例通过 |
+
+### 58.3 当前判断
+
+1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备业务成功码校验和回执号提取能力。
+2. 签名、统一回执状态映射、重试退避和供应商失败码标准化仍待补齐，因此仍不触发 `master / release`。

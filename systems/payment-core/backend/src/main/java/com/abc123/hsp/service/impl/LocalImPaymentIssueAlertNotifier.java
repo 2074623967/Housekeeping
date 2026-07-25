@@ -22,24 +22,48 @@ public class LocalImPaymentIssueAlertNotifier extends AbstractLocalPaymentIssueA
     private final RestTemplate restTemplate;
     private String webhookUrl;
     private final int timeoutMs;
+    private final String successJsonPointer;
+    private final String successExpectedValue;
+    private final String receiptNoJsonPointer;
 
     public LocalImPaymentIssueAlertNotifier(@Value("${payment.issue-alert.im.webhook-url:}") String webhookUrl,
-                                            @Value("${payment.issue-alert.im.timeout-ms:3000}") int timeoutMs) {
-        this(webhookUrl, timeoutMs, null);
+                                            @Value("${payment.issue-alert.im.timeout-ms:3000}") int timeoutMs,
+                                            @Value("${payment.issue-alert.im.success-code-json-pointer:}") String successJsonPointer,
+                                            @Value("${payment.issue-alert.im.success-code-expected-value:}") String successExpectedValue,
+                                            @Value("${payment.issue-alert.im.receipt-no-json-pointer:}") String receiptNoJsonPointer) {
+        this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer, null);
     }
 
     LocalImPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
-        this(restTemplate, webhookUrl, 3000);
+        this(restTemplate, webhookUrl, 3000, "", "", "");
     }
 
-    LocalImPaymentIssueAlertNotifier(String webhookUrl, int timeoutMs, RestTemplate restTemplate) {
-        this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate, webhookUrl, timeoutMs);
+    LocalImPaymentIssueAlertNotifier(String webhookUrl,
+                                     int timeoutMs,
+                                     String successJsonPointer,
+                                     String successExpectedValue,
+                                     String receiptNoJsonPointer,
+                                     RestTemplate restTemplate) {
+        this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate,
+                webhookUrl,
+                timeoutMs,
+                successJsonPointer,
+                successExpectedValue,
+                receiptNoJsonPointer);
     }
 
-    LocalImPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl, int timeoutMs) {
+    LocalImPaymentIssueAlertNotifier(RestTemplate restTemplate,
+                                     String webhookUrl,
+                                     int timeoutMs,
+                                     String successJsonPointer,
+                                     String successExpectedValue,
+                                     String receiptNoJsonPointer) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
         this.timeoutMs = timeoutMs;
+        this.successJsonPointer = successJsonPointer;
+        this.successExpectedValue = successExpectedValue;
+        this.receiptNoJsonPointer = receiptNoJsonPointer;
     }
 
     @Override
@@ -58,14 +82,17 @@ public class LocalImPaymentIssueAlertNotifier extends AbstractLocalPaymentIssueA
     private PaymentIssueAlertDeliveryResultDTO sendWebhookAlert(PaymentIssueAlertDispatchItemDTO item) {
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(webhookUrl, buildWebhookPayload(item), String.class);
-            PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
-            result.setProviderReceiptNo(buildWebhookReceiptNo(item));
-            result.setProviderDeliveryStatus("ACCEPTED");
-            result.setProviderDeliveryMessage("IM Webhook 已受理，HTTP=" + response.getStatusCodeValue() + "，timeout=" + timeoutMs + "ms");
-            result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
-                    ? item.getRenderedAlertContent()
-                    : item.getAlertContent());
-            return result;
+            return buildWebhookDeliveryResult(
+                    item,
+                    "IM",
+                    "IM-WEBHOOK",
+                    response.getBody(),
+                    response.getStatusCodeValue(),
+                    timeoutMs,
+                    successJsonPointer,
+                    successExpectedValue,
+                    receiptNoJsonPointer
+            );
         } catch (RestClientException exception) {
             throw new IllegalStateException("IM Webhook 通知失败：" + exception.getMessage(), exception);
         }
@@ -88,11 +115,4 @@ public class LocalImPaymentIssueAlertNotifier extends AbstractLocalPaymentIssueA
         return payload;
     }
 
-    private String buildWebhookReceiptNo(PaymentIssueAlertDispatchItemDTO item) {
-        String alertNo = StringUtils.hasText(item.getAlertNo()) ? item.getAlertNo().replaceAll("[^A-Za-z0-9]", "") : "UNKNOWN";
-        if (alertNo.length() > 20) {
-            alertNo = alertNo.substring(alertNo.length() - 20);
-        }
-        return "IM-WEBHOOK-" + alertNo;
-    }
 }

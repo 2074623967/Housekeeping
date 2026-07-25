@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -10,6 +12,8 @@ import org.springframework.web.client.RestTemplate;
  * 本地告警通知器抽象基类，统一生成供应商投递回执。
  */
 abstract class AbstractLocalPaymentIssueAlertNotifier {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     /**
      * 为外部 HTTP/Webhook 通知器配置统一的连接与读取超时，避免网关长时间阻塞任务线程。
@@ -35,6 +39,79 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 ? item.getRenderedAlertContent()
                 : buildRenderedContent(item, channelLabel));
         return result;
+    }
+
+    /**
+     * 构造外部 HTTP/Webhook 网关投递结果，并按可选的业务成功码规则校验响应体。
+     */
+    protected PaymentIssueAlertDeliveryResultDTO buildWebhookDeliveryResult(PaymentIssueAlertDispatchItemDTO item,
+                                                                           String channelLabel,
+                                                                           String receiptPrefix,
+                                                                           String responseBody,
+                                                                           int statusCode,
+                                                                           int timeoutMs,
+                                                                           String successJsonPointer,
+                                                                           String successExpectedValue,
+                                                                           String receiptNoJsonPointer) {
+        validateWebhookBusinessResponse(channelLabel, responseBody, successJsonPointer, successExpectedValue);
+        PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptNo(resolveWebhookReceiptNo(item, receiptPrefix, responseBody, receiptNoJsonPointer));
+        result.setProviderDeliveryStatus("ACCEPTED");
+        result.setProviderDeliveryMessage(channelLabel + " HTTP 网关已受理，HTTP=" + statusCode + "，timeout=" + timeoutMs + "ms");
+        result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
+                ? item.getRenderedAlertContent()
+                : item.getAlertContent());
+        return result;
+    }
+
+    private void validateWebhookBusinessResponse(String channelLabel,
+                                                 String responseBody,
+                                                 String successJsonPointer,
+                                                 String successExpectedValue) {
+        if (!StringUtils.hasText(successJsonPointer) || !StringUtils.hasText(successExpectedValue)) {
+            return;
+        }
+        JsonNode node = readJsonNode(channelLabel, responseBody);
+        JsonNode successNode = node.at(successJsonPointer);
+        String actualValue = successNode.isMissingNode() || successNode.isNull() ? "" : successNode.asText();
+        if (!successExpectedValue.equals(actualValue)) {
+            throw new IllegalStateException(channelLabel + " 网关业务响应未通过，期望="
+                    + successExpectedValue + "，实际=" + actualValue);
+        }
+    }
+
+    private String resolveWebhookReceiptNo(PaymentIssueAlertDispatchItemDTO item,
+                                           String receiptPrefix,
+                                           String responseBody,
+                                           String receiptNoJsonPointer) {
+        if (!StringUtils.hasText(receiptNoJsonPointer)) {
+            return buildWebhookReceiptNo(receiptPrefix, item.getAlertNo());
+        }
+        JsonNode node = readJsonNode(receiptPrefix, responseBody);
+        JsonNode receiptNode = node.at(receiptNoJsonPointer);
+        if (receiptNode.isMissingNode() || receiptNode.isNull() || !StringUtils.hasText(receiptNode.asText())) {
+            return buildWebhookReceiptNo(receiptPrefix, item.getAlertNo());
+        }
+        return receiptNode.asText().trim();
+    }
+
+    private JsonNode readJsonNode(String channelLabel, String responseBody) {
+        if (!StringUtils.hasText(responseBody)) {
+            throw new IllegalStateException(channelLabel + " 网关响应体为空，无法校验业务结果");
+        }
+        try {
+            return OBJECT_MAPPER.readTree(responseBody);
+        } catch (Exception exception) {
+            throw new IllegalStateException(channelLabel + " 网关响应体不是合法 JSON：" + exception.getMessage(), exception);
+        }
+    }
+
+    protected String buildWebhookReceiptNo(String receiptPrefix, String alertNo) {
+        String normalizedAlertNo = StringUtils.hasText(alertNo) ? alertNo.replaceAll("[^A-Za-z0-9]", "") : "UNKNOWN";
+        if (normalizedAlertNo.length() > 20) {
+            normalizedAlertNo = normalizedAlertNo.substring(normalizedAlertNo.length() - 20);
+        }
+        return receiptPrefix + "-" + normalizedAlertNo;
     }
 
     private String buildReceiptNo(String channelLabel, String issueNo) {

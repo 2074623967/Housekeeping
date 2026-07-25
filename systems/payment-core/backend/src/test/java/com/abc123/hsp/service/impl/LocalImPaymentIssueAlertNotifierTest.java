@@ -34,12 +34,15 @@ class LocalImPaymentIssueAlertNotifierTest {
                 Mockito.eq("https://hooks.example.com/payment-alert"),
                 Mockito.any(),
                 Mockito.eq(String.class)
-        )).thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-001\"}}", HttpStatus.OK));
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
                 restTemplate,
                 "https://hooks.example.com/payment-alert",
-                4500
+                4500,
+                "/code",
+                "0",
+                "/data/receiptNo"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -49,10 +52,34 @@ class LocalImPaymentIssueAlertNotifierTest {
                 Mockito.eq(String.class)
         );
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
-        Assertions.assertEquals("IM-WEBHOOK-PIAOUTBOX001", result.getProviderReceiptNo());
+        Assertions.assertEquals("IM-EXT-001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=4500ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
+    }
+
+    @Test
+    void shouldRejectWebhookWhenBusinessCodeMismatch() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"500\"}", HttpStatus.OK));
+
+        IllegalStateException exception = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new LocalImPaymentIssueAlertNotifier(
+                        restTemplate,
+                        "https://hooks.example.com/payment-alert",
+                        4500,
+                        "/code",
+                        "0",
+                        "/data/receiptNo"
+                ).send(buildDispatchItem())
+        );
+
+        Assertions.assertTrue(exception.getMessage().contains("业务响应未通过"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

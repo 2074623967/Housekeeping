@@ -34,12 +34,15 @@ class LocalSmsPaymentIssueAlertNotifierTest {
                 Mockito.eq("https://sms.example.com/payment-alert"),
                 Mockito.any(),
                 Mockito.eq(String.class)
-        )).thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"SUCCESS\",\"data\":{\"smsId\":\"SMS-EXT-001\"}}", HttpStatus.OK));
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalSmsPaymentIssueAlertNotifier(
                 restTemplate,
                 "https://sms.example.com/payment-alert",
-                5200
+                5200,
+                "/code",
+                "SUCCESS",
+                "/data/smsId"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
@@ -49,7 +52,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
                 Mockito.eq(String.class)
         );
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
-        Assertions.assertEquals("SMS-HTTP-PIAOUTBOX001", result.getProviderReceiptNo());
+        Assertions.assertEquals("SMS-EXT-001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=5200ms"));
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
