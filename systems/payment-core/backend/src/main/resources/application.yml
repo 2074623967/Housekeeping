@@ -44,6 +44,8 @@ payment:
       auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_IM_AUTH_HEADER_VALUE:}
       signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_HEADER_NAME:}
       signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_SECRET:}
+      timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_TIMESTAMP_HEADER_NAME:}
+      nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_NONCE_HEADER_NAME:}
     sms:
       # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
@@ -55,6 +57,8 @@ payment:
       auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_SMS_AUTH_HEADER_VALUE:}
       signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_HEADER_NAME:}
       signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_SECRET:}
+      timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_TIMESTAMP_HEADER_NAME:}
+      nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_NONCE_HEADER_NAME:}
     email:
       # 配置后邮件告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_WEBHOOK_URL:}
@@ -66,3 +70,5 @@ payment:
       auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_AUTH_HEADER_VALUE:}
       signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_HEADER_NAME:}
       signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_SECRET:}
+      timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_TIMESTAMP_HEADER_NAME:}
+      nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_NONCE_HEADER_NAME:}

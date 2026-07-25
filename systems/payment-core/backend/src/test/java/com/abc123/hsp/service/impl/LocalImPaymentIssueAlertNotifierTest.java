@@ -47,7 +47,9 @@ class LocalImPaymentIssueAlertNotifierTest {
                 "Authorization",
                 "Bearer im-token",
                 "X-Signature",
-                "im-secret"
+                "im-secret",
+                "X-Timestamp",
+                "X-Nonce"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -63,6 +65,8 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
         Assertions.assertEquals("Bearer im-token", payloadCaptor.getValue().getHeaders().getFirst("Authorization"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Signature"));
+        Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Timestamp"));
+        Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Nonce"));
     }
 
     @Test
@@ -83,6 +87,8 @@ class LocalImPaymentIssueAlertNotifierTest {
                         "/code",
                         "0",
                         "/data/receiptNo",
+                        "",
+                        "",
                         "",
                         "",
                         "",

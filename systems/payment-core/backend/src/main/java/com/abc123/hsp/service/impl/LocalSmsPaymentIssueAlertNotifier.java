@@ -29,6 +29,8 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
     private final String authHeaderValue;
     private final String signatureHeaderName;
     private final String signatureSecret;
+    private final String timestampHeaderName;
+    private final String nonceHeaderName;
 
     public LocalSmsPaymentIssueAlertNotifier(@Value("${payment.issue-alert.sms.webhook-url:}") String webhookUrl,
                                              @Value("${payment.issue-alert.sms.timeout-ms:3000}") int timeoutMs,
@@ -38,13 +40,28 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                              @Value("${payment.issue-alert.sms.auth-header-name:}") String authHeaderName,
                                              @Value("${payment.issue-alert.sms.auth-header-value:}") String authHeaderValue,
                                              @Value("${payment.issue-alert.sms.signature-header-name:}") String signatureHeaderName,
-                                             @Value("${payment.issue-alert.sms.signature-secret:}") String signatureSecret) {
+                                             @Value("${payment.issue-alert.sms.signature-secret:}") String signatureSecret,
+                                             @Value("${payment.issue-alert.sms.timestamp-header-name:}") String timestampHeaderName,
+                                             @Value("${payment.issue-alert.sms.nonce-header-name:}") String nonceHeaderName) {
         this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer,
-                authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, null);
+                authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, timestampHeaderName, nonceHeaderName, null);
     }
 
     LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
-        this(restTemplate, webhookUrl, 3000, "", "", "", "", "", "", "");
+        this(
+                webhookUrl,
+                3000,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                restTemplate
+        );
     }
 
     LocalSmsPaymentIssueAlertNotifier(String webhookUrl,
@@ -56,6 +73,8 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                       String authHeaderValue,
                                       String signatureHeaderName,
                                       String signatureSecret,
+                                      String timestampHeaderName,
+                                      String nonceHeaderName,
                                       RestTemplate restTemplate) {
         this(restTemplate == null ? buildRestTemplate(timeoutMs) : restTemplate,
                 webhookUrl,
@@ -66,7 +85,9 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                 authHeaderName,
                 authHeaderValue,
                 signatureHeaderName,
-                signatureSecret);
+                signatureSecret,
+                timestampHeaderName,
+                nonceHeaderName);
     }
 
     LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate,
@@ -78,7 +99,9 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                       String authHeaderName,
                                       String authHeaderValue,
                                       String signatureHeaderName,
-                                      String signatureSecret) {
+                                      String signatureSecret,
+                                      String timestampHeaderName,
+                                      String nonceHeaderName) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
         this.timeoutMs = timeoutMs;
@@ -89,6 +112,8 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
         this.authHeaderValue = authHeaderValue;
         this.signatureHeaderName = signatureHeaderName;
         this.signatureSecret = signatureSecret;
+        this.timestampHeaderName = timestampHeaderName;
+        this.nonceHeaderName = nonceHeaderName;
     }
 
     @Override
@@ -108,7 +133,7 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(
                     webhookUrl,
-                    buildWebhookRequestEntity(buildWebhookPayload(item), authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret),
+                    buildWebhookRequestEntity(buildWebhookPayload(item), authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, timestampHeaderName, nonceHeaderName),
                     String.class
             );
             return buildWebhookDeliveryResult(

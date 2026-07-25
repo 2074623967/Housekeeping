@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
+import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.HttpEntity;
@@ -40,7 +41,9 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                                         String authHeaderName,
                                                                         String authHeaderValue,
                                                                         String signatureHeaderName,
-                                                                        String signatureSecret) {
+                                                                        String signatureSecret,
+                                                                        String timestampHeaderName,
+                                                                        String nonceHeaderName) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         if (StringUtils.hasText(authHeaderName) && StringUtils.hasText(authHeaderValue)) {
@@ -48,6 +51,12 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         }
         if (StringUtils.hasText(signatureHeaderName) && StringUtils.hasText(signatureSecret)) {
             headers.set(signatureHeaderName.trim(), signPayload(payload, signatureSecret));
+        }
+        if (StringUtils.hasText(timestampHeaderName)) {
+            headers.set(timestampHeaderName.trim(), String.valueOf(System.currentTimeMillis()));
+        }
+        if (StringUtils.hasText(nonceHeaderName)) {
+            headers.set(nonceHeaderName.trim(), UUID.randomUUID().toString().replace("-", ""));
         }
         return new HttpEntity<Map<String, Object>>(payload, headers);
     }

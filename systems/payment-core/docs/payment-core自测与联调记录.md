@@ -1987,3 +1987,27 @@
 
 1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备签名头配置能力。
 2. 时间戳/nonce 联动、供应商签名算法切换、统一回执状态映射、重试退避和供应商失败码标准化仍待补齐，因此仍不触发 `master / release`。
+
+## 61. 2026-07-25 异常告警外部网关时间戳与 Nonce 头配置验证
+
+### 61.1 本轮验证范围
+
+本轮围绕“外部 HTTP/Webhook 通知器虽然可以带认证头和签名头，但缺少时间戳与 nonce 头，难以对接真实供应商的时效校验与防重放要求”的问题进行了补强验证。
+
+本轮覆盖内容：
+
+1. `application.yml` 新增 IM/SMS/EMAIL 三类通道的时间戳头名称配置
+2. `application.yml` 新增 IM/SMS/EMAIL 三类通道的 nonce 头名称配置
+3. 三类通知器统一把时间戳与 nonce 写入 HTTP 请求头
+4. 三类通知器测试补齐时间戳头与 nonce 头断言
+
+### 61.2 验证命令
+
+| 项目 | 命令/方式 | 预期结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalEmailPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalImPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `21` 个用例通过 |
+
+### 61.3 当前判断
+
+1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类异常告警通道都已具备时间戳头与 nonce 头配置能力。
+2. 服务端时间窗校验联动、统一防重放编排、供应商签名算法切换、统一回执状态映射、重试退避和供应商失败码标准化仍待补齐，因此仍不触发 `master / release`。

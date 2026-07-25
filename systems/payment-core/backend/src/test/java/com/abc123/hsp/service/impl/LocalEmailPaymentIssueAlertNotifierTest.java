@@ -47,7 +47,9 @@ class LocalEmailPaymentIssueAlertNotifierTest {
                 "X-Mail-Token",
                 "email-token-001",
                 "X-Email-Signature",
-                "email-secret"
+                "email-secret",
+                "X-Email-Timestamp",
+                "X-Email-Nonce"
         ).send(buildDispatchItem());
 
         ArgumentCaptor<HttpEntity> payloadCaptor = ArgumentCaptor.forClass(HttpEntity.class);
@@ -63,6 +65,8 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(payloadCaptor.getValue().toString().contains("PAY-001"));
         Assertions.assertEquals("email-token-001", payloadCaptor.getValue().getHeaders().getFirst("X-Mail-Token"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Signature"));
+        Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Timestamp"));
+        Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Nonce"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {
