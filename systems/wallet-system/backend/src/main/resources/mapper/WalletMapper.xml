@@ -67,4 +67,20 @@
         FROM t_wallet_recharge_order
         WHERE recharge_no = #{rechargeNo}
     </select>
+
+    <insert id="insertWithdrawOrder">
+        INSERT INTO t_wallet_withdraw_order (withdraw_no, account_no, biz_no, amount, status, created_at)
+        VALUES (#{withdrawNo}, #{accountNo}, #{bizNo}, #{amount}, #{status}, NOW())
+    </insert>
+
+    <select id="findWithdrawOrderByNo" resultType="com.abc123.wallet.entity.WalletWithdrawOrderEntity">
+        SELECT withdraw_no AS withdrawNo,
+               account_no AS accountNo,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_withdraw_order
+        WHERE withdraw_no = #{withdrawNo}
+    </select>
 </mapper>

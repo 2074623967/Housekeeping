@@ -5,8 +5,11 @@ import com.abc123.wallet.dto.WalletAccountDetailDTO;
 import com.abc123.wallet.dto.WalletAccountDTO;
 import com.abc123.wallet.dto.WalletRechargeOrderDTO;
 import com.abc123.wallet.dto.WalletRechargeRequestDTO;
+import com.abc123.wallet.dto.WalletWithdrawOrderDTO;
+import com.abc123.wallet.dto.WalletWithdrawRequestDTO;
 import com.abc123.wallet.service.WalletRechargeService;
 import com.abc123.wallet.service.WalletService;
+import com.abc123.wallet.service.WalletWithdrawService;
 import java.util.List;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,10 +24,14 @@ public class WalletController {
 
     private final WalletService walletService;
     private final WalletRechargeService walletRechargeService;
+    private final WalletWithdrawService walletWithdrawService;
 
-    public WalletController(WalletService walletService, WalletRechargeService walletRechargeService) {
+    public WalletController(WalletService walletService,
+            WalletRechargeService walletRechargeService,
+            WalletWithdrawService walletWithdrawService) {
         this.walletService = walletService;
         this.walletRechargeService = walletRechargeService;
+        this.walletWithdrawService = walletWithdrawService;
     }
 
     @GetMapping
@@ -40,5 +47,10 @@ public class WalletController {
     @PostMapping("/recharges")
     public ApiResponse<WalletRechargeOrderDTO> recharge(@RequestBody WalletRechargeRequestDTO request) {
         return ApiResponse.success(walletRechargeService.recharge(request));
+    }
+
+    @PostMapping("/withdrawals")
+    public ApiResponse<WalletWithdrawOrderDTO> withdraw(@RequestBody WalletWithdrawRequestDTO request) {
+        return ApiResponse.success(walletWithdrawService.withdraw(request));
     }
 }

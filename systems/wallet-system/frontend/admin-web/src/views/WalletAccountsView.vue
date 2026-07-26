@@ -12,6 +12,12 @@ const rechargeForm = ref({
   amount: "100.00",
   operatorName: "运营小王"
 });
+const withdrawForm = ref({
+  accountNo: "",
+  bizNo: "",
+  amount: "50.00",
+  operatorName: "运营小王"
+});
 
 async function load() {
   loading.value = true;
@@ -20,6 +26,9 @@ async function load() {
   detail.value = rows.value[0] ? await walletApi.getDetail(rows.value[0].accountNo) : null;
   if (!rechargeForm.value.accountNo && rows.value[0]) {
     rechargeForm.value.accountNo = rows.value[0].accountNo;
+  }
+  if (!withdrawForm.value.accountNo && rows.value[0]) {
+    withdrawForm.value.accountNo = rows.value[0].accountNo;
   }
   loading.value = false;
 }
@@ -37,6 +46,20 @@ async function recharge() {
     });
     await load();
     message.value = "充值成功";
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
+async function withdraw() {
+  message.value = "";
+  try {
+    await walletApi.withdraw({
+      ...withdrawForm.value,
+      amount: Number(withdrawForm.value.amount)
+    });
+    await load();
+    message.value = "提现成功";
   } catch (error) {
     message.value = error.message;
   }
@@ -82,6 +105,16 @@ onMounted(load);
               <input v-model="rechargeForm.amount" placeholder="充值金额" />
               <input v-model="rechargeForm.operatorName" placeholder="操作人" />
               <button class="button" style="background:#2563eb;color:#fff" @click="recharge">发起充值</button>
+            </div>
+          </div>
+          <div class="detail-card" style="grid-column:1/-1">
+            <div class="detail-label">提现单</div>
+            <div style="display:grid;gap:8px">
+              <input v-model="withdrawForm.accountNo" placeholder="账户号" />
+              <input v-model="withdrawForm.bizNo" placeholder="业务单号" />
+              <input v-model="withdrawForm.amount" placeholder="提现金额" />
+              <input v-model="withdrawForm.operatorName" placeholder="操作人" />
+              <button class="button" style="background:#0f766e;color:#fff" @click="withdraw">发起提现</button>
             </div>
           </div>
         </div>
