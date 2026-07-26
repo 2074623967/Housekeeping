@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
-import { PAYMENT_RESULT_STATE_META, resolvePaymentResultState } from "../constants/payment";
+import { PAYMENT_RESULT_STATE_META, resolvePaymentChannelCode, resolvePaymentResultState } from "../constants/payment";
 
 const props = defineProps({
   terminalVariant: {
@@ -48,6 +48,18 @@ const lastAction = ref("");
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
+const callbackChannelCode = computed(() => {
+  if (paymentDetail.value?.channel) {
+    return paymentDetail.value.channel;
+  }
+  if (paymentDetail.value?.paymentMethod) {
+    return resolvePaymentChannelCode(paymentDetail.value.paymentMethod);
+  }
+  if (typeof route.query.paymentMethod === "string" && route.query.paymentMethod.trim()) {
+    return resolvePaymentChannelCode(route.query.paymentMethod.trim());
+  }
+  return "WX_H5";
+});
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
@@ -131,13 +143,13 @@ async function queryResult() {
 async function mockSuccessCallback() {
   callbackLoading.value = true;
   try {
-    paymentDetail.value = await paymentApi.callback("WX_H5", {
+    paymentDetail.value = await paymentApi.callback(callbackChannelCode.value, {
       paymentOrderId: route.params.paymentOrderId,
       channelTransactionNo: `SIM${Date.now()}`,
       tradeStatus: "SUCCESS"
     });
     syncStatusByDetail();
-    feedbackMessage.value = "已模拟成功回调并完成状态收口。";
+    feedbackMessage.value = `已按渠道 ${callbackChannelCode.value} 模拟成功回调并完成状态收口。`;
     lastAction.value = "模拟成功回调";
   } catch (error) {
     feedbackMessage.value = error.message;
@@ -228,6 +240,10 @@ function backToCashier() {
           <div class="summary-item">
             <span>渠道编码</span>
             <strong>{{ paymentDetail?.channel || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>回调模拟渠道</span>
+            <strong>{{ callbackChannelCode }}</strong>
           </div>
           <div class="summary-item">
             <span>渠道流水号</span>
