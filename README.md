@@ -42,6 +42,7 @@
 - `systems/accounting-system`
 - `systems/clearing-system`
 - `systems/settlement-system`
+- `systems/wallet-system`
 
 `payment-core` 内部包含：
 
