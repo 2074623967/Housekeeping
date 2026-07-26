@@ -178,6 +178,9 @@ function backToCashier() {
     return;
   }
   const cashierRouteQuery = {};
+  if (typeof route.query.terminalVariant === "string" && route.query.terminalVariant.trim()) {
+    cashierRouteQuery.terminalVariant = route.query.terminalVariant.trim();
+  }
   if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
     cashierRouteQuery.accessToken = route.query.accessToken.trim();
   }
