@@ -71,8 +71,10 @@ const selectedPaymentMethod = ref("微信支付");
 const submitLoading = ref(false);
 const refreshLoading = ref(false);
 const closeLoading = ref(false);
+const queryLoading = ref(false);
 const idempotencyKey = ref("");
 const countdownSeconds = ref(0);
+const latestQueriedDetail = ref(null);
 
 let countdownTimer = null;
 
@@ -241,6 +243,34 @@ async function refreshCashier() {
   }
 }
 
+async function queryCurrentPayment() {
+  if (!cashier.value?.paymentOrderId) {
+    message.value = "当前支付单尚未生成，请先发起支付后再执行主动查单。";
+    return;
+  }
+  queryLoading.value = true;
+  message.value = "";
+  try {
+    const detail = await paymentApi.query({ paymentOrderId: cashier.value.paymentOrderId });
+    latestQueriedDetail.value = detail;
+    message.value = `已查询支付单 ${cashier.value.paymentOrderId} 的最新状态：${detail.status}。`;
+    if (detail.status === "SUCCESS" || detail.status === "CLOSED") {
+      router.push({
+        path: `/payment-result/${detail.paymentOrderId}`,
+        query: {
+          prepayOrderNo: detail.prepayOrderNo || cashier.value.prepayOrderNo,
+          paymentMethod: detail.paymentMethod || selectedPaymentMethod.value,
+          terminalVariant: props.terminalVariant
+        }
+      });
+    }
+  } catch (error) {
+    message.value = error.message;
+  } finally {
+    queryLoading.value = false;
+  }
+}
+
 async function pay() {
   if (!cashier.value || !hasChannels.value) {
     message.value = "当前暂无可用支付方式，请稍后重试。";
@@ -385,6 +415,9 @@ watch(selectedPaymentMethod, () => {
           <button class="action-button secondary" :disabled="refreshLoading" @click="refreshCashier">
             {{ refreshLoading ? "刷新中..." : terminalMeta.refreshLabel }}
           </button>
+          <button class="action-button secondary" :disabled="queryLoading || !cashier?.paymentOrderId" @click="queryCurrentPayment">
+            {{ queryLoading ? "查单中..." : "主动查单" }}
+          </button>
           <button class="action-button ghost" :disabled="closeLoading || !canClose" @click="closeCurrentPayment">
             {{ closeLoading ? "关闭中..." : terminalMeta.closeLabel }}
           </button>
@@ -505,6 +538,26 @@ watch(selectedPaymentMethod, () => {
           <div class="ops-row"><span>访问令牌</span><span>{{ accessTokenAvailable ? "已注入" : "未注入" }}</span></div>
           <div class="ops-row"><span>幂等键</span><span class="mono-text">{{ idempotencyKey || "-" }}</span></div>
           <div class="ops-row"><span>可选渠道</span><span>{{ channels.join(" / ") || "-" }}</span></div>
+        </div>
+
+        <div class="ops-card">
+          <div class="ops-title">主动查单快照</div>
+          <div class="ops-row">
+            <span>当前支付单</span>
+            <span class="mono-text">{{ cashier?.paymentOrderId || "-" }}</span>
+          </div>
+          <div class="ops-row">
+            <span>最近查单状态</span>
+            <span :class="['status-pill', `status-${latestQueriedDetail?.statusType || 'info'}`]">
+              {{ latestQueriedDetail?.status || "未查单" }}
+            </span>
+          </div>
+          <div class="ops-row"><span>查单来源</span><span>{{ latestQueriedDetail?.querySource || "-" }}</span></div>
+          <div class="ops-row"><span>渠道流水号</span><span class="mono-text">{{ latestQueriedDetail?.channelTransactionNo || "-" }}</span></div>
+          <div class="ops-row"><span>最近尝试状态</span><span>{{ latestQueriedDetail?.latestAttemptStatus || "-" }}</span></div>
+          <p class="ops-description">
+            扫码后若前端仍停留在支付中，可先在当前收银台执行主动查单；若已成功或已关闭，会自动跳转结果页继续收口。
+          </p>
         </div>
 
         <div v-if="paymentMethodComparisonRows.length" class="ops-card">
