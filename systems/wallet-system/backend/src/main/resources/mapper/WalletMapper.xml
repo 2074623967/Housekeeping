@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.wallet.mapper.WalletMapper">
+
+    <select id="findAccounts" resultType="com.abc123.wallet.entity.WalletAccountEntity">
+        SELECT account_no AS accountNo,
+               owner_name AS ownerName,
+               wallet_type AS walletType,
+               status,
+               FORMAT(available_amount, 2) AS availableAmount,
+               FORMAT(frozen_amount, 2) AS frozenAmount,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_account
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findAccountByNo" resultType="com.abc123.wallet.entity.WalletAccountEntity">
+        SELECT account_no AS accountNo,
+               owner_name AS ownerName,
+               wallet_type AS walletType,
+               status,
+               FORMAT(available_amount, 2) AS availableAmount,
+               FORMAT(frozen_amount, 2) AS frozenAmount,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_account
+        WHERE account_no = #{accountNo}
+    </select>
+
+    <select id="findLedgersByAccountNo" resultType="com.abc123.wallet.entity.WalletLedgerEntity">
+        SELECT ledger_no AS ledgerNo,
+               account_no AS accountNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               direction,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_ledger
+        WHERE account_no = #{accountNo}
+        ORDER BY created_at DESC
+    </select>
+</mapper>
