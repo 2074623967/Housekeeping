@@ -83,13 +83,28 @@ class GatewayAccessServiceImplTest {
         when(gatewayAccessMapper.findCertificates()).thenReturn(Collections.singletonList(certificate));
 
         GatewayCertificateDTO result = new GatewayAccessServiceImpl(gatewayAccessMapper)
-                .certificates()
+                .certificates("全部")
                 .getRecords()
                 .get(0);
 
         assertEquals("7天内到期", result.getRiskLevel());
         assertEquals("danger", result.getRiskLevelType());
         assertEquals(5L, result.getRemainingDays());
+    }
+
+    @Test
+    void shouldFilterCertificatesByRiskLevel() {
+        GatewayCertificateDTO riskCertificate = new GatewayCertificateDTO();
+        riskCertificate.setCertificateCode("CERT-001");
+        riskCertificate.setExpireAt(LocalDate.now().plusDays(5).toString());
+        GatewayCertificateDTO normalCertificate = new GatewayCertificateDTO();
+        normalCertificate.setCertificateCode("CERT-002");
+        normalCertificate.setExpireAt(LocalDate.now().plusDays(60).toString());
+        when(gatewayAccessMapper.findCertificates()).thenReturn(java.util.Arrays.asList(riskCertificate, normalCertificate));
+
+        GatewayAccessServiceImpl service = new GatewayAccessServiceImpl(gatewayAccessMapper);
+        assertEquals(1, service.certificates("7天内到期").getRecords().size());
+        assertEquals("CERT-001", service.certificates("7天内到期").getRecords().get(0).getCertificateCode());
     }
 
     @Test

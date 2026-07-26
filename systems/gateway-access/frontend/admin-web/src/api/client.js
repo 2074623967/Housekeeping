@@ -19,7 +19,10 @@ export const gatewayAccessApi = {
     const params = new URLSearchParams({ keyword, channelType, status });
     return request(`/api/gateway-access/gateways?${params.toString()}`);
   },
-  getCertificates: () => request("/api/gateway-access/certificates"),
+  getCertificates: (riskLevel = "全部") => {
+    const params = new URLSearchParams({ riskLevel });
+    return request(`/api/gateway-access/certificates?${params.toString()}`);
+  },
   getPermissions: () => request("/api/gateway-access/permissions"),
   toggleApplication: (configCode, enabled) => postJson("/api/gateway-access/applications/toggle", { configCode, enabled }),
   toggleGateway: (configCode, enabled) => postJson("/api/gateway-access/gateways/toggle", { configCode, enabled }),

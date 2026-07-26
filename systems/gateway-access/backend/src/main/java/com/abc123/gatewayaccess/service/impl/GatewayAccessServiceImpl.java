@@ -62,9 +62,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     }
 
     @Override
-    public PageResultDTO<GatewayCertificateDTO> certificates() {
-        List<GatewayCertificateDTO> records = gatewayAccessMapper.findCertificates();
+    public PageResultDTO<GatewayCertificateDTO> certificates(String riskLevel) {
+        List<GatewayCertificateDTO> records = new ArrayList<>(gatewayAccessMapper.findCertificates());
         records.forEach(this::enrichCertificateRisk);
+        if (StringUtils.hasText(riskLevel) && !"全部".equals(riskLevel.trim())) {
+            String normalizedRiskLevel = riskLevel.trim();
+            records.removeIf(item -> !normalizedRiskLevel.equals(item.getRiskLevel()));
+        }
         return page(records, 1, 20);
     }
 

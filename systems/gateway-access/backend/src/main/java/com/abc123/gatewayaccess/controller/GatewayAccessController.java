@@ -53,8 +53,9 @@ public class GatewayAccessController {
     }
 
     @GetMapping("/certificates")
-    public ApiResponse<PageResultDTO<GatewayCertificateDTO>> certificates() {
-        return ApiResponse.success(service.certificates());
+    public ApiResponse<PageResultDTO<GatewayCertificateDTO>> certificates(
+            @RequestParam(defaultValue = "全部") String riskLevel) {
+        return ApiResponse.success(service.certificates(riskLevel));
     }
 
     @GetMapping("/permissions")

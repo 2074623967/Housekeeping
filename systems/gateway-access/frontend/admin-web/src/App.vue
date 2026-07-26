@@ -10,6 +10,7 @@ const permissions = ref([]);
 const loading = ref(true);
 const message = ref("");
 const active = ref("");
+const certificateFilters = ref({ riskLevel: "全部" });
 const gatewayFilters = ref({
   keyword: "",
   channelType: "全部",
@@ -24,7 +25,7 @@ async function loadAll() {
       gatewayAccessApi.getSummary(),
       gatewayAccessApi.getApplications(),
       gatewayAccessApi.getGateways(gatewayFilters.value),
-      gatewayAccessApi.getCertificates(),
+      gatewayAccessApi.getCertificates(certificateFilters.value.riskLevel),
       gatewayAccessApi.getPermissions()
     ]);
     summary.value = summaryData;
@@ -44,6 +45,11 @@ async function loadGateways() {
   gateways.value = gatewayData.records;
 }
 
+async function loadCertificates() {
+  const certData = await gatewayAccessApi.getCertificates(certificateFilters.value.riskLevel);
+  certificates.value = certData.records;
+}
+
 async function applyGatewayFilters() {
   message.value = "";
   try {
@@ -60,6 +66,20 @@ async function resetGatewayFilters() {
     status: "全部"
   };
   await applyGatewayFilters();
+}
+
+async function applyCertificateFilters() {
+  message.value = "";
+  try {
+    await loadCertificates();
+  } catch (error) {
+    message.value = `证书筛选失败：${error.message}`;
+  }
+}
+
+async function resetCertificateFilters() {
+  certificateFilters.value = { riskLevel: "全部" };
+  await applyCertificateFilters();
 }
 
 async function toggle(run, code, enabled, label) {
@@ -212,6 +232,18 @@ onMounted(loadAll);
       <section class="card grid">
         <div>
           <div class="section-head"><h2>证书管理</h2></div>
+          <div class="toolbar">
+            <select v-model="certificateFilters.riskLevel">
+              <option>全部</option>
+              <option>已过期</option>
+              <option>7天内到期</option>
+              <option>30天内到期</option>
+              <option>正常</option>
+              <option>日期异常</option>
+            </select>
+            <button class="button secondary" @click="applyCertificateFilters">查询</button>
+            <button class="button secondary" @click="resetCertificateFilters">重置</button>
+          </div>
           <table>
             <thead>
               <tr>

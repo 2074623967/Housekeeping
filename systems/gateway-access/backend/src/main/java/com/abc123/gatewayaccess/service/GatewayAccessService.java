@@ -20,7 +20,7 @@ public interface GatewayAccessService {
 
     PageResultDTO<GatewayChannelDTO> gateways(GatewayChannelQueryDTO query);
 
-    PageResultDTO<GatewayCertificateDTO> certificates();
+    PageResultDTO<GatewayCertificateDTO> certificates(String riskLevel);
 
     PageResultDTO<GatewayPermissionDTO> permissions();
 
