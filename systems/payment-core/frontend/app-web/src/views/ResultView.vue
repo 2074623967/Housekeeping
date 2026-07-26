@@ -177,7 +177,14 @@ function backToCashier() {
   if (!prepayOrderNo) {
     return;
   }
-  router.push(`/cashier/${prepayOrderNo}`);
+  const cashierRouteQuery = {};
+  if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
+    cashierRouteQuery.accessToken = route.query.accessToken.trim();
+  }
+  router.push({
+    path: `/cashier/${prepayOrderNo}`,
+    query: cashierRouteQuery
+  });
 }
 </script>
 

@@ -78,6 +78,19 @@ const latestQueriedDetail = ref(null);
 
 let countdownTimer = null;
 
+function buildResultRouteQuery(prepayOrderNo, paymentMethod) {
+  const routeQuery = {
+    prepayOrderNo,
+    paymentMethod,
+    terminalVariant: props.terminalVariant
+  };
+  const accessToken = resolveAccessToken();
+  if (accessToken) {
+    routeQuery.accessToken = accessToken;
+  }
+  return routeQuery;
+}
+
 function generateIdempotencyKey() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -257,11 +270,10 @@ async function queryCurrentPayment() {
     if (detail.status === "SUCCESS" || detail.status === "CLOSED") {
       router.push({
         path: `/payment-result/${detail.paymentOrderId}`,
-        query: {
-          prepayOrderNo: detail.prepayOrderNo || cashier.value.prepayOrderNo,
-          paymentMethod: detail.paymentMethod || selectedPaymentMethod.value,
-          terminalVariant: props.terminalVariant
-        }
+        query: buildResultRouteQuery(
+          detail.prepayOrderNo || cashier.value.prepayOrderNo,
+          detail.paymentMethod || selectedPaymentMethod.value
+        )
       });
     }
   } catch (error) {
@@ -291,11 +303,7 @@ async function pay() {
     });
     router.push({
       path: `/payment-result/${submitResult?.paymentOrderId}`,
-      query: {
-        prepayOrderNo: submitResult?.prepayOrderNo,
-        paymentMethod: selectedPaymentMethod.value,
-        terminalVariant: props.terminalVariant
-      }
+      query: buildResultRouteQuery(submitResult?.prepayOrderNo, selectedPaymentMethod.value)
     });
   } catch (error) {
     message.value = error.message;
