@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS t_wallet_recharge_order;
 DROP TABLE IF EXISTS t_wallet_ledger;
 DROP TABLE IF EXISTS t_wallet_account;
 
@@ -27,3 +28,15 @@ CREATE TABLE t_wallet_ledger (
     UNIQUE KEY uk_wallet_ledger_no (ledger_no),
     KEY idx_wallet_ledger_account (account_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包流水表';
+
+CREATE TABLE t_wallet_recharge_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    recharge_no VARCHAR(64) NOT NULL COMMENT '充值单号',
+    account_no VARCHAR(64) NOT NULL COMMENT '钱包账户号',
+    biz_no VARCHAR(64) NOT NULL COMMENT '业务单号',
+    amount DECIMAL(18, 2) NOT NULL COMMENT '充值金额',
+    status VARCHAR(32) NOT NULL COMMENT '处理状态',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_wallet_recharge_no (recharge_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包充值单表';

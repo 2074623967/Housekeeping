@@ -9,5 +9,9 @@ async function request(url) {
 
 export const walletApi = {
   getAccounts: () => request("/api/wallet/accounts"),
-  getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`)
+  getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`),
+  recharge: (payload) => request("/api/wallet/recharges", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  })
 };

@@ -7,3 +7,6 @@ INSERT INTO t_wallet_ledger (ledger_no, account_no, biz_type, biz_no, amount, di
 ('WLD-0001', 'WALLET-10001', 'RECHARGE', 'RCH-20260726001', 100.00, 'IN', '2026-07-26 09:05:00'),
 ('WLD-0002', 'WALLET-10001', 'BALANCE_PAY', 'PAY-20260726001', 32.00, 'OUT', '2026-07-26 09:08:00'),
 ('WLD-0003', 'WALLET-20001', 'TRANSFER', 'TRF-20260726001', 500.00, 'IN', '2026-07-26 09:10:00');
+
+INSERT INTO t_wallet_recharge_order (recharge_no, account_no, biz_no, amount, status, created_at) VALUES
+('RCH-20260726001', 'WALLET-10001', 'RCH-20260726001', 100.00, 'SUCCESS', '2026-07-26 09:05:00');
