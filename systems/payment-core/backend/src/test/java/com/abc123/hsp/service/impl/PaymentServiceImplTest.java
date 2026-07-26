@@ -24,6 +24,7 @@ import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Arrays;
 import java.util.List;
@@ -207,6 +208,57 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-NEW", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-NEW", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldCreateVirtualPrepayWhenOrderSourceMissing() {
+        PrepayOrderDTO createdPrepay = new PrepayOrderDTO();
+        createdPrepay.setPrepayOrderNo("PRE-VIRTUAL");
+        createdPrepay.setPaymentOrderId("PAY-VIRTUAL");
+        when(paymentMapper.findLatestActivePrepayByOrderNo("WALLET-RECHARGE-001")).thenReturn(null);
+        when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
+        when(paymentMapper.findPaidAmount("WALLET-RECHARGE-001")).thenReturn(null);
+        when(paymentMapper.findPrepay(org.mockito.ArgumentMatchers.anyString())).thenReturn(createdPrepay);
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("WALLET-RECHARGE-001");
+        request.setPayScene("WALLET_RECHARGE_APP");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("99.00"));
+        request.setCashierTitle("钱包充值收银台");
+
+        PrepayOrderDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .prepay(request);
+
+        verify(paymentMapper, times(1)).insertBill(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("WALLET-RECHARGE-001"),
+                org.mockito.ArgumentMatchers.eq("张女士"),
+                org.mockito.ArgumentMatchers.eq(new BigDecimal("99.00")),
+                org.mockito.ArgumentMatchers.eq(BigDecimal.ZERO),
+                org.mockito.ArgumentMatchers.eq("待支付"),
+                org.mockito.ArgumentMatchers.eq("warn"));
+        verify(paymentMapper, times(1)).insertPaymentOrder(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("WALLET-RECHARGE-001"),
+                org.mockito.ArgumentMatchers.eq("张女士"),
+                org.mockito.ArgumentMatchers.eq(new BigDecimal("99.00")),
+                org.mockito.ArgumentMatchers.eq("WALLET_RECHARGE_APP"));
+        verify(paymentMapper, times(1)).insertPrepayOrder(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("WALLET-RECHARGE-001"),
+                org.mockito.ArgumentMatchers.eq("张女士"),
+                org.mockito.ArgumentMatchers.eq(new BigDecimal("99.00")),
+                org.mockito.ArgumentMatchers.eq("WALLET_RECHARGE_APP"),
+                org.mockito.ArgumentMatchers.eq("钱包充值收银台"),
+                org.mockito.ArgumentMatchers.anyString());
+        org.junit.jupiter.api.Assertions.assertEquals("PRE-VIRTUAL", result.getPrepayOrderNo());
     }
 
     @Test

@@ -149,6 +149,87 @@ button {
   gap: 18px;
 }
 
+.entry-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.entry-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.entry-tab {
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 700;
+}
+
+.entry-tab.active,
+.entry-tab.router-link-active {
+  background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+  color: #ffffff;
+}
+
+.entry-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 18px;
+}
+
+.entry-form,
+.entry-side {
+  display: grid;
+  gap: 18px;
+}
+
+.entry-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.entry-field {
+  display: grid;
+  gap: 8px;
+}
+
+.entry-field span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.entry-field input,
+.entry-field textarea {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: #f8fbff;
+  color: #0f172a;
+}
+
+.entry-field-full {
+  grid-column: 1 / -1;
+}
+
+.entry-aside-card {
+  padding: 22px;
+}
+
+.entry-checklist {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+  color: #334155;
+  line-height: 1.6;
+}
+
 .terminal-card {
   padding: 24px;
 }
@@ -368,6 +449,37 @@ button {
   line-height: 1.65;
 }
 
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.primary-button,
+.ghost-button {
+  border-radius: 999px;
+  padding: 12px 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, #2563eb 0%, #0891b2 100%);
+  color: #ffffff;
+}
+
+.ghost-button {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.primary-button:disabled,
+.ghost-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .ops-row {
   display: flex;
   justify-content: space-between;
@@ -568,12 +680,18 @@ button {
 @media (max-width: 960px) {
   .terminal-hero,
   .terminal-grid,
+  .entry-grid,
+  .entry-field-grid,
   .terminal-ops-grid,
   .channel-tips,
   .summary-grid,
   .desktop-payment-grid,
   .desktop-hint-grid {
     grid-template-columns: 1fr;
+  }
+
+  .entry-field-full {
+    grid-column: auto;
   }
 
   .terminal-page {

@@ -85,7 +85,7 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
         BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
         if (orderAmount == null || paidAmount == null) {
-            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "订单金额或已付金额不存在");
+            return createVirtualPrepay(request);
         }
         String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
@@ -114,6 +114,51 @@ public class PaymentServiceImpl implements PaymentService {
                 remainAmount,
                 request.getPayScene(),
                 "家政服务收银台",
+                paymentOrderId
+        );
+        return paymentMapper.findPrepay(prepayOrderNo);
+    }
+
+    /**
+     * 钱包充值、转账补款等非标准订单场景在当前阶段通过虚拟单方式接入统一收银台。
+     */
+    private PrepayOrderDTO createVirtualPrepay(PrepayRequestDTO request) {
+        if (!StringUtils.hasText(request.getOrderNo())
+                || !StringUtils.hasText(request.getCustomerName())
+                || request.getAmount() == null
+                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "虚拟支付场景缺少订单号、客户名称或金额");
+        }
+        String customerName = request.getCustomerName().trim();
+        String cashierTitle = StringUtils.hasText(request.getCashierTitle())
+                ? request.getCashierTitle().trim()
+                : "家政服务收银台";
+        String billNo = "BILL" + System.currentTimeMillis();
+        paymentMapper.insertBill(
+                billNo,
+                request.getOrderNo(),
+                customerName,
+                request.getAmount(),
+                BigDecimal.ZERO,
+                "待支付",
+                "warn");
+        String paymentOrderId = "PAY" + System.currentTimeMillis();
+        paymentMapper.insertPaymentOrder(
+                paymentOrderId,
+                request.getOrderNo(),
+                customerName,
+                request.getAmount(),
+                request.getPayScene()
+        );
+        String prepayOrderNo = "PRE" + System.currentTimeMillis();
+        paymentMapper.insertPrepayOrder(
+                prepayOrderNo,
+                billNo,
+                request.getOrderNo(),
+                customerName,
+                request.getAmount(),
+                request.getPayScene(),
+                cashierTitle,
                 paymentOrderId
         );
         return paymentMapper.findPrepay(prepayOrderNo);
