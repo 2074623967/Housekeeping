@@ -256,6 +256,30 @@ export const paymentFlowApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-flows?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    paymentOrderId = "",
+    orderNo = "",
+    flowType = "全部",
+    channelCode = "",
+    terminal = "全部",
+    businessStatus = "全部",
+    keyword = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      flowType,
+      channelCode,
+      terminal,
+      businessStatus,
+      keyword,
+      sortField,
+      sortOrder
+    });
+    return `/api/payment-flows/export?${params.toString()}`;
   }
 };
 
