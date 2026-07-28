@@ -634,6 +634,20 @@ export const refundApi = {
     });
     return request(`/api/refunds?${params.toString()}`);
   },
+  buildExportUrl: ({
+    refundOrderId = "",
+    paymentOrderId = "",
+    refundStatus = "全部",
+    refundMethod = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      refundOrderId,
+      paymentOrderId,
+      refundStatus,
+      refundMethod
+    });
+    return `/api/refunds/export?${params.toString()}`;
+  },
   getDetail: (refundOrderId) => request(`/api/refunds/${refundOrderId}`),
   apply: (payload) => postJson("/api/refunds/apply", payload),
   approve: (refundOrderId, remark = "") => postJson("/api/refunds/approve", { refundOrderId, remark }),
