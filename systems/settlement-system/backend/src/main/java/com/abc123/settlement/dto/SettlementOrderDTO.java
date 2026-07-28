@@ -21,5 +21,6 @@ public class SettlementOrderDTO {
     private String payoutStatus;
     private String payoutStatusType;
     private String auditStatus;
+    private String auditStatusType;
     private String createdAt;
 }

@@ -62,6 +62,7 @@ public class SettlementMapper {
         dto.setPayoutStatus(entity.getPayoutStatus());
         dto.setPayoutStatusType(statusType(entity.getPayoutStatus()));
         dto.setAuditStatus(entity.getAuditStatus());
+        dto.setAuditStatusType(statusType(entity.getAuditStatus()));
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }

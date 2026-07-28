@@ -30,6 +30,7 @@ class SettlementOrderServiceImplTest {
         SettlementOrderDetailDTO detail = settlementOrderService.fullDetail("SLT20001");
 
         assertEquals("已通过", audited.getAuditStatus());
+        assertEquals("success", audited.getAuditStatusType());
         assertEquals("待出款", audited.getSettlementStatus());
         assertEquals(2, detail.getItems().size());
     }
