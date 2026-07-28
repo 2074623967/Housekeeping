@@ -48,5 +48,6 @@ export const walletApi = {
   approveRiskEvent: (payload) => request("/api/wallet/risk-events/approve", {
     method: "POST",
     body: JSON.stringify(payload)
-  })
+  }),
+  getMarketingFundDashboard: () => request("/api/wallet/marketing-funds/dashboard")
 };
