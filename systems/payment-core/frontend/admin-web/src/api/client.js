@@ -674,6 +674,20 @@ export const settlementApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/settlements/workers?${params.toString()}`);
+  },
+  buildWorkerExportUrl: ({
+    settlementOrderId = "",
+    workerKeyword = "",
+    settlementStatus = "全部",
+    payoutStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      settlementOrderId,
+      workerKeyword,
+      settlementStatus,
+      payoutStatus
+    });
+    return `/api/settlements/workers/export?${params.toString()}`;
   }
 };
 
