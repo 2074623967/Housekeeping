@@ -207,6 +207,24 @@ export const billApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/bills?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    billNo = "",
+    orderNo = "",
+    customerName = "",
+    billStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      billNo,
+      orderNo,
+      customerName,
+      billStatus,
+      sortField,
+      sortOrder
+    });
+    return `/api/bills/export?${params.toString()}`;
   }
 };
 
