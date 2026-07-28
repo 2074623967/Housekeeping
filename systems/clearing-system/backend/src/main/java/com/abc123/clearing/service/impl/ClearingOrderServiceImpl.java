@@ -26,10 +26,11 @@ public class ClearingOrderServiceImpl implements ClearingOrderService {
     }
 
     @Override
-    public PageResultDTO<ClearingOrderDTO> list(String batchNo, String orderNo, String clearingStatus, int pageNo, int pageSize) {
+    public PageResultDTO<ClearingOrderDTO> list(String batchNo, String orderNo, String paymentOrderId, String clearingStatus, int pageNo, int pageSize) {
         List<ClearingOrderDTO> items = clearingMemoryStore.orders().stream()
                 .filter(item -> batchNo == null || batchNo.isEmpty() || batchNo.equals(item.getBatchNo()))
                 .filter(item -> orderNo == null || orderNo.isEmpty() || orderNo.equals(item.getOrderNo()))
+                .filter(item -> paymentOrderId == null || paymentOrderId.isEmpty() || paymentOrderId.equals(item.getPaymentOrderId()))
                 .filter(item -> clearingStatus == null || clearingStatus.isEmpty() || clearingStatus.equals(item.getClearingStatus()))
                 .map(clearingMapper::toOrderDTO)
                 .collect(Collectors.toList());

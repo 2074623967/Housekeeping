@@ -28,10 +28,11 @@ public class ClearingOrderController {
     public ApiResponse<PageResultDTO<ClearingOrderDTO>> list(
             @RequestParam(required = false) String batchNo,
             @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String paymentOrderId,
             @RequestParam(required = false) String clearingStatus,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.success(clearingOrderService.list(batchNo, orderNo, clearingStatus, pageNo, pageSize));
+        return ApiResponse.success(clearingOrderService.list(batchNo, orderNo, paymentOrderId, clearingStatus, pageNo, pageSize));
     }
 
     @GetMapping("/{clearingNo}")

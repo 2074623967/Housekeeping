@@ -9,7 +9,7 @@ import com.abc123.clearing.dto.PageResultDTO;
  */
 public interface ClearingOrderService {
 
-    PageResultDTO<ClearingOrderDTO> list(String batchNo, String orderNo, String clearingStatus, int pageNo, int pageSize);
+    PageResultDTO<ClearingOrderDTO> list(String batchNo, String orderNo, String paymentOrderId, String clearingStatus, int pageNo, int pageSize);
 
     ClearingOrderDetailDTO detail(String clearingNo);
 }

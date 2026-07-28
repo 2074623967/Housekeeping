@@ -47,10 +47,11 @@ export const batchApi = {
 };
 
 export const orderApi = {
-  getList: ({ batchNo = "", orderNo = "", clearingStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
-    const params = new URLSearchParams({ batchNo, orderNo, clearingStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
+  getList: ({ batchNo = "", orderNo = "", paymentOrderId = "", clearingStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
+    const params = new URLSearchParams({ batchNo, orderNo, paymentOrderId, clearingStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/clearing/orders?${params.toString()}`);
-  }
+  },
+  getDetail: (clearingNo) => request(`/api/clearing/orders/${clearingNo}`)
 };
 
 export const ruleApi = {

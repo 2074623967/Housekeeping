@@ -3,6 +3,7 @@ package com.abc123.clearing.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.clearing.dto.ClearingEventDTO;
+import com.abc123.clearing.dto.ClearingOrderDTO;
 import com.abc123.clearing.dto.PageResultDTO;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.clearing.dto.ShareItemDTO;
@@ -26,6 +27,9 @@ class ClearingEventServiceImplTest {
     @Autowired
     private ShareService shareService;
 
+    @Autowired
+    private ClearingOrderServiceImpl clearingOrderService;
+
     @Test
     void shouldGenerateClearingArtifactsWhenPaymentSuccessConsumed() {
         PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
@@ -39,8 +43,11 @@ class ClearingEventServiceImplTest {
 
         ClearingEventDTO result = clearingEventService.consumePaymentSuccess(request);
         PageResultDTO<ShareItemDTO> shares = shareService.list("", "", 1, 20);
+        PageResultDTO<ClearingOrderDTO> orders = clearingOrderService.list("", "", "PAY202607200099", "", 1, 20);
 
         assertEquals("PAYMENT_SUCCESS", result.getEventType());
         assertEquals(6, shares.getTotal());
+        assertEquals(1, orders.getTotal());
+        assertEquals("PAY202607200099", orders.getItems().get(0).getPaymentOrderId());
     }
 }
