@@ -70,6 +70,36 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findAuditLogs" resultType="com.abc123.gatewayaccess.dto.GatewayAuditLogDTO">
+        SELECT request_id,
+               app_code,
+               gateway_code,
+               operation_type,
+               sign_type,
+               client_ip,
+               result_status,
+               result_status_type,
+               risk_hint,
+               DATE_FORMAT(happened_at, '%Y-%m-%d %H:%i:%s') AS happenedAt
+        FROM t_gateway_audit_log
+        <where>
+            <if test="query.keyword != null and query.keyword != ''">
+                (
+                    request_id LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR app_code LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR gateway_code LIKE CONCAT('%', #{query.keyword}, '%')
+                )
+            </if>
+            <if test="query.appCode != null and query.appCode != '' and query.appCode != '全部'">
+                AND app_code = #{query.appCode}
+            </if>
+            <if test="query.resultStatus != null and query.resultStatus != '' and query.resultStatus != '全部'">
+                AND result_status = #{query.resultStatus}
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
     <select id="countApplications" resultType="long">
         SELECT COUNT(1) FROM t_gateway_app
     </select>

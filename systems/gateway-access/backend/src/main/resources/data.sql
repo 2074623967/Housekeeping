@@ -17,3 +17,8 @@ INSERT INTO t_gateway_permission (permission_code, app_code, scope, status, stat
 ('PERM_PAYMENT_CORE', 'APP_PAY_CORE', '支付收款/退款', 'ENABLED', 'success', '2026-07-20 22:40:00'),
 ('PERM_SETTLEMENT_OUT', 'APP_SETTLEMENT', '资金出款/回单', 'ENABLED', 'success', '2026-07-20 22:40:00'),
 ('PERM_RISK_SIGNAL', 'APP_RISK', '风险事件/拦截', 'DISABLED', 'danger', '2026-07-20 22:40:00');
+
+INSERT INTO t_gateway_audit_log (request_id, app_code, gateway_code, operation_type, sign_type, client_ip, result_status, result_status_type, risk_hint, happened_at) VALUES
+('REQ-202607280001', 'APP_PAY_CORE', 'GW_WX', 'PAY_PREPARE', 'HMAC-SHA256', '10.0.0.12', 'SUCCESS', 'success', '签名验证通过，来源IP命中白名单', '2026-07-28 09:10:00'),
+('REQ-202607280002', 'APP_SETTLEMENT', 'GW_BANK', 'PAYOUT_SUBMIT', 'RSA2048', '10.0.1.33', 'FAILED', 'danger', '银行网关已停用，请检查渠道状态', '2026-07-28 10:05:00'),
+('REQ-202607280003', 'APP_PAY_CORE', 'GW_ALI', 'REFUND_SUBMIT', 'RSA2', '10.0.0.12', 'SUCCESS', 'success', '签名验证通过，回调地址校验完成', '2026-07-28 11:18:00');

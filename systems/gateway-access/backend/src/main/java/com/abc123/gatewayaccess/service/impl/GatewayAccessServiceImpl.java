@@ -3,6 +3,8 @@ package com.abc123.gatewayaccess.service.impl;
 import com.abc123.gatewayaccess.dto.DashboardMetricDTO;
 import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
@@ -44,7 +46,7 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
         List<String> highlights = new ArrayList<>();
         highlights.add("渠道接入与证书轮换已纳入 gateway-access");
         highlights.add("payment-core 只保留支付主链路，不再承接接入治理台账");
-        highlights.add("后续将继续补灰度发布、环境隔离和调用方审计");
+        highlights.add("调用方审计台账已补齐，后续将继续补灰度发布和环境隔离");
         summary.setHighlights(highlights);
         return summary;
     }
@@ -75,6 +77,12 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     @Override
     public PageResultDTO<GatewayPermissionDTO> permissions() {
         List<GatewayPermissionDTO> records = gatewayAccessMapper.findPermissions();
+        return page(records, 1, 20);
+    }
+
+    @Override
+    public PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query) {
+        List<GatewayAuditLogDTO> records = gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query));
         return page(records, 1, 20);
     }
 
@@ -199,6 +207,14 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
         normalizedQuery.setKeyword(normalizedQuery.getKeyword() == null ? null : normalizedQuery.getKeyword().trim());
         normalizedQuery.setChannelType(normalizedQuery.getChannelType() == null ? "全部" : normalizedQuery.getChannelType().trim());
         normalizedQuery.setStatus(normalizedQuery.getStatus() == null ? "全部" : normalizedQuery.getStatus().trim());
+        return normalizedQuery;
+    }
+
+    private GatewayAuditQueryDTO normalizeAuditQuery(GatewayAuditQueryDTO query) {
+        GatewayAuditQueryDTO normalizedQuery = query == null ? new GatewayAuditQueryDTO() : query;
+        normalizedQuery.setKeyword(normalizedQuery.getKeyword() == null ? null : normalizedQuery.getKeyword().trim());
+        normalizedQuery.setAppCode(normalizedQuery.getAppCode() == null ? "全部" : normalizedQuery.getAppCode().trim());
+        normalizedQuery.setResultStatus(normalizedQuery.getResultStatus() == null ? "全部" : normalizedQuery.getResultStatus().trim());
         return normalizedQuery;
     }
 

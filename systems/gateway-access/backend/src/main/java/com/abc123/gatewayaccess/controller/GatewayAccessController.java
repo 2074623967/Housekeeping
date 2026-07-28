@@ -2,6 +2,8 @@ package com.abc123.gatewayaccess.controller;
 
 import com.abc123.gatewayaccess.common.ApiResponse;
 import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
@@ -61,6 +63,18 @@ public class GatewayAccessController {
     @GetMapping("/permissions")
     public ApiResponse<PageResultDTO<GatewayPermissionDTO>> permissions() {
         return ApiResponse.success(service.permissions());
+    }
+
+    @GetMapping("/audit-logs")
+    public ApiResponse<PageResultDTO<GatewayAuditLogDTO>> auditLogs(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "全部") String appCode,
+            @RequestParam(defaultValue = "全部") String resultStatus) {
+        GatewayAuditQueryDTO query = new GatewayAuditQueryDTO();
+        query.setKeyword(keyword);
+        query.setAppCode(appCode);
+        query.setResultStatus(resultStatus);
+        return ApiResponse.success(service.auditLogs(query));
     }
 
     @PostMapping("/applications/toggle")

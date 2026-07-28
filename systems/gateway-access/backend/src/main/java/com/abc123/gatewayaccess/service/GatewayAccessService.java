@@ -1,6 +1,8 @@
 package com.abc123.gatewayaccess.service;
 
 import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
@@ -23,6 +25,8 @@ public interface GatewayAccessService {
     PageResultDTO<GatewayCertificateDTO> certificates(String riskLevel);
 
     PageResultDTO<GatewayPermissionDTO> permissions();
+
+    PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query);
 
     GatewayAccessSummaryDTO toggleApplication(ToggleRequestDTO request);
 

@@ -24,6 +24,10 @@ export const gatewayAccessApi = {
     return request(`/api/gateway-access/certificates?${params.toString()}`);
   },
   getPermissions: () => request("/api/gateway-access/permissions"),
+  getAuditLogs: ({ keyword = "", appCode = "全部", resultStatus = "全部" } = {}) => {
+    const params = new URLSearchParams({ keyword, appCode, resultStatus });
+    return request(`/api/gateway-access/audit-logs?${params.toString()}`);
+  },
   toggleApplication: (configCode, enabled) => postJson("/api/gateway-access/applications/toggle", { configCode, enabled }),
   toggleGateway: (configCode, enabled) => postJson("/api/gateway-access/gateways/toggle", { configCode, enabled }),
   toggleCertificate: (configCode, enabled) => postJson("/api/gateway-access/certificates/toggle", { configCode, enabled }),

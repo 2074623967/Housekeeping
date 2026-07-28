@@ -7,6 +7,7 @@ const applications = ref([]);
 const gateways = ref([]);
 const certificates = ref([]);
 const permissions = ref([]);
+const auditLogs = ref([]);
 const loading = ref(true);
 const message = ref("");
 const active = ref("");
@@ -16,23 +17,30 @@ const gatewayFilters = ref({
   channelType: "全部",
   status: "全部"
 });
+const auditFilters = ref({
+  keyword: "",
+  appCode: "全部",
+  resultStatus: "全部"
+});
 
 async function loadAll() {
   loading.value = true;
   message.value = "";
   try {
-    const [summaryData, appData, gatewayData, certData, permissionData] = await Promise.all([
+    const [summaryData, appData, gatewayData, certData, permissionData, auditData] = await Promise.all([
       gatewayAccessApi.getSummary(),
       gatewayAccessApi.getApplications(),
       gatewayAccessApi.getGateways(gatewayFilters.value),
       gatewayAccessApi.getCertificates(certificateFilters.value.riskLevel),
-      gatewayAccessApi.getPermissions()
+      gatewayAccessApi.getPermissions(),
+      gatewayAccessApi.getAuditLogs(auditFilters.value)
     ]);
     summary.value = summaryData;
     applications.value = appData.records;
     gateways.value = gatewayData.records;
     certificates.value = certData.records;
     permissions.value = permissionData.records;
+    auditLogs.value = auditData.records;
   } catch (error) {
     message.value = error.message;
   } finally {
@@ -82,6 +90,25 @@ async function resetCertificateFilters() {
   await applyCertificateFilters();
 }
 
+async function applyAuditFilters() {
+  message.value = "";
+  try {
+    const auditData = await gatewayAccessApi.getAuditLogs(auditFilters.value);
+    auditLogs.value = auditData.records;
+  } catch (error) {
+    message.value = `审计筛选失败：${error.message}`;
+  }
+}
+
+async function resetAuditFilters() {
+  auditFilters.value = {
+    keyword: "",
+    appCode: "全部",
+    resultStatus: "全部"
+  };
+  await applyAuditFilters();
+}
+
 async function toggle(run, code, enabled, label) {
   active.value = code;
   try {
@@ -91,10 +118,12 @@ async function toggle(run, code, enabled, label) {
     const gatewayData = await gatewayAccessApi.getGateways(gatewayFilters.value);
     const certData = await gatewayAccessApi.getCertificates();
     const permissionData = await gatewayAccessApi.getPermissions();
+    const auditData = await gatewayAccessApi.getAuditLogs(auditFilters.value);
     applications.value = appData.records;
     gateways.value = gatewayData.records;
     certificates.value = certData.records;
     permissions.value = permissionData.records;
+    auditLogs.value = auditData.records;
     message.value = `${label} ${code} 已${enabled ? "启用" : "停用"}`;
   } catch (error) {
     message.value = `${label} ${code} 操作失败：${error.message}`;
@@ -311,6 +340,56 @@ onMounted(loadAll);
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>调用方审计台账</h2>
+        </div>
+        <div class="toolbar">
+          <input v-model="auditFilters.keyword" placeholder="请求流水号 / 应用 / 网关编码" />
+          <select v-model="auditFilters.appCode">
+            <option>全部</option>
+            <option>APP_PAY_CORE</option>
+            <option>APP_SETTLEMENT</option>
+            <option>APP_RISK</option>
+          </select>
+          <select v-model="auditFilters.resultStatus">
+            <option>全部</option>
+            <option>SUCCESS</option>
+            <option>FAILED</option>
+          </select>
+          <button class="button secondary" @click="applyAuditFilters">查询</button>
+          <button class="button secondary" @click="resetAuditFilters">重置</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>请求流水号</th>
+              <th>应用</th>
+              <th>网关</th>
+              <th>操作类型</th>
+              <th>签名算法</th>
+              <th>客户端IP</th>
+              <th>结果</th>
+              <th>风险提示</th>
+              <th>发生时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in auditLogs" :key="item.requestId">
+              <td>{{ item.requestId }}</td>
+              <td>{{ item.appCode }}</td>
+              <td>{{ item.gatewayCode }}</td>
+              <td>{{ item.operationType }}</td>
+              <td>{{ item.signType }}</td>
+              <td>{{ item.clientIp }}</td>
+              <td><span class="tag" :class="item.resultStatusType">{{ item.resultStatus }}</span></td>
+              <td>{{ item.riskHint }}</td>
+              <td>{{ item.happenedAt }}</td>
+            </tr>
+          </tbody>
+        </table>
       </section>
     </template>
   </div>

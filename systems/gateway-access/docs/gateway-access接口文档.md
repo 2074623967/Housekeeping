@@ -28,3 +28,9 @@
 
 ### `GET /api/gateway-access/permissions`
 ### `POST /api/gateway-access/permissions/toggle`
+
+## 6. 调用方审计
+
+### `GET /api/gateway-access/audit-logs`
+
+支持按请求流水号、应用编码和结果状态筛选，返回签名算法、来源 IP、调用结果和风险提示。

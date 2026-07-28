@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
@@ -110,5 +112,26 @@ class GatewayAccessServiceImplTest {
     @Test
     void shouldRejectMissingAppCode() {
         assertThrows(IllegalArgumentException.class, () -> new GatewayAccessServiceImpl(gatewayAccessMapper).toggleApplication(new ToggleRequestDTO()));
+    }
+
+    @Test
+    void shouldNormalizeAuditFilters() {
+        GatewayAuditLogDTO record = new GatewayAuditLogDTO();
+        record.setRequestId("REQ-001");
+        when(gatewayAccessMapper.findAuditLogs(org.mockito.ArgumentMatchers.any(GatewayAuditQueryDTO.class)))
+                .thenReturn(Collections.singletonList(record));
+
+        GatewayAuditQueryDTO query = new GatewayAuditQueryDTO();
+        query.setKeyword("  REQ-001  ");
+        query.setAppCode("  APP_PAY_CORE  ");
+        query.setResultStatus("  SUCCESS  ");
+
+        assertEquals(1, new GatewayAccessServiceImpl(gatewayAccessMapper).auditLogs(query).getRecords().size());
+
+        ArgumentCaptor<GatewayAuditQueryDTO> captor = ArgumentCaptor.forClass(GatewayAuditQueryDTO.class);
+        verify(gatewayAccessMapper).findAuditLogs(captor.capture());
+        assertEquals("REQ-001", captor.getValue().getKeyword());
+        assertEquals("APP_PAY_CORE", captor.getValue().getAppCode());
+        assertEquals("SUCCESS", captor.getValue().getResultStatus());
     }
 }

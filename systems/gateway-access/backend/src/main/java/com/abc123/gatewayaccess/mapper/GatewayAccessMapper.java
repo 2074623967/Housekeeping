@@ -1,6 +1,8 @@
 package com.abc123.gatewayaccess.mapper;
 
 import com.abc123.gatewayaccess.dto.GatewayAppDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
@@ -32,6 +34,11 @@ public interface GatewayAccessMapper {
      * 查询接入权限列表。
      */
     List<GatewayPermissionDTO> findPermissions();
+
+    /**
+     * 查询调用方审计日志。
+     */
+    List<GatewayAuditLogDTO> findAuditLogs(@Param("query") GatewayAuditQueryDTO query);
 
     /**
      * 统计接入应用数。
