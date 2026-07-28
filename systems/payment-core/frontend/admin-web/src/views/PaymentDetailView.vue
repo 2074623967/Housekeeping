@@ -41,6 +41,60 @@ const cashierUrl = computed(() => {
   return `http://127.0.0.1:5175/cashier/${detail.value.prepayOrderNo}`;
 });
 
+const metricCards = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  return [
+    {
+      title: "支付金额",
+      value: detail.value.amount || "-",
+      hint: `支付方式 ${detail.value.paymentMethod || "-"}`
+    },
+    {
+      title: "路由轨迹数",
+      value: `${(detail.value.routeLogs || []).length}`,
+      hint: "用于复盘路由选型和渠道命中"
+    },
+    {
+      title: "回调轨迹数",
+      value: `${(detail.value.notifyLogs || []).length}`,
+      hint: "用于确认渠道通知是否已经收口"
+    },
+    {
+      title: "事件轨迹数",
+      value: `${(detail.value.eventLogs || []).length}`,
+      hint: "用于确认下游事件是否完整发布"
+    }
+  ];
+});
+
+const operationSuggestions = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  const suggestions = [];
+  if (detail.value.status === "WAIT_CALLBACK") {
+    suggestions.push("当前支付单等待回调，建议先主动查单；确认渠道已成功但未回调时，再进入异常中心排查。");
+  }
+  if (detail.value.status === "PAYING") {
+    suggestions.push("当前支付单处理中，建议优先查看最近一次支付尝试和渠道响应报文，避免重复提交。");
+  }
+  if (detail.value.status === "CLOSED") {
+    suggestions.push("当前支付单已关闭，如业务仍需付款，应从订单侧重新发起预付单，禁止直接恢复旧单。");
+  }
+  if (detail.value.status === "SUCCESS") {
+    suggestions.push("当前支付单已成功，建议联查订单、账单、支付记录和下游事件是否全部收口。");
+  }
+  if (!(detail.value.notifyLogs || []).length) {
+    suggestions.push("当前没有回调轨迹，需关注渠道回调地址、验签和消息落库情况。");
+  }
+  if (!suggestions.length) {
+    suggestions.push("当前状态可结合路由、回调和事件轨迹继续完成支付链路复盘。");
+  }
+  return suggestions;
+});
+
 async function loadDetail() {
   isLoading.value = true;
   errorMessage.value = "";
@@ -55,6 +109,14 @@ async function loadDetail() {
 
 function isActionRunning(actionName) {
   return activeAction.value === actionName;
+}
+
+function canRunCallback() {
+  return detail.value?.status === "WAIT_CALLBACK" || detail.value?.status === "PAYING";
+}
+
+function canRunClose() {
+  return detail.value?.status !== "SUCCESS" && detail.value?.status !== "CLOSED";
 }
 
 async function handleQuery() {
@@ -126,10 +188,10 @@ onMounted(loadDetail);
         <button class="button secondary" :disabled="!!activeAction" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
         </button>
-        <button class="button secondary" :disabled="!!activeAction" @click="handleCallback">
+        <button class="button secondary" :disabled="!!activeAction || !canRunCallback()" @click="handleCallback">
           {{ isActionRunning("callback") ? "回调中..." : "模拟回调" }}
         </button>
-        <button class="button primary" :disabled="!!activeAction" @click="handleClose">
+        <button class="button primary" :disabled="!!activeAction || !canRunClose()" @click="handleClose">
           {{ isActionRunning("close") ? "关闭中..." : "关闭支付单" }}
         </button>
       </div>
@@ -161,6 +223,38 @@ onMounted(loadDetail);
             <div class="detail-label">当前状态</div>
             <div class="detail-value"><span :class="['badge', detail.statusType]">{{ detail.status }}</span></div>
           </div>
+        </div>
+
+        <div class="detail-card-grid detail-panel">
+          <div v-for="card in metricCards" :key="card.title" class="detail-card">
+            <div class="detail-label">{{ card.title }}</div>
+            <div class="detail-value">{{ card.value }}</div>
+            <div class="meta">{{ card.hint }}</div>
+          </div>
+        </div>
+
+        <div class="split-panels detail-panel">
+          <section class="panel mini">
+            <div class="section-title">
+              <h3>支付动作说明</h3>
+              <span class="meta">根据支付单当前状态控制动作</span>
+            </div>
+            <div class="ops-card">
+              <div class="ops-row"><span>主动查单</span><span>始终可用，用于拉取渠道或本地最新状态</span></div>
+              <div class="ops-row"><span>模拟回调</span><span>{{ canRunCallback() ? "当前可执行" : "仅 WAIT_CALLBACK / PAYING 状态可执行" }}</span></div>
+              <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "成功或已关闭支付单不可关闭" }}</span></div>
+            </div>
+          </section>
+
+          <section class="panel mini">
+            <div class="section-title">
+              <h3>处理建议</h3>
+              <span class="meta">按当前状态和轨迹自动整理</span>
+            </div>
+            <div class="suggestion-list">
+              <div v-for="item in operationSuggestions" :key="item" class="timeline-item">{{ item }}</div>
+            </div>
+          </section>
         </div>
 
         <div class="detail-grid detail-grid-wide">
@@ -229,3 +323,10 @@ onMounted(loadDetail);
     </section>
   </div>
 </template>
+
+<style scoped>
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+}
+</style>
