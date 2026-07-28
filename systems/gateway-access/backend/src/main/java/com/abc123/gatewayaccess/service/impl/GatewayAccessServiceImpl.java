@@ -9,6 +9,8 @@ import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
@@ -87,6 +89,12 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     }
 
     @Override
+    public PageResultDTO<GatewayReleaseRouteDTO> releaseRoutes(GatewayReleaseRouteQueryDTO query) {
+        List<GatewayReleaseRouteDTO> records = gatewayAccessMapper.findReleaseRoutes(normalizeReleaseRouteQuery(query));
+        return page(records, 1, 20);
+    }
+
+    @Override
     @Transactional
     public GatewayAccessSummaryDTO toggleApplication(ToggleRequestDTO request) {
         toggleApplicationRequest(request);
@@ -111,6 +119,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     @Transactional
     public GatewayAccessSummaryDTO togglePermission(ToggleRequestDTO request) {
         togglePermissionRequest(request);
+        return summary();
+    }
+
+    @Override
+    @Transactional
+    public GatewayAccessSummaryDTO toggleReleaseRoute(ToggleRequestDTO request) {
+        toggleReleaseRouteRequest(request);
         return summary();
     }
 
@@ -218,6 +233,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
         return normalizedQuery;
     }
 
+    private GatewayReleaseRouteQueryDTO normalizeReleaseRouteQuery(GatewayReleaseRouteQueryDTO query) {
+        GatewayReleaseRouteQueryDTO normalizedQuery = query == null ? new GatewayReleaseRouteQueryDTO() : query;
+        normalizedQuery.setEnvironment(normalizedQuery.getEnvironment() == null ? "全部" : normalizedQuery.getEnvironment().trim());
+        normalizedQuery.setStatus(normalizedQuery.getStatus() == null ? "全部" : normalizedQuery.getStatus().trim());
+        return normalizedQuery;
+    }
+
     private void togglePermissionRequest(ToggleRequestDTO request) {
         String configCode = requireConfigCode(request, "权限");
         int affectedRows = gatewayAccessMapper.updatePermissionStatus(
@@ -227,6 +249,18 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
         );
         if (affectedRows == 0) {
             throw new IllegalArgumentException("权限不存在");
+        }
+    }
+
+    private void toggleReleaseRouteRequest(ToggleRequestDTO request) {
+        String configCode = requireConfigCode(request, "灰度路由");
+        int affectedRows = gatewayAccessMapper.updateReleaseRouteStatus(
+                configCode,
+                resolveStatus(request.getEnabled()),
+                resolveStatusType(request.getEnabled())
+        );
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("灰度路由不存在");
         }
     }
 

@@ -8,6 +8,7 @@ const gateways = ref([]);
 const certificates = ref([]);
 const permissions = ref([]);
 const auditLogs = ref([]);
+const releaseRoutes = ref([]);
 const loading = ref(true);
 const message = ref("");
 const active = ref("");
@@ -22,18 +23,23 @@ const auditFilters = ref({
   appCode: "全部",
   resultStatus: "全部"
 });
+const releaseRouteFilters = ref({
+  environment: "全部",
+  status: "全部"
+});
 
 async function loadAll() {
   loading.value = true;
   message.value = "";
   try {
-    const [summaryData, appData, gatewayData, certData, permissionData, auditData] = await Promise.all([
+    const [summaryData, appData, gatewayData, certData, permissionData, auditData, releaseRouteData] = await Promise.all([
       gatewayAccessApi.getSummary(),
       gatewayAccessApi.getApplications(),
       gatewayAccessApi.getGateways(gatewayFilters.value),
       gatewayAccessApi.getCertificates(certificateFilters.value.riskLevel),
       gatewayAccessApi.getPermissions(),
-      gatewayAccessApi.getAuditLogs(auditFilters.value)
+      gatewayAccessApi.getAuditLogs(auditFilters.value),
+      gatewayAccessApi.getReleaseRoutes(releaseRouteFilters.value)
     ]);
     summary.value = summaryData;
     applications.value = appData.records;
@@ -41,6 +47,7 @@ async function loadAll() {
     certificates.value = certData.records;
     permissions.value = permissionData.records;
     auditLogs.value = auditData.records;
+    releaseRoutes.value = releaseRouteData.records;
   } catch (error) {
     message.value = error.message;
   } finally {
@@ -109,6 +116,24 @@ async function resetAuditFilters() {
   await applyAuditFilters();
 }
 
+async function applyReleaseRouteFilters() {
+  message.value = "";
+  try {
+    const releaseRouteData = await gatewayAccessApi.getReleaseRoutes(releaseRouteFilters.value);
+    releaseRoutes.value = releaseRouteData.records;
+  } catch (error) {
+    message.value = `灰度路由筛选失败：${error.message}`;
+  }
+}
+
+async function resetReleaseRouteFilters() {
+  releaseRouteFilters.value = {
+    environment: "全部",
+    status: "全部"
+  };
+  await applyReleaseRouteFilters();
+}
+
 async function toggle(run, code, enabled, label) {
   active.value = code;
   try {
@@ -119,11 +144,13 @@ async function toggle(run, code, enabled, label) {
     const certData = await gatewayAccessApi.getCertificates();
     const permissionData = await gatewayAccessApi.getPermissions();
     const auditData = await gatewayAccessApi.getAuditLogs(auditFilters.value);
+    const releaseRouteData = await gatewayAccessApi.getReleaseRoutes(releaseRouteFilters.value);
     applications.value = appData.records;
     gateways.value = gatewayData.records;
     certificates.value = certData.records;
     permissions.value = permissionData.records;
     auditLogs.value = auditData.records;
+    releaseRoutes.value = releaseRouteData.records;
     message.value = `${label} ${code} 已${enabled ? "启用" : "停用"}`;
   } catch (error) {
     message.value = `${label} ${code} 操作失败：${error.message}`;
@@ -340,6 +367,59 @@ onMounted(loadAll);
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>环境隔离与灰度发布</h2>
+        </div>
+        <div class="toolbar">
+          <select v-model="releaseRouteFilters.environment">
+            <option>全部</option>
+            <option>PROD</option>
+            <option>GRAY</option>
+            <option>UAT</option>
+          </select>
+          <select v-model="releaseRouteFilters.status">
+            <option>全部</option>
+            <option>ENABLED</option>
+            <option>DISABLED</option>
+          </select>
+          <button class="button secondary" @click="applyReleaseRouteFilters">查询</button>
+          <button class="button secondary" @click="resetReleaseRouteFilters">重置</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>路由编码</th>
+              <th>网关</th>
+              <th>环境</th>
+              <th>发布策略</th>
+              <th>流量占比</th>
+              <th>发布窗口</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in releaseRoutes" :key="item.routeCode">
+              <td>{{ item.routeCode }}</td>
+              <td>{{ item.gatewayCode }}</td>
+              <td>{{ item.environment }}</td>
+              <td>{{ item.releaseStrategy }}</td>
+              <td>{{ item.trafficPercent }}%</td>
+              <td>{{ item.releaseWindow }}</td>
+              <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
+              <td>{{ item.updatedAt }}</td>
+              <td>
+                <button class="link" :disabled="active === item.routeCode" @click="toggle(gatewayAccessApi.toggleReleaseRoute, item.routeCode, item.status !== 'ENABLED', '灰度路由')">
+                  {{ item.status === "ENABLED" ? "停用" : "启用" }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="card">

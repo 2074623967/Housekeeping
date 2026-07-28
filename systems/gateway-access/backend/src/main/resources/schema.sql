@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS t_gateway_permission;
+DROP TABLE IF EXISTS t_gateway_release_route;
 DROP TABLE IF EXISTS t_gateway_audit_log;
 DROP TABLE IF EXISTS t_gateway_certificate;
 DROP TABLE IF EXISTS t_gateway_channel;
@@ -57,6 +58,21 @@ CREATE TABLE t_gateway_permission (
     updated_at DATETIME NOT NULL COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_permission_code (permission_code)
+);
+
+CREATE TABLE t_gateway_release_route (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    route_code VARCHAR(64) NOT NULL COMMENT '路由编码',
+    gateway_code VARCHAR(64) NOT NULL COMMENT '网关编码',
+    environment VARCHAR(32) NOT NULL COMMENT '环境',
+    release_strategy VARCHAR(64) NOT NULL COMMENT '发布策略',
+    traffic_percent INT NOT NULL COMMENT '流量百分比',
+    release_window VARCHAR(128) NOT NULL COMMENT '发布窗口',
+    status VARCHAR(32) NOT NULL COMMENT '状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '状态样式',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_release_route_code (route_code)
 );
 
 CREATE TABLE t_gateway_audit_log (

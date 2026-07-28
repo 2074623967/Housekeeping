@@ -8,6 +8,8 @@ import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 
@@ -28,6 +30,8 @@ public interface GatewayAccessService {
 
     PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query);
 
+    PageResultDTO<GatewayReleaseRouteDTO> releaseRoutes(GatewayReleaseRouteQueryDTO query);
+
     GatewayAccessSummaryDTO toggleApplication(ToggleRequestDTO request);
 
     GatewayAccessSummaryDTO toggleGateway(ToggleRequestDTO request);
@@ -35,4 +39,6 @@ public interface GatewayAccessService {
     GatewayAccessSummaryDTO toggleCertificate(ToggleRequestDTO request);
 
     GatewayAccessSummaryDTO togglePermission(ToggleRequestDTO request);
+
+    GatewayAccessSummaryDTO toggleReleaseRoute(ToggleRequestDTO request);
 }

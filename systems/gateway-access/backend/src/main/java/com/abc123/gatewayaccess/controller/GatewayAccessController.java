@@ -9,6 +9,8 @@ import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
@@ -65,6 +67,16 @@ public class GatewayAccessController {
         return ApiResponse.success(service.permissions());
     }
 
+    @GetMapping("/release-routes")
+    public ApiResponse<PageResultDTO<GatewayReleaseRouteDTO>> releaseRoutes(
+            @RequestParam(defaultValue = "全部") String environment,
+            @RequestParam(defaultValue = "全部") String status) {
+        GatewayReleaseRouteQueryDTO query = new GatewayReleaseRouteQueryDTO();
+        query.setEnvironment(environment);
+        query.setStatus(status);
+        return ApiResponse.success(service.releaseRoutes(query));
+    }
+
     @GetMapping("/audit-logs")
     public ApiResponse<PageResultDTO<GatewayAuditLogDTO>> auditLogs(
             @RequestParam(required = false) String keyword,
@@ -95,5 +107,10 @@ public class GatewayAccessController {
     @PostMapping("/permissions/toggle")
     public ApiResponse<GatewayAccessSummaryDTO> togglePermission(@RequestBody ToggleRequestDTO request) {
         return ApiResponse.success(service.togglePermission(request));
+    }
+
+    @PostMapping("/release-routes/toggle")
+    public ApiResponse<GatewayAccessSummaryDTO> toggleReleaseRoute(@RequestBody ToggleRequestDTO request) {
+        return ApiResponse.success(service.toggleReleaseRoute(request));
     }
 }

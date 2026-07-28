@@ -7,6 +7,8 @@ import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -39,6 +41,11 @@ public interface GatewayAccessMapper {
      * 查询调用方审计日志。
      */
     List<GatewayAuditLogDTO> findAuditLogs(@Param("query") GatewayAuditQueryDTO query);
+
+    /**
+     * 查询灰度发布路由。
+     */
+    List<GatewayReleaseRouteDTO> findReleaseRoutes(@Param("query") GatewayReleaseRouteQueryDTO query);
 
     /**
      * 统计接入应用数。
@@ -87,4 +94,11 @@ public interface GatewayAccessMapper {
     int updatePermissionStatus(@Param("permissionCode") String permissionCode,
                                @Param("status") String status,
                                @Param("statusType") String statusType);
+
+    /**
+     * 更新灰度发布路由状态。
+     */
+    int updateReleaseRouteStatus(@Param("routeCode") String routeCode,
+                                 @Param("status") String status,
+                                 @Param("statusType") String statusType);
 }

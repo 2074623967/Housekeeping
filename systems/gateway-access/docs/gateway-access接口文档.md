@@ -34,3 +34,10 @@
 ### `GET /api/gateway-access/audit-logs`
 
 支持按请求流水号、应用编码和结果状态筛选，返回签名算法、来源 IP、调用结果和风险提示。
+
+## 7. 灰度发布路由
+
+### `GET /api/gateway-access/release-routes`
+### `POST /api/gateway-access/release-routes/toggle`
+
+支持按环境和状态筛选，用于管理 `PROD / GRAY / UAT` 发布路由、流量占比和发布窗口。

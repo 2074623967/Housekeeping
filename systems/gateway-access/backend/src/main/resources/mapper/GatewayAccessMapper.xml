@@ -100,6 +100,28 @@
         ORDER BY id DESC
     </select>
 
+    <select id="findReleaseRoutes" resultType="com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO">
+        SELECT route_code,
+               gateway_code,
+               environment,
+               release_strategy,
+               traffic_percent,
+               release_window,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_release_route
+        <where>
+            <if test="query.environment != null and query.environment != '' and query.environment != '全部'">
+                environment = #{query.environment}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND status = #{query.status}
+            </if>
+        </where>
+        ORDER BY id ASC
+    </select>
+
     <select id="countApplications" resultType="long">
         SELECT COUNT(1) FROM t_gateway_app
     </select>
@@ -152,5 +174,13 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE permission_code = #{permissionCode}
+    </update>
+
+    <update id="updateReleaseRouteStatus">
+        UPDATE t_gateway_release_route
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE route_code = #{routeCode}
     </update>
 </mapper>

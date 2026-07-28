@@ -11,6 +11,8 @@ import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
 import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.time.LocalDate;
@@ -133,5 +135,24 @@ class GatewayAccessServiceImplTest {
         assertEquals("REQ-001", captor.getValue().getKeyword());
         assertEquals("APP_PAY_CORE", captor.getValue().getAppCode());
         assertEquals("SUCCESS", captor.getValue().getResultStatus());
+    }
+
+    @Test
+    void shouldNormalizeReleaseRouteFilters() {
+        GatewayReleaseRouteDTO record = new GatewayReleaseRouteDTO();
+        record.setRouteCode("ROUTE_ALI_GRAY");
+        when(gatewayAccessMapper.findReleaseRoutes(org.mockito.ArgumentMatchers.any(GatewayReleaseRouteQueryDTO.class)))
+                .thenReturn(Collections.singletonList(record));
+
+        GatewayReleaseRouteQueryDTO query = new GatewayReleaseRouteQueryDTO();
+        query.setEnvironment("  GRAY  ");
+        query.setStatus("  ENABLED  ");
+
+        assertEquals(1, new GatewayAccessServiceImpl(gatewayAccessMapper).releaseRoutes(query).getRecords().size());
+
+        ArgumentCaptor<GatewayReleaseRouteQueryDTO> captor = ArgumentCaptor.forClass(GatewayReleaseRouteQueryDTO.class);
+        verify(gatewayAccessMapper).findReleaseRoutes(captor.capture());
+        assertEquals("GRAY", captor.getValue().getEnvironment());
+        assertEquals("ENABLED", captor.getValue().getStatus());
     }
 }

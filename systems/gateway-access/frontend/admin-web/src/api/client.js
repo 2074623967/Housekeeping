@@ -28,8 +28,13 @@ export const gatewayAccessApi = {
     const params = new URLSearchParams({ keyword, appCode, resultStatus });
     return request(`/api/gateway-access/audit-logs?${params.toString()}`);
   },
+  getReleaseRoutes: ({ environment = "全部", status = "全部" } = {}) => {
+    const params = new URLSearchParams({ environment, status });
+    return request(`/api/gateway-access/release-routes?${params.toString()}`);
+  },
   toggleApplication: (configCode, enabled) => postJson("/api/gateway-access/applications/toggle", { configCode, enabled }),
   toggleGateway: (configCode, enabled) => postJson("/api/gateway-access/gateways/toggle", { configCode, enabled }),
   toggleCertificate: (configCode, enabled) => postJson("/api/gateway-access/certificates/toggle", { configCode, enabled }),
-  togglePermission: (configCode, enabled) => postJson("/api/gateway-access/permissions/toggle", { configCode, enabled })
+  togglePermission: (configCode, enabled) => postJson("/api/gateway-access/permissions/toggle", { configCode, enabled }),
+  toggleReleaseRoute: (configCode, enabled) => postJson("/api/gateway-access/release-routes/toggle", { configCode, enabled })
 };
