@@ -28,11 +28,12 @@ public class SettlementOrderServiceImpl implements SettlementOrderService {
     }
 
     @Override
-    public PageResultDTO<SettlementOrderDTO> list(String batchNo, String targetType, String settlementStatus, int pageNo, int pageSize) {
+    public PageResultDTO<SettlementOrderDTO> list(String batchNo, String targetType, String settlementStatus, String clearingNo, int pageNo, int pageSize) {
         List<SettlementOrderDTO> items = settlementMemoryStore.orders().stream()
                 .filter(item -> batchNo == null || batchNo.isEmpty() || batchNo.equals(item.getBatchNo()))
                 .filter(item -> targetType == null || targetType.isEmpty() || targetType.equals(item.getTargetType()))
                 .filter(item -> settlementStatus == null || settlementStatus.isEmpty() || settlementStatus.equals(item.getSettlementStatus()))
+                .filter(item -> clearingNo == null || clearingNo.isEmpty() || clearingNo.equals(item.getClearingNo()))
                 .map(settlementMapper::toOrderDTO)
                 .collect(Collectors.toList());
         return page(items, pageNo, pageSize);

@@ -33,9 +33,10 @@ public class SettlementOrderController {
             @RequestParam(required = false) String batchNo,
             @RequestParam(required = false) String targetType,
             @RequestParam(required = false) String settlementStatus,
+            @RequestParam(required = false) String clearingNo,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.success(settlementOrderService.list(batchNo, targetType, settlementStatus, pageNo, pageSize));
+        return ApiResponse.success(settlementOrderService.list(batchNo, targetType, settlementStatus, clearingNo, pageNo, pageSize));
     }
 
     @PostMapping

@@ -47,8 +47,8 @@ export const batchApi = {
 };
 
 export const orderApi = {
-  getList: ({ batchNo = "", targetType = "", settlementStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
-    const params = new URLSearchParams({ batchNo, targetType, settlementStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
+  getList: ({ batchNo = "", targetType = "", settlementStatus = "", clearingNo = "", pageNo = 1, pageSize = 20 } = {}) => {
+    const params = new URLSearchParams({ batchNo, targetType, settlementStatus, clearingNo, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/settlements/orders?${params.toString()}`);
   },
   create: (payload) => postJson("/api/settlements/orders", payload),

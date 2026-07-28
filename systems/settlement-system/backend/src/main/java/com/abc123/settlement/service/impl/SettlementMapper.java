@@ -64,6 +64,7 @@ public class SettlementMapper {
         dto.setAuditStatus(entity.getAuditStatus());
         dto.setAuditStatusType(statusType(entity.getAuditStatus()));
         dto.setCreatedAt(entity.getCreatedAt());
+        dto.setClearingNo(entity.getClearingNo());
         return dto;
     }
 

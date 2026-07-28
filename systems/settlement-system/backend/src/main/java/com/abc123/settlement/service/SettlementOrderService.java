@@ -11,7 +11,7 @@ import com.abc123.settlement.dto.SettlementOrderDetailDTO;
  */
 public interface SettlementOrderService {
 
-    PageResultDTO<SettlementOrderDTO> list(String batchNo, String targetType, String settlementStatus, int pageNo, int pageSize);
+    PageResultDTO<SettlementOrderDTO> list(String batchNo, String targetType, String settlementStatus, String clearingNo, int pageNo, int pageSize);
 
     SettlementOrderDTO create(CreateSettlementOrderRequestDTO request);
 

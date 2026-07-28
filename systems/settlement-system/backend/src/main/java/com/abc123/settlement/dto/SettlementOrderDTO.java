@@ -23,4 +23,5 @@ public class SettlementOrderDTO {
     private String auditStatus;
     private String auditStatusType;
     private String createdAt;
+    private String clearingNo;
 }
