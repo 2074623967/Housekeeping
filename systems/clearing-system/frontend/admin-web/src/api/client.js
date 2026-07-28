@@ -42,6 +42,7 @@ export const batchApi = {
     const params = new URLSearchParams({ batchDate, batchStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/clearing/batches?${params.toString()}`);
   },
+  getDetail: (batchNo) => request(`/api/clearing/batches/${batchNo}`),
   create: (payload) => postJson("/api/clearing/batches", payload),
   rerun: (batchNo, payload) => postJson(`/api/clearing/batches/${batchNo}/rerun`, payload)
 };
