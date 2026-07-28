@@ -349,6 +349,28 @@ export const cashierSessionApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/cashier-sessions?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    sessionNo = "",
+    paymentOrderId = "",
+    orderNo = "",
+    customerName = "",
+    terminal = "全部",
+    sessionStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      sessionNo,
+      paymentOrderId,
+      orderNo,
+      customerName,
+      terminal,
+      sessionStatus,
+      sortField,
+      sortOrder
+    });
+    return `/api/cashier-sessions/export?${params.toString()}`;
   }
 };
 
