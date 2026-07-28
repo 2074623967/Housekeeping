@@ -35,6 +35,33 @@ const TERMINAL_COPY = {
   }
 };
 
+const BIZ_SCENE_META = {
+  recharge: {
+    label: "充值",
+    successHint: "支付成功后，优先核对钱包或预存账户是否已入账。",
+    pendingHint: "充值场景若长时间处理中，需检查支付结果与钱包入账事件是否已发布。",
+    closedHint: "旧充值支付单关闭后，建议重新发起新预付单，避免储值重复扣款。"
+  },
+  withdraw: {
+    label: "提现补款",
+    successHint: "支付成功后，可回提现系统确认手续费补扣或失败重试是否已继续推进。",
+    pendingHint: "提现补款处理中时，建议同时核对支付结果和提现业务状态。",
+    closedHint: "若旧补款单已关闭，请在提现侧重新发起新的补款流程。"
+  },
+  transfer: {
+    label: "转账补款",
+    successHint: "支付成功后，建议继续核对转账目标账户或后续结算单据是否已更新。",
+    pendingHint: "转账场景处理中时，需同时关注支付结果与转账执行状态。",
+    closedHint: "关闭后需重新拉起新的转账补款单，避免原业务单停留在待支付。"
+  },
+  "balance-pay": {
+    label: "余额支付",
+    successHint: "支付成功后，建议回订单中心确认履约、派单或上门流程是否已解锁。",
+    pendingHint: "若尾款支付迟迟未收口，优先主动查单并检查订单支付状态是否同步。",
+    closedHint: "关闭后需重新发起新的尾款支付单，避免订单继续挂起。"
+  }
+};
+
 const route = useRoute();
 const router = useRouter();
 const resultState = ref("pending");
@@ -47,6 +74,7 @@ const closeLoading = ref(false);
 const lastAction = ref("");
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
+const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
 const callbackChannelCode = computed(() => {
   if (paymentDetail.value?.channel) {
@@ -66,6 +94,7 @@ const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusTyp
 const nextStepChecklist = computed(() => {
   if (resultState.value === "success") {
     return [
+      bizSceneMeta.value.successHint,
       "支付已成功收口，可回到订单页继续履约或查看服务进度。",
       "若后台与用户端状态不一致，优先查看事件轨迹是否已投递到账务、清分和结算链路。",
       "若是 PC 场景，建议客服或运营保留当前页，便于复核渠道流水号。"
@@ -73,12 +102,14 @@ const nextStepChecklist = computed(() => {
   }
   if (resultState.value === "closed") {
     return [
+      bizSceneMeta.value.closedHint,
       "当前支付单已关闭，建议返回收银台重新发起新的预付单。",
       "若用户已实际付款，请先保留凭证并联系运营核查渠道回调与支付请求。",
       "如关闭前发生重复点击，需对照幂等键和支付请求页确认是否存在重复提交流水。"
     ];
   }
   return [
+    bizSceneMeta.value.pendingHint,
     "当前结果尚未最终收口，可先执行主动查单刷新最新状态。",
     "若渠道回调存在延迟，建议结合路由轨迹、回调轨迹和事件轨迹一起排查。",
     "若用户需要立即重试，先关闭当前支付单，再回到收银台切换支付方式发起新支付。"
@@ -184,10 +215,20 @@ function backToCashier() {
   if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
     cashierRouteQuery.accessToken = route.query.accessToken.trim();
   }
+  if (typeof route.query.bizType === "string" && route.query.bizType.trim()) {
+    cashierRouteQuery.bizType = route.query.bizType.trim();
+  }
   router.push({
     path: `/cashier/${prepayOrderNo}`,
     query: cashierRouteQuery
   });
+}
+
+function resolveBizType() {
+  if (typeof route.query.bizType === "string" && route.query.bizType.trim()) {
+    return route.query.bizType.trim();
+  }
+  return "balance-pay";
 }
 </script>
 
@@ -197,7 +238,7 @@ function backToCashier() {
       <div class="hero-copy">
         <div class="hero-label">{{ terminalCopy.heroLabel }}</div>
         <h1>{{ resultTitle }}</h1>
-        <p>{{ resultHint }}</p>
+        <p>{{ resultHint }} 当前业务场景为{{ bizSceneMeta.label }}，结果页会给出对应的后续动作建议。</p>
       </div>
       <div class="hero-amount-card">
         <div class="mini-label">支付状态</div>
@@ -242,6 +283,10 @@ function backToCashier() {
           <div class="summary-item">
             <span>金额</span>
             <strong>{{ paymentDetail?.amount || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>业务场景</span>
+            <strong>{{ bizSceneMeta.label }}</strong>
           </div>
           <div class="summary-item">
             <span>支付方式</span>

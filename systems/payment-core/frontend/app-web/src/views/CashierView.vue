@@ -62,6 +62,33 @@ const CHANNEL_META = {
   }
 };
 
+const BIZ_SCENE_META = {
+  recharge: {
+    label: "充值",
+    title: "钱包充值支付",
+    description: "面向会员储值、预存款补充和押金补缴场景，关注支付完成后的资金到账提示。",
+    supportHint: "若支付成功但钱包未到账，优先核对支付结果、账务事件和钱包入账链路。"
+  },
+  withdraw: {
+    label: "提现补款",
+    title: "提现链路补款",
+    description: "用于提现手续费补扣、银行卡校验补扣和提现失败重试支付场景。",
+    supportHint: "若提现侧状态仍未推进，建议携带支付单号同步提现系统复核。"
+  },
+  transfer: {
+    label: "转账补款",
+    title: "转账补款支付",
+    description: "用于商家钱包转账、服务者垫资补款和企业客户内部划转类支付。",
+    supportHint: "若转账目标侧资金未变化，需同步核对支付结果与后续结算链路。"
+  },
+  "balance-pay": {
+    label: "余额支付",
+    title: "订单尾款支付",
+    description: "用于订单尾款补缴、履约前二次支付和账户余额不足兜底支付场景。",
+    supportHint: "若订单履约侧仍显示待支付，建议先主动查单，再回订单中心刷新支付状态。"
+  }
+};
+
 const route = useRoute();
 const router = useRouter();
 const cashier = ref(null);
@@ -84,6 +111,10 @@ function buildResultRouteQuery(prepayOrderNo, paymentMethod) {
     paymentMethod,
     terminalVariant: props.terminalVariant
   };
+  const bizType = resolveBizType();
+  if (bizType) {
+    routeQuery.bizType = bizType;
+  }
   const accessToken = resolveAccessToken();
   if (accessToken) {
     routeQuery.accessToken = accessToken;
@@ -145,6 +176,7 @@ onMounted(loadCashier);
 onBeforeUnmount(stopCountdown);
 
 const terminalMeta = computed(() => TERMINAL_META[props.terminalVariant] || TERMINAL_META.app);
+const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
 const sourceAppId = computed(() => {
   if (props.terminalVariant === "pc") {
     return "housekeeping-pc-web";
@@ -217,6 +249,11 @@ const countdownRiskHint = computed(() => {
 });
 const paymentReadinessChecklist = computed(() => {
   return [
+    {
+      title: "业务场景",
+      detail: `${bizSceneMeta.value.label} / ${bizSceneMeta.value.title}`,
+      statusType: "info"
+    },
     {
       title: "支付对象",
       detail: `订单 ${cashier.value?.orderNo || "-"} / 账单 ${cashier.value?.billNo || "-"}`,
@@ -341,6 +378,13 @@ function resolveAccessToken() {
   return "";
 }
 
+function resolveBizType() {
+  if (typeof route.query.bizType === "string" && route.query.bizType.trim()) {
+    return route.query.bizType.trim();
+  }
+  return "balance-pay";
+}
+
 function syncAccessToken() {
   accessTokenAvailable.value = Boolean(resolveAccessToken());
 }
@@ -355,8 +399,8 @@ watch(selectedPaymentMethod, () => {
     <section class="terminal-hero">
       <div class="hero-copy">
         <div class="hero-label">{{ terminalMeta.heroLabel }}</div>
-        <h1>{{ cashier?.title || "支付收银台" }}</h1>
-        <p>{{ terminalMeta.heroHint }}</p>
+        <h1>{{ cashier?.title || bizSceneMeta.title }}</h1>
+        <p>{{ bizSceneMeta.description }} {{ terminalMeta.heroHint }}</p>
       </div>
       <div class="hero-amount-card">
         <div class="mini-label">本次应付</div>
@@ -402,6 +446,10 @@ watch(selectedPaymentMethod, () => {
         </div>
 
         <div v-if="selectedChannelMeta" class="channel-tips">
+          <div>
+            <strong>业务说明</strong>
+            <p>{{ bizSceneMeta.supportHint }}</p>
+          </div>
           <div>
             <strong>渠道说明</strong>
             <p>{{ selectedChannelMeta.description }}</p>
