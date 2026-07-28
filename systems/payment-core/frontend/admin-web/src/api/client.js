@@ -433,6 +433,28 @@ export const paymentLogApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-logs?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    paymentOrderId = "",
+    orderNo = "",
+    processStage = "全部",
+    logLevel = "全部",
+    source = "",
+    keyword = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      processStage,
+      logLevel,
+      source,
+      keyword,
+      sortField,
+      sortOrder
+    });
+    return `/api/payment-logs/export?${params.toString()}`;
   }
 };
 

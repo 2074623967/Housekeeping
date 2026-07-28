@@ -1,10 +1,11 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentLogApi } from "../api/client";
 
 const route = useRoute();
 const items = ref([]);
+const selectedItem = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const total = ref(0);
@@ -20,6 +21,13 @@ const filters = ref({
   sortField: route.query.sortField || "createdAt",
   sortOrder: route.query.sortOrder || "desc"
 });
+
+const metrics = computed(() => ({
+  total: total.value,
+  errorTotal: items.value.filter((item) => item.logLevel === "ERROR").length,
+  warnTotal: items.value.filter((item) => item.logLevel === "WARN").length,
+  stageCount: new Set(items.value.map((item) => item.processStage).filter(Boolean)).size
+}));
 
 function resetFilters() {
   filters.value = {
@@ -41,6 +49,10 @@ function applyFilters() {
   loadPaymentLogs();
 }
 
+function pickItem(item) {
+  selectedItem.value = item;
+}
+
 async function loadPaymentLogs() {
   isLoading.value = true;
   errorMessage.value = "";
@@ -59,11 +71,26 @@ async function loadPaymentLogs() {
     });
     total.value = result.total;
     items.value = result.items;
+    selectedItem.value = result.items[0] || null;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
+}
+
+function exportLogs() {
+  const exportUrl = paymentLogApi.buildExportUrl({
+    paymentOrderId: filters.value.paymentOrderId,
+    orderNo: filters.value.orderNo,
+    processStage: filters.value.processStage,
+    logLevel: filters.value.logLevel,
+    source: filters.value.source,
+    keyword: filters.value.keyword,
+    sortField: filters.value.sortField,
+    sortOrder: filters.value.sortOrder
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 function goToPage(nextPage) {
@@ -84,8 +111,27 @@ onMounted(loadPaymentLogs);
         <h2>支付处理日志</h2>
         <p>按处理阶段查看支付提交、路由、回调和业务事件日志，支撑异常定位与测试回归</p>
       </div>
-      <button class="button primary">导出日志</button>
+      <button class="button primary" @click="exportLogs">导出日志</button>
     </div>
+
+    <section class="card-grid">
+      <article class="card">
+        <p class="card-title">日志总数</p>
+        <p class="card-value">{{ metrics.total }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">错误日志</p>
+        <p class="card-value">{{ metrics.errorTotal }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">告警日志</p>
+        <p class="card-value">{{ metrics.warnTotal }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">涉及阶段数</p>
+        <p class="card-value">{{ metrics.stageCount }}</p>
+      </article>
+    </section>
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
@@ -157,37 +203,71 @@ onMounted(loadPaymentLogs);
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付处理日志</div>
 
-      <div v-else class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>日志编号</th>
-              <th>支付单号</th>
-              <th>订单号</th>
-              <th>处理阶段</th>
-              <th>级别</th>
-              <th>来源</th>
-              <th>日志消息</th>
-              <th>创建时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in items" :key="item.logNo">
-              <td>{{ item.logNo }}</td>
-              <td>
-                <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
-                  {{ item.paymentOrderId }}
-                </RouterLink>
-              </td>
-              <td>{{ item.orderNo }}</td>
-              <td>{{ item.processStage }}</td>
-              <td><span :class="['badge', item.logLevelType]">{{ item.logLevel }}</span></td>
-              <td>{{ item.source }}</td>
-              <td class="flow-summary-cell">{{ item.message }}</td>
-              <td>{{ item.createdAt }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="detail-layout">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日志编号</th>
+                <th>支付单号</th>
+                <th>订单号</th>
+                <th>处理阶段</th>
+                <th>级别</th>
+                <th>来源</th>
+                <th>日志消息</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in items" :key="item.logNo">
+                <td>{{ item.logNo }}</td>
+                <td>
+                  <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                    {{ item.paymentOrderId }}
+                  </RouterLink>
+                </td>
+                <td>{{ item.orderNo }}</td>
+                <td>{{ item.processStage }}</td>
+                <td><span :class="['badge', item.logLevelType]">{{ item.logLevel }}</span></td>
+                <td>{{ item.source }}</td>
+                <td class="flow-summary-cell">{{ item.message }}</td>
+                <td>{{ item.createdAt }}</td>
+                <td><button class="link-button" @click="pickItem(item)">查看详情</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <aside class="detail-side">
+          <div v-if="selectedItem" class="detail-stack">
+            <div class="section-title">
+              <h3>日志详情</h3>
+              <span class="meta">{{ selectedItem.logNo }}</span>
+            </div>
+            <div class="detail-grid">
+              <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
+              <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
+              <div class="detail-card"><span>处理阶段</span><strong>{{ selectedItem.processStage }}</strong></div>
+              <div class="detail-card"><span>日志级别</span><strong>{{ selectedItem.logLevel }}</strong></div>
+              <div class="detail-card"><span>来源</span><strong>{{ selectedItem.source }}</strong></div>
+              <div class="detail-card"><span>创建时间</span><strong>{{ selectedItem.createdAt }}</strong></div>
+              <div class="detail-card detail-card-wide"><span>日志消息</span><strong>{{ selectedItem.message }}</strong></div>
+            </div>
+            <div class="ops-card">
+              <div class="ops-title">排障建议</div>
+              <div class="ops-row"><span>优先联查</span><span>支付单详情 / 支付请求 / 支付事件</span></div>
+              <div class="ops-row"><span>适用角色</span><span>运营 / 研发 / 测试共用同一入口</span></div>
+              <div class="ops-row"><span>重点核对</span><span>处理阶段、来源系统、级别和关键字</span></div>
+            </div>
+            <div class="table-inline-actions">
+              <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-requests?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付请求</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-events?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付事件</RouterLink>
+            </div>
+          </div>
+          <div v-else class="state-box">选择左侧日志后，可在这里查看详情与排障建议。</div>
+        </aside>
       </div>
       <div v-if="total > pageSize" class="pager">
         <span>共 {{ total }} 条日志</span>
@@ -198,3 +278,73 @@ onMounted(loadPaymentLogs);
     </section>
   </div>
 </template>
+
+<style scoped>
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 360px;
+  gap: 16px;
+}
+
+.detail-side {
+  display: grid;
+  align-self: start;
+}
+
+.detail-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-card {
+  padding: 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #dbe3f0;
+}
+
+.detail-card span {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.detail-card strong {
+  color: #0f172a;
+}
+
+.detail-card-wide {
+  grid-column: 1 / -1;
+}
+
+.ops-card {
+  padding: 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #dbe3f0;
+}
+
+.ops-title {
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.ops-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed #dbe3f0;
+}
+
+.ops-row:last-child {
+  border-bottom: 0;
+}
+</style>
