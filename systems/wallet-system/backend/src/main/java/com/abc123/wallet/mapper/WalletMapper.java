@@ -38,4 +38,13 @@ public interface WalletMapper {
             @Param("status") String status);
 
     com.abc123.wallet.entity.WalletWithdrawOrderEntity findWithdrawOrderByNo(@Param("withdrawNo") String withdrawNo);
+
+    int insertTransferOrder(@Param("transferNo") String transferNo,
+            @Param("sourceAccountNo") String sourceAccountNo,
+            @Param("targetAccountNo") String targetAccountNo,
+            @Param("bizNo") String bizNo,
+            @Param("amount") BigDecimal amount,
+            @Param("status") String status);
+
+    com.abc123.wallet.entity.WalletTransferOrderEntity findTransferOrderByNo(@Param("transferNo") String transferNo);
 }

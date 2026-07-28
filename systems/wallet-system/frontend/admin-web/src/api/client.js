@@ -20,5 +20,9 @@ export const walletApi = {
   withdraw: (payload) => request("/api/wallet/withdrawals", {
     method: "POST",
     body: JSON.stringify(payload)
+  }),
+  transfer: (payload) => request("/api/wallet/transfers", {
+    method: "POST",
+    body: JSON.stringify(payload)
   })
 };

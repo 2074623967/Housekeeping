@@ -83,4 +83,21 @@
         FROM t_wallet_withdraw_order
         WHERE withdraw_no = #{withdrawNo}
     </select>
+
+    <insert id="insertTransferOrder">
+        INSERT INTO t_wallet_transfer_order (transfer_no, source_account_no, target_account_no, biz_no, amount, status, created_at)
+        VALUES (#{transferNo}, #{sourceAccountNo}, #{targetAccountNo}, #{bizNo}, #{amount}, #{status}, NOW())
+    </insert>
+
+    <select id="findTransferOrderByNo" resultType="com.abc123.wallet.entity.WalletTransferOrderEntity">
+        SELECT transfer_no AS transferNo,
+               source_account_no AS sourceAccountNo,
+               target_account_no AS targetAccountNo,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_transfer_order
+        WHERE transfer_no = #{transferNo}
+    </select>
 </mapper>

@@ -18,6 +18,13 @@ const withdrawForm = ref({
   amount: "50.00",
   operatorName: "运营小王"
 });
+const transferForm = ref({
+  sourceAccountNo: "",
+  targetAccountNo: "",
+  bizNo: "",
+  amount: "30.00",
+  operatorName: "运营小王"
+});
 
 async function load() {
   loading.value = true;
@@ -29,6 +36,12 @@ async function load() {
   }
   if (!withdrawForm.value.accountNo && rows.value[0]) {
     withdrawForm.value.accountNo = rows.value[0].accountNo;
+  }
+  if (!transferForm.value.sourceAccountNo && rows.value[0]) {
+    transferForm.value.sourceAccountNo = rows.value[0].accountNo;
+  }
+  if (!transferForm.value.targetAccountNo && rows.value[1]) {
+    transferForm.value.targetAccountNo = rows.value[1].accountNo;
   }
   loading.value = false;
 }
@@ -60,6 +73,20 @@ async function withdraw() {
     });
     await load();
     message.value = "提现成功";
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
+async function transfer() {
+  message.value = "";
+  try {
+    await walletApi.transfer({
+      ...transferForm.value,
+      amount: Number(transferForm.value.amount)
+    });
+    await load();
+    message.value = "转账成功";
   } catch (error) {
     message.value = error.message;
   }
@@ -115,6 +142,17 @@ onMounted(load);
               <input v-model="withdrawForm.amount" placeholder="提现金额" />
               <input v-model="withdrawForm.operatorName" placeholder="操作人" />
               <button class="button" style="background:#0f766e;color:#fff" @click="withdraw">发起提现</button>
+            </div>
+          </div>
+          <div class="detail-card" style="grid-column:1/-1">
+            <div class="detail-label">转账单</div>
+            <div style="display:grid;gap:8px">
+              <input v-model="transferForm.sourceAccountNo" placeholder="转出账户号" />
+              <input v-model="transferForm.targetAccountNo" placeholder="转入账户号" />
+              <input v-model="transferForm.bizNo" placeholder="业务单号" />
+              <input v-model="transferForm.amount" placeholder="转账金额" />
+              <input v-model="transferForm.operatorName" placeholder="操作人" />
+              <button class="button" style="background:#7c3aed;color:#fff" @click="transfer">发起转账</button>
             </div>
           </div>
         </div>
