@@ -339,6 +339,26 @@ export const paymentEventApi = {
     });
     return request(`/api/payment-events?${params.toString()}`);
   },
+  buildExportUrl: ({
+    paymentOrderId = "",
+    eventType = "全部",
+    publishStatus = "全部",
+    downstreamSystem = "全部",
+    eventTopic = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      eventType,
+      publishStatus,
+      downstreamSystem,
+      eventTopic,
+      sortField,
+      sortOrder
+    });
+    return `/api/payment-events/export?${params.toString()}`;
+  },
   republish: (eventNo, {
     paymentOrderId = "",
     eventType = "全部",
