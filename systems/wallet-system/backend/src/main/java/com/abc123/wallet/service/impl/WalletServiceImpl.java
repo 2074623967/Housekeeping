@@ -37,6 +37,14 @@ public class WalletServiceImpl implements WalletService {
         return detail;
     }
 
+    @Override
+    public List<WalletLedgerDTO> listLedgers(String accountNo, String bizType, String direction) {
+        return walletMapper.findAllLedgers(accountNo, bizType, direction)
+                .stream()
+                .map(this::toLedgerDTO)
+                .collect(Collectors.toList());
+    }
+
     private WalletAccountDTO toAccountDTO(WalletAccountEntity entity) {
         WalletAccountDTO dto = new WalletAccountDTO();
         dto.setAccountNo(entity.getAccountNo());
@@ -52,6 +60,7 @@ public class WalletServiceImpl implements WalletService {
     private WalletLedgerDTO toLedgerDTO(WalletLedgerEntity entity) {
         WalletLedgerDTO dto = new WalletLedgerDTO();
         dto.setLedgerNo(entity.getLedgerNo());
+        dto.setAccountNo(entity.getAccountNo());
         dto.setBizType(entity.getBizType());
         dto.setBizNo(entity.getBizNo());
         dto.setAmount(entity.getAmount());

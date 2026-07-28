@@ -41,6 +41,29 @@
         ORDER BY created_at DESC
     </select>
 
+    <select id="findAllLedgers" resultType="com.abc123.wallet.entity.WalletLedgerEntity">
+        SELECT ledger_no AS ledgerNo,
+               account_no AS accountNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               direction,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_ledger
+        <where>
+            <if test="accountNo != null and accountNo != ''">
+                account_no = #{accountNo}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                AND biz_type = #{bizType}
+            </if>
+            <if test="direction != null and direction != ''">
+                AND direction = #{direction}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
     <update id="updateAccountAmount">
         UPDATE t_wallet_account
         SET available_amount = available_amount + #{amount}

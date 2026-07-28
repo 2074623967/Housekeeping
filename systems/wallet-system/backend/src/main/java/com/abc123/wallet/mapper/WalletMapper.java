@@ -16,6 +16,10 @@ public interface WalletMapper {
 
     List<WalletLedgerEntity> findLedgersByAccountNo(@Param("accountNo") String accountNo);
 
+    List<WalletLedgerEntity> findAllLedgers(@Param("accountNo") String accountNo,
+            @Param("bizType") String bizType,
+            @Param("direction") String direction);
+
     int updateAccountAmount(@Param("accountNo") String accountNo, @Param("amount") BigDecimal amount);
 
     int insertRechargeOrder(@Param("rechargeNo") String rechargeNo,

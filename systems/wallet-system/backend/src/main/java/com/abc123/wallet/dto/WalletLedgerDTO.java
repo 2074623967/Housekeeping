@@ -7,6 +7,8 @@ import lombok.Data;
 public class WalletLedgerDTO {
     /** 流水号。 */
     private String ledgerNo;
+    /** 钱包账户号。 */
+    private String accountNo;
     /** 业务类型。 */
     private String bizType;
     /** 业务单号。 */

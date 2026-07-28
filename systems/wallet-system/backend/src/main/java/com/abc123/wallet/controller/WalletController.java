@@ -20,6 +20,7 @@ import java.util.List;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,6 +50,14 @@ public class WalletController {
     @GetMapping
     public ApiResponse<List<WalletAccountDTO>> list() {
         return ApiResponse.success(walletService.listAccounts());
+    }
+
+    @GetMapping("/ledgers")
+    public ApiResponse<List<com.abc123.wallet.dto.WalletLedgerDTO>> ledgers(
+            @RequestParam(required = false) String accountNo,
+            @RequestParam(required = false) String bizType,
+            @RequestParam(required = false) String direction) {
+        return ApiResponse.success(walletService.listLedgers(accountNo, bizType, direction));
     }
 
     @GetMapping("/{accountNo}")
