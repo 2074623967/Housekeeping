@@ -50,21 +50,33 @@ public class WalletRedPacketServiceImpl implements WalletRedPacketService {
             throw new IllegalArgumentException("营销资金余额不足");
         }
         String redPacketNo = "RED" + new Date().getTime();
+        String status = request.getTotalAmount().compareTo(new BigDecimal("500")) >= 0 ? "PENDING_APPROVAL" : "ISSUED";
         walletMapper.insertRedPacket(
                 redPacketNo,
                 request.getAccountNo(),
                 request.getCampaignName(),
                 request.getTotalAmount(),
                 request.getPacketCount(),
-                "ISSUED");
-        walletMapper.updateAccountAmount(request.getAccountNo(), request.getTotalAmount().negate());
-        walletMapper.insertLedger(
-                "LED" + new Date().getTime(),
-                request.getAccountNo(),
-                "RED_PACKET_OUT",
-                redPacketNo,
-                request.getTotalAmount(),
-                "OUT");
+                status);
+        if ("ISSUED".equals(status)) {
+            walletMapper.updateAccountAmount(request.getAccountNo(), request.getTotalAmount().negate());
+            walletMapper.insertLedger(
+                    "LED" + new Date().getTime(),
+                    request.getAccountNo(),
+                    "RED_PACKET_OUT",
+                    redPacketNo,
+                    request.getTotalAmount(),
+                    "OUT");
+        }
+        if ("PENDING_APPROVAL".equals(status)) {
+            walletMapper.insertRiskEvent(
+                    "RSK" + new Date().getTime(),
+                    "RED_PACKET",
+                    redPacketNo,
+                    "HIGH",
+                    "PENDING",
+                    "红包总金额达到风控审批阈值");
+        }
         List<WalletRedPacketEntity> entities = walletMapper.findRedPackets();
         for (WalletRedPacketEntity entity : entities) {
             if (redPacketNo.equals(entity.getRedPacketNo())) {

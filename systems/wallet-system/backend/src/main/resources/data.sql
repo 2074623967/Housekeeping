@@ -19,3 +19,6 @@ INSERT INTO t_wallet_transfer_order (transfer_no, source_account_no, target_acco
 
 INSERT INTO t_wallet_red_packet (red_packet_no, account_no, campaign_name, total_amount, packet_count, status, created_at) VALUES
 ('RED-20260726001', 'WALLET-20001', '新客首单红包', 300.00, 30, 'ISSUED', '2026-07-26 09:20:00');
+
+INSERT INTO t_wallet_risk_event (event_no, biz_type, biz_no, risk_level, status, risk_reason, handled_by, handled_remark, created_at, handled_at) VALUES
+('RSK-20260726001', 'RED_PACKET', 'RED-20260726001', 'MEDIUM', 'APPROVED', '营销红包金额达到复核阈值', '风控主管张敏', '历史数据通过复核', '2026-07-26 09:18:00', '2026-07-26 09:19:00');

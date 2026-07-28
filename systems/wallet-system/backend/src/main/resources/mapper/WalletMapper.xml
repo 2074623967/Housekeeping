@@ -152,8 +152,70 @@
         ORDER BY created_at DESC
     </select>
 
+    <select id="findRedPacketByNo" resultType="com.abc123.wallet.entity.WalletRedPacketEntity">
+        SELECT red_packet_no AS redPacketNo,
+               account_no AS accountNo,
+               campaign_name AS campaignName,
+               FORMAT(total_amount, 2) AS totalAmount,
+               packet_count AS packetCount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_red_packet
+        WHERE red_packet_no = #{redPacketNo}
+    </select>
+
     <insert id="insertRedPacket">
         INSERT INTO t_wallet_red_packet (red_packet_no, account_no, campaign_name, total_amount, packet_count, status, created_at)
         VALUES (#{redPacketNo}, #{accountNo}, #{campaignName}, #{totalAmount}, #{packetCount}, #{status}, NOW())
     </insert>
+
+    <update id="updateRedPacketStatus">
+        UPDATE t_wallet_red_packet
+        SET status = #{status}
+        WHERE red_packet_no = #{redPacketNo}
+    </update>
+
+    <insert id="insertRiskEvent">
+        INSERT INTO t_wallet_risk_event (event_no, biz_type, biz_no, risk_level, status, risk_reason, created_at)
+        VALUES (#{eventNo}, #{bizType}, #{bizNo}, #{riskLevel}, #{status}, #{riskReason}, NOW())
+    </insert>
+
+    <select id="findRiskEvents" resultType="com.abc123.wallet.entity.WalletRiskEventEntity">
+        SELECT event_no AS eventNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               risk_level AS riskLevel,
+               status,
+               risk_reason AS riskReason,
+               handled_by AS handledBy,
+               handled_remark AS handledRemark,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(handled_at, '%Y-%m-%d %H:%i:%s') AS handledAt
+        FROM t_wallet_risk_event
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findRiskEventByNo" resultType="com.abc123.wallet.entity.WalletRiskEventEntity">
+        SELECT event_no AS eventNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               risk_level AS riskLevel,
+               status,
+               risk_reason AS riskReason,
+               handled_by AS handledBy,
+               handled_remark AS handledRemark,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(handled_at, '%Y-%m-%d %H:%i:%s') AS handledAt
+        FROM t_wallet_risk_event
+        WHERE event_no = #{eventNo}
+    </select>
+
+    <update id="updateRiskEvent">
+        UPDATE t_wallet_risk_event
+        SET status = #{status},
+            handled_by = #{handledBy},
+            handled_remark = #{handledRemark},
+            handled_at = NOW()
+        WHERE event_no = #{eventNo}
+    </update>
 </mapper>

@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS t_wallet_recharge_order;
+DROP TABLE IF EXISTS t_wallet_risk_event;
 DROP TABLE IF EXISTS t_wallet_red_packet;
 DROP TABLE IF EXISTS t_wallet_transfer_order;
 DROP TABLE IF EXISTS t_wallet_withdraw_order;
@@ -94,3 +95,19 @@ CREATE TABLE t_wallet_red_packet (
     PRIMARY KEY (id),
     UNIQUE KEY uk_wallet_red_packet_no (red_packet_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包红包批次表';
+
+CREATE TABLE t_wallet_risk_event (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    event_no VARCHAR(64) NOT NULL COMMENT '风控事件号',
+    biz_type VARCHAR(64) NOT NULL COMMENT '业务类型',
+    biz_no VARCHAR(64) NOT NULL COMMENT '业务单号',
+    risk_level VARCHAR(32) NOT NULL COMMENT '风险等级',
+    status VARCHAR(32) NOT NULL COMMENT '处理状态',
+    risk_reason VARCHAR(255) NOT NULL COMMENT '风险原因',
+    handled_by VARCHAR(64) DEFAULT NULL COMMENT '处理人',
+    handled_remark VARCHAR(255) DEFAULT NULL COMMENT '处理备注',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    handled_at DATETIME DEFAULT NULL COMMENT '处理时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_wallet_risk_event_no (event_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包风控事件表';

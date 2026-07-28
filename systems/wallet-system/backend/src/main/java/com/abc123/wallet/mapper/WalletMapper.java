@@ -4,6 +4,7 @@ import com.abc123.wallet.entity.WalletAccountEntity;
 import com.abc123.wallet.entity.WalletBalancePaymentOrderEntity;
 import com.abc123.wallet.entity.WalletLedgerEntity;
 import com.abc123.wallet.entity.WalletRedPacketEntity;
+import com.abc123.wallet.entity.WalletRiskEventEntity;
 import java.util.List;
 import java.math.BigDecimal;
 import org.apache.ibatis.annotations.Param;
@@ -64,10 +65,31 @@ public interface WalletMapper {
 
     List<WalletRedPacketEntity> findRedPackets();
 
+    WalletRedPacketEntity findRedPacketByNo(@Param("redPacketNo") String redPacketNo);
+
     int insertRedPacket(@Param("redPacketNo") String redPacketNo,
             @Param("accountNo") String accountNo,
             @Param("campaignName") String campaignName,
             @Param("totalAmount") BigDecimal totalAmount,
             @Param("packetCount") Integer packetCount,
             @Param("status") String status);
+
+    int updateRedPacketStatus(@Param("redPacketNo") String redPacketNo,
+            @Param("status") String status);
+
+    int insertRiskEvent(@Param("eventNo") String eventNo,
+            @Param("bizType") String bizType,
+            @Param("bizNo") String bizNo,
+            @Param("riskLevel") String riskLevel,
+            @Param("status") String status,
+            @Param("riskReason") String riskReason);
+
+    List<WalletRiskEventEntity> findRiskEvents();
+
+    WalletRiskEventEntity findRiskEventByNo(@Param("eventNo") String eventNo);
+
+    int updateRiskEvent(@Param("eventNo") String eventNo,
+            @Param("status") String status,
+            @Param("handledBy") String handledBy,
+            @Param("handledRemark") String handledRemark);
 }

@@ -43,5 +43,10 @@ export const walletApi = {
   issueRedPacket: (payload) => request("/api/wallet/red-packets", {
     method: "POST",
     body: JSON.stringify(payload)
+  }),
+  getRiskEvents: () => request("/api/wallet/risk-events"),
+  approveRiskEvent: (payload) => request("/api/wallet/risk-events/approve", {
+    method: "POST",
+    body: JSON.stringify(payload)
   })
 };
