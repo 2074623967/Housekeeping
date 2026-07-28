@@ -547,6 +547,20 @@ export const paymentApi = {
     });
     return request(`/api/payments?${params.toString()}`);
   },
+  buildExportUrl: ({
+    paymentOrderId = "",
+    orderNo = "",
+    paymentMethod = "全部",
+    status = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      paymentMethod,
+      status
+    });
+    return `/api/payments/export?${params.toString()}`;
+  },
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
   prepay: (payload) => postJson("/api/payments/prepay", payload),
   query: (paymentOrderId) => postJson("/api/payments/query", { paymentOrderId }),
