@@ -12,6 +12,13 @@ const rechargeForm = ref({
   amount: "100.00",
   operatorName: "运营小王"
 });
+const balancePaymentForm = ref({
+  accountNo: "",
+  bizNo: "",
+  amount: "20.00",
+  operatorName: "运营小王",
+  remark: ""
+});
 const withdrawForm = ref({
   accountNo: "",
   bizNo: "",
@@ -33,6 +40,9 @@ async function load() {
   detail.value = rows.value[0] ? await walletApi.getDetail(rows.value[0].accountNo) : null;
   if (!rechargeForm.value.accountNo && rows.value[0]) {
     rechargeForm.value.accountNo = rows.value[0].accountNo;
+  }
+  if (!balancePaymentForm.value.accountNo && rows.value[0]) {
+    balancePaymentForm.value.accountNo = rows.value[0].accountNo;
   }
   if (!withdrawForm.value.accountNo && rows.value[0]) {
     withdrawForm.value.accountNo = rows.value[0].accountNo;
@@ -59,6 +69,20 @@ async function recharge() {
     });
     await load();
     message.value = "充值成功";
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
+async function balancePayment() {
+  message.value = "";
+  try {
+    await walletApi.balancePayment({
+      ...balancePaymentForm.value,
+      amount: Number(balancePaymentForm.value.amount)
+    });
+    await load();
+    message.value = "余额支付成功";
   } catch (error) {
     message.value = error.message;
   }
@@ -124,6 +148,17 @@ onMounted(load);
           <div class="detail-card"><div class="detail-label">用户</div><div class="detail-value">{{ detail.account.ownerName }}</div></div>
           <div class="detail-card"><div class="detail-label">可用余额</div><div class="detail-value">{{ detail.account.availableAmount }}</div></div>
           <div class="detail-card"><div class="detail-label">最近流水数</div><div class="detail-value">{{ detail.ledgers.length }}</div></div>
+          <div class="detail-card" style="grid-column:1/-1">
+            <div class="detail-label">余额支付单</div>
+            <div style="display:grid;gap:8px">
+              <input v-model="balancePaymentForm.accountNo" placeholder="账户号" />
+              <input v-model="balancePaymentForm.bizNo" placeholder="业务单号" />
+              <input v-model="balancePaymentForm.amount" placeholder="支付金额" />
+              <input v-model="balancePaymentForm.operatorName" placeholder="操作人" />
+              <input v-model="balancePaymentForm.remark" placeholder="备注" />
+              <button class="button" style="background:#b45309;color:#fff" @click="balancePayment">发起余额支付</button>
+            </div>
+          </div>
           <div class="detail-card" style="grid-column:1/-1">
             <div class="detail-label">充值单</div>
             <div style="display:grid;gap:8px">

@@ -3,12 +3,15 @@ package com.abc123.wallet.controller;
 import com.abc123.wallet.common.ApiResponse;
 import com.abc123.wallet.dto.WalletAccountDetailDTO;
 import com.abc123.wallet.dto.WalletAccountDTO;
+import com.abc123.wallet.dto.WalletBalancePaymentOrderDTO;
+import com.abc123.wallet.dto.WalletBalancePaymentRequestDTO;
 import com.abc123.wallet.dto.WalletRechargeOrderDTO;
 import com.abc123.wallet.dto.WalletRechargeRequestDTO;
 import com.abc123.wallet.dto.WalletTransferOrderDTO;
 import com.abc123.wallet.dto.WalletTransferRequestDTO;
 import com.abc123.wallet.dto.WalletWithdrawOrderDTO;
 import com.abc123.wallet.dto.WalletWithdrawRequestDTO;
+import com.abc123.wallet.service.WalletBalancePaymentService;
 import com.abc123.wallet.service.WalletRechargeService;
 import com.abc123.wallet.service.WalletService;
 import com.abc123.wallet.service.WalletTransferService;
@@ -26,15 +29,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class WalletController {
 
     private final WalletService walletService;
+    private final WalletBalancePaymentService walletBalancePaymentService;
     private final WalletRechargeService walletRechargeService;
     private final WalletTransferService walletTransferService;
     private final WalletWithdrawService walletWithdrawService;
 
     public WalletController(WalletService walletService,
+            WalletBalancePaymentService walletBalancePaymentService,
             WalletRechargeService walletRechargeService,
             WalletTransferService walletTransferService,
             WalletWithdrawService walletWithdrawService) {
         this.walletService = walletService;
+        this.walletBalancePaymentService = walletBalancePaymentService;
         this.walletRechargeService = walletRechargeService;
         this.walletTransferService = walletTransferService;
         this.walletWithdrawService = walletWithdrawService;
@@ -48,6 +54,11 @@ public class WalletController {
     @GetMapping("/{accountNo}")
     public ApiResponse<WalletAccountDetailDTO> detail(@PathVariable String accountNo) {
         return ApiResponse.success(walletService.getDetail(accountNo));
+    }
+
+    @PostMapping("/balance-payments")
+    public ApiResponse<WalletBalancePaymentOrderDTO> balancePayment(@RequestBody WalletBalancePaymentRequestDTO request) {
+        return ApiResponse.success(walletBalancePaymentService.pay(request));
     }
 
     @PostMapping("/recharges")

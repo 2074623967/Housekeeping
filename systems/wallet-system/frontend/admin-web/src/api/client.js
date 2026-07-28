@@ -13,15 +13,19 @@ async function request(url, options = {}) {
 export const walletApi = {
   getAccounts: () => request("/api/wallet/accounts"),
   getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`),
-  recharge: (payload) => request("/api/wallet/recharges", {
+  balancePayment: (payload) => request("/api/wallet/accounts/balance-payments", {
     method: "POST",
     body: JSON.stringify(payload)
   }),
-  withdraw: (payload) => request("/api/wallet/withdrawals", {
+  recharge: (payload) => request("/api/wallet/accounts/recharges", {
     method: "POST",
     body: JSON.stringify(payload)
   }),
-  transfer: (payload) => request("/api/wallet/transfers", {
+  withdraw: (payload) => request("/api/wallet/accounts/withdrawals", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }),
+  transfer: (payload) => request("/api/wallet/accounts/transfers", {
     method: "POST",
     body: JSON.stringify(payload)
   })

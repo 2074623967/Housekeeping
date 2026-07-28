@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS t_wallet_recharge_order;
 DROP TABLE IF EXISTS t_wallet_transfer_order;
 DROP TABLE IF EXISTS t_wallet_withdraw_order;
+DROP TABLE IF EXISTS t_wallet_balance_payment_order;
 DROP TABLE IF EXISTS t_wallet_ledger;
 DROP TABLE IF EXISTS t_wallet_account;
 
@@ -67,3 +68,15 @@ CREATE TABLE t_wallet_transfer_order (
     PRIMARY KEY (id),
     UNIQUE KEY uk_wallet_transfer_no (transfer_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包转账单表';
+
+CREATE TABLE t_wallet_balance_payment_order (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    balance_payment_no VARCHAR(64) NOT NULL COMMENT '余额支付单号',
+    account_no VARCHAR(64) NOT NULL COMMENT '钱包账户号',
+    biz_no VARCHAR(64) NOT NULL COMMENT '业务单号',
+    amount DECIMAL(18, 2) NOT NULL COMMENT '支付金额',
+    status VARCHAR(32) NOT NULL COMMENT '处理状态',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_wallet_balance_payment_no (balance_payment_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包余额支付单表';
