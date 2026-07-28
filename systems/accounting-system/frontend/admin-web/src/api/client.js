@@ -117,10 +117,11 @@ export const adjustmentApi = {
 };
 
 export const eventApi = {
-  getList: ({ eventType = "", bizNo = "", pageNo = 1, pageSize = 20 } = {}) => {
+  getList: ({ eventType = "", bizNo = "", paymentOrderId = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({
       eventType,
       bizNo,
+      paymentOrderId,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
