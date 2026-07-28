@@ -1,15 +1,88 @@
 <script setup>
-import { onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { refundApi } from "../api/client";
 
 const route = useRoute();
+const router = useRouter();
 const detail = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const actionRemark = ref("");
 const activeAction = ref("");
+
+const paymentDetailRoute = computed(() => {
+  if (!detail.value?.paymentOrderId) {
+    return "";
+  }
+  return `/payments/${detail.value.paymentOrderId}`;
+});
+
+const paymentRecordDetailRoute = computed(() => {
+  if (!detail.value?.paymentOrderId) {
+    return "";
+  }
+  return `/payment-records/${detail.value.paymentOrderId}?recordType=ALL`;
+});
+
+const paymentLogRoute = computed(() => {
+  if (!detail.value?.paymentOrderId) {
+    return "";
+  }
+  return `/payment-logs?paymentOrderId=${detail.value.paymentOrderId}`;
+});
+
+const metricCards = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  return [
+    {
+      title: "退款金额",
+      value: detail.value.refundAmount || "-",
+      hint: `原支付金额 ${detail.value.paidAmount || "-"}`
+    },
+    {
+      title: "操作日志数",
+      value: `${(detail.value.operationLogs || []).length}`,
+      hint: "用于复盘人工与自动动作"
+    },
+    {
+      title: "当前退款状态",
+      value: detail.value.status || "-",
+      hint: `原支付状态 ${detail.value.paymentStatus || "-"}`
+    },
+    {
+      title: "退款方式",
+      value: detail.value.refundMethod || "-",
+      hint: `原支付方式 ${detail.value.paymentMethod || "-"}`
+    }
+  ];
+});
+
+const operationSuggestions = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  const suggestions = [];
+  if (detail.value.status === "REVIEWING") {
+    suggestions.push("当前退款单仍在审核阶段，建议先核对退款原因、原支付事实和审批备注后再放行。");
+  }
+  if (detail.value.status === "PROCESSING") {
+    suggestions.push("当前退款单已进入处理中，建议优先关注渠道回调和任务中心自动重试结果。");
+  }
+  if (detail.value.status === "FAIL") {
+    suggestions.push("当前退款单已失败，建议结合操作日志查看失败原因，并决定是否执行失败重试。");
+  }
+  if (!(detail.value.operationLogs || []).length) {
+    suggestions.push("当前暂无退款操作日志，建议补充申请、审核或回调动作后再做复盘。");
+  }
+  if (!suggestions.length) {
+    suggestions.push("当前退款状态稳定，可结合支付单详情和支付记录详情继续做资金复盘。");
+  }
+  return suggestions;
+});
 
 async function loadDetail() {
   isLoading.value = true;
@@ -48,7 +121,12 @@ onMounted(loadDetail);
         <h2>退款详情</h2>
         <p>统一查看退款原因、原支付快照、状态流转和人工/自动操作日志</p>
       </div>
-      <RouterLink class="button secondary" to="/refunds">返回退款单</RouterLink>
+      <div class="toolbar-actions">
+        <RouterLink class="button secondary" to="/refunds">返回退款单</RouterLink>
+        <button class="button secondary" :disabled="!paymentDetailRoute" @click="router.push(paymentDetailRoute)">查看支付单详情</button>
+        <button class="button secondary" :disabled="!paymentRecordDetailRoute" @click="router.push(paymentRecordDetailRoute)">查看支付记录详情</button>
+        <button class="button secondary" :disabled="!paymentLogRoute" @click="router.push(paymentLogRoute)">查看处理日志</button>
+      </div>
     </div>
 
     <section class="panel">
@@ -82,6 +160,14 @@ onMounted(loadDetail);
           </div>
         </div>
 
+        <div class="detail-card-grid detail-panel">
+          <div v-for="card in metricCards" :key="card.title" class="detail-card">
+            <div class="detail-label">{{ card.title }}</div>
+            <div class="detail-value">{{ card.value }}</div>
+            <div class="meta">{{ card.hint }}</div>
+          </div>
+        </div>
+
         <div class="split-panels">
           <section class="panel mini">
             <div class="section-title">
@@ -111,6 +197,34 @@ onMounted(loadDetail);
               <div><strong>原支付金额：</strong>{{ detail.paidAmount }}</div>
               <div><strong>原支付方式：</strong>{{ detail.paymentMethod }}</div>
               <div><strong>原支付状态：</strong>{{ detail.paymentStatus }}</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="split-panels detail-panel">
+          <section class="panel mini">
+            <div class="section-title">
+              <div>
+                <h3>联查入口</h3>
+                <p class="meta">统一回到支付主链路和支付日志继续排查</p>
+              </div>
+            </div>
+            <div class="list-actions">
+              <button class="link-button" :disabled="!paymentDetailRoute" @click="router.push(paymentDetailRoute)">查看支付单详情</button>
+              <button class="link-button" :disabled="!paymentRecordDetailRoute" @click="router.push(paymentRecordDetailRoute)">查看支付记录详情</button>
+              <button class="link-button" :disabled="!paymentLogRoute" @click="router.push(paymentLogRoute)">查看支付处理日志</button>
+            </div>
+          </section>
+
+          <section class="panel mini">
+            <div class="section-title">
+              <div>
+                <h3>操作建议</h3>
+                <p class="meta">按当前退款状态自动整理</p>
+              </div>
+            </div>
+            <div class="suggestion-list">
+              <div v-for="item in operationSuggestions" :key="item" class="timeline-item">{{ item }}</div>
             </div>
           </section>
         </div>
@@ -166,9 +280,17 @@ onMounted(loadDetail);
                 </tr>
               </tbody>
             </table>
+            <div v-if="!detail.operationLogs.length" class="state-box">当前暂无退款操作日志</div>
           </div>
         </div>
       </template>
     </section>
   </div>
 </template>
+
+<style scoped>
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+}
+</style>
