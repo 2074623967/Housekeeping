@@ -28,5 +28,10 @@ export const walletApi = {
   transfer: (payload) => request("/api/wallet/accounts/transfers", {
     method: "POST",
     body: JSON.stringify(payload)
+  }),
+  getRedPackets: () => request("/api/wallet/red-packets"),
+  issueRedPacket: (payload) => request("/api/wallet/red-packets", {
+    method: "POST",
+    body: JSON.stringify(payload)
   })
 };

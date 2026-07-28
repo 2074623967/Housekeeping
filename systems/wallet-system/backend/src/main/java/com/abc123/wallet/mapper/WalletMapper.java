@@ -3,6 +3,7 @@ package com.abc123.wallet.mapper;
 import com.abc123.wallet.entity.WalletAccountEntity;
 import com.abc123.wallet.entity.WalletBalancePaymentOrderEntity;
 import com.abc123.wallet.entity.WalletLedgerEntity;
+import com.abc123.wallet.entity.WalletRedPacketEntity;
 import java.util.List;
 import java.math.BigDecimal;
 import org.apache.ibatis.annotations.Param;
@@ -56,4 +57,13 @@ public interface WalletMapper {
             @Param("status") String status);
 
     WalletBalancePaymentOrderEntity findBalancePaymentOrderByNo(@Param("balancePaymentNo") String balancePaymentNo);
+
+    List<WalletRedPacketEntity> findRedPackets();
+
+    int insertRedPacket(@Param("redPacketNo") String redPacketNo,
+            @Param("accountNo") String accountNo,
+            @Param("campaignName") String campaignName,
+            @Param("totalAmount") BigDecimal totalAmount,
+            @Param("packetCount") Integer packetCount,
+            @Param("status") String status);
 }

@@ -116,4 +116,21 @@
         FROM t_wallet_balance_payment_order
         WHERE balance_payment_no = #{balancePaymentNo}
     </select>
+
+    <select id="findRedPackets" resultType="com.abc123.wallet.entity.WalletRedPacketEntity">
+        SELECT red_packet_no AS redPacketNo,
+               account_no AS accountNo,
+               campaign_name AS campaignName,
+               FORMAT(total_amount, 2) AS totalAmount,
+               packet_count AS packetCount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_red_packet
+        ORDER BY created_at DESC
+    </select>
+
+    <insert id="insertRedPacket">
+        INSERT INTO t_wallet_red_packet (red_packet_no, account_no, campaign_name, total_amount, packet_count, status, created_at)
+        VALUES (#{redPacketNo}, #{accountNo}, #{campaignName}, #{totalAmount}, #{packetCount}, #{status}, NOW())
+    </insert>
 </mapper>

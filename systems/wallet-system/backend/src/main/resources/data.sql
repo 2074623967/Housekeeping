@@ -16,3 +16,6 @@ INSERT INTO t_wallet_withdraw_order (withdraw_no, account_no, biz_no, amount, st
 
 INSERT INTO t_wallet_transfer_order (transfer_no, source_account_no, target_account_no, biz_no, amount, status, created_at) VALUES
 ('TRF-20260726001', 'WALLET-20001', 'WALLET-10001', 'TRF-20260726001', 500.00, 'SUCCESS', '2026-07-26 09:10:00');
+
+INSERT INTO t_wallet_red_packet (red_packet_no, account_no, campaign_name, total_amount, packet_count, status, created_at) VALUES
+('RED-20260726001', 'WALLET-20001', '新客首单红包', 300.00, 30, 'ISSUED', '2026-07-26 09:20:00');
