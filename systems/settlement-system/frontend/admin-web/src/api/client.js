@@ -42,6 +42,7 @@ export const batchApi = {
     const params = new URLSearchParams({ batchDate, batchStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/settlements/batches?${params.toString()}`);
   },
+  getDetail: (batchNo) => request(`/api/settlements/batches/${batchNo}`),
   create: (payload) => postJson("/api/settlements/batches", payload)
 };
 
