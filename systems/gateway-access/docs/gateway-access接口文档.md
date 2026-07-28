@@ -28,4 +28,3 @@
 
 ### `GET /api/gateway-access/permissions`
 ### `POST /api/gateway-access/permissions/toggle`
-
