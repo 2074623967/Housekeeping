@@ -310,7 +310,7 @@
             updated_at = NOW()
         WHERE prepay_order_no = #{prepayOrderNo}
           AND source_app_id = #{sourceAppId}
-          AND (token_status <> 'ACTIVE' OR expire_at &lt; NOW())
+           AND (token_status &lt;&gt; 'ACTIVE' OR expire_at &lt; NOW())
     </update>
 
     <update id="releaseSubmitConcurrencyToken">

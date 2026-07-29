@@ -56,7 +56,7 @@
                CONCAT('渠道回调状态仍为', pnl.notify_status, '，回调类型=', pnl.notify_type) AS issue_summary,
                '回调日志已入库但尚未完成状态收敛，建议核对验签、去重、幂等与业务收口逻辑。' AS root_cause_hint,
                '进入支付处理日志页，联查回调报文与处理日志' AS recommended_action,
-               CONCAT('/payment-logs?paymentOrderId=', pnl.payment_order_id, '&processStage=渠道回调') AS recommended_route,
+               CONCAT('/payment-logs?paymentOrderId=', pnl.payment_order_id, '&amp;processStage=渠道回调') AS recommended_route,
                DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_notify_log pnl
                  INNER JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
@@ -79,7 +79,7 @@
                CONCAT('支付事件发布失败，主题=', pe.event_topic, '，重试次数=', pe.retry_count) AS issue_summary,
                '支付主链路可能已成功，但下游账务/清分/结算未收到事件，建议优先补发并核对下游消费结果。' AS root_cause_hint,
                '进入支付事件出站页，复核发布状态并执行重发' AS recommended_action,
-               CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id, '&publishStatus=FAILED') AS recommended_route,
+               CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id, '&amp;publishStatus=FAILED') AS recommended_route,
                DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_event pe
                  INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
@@ -235,15 +235,15 @@
                     SELECT alert_log.id
                     FROM t_payment_issue_alert_log alert_log
                     WHERE alert_log.issue_no = payment_issue_union.issue_no
-                      AND alert_log.alert_channel <> 'IN_APP_OUTBOX'
+                      AND alert_log.alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                     ORDER BY alert_log.created_at DESC, alert_log.id DESC
                     LIMIT 1
                 )
                  LEFT JOIN (
                     SELECT issue_no AS summaryIssueNo,
-                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '未派发') AS alertChannelSummary,
-                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' AND alert_status = '已派发' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS successChannels,
-                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' AND alert_status = '派发失败' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS failedChannels
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '未派发') AS alertChannelSummary,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' AND alert_status = '已派发' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS successChannels,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX' AND alert_status = '派发失败' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS failedChannels
                     FROM t_payment_issue_alert_log
                     GROUP BY issue_no
                 ) channel_delivery_summary ON channel_delivery_summary.summaryIssueNo = payment_issue_union.issue_no

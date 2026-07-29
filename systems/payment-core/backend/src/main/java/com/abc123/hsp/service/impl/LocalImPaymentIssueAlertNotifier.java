@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -38,6 +39,7 @@ public class LocalImPaymentIssueAlertNotifier extends AbstractLocalPaymentIssueA
     private final String failedStatusValues;
     private final String failureCodeJsonPointer;
 
+    @Autowired
     public LocalImPaymentIssueAlertNotifier(@Value("${payment.issue-alert.im.webhook-url:}") String webhookUrl,
                                             @Value("${payment.issue-alert.im.timeout-ms:3000}") int timeoutMs,
                                             @Value("${payment.issue-alert.im.success-code-json-pointer:}") String successJsonPointer,

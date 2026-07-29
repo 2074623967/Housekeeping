@@ -84,7 +84,7 @@
         SELECT event_no
         FROM t_payment_event
         WHERE publish_status = 'FAILED'
-          AND (next_retry_at IS NULL OR next_retry_at <= NOW())
+          AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
         ORDER BY created_at ASC, id ASC
     </select>
 

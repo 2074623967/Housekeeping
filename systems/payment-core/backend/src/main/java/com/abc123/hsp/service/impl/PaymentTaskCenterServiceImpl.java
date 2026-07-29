@@ -22,6 +22,7 @@ import com.abc123.hsp.service.PaymentTaskCenterService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
     private final PaymentEventDispatchService paymentEventDispatchService;
 
+    @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                         PaymentExpiryTaskService paymentExpiryTaskService,
                                         PaymentEventMapper paymentEventMapper,

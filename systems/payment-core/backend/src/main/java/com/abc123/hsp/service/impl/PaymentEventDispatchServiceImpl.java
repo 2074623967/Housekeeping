@@ -7,6 +7,7 @@ import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private final String accountingUrl;
     private final String accountingPaymentSuccessAccountNo;
 
+    @Autowired
     public PaymentEventDispatchServiceImpl(
             PaymentMapper paymentMapper,
             PaymentEventMapper paymentEventMapper,

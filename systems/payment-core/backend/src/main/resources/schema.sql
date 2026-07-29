@@ -9,6 +9,7 @@ DROP TABLE IF EXISTS t_prepay_order;
 DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
+DROP TABLE IF EXISTS t_refund_operation_log;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster;

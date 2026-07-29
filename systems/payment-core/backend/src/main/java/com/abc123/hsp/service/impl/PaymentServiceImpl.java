@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.StringJoiner;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -46,6 +47,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentChannelSubmitService paymentChannelSubmitService;
     private final PaymentEventDispatchService paymentEventDispatchService;
 
+    @Autowired
     public PaymentServiceImpl(
             PaymentMapper paymentMapper,
             PaymentCallbackSignatureService paymentCallbackSignatureService,
@@ -388,8 +390,13 @@ public class PaymentServiceImpl implements PaymentService {
         );
         if (paySuccess) {
             BigDecimal latestOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
-            paymentMapper.updateOrderAfterPayment(detail.getOrderNo(), latestOrderAmount, "待履约", "info");
-            paymentMapper.updateBillAfterPayment(detail.getOrderNo(), latestOrderAmount, "已结清", "success");
+            BigDecimal settledAmount = latestOrderAmount == null
+                    ? parseAmount(detail.getAmount())
+                    : latestOrderAmount;
+            if (latestOrderAmount != null) {
+                paymentMapper.updateOrderAfterPayment(detail.getOrderNo(), latestOrderAmount, "待履约", "info");
+            }
+            paymentMapper.updateBillAfterPayment(detail.getOrderNo(), settledAmount, "已结清", "success");
         }
         String eventNo = "EVT" + System.currentTimeMillis();
         paymentMapper.insertEvent(

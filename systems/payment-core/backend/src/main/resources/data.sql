@@ -69,10 +69,10 @@ INSERT INTO t_prepay_order (prepay_order_no, bill_no, order_no, customer_name, a
 ('PRE202607190002', 'BILL202607190002', 'ORD202607190002', '王先生', 6800.00, 'H5', '家政服务收银台', '支付中', 'info', 'PAY202607190002', '2026-07-19 10:03:00', '2026-07-19 11:03:00'),
 ('PRE202607180118', 'BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 'PC', '企业客户收银台', '已完成', 'success', 'PAY202607180074', '2026-07-18 18:40:52', '2026-07-18 19:40:52');
 
-INSERT INTO t_payment_attempt (attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, request_payload, response_payload, attempt_status, attempt_status_type, created_at) VALUES
-('ATT202607190001', 'PRE202607190001', 'PAY202607190001', 'wx_jsapi', '微信', 'housekeeping-h5-web', '{"scene":"H5","amount":268.00}', '{"payUrl":"https://pay.example.com/wx/1"}', '成功', 'success', '2026-07-19 09:21:10'),
-('ATT202607190002', 'PRE202607190002', 'PAY202607190002', 'alipay_h5', '支付宝', 'housekeeping-app-web', '{"scene":"H5","amount":6800.00}', '{"payUrl":"https://pay.example.com/ali/2"}', '等待回调', 'warn', '2026-07-19 10:03:11'),
-('ATT202607180074', 'PRE202607180118', 'PAY202607180074', 'offline_bank', '银行转账', 'housekeeping-pc-web', '{"scene":"PC","amount":3600.00}', '{"bankNo":"BANK332211"}', '成功', 'success', '2026-07-18 18:41:11');
+INSERT INTO t_payment_attempt (attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at) VALUES
+('ATT202607190001', 'PRE202607190001', 'PAY202607190001', 'wx_jsapi', '微信', 'housekeeping-h5-web', 'MOBILE_WEB', '127.0.0.1', 'PRE202607190001|微信|wx_jsapi', '{"scene":"H5","amount":268.00}', '{"payUrl":"https://pay.example.com/wx/1"}', '成功', 'success', '2026-07-19 09:21:10'),
+('ATT202607190002', 'PRE202607190002', 'PAY202607190002', 'alipay_h5', '支付宝', 'housekeeping-app-web', 'APP', '127.0.0.1', 'PRE202607190002|支付宝|alipay_h5', '{"scene":"H5","amount":6800.00}', '{"payUrl":"https://pay.example.com/ali/2"}', '等待回调', 'warn', '2026-07-19 10:03:11'),
+('ATT202607180074', 'PRE202607180118', 'PAY202607180074', 'offline_bank', '银行转账', 'housekeeping-pc-web', 'PC_WEB', '127.0.0.1', 'PRE202607180118|银行转账|offline_bank', '{"scene":"PC","amount":3600.00}', '{"bankNo":"BANK332211"}', '成功', 'success', '2026-07-18 18:41:11');
 
 INSERT INTO t_payment_notify_log (notify_no, payment_order_id, channel_code, notify_type, notify_payload, notify_result, notify_status, notify_status_type, created_at) VALUES
 ('NTF202607190001', 'PAY202607190001', 'wx_jsapi', 'SUCCESS', '{"tradeState":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-19 09:21:22'),

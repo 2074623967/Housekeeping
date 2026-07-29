@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -53,6 +54,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
 
+    @Autowired
     public PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                                 List<PaymentIssueAlertNotifier> notifiers) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;

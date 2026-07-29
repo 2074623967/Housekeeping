@@ -262,6 +262,44 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldUsePaymentAmountToCloseBillWhenCallbackOrderSourceMissing() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-VIRTUAL-CALLBACK");
+        detail.setOrderNo("WALLET-RECHARGE-001");
+        detail.setStatus("WAIT_CALLBACK");
+        detail.setAmount("¥99.00");
+        when(paymentMapper.findDetail("PAY-VIRTUAL-CALLBACK")).thenReturn(detail, detail);
+        when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
+        when(paymentMapper.findRouteLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-VIRTUAL-CALLBACK");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("ALI-VIRTUAL-001");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .callback("alipay_h5", callback);
+
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                org.mockito.ArgumentMatchers.eq("WALLET-RECHARGE-001"),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        verify(paymentMapper, times(1)).updateBillAfterPayment(
+                "WALLET-RECHARGE-001",
+                new BigDecimal("99.00"),
+                "已结清",
+                "success");
+    }
+
+    @Test
     void shouldReuseCurrentPrepayWhenSubmitAlreadyEnteredWaitCallback() {
         PrepayOrderDTO prepay = new PrepayOrderDTO();
         prepay.setPrepayOrderNo("PRE-100");

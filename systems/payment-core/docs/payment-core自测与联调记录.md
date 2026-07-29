@@ -2353,3 +2353,45 @@
 1. 本轮证明当前已有的后端自动化测试套件可稳定执行，具备进入后续 `test` 分支集成验证的基础。
 2. 该结果不等同于完整支付平台已可发布：真实渠道、真实回调验签、跨系统联调、压测、容灾演练与生产通知供应商接入仍是后续门槛。
 3. `master / release` 的推进仍需以完整交付差距清单收口、跨端构建回归、关键主链路 smoke test 和跨系统接口验证通过为准。
+
+## 75. 2026-07-29 虚拟预付单回调与自动下游联调验证
+
+### 75.1 本轮验证范围
+
+本轮围绕虚拟业务单场景的真实联调缺陷进行收口，重点验证以下内容：
+
+1. 非标准订单型支付场景创建虚拟预付单后，支付成功回调是否能正确更新账单实付金额
+2. 支付成功事件是否会由 `payment-core` 自动下发到 `clearing-system` 与 `accounting-system`
+3. 修复后端回调逻辑后，完整 Maven 回归测试与真实 smoke 是否同时通过
+
+### 75.2 缺陷定位
+
+真实调用 `POST /api/payments/callback/alipay_h5` 时发现：
+
+1. 虚拟订单 `SMOKE-ORDER-20260729-002` 不存在 `t_order` 数据
+2. `findOrderAmount(orderNo)` 返回空值
+3. 回调成功分支仍直接使用空金额更新 `t_bill.paid_amount`
+4. 最终触发数据库异常：`Column 'paid_amount' cannot be null`
+
+### 75.3 修复内容
+
+1. `PaymentServiceImpl.callback(...)` 在支付成功分支增加账单实付金额兜底：当订单金额缺失时，使用支付单金额 `detail.getAmount()` 解析结果作为 `settledAmount`
+2. 仅在存在真实订单金额时才更新 `t_order`
+3. 补充 `PaymentServiceImplTest.shouldUsePaymentAmountToCloseBillWhenCallbackOrderSourceMissing`
+4. 重新启动 `payment-core` 本地服务，确保联调使用的是修复后的最新编译产物
+
+### 75.4 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | `150` 个测试全部通过 |
+| 虚拟预付单创建 | `POST /api/payments/prepay` | 通过 | 生成 `PRE1785287995357` / `PAY1785287995355` |
+| 支付成功回调 | `POST /api/payments/callback/alipay_h5` | 通过 | 支付单状态成功收口为 `SUCCESS` |
+| 清分消费验证 | `GET /api/clearing/events?bizNo=PAY1785287995355&pageNo=1&pageSize=20` | 通过 | 生成 `EVT60003` |
+| 账务消费验证 | `GET /api/accounting/events?bizNo=PAY1785287995355&pageNo=1&pageSize=20` | 通过 | 生成 `EVT50003` |
+
+### 75.5 当前判断
+
+1. 虚拟预付单场景已经具备真实回调成功收口能力，不再因为缺少订单主表而导致账单更新失败。
+2. `payment-core -> clearing-system / accounting-system` 的自动下游联动已在本机环境真实验证通过。
+3. 后续仍要继续补 `settlement-system` 自动串联、MQ 级可靠投递、补偿与死信验证，才能继续推进更高阶段的冻结交付。

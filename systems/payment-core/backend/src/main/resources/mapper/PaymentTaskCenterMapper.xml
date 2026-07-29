@@ -37,7 +37,7 @@
                 SELECT COUNT(1)
                 FROM t_payment_control_policy
                 WHERE status = 'ENABLED'
-                  AND COALESCE(self_check_status, 'WARN') <> 'PASS'
+                   AND COALESCE(self_check_status, 'WARN') &lt;&gt; 'PASS'
             ), 0) AS controlPolicyWarningCount,
             COALESCE((
                 SELECT COUNT(1)
@@ -102,7 +102,7 @@
                CASE
                    WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL
                        THEN '00:00-23:00'
-                   WHEN roster.effective_start_hour <= roster.effective_end_hour
+                    WHEN roster.effective_start_hour &lt;= roster.effective_end_hour
                        THEN CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-',
                                    LPAD(roster.effective_end_hour, 2, '0'), ':00')
                    ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
@@ -154,11 +154,11 @@
                OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
            )
            AND (
-               (roster.effective_start_hour <= roster.effective_end_hour
+                (roster.effective_start_hour &lt;= roster.effective_end_hour
                    AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
                OR
                (roster.effective_start_hour > roster.effective_end_hour
-                   AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+                    AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
            )
         WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
             OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
@@ -186,7 +186,7 @@
                CASE
                    WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL
                        THEN '00:00-23:00'
-                   WHEN roster.effective_start_hour <= roster.effective_end_hour
+                    WHEN roster.effective_start_hour &lt;= roster.effective_end_hour
                        THEN CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-',
                                    LPAD(roster.effective_end_hour, 2, '0'), ':00')
                    ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
@@ -207,11 +207,11 @@
                   OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
               )
               AND (
-                  (roster.effective_start_hour <= roster.effective_end_hour
+                   (roster.effective_start_hour &lt;= roster.effective_end_hour
                       AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
                   OR
                   (roster.effective_start_hour > roster.effective_end_hour
-                      AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+                       AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
               )
         WHERE source_alert.alert_channel = 'IN_APP_OUTBOX'
           AND source_alert.ack_status = '待确认'
@@ -433,11 +433,11 @@
                   OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
               )
               AND (
-                  (roster.effective_start_hour <= roster.effective_end_hour
+                   (roster.effective_start_hour &lt;= roster.effective_end_hour
                       AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
                   OR
                   (roster.effective_start_hour > roster.effective_end_hour
-                      AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+                       AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
               )
         WHERE alert_channel = 'IN_APP_OUTBOX'
           AND alert_status IN ('已生成', '部分失败', '派发失败')

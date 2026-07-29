@@ -211,7 +211,7 @@
                    ELSE '全部日期'
                END AS applicabilityDesc,
                CASE
-                   WHEN effective_start_hour <= effective_end_hour
+                   WHEN effective_start_hour &lt;= effective_end_hour
                        THEN CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-', LPAD(effective_end_hour, 2, '0'), ':00')
                    ELSE CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-次日', LPAD(effective_end_hour, 2, '0'), ':00')
                END AS effectiveWindow,

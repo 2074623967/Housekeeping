@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -20,6 +21,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
 
+    @Autowired
     public PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper,
                                    PaymentEventDispatchService paymentEventDispatchService) {
         this.paymentEventMapper = paymentEventMapper;
