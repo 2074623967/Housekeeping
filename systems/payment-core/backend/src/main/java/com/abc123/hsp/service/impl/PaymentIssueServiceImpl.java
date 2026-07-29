@@ -70,7 +70,9 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             return alertLog;
         }
         String operator = request == null ? null : request.getOperator();
-        paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, requireText(operator, "确认人不能为空"));
+        String normalizedOperator = requireText(operator, "确认人不能为空");
+        paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, normalizedOperator);
+        acknowledgeSourceAlertIfNeeded(alertLog, normalizedOperator);
         return paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
     }
 
@@ -146,6 +148,13 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             throw new IllegalArgumentException(message);
         }
         return text.trim();
+    }
+
+    private void acknowledgeSourceAlertIfNeeded(PaymentIssueAlertLogRowDTO alertLog, String operator) {
+        if (alertLog == null || !StringUtils.hasText(alertLog.getSourceAlertNo())) {
+            return;
+        }
+        paymentIssueMapper.acknowledgeAlertByAlertNo(alertLog.getSourceAlertNo().trim(), operator);
     }
 
     private HandlingStatus resolveHandlingStatus(String actionType) {

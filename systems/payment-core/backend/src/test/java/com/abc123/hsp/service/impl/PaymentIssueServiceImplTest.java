@@ -132,6 +132,7 @@ class PaymentIssueServiceImplTest {
     void shouldAcknowledgeAlertByAlertNo() {
         PaymentIssueAlertLogRowDTO pendingRow = new PaymentIssueAlertLogRowDTO();
         pendingRow.setAlertNo("PIA-ACK-001");
+        pendingRow.setSourceAlertNo("PIA-OUTBOX-001");
         pendingRow.setAckStatus("待确认");
         PaymentIssueAlertLogRowDTO acknowledgedRow = new PaymentIssueAlertLogRowDTO();
         acknowledgedRow.setAlertNo("PIA-ACK-001");
@@ -149,6 +150,7 @@ class PaymentIssueServiceImplTest {
         assertEquals("已确认", result.getAckStatus());
         assertEquals("支付运营", result.getAckOperator());
         verify(paymentIssueMapper).acknowledgeAlertByAlertNo("PIA-ACK-001", "支付运营");
+        verify(paymentIssueMapper).acknowledgeAlertByAlertNo("PIA-OUTBOX-001", "支付运营");
     }
 
     @Test

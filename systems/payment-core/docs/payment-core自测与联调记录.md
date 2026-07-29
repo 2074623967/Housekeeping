@@ -2498,3 +2498,27 @@
 1. 当前 `payment-core` 的异常告警回执回查终于从“只改外部通道日志”升级为“外部通道日志 + source outbox 一起收口”的完整闭环，和文档口径保持一致。
 2. 这一步直接降低了“供应商已送达但 source outbox 仍触发升级巡检”的误报风险，也提升了异常中心、任务中心和升级巡检之间的一致性。
 3. 真实供应商 API、跨实例协调和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 80. 2026-07-29 人工确认同步收口 source outbox 验证
+
+### 80.1 本轮验证范围
+
+本轮围绕“异常中心人工确认的是一条外部告警日志，但 source outbox 仍可能保持 `待确认`，从而与自动回查收口口径不一致”的问题进行补强，目标是让人工确认和自动确认都能收口同一条来源站内告警。
+
+### 80.2 本轮新增内容
+
+1. `PaymentIssueServiceImpl#acknowledgeAlert` 在确认目标告警后，若该告警存在 `sourceAlertNo`，会同步确认对应的 source outbox。
+2. 同步确认沿用现有 `PaymentIssueMapper#acknowledgeAlertByAlertNo`，不额外引入并行口径，保持异常中心确认动作的一致性。
+3. `PaymentIssueServiceImplTest` 在“人工确认成功”场景中新增 source outbox 断言，验证 `PIA-OUTBOX-001` 会与外部告警日志一起被确认。
+
+### 80.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueServiceImplTest test` | 通过 | `9` 个用例全部通过，新增覆盖人工确认同步 source outbox |
+
+### 80.4 当前判断
+
+1. 当前 `payment-core` 的异常告警确认链路已经在“自动回查确认”和“人工确认”两条入口上统一收口 source outbox，不再出现一边已确认、一边仍待确认的状态撕裂。
+2. 这一步进一步提升了异常中心、任务中心和升级巡检三者之间的一致性，也让值班同学在手工处置时不会留下隐藏的升级触发点。
+3. 真实供应商 API、跨实例协调和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
