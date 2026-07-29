@@ -164,7 +164,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 defaultZero(overview.getOpenInternalAbnormalCount()),
                 "存在支付成功但内部事件未正常发布的交易，需要核对事件出站和下游收口。",
                 "进入支付事件出站页重发失败事件并确认下游消费结果",
-                "/payment-events?publishStatus=FAILED",
+                "/payment-events?publishStatus=FAILED_OR_DEAD_LETTER",
                 2
         ));
         alerts.add(buildAlert(

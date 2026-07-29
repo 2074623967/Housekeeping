@@ -27,6 +27,9 @@ class PaymentEventServiceImplTest {
     void shouldListPaymentEvents() {
         PaymentEventQueryDTO query = new PaymentEventQueryDTO();
         query.setPaymentOrderId(" PAY-001 ");
+        query.setEventType(" PAYMENT_SUCCESS ");
+        query.setPublishStatus(" FAILED_OR_DEAD_LETTER ");
+        query.setDownstreamSystem(" accounting-system ");
         query.setEventTopic(" payment.trade ");
         query.setSortField(" retryCount ");
         query.setSortOrder(" ASC ");
@@ -37,6 +40,9 @@ class PaymentEventServiceImplTest {
 
         assertEquals(0, new PaymentEventServiceImpl(paymentEventMapper).list(query).getTotal());
         assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("PAYMENT_SUCCESS", query.getEventType());
+        assertEquals("FAILED_OR_DEAD_LETTER", query.getPublishStatus());
+        assertEquals("accounting-system", query.getDownstreamSystem());
         assertEquals("payment.trade", query.getEventTopic());
         assertEquals("retryCount", query.getSortField());
         assertEquals("asc", query.getSortOrder());

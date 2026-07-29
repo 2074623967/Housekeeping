@@ -70,6 +70,9 @@ public class PaymentEventServiceImpl implements PaymentEventService {
 
     private void normalizeQuery(PaymentEventQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setEventType(query.getEventType() == null ? "全部" : query.getEventType().trim());
+        query.setPublishStatus(query.getPublishStatus() == null ? "全部" : query.getPublishStatus().trim());
+        query.setDownstreamSystem(query.getDownstreamSystem() == null ? "全部" : query.getDownstreamSystem().trim());
         query.setEventTopic(query.getEventTopic() == null ? null : query.getEventTopic().trim());
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());

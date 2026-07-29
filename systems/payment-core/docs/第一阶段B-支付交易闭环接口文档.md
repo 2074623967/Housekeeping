@@ -29,7 +29,7 @@
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
-| `/api/payment-events` | `GET` | 查询支付事件出站台账 |
+| `/api/payment-events` | `GET` | 查询支付事件出站台账，支持 `FAILED_OR_DEAD_LETTER` 联合口径 |
 | `/api/payment-events/republish` | `POST` | 手动重发支付事件 |
 | `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
 | `/api/payment-issues/responsibility-summary` | `GET` | 查询支付交易异常责任组统计 |

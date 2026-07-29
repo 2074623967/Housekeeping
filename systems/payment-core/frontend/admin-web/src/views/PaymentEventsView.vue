@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { paymentEventApi } from "../api/client";
 
+const route = useRoute();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
@@ -12,19 +14,20 @@ const pageNo = ref(1);
 const pageSize = 20;
 const activeEventNo = ref("");
 const filters = ref({
-  paymentOrderId: "",
-  eventType: "全部",
-  publishStatus: "全部",
-  downstreamSystem: "全部",
-  eventTopic: "",
-  sortField: "createdAt",
-  sortOrder: "desc"
+  paymentOrderId: typeof route.query.paymentOrderId === "string" ? route.query.paymentOrderId : "",
+  eventType: typeof route.query.eventType === "string" ? route.query.eventType : "全部",
+  publishStatus: typeof route.query.publishStatus === "string" ? route.query.publishStatus : "全部",
+  downstreamSystem: typeof route.query.downstreamSystem === "string" ? route.query.downstreamSystem : "全部",
+  eventTopic: typeof route.query.eventTopic === "string" ? route.query.eventTopic : "",
+  sortField: typeof route.query.sortField === "string" ? route.query.sortField : "createdAt",
+  sortOrder: typeof route.query.sortOrder === "string" ? route.query.sortOrder : "desc"
 });
 
 const metrics = computed(() => ({
   total: total.value,
   successTotal: items.value.filter((item) => item.publishStatus === "SUCCESS").length,
-  failedTotal: items.value.filter((item) => item.publishStatus === "FAILED").length,
+  failedTotal: items.value.filter((item) => item.publishStatus === "FAILED" || item.publishStatus === "DEAD_LETTER").length,
+  deadLetterTotal: items.value.filter((item) => item.publishStatus === "DEAD_LETTER").length,
   downstreamCount: new Set(items.value.map((item) => item.downstreamSystem).filter(Boolean)).size
 }));
 
@@ -149,6 +152,10 @@ onMounted(loadEvents);
         <p class="card-value">{{ metrics.failedTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">死信事件</p>
+        <p class="card-value">{{ metrics.deadLetterTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">下游系统数</p>
         <p class="card-value">{{ metrics.downstreamCount }}</p>
       </article>
@@ -184,7 +191,9 @@ onMounted(loadEvents);
             <option>全部</option>
             <option>PENDING</option>
             <option>SUCCESS</option>
+            <option>FAILED_OR_DEAD_LETTER</option>
             <option>FAILED</option>
+            <option>DEAD_LETTER</option>
           </select>
         </div>
         <div class="field">

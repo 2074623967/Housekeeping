@@ -27,7 +27,14 @@
                 AND event_type = #{query.eventType}
             </if>
             <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
-                AND publish_status = #{query.publishStatus}
+                <choose>
+                    <when test="query.publishStatus == 'FAILED_OR_DEAD_LETTER'">
+                        AND publish_status IN ('FAILED', 'DEAD_LETTER')
+                    </when>
+                    <otherwise>
+                        AND publish_status = #{query.publishStatus}
+                    </otherwise>
+                </choose>
             </if>
             <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
                 AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
@@ -69,7 +76,14 @@
                 AND event_type = #{query.eventType}
             </if>
             <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
-                AND publish_status = #{query.publishStatus}
+                <choose>
+                    <when test="query.publishStatus == 'FAILED_OR_DEAD_LETTER'">
+                        AND publish_status IN ('FAILED', 'DEAD_LETTER')
+                    </when>
+                    <otherwise>
+                        AND publish_status = #{query.publishStatus}
+                    </otherwise>
+                </choose>
             </if>
             <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
                 AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
