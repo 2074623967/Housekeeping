@@ -1,9 +1,14 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -34,12 +39,31 @@ class PaymentLogServiceImplTest {
 
         new PaymentLogServiceImpl(paymentLogMapper).list(query);
 
-        org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
-        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getSource());
-        org.junit.jupiter.api.Assertions.assertEquals("回调", query.getKeyword());
-        org.junit.jupiter.api.Assertions.assertEquals("logLevel", query.getSortField());
-        org.junit.jupiter.api.Assertions.assertEquals("asc", query.getSortOrder());
+        assertEquals("ORD-001", query.getOrderNo());
+        assertEquals("wx_h5", query.getSource());
+        assertEquals("回调", query.getKeyword());
+        assertEquals("logLevel", query.getSortField());
+        assertEquals("asc", query.getSortOrder());
         verify(paymentLogMapper).findAll(query);
         verify(paymentLogMapper).count(query);
+    }
+
+    @Test
+    void shouldExportCsvWithNormalizedFieldsAndEscapedMessage() {
+        PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+        query.setSource(" payment-core ");
+        query.setKeyword(" 回调 ");
+        PaymentLogListItemDTO item = new PaymentLogListItemDTO();
+        item.setLogNo("LOG-001");
+        item.setMessage("{\"trace\":\"ok\"}");
+        when(paymentLogMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
+
+        String csv = new PaymentLogServiceImpl(paymentLogMapper).exportCsv(query);
+
+        assertEquals("payment-core", query.getSource());
+        assertEquals("回调", query.getKeyword());
+        assertTrue(csv.contains("LOG-001"));
+        assertTrue(csv.contains("\"{\"\"trace\"\":\"\"ok\"\"}\""));
+        verify(paymentLogMapper).findAllForExport(query);
     }
 }

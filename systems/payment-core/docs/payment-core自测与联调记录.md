@@ -2722,3 +2722,29 @@
 1. 当前 `payment-core` 的后端自动化门禁已刷新到 `171` 个测试通过，最新补强的异常治理和跨系统主链路能力已经纳入全量回归，而不再只是局部定向验证。
 2. 这提升了 `test` 分支继续迭代时的可信度，也让后续 `master / release` 审计有了更新鲜的测试基线。
 3. 但该结果仍不等同于支付系统整包已可发布，前端跨端统一回归、整包多系统统一回归、MQ 级可靠投递和回滚演练仍需继续补齐。
+
+## 87. 2026-07-29 支付处理日志导出与全量回归刷新验证
+
+### 87.1 本轮验证范围
+
+本轮围绕“支付处理日志页面已经有导出按钮，但后端并没有真实 `payment-logs/export` 支撑，且全量回归基线仍停留在旧测试数量”这两个问题进行补齐，目标是同时收口日志导出闭环与最新后端回归基线。
+
+### 87.2 本轮新增内容
+
+1. `PaymentLogService` 新增导出接口。
+2. `PaymentLogServiceImpl` 新增 CSV 导出逻辑，和支付请求、支付事件导出保持一致。
+3. `PaymentLogController` 新增 `/api/payment-logs/export`。
+4. `PaymentLogMapper` / `PaymentLogMapper.xml` 新增 `findAllForExport`。
+5. `PaymentLogServiceImplTest` 新增导出场景，覆盖字段标准化和消息内容转义。
+
+### 87.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `174` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+
+### 87.4 当前判断
+
+1. 支付处理日志已经从“可查询”升级为“可查询 + 可导出”，前端导出按钮与后端导出接口正式闭环。
+2. 当前 `payment-core` 后端自动化门禁已刷新到 `174` 个测试通过，测试基线继续前移。
+3. 但该结果仍不等同于支付系统整包已可发布，前端跨端统一回归、整包多系统统一回归、MQ 级可靠投递和回滚演练仍需继续补齐。

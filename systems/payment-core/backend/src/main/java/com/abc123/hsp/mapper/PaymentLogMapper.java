@@ -18,6 +18,13 @@ public interface PaymentLogMapper {
     List<PaymentLogListItemDTO> findAll(@Param("query") PaymentLogQueryDTO query);
 
     /**
+     * 查询导出的支付处理日志。
+     *
+     * @return 支付处理日志列表
+     */
+    List<PaymentLogListItemDTO> findAllForExport(@Param("query") PaymentLogQueryDTO query);
+
+    /**
      * 统计符合条件的支付处理日志总数。
      */
     long count(@Param("query") PaymentLogQueryDTO query);

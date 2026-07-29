@@ -26,6 +26,7 @@
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
+| `/api/payment-logs/export` | `GET` | 导出支付处理日志 CSV |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
@@ -218,6 +219,8 @@
 
 接口：`GET /api/payment-logs`
 
+导出接口：`GET /api/payment-logs/export`
+
 查询参数：
 
 | 参数 | 说明 |
@@ -237,7 +240,8 @@
 
 1. 当前统一收敛支付提交、支付路由、渠道回调和业务事件四类处理日志。
 2. 排序能力主要用于运营优先查看最新错误、按阶段集中复核问题单。
-3. 生产环境后续接日志检索、链路追踪和告警平台时，本接口可继续作为业务态排障入口。
+3. 当前已支持沿用同一组筛选参数导出 CSV 快照，便于测试留档、问题复盘和跨团队对数。
+4. 生产环境后续接日志检索、链路追踪和告警平台时，本接口可继续作为业务态排障入口。
 
 ## 7. 支付事件出站查询与重发
 

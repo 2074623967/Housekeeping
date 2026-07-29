@@ -15,4 +15,11 @@ public interface PaymentLogService {
      * @return 支付处理日志列表
      */
     PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query);
+
+    /**
+     * 导出支付处理日志。
+     *
+     * @return CSV 文本内容
+     */
+    String exportCsv(PaymentLogQueryDTO query);
 }

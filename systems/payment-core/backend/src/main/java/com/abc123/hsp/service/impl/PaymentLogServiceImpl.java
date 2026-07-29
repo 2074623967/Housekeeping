@@ -36,4 +36,36 @@ public class PaymentLogServiceImpl implements PaymentLogService {
                 query.getPageSize()
         );
     }
+
+    @Override
+    public String exportCsv(PaymentLogQueryDTO query) {
+        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        query.setSource(query.getSource() == null ? null : query.getSource().trim());
+        query.setKeyword(query.getKeyword() == null ? null : query.getKeyword().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+
+        java.util.List<PaymentLogListItemDTO> items = paymentLogMapper.findAllForExport(query);
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("日志编号,支付单号,订单号,处理阶段,日志级别,来源,日志消息,创建时间\n");
+        for (PaymentLogListItemDTO item : items) {
+            builder.append(csvCell(item.getLogNo())).append(',')
+                    .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getProcessStage())).append(',')
+                    .append(csvCell(item.getLogLevel())).append(',')
+                    .append(csvCell(item.getSource())).append(',')
+                    .append(csvCell(item.getMessage())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
+    }
 }

@@ -5,6 +5,10 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.service.PaymentLogService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -50,5 +54,34 @@ public class PaymentLogController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentLogService.list(query));
+    }
+
+    /**
+     * 导出支付处理日志，供运营、研发和测试留痕。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(defaultValue = "全部") String processStage,
+            @RequestParam(defaultValue = "全部") String logLevel,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setProcessStage(processStage);
+        query.setLogLevel(logLevel);
+        query.setSource(source);
+        query.setKeyword(keyword);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        byte[] csvBytes = paymentLogService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-logs.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 }
