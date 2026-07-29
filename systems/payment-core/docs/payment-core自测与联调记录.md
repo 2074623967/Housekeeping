@@ -2395,3 +2395,29 @@
 1. 虚拟预付单场景已经具备真实回调成功收口能力，不再因为缺少订单主表而导致账单更新失败。
 2. `payment-core -> clearing-system / accounting-system` 的自动下游联动已在本机环境真实验证通过。
 3. 后续仍要继续补 `settlement-system` 自动串联、MQ 级可靠投递、补偿与死信验证，才能继续推进更高阶段的冻结交付。
+
+## 76. 2026-07-29 告警派发时间窗正式化验证
+
+### 76.1 本轮验证范围
+
+本轮围绕“异常告警派发虽然已支持防重放窗口配置，但 `时间窗X分钟` 仍未真正按站内告警创建时间生效”的问题进行补强，目标是避免过期 outbox 告警继续外发到真实通知通道。
+
+### 76.2 本轮新增内容
+
+1. `PaymentIssueAlertDispatchItemDTO` 新增 `createdAt` 字段，正式承接站内 outbox 告警创建时间。
+2. `PaymentTaskCenterMapper.xml#findPendingOutboxAlerts` 补齐 `createdAt` 查询下推，避免派发服务只能依赖运行时最新日志推断时间窗。
+3. `PaymentIssueAlertDeliveryServiceImpl` 新增服务端新鲜度护栏：当供应商 `retryPolicy` 配置了 `时间窗X分钟` 且 outbox 告警已过期时，直接回写 `FRESHNESS_WINDOW_EXPIRED`，不再继续调用外部通知器。
+4. 保留已有 `防重放窗口` 逻辑，形成“来源告警时间窗 + 最近一次派发保护窗”双重护栏。
+5. `PaymentIssueAlertDeliveryServiceImplTest` 新增过期时间窗用例，并同步修正基础测试数据的 `createdAt`，避免旧用例误命中过期护栏。
+
+### 76.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `20` 个用例全部通过，新增覆盖 `FRESHNESS_WINDOW_EXPIRED` |
+
+### 76.4 当前判断
+
+1. 当前 `payment-core` 的异常告警派发不再只校验“最近是否派发成功”，也会校验“这条 outbox 告警本身是否已经过期”，更接近正式通知中心的时间窗治理口径。
+2. 这一步补齐了文档里多次提到的“服务端时间窗校验联动”缺口，后续接入真实企业微信、短信和邮件供应商时不需要再回头重改主链路。
+3. 真实外部供应商回执状态映射、失败码标准化和跨实例协调仍需继续补齐，因此本轮依旧不触发 `master / release`。

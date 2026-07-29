@@ -283,6 +283,36 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldBlockDispatchWhenOutboxExpiredByFreshnessWindow() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        item.setCreatedAt("2026-07-29 09:00:00");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100,
+                        "失败重试3次/间隔5分钟/时间窗10分钟")
+        ));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertEquals("FRESHNESS_WINDOW_EXPIRED", logCaptor.getValue().getProviderDeliveryStatus());
+        Assertions.assertTrue(logCaptor.getValue().getProviderDeliveryMessage().contains("10 分钟"));
+    }
+
+    @Test
     void shouldDispatchEscalationOutboxEvenWhenOriginalIssueAlreadyDispatched() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setAlertNo("PIA-ESCALATION-001");
@@ -652,6 +682,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         item.setEscalationLevel("L2");
         item.setScheduleTag("交易链路白班");
         item.setAlertContent("支付异常 ISSUE-001 已超过 P1 SLA，请进入异常中心处理。");
+        item.setCreatedAt("2099-12-31 23:59:59");
         item.setTriggeredBy("payment-issue-sla-scheduler");
         return item;
     }

@@ -42,6 +42,8 @@ public class PaymentIssueAlertDispatchItemDTO {
     private String renderedAlertContent;
     /** 告警内容。 */
     private String alertContent;
+    /** 站内告警创建时间。 */
+    private String createdAt;
     /** 触发来源。 */
     private String triggeredBy;
 }

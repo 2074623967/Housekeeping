@@ -246,6 +246,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         }
         RetryGuard retryGuard = parseRetryGuard(providerConfig.getRetryPolicy());
         PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getAlertNo(), channelCode);
+        PaymentIssueAlertDeliveryResultDTO freshnessGuardFailure = resolveFreshnessGuardFailure(retryGuard, item);
+        if (freshnessGuardFailure != null) {
+            return freshnessGuardFailure;
+        }
         PaymentIssueAlertDeliveryResultDTO replayGuardFailure = resolveReplayGuardFailure(retryGuard, latestLog, item);
         if (replayGuardFailure != null) {
             return replayGuardFailure;
@@ -274,6 +278,29 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             );
         }
         return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO resolveFreshnessGuardFailure(RetryGuard retryGuard,
+                                                                            PaymentIssueAlertDispatchItemDTO item) {
+        if (item == null || !retryGuard.hasFreshnessWindow()) {
+            return null;
+        }
+        LocalDateTime sourceCreatedAt = parseAlertCreatedAt(item.getCreatedAt());
+        if (sourceCreatedAt == null) {
+            return null;
+        }
+        int freshnessWindowMinutes = retryGuard.resolveFreshnessWindowMinutes();
+        if (freshnessWindowMinutes <= 0) {
+            return null;
+        }
+        if (LocalDateTime.now().isAfter(sourceCreatedAt.plusMinutes(freshnessWindowMinutes))) {
+            return buildFailureResult(
+                    "FRESHNESS_WINDOW_EXPIRED",
+                    String.format("站内告警已超过 %d 分钟发送时间窗，停止继续外发", freshnessWindowMinutes),
+                    item
+            );
+        }
+        return null;
     }
 
     private PaymentIssueAlertDeliveryResultDTO resolveReplayGuardFailure(RetryGuard retryGuard,
@@ -482,6 +509,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         deliveryItem.setEscalationLevel(item.getEscalationLevel());
         deliveryItem.setScheduleTag(item.getScheduleTag());
         deliveryItem.setAlertContent(item.getAlertContent());
+        deliveryItem.setCreatedAt(item.getCreatedAt());
         deliveryItem.setTriggeredBy(item.getTriggeredBy());
         deliveryItem.setProviderCode(providerConfig.getProviderCode());
         deliveryItem.setProviderName(providerConfig.getProviderName());
@@ -996,10 +1024,18 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     || freshnessWindowMinutes != null && freshnessWindowMinutes.intValue() > 0;
         }
 
+        boolean hasFreshnessWindow() {
+            return freshnessWindowMinutes != null && freshnessWindowMinutes.intValue() > 0;
+        }
+
         int resolveReplayProtectionWindowMinutes() {
             int replayWindow = replayWindowMinutes == null ? 0 : replayWindowMinutes.intValue();
             int freshnessWindow = freshnessWindowMinutes == null ? 0 : freshnessWindowMinutes.intValue();
             return Math.max(replayWindow, freshnessWindow);
+        }
+
+        int resolveFreshnessWindowMinutes() {
+            return freshnessWindowMinutes == null ? 0 : freshnessWindowMinutes.intValue();
         }
 
         int resolveEffectiveCooldownMinutes(int failedAttemptCount) {
