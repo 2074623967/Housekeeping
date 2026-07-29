@@ -1,17 +1,18 @@
 # wallet-system database
 
-一期计划：
+当前已补齐：
 
-- `wallet_account`
-- `wallet_balance`
-- `wallet_ledger`
-- `wallet_recharge_order`
-- `wallet_withdraw_order`
-- `wallet_transfer_order`
-- `wallet_red_packet`
-- `wallet_risk_event`
+- `schema.sql`：钱包账户、流水、充值、提现、转账、余额支付、红包、风控事件建表脚本
+- `data.sql`：个人/企业钱包、充值、提现、转账、红包与风控演示数据
+
+初始化方式：
+
+1. 先执行 `schema.sql`
+2. 再执行 `data.sql`
+3. 默认数据库名为 `housekeeping_wallet`
 
 说明：
 
 - 所有表字段必须带备注
 - 钱包资金域和支付核心域分库
+- 后续继续补余额快照、冻结明细、营销活动资金池与对账辅助表

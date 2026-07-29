@@ -1,0 +1,119 @@
+INSERT INTO t_dashboard_card (card_key, title, value, badge_type, badge_text, sort_no) VALUES
+('pay_success', '今日支付成功金额', '¥128,420', 'success', '较昨日 +8.4%', 1),
+('refund_amount', '今日退款金额', '¥7,240', 'warn', '待复核 3 笔', 2),
+('worker_pending', '待结算服务者金额', '¥89,360', 'info', '账期待生成', 3),
+('recon_gap', '未关闭差异金额', '¥3,120', 'danger', '阻断级 2 笔', 4);
+
+INSERT INTO t_payment_channel_config (channel_code, channel_name, payment_method, merchant_no, merchant_app_id, callback_secret, callback_sign_algorithm, callback_public_key, callback_notify_url, certificate_profile, notify_sign_window_sec, refund_window_days, risk_control_tag, scene_scope, status, status_type, daily_limit, priority, updated_at) VALUES
+('wx_h5', '微信 H5 支付', '微信支付', 'MCH_WX_10001', 'wx-app-h5-001', 'wx-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/wx_h5', 'wx-cert-profile-v2026.07', 300, 180, '实名校验+重复支付监控', 'H5/APP/小程序', 'ENABLED', 'success', 500000.00, 1, '2026-07-20 22:40:00'),
+('alipay_h5', '支付宝 H5 支付', '支付宝', 'MCH_ALI_20001', 'ali-app-h5-002', 'alipay-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/alipay_h5', 'ali-cert-profile-v2026.06', 600, 365, '大额风控+商户黑名单联动', 'H5/APP/PC', 'ENABLED', 'success', 500000.00, 2, '2026-07-20 22:40:00'),
+('offline_bank', '线下银行转账', '银行转账', 'BANK_OFFLINE_30001', 'bank-offline-batch-003', 'offline-bank-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/offline_bank', 'bank-batch-profile-v2026.05', 1800, 1095, '对公白名单+人工复核', '企业客户/大额订单', 'ENABLED', 'success', 2000000.00, 3, '2026-07-20 22:40:00');
+
+INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, match_expression, target_channel_code, fallback_channel_code, status, status_type, priority, updated_at) VALUES
+('RULE_HOME_WX', '家政 H5 微信优先', 'HOME_CLEAN/H5', 'paymentMethod=微信支付 AND amount<=5000', 'wx_h5', 'alipay_h5', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('RULE_ENTERPRISE_BANK', '企业大额订单走线下银行', 'ENTERPRISE/PC', 'amount>5000 OR customerType=ENTERPRISE', 'offline_bank', 'alipay_h5', 'ENABLED', 'success', 3, '2026-07-20 22:40:00');
+
+INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_type, protocol_type_name, template_code, template_name, template_version, sign_mode, sign_element_spec, e_signature_provider, scene_scope, channel_scope, merchant_ack_required, risk_control_tag, protocol_body, status, status_type, priority, updated_at) VALUES
+('PROTO_HOUSEKEEPING_SIGN_V1', '家政服务标准收单协议', 'PAYMENT_SIGN', '支付签约协议', 'TPL_HK_SIGN_STD', '家政标准收单模板', 'v1.0.0', '线上签约+实名校验', '姓名/身份证/手机号/服务地址/授权扣款确认', 'E-SIGN-CLOUD', '保洁/月嫂/到家服务', 'wx_h5,alipay_h5', '需要', '实名+重复签约校验', '1. 用户授权平台按订单金额发起收款。\\n2. 用户需确保签约身份信息真实有效。\\n3. 平台应在扣款成功后同步提供账单与服务记录。', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('PROTO_ENTERPRISE_PREAUTH_V1', '企业客户预授权协议', 'PREAUTH', '预授权协议', 'TPL_ENT_PREAUTH', '企业预授权协议模板', 'v1.2.0', '线下审核+线上确认', '企业主体/统一社会信用代码/授权人签字/预授权额度', 'E-SIGN-ENTERPRISE', '企业保洁/长期合同', 'offline_bank,alipay_h5', '需要', '企业白名单+大额限额', '1. 企业客户需先完成预授权额度确认。\\n2. 平台仅在服务完成或合同约定条件满足后执行正式扣款。\\n3. 预授权异常需由企业运营与财务双人复核。', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('PROTO_MEMBER_DEDUCT_V1', '会员代扣协议', 'WITHHOLD', '代扣协议', 'TPL_MEMBER_WITHHOLD', '会员代扣模板', 'v0.9.3', '短信确认+静默续扣', '会员ID/手机号/扣款周期/续扣授权', 'E-SIGN-LITE', '包月保洁/会员续费', 'wx_h5', '不需要', '签约时效+扣款频控', '1. 用户授权平台按会员周期自动续扣。\\n2. 每次续扣前平台应按约定方式提醒用户。\\n3. 用户可在下一计费周期前取消自动续扣授权。', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
+
+INSERT INTO t_payment_channel_return_code_map (channel_code, channel_return_code, standardized_code, standardized_message, handling_suggestion, retryable, manual_intervention_required, mapping_version, archive_status, archive_status_type, status, status_type, priority, updated_at) VALUES
+('wx_h5', 'USERPAYING', 'PAYMENT-CHANNEL-1001', '用户支付中，需继续轮询或等待回调', '展示处理中并触发主动查单', '是', '否', 'v2026.07.1', 'ACTIVE', 'success', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('wx_h5', 'AUTH_CODE_INVALID', 'PAYMENT-CHANNEL-1002', '付款码无效或已过期', '提示用户刷新付款码后重试', '否', '否', 'v2026.07.1', 'ACTIVE', 'success', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('alipay_h5', 'ACQ.TRADE_HAS_SUCCESS', 'PAYMENT-CHANNEL-2001', '交易已成功，请避免重复扣款', '直接收口成功并记录重复提交通知', '否', '否', 'v2026.07.2', 'ACTIVE', 'success', 'ENABLED', 'success', 3, '2026-07-20 22:40:00'),
+('offline_bank', 'BANK_TIMEOUT', 'PAYMENT-CHANNEL-3001', '银行通道超时', '转人工复核并支持后续补单', '是', '是', 'v2026.06.archive', 'ARCHIVED', 'warn', 'DISABLED', 'danger', 4, '2026-07-20 22:40:00');
+
+INSERT INTO t_payment_gateway_config (gateway_code, gateway_name, access_mode, channel_scope, environment_scope, api_base_url, protocol_type, sign_algorithm, certificate_alias, certificate_status, certificate_status_type, release_stage, gray_strategy, callback_whitelist, adapter_registry, timeout_ms, retry_policy, status, status_type, priority, updated_at) VALUES
+('GATEWAY_WX_ACQ', '微信收单网关', '直连', 'wx_h5', '生产+预发+沙箱', 'https://gateway.housekeeping.local/wx/acquire', 'HTTP+JSON', 'HMAC-SHA256', 'wx-mch-cert-v2026.07', 'VALID', 'success', '灰度 30%', '按商户分组灰度至核心城市订单', '101.1.0.0/16,101.2.0.0/16', 'submit=wechat-h5,query=wechat-query,refund=wechat-refund', 3000, '失败重试2次+超时查单', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('GATEWAY_ALI_ACQ', '支付宝收单网关', '直连', 'alipay_h5', '生产+预发', 'https://gateway.housekeeping.local/alipay/acquire', 'HTTP+FORM', 'RSA2', 'ali-mch-cert-v2026.06', 'EXPIRING_SOON', 'warn', '全量', '已全量开放，预发保留联调商户', '110.75.0.0/16,110.76.0.0/16', 'submit=alipay-h5,query=alipay-query,refund=alipay-refund', 3500, '失败重试1次+异步回调兜底', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('GATEWAY_BANK_OFFLINE', '线下银行清算网关', '银行服务商', 'offline_bank', '生产+演练', 'https://gateway.housekeeping.local/bank/offline', 'SFTP+文件', 'RSA2048', 'bank-batch-cert-v2026.05', 'ARCHIVED', 'danger', '只读演练', '仅保留对公线下演练，不接新单', '10.8.1.0/24', 'submit=offline-bank,query=bank-batch-query,refund=manual-offline', 8000, '人工复核+批次补传', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
+
+INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes, allowed_merchant_nos, minute_submit_limit, interface_minute_submit_limit, token_auth_required, access_token_value, strict_mode, self_check_status, self_check_status_type, self_check_message, status, status_type, updated_at) VALUES
+('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 'MCH_DEFAULT,MCH_HOME_APP,MCH_HOME_PC', 120, 90, '关闭', 'token-default-app', '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 40, 20, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_HOME_APP', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_HOME_PC', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'WARN', 'warn', 'PC 端银行卡链路处于观察期，大额订单请优先人工复核', 'ENABLED', 'success', '2026-07-21 09:00:00');
+
+INSERT INTO t_payment_alert_provider_config (provider_code, provider_name, channel_code, endpoint_alias, template_code, template_body, route_rule, route_priority, retry_policy, rate_limit_policy, status, status_type, updated_at) VALUES
+('ALERT_IM_WECOM_P1', '企业微信告警机器人-P1', 'IM', 'wecom-bot-alerts', 'TPL_PAYMENT_ISSUE_IM_P1_V1', '[{{severity}}] {{issueType}}\\n异常单号：{{issueNo}}\\n支付单号：{{paymentOrderId}}\\n责任组：{{responsibilityGroup}}\\n接收人：{{receiver}}\\n班次：{{scheduleTag}}\\n说明：{{alertContent}}', 'severity=P1', 10, '失败重试2次/间隔5分钟', '每分钟 60 条', 'ENABLED', 'success', '2026-07-24 15:20:00'),
+('ALERT_IM_WECOM_DEFAULT', '企业微信告警机器人-默认', 'IM', 'wecom-bot-alerts-default', 'TPL_PAYMENT_ISSUE_IM_V1', '[{{severity}}] {{issueType}} | 支付单{{paymentOrderId}} | {{alertContent}}', 'DEFAULT', 100, '失败重试2次/间隔5分钟', '每分钟 60 条', 'ENABLED', 'success', '2026-07-24 15:20:00'),
+('ALERT_SMS_TENCENT', '腾讯云短信告警', 'SMS', 'tencent-sms-alerts', 'TPL_PAYMENT_ISSUE_SMS_V1', '【{{severity}}/{{issueType}}】支付单{{paymentOrderId}}异常，责任组{{responsibilityGroup}}，请及时处理。', 'DEFAULT', 100, '失败重试1次/间隔10分钟', '每分钟 30 条', 'ENABLED', 'success', '2026-07-24 15:20:00'),
+('ALERT_EMAIL_SENDCLOUD', 'SendCloud 邮件告警', 'EMAIL', 'sendcloud-payment-alerts', 'TPL_PAYMENT_ISSUE_EMAIL_V1', '主题：{{severity}} {{issueType}}\\n异常单号：{{issueNo}}\\n支付单号：{{paymentOrderId}}\\n责任组：{{responsibilityGroup}}\\n告警详情：{{alertContent}}\\n触发来源：{{triggeredBy}}', 'severity=P2', 20, '失败重试2次/间隔15分钟', '每分钟 20 封', 'ENABLED', 'success', '2026-07-24 15:20:00'),
+('ALERT_EMAIL_SENDCLOUD_DEFAULT', 'SendCloud 邮件告警-默认', 'EMAIL', 'sendcloud-payment-alerts-default', 'TPL_PAYMENT_ISSUE_EMAIL_V2', '主题：{{severity}} {{issueType}}\\n支付单号：{{paymentOrderId}}\\n接收人：{{receiver}}\\n详情：{{alertContent}}', 'DEFAULT', 100, '失败重试2次/间隔15分钟', '每分钟 20 封', 'ENABLED', 'success', '2026-07-24 15:20:00');
+
+INSERT INTO t_payment_issue_duty_roster (roster_code, issue_type, severity, responsibility_group, receiver, notify_channels, escalation_level, escalation_receiver, escalation_policy, escalation_timeout_minutes, schedule_tag, effective_start_hour, effective_end_hour, weekday_scope, holiday_strategy, status, status_type, updated_at) VALUES
+('DUTY_WAIT_CALLBACK_P1', '待回调未收口', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '支付技术负责人', '30分钟未确认升级支付技术负责人', 30, '交易链路白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_NOTIFY_PENDING_P1', '回调处理待跟进', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '支付技术负责人', '30分钟未确认升级支付技术负责人', 30, '回调补偿白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_EVENT_FAILED_P2', '下游事件发布失败', 'P2', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,EMAIL', 'L2', '账清结算负责人', '60分钟未恢复升级账清结算负责人', 60, '账务联动晚班', 0, 23, '1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_DISABLED_CHANNEL_P2', '命中停用渠道', 'P2', '渠道配置运营组', '渠道配置运营', 'IN_APP,IM', 'L2', '渠道运营负责人', '60分钟未处理升级渠道运营负责人', 60, '渠道运营白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00');
+
+INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES
+('ORD202607190001', '张女士', '深度保洁', '李阿姨', 268.00, 268.00, '待履约', 'info', '已预约', 'info', '2026-07-19 09:20:11'),
+('ORD202607190002', '王先生', '月嫂套餐', '周阿姨', 8800.00, 2000.00, '待支付', 'warn', '待确认', 'warn', '2026-07-19 10:02:44'),
+('ORD202607180118', '企业客户-晨星科技', '企业保洁', '企业服务组', 3600.00, 3600.00, '已完成', 'success', '已验收', 'success', '2026-07-18 18:40:07');
+
+INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, amount, payment_method, channel_code, channel_transaction_no, status, status_type, created_at) VALUES
+('PAY202607190001', 'ORD202607190001', '张女士', 268.00, '微信', 'wx_jsapi', 'WX99887766', 'SUCCESS', 'success', '2026-07-19 09:21:18'),
+('PAY202607190002', 'ORD202607190002', '王先生', 2000.00, '支付宝', 'alipay_h5', 'ALI77665544', 'WAIT_CALLBACK', 'warn', '2026-07-19 10:03:01'),
+('PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 3600.00, '银行转账', 'offline_bank', 'BANK332211', 'SUCCESS', 'success', '2026-07-18 18:41:09');
+
+INSERT INTO t_bill (bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at) VALUES
+('BILL202607190001', 'ORD202607190001', '张女士', 268.00, 268.00, '已支付', 'success', '2026-07-20 23:59:59', '2026-07-19 09:20:35'),
+('BILL202607190002', 'ORD202607190002', '王先生', 8800.00, 2000.00, '部分支付', 'warn', '2026-07-21 23:59:59', '2026-07-19 10:02:51'),
+('BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 3600.00, '已结清', 'success', '2026-07-19 23:59:59', '2026-07-18 18:40:18');
+
+INSERT INTO t_prepay_order (prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, created_at, expires_at) VALUES
+('PRE202607190001', 'BILL202607190001', 'ORD202607190001', '张女士', 268.00, 'H5', '家政服务收银台', '待支付', 'warn', 'PAY202607190001', '2026-07-19 09:20:58', '2026-07-19 10:20:58'),
+('PRE202607190002', 'BILL202607190002', 'ORD202607190002', '王先生', 6800.00, 'H5', '家政服务收银台', '支付中', 'info', 'PAY202607190002', '2026-07-19 10:03:00', '2026-07-19 11:03:00'),
+('PRE202607180118', 'BILL202607180118', 'ORD202607180118', '企业客户-晨星科技', 3600.00, 'PC', '企业客户收银台', '已完成', 'success', 'PAY202607180074', '2026-07-18 18:40:52', '2026-07-18 19:40:52');
+
+INSERT INTO t_payment_attempt (attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at) VALUES
+('ATT202607190001', 'PRE202607190001', 'PAY202607190001', 'wx_jsapi', '微信', 'housekeeping-h5-web', 'MOBILE_WEB', '127.0.0.1', 'PRE202607190001|微信|wx_jsapi', '{"scene":"H5","amount":268.00}', '{"payUrl":"https://pay.example.com/wx/1"}', '成功', 'success', '2026-07-19 09:21:10'),
+('ATT202607190002', 'PRE202607190002', 'PAY202607190002', 'alipay_h5', '支付宝', 'housekeeping-app-web', 'APP', '127.0.0.1', 'PRE202607190002|支付宝|alipay_h5', '{"scene":"H5","amount":6800.00}', '{"payUrl":"https://pay.example.com/ali/2"}', '等待回调', 'warn', '2026-07-19 10:03:11'),
+('ATT202607180074', 'PRE202607180118', 'PAY202607180074', 'offline_bank', '银行转账', 'housekeeping-pc-web', 'PC_WEB', '127.0.0.1', 'PRE202607180118|银行转账|offline_bank', '{"scene":"PC","amount":3600.00}', '{"bankNo":"BANK332211"}', '成功', 'success', '2026-07-18 18:41:11');
+
+INSERT INTO t_payment_notify_log (notify_no, payment_order_id, channel_code, notify_type, notify_payload, notify_result, notify_status, notify_status_type, created_at) VALUES
+('NTF202607190001', 'PAY202607190001', 'wx_jsapi', 'SUCCESS', '{"tradeState":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-19 09:21:22'),
+('NTF202607190002', 'PAY202607190002', 'alipay_h5', 'WAITING', '{"tradeStatus":"WAIT_BUYER_PAY"}', NULL, '待处理', 'warn', '2026-07-19 10:03:18'),
+('NTF202607180074', 'PAY202607180074', 'offline_bank', 'SUCCESS', '{"status":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-18 18:41:20');
+
+INSERT INTO t_payment_route_record (route_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES
+('RTR202607190001', 'PAY202607190001', 'wx_jsapi', 'customer_channel=wechat', '微信JSAPI', '2026-07-19 09:20:59'),
+('RTR202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
+('RTR202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
+
+INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, downstream_system, event_topic, publish_status, publish_status_type, retry_count, last_published_at, next_retry_at, event_payload, created_at) VALUES
+('EVT202607190001', 'PAYMENT_SUCCESS', 'PAY202607190001', 'ORD202607190001', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'SUCCESS', 'success', 1, '2026-07-19 09:21:25', NULL, '{"amount":268.00}', '2026-07-19 09:21:23'),
+('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', 'payment-core-ops', 'payment.trade.pending.v1', 'PENDING', 'warn', 0, NULL, '2026-07-20 10:08:19', '{"amount":6800.00}', '2026-07-19 10:03:19'),
+('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 2, '2026-07-18 18:41:30', '2026-07-20 09:00:00', '{"amount":3600.00}', '2026-07-18 18:41:21');
+
+INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES
+('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
+('REF202607180019', 'PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
+('REF202607170088', 'PAY202607160031', 'ORD202607160071', '赵女士', 200.00, '退转付', '用户重复支付', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
+
+INSERT INTO t_refund_operation_log (log_no, refund_order_id, action_code, action_name, from_status, to_status, operator_name, operation_remark, created_at) VALUES
+('ROL202607190001', 'REF202607190001', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '客户取消服务', '2026-07-19 11:05:10'),
+('ROL202607190002', 'REF202607190001', 'APPROVE', '审核通过', 'REVIEWING', 'PROCESSING', 'payment-core-admin', '审核通过，进入渠道退款处理', '2026-07-19 11:08:20'),
+('ROL202607180001', 'REF202607180019', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '服务未按约履行', '2026-07-18 19:00:11'),
+('ROL202607180002', 'REF202607180019', 'APPROVE', '审核通过', 'REVIEWING', 'PROCESSING', 'payment-core-admin', '企业客户退款审核通过', '2026-07-18 19:01:10'),
+('ROL202607180003', 'REF202607180019', 'SUCCESS', '退款成功回调', 'PROCESSING', 'SUCCESS', 'channel-callback', '渠道侧退款成功回调', '2026-07-18 19:03:26'),
+('ROL202607170001', 'REF202607170088', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '用户重复支付', '2026-07-17 15:10:32'),
+('ROL202607170002', 'REF202607170088', 'APPROVE', '审核通过', 'REVIEWING', 'PROCESSING', 'payment-core-admin', '审核通过后进入退款处理', '2026-07-17 15:12:00'),
+('ROL202607170003', 'REF202607170088', 'FAIL', '退款失败回调', 'PROCESSING', 'FAIL', 'channel-callback', '渠道侧返回账户异常', '2026-07-17 15:18:21');
+
+INSERT INTO t_worker_settlement_order (settlement_order_id, worker_name, period_start, period_end, amount_should_settle, deduct_amount, amount_net_settle, deposit_impact_amount, status, status_type, payout_status, payout_status_type, created_at) VALUES
+('SETW202607190001', '李阿姨', '2026-07-14', '2026-07-19', 4260.00, 120.00, 4140.00, 0.00, '待审核', 'warn', '待出款', 'info', '2026-07-19 12:10:00'),
+('SETW202607190002', '周阿姨', '2026-07-14', '2026-07-19', 9860.00, 300.00, 9560.00, 200.00, '待出款', 'info', '出款中', 'warn', '2026-07-19 12:15:00'),
+('SETW202607180017', '陈师傅', '2026-07-07', '2026-07-13', 3120.00, 0.00, 3120.00, 0.00, '已完成', 'success', '出款成功', 'success', '2026-07-18 16:30:00');
+
+INSERT INTO t_payment_day_end_batch (batch_no, biz_date, run_mode, batch_status, batch_status_type, payment_total_count, payment_success_count, payment_success_amount, channel_success_count, channel_success_amount, internal_success_count, internal_success_amount, payment_success_gap_count, payment_success_gap_amount, refund_success_count, refund_success_amount, channel_abnormal_count, internal_abnormal_count, pending_refund_count, pending_refund_amount, summary_comment, triggered_by, created_at, completed_at) VALUES
+('DEB202607190001', '2026-07-19', 'AUTO', 'WARNING', 'warn', 2, 1, 268.00, 0, 0.00, 1, 268.00, 1, 268.00, 0, 0.00, 1, 0, 1, 68.00, '成功交易存在 1 笔渠道侧未收口差异，且仍有退款处理中需在下一账期继续跟进。', 'system', '2026-07-19 23:30:00', '2026-07-19 23:30:10'),
+('DEB202607180001', '2026-07-18', 'AUTO', 'WARNING', 'warn', 1, 1, 3600.00, 1, 3600.00, 0, 0.00, 1, 3600.00, 1, 600.00, 0, 1, 0, 0.00, '内部事件存在未发布成功记录，需与清分、结算和账务链路一起排查。', 'system', '2026-07-18 23:30:00', '2026-07-18 23:30:12');
+
+INSERT INTO t_payment_task_run_log (task_log_no, task_code, task_name, run_mode, task_status, task_status_type, severity_level, severity_level_type, escalation_status, escalation_status_type, processed_count, success_count, fail_count, summary_comment, suggested_action, recommended_route, triggered_by, started_at, completed_at) VALUES
+('PTL202607190001', 'PAYMENT_EXPIRE_CLOSE', '支付超时关单', 'AUTO', 'SUCCESS', 'success', 'P2', 'warn', '需关注', 'warn', 1, 1, 0, '自动关闭 1 笔已过期未收口支付单。', '继续观察超时队列并核对是否仍有未收口订单', '/payment-task-center', 'system-scheduler', '2026-07-19 11:05:00', '2026-07-19 11:05:02'),
+('PTL202607190002', 'PAYMENT_EVENT_RETRY', '失败事件重发', 'MANUAL', 'SUCCESS', 'success', 'P2', 'warn', '需关注', 'warn', 1, 1, 0, '已重发 1 条失败事件，当前无剩余失败事件。', '回看事件出站结果并确认下游系统已收口', '/payment-events', 'payment-core-admin', '2026-07-19 15:30:00', '2026-07-19 15:30:03'),
+('PTL202607180001', 'REFUND_FAIL_RETRY', '失败退款重试', 'MANUAL', 'WARNING', 'warn', 'P1', 'danger', '需立即升级', 'danger', 2, 1, 1, '已重试 1 笔失败退款，仍有 1 笔待人工排查。', '优先核对退款失败原因并决定是否重新提交', '/refunds', 'payment-core-admin', '2026-07-18 18:10:00', '2026-07-18 18:10:05');

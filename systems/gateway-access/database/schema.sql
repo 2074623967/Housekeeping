@@ -1,3 +1,9 @@
+CREATE DATABASE IF NOT EXISTS housekeeping_gateway_access
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_general_ci;
+
+USE housekeeping_gateway_access;
+
 DROP TABLE IF EXISTS t_gateway_permission;
 DROP TABLE IF EXISTS t_gateway_certificate;
 DROP TABLE IF EXISTS t_gateway_channel;

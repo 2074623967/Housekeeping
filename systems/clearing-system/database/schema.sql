@@ -1,3 +1,9 @@
+CREATE DATABASE IF NOT EXISTS housekeeping_clearing
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_general_ci;
+
+USE housekeeping_clearing;
+
 CREATE TABLE `t_clearing_batch` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `batch_no` VARCHAR(32) NOT NULL COMMENT '清分批次号',
