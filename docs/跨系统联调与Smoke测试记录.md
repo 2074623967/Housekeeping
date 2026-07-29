@@ -67,3 +67,34 @@
 
 1. `payment-core` 到 `clearing-system`、`accounting-system` 的支付成功自动联动已经在本机环境验证通过。
 2. 当前仍未覆盖 `settlement-system` 自动串联、MQ 真正异步投递、死信补偿和失败重试闭环，这些仍是进入 `master` / `release` 前的后续门禁。
+
+## 7. 2026-07-29 clearing -> settlement/accounting 自动联调验证
+
+### 7.1 验证范围
+
+本轮在 `payment-core -> clearing-system` 已自动联动的基础上，继续验证 `clearing-system` 是否会把 `CLEARING_GENERATED` 结果自动派发到 `settlement-system` 与 `accounting-system`。
+
+### 7.2 本轮修复
+
+1. 为 `clearing-system` 新增 `ClearingEventDispatchService`，在消费 `PAYMENT_SUCCESS` 后自动向结算、账务继续投递清分结果。
+2. 新增 `ClearingEventDispatchServiceImplTest`，覆盖“派发成功”和“清分单不存在”两类场景。
+3. 修复两处真实联调缺陷：
+   `settlement-system` 默认派发地址应为 `/api/settlements/events/clearing/generated`
+   `accounting-system` 默认派发地址应为 `/api/accounting/events/clearing/generated`
+
+### 7.3 验证步骤与结果
+
+| 步骤 | 接口/动作 | 业务编号 | 结果 |
+| --- | --- | --- | --- |
+| 预付单创建 | `POST /api/payments/prepay` | `SMOKE-ORDER-20260729-006` | 成功生成 `PRE1785289710000` / `PAY1785289709999` |
+| 支付成功回调 | `POST /api/payments/callback/alipay_h5` | `PAY1785289709999` | 支付单状态收口为 `SUCCESS` |
+| 清分事件消费 | `GET /api/clearing/events` | `PAY1785289709999` | 生成 `EVT60002`，状态“已消费” |
+| 清分结果生成 | `GET /api/clearing/orders` | `CLO20002` | 生成清分单 `CLO20002` |
+| 结算事件消费 | `GET /api/settlements/events?bizNo=CLO20002` | `CLO20002` | 生成 `SVE70003`，状态“已消费” |
+| 账务事件消费 | `GET /api/accounting/events?bizNo=CLO20002` | `CLO20002` | 生成 `EVT50008`，状态“已消费” |
+
+### 7.4 验证结论
+
+1. 当前本机环境已经真实验证 `payment-core -> clearing-system -> settlement-system / accounting-system` 的自动链路。
+2. 这意味着跨系统 smoke 不再依赖人工补投 `CLEARING_GENERATED` 事件。
+3. 当前剩余门禁主要收敛到 MQ 级可靠投递、失败重试、死信补偿和 `test -> master -> release` 稳定性观察。

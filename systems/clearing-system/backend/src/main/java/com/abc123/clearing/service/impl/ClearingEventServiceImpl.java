@@ -3,9 +3,11 @@ package com.abc123.clearing.service.impl;
 import com.abc123.clearing.dto.ClearingEventDTO;
 import com.abc123.clearing.dto.PageResultDTO;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.clearing.service.ClearingEventDispatchService;
 import com.abc123.clearing.service.ClearingEventService;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -16,10 +18,24 @@ public class ClearingEventServiceImpl implements ClearingEventService {
 
     private final ClearingMemoryStore clearingMemoryStore;
     private final ClearingMapper clearingMapper;
+    private final ClearingEventDispatchService clearingEventDispatchService;
 
-    public ClearingEventServiceImpl(ClearingMemoryStore clearingMemoryStore, ClearingMapper clearingMapper) {
+    @Autowired
+    public ClearingEventServiceImpl(ClearingMemoryStore clearingMemoryStore,
+                                    ClearingMapper clearingMapper,
+                                    ClearingEventDispatchService clearingEventDispatchService) {
         this.clearingMemoryStore = clearingMemoryStore;
         this.clearingMapper = clearingMapper;
+        this.clearingEventDispatchService = clearingEventDispatchService;
+    }
+
+    ClearingEventServiceImpl(ClearingMemoryStore clearingMemoryStore, ClearingMapper clearingMapper) {
+        this(clearingMemoryStore, clearingMapper, new ClearingEventDispatchService() {
+            @Override
+            public boolean publishClearingGenerated(String paymentOrderId) {
+                return false;
+            }
+        });
     }
 
     @Override
@@ -34,7 +50,9 @@ public class ClearingEventServiceImpl implements ClearingEventService {
 
     @Override
     public ClearingEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
-        return clearingMapper.toEventDTO(clearingMemoryStore.consumePaymentSuccess(request));
+        ClearingEventDTO event = clearingMapper.toEventDTO(clearingMemoryStore.consumePaymentSuccess(request));
+        clearingEventDispatchService.publishClearingGenerated(request.getPaymentOrderId());
+        return event;
     }
 
     private PageResultDTO<ClearingEventDTO> page(List<ClearingEventDTO> items, int pageNo, int pageSize) {
