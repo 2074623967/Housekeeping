@@ -567,6 +567,8 @@
                provider_delivery_status AS providerDeliveryStatus,
                provider_delivery_message AS providerDeliveryMessage,
                rendered_content_snapshot AS renderedContentSnapshot,
+               ack_operator AS ackOperator,
+               DATE_FORMAT(ack_at, '%Y-%m-%d %H:%i:%s') AS ackAt,
                triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log
         WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
@@ -582,6 +584,8 @@
             provider_delivery_message = #{providerDeliveryMessage},
             ack_status = #{ackStatus},
             ack_status_type = #{ackStatusType},
+            ack_operator = #{ackOperator},
+            ack_at = NOW(),
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
           AND provider_delivery_status = 'ACCEPTED'

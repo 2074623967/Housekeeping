@@ -2447,3 +2447,29 @@
 1. 当前 `payment-core` 的异常告警派发链路已经具备“时间窗/防重放/人工确认”三层收敛保护，不再因为 source outbox 已确认却继续被自动派发而重复打扰值班人员。
 2. 这一步进一步提升了异常告警链路在真实运维场景下的可控性，也让任务中心、异常中心和人工确认动作之间的闭环更完整。
 3. 真实通知供应商接入、跨实例协调和更大范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 78. 2026-07-29 自动回执确认审计留痕验证
+
+### 78.1 本轮验证范围
+
+本轮围绕“异常告警回执回查已经能把供应商日志从 `ACCEPTED` 回写为 `DELIVERED`，但自动确认人/确认时间留痕不足”的问题进行补强，目标是让自动回查形成可审计的正式闭环。
+
+### 78.2 本轮新增内容
+
+1. `PaymentIssueAlertLogEntity` 新增 `ackOperator / ackAt` 字段，补齐异常告警自动确认的审计承载对象。
+2. `PaymentTaskCenterMapper.xml#findAcceptedIssueAlertDeliveryLogs` 查询补齐 `ackOperator / ackAt` 映射，保证后续联查和二次处理能拿到完整上下文。
+3. `PaymentTaskCenterMapper.xml#updateIssueAlertProviderReceipt` 增加 `ack_operator` 和 `ack_at = NOW()` 回写，自动回执确认不再只是改状态。
+4. `PaymentIssueAlertDeliveryServiceImpl#buildReceiptUpdate` 在自动回查成功时，将 `triggeredBy` 同步写入 `ackOperator`，明确是谁触发了自动确认。
+5. `PaymentIssueAlertDeliveryServiceImplTest` 增加断言，确认自动回查后 `ackOperator=payment-core-admin` 可正确沉淀。
+
+### 78.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `21` 个用例全部通过，新增覆盖自动确认人留痕 |
+
+### 78.4 当前判断
+
+1. 当前 `payment-core` 的异常告警回执回查不再只是“状态收口”，还具备了“自动确认人 + 自动确认时间”的审计留痕，更接近公司内部正式运维台账的要求。
+2. 这一步提升了测试、运营和研发回放自动回查任务时的可解释性，也为后续 release 前门禁审计提供了更强证据。
+3. 真实供应商回执 API、跨实例协调和更广范围跨系统联动仍需继续补齐，因此本轮依旧不触发 `master / release`。

@@ -623,6 +623,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
         Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
         Assertions.assertEquals("已确认", captor.getValue().getAckStatus());
+        Assertions.assertEquals("payment-core-admin", captor.getValue().getAckOperator());
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(0, result.getFailCount());

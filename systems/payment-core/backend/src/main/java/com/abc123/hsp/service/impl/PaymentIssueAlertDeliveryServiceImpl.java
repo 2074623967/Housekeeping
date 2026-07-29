@@ -830,6 +830,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setProviderDeliveryMessage("供应商回执回查成功，消息已送达");
         entity.setAckStatus("已确认");
         entity.setAckStatusType("success");
+        entity.setAckOperator(triggeredBy);
         entity.setTriggeredBy(triggeredBy);
         return entity;
     }
