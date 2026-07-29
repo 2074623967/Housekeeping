@@ -3,6 +3,9 @@ package com.abc123.settlement.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.settlement.dto.AuditSettlementRequestDTO;
+import com.abc123.settlement.dto.PageResultDTO;
+import com.abc123.settlement.dto.PayoutBatchDTO;
+import com.abc123.settlement.dto.PayoutRecordDTO;
 import com.abc123.settlement.dto.SettlementOrderDTO;
 import com.abc123.settlement.dto.SettlementOrderDetailDTO;
 import org.junit.jupiter.api.Test;
@@ -20,6 +23,9 @@ class SettlementOrderServiceImplTest {
     @Autowired
     private SettlementOrderServiceImpl settlementOrderService;
 
+    @Autowired
+    private PayoutServiceImpl payoutService;
+
     @Test
     void shouldAuditSettlementOrderToReadyForPayout() {
         AuditSettlementRequestDTO audit = new AuditSettlementRequestDTO();
@@ -28,10 +34,20 @@ class SettlementOrderServiceImplTest {
 
         SettlementOrderDTO audited = settlementOrderService.audit("SLT20001", audit);
         SettlementOrderDetailDTO detail = settlementOrderService.fullDetail("SLT20001");
+        PageResultDTO<PayoutBatchDTO> payoutBatches = payoutService.list("SET10001", "", 1, 20);
+        PageResultDTO<PayoutRecordDTO> payoutRecords = payoutService.records(
+                payoutBatches.getItems().get(0).getPayoutBatchNo(),
+                "",
+                1,
+                20);
 
         assertEquals("已通过", audited.getAuditStatus());
         assertEquals("success", audited.getAuditStatusType());
         assertEquals("待出款", audited.getSettlementStatus());
         assertEquals(2, detail.getItems().size());
+        assertEquals(1, payoutBatches.getTotal());
+        assertEquals("待出款", payoutBatches.getItems().get(0).getPayoutStatus());
+        assertEquals(1, payoutRecords.getTotal());
+        assertEquals("待出款", payoutRecords.getItems().get(0).getPayoutStatus());
     }
 }

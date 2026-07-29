@@ -179,6 +179,13 @@ public class SettlementMemoryStore {
         return settlementDataMapper.findPayoutBatch(payoutBatchNo);
     }
 
+    public PayoutBatchEntity findLatestPayoutBatchByBatchNo(String batchNo) {
+        return payoutBatches().stream()
+                .filter(item -> batchNo.equals(item.getBatchNo()))
+                .findFirst()
+                .orElse(null);
+    }
+
     @Transactional
     public PayoutBatchEntity createPayoutBatch(String batchNo, String payoutChannel, String createdBy) {
         PayoutBatchEntity entity = new PayoutBatchEntity();
@@ -198,6 +205,32 @@ public class SettlementMemoryStore {
 
     public List<PayoutRecordEntity> payoutRecordsByBatchNo(String payoutBatchNo) {
         return settlementDataMapper.findPayoutRecordsByBatchNo(payoutBatchNo);
+    }
+
+    public PayoutRecordEntity findPayoutRecordBySettlementNo(String settlementNo) {
+        return payoutBatches().stream()
+                .map(PayoutBatchEntity::getPayoutBatchNo)
+                .flatMap(batchNo -> payoutRecordsByBatchNo(batchNo).stream())
+                .filter(item -> settlementNo.equals(item.getSettlementNo()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Transactional
+    public PayoutRecordEntity createPendingPayoutRecord(String payoutBatchNo, SettlementOrderEntity order) {
+        PayoutRecordEntity entity = new PayoutRecordEntity();
+        entity.setPayoutNo(nextNo("POU", payoutRecordSeq));
+        entity.setPayoutBatchNo(payoutBatchNo);
+        entity.setSettlementNo(order.getSettlementNo());
+        entity.setTargetNo(order.getTargetNo());
+        entity.setTargetName(order.getTargetName());
+        entity.setPayoutAmount(order.getNetSettleAmount());
+        entity.setPayoutStatus("待出款");
+        entity.setRetryCount(0);
+        entity.setCreatedAt(now());
+        settlementDataMapper.insertPayoutRecord(entity);
+        updatePayoutBatchSummary(payoutBatchNo);
+        return entity;
     }
 
     @Transactional
@@ -269,6 +302,33 @@ public class SettlementMemoryStore {
         }
         updateBatchSummary(batch.getBatchNo(), batch.getBatchStatus(), batch.getFinishedAt());
         return findOrder(settlementNo);
+    }
+
+    @Transactional
+    public PayoutBatchEntity ensurePendingPayoutBatchForSettlement(String settlementNo, String operatorName) {
+        SettlementOrderEntity order = findOrder(settlementNo);
+        if (order == null || !"已通过".equals(order.getAuditStatus()) || !"待出款".equals(order.getSettlementStatus())) {
+            return null;
+        }
+        PayoutRecordEntity existingRecord = findPayoutRecordBySettlementNo(settlementNo);
+        if (existingRecord != null) {
+            return findPayoutBatch(existingRecord.getPayoutBatchNo());
+        }
+        PayoutBatchEntity payoutBatch = findLatestPayoutBatchByBatchNo(order.getBatchNo());
+        if (payoutBatch == null || "已完成".equals(payoutBatch.getPayoutStatus())) {
+            payoutBatch = createPayoutBatch(order.getBatchNo(), "AUTO_BANK", operatorName);
+            settlementDataMapper.updatePayoutBatch(
+                    payoutBatch.getPayoutBatchNo(),
+                    "待出款",
+                    payoutBatch.getPayoutCount(),
+                    payoutBatch.getSuccessCount(),
+                    payoutBatch.getFailedCount(),
+                    payoutBatch.getTotalAmount(),
+                    payoutBatch.getFinishedAt());
+        }
+        createPendingPayoutRecord(payoutBatch.getPayoutBatchNo(), order);
+        updateBatchSummary(order.getBatchNo(), "待出款", findBatch(order.getBatchNo()).getFinishedAt());
+        return findPayoutBatch(payoutBatch.getPayoutBatchNo());
     }
 
     @Transactional
@@ -348,10 +408,20 @@ public class SettlementMemoryStore {
         int failedCount = (int) records.stream()
                 .filter(item -> "已失败".equals(item.getPayoutStatus()))
                 .count();
+        int pendingCount = (int) records.stream()
+                .filter(item -> "待出款".equals(item.getPayoutStatus()) || "处理中".equals(item.getPayoutStatus()))
+                .count();
         BigDecimal totalAmount = records.stream()
                 .map(PayoutRecordEntity::getPayoutAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        String payoutStatus = failedCount > 0 ? "部分失败" : (payoutCount > 0 ? "已完成" : batch.getPayoutStatus());
+        String payoutStatus;
+        if (failedCount > 0) {
+            payoutStatus = successCount > 0 ? "部分失败" : "待重试";
+        } else if (pendingCount > 0) {
+            payoutStatus = successCount > 0 ? "处理中" : "待出款";
+        } else {
+            payoutStatus = payoutCount > 0 ? "已完成" : batch.getPayoutStatus();
+        }
         String finishedAt = payoutCount > 0 ? now() : batch.getFinishedAt();
         settlementDataMapper.updatePayoutBatch(
                 batch.getPayoutBatchNo(),

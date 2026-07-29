@@ -63,7 +63,10 @@ public class SettlementOrderServiceImpl implements SettlementOrderService {
 
     @Override
     public SettlementOrderDTO audit(String settlementNo, AuditSettlementRequestDTO request) {
-        return settlementMapper.toOrderDTO(settlementMemoryStore.audit(settlementNo, request.getOperatorName(), request.getAuditRemark(), true));
+        SettlementOrderDTO audited = settlementMapper.toOrderDTO(
+                settlementMemoryStore.audit(settlementNo, request.getOperatorName(), request.getAuditRemark(), true));
+        settlementMemoryStore.ensurePendingPayoutBatchForSettlement(settlementNo, request.getOperatorName());
+        return settlementMapper.toOrderDTO(settlementMemoryStore.findOrder(settlementNo));
     }
 
     @Override
