@@ -200,7 +200,7 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                     failureCodeJsonPointer
             );
         } catch (RestClientException exception) {
-            throw new IllegalStateException("SMS HTTP 网关通知失败：" + exception.getMessage(), exception);
+            return buildWebhookTransportFailureResult(item, "SMS", timeoutMs, exception.getMessage());
         }
     }
 

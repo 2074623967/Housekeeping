@@ -200,7 +200,7 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                     failureCodeJsonPointer
             );
         } catch (RestClientException exception) {
-            throw new IllegalStateException("EMAIL HTTP 网关通知失败：" + exception.getMessage(), exception);
+            return buildWebhookTransportFailureResult(item, "EMAIL", timeoutMs, exception.getMessage());
         }
     }
 

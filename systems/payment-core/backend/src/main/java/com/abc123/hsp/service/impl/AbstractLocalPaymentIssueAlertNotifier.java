@@ -173,12 +173,21 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                                            String acceptedStatusValues,
                                                                            String failedStatusValues,
                                                                            String failureCodeJsonPointer) {
-        validateWebhookBusinessResponse(channelLabel, responseBody, successJsonPointer, successExpectedValue);
+        String businessFailureMessage = resolveWebhookBusinessFailureMessage(
+                channelLabel,
+                responseBody,
+                successJsonPointer,
+                successExpectedValue
+        );
         String rawDeliveryStatus = resolveWebhookPointerText(channelLabel, responseBody, deliveryStatusJsonPointer);
+        boolean httpStatusFailed = statusCode < 200 || statusCode >= 300;
         String normalizedDeliveryStatus = resolveNormalizedDeliveryStatus(rawDeliveryStatus,
                 deliveredStatusValues,
                 acceptedStatusValues,
                 failedStatusValues);
+        if (httpStatusFailed || StringUtils.hasText(businessFailureMessage)) {
+            normalizedDeliveryStatus = "FAILED";
+        }
         String failureCode = resolveWebhookPointerText(channelLabel, responseBody, failureCodeJsonPointer);
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
         result.setProviderReceiptSnapshot(buildSnapshot("HTTP_RESPONSE", responseBody));
@@ -190,11 +199,33 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 timeoutMs,
                 rawDeliveryStatus,
                 failureCode,
-                normalizedDeliveryStatus
+                normalizedDeliveryStatus,
+                businessFailureMessage
         ));
         result.setRenderedContentSnapshot(StringUtils.hasText(item.getRenderedAlertContent())
                 ? item.getRenderedAlertContent()
                 : item.getAlertContent());
+        return result;
+    }
+
+    /**
+     * 构造外部网关传输异常结果，统一沉淀超时/连接失败等供应商接入侧证据。
+     */
+    protected PaymentIssueAlertDeliveryResultDTO buildWebhookTransportFailureResult(PaymentIssueAlertDispatchItemDTO item,
+                                                                                    String channelLabel,
+                                                                                    int timeoutMs,
+                                                                                    String exceptionMessage) {
+        PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot(buildSnapshot("HTTP_TRANSPORT_ERROR", exceptionMessage));
+        result.setProviderReceiptNo(buildWebhookReceiptNo(channelLabel + "-HTTP", item == null ? null : item.getAlertNo()));
+        result.setProviderDeliveryStatus("FAILED");
+        result.setProviderDeliveryMessage(new StringBuilder(channelLabel)
+                .append(" HTTP 网关请求失败，timeout=").append(timeoutMs).append("ms")
+                .append("，transportError=").append(StringUtils.hasText(exceptionMessage) ? exceptionMessage : "未知异常")
+                .toString());
+        result.setRenderedContentSnapshot(item != null && StringUtils.hasText(item.getRenderedAlertContent())
+                ? item.getRenderedAlertContent()
+                : item == null ? "" : item.getAlertContent());
         return result;
     }
 
@@ -203,7 +234,8 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                               int timeoutMs,
                                               String rawDeliveryStatus,
                                               String failureCode,
-                                              String normalizedDeliveryStatus) {
+                                              String normalizedDeliveryStatus,
+                                              String businessFailureMessage) {
         StringBuilder builder = new StringBuilder(channelLabel)
                 .append(" HTTP 网关已响应，HTTP=").append(statusCode)
                 .append("，timeout=").append(timeoutMs).append("ms")
@@ -213,6 +245,9 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         }
         if (StringUtils.hasText(failureCode)) {
             builder.append("，failureCode=").append(failureCode);
+        }
+        if (StringUtils.hasText(businessFailureMessage)) {
+            builder.append("，businessCheck=").append(businessFailureMessage);
         }
         return builder.toString();
     }
@@ -228,20 +263,20 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         return source + ":" + normalizedContent;
     }
 
-    private void validateWebhookBusinessResponse(String channelLabel,
-                                                 String responseBody,
-                                                 String successJsonPointer,
-                                                 String successExpectedValue) {
+    private String resolveWebhookBusinessFailureMessage(String channelLabel,
+                                                        String responseBody,
+                                                        String successJsonPointer,
+                                                        String successExpectedValue) {
         if (!StringUtils.hasText(successJsonPointer) || !StringUtils.hasText(successExpectedValue)) {
-            return;
+            return "";
         }
         JsonNode node = readJsonNode(channelLabel, responseBody);
         JsonNode successNode = node.at(successJsonPointer);
         String actualValue = successNode.isMissingNode() || successNode.isNull() ? "" : successNode.asText();
         if (!successExpectedValue.equals(actualValue)) {
-            throw new IllegalStateException(channelLabel + " 网关业务响应未通过，期望="
-                    + successExpectedValue + "，实际=" + actualValue);
+            return "期望=" + successExpectedValue + "，实际=" + actualValue;
         }
+        return "";
     }
 
     private String resolveWebhookReceiptNo(PaymentIssueAlertDispatchItemDTO item,

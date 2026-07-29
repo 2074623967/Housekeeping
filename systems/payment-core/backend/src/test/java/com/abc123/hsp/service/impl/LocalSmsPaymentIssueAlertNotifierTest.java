@@ -12,6 +12,7 @@ import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -75,6 +76,110 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Sms-Signature"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Sms-Timestamp"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Sms-Nonce"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenSmsWebhookBusinessCodeMismatch() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://sms.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"ERROR\",\"data\":{\"smsId\":\"SMS-EXT-ERR\"}}", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalSmsPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://sms.example.com/payment-alert",
+                5200,
+                "/code",
+                "SUCCESS",
+                "/data/smsId",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("businessCheck=期望=SUCCESS，实际=ERROR"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenSmsWebhookHttpStatusIsNot2xx() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://sms.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"SUCCESS\",\"data\":{\"smsId\":\"SMS-EXT-500\",\"deliveryStatus\":\"QUEUED\",\"errorCode\":\"SMS_500\"}}", HttpStatus.BAD_GATEWAY));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalSmsPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://sms.example.com/payment-alert",
+                5200,
+                "/code",
+                "SUCCESS",
+                "/data/smsId",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/data/deliveryStatus",
+                "SENT,DELIVERED",
+                "QUEUED,ACCEPTED",
+                "FAILED,REJECTED",
+                "/data/errorCode"
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=502"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("failureCode=SMS_500"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenSmsWebhookTransportFails() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://sms.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenThrow(new ResourceAccessException("Connection reset"));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalSmsPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://sms.example.com/payment-alert",
+                5200,
+                "/code",
+                "SUCCESS",
+                "/data/smsId",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=Connection reset"));
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_TRANSPORT_ERROR"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

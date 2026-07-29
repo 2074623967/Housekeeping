@@ -24,6 +24,7 @@ import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Arrays;
@@ -53,6 +54,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentChannelSubmitService paymentChannelSubmitService;
+
+    @Mock
+    private PaymentEventDispatchService paymentEventDispatchService;
 
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
@@ -297,6 +301,87 @@ class PaymentServiceImplTest {
                 new BigDecimal("99.00"),
                 "已结清",
                 "success");
+    }
+
+    @Test
+    void shouldPublishDownstreamEventWhenCallbackMarksPaymentSuccess() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CALLBACK-001");
+        detail.setOrderNo("ORD-CALLBACK-001");
+        detail.setStatus("WAIT_CALLBACK");
+        detail.setAmount("¥168.00");
+        when(paymentMapper.findDetail("PAY-CALLBACK-001")).thenReturn(detail, detail);
+        when(paymentMapper.findOrderAmount("ORD-CALLBACK-001")).thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findRouteLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-001");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-001");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback);
+
+        verify(paymentMapper).insertEvent(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("PAYMENT_SUCCESS"),
+                org.mockito.ArgumentMatchers.eq("PAY-CALLBACK-001"),
+                org.mockito.ArgumentMatchers.eq("ORD-CALLBACK-001"),
+                org.mockito.ArgumentMatchers.eq("{\"channel\":\"wx_h5\"}")
+        );
+        verify(paymentEventDispatchService).publishPaymentSuccess(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("PAY-CALLBACK-001")
+        );
+        verify(paymentMapper).releaseSubmitConcurrencyToken("PAY-CALLBACK-001", "CALLBACK_SUCCESS");
+    }
+
+    @Test
+    void shouldNotPublishDownstreamEventWhenCallbackStillPending() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CALLBACK-002");
+        detail.setOrderNo("ORD-CALLBACK-002");
+        detail.setStatus("WAIT_CALLBACK");
+        detail.setAmount("¥168.00");
+        when(paymentMapper.findDetail("PAY-CALLBACK-002")).thenReturn(detail, detail);
+        when(paymentMapper.findRouteLogs("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-002");
+        callback.setTradeStatus("PROCESSING");
+        callback.setChannelTransactionNo("WX-CALLBACK-002");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback);
+
+        verify(paymentMapper).insertEvent(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("PAYMENT_PENDING"),
+                org.mockito.ArgumentMatchers.eq("PAY-CALLBACK-002"),
+                org.mockito.ArgumentMatchers.eq("ORD-CALLBACK-002"),
+                org.mockito.ArgumentMatchers.eq("{\"channel\":\"wx_h5\"}")
+        );
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken("PAY-CALLBACK-002", "CALLBACK_SUCCESS");
     }
 
     @Test

@@ -12,6 +12,7 @@ import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -75,6 +76,110 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Signature"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Timestamp"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Nonce"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenEmailWebhookBusinessCodeMismatch() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://email.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"status\":\"ERROR\",\"result\":{\"mailNo\":\"EMAIL-EXT-ERR\"}}", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://email.example.com/payment-alert",
+                6100,
+                "/status",
+                "DELIVERED",
+                "/result/mailNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("businessCheck=期望=DELIVERED，实际=ERROR"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenEmailWebhookHttpStatusIsNot2xx() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://email.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"status\":\"DELIVERED\",\"result\":{\"mailNo\":\"EMAIL-EXT-500\",\"errorCode\":\"MAIL_500\"}}", HttpStatus.BAD_GATEWAY));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://email.example.com/payment-alert",
+                6100,
+                "/status",
+                "DELIVERED",
+                "/result/mailNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/status",
+                "DELIVERED,SENT",
+                "ACCEPTED,QUEUED",
+                "FAILED,REJECTED",
+                "/result/errorCode"
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=502"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("failureCode=MAIL_500"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenEmailWebhookTransportFails() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://email.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenThrow(new ResourceAccessException("Connect timed out"));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://email.example.com/payment-alert",
+                6100,
+                "/status",
+                "DELIVERED",
+                "/result/mailNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=Connect timed out"));
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_TRANSPORT_ERROR"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

@@ -2574,3 +2574,78 @@
 1. 当前 `payment-core` 的任务中心核心自动调度已从“单任务有锁”升级为“多任务统一租约锁治理”，更接近真实生产多实例部署的任务调度标准。
 2. 这一步继续缩小了 `master / release` 门槛里“跨实例协调”这一类高优先级缺口。
 3. 真实供应商 API、更广范围跨系统门禁和支付主链路/页面矩阵全量联调仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 83. 2026-07-29 通知供应商业务失败码标准化回执验证
+
+### 83.1 本轮验证范围
+
+本轮围绕“外部通知供应商虽然已经支持响应体解析，但当业务码不通过或 HTTP 非 2xx 时仍主要依赖抛异常，导致任务中心和异常中心拿不到稳定失败证据”的问题进行补强，目标是让通知器把这类场景标准化收口为 `FAILED` 投递结果。
+
+### 83.2 本轮新增内容
+
+1. `AbstractLocalPaymentIssueAlertNotifier#buildWebhookDeliveryResult` 新增对 HTTP 状态码和业务成功码的统一失败判定。
+2. 当业务码不满足 `successExpectedValue` 时，不再只抛异常，而是沉淀 `FAILED` 投递状态，并把 `期望/实际` 写入 `businessCheck`。
+3. 当供应商返回 HTTP 非 `2xx` 时，即使响应体里带有受理态字段，也统一按失败回执处理。
+4. `LocalImPaymentIssueAlertNotifierTest / LocalSmsPaymentIssueAlertNotifierTest / LocalEmailPaymentIssueAlertNotifierTest` 新增业务码失败与 HTTP 非 `2xx` 标准化失败场景。
+
+### 83.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `33` 个用例全部通过，新增覆盖 IM/SMS/EMAIL 三通道业务码失败与 HTTP 500 场景 |
+
+### 83.4 当前判断
+
+1. 当前 `payment-core` 的 IM/SMS/EMAIL 三类通知器已经从“业务失败主要靠异常抛出”升级为“失败结果可标准化落库、可被异常中心和任务中心审计”。
+2. 这一步继续缩小了真实通知供应商接入里的“响应体业务码解析 / 失败码标准化”缺口。
+3. 真实供应商 API、更多供应商特定签名/鉴权细节和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 84. 2026-07-29 支付成功双下游自动联动门禁验证
+
+### 84.1 本轮验证范围
+
+本轮围绕“文档已经声称 `payment-core -> clearing-system / accounting-system` 的下游自动联动成立，但缺少稳定自动化测试门禁”的问题进行补强，目标是把支付成功后的双下游投递纳入自动化验证。
+
+### 84.2 本轮新增内容
+
+1. 新增 `PaymentEventDispatchServiceImplTest`。
+2. 补齐“清分与账务双下游都成功时标记事件成功”场景。
+3. 补齐“账务下游返回非 2xx 时标记事件失败”场景。
+4. 补齐“事件不存在时 republish 返回 false”场景。
+5. 补齐“清分载荷 / 账务载荷关键字段正确组装”场景。
+
+### 84.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentEventDispatchServiceImplTest test` | 通过 | `4` 个用例全部通过，新增覆盖 clearing/accounting 双下游自动联动门禁 |
+
+### 84.4 当前判断
+
+1. 当前 `payment-core` 已经不只是“本机手工 smoke 证明能联动下游”，而是把支付成功后的 `clearing-system / accounting-system` 双下游自动投递纳入了后端自动化门禁。
+2. 这一步继续缩小了“更广范围跨系统门禁”这一类发布缺口。
+3. 真实供应商 API、更大范围跨系统链路矩阵和支付端页面矩阵全量联调仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 85. 2026-07-29 支付成功回调触发双下游分发门禁验证
+
+### 85.1 本轮验证范围
+
+本轮围绕“虽然已有下游投递测试，但仍缺少主链路层面对 `callback -> publishPaymentSuccess -> clearing/accounting` 触发关系的自动化门禁”进行补强，目标是把支付成功回调与双下游分发之间的主链路关系补成显式测试。
+
+### 85.2 本轮新增内容
+
+1. `PaymentServiceImplTest` 新增“支付成功回调会写 `PAYMENT_SUCCESS` 事件并触发 `paymentEventDispatchService.publishPaymentSuccess`”场景。
+2. `PaymentServiceImplTest` 新增“非成功回调只写 `PAYMENT_PENDING` 事件，不触发下游分发”场景。
+3. 联合 `PaymentEventDispatchServiceImplTest`，形成“主链路触发 + 双下游投递”两段式自动化门禁。
+
+### 85.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentServiceImplTest,PaymentEventDispatchServiceImplTest test` | 通过 | `27` 个用例全部通过，新增覆盖成功回调触发下游分发与待回调不触发下游分发 |
+
+### 85.4 当前判断
+
+1. 当前 `payment-core` 已经把“支付成功回调 -> 事件落库 -> 双下游分发”这条跨系统主链路补成了自动化门禁，而不只是依赖人工 smoke 和记忆口径。
+2. 这一步继续缩小了 `master / release` 前必须验证的跨系统链路缺口。
+3. 真实供应商 API、更大范围跨系统链路矩阵和支付端页面矩阵全量联调仍需继续补齐，因此本轮依旧不触发 `master / release`。

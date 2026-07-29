@@ -611,6 +611,42 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldFallbackToNextProviderWhenPrimaryProviderReturnsTransportFailureResult() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult("IM-PRIMARY-TRANSPORT-001", "FAILED", "IM HTTP 网关请求失败，timeout=4500ms，transportError=Read timed out", "[IM-PRIMARY] ISSUE-001"))
+                .thenReturn(buildDeliveryResult("IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-主".equals(log.getProviderName())
+                        && "派发失败".equals(log.getAlertStatus())
+                        && "FAILED".equals(log.getProviderDeliveryStatus())
+                        && log.getProviderDeliveryMessage().contains("transportError=Read timed out")));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-备".equals(log.getProviderName())
+                        && "已派发".equals(log.getAlertStatus())
+                        && "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+    }
+
+    @Test
     void shouldFallbackToBackupProviderWhenPrimaryProviderCircuitOpen() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");

@@ -20,6 +20,7 @@ import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -94,7 +95,7 @@ class LocalImPaymentIssueAlertNotifierTest {
     }
 
     @Test
-    void shouldRejectWebhookWhenBusinessCodeMismatch() {
+    void shouldReturnFailedStatusWhenWebhookBusinessCodeMismatch() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.postForEntity(
                 Mockito.eq("https://hooks.example.com/payment-alert"),
@@ -102,31 +103,99 @@ class LocalImPaymentIssueAlertNotifierTest {
                 Mockito.eq(String.class)
         )).thenReturn(new ResponseEntity<String>("{\"code\":\"500\"}", HttpStatus.OK));
 
-        IllegalStateException exception = Assertions.assertThrows(
-                IllegalStateException.class,
-                () -> new LocalImPaymentIssueAlertNotifier(
-                        restTemplate,
-                        "https://hooks.example.com/payment-alert",
-                        4500,
-                        "/code",
-                        "0",
-                        "/data/receiptNo",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        "",
-                        ""
-                ).send(buildDispatchItem())
-        );
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "/code",
+                "0",
+                "/data/receiptNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
 
-        Assertions.assertTrue(exception.getMessage().contains("业务响应未通过"));
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("businessCheck=期望=0，实际=500"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenWebhookHttpStatusIsNot2xx() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-500\",\"deliveryStatus\":\"ACCEPTED\",\"errorCode\":\"IM_500\"}}", HttpStatus.INTERNAL_SERVER_ERROR));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "/code",
+                "0",
+                "/data/receiptNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/data/deliveryStatus",
+                "SENT,DELIVERED",
+                "QUEUED,ACCEPTED",
+                "FAILED,REJECTED",
+                "/data/errorCode"
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=500"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("failureCode=IM_500"));
+    }
+
+    @Test
+    void shouldReturnFailedStatusWhenImWebhookTransportFails() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenThrow(new ResourceAccessException("Read timed out"));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "/code",
+                "0",
+                "/data/receiptNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=Read timed out"));
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_TRANSPORT_ERROR"));
     }
 
     @Test
