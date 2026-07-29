@@ -1290,6 +1290,29 @@
 2. 当前仍未接真实 MQ、死信队列和消费回执，因此这次补齐属于本地 outbox 可靠性增强，不等同于生产级消息中间件治理。
 3. 在补齐真实消息总线、订阅确认和死信二次补偿编排之前，仍不满足 `master / release` 冻结门槛。
 
+## 44. 2026-07-29 支付事件导出验证
+
+### 44.1 本轮验证结论
+
+本轮围绕“支付事件出站不仅要能查，还要能导出给测试、运营和排障复盘”的问题进行了补齐，确认 `payment-events/export` 已经和前端导出按钮闭环。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 定向单测 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentEventServiceImplTest test` | 通过 | 合计 `4` 个用例全部通过，覆盖事件列表查询、导出和重发场景 |
+
+### 44.2 本轮补齐项
+
+1. `PaymentEventService` 新增导出接口。
+2. `PaymentEventServiceImpl` 新增 CSV 导出逻辑，和支付请求导出保持一致。
+3. `PaymentEventController` 新增 `/api/payment-events/export`。
+4. `PaymentEventMapper` / `PaymentEventMapper.xml` 新增 `findAllForExport`。
+5. `PaymentEventsView` 继续沿用前端导出按钮，和后端导出接口正式闭环。
+
+### 44.3 当前判断
+
+1. 支付事件出站已经从“可查询”升级为“可查询 + 可导出 + 可重发 + 可识别死信”。
+2. 当前仍未接真实消息总线，因此仍属于支付核心域的出站治理增强，不等于最终 `master / release` 冻结门槛。
+
 1. 当前异常告警派发已经具备“值班路由配置 -> 通知通道选择 -> 派发执行 -> 失败留痕 -> 任务升级文案”的轻量闭环。
 2. 后续仍需补真实通知供应商、发送回执、失败补发和通道限流，才可能接近最终冻结版门槛。
 ## 43. 2026-07-24 告警失败补发与对象规范收口验证

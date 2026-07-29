@@ -16,6 +16,11 @@ public interface PaymentEventService {
     PageResultDTO<PaymentEventListItemDTO> list(PaymentEventQueryDTO query);
 
     /**
+     * 导出支付事件出站列表。
+     */
+    String exportCsv(PaymentEventQueryDTO query);
+
+    /**
      * 手动重发支付事件。
      */
     PageResultDTO<PaymentEventListItemDTO> republish(PaymentEventRepublishRequestDTO request, PaymentEventQueryDTO query);

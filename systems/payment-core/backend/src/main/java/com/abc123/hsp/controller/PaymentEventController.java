@@ -6,6 +6,10 @@ import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.service.PaymentEventService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -51,6 +55,33 @@ public class PaymentEventController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentEventService.list(query));
+    }
+
+    /**
+     * 导出支付事件出站列表。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(defaultValue = "全部") String eventType,
+            @RequestParam(defaultValue = "全部") String publishStatus,
+            @RequestParam(defaultValue = "全部") String downstreamSystem,
+            @RequestParam(required = false) String eventTopic,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setEventType(eventType);
+        query.setPublishStatus(publishStatus);
+        query.setDownstreamSystem(downstreamSystem);
+        query.setEventTopic(eventTopic);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        byte[] csvBytes = paymentEventService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-events.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**

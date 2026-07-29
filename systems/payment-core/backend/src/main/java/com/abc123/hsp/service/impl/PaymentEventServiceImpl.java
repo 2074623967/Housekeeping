@@ -54,6 +54,29 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     }
 
     @Override
+    public String exportCsv(PaymentEventQueryDTO query) {
+        normalizeQuery(query);
+        java.util.List<PaymentEventListItemDTO> items = paymentEventMapper.findAllForExport(query);
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,重试次数,最近发布时间,下次重试时间,事件摘要,创建时间\n");
+        for (PaymentEventListItemDTO item : items) {
+            builder.append(csvCell(item.getEventNo())).append(',')
+                    .append(csvCell(item.getEventType())).append(',')
+                    .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getBizNo())).append(',')
+                    .append(csvCell(item.getEventTopic())).append(',')
+                    .append(csvCell(item.getDownstreamSystem())).append(',')
+                    .append(csvCell(item.getPublishStatus())).append(',')
+                    .append(csvCell(item.getRetryCount() == null ? null : String.valueOf(item.getRetryCount()))).append(',')
+                    .append(csvCell(item.getLastPublishedAt())).append(',')
+                    .append(csvCell(item.getNextRetryAt())).append(',')
+                    .append(csvCell(item.getEventPayload())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    @Override
     @Transactional
     public PageResultDTO<PaymentEventListItemDTO> republish(
             PaymentEventRepublishRequestDTO request,
@@ -78,5 +101,10 @@ public class PaymentEventServiceImpl implements PaymentEventService {
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }

@@ -16,6 +16,11 @@ public interface PaymentEventMapper {
     List<PaymentEventListItemDTO> findAll(@Param("query") PaymentEventQueryDTO query);
 
     /**
+     * 查询导出用的支付事件出站列表。
+     */
+    List<PaymentEventListItemDTO> findAllForExport(@Param("query") PaymentEventQueryDTO query);
+
+    /**
      * 统计支付事件出站总数。
      */
     long count(@Param("query") PaymentEventQueryDTO query);

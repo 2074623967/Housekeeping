@@ -2,11 +2,13 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
+import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -75,5 +77,24 @@ class PaymentEventServiceImplTest {
         assertEquals("payment.trade", query.getEventTopic());
         assertEquals("nextRetryAt", query.getSortField());
         assertEquals("asc", query.getSortOrder());
+    }
+
+    @Test
+    void shouldExportCsvWithCombinedFailedAndDeadLetterFilter() {
+        PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setPublishStatus(" FAILED_OR_DEAD_LETTER ");
+        PaymentEventListItemDTO item = new PaymentEventListItemDTO();
+        item.setEventNo("EVT-001");
+        item.setPublishStatus("DEAD_LETTER");
+        item.setEventPayload("{\"reason\":\"retry exhausted\"}");
+        when(paymentEventMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
+
+        String csv = new PaymentEventServiceImpl(paymentEventMapper).exportCsv(query);
+
+        assertEquals("FAILED_OR_DEAD_LETTER", query.getPublishStatus());
+        assertTrue(csv.contains("EVT-001"));
+        assertTrue(csv.contains("DEAD_LETTER"));
+        assertTrue(csv.contains("\"{\"\"reason\"\":\"\"retry exhausted\"\"}\""));
+        verify(paymentEventMapper).findAllForExport(query);
     }
 }
