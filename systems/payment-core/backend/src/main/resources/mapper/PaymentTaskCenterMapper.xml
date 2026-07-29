@@ -546,6 +546,7 @@
 
     <select id="findAcceptedIssueAlertDeliveryLogs" resultType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
         SELECT alert_no AS alertNo,
+               source_alert_no AS sourceAlertNo,
                issue_no AS issueNo,
                payment_order_id AS paymentOrderId,
                issue_type AS issueType,
@@ -589,5 +590,17 @@
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
           AND provider_delivery_status = 'ACCEPTED'
+    </update>
+
+    <update id="updateSourceIssueAlertAcknowledgement" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        UPDATE t_payment_issue_alert_log
+        SET ack_status = #{ackStatus},
+            ack_status_type = #{ackStatusType},
+            ack_operator = #{ackOperator},
+            ack_at = NOW(),
+            triggered_by = #{triggeredBy}
+        WHERE alert_no = #{alertNo}
+          AND alert_channel = 'IN_APP_OUTBOX'
+          AND ack_status = '待确认'
     </update>
 </mapper>

@@ -808,6 +808,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, triggeredBy);
             int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
             if (affectedRows > 0) {
+                acknowledgeSourceAlertFromReceipt(acceptedLog, receiptUpdate);
                 successCount++;
             } else {
                 failCount++;
@@ -833,6 +834,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setAckOperator(triggeredBy);
         entity.setTriggeredBy(triggeredBy);
         return entity;
+    }
+
+    private void acknowledgeSourceAlertFromReceipt(PaymentIssueAlertLogEntity acceptedLog,
+                                                   PaymentIssueAlertLogEntity receiptUpdate) {
+        if (acceptedLog == null || !StringUtils.hasText(acceptedLog.getSourceAlertNo())) {
+            return;
+        }
+        PaymentIssueAlertLogEntity sourceAckUpdate = new PaymentIssueAlertLogEntity();
+        sourceAckUpdate.setAlertNo(acceptedLog.getSourceAlertNo().trim());
+        sourceAckUpdate.setAckStatus(receiptUpdate.getAckStatus());
+        sourceAckUpdate.setAckStatusType(receiptUpdate.getAckStatusType());
+        sourceAckUpdate.setAckOperator(receiptUpdate.getAckOperator());
+        sourceAckUpdate.setTriggeredBy(receiptUpdate.getTriggeredBy());
+        paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
     }
 
     private String buildReceiptReconcileSummary(int processedCount, int successCount, int failCount) {

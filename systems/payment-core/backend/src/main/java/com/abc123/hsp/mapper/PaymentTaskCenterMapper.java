@@ -82,6 +82,11 @@ public interface PaymentTaskCenterMapper {
     int updateIssueAlertProviderReceipt(PaymentIssueAlertLogEntity entity);
 
     /**
+     * 基于供应商回执结果回写来源站内告警确认状态。
+     */
+    int updateSourceIssueAlertAcknowledgement(PaymentIssueAlertLogEntity entity);
+
+    /**
      * 判断某个来源 outbox 在指定通知通道上是否已经成功派发过。
      */
     boolean hasSuccessfulIssueAlertChannelDelivery(String sourceAlertNo, String alertChannel);

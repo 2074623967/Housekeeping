@@ -607,6 +607,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldReconcileAcceptedDeliveryReceiptsSuccessfully() {
         PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
         acceptedLog.setAlertNo("PIA-IM-001");
+        acceptedLog.setSourceAlertNo("PIA-OUTBOX-001");
         acceptedLog.setIssueNo("ISSUE-001");
         acceptedLog.setAlertChannel("IM");
         acceptedLog.setProviderDeliveryStatus("ACCEPTED");
@@ -620,6 +621,11 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).updateIssueAlertProviderReceipt(captor.capture());
+        verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PIA-OUTBOX-001".equals(entity.getAlertNo())
+                        && "已确认".equals(entity.getAckStatus())
+                        && "payment-core-admin".equals(entity.getAckOperator())
+        ));
         verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
         Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
         Assertions.assertEquals("已确认", captor.getValue().getAckStatus());

@@ -2473,3 +2473,28 @@
 1. 当前 `payment-core` 的异常告警回执回查不再只是“状态收口”，还具备了“自动确认人 + 自动确认时间”的审计留痕，更接近公司内部正式运维台账的要求。
 2. 这一步提升了测试、运营和研发回放自动回查任务时的可解释性，也为后续 release 前门禁审计提供了更强证据。
 3. 真实供应商回执 API、跨实例协调和更广范围跨系统联动仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 79. 2026-07-29 回执回查同步确认 source outbox 验证
+
+### 79.1 本轮验证范围
+
+本轮围绕“文档声称回执回查成功后会同步回写 `ack_status=已确认`，但实际代码只更新了外部通道日志，source outbox 仍可能保持 `待确认` 并继续触发升级巡检”的真实闭环缺口进行修复。
+
+### 79.2 本轮新增内容
+
+1. `PaymentTaskCenterMapper#findAcceptedIssueAlertDeliveryLogs` 补齐 `sourceAlertNo` 查询映射，保证回执回查阶段能拿到来源站内告警编号。
+2. 新增 `PaymentTaskCenterMapper#updateSourceIssueAlertAcknowledgement`，用于在回执回查成功后回写 source outbox 的确认状态。
+3. `PaymentIssueAlertDeliveryServiceImpl` 在外部通道日志从 `ACCEPTED -> DELIVERED` 回写成功后，同步将 `sourceAlertNo` 对应的站内 outbox 更新为 `ack_status=已确认`，并沉淀 `ackOperator / ackAt`。
+4. `PaymentIssueAlertDeliveryServiceImplTest` 新增断言，确认回执回查成功后会调用 `updateSourceIssueAlertAcknowledgement`，避免 source outbox 长期悬挂在 `待确认`。
+
+### 79.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `21` 个用例全部通过，新增覆盖 source outbox 同步确认 |
+
+### 79.4 当前判断
+
+1. 当前 `payment-core` 的异常告警回执回查终于从“只改外部通道日志”升级为“外部通道日志 + source outbox 一起收口”的完整闭环，和文档口径保持一致。
+2. 这一步直接降低了“供应商已送达但 source outbox 仍触发升级巡检”的误报风险，也提升了异常中心、任务中心和升级巡检之间的一致性。
+3. 真实供应商 API、跨实例协调和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
