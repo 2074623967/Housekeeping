@@ -2748,3 +2748,26 @@
 1. 支付处理日志已经从“可查询”升级为“可查询 + 可导出”，前端导出按钮与后端导出接口正式闭环。
 2. 当前 `payment-core` 后端自动化门禁已刷新到 `174` 个测试通过，测试基线继续前移。
 3. 但该结果仍不等同于支付系统整包已可发布，前端跨端统一回归、整包多系统统一回归、MQ 级可靠投递和回滚演练仍需继续补齐。
+
+## 88. 2026-07-29 支付导出控制器层门禁补齐验证
+
+### 88.1 本轮验证范围
+
+本轮围绕“支付事件导出和支付处理日志导出虽然已经有服务层单测，但控制器层缺少显式门禁，无法证明 `/export` 接口头信息、编码和参数组装没有被后续改坏”的问题进行补强。
+
+### 88.2 本轮新增内容
+
+1. 新增 `PaymentLogControllerTest`，覆盖 `payment-logs/export` 的响应头、字节内容和列表调用入口。
+2. 新增 `PaymentEventControllerTest`，覆盖 `payment-events/export` 的响应头、字节内容和列表调用入口。
+3. 接口文档补充 `payment-events/export` 的显式说明，避免文档只写查询和重发、遗漏导出能力。
+
+### 88.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentLogServiceImplTest,PaymentLogControllerTest,PaymentEventControllerTest,PaymentEventServiceImplTest test` | 通过 | `10` 个用例全部通过，覆盖日志/事件导出服务层与控制器层闭环 |
+
+### 88.4 当前判断
+
+1. `payment-core` 的导出能力已经从“服务层可用”提升为“控制器层也有显式门禁”，更接近冻结版交付包要求。
+2. 这一步提升的是接口交付可信度，不等于整包已达到 `master / release` 门槛。

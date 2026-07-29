@@ -249,6 +249,8 @@
 
 重发接口：`POST /api/payment-events/republish`
 
+导出接口：`GET /api/payment-events/export`
+
 查询参数：
 
 | 参数 | 说明 |
@@ -259,8 +261,8 @@
 | `downstreamSystem` | 下游系统，支持 `全部` |
 | `eventTopic` | 事件主题关键字，模糊匹配 |
 | `sortField` | 排序字段，支持 `createdAt / retryCount / nextRetryAt` |
-| `sortOrder` | 排序方向，支持 `asc / desc` |
-| `pageNo` | 页码，从 `1` 开始 |
+ | `sortOrder` | 排序方向，支持 `asc / desc` |
+ | `pageNo` | 页码，从 `1` 开始 |
 | `pageSize` | 每页条数，最大 `100` |
 
 重发请求示例：
