@@ -603,4 +603,41 @@
           AND alert_channel = 'IN_APP_OUTBOX'
           AND ack_status = '待确认'
     </update>
+
+    <insert id="initTaskLease">
+        INSERT IGNORE INTO t_payment_task_lease (
+            task_code,
+            lock_owner,
+            lock_expires_at,
+            updated_at
+        ) VALUES (
+            #{taskCode},
+            NULL,
+            NULL,
+            NOW()
+        )
+    </insert>
+
+    <update id="acquireTaskLease">
+        UPDATE t_payment_task_lease
+        SET lock_owner = #{lockOwner},
+            lock_expires_at = DATE_ADD(NOW(), INTERVAL #{leaseSeconds} SECOND),
+            updated_at = NOW()
+        WHERE task_code = #{taskCode}
+          AND (
+              lock_owner IS NULL
+              OR lock_expires_at IS NULL
+              OR lock_expires_at &lt;= NOW()
+              OR lock_owner = #{lockOwner}
+          )
+    </update>
+
+    <update id="releaseTaskLease">
+        UPDATE t_payment_task_lease
+        SET lock_owner = NULL,
+            lock_expires_at = NULL,
+            updated_at = NOW()
+        WHERE task_code = #{taskCode}
+          AND lock_owner = #{lockOwner}
+    </update>
 </mapper>

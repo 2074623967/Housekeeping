@@ -81,6 +81,45 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldSkipAutoDispatchWhenLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_ISSUE_ALERT_DISPATCH", "payment-issue-alert-scheduler", 120))
+                .thenReturn(0);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).autoDispatchPendingAlerts();
+
+        verify(paymentTaskCenterMapper).initTaskLease("PAYMENT_ISSUE_ALERT_DISPATCH");
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).findPendingOutboxAlerts();
+        Assertions.assertEquals("PAYMENT_ISSUE_ALERT_DISPATCH", result.getTaskCode());
+        Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
+    void shouldReleaseLeaseAfterAutoReceiptReconcile() {
+        PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
+        acceptedLog.setAlertNo("PIA-IM-001");
+        acceptedLog.setSourceAlertNo("PIA-OUTBOX-001");
+        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE", "payment-issue-alert-receipt-scheduler", 120))
+                .thenReturn(1);
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).autoReconcileDeliveryReceipts();
+
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE",
+                "payment-issue-alert-receipt-scheduler"
+        );
+        verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class));
+    }
+
+    @Test
     void shouldMatchCompositeProviderRouteRuleByScheduleAndEscalationLevel() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");

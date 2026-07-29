@@ -2522,3 +2522,30 @@
 1. 当前 `payment-core` 的异常告警确认链路已经在“自动回查确认”和“人工确认”两条入口上统一收口 source outbox，不再出现一边已确认、一边仍待确认的状态撕裂。
 2. 这一步进一步提升了异常中心、任务中心和升级巡检三者之间的一致性，也让值班同学在手工处置时不会留下隐藏的升级触发点。
 3. 真实供应商 API、跨实例协调和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 81. 2026-07-29 异常告警自动任务跨实例租约锁验证
+
+### 81.1 本轮验证范围
+
+本轮围绕“异常告警自动派发 / 自动回执回查在多实例部署下仍可能被多个调度器重复执行，导致重复外发和重复回写”的问题进行补强，目标是让 `payment-core` 至少在最关键的异常告警自动任务上具备数据库共享租约锁能力。
+
+### 81.2 本轮新增内容
+
+1. `schema.sql` 新增 `t_payment_task_lease`，沉淀任务级分布式租约锁。
+2. `PaymentTaskCenterMapper / PaymentTaskCenterMapper.xml` 新增 `initTaskLease / acquireTaskLease / releaseTaskLease`。
+3. `PaymentIssueAlertDeliveryServiceImpl` 的 `autoDispatchPendingAlerts / autoReconcileDeliveryReceipts` 在正式执行前先抢占租约锁。
+4. 当检测到其他实例已持锁时，本次自动任务会直接跳过，并落一条 `WARNING` 级任务执行日志。
+5. 自动任务执行完成后会释放本实例持有的租约，避免锁长期悬挂。
+6. `PaymentIssueAlertDeliveryServiceImplTest` 新增“租约被占用时跳过”和“回执回查后释放租约”场景。
+
+### 81.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `23` 个用例全部通过，新增覆盖自动任务租约锁跳过与释放 |
+
+### 81.4 当前判断
+
+1. 当前 `payment-core` 的异常告警自动派发与自动回执回查已经具备第一版跨实例共享租约锁，不再默认允许多个调度实例同时执行同一任务。
+2. 这一步显著降低了多实例部署时重复派发、重复回查和重复写任务日志的风险，更接近正式生产调度体系的基本门槛。
+3. 真实供应商 API、更多任务类型的跨实例协调和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。

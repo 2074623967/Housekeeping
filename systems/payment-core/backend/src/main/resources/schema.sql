@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS t_worker_settlement_order;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_refund_operation_log;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
+DROP TABLE IF EXISTS t_payment_task_lease;
 DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster;
 DROP TABLE IF EXISTS t_payment_alert_provider_config;
@@ -536,6 +537,17 @@ CREATE TABLE t_payment_day_end_batch (
     UNIQUE KEY uk_day_end_batch_no (batch_no),
     KEY idx_day_end_biz_date_status (biz_date, batch_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付日终批次表';
+
+CREATE TABLE t_payment_task_lease (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    task_code VARCHAR(64) NOT NULL COMMENT '任务编码',
+    lock_owner VARCHAR(128) DEFAULT NULL COMMENT '当前持锁实例或执行者',
+    lock_expires_at DATETIME DEFAULT NULL COMMENT '租约过期时间',
+    updated_at DATETIME NOT NULL COMMENT '最近更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_task_code (task_code),
+    KEY idx_lock_expires_at (lock_expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付任务分布式租约锁表';
 
 CREATE TABLE t_payment_task_run_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

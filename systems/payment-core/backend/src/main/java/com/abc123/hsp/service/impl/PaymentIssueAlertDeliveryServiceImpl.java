@@ -36,6 +36,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RUN_MODE_AUTO = "AUTO";
     private static final String TASK_CODE_ISSUE_ALERT_DISPATCH = "PAYMENT_ISSUE_ALERT_DISPATCH";
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
+    private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
     private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
     private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -70,7 +71,17 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     @Override
     @Transactional
     public PaymentTaskActionResultDTO autoDispatchPendingAlerts() {
-        return dispatchPendingAlertsByMode(RUN_MODE_AUTO, "payment-issue-alert-scheduler");
+        return runAutoTaskWithLease(
+                TASK_CODE_ISSUE_ALERT_DISPATCH,
+                "异常告警派发",
+                "payment-issue-alert-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return dispatchPendingAlertsByMode(RUN_MODE_AUTO, "payment-issue-alert-scheduler");
+                    }
+                }
+        );
     }
 
     @Override
@@ -82,7 +93,33 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     @Override
     @Transactional
     public PaymentTaskActionResultDTO autoReconcileDeliveryReceipts() {
-        return reconcileDeliveryReceiptsByMode(RUN_MODE_AUTO, "payment-issue-alert-receipt-scheduler");
+        return runAutoTaskWithLease(
+                TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE,
+                "异常告警回执回查",
+                "payment-issue-alert-receipt-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return reconcileDeliveryReceiptsByMode(RUN_MODE_AUTO, "payment-issue-alert-receipt-scheduler");
+                    }
+                }
+        );
+    }
+
+    private PaymentTaskActionResultDTO runAutoTaskWithLease(String taskCode,
+                                                            String taskName,
+                                                            String triggeredBy,
+                                                            AutoTaskRunner runner) {
+        paymentTaskCenterMapper.initTaskLease(taskCode);
+        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, triggeredBy, AUTO_TASK_LEASE_SECONDS);
+        if (lockedRows <= 0) {
+            return buildLeaseSkippedResult(taskCode, taskName, triggeredBy);
+        }
+        try {
+            return runner.run();
+        } finally {
+            paymentTaskCenterMapper.releaseTaskLease(taskCode, triggeredBy);
+        }
     }
 
     private PaymentTaskActionResultDTO dispatchPendingAlertsByMode(String runMode, String triggeredBy) {
@@ -943,6 +980,45 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         result.setFailCount(failCount);
         result.setSummaryComment(summaryComment);
         return result;
+    }
+
+    private PaymentTaskActionResultDTO buildLeaseSkippedResult(String taskCode,
+                                                               String taskName,
+                                                               String triggeredBy) {
+        PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
+        entity.setTaskLogNo("TL" + System.currentTimeMillis());
+        entity.setTaskCode(taskCode);
+        entity.setTaskName(taskName);
+        entity.setRunMode(RUN_MODE_AUTO);
+        entity.setTaskStatus("WARNING");
+        entity.setTaskStatusType("warn");
+        entity.setSeverityLevel("P3");
+        entity.setSeverityLevelType("warn");
+        entity.setEscalationStatus("其他实例执行中");
+        entity.setEscalationStatusType("warn");
+        entity.setProcessedCount(0);
+        entity.setSuccessCount(0);
+        entity.setWarningCount(0);
+        entity.setFailCount(0);
+        entity.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
+        entity.setSuggestedAction("继续观察当前实例执行结果，避免重复派发或重复回查。");
+        entity.setRecommendedRoute("/task-center");
+        entity.setTriggeredBy(triggeredBy);
+        paymentTaskCenterMapper.insertTaskRunLog(entity);
+
+        PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
+        result.setTaskCode(taskCode);
+        result.setTaskName(taskName);
+        result.setProcessedCount(0);
+        result.setSuccessCount(0);
+        result.setWarningCount(0);
+        result.setFailCount(0);
+        result.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
+        return result;
+    }
+
+    private interface AutoTaskRunner {
+        PaymentTaskActionResultDTO run();
     }
 
     /**

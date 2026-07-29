@@ -119,4 +119,22 @@ public interface PaymentTaskCenterMapper {
      * 查询指定通知通道当前启用中的供应商配置。
      */
     List<PaymentAlertProviderConfigDTO> findEnabledAlertProvidersByChannel(String alertChannel);
+
+    /**
+     * 初始化任务租约锁记录。
+     */
+    int initTaskLease(@Param("taskCode") String taskCode);
+
+    /**
+     * 抢占任务租约锁，避免多实例重复执行同一自动任务。
+     */
+    int acquireTaskLease(@Param("taskCode") String taskCode,
+                         @Param("lockOwner") String lockOwner,
+                         @Param("leaseSeconds") int leaseSeconds);
+
+    /**
+     * 释放当前实例持有的任务租约锁。
+     */
+    int releaseTaskLease(@Param("taskCode") String taskCode,
+                         @Param("lockOwner") String lockOwner);
 }
