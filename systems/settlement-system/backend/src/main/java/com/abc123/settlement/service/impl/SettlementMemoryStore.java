@@ -252,6 +252,24 @@ public class SettlementMemoryStore {
         return entity;
     }
 
+    @Transactional
+    public PayoutBatchEntity executePendingPayoutBatch(String payoutBatchNo, String operatorName, String remark) {
+        PayoutBatchEntity batch = findPayoutBatch(payoutBatchNo);
+        if (batch == null) {
+            return null;
+        }
+        for (PayoutRecordEntity record : payoutRecordsByBatchNo(payoutBatchNo)) {
+            if ("待出款".equals(record.getPayoutStatus()) || "处理中".equals(record.getPayoutStatus())) {
+                settlementDataMapper.updatePayoutRecord(record.getPayoutNo(), "已发放", record.getRetryCount());
+                markOrderPayoutCompleted(record.getSettlementNo());
+                createAuditLog(record.getSettlementNo(), "执行出款", "已发放", operatorName, remark);
+            }
+        }
+        updatePayoutBatchSummary(payoutBatchNo);
+        updateBatchSummary(batch.getBatchNo());
+        return findPayoutBatch(payoutBatchNo);
+    }
+
     public List<SettlementEventEntity> events() {
         List<SettlementEventEntity> items = new ArrayList<>(settlementDataMapper.findEvents());
         items.sort(Comparator.comparing(SettlementEventEntity::getCreatedAt).reversed());

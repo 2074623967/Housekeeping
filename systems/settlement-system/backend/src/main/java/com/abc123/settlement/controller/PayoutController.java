@@ -2,6 +2,7 @@ package com.abc123.settlement.controller;
 
 import com.abc123.settlement.common.ApiResponse;
 import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
+import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
@@ -40,6 +41,11 @@ public class PayoutController {
     @PostMapping
     public ApiResponse<PayoutBatchDTO> create(@RequestBody CreatePayoutBatchRequestDTO request) {
         return ApiResponse.success(payoutService.create(request));
+    }
+
+    @PostMapping("/{payoutBatchNo}/execute")
+    public ApiResponse<PayoutBatchDTO> execute(@PathVariable String payoutBatchNo, @RequestBody ExecutePayoutBatchRequestDTO request) {
+        return ApiResponse.success(payoutService.execute(payoutBatchNo, request));
     }
 
     @PostMapping("/{payoutBatchNo}/retry")

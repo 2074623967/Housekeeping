@@ -1,6 +1,7 @@
 package com.abc123.settlement.service.impl;
 
 import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
+import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
@@ -45,6 +46,12 @@ public class PayoutServiceImpl implements PayoutService {
                     settlementMemoryStore.createPayoutRecord(dto.getPayoutBatchNo(), order);
                 });
         return settlementMapper.toPayoutBatchDTO(settlementMemoryStore.findPayoutBatch(dto.getPayoutBatchNo()));
+    }
+
+    @Override
+    public PayoutBatchDTO execute(String payoutBatchNo, ExecutePayoutBatchRequestDTO request) {
+        return settlementMapper.toPayoutBatchDTO(
+                settlementMemoryStore.executePendingPayoutBatch(payoutBatchNo, request.getOperatorName(), request.getRemark()));
     }
 
     @Override

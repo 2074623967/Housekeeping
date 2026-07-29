@@ -152,7 +152,8 @@ public class SettlementMapper {
         if (status == null) {
             return "info";
         }
-        if (status.contains("成功") || status.contains("已完成") || status.contains("通过") || status.contains("已发放")) {
+        if (status.contains("成功") || status.contains("已完成") || status.contains("通过")
+                || status.contains("已发放") || status.contains("已出款")) {
             return "success";
         }
         if (status.contains("失败") || status.contains("退回") || status.contains("驳回") || status.contains("停用")) {

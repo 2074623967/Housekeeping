@@ -1,6 +1,7 @@
 package com.abc123.settlement.service;
 
 import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
+import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
@@ -14,6 +15,8 @@ public interface PayoutService {
     PageResultDTO<PayoutBatchDTO> list(String batchNo, String payoutStatus, int pageNo, int pageSize);
 
     PayoutBatchDTO create(CreatePayoutBatchRequestDTO request);
+
+    PayoutBatchDTO execute(String payoutBatchNo, ExecutePayoutBatchRequestDTO request);
 
     PayoutBatchDTO retry(String payoutBatchNo, RetryPayoutBatchRequestDTO request);
 
