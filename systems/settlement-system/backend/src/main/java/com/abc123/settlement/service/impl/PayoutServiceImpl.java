@@ -51,7 +51,7 @@ public class PayoutServiceImpl implements PayoutService {
     @Override
     public PayoutBatchDTO execute(String payoutBatchNo, ExecutePayoutBatchRequestDTO request) {
         return settlementMapper.toPayoutBatchDTO(
-                settlementMemoryStore.executePendingPayoutBatch(payoutBatchNo, request.getOperatorName(), request.getRemark()));
+                settlementMemoryStore.executePendingPayoutBatch(payoutBatchNo, request));
     }
 
     @Override

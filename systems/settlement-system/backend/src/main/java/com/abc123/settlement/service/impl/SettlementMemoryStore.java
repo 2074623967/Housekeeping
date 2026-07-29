@@ -1,6 +1,7 @@
 package com.abc123.settlement.service.impl;
 
 import com.abc123.settlement.dto.ClearingGeneratedEventRequestDTO;
+import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.entity.PayoutBatchEntity;
 import com.abc123.settlement.entity.PayoutRecordEntity;
 import com.abc123.settlement.entity.SettlementAuditLogEntity;
@@ -16,6 +17,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
@@ -253,16 +255,26 @@ public class SettlementMemoryStore {
     }
 
     @Transactional
-    public PayoutBatchEntity executePendingPayoutBatch(String payoutBatchNo, String operatorName, String remark) {
+    public PayoutBatchEntity executePendingPayoutBatch(String payoutBatchNo, ExecutePayoutBatchRequestDTO request) {
         PayoutBatchEntity batch = findPayoutBatch(payoutBatchNo);
         if (batch == null) {
             return null;
         }
+        String operatorName = request == null ? "" : request.getOperatorName();
+        String remark = request == null ? "" : request.getRemark();
+        String executionResult = normalizeExecutionResult(request);
+        String failureReason = request == null ? "" : request.getFailureReason();
         for (PayoutRecordEntity record : payoutRecordsByBatchNo(payoutBatchNo)) {
             if ("待出款".equals(record.getPayoutStatus()) || "处理中".equals(record.getPayoutStatus())) {
-                settlementDataMapper.updatePayoutRecord(record.getPayoutNo(), "已发放", record.getRetryCount());
-                markOrderPayoutCompleted(record.getSettlementNo());
-                createAuditLog(record.getSettlementNo(), "执行出款", "已发放", operatorName, remark);
+                if ("FAILED".equals(executionResult)) {
+                    settlementDataMapper.updatePayoutRecord(record.getPayoutNo(), "已失败", record.getRetryCount());
+                    markOrderPayoutFailed(record.getSettlementNo());
+                    createAuditLog(record.getSettlementNo(), "执行出款", "已失败", operatorName, buildFailureRemark(remark, failureReason));
+                } else {
+                    settlementDataMapper.updatePayoutRecord(record.getPayoutNo(), "已发放", record.getRetryCount());
+                    markOrderPayoutCompleted(record.getSettlementNo());
+                    createAuditLog(record.getSettlementNo(), "执行出款", "已发放", operatorName, remark);
+                }
             }
         }
         updatePayoutBatchSummary(payoutBatchNo);
@@ -352,19 +364,17 @@ public class SettlementMemoryStore {
     @Transactional
     public PayoutBatchEntity retryPayoutBatch(String payoutBatchNo, String operatorName, String reason) {
         PayoutBatchEntity entity = findPayoutBatch(payoutBatchNo);
+        if (entity == null) {
+            return null;
+        }
         for (PayoutRecordEntity record : payoutRecordsByBatchNo(payoutBatchNo)) {
-            if (!"已发放".equals(record.getPayoutStatus())) {
+            if ("已失败".equals(record.getPayoutStatus()) || "待重试".equals(record.getPayoutStatus())) {
                 settlementDataMapper.updatePayoutRecord(record.getPayoutNo(), "已发放", record.getRetryCount() + 1);
+                markOrderPayoutCompleted(record.getSettlementNo());
+                createAuditLog(record.getSettlementNo(), "失败重试", "已发放", operatorName, reason);
             }
         }
-        settlementDataMapper.updatePayoutBatch(
-                payoutBatchNo,
-                "已完成",
-                entity.getPayoutCount(),
-                entity.getSuccessCount(),
-                entity.getFailedCount(),
-                entity.getTotalAmount(),
-                now());
+        updatePayoutBatchSummary(payoutBatchNo);
         updateBatchSummary(entity.getBatchNo());
         return findPayoutBatch(payoutBatchNo);
     }
@@ -373,6 +383,13 @@ public class SettlementMemoryStore {
     public SettlementOrderEntity markOrderPayoutCompleted(String settlementNo) {
         SettlementOrderEntity entity = findOrder(settlementNo);
         settlementDataMapper.updateOrderStatus(settlementNo, "已出款", "已发放", entity.getAuditStatus());
+        return findOrder(settlementNo);
+    }
+
+    @Transactional
+    public SettlementOrderEntity markOrderPayoutFailed(String settlementNo) {
+        SettlementOrderEntity entity = findOrder(settlementNo);
+        settlementDataMapper.updateOrderStatus(settlementNo, "待出款", "已失败", entity.getAuditStatus());
         return findOrder(settlementNo);
     }
 
@@ -449,6 +466,23 @@ public class SettlementMemoryStore {
                 failedCount,
                 totalAmount,
                 finishedAt);
+    }
+
+    private String normalizeExecutionResult(ExecutePayoutBatchRequestDTO request) {
+        if (request == null || request.getExecutionResult() == null || request.getExecutionResult().trim().isEmpty()) {
+            return "SUCCESS";
+        }
+        return request.getExecutionResult().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String buildFailureRemark(String remark, String failureReason) {
+        if (failureReason == null || failureReason.trim().isEmpty()) {
+            return remark;
+        }
+        if (remark == null || remark.trim().isEmpty()) {
+            return "失败原因：" + failureReason.trim();
+        }
+        return remark + "；失败原因：" + failureReason.trim();
     }
 
     private ClearingGeneratedEventRequestDTO buildDemoEvent() {
