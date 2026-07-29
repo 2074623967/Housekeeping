@@ -419,6 +419,7 @@
                COALESCE(roster.notify_channels, 'IN_APP,IM,SMS,EMAIL') AS notifyChannels,
                COALESCE(roster.escalation_level, 'L1') AS escalationLevel,
                COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
+               outbox.ack_status AS ackStatus,
                outbox.alert_content AS alertContent,
                DATE_FORMAT(outbox.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                outbox.triggered_by AS triggeredBy
@@ -442,6 +443,7 @@
               )
         WHERE alert_channel = 'IN_APP_OUTBOX'
           AND alert_status IN ('已生成', '部分失败', '派发失败')
+          AND COALESCE(outbox.ack_status, '待确认') = '待确认'
         ORDER BY outbox.created_at ASC, outbox.id ASC
     </select>
 

@@ -343,6 +343,32 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldSkipDispatchWhenSourceAlertAlreadyAcknowledged() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS");
+        item.setAckStatus("已确认");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(smsNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(emailNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).insertIssueAlertLog(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
     void shouldMarkFailureWhenProviderConfigMissingForChannel() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
@@ -681,6 +707,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         item.setReceiver("支付后端值班");
         item.setEscalationLevel("L2");
         item.setScheduleTag("交易链路白班");
+        item.setAckStatus("待确认");
         item.setAlertContent("支付异常 ISSUE-001 已超过 P1 SLA，请进入异常中心处理。");
         item.setCreatedAt("2099-12-31 23:59:59");
         item.setTriggeredBy("payment-issue-sla-scheduler");

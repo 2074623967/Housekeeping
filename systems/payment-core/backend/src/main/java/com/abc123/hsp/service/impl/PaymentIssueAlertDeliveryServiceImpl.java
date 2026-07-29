@@ -90,10 +90,15 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         Map<String, PaymentIssueAlertNotifier> notifierMap = notifiers.stream()
                 .collect(Collectors.toMap(PaymentIssueAlertNotifier::channelCode, notifier -> notifier, (left, right) -> left));
 
+        int processedCount = 0;
         int successCount = 0;
         int warningCount = 0;
         int failCount = 0;
         for (PaymentIssueAlertDispatchItemDTO item : pendingAlerts) {
+            if (shouldSkipAcknowledgedSourceAlert(item)) {
+                continue;
+            }
+            processedCount++;
             DispatchOutcome outcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
             if (outcome.isAllSucceeded()) {
                 successCount++;
@@ -108,13 +113,17 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         return buildResult(
                 runMode,
                 triggeredBy,
-                pendingAlerts.size(),
+                processedCount,
                 successCount,
                 warningCount,
                 failCount,
-                buildSummaryComment(pendingAlerts.size(), successCount, warningCount, failCount),
+                buildSummaryComment(processedCount, successCount, warningCount, failCount),
                 resolveHighestEscalationLevel(pendingAlerts)
         );
+    }
+
+    private boolean shouldSkipAcknowledgedSourceAlert(PaymentIssueAlertDispatchItemDTO item) {
+        return item != null && "已确认".equals(item.getAckStatus());
     }
 
     private DispatchOutcome dispatchToAllChannels(PaymentIssueAlertDispatchItemDTO item,
@@ -508,6 +517,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         deliveryItem.setNotifyChannels(item.getNotifyChannels());
         deliveryItem.setEscalationLevel(item.getEscalationLevel());
         deliveryItem.setScheduleTag(item.getScheduleTag());
+        deliveryItem.setAckStatus(item.getAckStatus());
         deliveryItem.setAlertContent(item.getAlertContent());
         deliveryItem.setCreatedAt(item.getCreatedAt());
         deliveryItem.setTriggeredBy(item.getTriggeredBy());

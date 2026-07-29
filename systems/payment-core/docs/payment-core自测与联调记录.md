@@ -2421,3 +2421,29 @@
 1. 当前 `payment-core` 的异常告警派发不再只校验“最近是否派发成功”，也会校验“这条 outbox 告警本身是否已经过期”，更接近正式通知中心的时间窗治理口径。
 2. 这一步补齐了文档里多次提到的“服务端时间窗校验联动”缺口，后续接入真实企业微信、短信和邮件供应商时不需要再回头重改主链路。
 3. 真实外部供应商回执状态映射、失败码标准化和跨实例协调仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 77. 2026-07-29 已确认告警停止外发验证
+
+### 77.1 本轮验证范围
+
+本轮围绕“站内 outbox 告警一旦被人工确认，后续自动派发任务仍可能继续把它投递到外部通道”的闭环缺口进行补强，目标是避免已确认告警继续触发重复通知。
+
+### 77.2 本轮新增内容
+
+1. `PaymentIssueAlertDispatchItemDTO` 新增 `ackStatus` 字段，正式承接站内 outbox 确认状态。
+2. `PaymentTaskCenterMapper.xml#findPendingOutboxAlerts` 增加 `ack_status` 下推，并只返回 `待确认` 的 source outbox 告警。
+3. `PaymentIssueAlertDeliveryServiceImpl` 增加服务端兜底校验：即使查询层漏拦截，`ackStatus=已确认` 的 source outbox 也会被直接跳过，不再进入任何通知器。
+4. 异常告警派发结果中的 `processedCount` 与摘要口径改为按“实际参与派发的告警数”统计，不再把已确认后被跳过的数据误算进去。
+5. `PaymentIssueAlertDeliveryServiceImplTest` 新增“source outbox 已确认时不再外发”场景，验证不会写派发日志、不会回写通道状态，也不会继续调用 IM/SMS/EMAIL 通知器。
+
+### 77.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `21` 个用例全部通过，新增覆盖“已确认即停止外发” |
+
+### 77.4 当前判断
+
+1. 当前 `payment-core` 的异常告警派发链路已经具备“时间窗/防重放/人工确认”三层收敛保护，不再因为 source outbox 已确认却继续被自动派发而重复打扰值班人员。
+2. 这一步进一步提升了异常告警链路在真实运维场景下的可控性，也让任务中心、异常中心和人工确认动作之间的闭环更完整。
+3. 真实通知供应商接入、跨实例协调和更大范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
