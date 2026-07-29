@@ -84,16 +84,46 @@
         SELECT event_no
         FROM t_payment_event
         WHERE publish_status = 'FAILED'
+          AND (next_retry_at IS NULL OR next_retry_at <= NOW())
         ORDER BY created_at ASC, id ASC
     </select>
 
-    <update id="markRepublished">
+    <select id="findByEventNo" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
+        SELECT event_no AS eventNo,
+               event_type AS eventType,
+               payment_order_id AS paymentOrderId,
+               biz_no AS bizNo,
+               event_topic AS eventTopic,
+               downstream_system AS downstreamSystem,
+               publish_status AS publishStatus,
+               publish_status_type AS publishStatusType,
+               retry_count AS retryCount,
+               DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
+               DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               event_payload AS eventPayload,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_event
+        WHERE event_no = #{eventNo}
+        LIMIT 1
+    </select>
+
+    <update id="markPublishSuccess">
         UPDATE t_payment_event
         SET publish_status = 'SUCCESS',
             publish_status_type = 'success',
             retry_count = retry_count + 1,
             last_published_at = NOW(),
             next_retry_at = NULL
+        WHERE event_no = #{eventNo}
+    </update>
+
+    <update id="markPublishFailed">
+        UPDATE t_payment_event
+        SET publish_status = 'FAILED',
+            publish_status_type = 'danger',
+            retry_count = retry_count + 1,
+            last_published_at = NOW(),
+            next_retry_at = DATE_ADD(NOW(), INTERVAL 5 MINUTE)
         WHERE event_no = #{eventNo}
     </update>
 </mapper>

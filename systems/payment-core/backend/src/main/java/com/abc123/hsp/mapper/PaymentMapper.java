@@ -53,6 +53,11 @@ public interface PaymentMapper {
     String findCustomerNameByOrderNo(@Param("orderNo") String orderNo);
 
     /**
+     * 查询订单服务者名称。
+     */
+    String findWorkerNameByOrderNo(@Param("orderNo") String orderNo);
+
+    /**
      * 查询订单关联账单号。
      */
     String findBillNoByOrderNo(@Param("orderNo") String orderNo);

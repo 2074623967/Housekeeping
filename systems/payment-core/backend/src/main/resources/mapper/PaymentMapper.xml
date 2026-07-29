@@ -116,6 +116,10 @@
         SELECT customer_name FROM t_order WHERE order_no = #{orderNo}
     </select>
 
+    <select id="findWorkerNameByOrderNo" resultType="string">
+        SELECT worker_name FROM t_order WHERE order_no = #{orderNo}
+    </select>
+
     <select id="findBillNoByOrderNo" resultType="string">
         SELECT bill_no FROM t_bill WHERE order_no = #{orderNo}
     </select>
@@ -367,7 +371,7 @@
             #{paymentOrderId},
             #{bizNo},
             CASE
-                WHEN #{eventType} = 'PAYMENT_SUCCESS' THEN 'accounting-system,clearing-system,settlement-system'
+                WHEN #{eventType} = 'PAYMENT_SUCCESS' THEN 'accounting-system,clearing-system'
                 WHEN #{eventType} = 'PAYMENT_CLOSED' THEN 'accounting-system'
                 WHEN #{eventType} = 'PAYMENT_SUBMIT' THEN 'gateway-access'
                 ELSE 'payment-core-ops'

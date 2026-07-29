@@ -26,7 +26,24 @@ public interface PaymentEventMapper {
     List<String> findFailedEventNos();
 
     /**
-     * 手动重发事件，模拟事件重新投递成功。
+     * 按事件号查询支付事件。
      */
-    int markRepublished(@Param("eventNo") String eventNo);
+    PaymentEventListItemDTO findByEventNo(@Param("eventNo") String eventNo);
+
+    /**
+     * 标记事件发布成功。
+     */
+    int markPublishSuccess(@Param("eventNo") String eventNo);
+
+    /**
+     * 标记事件发布失败。
+     */
+    int markPublishFailed(@Param("eventNo") String eventNo);
+
+    /**
+     * 兼容旧测试和旧调用方的重发标记方法。
+     */
+    default int markRepublished(@Param("eventNo") String eventNo) {
+        return markPublishSuccess(eventNo);
+    }
 }

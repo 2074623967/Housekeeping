@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -17,9 +18,26 @@ import org.springframework.util.StringUtils;
 public class PaymentEventServiceImpl implements PaymentEventService {
 
     private final PaymentEventMapper paymentEventMapper;
+    private final PaymentEventDispatchService paymentEventDispatchService;
 
-    public PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper) {
+    public PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper,
+                                   PaymentEventDispatchService paymentEventDispatchService) {
         this.paymentEventMapper = paymentEventMapper;
+        this.paymentEventDispatchService = paymentEventDispatchService;
+    }
+
+    PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper) {
+        this(paymentEventMapper, new PaymentEventDispatchService() {
+            @Override
+            public void publishPaymentSuccess(String eventNo, String paymentOrderId) {
+                // 单元测试兼容构造器默认不触发下游联动。
+            }
+
+            @Override
+            public boolean republish(String eventNo) {
+                return paymentEventMapper.markRepublished(eventNo) > 0;
+            }
+        });
     }
 
     @Override
@@ -41,8 +59,8 @@ public class PaymentEventServiceImpl implements PaymentEventService {
         if (request == null || !StringUtils.hasText(request.getEventNo())) {
             throw new IllegalArgumentException("事件号不能为空");
         }
-        int affectedRows = paymentEventMapper.markRepublished(request.getEventNo().trim());
-        if (affectedRows == 0) {
+        boolean published = paymentEventDispatchService.republish(request.getEventNo().trim());
+        if (!published) {
             throw new IllegalArgumentException("支付事件不存在");
         }
         return list(query == null ? new PaymentEventQueryDTO() : query);

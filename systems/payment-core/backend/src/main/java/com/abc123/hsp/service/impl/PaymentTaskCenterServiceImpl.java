@@ -16,6 +16,7 @@ import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentConfigService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import java.util.ArrayList;
@@ -47,19 +48,47 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final RefundMapper refundMapper;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
+    private final PaymentEventDispatchService paymentEventDispatchService;
 
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                         PaymentExpiryTaskService paymentExpiryTaskService,
                                         PaymentEventMapper paymentEventMapper,
                                         RefundMapper refundMapper,
                                         PaymentConfigService paymentConfigService,
-                                        PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService) {
+                                        PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
+                                        PaymentEventDispatchService paymentEventDispatchService) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
         this.refundMapper = refundMapper;
         this.paymentConfigService = paymentConfigService;
         this.paymentIssueAlertDeliveryService = paymentIssueAlertDeliveryService;
+        this.paymentEventDispatchService = paymentEventDispatchService;
+    }
+
+    PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                 PaymentExpiryTaskService paymentExpiryTaskService,
+                                 PaymentEventMapper paymentEventMapper,
+                                 RefundMapper refundMapper,
+                                 PaymentConfigService paymentConfigService,
+                                 PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService) {
+        this(paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService,
+                new PaymentEventDispatchService() {
+                    @Override
+                    public void publishPaymentSuccess(String eventNo, String paymentOrderId) {
+                        // 单元测试兼容构造器默认不触发下游联动。
+                    }
+
+                    @Override
+                    public boolean republish(String eventNo) {
+                        return paymentEventMapper.markRepublished(eventNo) > 0;
+                    }
+                });
     }
 
     @Override
@@ -273,7 +302,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         List<String> failedEventNos = paymentEventMapper.findFailedEventNos();
         int successCount = 0;
         for (String eventNo : failedEventNos) {
-            successCount += paymentEventMapper.markRepublished(eventNo);
+            if (paymentEventDispatchService.republish(eventNo)) {
+                successCount++;
+            }
         }
         int failCount = Math.max(failedEventNos.size() - successCount, 0);
         return buildAndRecordResult(

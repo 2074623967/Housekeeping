@@ -25,6 +25,7 @@ import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Locale;
@@ -43,18 +44,46 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentChannelRoutingService paymentChannelRoutingService;
     private final PaymentChannelQueryService paymentChannelQueryService;
     private final PaymentChannelSubmitService paymentChannelSubmitService;
+    private final PaymentEventDispatchService paymentEventDispatchService;
 
     public PaymentServiceImpl(
             PaymentMapper paymentMapper,
             PaymentCallbackSignatureService paymentCallbackSignatureService,
             PaymentChannelRoutingService paymentChannelRoutingService,
             PaymentChannelQueryService paymentChannelQueryService,
-            PaymentChannelSubmitService paymentChannelSubmitService) {
+            PaymentChannelSubmitService paymentChannelSubmitService,
+            PaymentEventDispatchService paymentEventDispatchService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
         this.paymentChannelQueryService = paymentChannelQueryService;
         this.paymentChannelSubmitService = paymentChannelSubmitService;
+        this.paymentEventDispatchService = paymentEventDispatchService;
+    }
+
+    PaymentServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentCallbackSignatureService paymentCallbackSignatureService,
+            PaymentChannelRoutingService paymentChannelRoutingService,
+            PaymentChannelQueryService paymentChannelQueryService,
+            PaymentChannelSubmitService paymentChannelSubmitService) {
+        this(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                new PaymentEventDispatchService() {
+                    @Override
+                    public void publishPaymentSuccess(String eventNo, String paymentOrderId) {
+                        // 单元测试兼容构造器默认不触发下游联动。
+                    }
+
+                    @Override
+                    public boolean republish(String eventNo) {
+                        return false;
+                    }
+                });
     }
 
     @Override
@@ -362,13 +391,17 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.updateOrderAfterPayment(detail.getOrderNo(), latestOrderAmount, "待履约", "info");
             paymentMapper.updateBillAfterPayment(detail.getOrderNo(), latestOrderAmount, "已结清", "success");
         }
+        String eventNo = "EVT" + System.currentTimeMillis();
         paymentMapper.insertEvent(
-                "EVT" + System.currentTimeMillis(),
+                eventNo,
                 paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING",
                 request.getPaymentOrderId(),
                 detail.getOrderNo(),
                 "{\"channel\":\"" + channel + "\"}"
         );
+        if (paySuccess) {
+            paymentEventDispatchService.publishPaymentSuccess(eventNo, request.getPaymentOrderId());
+        }
         if (paySuccess) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_SUCCESS");
         }
