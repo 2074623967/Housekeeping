@@ -2790,3 +2790,28 @@
 
 1. 服务者结算单已从“只可查询”升级为“可查询 + 可导出”，和前端导出按钮正式闭环。
 2. 这一步提升的是 `payment-core` 轻量结算查询入口的完整性，不等于完整 `settlement-system` 已交付。
+
+## 90. 2026-07-29 支付单列表与导出闭环验证
+
+### 90.1 本轮验证范围
+
+本轮围绕“后台支付单页面已有列表和导出入口，但后端还缺少 `/api/payments/export`”的问题进行补齐。
+
+### 90.2 本轮新增内容
+
+1. `PaymentService` 新增导出接口。
+2. `PaymentServiceImpl` 新增支付单 CSV 导出逻辑。
+3. `PaymentController` 新增 `/api/payments/export`。
+4. `PaymentServiceImplTest` 新增导出场景。
+5. 新增 `PaymentControllerTest`，覆盖导出响应头、字节内容和列表调用入口。
+
+### 90.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml -Dtest=PaymentServiceImplTest,PaymentControllerTest test` | 通过 | `26` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+
+### 90.4 当前判断
+
+1. 支付单管理现在已从“可查询”升级为“可查询 + 可导出”，和前端按钮形成闭环。
+2. 这一步继续抬高了 `payment-core` 的冻结版交付完整度，但仍不等于整包已可直接发布。

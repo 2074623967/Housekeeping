@@ -14,7 +14,11 @@ import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import javax.servlet.http.HttpServletRequest;
 import com.abc123.hsp.service.PaymentService;
+import java.nio.charset.StandardCharsets;
 import org.springframework.util.StringUtils;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +56,31 @@ public class PaymentController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentService.list(query));
+    }
+
+    /**
+     * 导出支付单列表，便于运营和测试留痕复盘。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(defaultValue = "全部") String paymentMethod,
+            @RequestParam(defaultValue = "全部") String status,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        PaymentListQueryDTO query = new PaymentListQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setPaymentMethod(paymentMethod);
+        query.setStatus(status);
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        byte[] csvBytes = paymentService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payments.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**

@@ -53,6 +53,35 @@
         </where>
     </select>
 
+    <select id="findAllForExport" resultType="com.abc123.hsp.dto.PaymentListItemDTO">
+        SELECT p.payment_order_id AS paymentOrderId,
+               p.order_no AS orderNo,
+               p.customer_name AS customerName,
+               CONCAT('¥', FORMAT(p.amount, 2)) AS amount,
+               p.payment_method AS paymentMethod,
+               p.channel_code AS channel,
+               p.channel_transaction_no AS channelTransactionNo,
+               p.status,
+               p.status_type AS statusType,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_order p
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND p.payment_method = #{query.paymentMethod}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND p.status = #{query.status}
+            </if>
+        </where>
+        ORDER BY p.created_at DESC
+    </select>
+
     <select id="findExpiredPayments" resultType="com.abc123.hsp.dto.ExpiredPaymentDTO">
         SELECT p.payment_order_id AS paymentOrderId,
                p.order_no AS orderNo,

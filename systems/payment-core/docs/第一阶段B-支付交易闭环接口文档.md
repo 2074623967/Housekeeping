@@ -21,6 +21,8 @@
 | `/api/payments/callback/{channel}` | `POST` | 模拟渠道回调 |
 | `/api/payments/query` | `POST` | 主动查单 |
 | `/api/payments/close` | `POST` | 关闭支付单 |
+| `/api/payments` | `GET` | 查询支付单列表 |
+| `/api/payments/export` | `GET` | 导出支付单列表 CSV |
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
@@ -281,7 +283,30 @@
 2. 当前主要支撑支付成功、支付关闭、退款等出站事件的可见化与手动补偿入口。
 3. 后续若接入真实消息总线，需要继续补投递批次、订阅确认和死信处理字段。
 
-## 8. 创建预付单
+## 8. 支付单管理查询与导出
+
+查询接口：`GET /api/payments`
+
+导出接口：`GET /api/payments/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `orderNo` | 订单号，模糊匹配 |
+| `paymentMethod` | 支付方式，支持 `全部 / 微信支付 / 支付宝 / 银行卡` |
+| `status` | 支付状态，支持 `全部 / PREPAY_CREATED / WAIT_CALLBACK / SUCCESS / CLOSED` |
+| `pageNo` | 页码，从 `1` 开始 |
+| `pageSize` | 每页条数，最大 `100` |
+
+业务说明：
+
+1. 当前后台支付单列表和导出 CSV 使用同一组筛选口径，避免页面看到的数据和导出快照不一致。
+2. 导出文件包含支付单号、订单号、客户名称、支付金额、支付方式、支付渠道、渠道交易号、支付状态和创建时间。
+3. 明细钻取仍沿用 `GET /api/payments/{paymentOrderId}`，导出接口只负责当前筛选结果快照。
+
+## 9. 创建预付单
 
 接口：`POST /api/payments/prepay`
 

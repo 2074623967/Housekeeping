@@ -23,6 +23,11 @@ public interface PaymentService {
     PageResultDTO<PaymentListItemDTO> list(PaymentListQueryDTO query);
 
     /**
+     * 导出支付单列表。
+     */
+    String exportCsv(PaymentListQueryDTO query);
+
+    /**
      * 查询支付单详情和轨迹信息。
      */
     PaymentDetailDTO detail(String paymentOrderId);

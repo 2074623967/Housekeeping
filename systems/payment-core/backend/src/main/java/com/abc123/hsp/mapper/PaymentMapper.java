@@ -23,6 +23,11 @@ public interface PaymentMapper {
     List<PaymentListItemDTO> findAll(@Param("query") PaymentListQueryDTO query);
 
     /**
+     * 查询导出使用的支付单列表。
+     */
+    List<PaymentListItemDTO> findAllForExport(@Param("query") PaymentListQueryDTO query);
+
+    /**
      * 统计符合条件的支付单总数。
      */
     long count(@Param("query") PaymentListQueryDTO query);

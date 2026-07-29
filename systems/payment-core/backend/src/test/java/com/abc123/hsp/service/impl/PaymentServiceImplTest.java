@@ -15,6 +15,8 @@ import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
+import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -1096,5 +1098,41 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getRouteLogs().size());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getNotifyLogs().size());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getEventLogs().size());
+    }
+
+    @Test
+    void shouldExportPaymentOrdersAsCsv() {
+        PaymentListQueryDTO query = new PaymentListQueryDTO();
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setOrderNo(" ORD-001 ");
+        query.setPaymentMethod(" 微信支付 ");
+        query.setStatus(" SUCCESS ");
+        PaymentListItemDTO item = new PaymentListItemDTO();
+        item.setPaymentOrderId("PAY-001");
+        item.setOrderNo("ORD-001");
+        item.setCustomerName("张女士");
+        item.setAmount("¥88.00");
+        item.setPaymentMethod("微信支付");
+        item.setChannel("wx_h5");
+        item.setChannelTransactionNo("WX-001");
+        item.setStatus("SUCCESS");
+        item.setCreatedAt("2026-07-29 10:00:00");
+        when(paymentMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
+
+        String csv = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .exportCsv(query);
+
+        org.junit.jupiter.api.Assertions.assertEquals("PAY-001", query.getPaymentOrderId());
+        org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
+        org.junit.jupiter.api.Assertions.assertEquals("微信支付", query.getPaymentMethod());
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", query.getStatus());
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("PAY-001"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("张女士"));
+        verify(paymentMapper).findAllForExport(query);
     }
 }

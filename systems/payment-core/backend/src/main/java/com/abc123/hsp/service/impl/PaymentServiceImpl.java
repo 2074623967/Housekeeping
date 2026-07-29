@@ -28,6 +28,7 @@ import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -97,6 +98,26 @@ public class PaymentServiceImpl implements PaymentService {
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    @Override
+    public String exportCsv(PaymentListQueryDTO query) {
+        normalizeQuery(query);
+        List<PaymentListItemDTO> items = paymentMapper.findAllForExport(query);
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("支付单号,订单号,客户名称,支付金额,支付方式,支付渠道,渠道交易号,支付状态,创建时间\n");
+        for (PaymentListItemDTO item : items) {
+            builder.append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getCustomerName())).append(',')
+                    .append(csvCell(item.getAmount())).append(',')
+                    .append(csvCell(item.getPaymentMethod())).append(',')
+                    .append(csvCell(item.getChannel())).append(',')
+                    .append(csvCell(item.getChannelTransactionNo())).append(',')
+                    .append(csvCell(item.getStatus())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append('\n');
+        }
+        return builder.toString();
     }
 
     @Override
@@ -671,5 +692,10 @@ public class PaymentServiceImpl implements PaymentService {
         query.setStatus(StringUtils.hasText(query.getStatus()) ? query.getStatus().trim() : "全部");
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }
