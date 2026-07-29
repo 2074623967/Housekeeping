@@ -8,6 +8,18 @@ const navGroups = [
     title: "交易支付",
     links: [
       { label: "订单中心", to: "/orders" },
+      { label: "账单中心", to: "/bills" },
+      { label: "统一支付记录", to: "/payment-records" },
+      { label: "微信支付宝支付记录", to: "/payment-records/wechat-alipay" },
+      { label: "银行卡支付记录", to: "/payment-records/bank-card" },
+      { label: "支付流水查询", to: "/payment-flows" },
+      { label: "支付路由执行结果", to: "/payment-routes" },
+      { label: "支付事件出站", to: "/payment-events" },
+      { label: "支付交易异常中心", to: "/payment-issues" },
+      { label: "异常告警明细台", to: "/payment-issue-alerts" },
+      { label: "收银台会话", to: "/cashier-sessions" },
+      { label: "支付请求管理", to: "/payment-requests" },
+      { label: "支付处理日志", to: "/payment-logs" },
       { label: "支付单管理", to: "/payments" },
       { label: "退款单管理", to: "/refunds" }
     ]
@@ -15,6 +27,18 @@ const navGroups = [
   {
     title: "结算",
     links: [{ label: "服务者结算单", to: "/worker-settlements" }]
+  },
+  {
+    title: "配置中心",
+    links: [{ label: "支付渠道与路由", to: "/payment-config" }]
+  },
+  {
+    title: "监控分析",
+    links: [
+      { label: "支付监控分析", to: "/payment-monitor" },
+      { label: "支付任务中心", to: "/payment-task-center" },
+      { label: "支付日终处理", to: "/payment-day-end" }
+    ]
   }
 ];
 </script>

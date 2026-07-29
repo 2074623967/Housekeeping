@@ -1,0 +1,450 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentMapper">
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentListItemDTO">
+        SELECT p.payment_order_id AS paymentOrderId,
+               p.order_no AS orderNo,
+               p.customer_name AS customerName,
+               CONCAT('¥', FORMAT(p.amount, 2)) AS amount,
+               p.payment_method AS paymentMethod,
+               p.channel_code AS channel,
+               p.channel_transaction_no AS channelTransactionNo,
+               p.status,
+               p.status_type AS statusType,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_order p
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND p.payment_method = #{query.paymentMethod}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND p.status = #{query.status}
+            </if>
+        </where>
+        ORDER BY p.created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_order p
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND p.payment_method = #{query.paymentMethod}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND p.status = #{query.status}
+            </if>
+        </where>
+    </select>
+
+    <select id="findExpiredPayments" resultType="com.abc123.hsp.dto.ExpiredPaymentDTO">
+        SELECT p.payment_order_id AS paymentOrderId,
+               p.order_no AS orderNo,
+               p.channel_transaction_no AS channelTransactionNo
+        FROM t_payment_order p
+                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        WHERE p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+          AND pr.expires_at &lt; NOW()
+        GROUP BY p.payment_order_id, p.order_no, p.channel_transaction_no
+        ORDER BY MIN(pr.expires_at)
+    </select>
+
+    <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentDetailDTO">
+        SELECT p.payment_order_id AS paymentOrderId,
+               pr.prepay_order_no AS prepayOrderNo,
+               b.bill_no AS billNo,
+               p.order_no AS orderNo,
+               p.customer_name AS customerName,
+               CONCAT('¥', FORMAT(p.amount, 2)) AS amount,
+               p.payment_method AS paymentMethod,
+               p.channel_code AS channel,
+               p.channel_transaction_no AS channelTransactionNo,
+               pa.terminal AS latestTerminal,
+               pa.client_ip AS latestClientIp,
+               pa.idempotency_key AS latestIdempotencyKey,
+               pa.attempt_status AS latestAttemptStatus,
+               pa.attempt_status_type AS latestAttemptStatusType,
+               pa.request_payload AS latestRequestPayload,
+               pa.response_payload AS latestResponsePayload,
+               p.status,
+               p.status_type AS statusType,
+               DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_order p
+                 LEFT JOIN t_prepay_order pr ON pr.id = (
+                    SELECT latest_pr.id
+                    FROM t_prepay_order latest_pr
+                    WHERE latest_pr.payment_order_id = p.payment_order_id
+                    ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_bill b ON b.order_no = p.order_no
+                 LEFT JOIN t_payment_attempt pa ON pa.id = (
+                    SELECT latest_pa.id
+                    FROM t_payment_attempt latest_pa
+                    WHERE latest_pa.payment_order_id = p.payment_order_id
+                    ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
+                    LIMIT 1
+                )
+        WHERE p.payment_order_id = #{paymentOrderId}
+    </select>
+
+    <select id="findOrderAmount" resultType="java.math.BigDecimal">
+        SELECT order_amount FROM t_order WHERE order_no = #{orderNo}
+    </select>
+
+    <select id="findPaidAmount" resultType="java.math.BigDecimal">
+        SELECT paid_amount FROM t_order WHERE order_no = #{orderNo}
+    </select>
+
+    <select id="findCustomerNameByOrderNo" resultType="string">
+        SELECT customer_name FROM t_order WHERE order_no = #{orderNo}
+    </select>
+
+    <select id="findBillNoByOrderNo" resultType="string">
+        SELECT bill_no FROM t_bill WHERE order_no = #{orderNo}
+    </select>
+
+    <insert id="insertBill">
+        INSERT INTO t_bill(bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at)
+        VALUES (#{billNo}, #{orderNo}, #{customerName}, #{orderAmount}, #{paidAmount}, #{billStatus}, #{billStatusType}, DATE_ADD(NOW(), INTERVAL 1 DAY), NOW())
+    </insert>
+
+    <insert id="insertPaymentOrder">
+        INSERT INTO t_payment_order(payment_order_id, order_no, customer_name, amount, payment_method, channel_code, channel_transaction_no, status, status_type, created_at)
+        VALUES (#{paymentOrderId}, #{orderNo}, #{customerName}, #{amount}, '待选渠道', #{channelCode}, '', 'PREPAY_CREATED', 'info', NOW())
+    </insert>
+
+    <insert id="insertPrepayOrder">
+        INSERT INTO t_prepay_order(prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, created_at, expires_at)
+        VALUES (#{prepayOrderNo}, #{billNo}, #{orderNo}, #{customerName}, #{amount}, #{payScene}, #{cashierTitle}, '待支付', 'warn', #{paymentOrderId}, NOW(), DATE_ADD(NOW(), INTERVAL 1 HOUR))
+    </insert>
+
+    <select id="findPrepay" resultType="com.abc123.hsp.dto.PrepayOrderDTO">
+        SELECT prepay_order_no AS prepayOrderNo,
+               bill_no AS billNo,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               CONCAT('¥', FORMAT(amount, 2)) AS amount,
+               pay_scene AS payScene,
+               cashier_title AS cashierTitle,
+               cashier_status AS cashierStatus,
+               cashier_status_type AS cashierStatusType,
+               payment_order_id AS paymentOrderId,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
+        FROM t_prepay_order
+        WHERE prepay_order_no = #{prepayOrderNo}
+    </select>
+
+    <select id="findLatestActivePrepayByOrderNo" resultType="com.abc123.hsp.dto.PrepayOrderDTO">
+        SELECT pr.prepay_order_no AS prepayOrderNo,
+               pr.bill_no AS billNo,
+               pr.order_no AS orderNo,
+               pr.customer_name AS customerName,
+               CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
+               pr.pay_scene AS payScene,
+               pr.cashier_title AS cashierTitle,
+               pr.cashier_status AS cashierStatus,
+               pr.cashier_status_type AS cashierStatusType,
+               pr.payment_order_id AS paymentOrderId,
+               p.status AS paymentStatus,
+               DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
+        FROM t_prepay_order pr
+                 INNER JOIN t_payment_order p ON p.payment_order_id = pr.payment_order_id
+        WHERE pr.order_no = #{orderNo}
+          AND pr.expires_at &gt; NOW()
+          AND pr.cashier_status IN ('待支付', '支付中')
+          AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+        ORDER BY pr.created_at DESC, pr.id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findSubmitConcurrencyToken" resultType="com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO">
+        SELECT prepay_order_no AS prepayOrderNo,
+               payment_order_id AS paymentOrderId,
+               source_app_id AS sourceAppId,
+               token_status AS tokenStatus,
+               holder_idempotency_key AS holderIdempotencyKey,
+               holder_terminal AS holderTerminal,
+               holder_client_ip AS holderClientIp,
+               DATE_FORMAT(expire_at, '%Y-%m-%d %H:%i:%s') AS expireAt
+        FROM t_payment_submit_concurrency_token
+        WHERE prepay_order_no = #{prepayOrderNo}
+          AND source_app_id = #{sourceAppId}
+        LIMIT 1
+    </select>
+
+    <select id="findNotifyLogs" resultType="string">
+        SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', notify_type, ' | ', notify_status) AS item
+        FROM t_payment_notify_log
+        WHERE payment_order_id = #{paymentOrderId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findRouteLogs" resultType="string">
+        SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', route_rule, ' | ', route_result) AS item
+        FROM t_payment_route_record
+        WHERE payment_order_id = #{paymentOrderId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findEventItems" resultType="string">
+        SELECT CONCAT(event_type, ' | ', event_topic, ' | ', publish_status, ' | ', DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s')) AS item
+        FROM t_payment_event
+        WHERE payment_order_id = #{paymentOrderId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findPaymentOrderIdByPrepayOrderNo" resultType="string">
+        SELECT payment_order_id FROM t_prepay_order WHERE prepay_order_no = #{prepayOrderNo}
+    </select>
+
+    <select id="findOrderNoByPrepayOrderNo" resultType="string">
+        SELECT order_no FROM t_prepay_order WHERE prepay_order_no = #{prepayOrderNo}
+    </select>
+
+    <update id="updatePaymentStatus">
+        UPDATE t_payment_order
+        SET status = #{status},
+            status_type = #{statusType},
+            channel_transaction_no = #{channelTransactionNo}
+        WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <update id="updatePrepayToPaying">
+        UPDATE t_prepay_order
+        SET cashier_status = '支付中',
+            cashier_status_type = 'info'
+        WHERE prepay_order_no = #{prepayOrderNo}
+          AND cashier_status = '待支付'
+    </update>
+
+    <update id="updatePrepayStatusByPaymentOrderId">
+        UPDATE t_prepay_order
+        SET cashier_status = #{cashierStatus},
+            cashier_status_type = #{cashierStatusType}
+        WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <update id="updatePaymentMethodAndChannel">
+        UPDATE t_payment_order
+        SET payment_method = #{paymentMethod},
+            channel_code = #{channelCode},
+            channel_transaction_no = #{channelTransactionNo},
+            status = 'WAIT_CALLBACK',
+            status_type = 'warn'
+        WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <update id="updatePaymentAttemptStatusByPaymentOrderId">
+        UPDATE t_payment_attempt
+        SET attempt_status = #{attemptStatus},
+            attempt_status_type = #{attemptStatusType}
+        WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <insert id="insertSubmitConcurrencyToken">
+        INSERT INTO t_payment_submit_concurrency_token(
+            prepay_order_no,
+            payment_order_id,
+            source_app_id,
+            token_status,
+            holder_idempotency_key,
+            holder_terminal,
+            holder_client_ip,
+            release_reason,
+            last_occupied_at,
+            released_at,
+            expire_at,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{prepayOrderNo},
+            #{paymentOrderId},
+            #{sourceAppId},
+            'ACTIVE',
+            #{holderIdempotencyKey},
+            #{holderTerminal},
+            #{holderClientIp},
+            NULL,
+            NOW(),
+            NULL,
+            DATE_ADD(NOW(), INTERVAL #{expireAfterSeconds} SECOND),
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <update id="occupySubmitConcurrencyToken">
+        UPDATE t_payment_submit_concurrency_token
+        SET payment_order_id = #{paymentOrderId},
+            token_status = 'ACTIVE',
+            holder_idempotency_key = #{holderIdempotencyKey},
+            holder_terminal = #{holderTerminal},
+            holder_client_ip = #{holderClientIp},
+            release_reason = NULL,
+            last_occupied_at = NOW(),
+            released_at = NULL,
+            expire_at = DATE_ADD(NOW(), INTERVAL #{expireAfterSeconds} SECOND),
+            updated_at = NOW()
+        WHERE prepay_order_no = #{prepayOrderNo}
+          AND source_app_id = #{sourceAppId}
+          AND (token_status <> 'ACTIVE' OR expire_at &lt; NOW())
+    </update>
+
+    <update id="releaseSubmitConcurrencyToken">
+        UPDATE t_payment_submit_concurrency_token
+        SET token_status = 'RELEASED',
+            release_reason = #{releaseReason},
+            released_at = NOW(),
+            updated_at = NOW()
+        WHERE payment_order_id = #{paymentOrderId}
+          AND token_status = 'ACTIVE'
+    </update>
+
+    <update id="updateOrderAfterPayment">
+        UPDATE t_order
+        SET paid_amount = #{paidAmount},
+            order_status = #{orderStatus},
+            order_status_type = #{orderStatusType}
+        WHERE order_no = #{orderNo}
+    </update>
+
+    <update id="updateBillAfterPayment">
+        UPDATE t_bill
+        SET paid_amount = #{paidAmount},
+            bill_status = #{billStatus},
+            bill_status_type = #{billStatusType}
+        WHERE order_no = #{orderNo}
+    </update>
+
+    <insert id="insertNotifyLog">
+        INSERT INTO t_payment_notify_log(notify_no, payment_order_id, channel_code, notify_type, notify_payload, notify_result, notify_status, notify_status_type, created_at)
+        VALUES (#{notifyNo}, #{paymentOrderId}, #{channelCode}, #{notifyType}, #{notifyPayload}, #{notifyResult}, #{notifyStatus}, #{notifyStatusType}, NOW())
+    </insert>
+
+    <insert id="insertRouteRecord">
+        INSERT INTO t_payment_route_record(route_no, payment_order_id, channel_code, route_rule, route_result, created_at)
+        VALUES (#{routeNo}, #{paymentOrderId}, #{channelCode}, #{routeRule}, #{routeResult}, NOW())
+    </insert>
+
+    <insert id="insertEvent">
+        INSERT INTO t_payment_event(
+            event_no,
+            event_type,
+            payment_order_id,
+            biz_no,
+            downstream_system,
+            event_topic,
+            publish_status,
+            publish_status_type,
+            retry_count,
+            last_published_at,
+            next_retry_at,
+            event_payload,
+            created_at
+        )
+        VALUES (
+            #{eventNo},
+            #{eventType},
+            #{paymentOrderId},
+            #{bizNo},
+            CASE
+                WHEN #{eventType} = 'PAYMENT_SUCCESS' THEN 'accounting-system,clearing-system,settlement-system'
+                WHEN #{eventType} = 'PAYMENT_CLOSED' THEN 'accounting-system'
+                WHEN #{eventType} = 'PAYMENT_SUBMIT' THEN 'gateway-access'
+                ELSE 'payment-core-ops'
+            END,
+            CASE
+                WHEN #{eventType} = 'PAYMENT_SUCCESS' THEN 'payment.trade.succeeded.v1'
+                WHEN #{eventType} = 'PAYMENT_CLOSED' THEN 'payment.trade.closed.v1'
+                WHEN #{eventType} = 'PAYMENT_EXPIRED_CLOSED' THEN 'payment.trade.expired-closed.v1'
+                WHEN #{eventType} = 'PAYMENT_SUBMIT' THEN 'payment.trade.submitted.v1'
+                ELSE 'payment.trade.pending.v1'
+            END,
+            'PENDING',
+            'warn',
+            0,
+            NULL,
+            DATE_ADD(NOW(), INTERVAL 5 MINUTE),
+            #{eventPayload},
+            NOW()
+        )
+    </insert>
+
+    <insert id="insertPaymentAttempt">
+        INSERT INTO t_payment_attempt(attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at)
+        VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{sourceAppId}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
+    </insert>
+
+    <select id="existsPaymentAttemptByIdempotencyKey" resultType="boolean">
+        SELECT COUNT(1) &gt; 0
+        FROM t_payment_attempt
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <select id="findActiveControlPolicyBySourceAppId" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
+        SELECT source_app_id AS sourceAppId,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               access_token_value AS accessTokenValue,
+               strict_mode AS strictMode,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage,
+               status,
+               status_type AS statusType
+        FROM t_payment_control_policy
+        WHERE source_app_id = #{sourceAppId}
+          AND status = 'ENABLED'
+        LIMIT 1
+    </select>
+
+    <select id="countRecentAttemptsBySourceAppAndMethod" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_attempt
+        WHERE source_app_id = #{sourceAppId}
+          AND payment_method = #{paymentMethod}
+          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
+    </select>
+
+    <select id="countRecentAttemptsBySubmitScope" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_attempt
+        WHERE source_app_id = #{sourceAppId}
+          AND terminal = #{terminal}
+          AND client_ip = #{clientIp}
+          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
+    </select>
+
+    <select id="sumTodayAcceptedAmountByChannel" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(amount), 0)
+        FROM t_payment_order
+        WHERE channel_code = #{channelCode}
+          AND status IN ('WAIT_CALLBACK', 'SUCCESS')
+          AND created_at &gt;= CURDATE()
+          AND created_at &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+    </select>
+</mapper>

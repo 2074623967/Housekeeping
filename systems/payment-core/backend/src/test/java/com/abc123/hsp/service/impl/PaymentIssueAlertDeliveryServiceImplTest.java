@@ -1,0 +1,658 @@
+package com.abc123.hsp.service.impl;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
+import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
+import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
+import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
+import com.abc123.hsp.service.PaymentIssueAlertNotifier;
+import java.util.Arrays;
+import java.util.Collections;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+/**
+ * 支付交易异常告警派发服务测试。
+ */
+@ExtendWith(MockitoExtension.class)
+class PaymentIssueAlertDeliveryServiceImplTest {
+
+    @Mock
+    private PaymentTaskCenterMapper paymentTaskCenterMapper;
+    @Mock
+    private PaymentIssueAlertNotifier imNotifier;
+    @Mock
+    private PaymentIssueAlertNotifier smsNotifier;
+    @Mock
+    private PaymentIssueAlertNotifier emailNotifier;
+
+    @Test
+    void shouldDispatchAllChannelsSuccessfully() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "SMS")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "EMAIL")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_WECOM_P1", "企业微信告警机器人-P1", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_P1_V1", "severity=P1", 10),
+                buildProvider("ALERT_IM_WECOM_DEFAULT", "企业微信告警机器人-默认", "wecom-bot-alerts-default", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)
+        ));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("SMS")).thenReturn(Collections.singletonList(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1", "DEFAULT", 100)));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("EMAIL")).thenReturn(Collections.singletonList(buildProvider("ALERT_EMAIL_SENDCLOUD", "SendCloud 邮件告警", "sendcloud-payment-alerts", "TPL_PAYMENT_ISSUE_EMAIL_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+        when(smsNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("SMS-RECEIPT-001", "ACCEPTED", "短信供应商已接单", "[SMS] ISSUE-001"));
+        when(emailNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("EMAIL-RECEIPT-001", "ACCEPTED", "邮件供应商已接单", "[EMAIL] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> deliveryLogCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(3)).insertIssueAlertLog(deliveryLogCaptor.capture());
+        verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log -> "已派发".equals(log.getAlertStatus())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getAlertContent().contains("支付异常 ISSUE-001")));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "企业微信告警机器人-P1".equals(log.getProviderName())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "TPL_PAYMENT_ISSUE_IM_P1_V1".equals(log.getTemplateCode())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "IM-RECEIPT-001".equals(log.getProviderReceiptNo())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log -> org.springframework.util.StringUtils.hasText(log.getProviderReceiptSnapshot())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getProviderReceiptSnapshot().contains("ACCEPTED")));
+    }
+
+    @Test
+    void shouldMatchCompositeProviderRouteRuleByScheduleAndEscalationLevel() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        item.setEscalationLevel("L2");
+        item.setScheduleTag("交易链路白班");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_NIGHT", "企业微信夜班机器人", "wecom-bot-night", "TPL_PAYMENT_ISSUE_IM_NIGHT", "scheduleTag=交易链路夜班&escalationLevel=L2", 10),
+                buildProvider("ALERT_IM_DAY", "企业微信白班机器人", "wecom-bot-day", "TPL_PAYMENT_ISSUE_IM_DAY", "scheduleTag=交易链路白班&escalationLevel=L2", 20),
+                buildProvider("ALERT_IM_DEFAULT", "企业微信默认机器人", "wecom-bot-default", "TPL_PAYMENT_ISSUE_IM_DEFAULT", "DEFAULT", 100)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-DAY", "ACCEPTED", "白班机器人已接单", "[IM-DAY] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor = ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
+        verify(imNotifier).send(dispatchCaptor.capture());
+        Assertions.assertEquals("ALERT_IM_DAY", dispatchCaptor.getValue().getProviderCode());
+        Assertions.assertEquals("企业微信白班机器人", dispatchCaptor.getValue().getProviderName());
+        Assertions.assertEquals("TPL_PAYMENT_ISSUE_IM_DAY", dispatchCaptor.getValue().getTemplateCode());
+    }
+
+    @Test
+    void shouldMarkPartialFailureWhenOneChannelFails() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "SMS")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "EMAIL")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("SMS")).thenReturn(Collections.singletonList(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1", "DEFAULT", 100)));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("EMAIL")).thenReturn(Collections.singletonList(buildProvider("ALERT_EMAIL_SENDCLOUD", "SendCloud 邮件告警", "sendcloud-payment-alerts", "TPL_PAYMENT_ISSUE_EMAIL_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+        when(emailNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("EMAIL-RECEIPT-001", "ACCEPTED", "邮件供应商已接单", "[EMAIL] ISSUE-001"));
+        doThrow(new RuntimeException("sms down")).when(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> sourceCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(sourceCaptor.capture());
+        Assertions.assertEquals("部分失败", sourceCaptor.getValue().getAlertStatus());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldDispatchOnlyConfiguredChannels() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(smsNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(emailNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+    }
+
+    @Test
+    void shouldRenderExtendedTemplateVariablesAndFallbackUnknownPlaceholder() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        PaymentAlertProviderConfigDTO provider = buildProvider(
+                "ALERT_IM_WECOM",
+                "企业微信告警机器人",
+                "wecom-bot-alerts",
+                "TPL_PAYMENT_ISSUE_IM_V1",
+                "DEFAULT",
+                100
+        );
+        provider.setTemplateBody("{{providerName}}|{{endpointAlias}}|{{notifyChannels}}|{{escalationLevel}}|{{unknownField}}");
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(provider));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor = ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
+        verify(imNotifier).send(dispatchCaptor.capture());
+        Assertions.assertEquals(
+                "企业微信告警机器人|wecom-bot-alerts|IN_APP,IM,SMS|L2|-",
+                dispatchCaptor.getValue().getRenderedAlertContent()
+        );
+    }
+
+    @Test
+    void shouldMarkUnsupportedChannelAsFailure() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,VOICE");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "VOICE")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("VOICE")).thenReturn(Collections.emptyList());
+
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> sourceCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(sourceCaptor.capture());
+        Assertions.assertEquals("部分失败", sourceCaptor.getValue().getAlertStatus());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldSkipChannelAlreadyDispatchedSuccessfullyWhenRetrying() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM,SMS");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(true);
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "SMS")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("SMS")).thenReturn(Collections.singletonList(buildProvider("ALERT_SMS_TENCENT", "腾讯云短信告警", "tencent-sms-alerts", "TPL_PAYMENT_ISSUE_SMS_V1", "DEFAULT", 100)));
+        when(smsNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("SMS-RECEIPT-001", "ACCEPTED", "短信供应商已接单", "[SMS] ISSUE-001"));
+
+        new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+    }
+
+    @Test
+    void shouldBlockReplayWhenRecentSuccessfulDeliveryStillInProtectionWindow() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100,
+                        "防重放窗口10分钟/时间窗5分钟")
+        ));
+        PaymentIssueAlertLogEntity latestLog = new PaymentIssueAlertLogEntity();
+        latestLog.setAlertStatus("已派发");
+        latestLog.setProviderDeliveryStatus("ACCEPTED");
+        latestLog.setCreatedAt("2099-12-31 23:59:59");
+        when(paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog("PIA-OUTBOX-001", "IM")).thenReturn(latestLog);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertEquals("REPLAY_WINDOW_ACTIVE", logCaptor.getValue().getProviderDeliveryStatus());
+        Assertions.assertTrue(logCaptor.getValue().getProviderDeliveryMessage().contains("10 分钟"));
+    }
+
+    @Test
+    void shouldDispatchEscalationOutboxEvenWhenOriginalIssueAlreadyDispatched() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setAlertNo("PIA-ESCALATION-001");
+        item.setNotifyChannels("IN_APP,IM");
+        item.setReceiver("支付技术负责人");
+        item.setAlertContent("升级来源告警 PIA-OUTBOX-001 已超过 30 分钟未确认，请升级跟进。");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-ESCALATION-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM_P1", "企业微信告警机器人-P1", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_P1_V1", "severity=P1", 10)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-ESC-001", "ACCEPTED", "升级告警已接单", "[IM] ESCALATION"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals("PIA-ESCALATION-001", logCaptor.getValue().getSourceAlertNo());
+        Assertions.assertEquals("支付技术负责人", logCaptor.getValue().getReceiver());
+        Assertions.assertTrue(logCaptor.getValue().getAlertContent().contains("PIA-OUTBOX-001"));
+    }
+
+    @Test
+    void shouldMarkFailureWhenProviderConfigMissingForChannel() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldSkipRetryWhenFailureCountExceedsConfiguredLimit() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, "失败重试1次/间隔5分钟")
+        ));
+        when(paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries("PIA-OUTBOX-001", "IM")).thenReturn(2);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldSkipRetryWhenCooldownWindowNotElapsed() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, "失败重试2次/间隔5分钟")
+        ));
+        when(paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries("PIA-OUTBOX-001", "IM")).thenReturn(1);
+        PaymentIssueAlertLogEntity latestLog = new PaymentIssueAlertLogEntity();
+        latestLog.setAlertStatus("派发失败");
+        latestLog.setCreatedAt("2099-12-31 23:59:59");
+        when(paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog("PIA-OUTBOX-001", "IM")).thenReturn(latestLog);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldApplyExponentialRetryCooldownWhenBackoffConfigured() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100,
+                        "失败重试3次/间隔5分钟/退避系数2倍/最大间隔12分钟")
+        ));
+        when(paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries("PIA-OUTBOX-001", "IM")).thenReturn(3);
+        PaymentIssueAlertLogEntity latestLog = new PaymentIssueAlertLogEntity();
+        latestLog.setAlertStatus("派发失败");
+        latestLog.setCreatedAt("2099-12-31 23:59:59");
+        when(paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog("PIA-OUTBOX-001", "IM")).thenReturn(latestLog);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertEquals("RETRY_COOLDOWN_ACTIVE", logCaptor.getValue().getProviderDeliveryStatus());
+        Assertions.assertTrue(logCaptor.getValue().getProviderDeliveryMessage().contains("12 分钟"));
+    }
+
+    @Test
+    void shouldBlockDispatchWhenProviderRateLimitReached() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, null, "每分钟 1 条")
+        ));
+        when(paymentTaskCenterMapper.countIssueAlertProviderDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_WECOM"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(1);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldFallbackToNextProviderWhenPrimaryProviderFails() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenThrow(new RuntimeException("primary down"))
+                .thenReturn(buildDeliveryResult("IM-RECEIPT-BACKUP", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-主".equals(log.getProviderName()) && "派发失败".equals(log.getAlertStatus())));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-备".equals(log.getProviderName()) && "已派发".equals(log.getAlertStatus())));
+    }
+
+    @Test
+    void shouldFallbackToNextProviderWhenPrimaryProviderReturnsFailedStatus() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult("IM-PRIMARY-001", "FAILED", "供应商拒绝，failureCode=IM_429", "[IM-PRIMARY] ISSUE-001"))
+                .thenReturn(buildDeliveryResult("IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-主".equals(log.getProviderName())
+                        && "派发失败".equals(log.getAlertStatus())
+                        && "FAILED".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-备".equals(log.getProviderName())
+                        && "已派发".equals(log.getAlertStatus())
+                        && "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+    }
+
+    @Test
+    void shouldFallbackToBackupProviderWhenPrimaryProviderCircuitOpen() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_PRIMARY"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(3);
+        when(paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_BACKUP"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(0);
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-BACKUP", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-主".equals(log.getProviderName()) && "派发失败".equals(log.getAlertStatus())
+                        && "PROVIDER_CIRCUIT_OPEN".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-备".equals(log.getProviderName()) && "已派发".equals(log.getAlertStatus())));
+    }
+
+    @Test
+    void shouldReconcileAcceptedDeliveryReceiptsSuccessfully() {
+        PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
+        acceptedLog.setAlertNo("PIA-IM-001");
+        acceptedLog.setIssueNo("ISSUE-001");
+        acceptedLog.setAlertChannel("IM");
+        acceptedLog.setProviderDeliveryStatus("ACCEPTED");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).reconcileDeliveryReceipts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).updateIssueAlertProviderReceipt(captor.capture());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
+        Assertions.assertEquals("已确认", captor.getValue().getAckStatus());
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldReturnZeroWhenNoAcceptedReceiptsNeedReconcile() {
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).reconcileDeliveryReceipts();
+
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO buildDeliveryResult(String receiptNo,
+                                                                   String deliveryStatus,
+                                                                   String deliveryMessage,
+                                                                   String renderedContent) {
+        PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot("LOCAL:TEST:" + deliveryStatus);
+        result.setProviderReceiptNo(receiptNo);
+        result.setProviderDeliveryStatus(deliveryStatus);
+        result.setProviderDeliveryMessage(deliveryMessage);
+        result.setRenderedContentSnapshot(renderedContent);
+        return result;
+    }
+
+    private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
+                                                        String providerName,
+                                                        String endpointAlias,
+                                                        String templateCode,
+                                                        String routeRule,
+                                                        Integer routePriority) {
+        return buildProvider(providerCode, providerName, endpointAlias, templateCode, routeRule, routePriority, null, null);
+    }
+
+    private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
+                                                        String providerName,
+                                                        String endpointAlias,
+                                                        String templateCode,
+                                                        String routeRule,
+                                                        Integer routePriority,
+                                                        String retryPolicy) {
+        return buildProvider(providerCode, providerName, endpointAlias, templateCode, routeRule, routePriority, retryPolicy, null);
+    }
+
+    private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
+                                                        String providerName,
+                                                        String endpointAlias,
+                                                        String templateCode,
+                                                        String routeRule,
+                                                        Integer routePriority,
+                                                        String retryPolicy,
+                                                        String rateLimitPolicy) {
+        PaymentAlertProviderConfigDTO provider = new PaymentAlertProviderConfigDTO();
+        provider.setProviderCode(providerCode);
+        provider.setProviderName(providerName);
+        provider.setEndpointAlias(endpointAlias);
+        provider.setTemplateCode(templateCode);
+        provider.setTemplateBody("[{{severity}}] {{issueType}} {{issueNo}} {{paymentOrderId}} {{alertContent}}");
+        provider.setRouteRule(routeRule);
+        provider.setRoutePriority(routePriority);
+        provider.setRetryPolicy(retryPolicy);
+        provider.setRateLimitPolicy(rateLimitPolicy);
+        return provider;
+    }
+
+    private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {
+        PaymentIssueAlertDispatchItemDTO item = new PaymentIssueAlertDispatchItemDTO();
+        item.setAlertNo("PIA-OUTBOX-001");
+        item.setIssueNo("ISSUE-001");
+        item.setPaymentOrderId("PAY-001");
+        item.setIssueType("待回调未收口");
+        item.setSeverity("P1");
+        item.setResponsibilityGroup("支付后端值班组");
+        item.setReceiver("支付后端值班");
+        item.setEscalationLevel("L2");
+        item.setScheduleTag("交易链路白班");
+        item.setAlertContent("支付异常 ISSUE-001 已超过 P1 SLA，请进入异常中心处理。");
+        item.setTriggeredBy("payment-issue-sla-scheduler");
+        return item;
+    }
+}

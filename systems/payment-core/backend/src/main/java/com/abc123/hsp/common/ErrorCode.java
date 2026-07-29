@@ -1,0 +1,37 @@
+package com.abc123.hsp.common;
+
+/**
+ * 支付核心域错误码常量。
+ */
+public final class ErrorCode {
+
+    private ErrorCode() {
+    }
+
+    public static final String VALIDATION_ERROR = "PAYMENT-400";
+    public static final String SYSTEM_ERROR = "PAYMENT-500";
+
+    public static final String PREPAY_ORDER_NOT_FOUND = "PAYMENT-1001";
+    public static final String PAYMENT_ORDER_NOT_FOUND = "PAYMENT-1002";
+    public static final String PAYMENT_ROUTE_UNSUPPORTED = "PAYMENT-1003";
+    public static final String PAYMENT_CHANNEL_QUERY_ADAPTER_MISSING = "PAYMENT-1004";
+    public static final String PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING = "PAYMENT-1012";
+    public static final String PAYMENT_REQUESTED_CHANNEL_INVALID = "PAYMENT-1013";
+    public static final String PAYMENT_CHANNEL_SCENE_MISMATCH = "PAYMENT-1014";
+    public static final String PAYMENT_CHANNEL_DAILY_LIMIT_EXCEEDED = "PAYMENT-1015";
+    public static final String PAYMENT_CALLBACK_SIGNATURE_INVALID = "PAYMENT-1005";
+    public static final String PAYMENT_CALLBACK_SECRET_MISSING = "PAYMENT-1006";
+    public static final String PAYMENT_CALLBACK_NONCE_REPLAY = "PAYMENT-1007";
+    public static final String PAYMENT_CALLBACK_TIMESTAMP_INVALID = "PAYMENT-1008";
+    public static final String PAYMENT_CALLBACK_CHANNEL_MISSING = "PAYMENT-1009";
+    public static final String PAYMENT_CHANNEL_UNAVAILABLE = "PAYMENT-1010";
+    public static final String PAYMENT_ORDER_SOURCE_MISSING = "PAYMENT-1011";
+    public static final String PAYMENT_SUBMIT_IN_PROGRESS = "PAYMENT-1016";
+    public static final String PAYMENT_SOURCE_APP_NOT_ALLOWED = "PAYMENT-1017";
+    public static final String PAYMENT_SUBMIT_RATE_LIMITED = "PAYMENT-1018";
+    public static final String PAYMENT_SUBMIT_SELF_CHECK_BLOCKED = "PAYMENT-1019";
+    public static final String PAYMENT_MERCHANT_NOT_ALLOWED = "PAYMENT-1020";
+    public static final String PAYMENT_ACCESS_TOKEN_INVALID = "PAYMENT-1021";
+    public static final String PAYMENT_SUBMIT_CONCURRENCY_BLOCKED = "PAYMENT-1022";
+    public static final String PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED = "PAYMENT-1023";
+}

@@ -1,0 +1,189 @@
+package com.abc123.hsp.mapper;
+
+import com.abc123.hsp.dto.PaymentChannelConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
+import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
+import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
+import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
+import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import java.util.List;
+import org.apache.ibatis.annotations.Param;
+
+/**
+ * 支付配置 Mapper，负责渠道和路由规则配置读写。
+ */
+public interface PaymentConfigMapper {
+
+    /**
+     * 查询支付渠道配置。
+     */
+    List<PaymentChannelConfigDTO> findChannels();
+
+    /**
+     * 查询支付路由规则配置。
+     */
+    List<PaymentRouteRuleConfigDTO> findRouteRules();
+
+    /**
+     * 查询支付协议配置。
+     */
+    List<PaymentProtocolConfigDTO> findProtocols();
+
+    /**
+     * 查询支付协议类型字典。
+     */
+    List<PaymentProtocolTypeOptionDTO> findProtocolTypeOptions();
+
+    /**
+     * 按协议编码查询支付协议配置。
+     */
+    PaymentProtocolConfigEntity findProtocolByCode(@Param("protocolCode") String protocolCode);
+
+    /**
+     * 查询渠道返回码映射配置。
+     */
+    List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappings();
+
+    /**
+     * 查询支付网关接入配置。
+     */
+    List<PaymentGatewayConfigDTO> findGateways();
+
+    /**
+     * 查询支付控制策略配置。
+     */
+    List<PaymentControlPolicyDTO> findControlPolicies();
+
+    /**
+     * 查询告警通知供应商配置。
+     */
+    List<PaymentAlertProviderConfigDTO> findAlertProviders();
+
+    /**
+     * 查询异常告警值班路由配置。
+     */
+    List<PaymentIssueDutyRosterDTO> findIssueDutyRosters();
+
+    /**
+     * 按路由编码查询异常告警值班路由配置。
+     */
+    PaymentIssueDutyRosterEntity findIssueDutyRosterByCode(@Param("rosterCode") String rosterCode);
+
+    /**
+     * 按来源应用标识查询支付控制策略配置。
+     */
+    PaymentControlPolicyDTO findControlPolicyBySourceAppId(@Param("sourceAppId") String sourceAppId);
+
+    /**
+     * 查询启用中的支付控制策略自检批次。
+     */
+    List<PaymentControlPolicySelfCheckItemDTO> findEnabledControlPolicySelfCheckItems();
+
+    /**
+     * 查询已启用的渠道配置，供支付路由执行使用。
+     */
+    List<PaymentChannelRoutingConfigDTO> findEnabledChannelsForRouting();
+
+    /**
+     * 按渠道编码查询路由执行所需配置。
+     */
+    PaymentChannelRoutingConfigDTO findChannelForRouting(@Param("channelCode") String channelCode);
+
+    /**
+     * 查询已启用的路由规则，供支付路由执行使用。
+     */
+    List<PaymentRouteRuleRuntimeDTO> findEnabledRouteRulesForRouting();
+
+    /**
+     * 更新渠道启停状态。
+     */
+    int updateChannelStatus(@Param("channelCode") String channelCode,
+                            @Param("status") String status,
+                            @Param("statusType") String statusType);
+
+    /**
+     * 更新路由规则启停状态。
+     */
+    int updateRouteRuleStatus(@Param("ruleCode") String ruleCode,
+                              @Param("status") String status,
+                              @Param("statusType") String statusType);
+
+    /**
+     * 更新支付协议启停状态。
+     */
+    int updateProtocolStatus(@Param("protocolCode") String protocolCode,
+                             @Param("status") String status,
+                             @Param("statusType") String statusType);
+
+    /**
+     * 新增支付协议配置。
+     */
+    int insertProtocol(PaymentProtocolConfigEntity entity);
+
+    /**
+     * 更新支付协议配置。
+     */
+    int updateProtocol(PaymentProtocolConfigEntity entity);
+
+    /**
+     * 新增异常告警值班路由配置。
+     */
+    int insertIssueDutyRoster(PaymentIssueDutyRosterEntity entity);
+
+    /**
+     * 更新异常告警值班路由配置。
+     */
+    int updateIssueDutyRoster(PaymentIssueDutyRosterEntity entity);
+
+    /**
+     * 更新渠道返回码映射启停状态。
+     */
+    int updateReturnCodeMappingStatus(@Param("channelCode") String channelCode,
+                                      @Param("channelReturnCode") String channelReturnCode,
+                                      @Param("status") String status,
+                                      @Param("statusType") String statusType);
+
+    /**
+     * 更新支付网关启停状态。
+     */
+    int updateGatewayStatus(@Param("gatewayCode") String gatewayCode,
+                            @Param("status") String status,
+                            @Param("statusType") String statusType);
+
+    /**
+     * 更新支付控制策略启停状态。
+     */
+    int updateControlPolicyStatus(@Param("sourceAppId") String sourceAppId,
+                                  @Param("status") String status,
+                                  @Param("statusType") String statusType);
+
+    /**
+     * 更新告警通知供应商配置启停状态。
+     */
+    int updateAlertProviderStatus(@Param("providerCode") String providerCode,
+                                  @Param("status") String status,
+                                  @Param("statusType") String statusType);
+
+    /**
+     * 更新支付控制策略自检结果。
+     */
+    int updateControlPolicySelfCheck(@Param("sourceAppId") String sourceAppId,
+                                     @Param("selfCheckStatus") String selfCheckStatus,
+                                     @Param("selfCheckStatusType") String selfCheckStatusType,
+                                     @Param("selfCheckMessage") String selfCheckMessage);
+
+    /**
+     * 更新异常告警值班路由启停状态。
+     */
+    int updateIssueDutyRosterStatus(@Param("rosterCode") String rosterCode,
+                                    @Param("status") String status,
+                                    @Param("statusType") String statusType);
+}

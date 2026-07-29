@@ -1,0 +1,44 @@
+package com.abc123.gatewayaccess.service;
+
+import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAppDTO;
+import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
+import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
+import com.abc123.gatewayaccess.dto.PageResultDTO;
+import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
+
+/**
+ * 网关接入服务。
+ */
+public interface GatewayAccessService {
+
+    GatewayAccessSummaryDTO summary();
+
+    PageResultDTO<GatewayAppDTO> applications();
+
+    PageResultDTO<GatewayChannelDTO> gateways(GatewayChannelQueryDTO query);
+
+    PageResultDTO<GatewayCertificateDTO> certificates(String riskLevel);
+
+    PageResultDTO<GatewayPermissionDTO> permissions();
+
+    PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query);
+
+    PageResultDTO<GatewayReleaseRouteDTO> releaseRoutes(GatewayReleaseRouteQueryDTO query);
+
+    GatewayAccessSummaryDTO toggleApplication(ToggleRequestDTO request);
+
+    GatewayAccessSummaryDTO toggleGateway(ToggleRequestDTO request);
+
+    GatewayAccessSummaryDTO toggleCertificate(ToggleRequestDTO request);
+
+    GatewayAccessSummaryDTO togglePermission(ToggleRequestDTO request);
+
+    GatewayAccessSummaryDTO toggleReleaseRoute(ToggleRequestDTO request);
+}

@@ -1,0 +1,519 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentConfigMapper">
+
+    <select id="findChannels" resultType="com.abc123.hsp.dto.PaymentChannelConfigDTO">
+        SELECT channel_code AS channelCode,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               merchant_no AS merchantNo,
+               merchant_app_id AS merchantAppId,
+               callback_notify_url AS callbackNotifyUrl,
+               callback_sign_algorithm AS callbackSignAlgorithm,
+               CASE
+                   WHEN callback_secret IS NULL OR callback_secret = '' THEN '未配置'
+                   ELSE '已配置'
+               END AS callbackSecretMasked,
+               certificate_profile AS certificateProfile,
+               CONCAT(notify_sign_window_sec, 's') AS notifySignWindow,
+               CONCAT(refund_window_days, '天') AS refundWindow,
+               risk_control_tag AS riskControlTag,
+               scene_scope AS sceneScope,
+               status,
+               status_type AS statusType,
+               CONCAT('¥', FORMAT(daily_limit, 2)) AS dailyLimit,
+               priority,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_channel_config
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findRouteRules" resultType="com.abc123.hsp.dto.PaymentRouteRuleConfigDTO">
+        SELECT rule_code AS ruleCode,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_route_rule_config
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findProtocols" resultType="com.abc123.hsp.dto.PaymentProtocolConfigDTO">
+        SELECT protocol_code AS protocolCode,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
+               template_code AS templateCode,
+               template_name AS templateName,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               sign_element_spec AS signElementSpec,
+               e_signature_provider AS eSignatureProvider,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
+               priority,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_protocol_config
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findProtocolTypeOptions" resultType="com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO">
+        SELECT 'PAYMENT_SIGN' AS protocolType,
+               '支付签约协议' AS protocolTypeName,
+               '适用于正向支付签约、扣款授权和实名确认场景' AS description
+        UNION ALL
+        SELECT 'PREAUTH' AS protocolType,
+               '预授权协议' AS protocolTypeName,
+               '适用于企业客户预授权、押金冻结和后续确认扣款场景' AS description
+        UNION ALL
+        SELECT 'WITHHOLD' AS protocolType,
+               '代扣协议' AS protocolTypeName,
+               '适用于会员续费、周期扣款和静默代扣授权场景' AS description
+    </select>
+
+    <select id="findProtocolByCode" resultType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        SELECT protocol_code AS protocolCode,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
+               template_code AS templateCode,
+               template_name AS templateName,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               sign_element_spec AS signElementSpec,
+               e_signature_provider AS eSignatureProvider,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
+               status,
+               status_type AS statusType,
+               priority
+        FROM t_payment_protocol_config
+        WHERE protocol_code = #{protocolCode}
+        LIMIT 1
+    </select>
+
+    <select id="findReturnCodeMappings" resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
+        SELECT channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               standardized_code AS standardizedCode,
+               standardized_message AS standardizedMessage,
+               handling_suggestion AS handlingSuggestion,
+               retryable,
+               manual_intervention_required AS manualInterventionRequired,
+               mapping_version AS mappingVersion,
+               archive_status AS archiveStatus,
+               archive_status_type AS archiveStatusType,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_channel_return_code_map
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findGateways" resultType="com.abc123.hsp.dto.PaymentGatewayConfigDTO">
+        SELECT gateway_code AS gatewayCode,
+               gateway_name AS gatewayName,
+               access_mode AS accessMode,
+               channel_scope AS channelScope,
+               environment_scope AS environmentScope,
+               api_base_url AS apiBaseUrl,
+               protocol_type AS protocolType,
+               sign_algorithm AS signAlgorithm,
+               certificate_alias AS certificateAlias,
+               certificate_status AS certificateStatus,
+               certificate_status_type AS certificateStatusType,
+               release_stage AS releaseStage,
+               gray_strategy AS grayStrategy,
+               callback_whitelist AS callbackWhitelist,
+               adapter_registry AS adapterRegistry,
+               CONCAT(timeout_ms, 'ms') AS timeoutMs,
+               retry_policy AS retryPolicy,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_gateway_config
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findControlPolicies" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
+        SELECT source_app_id AS sourceAppId,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               access_token_value AS accessTokenValue,
+               strict_mode AS strictMode,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_control_policy
+        ORDER BY id ASC
+    </select>
+
+    <select id="findAlertProviders" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
+        SELECT provider_code AS providerCode,
+               provider_name AS providerName,
+               channel_code AS channelCode,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               template_body AS templateBody,
+               route_rule AS routeRule,
+               route_priority AS routePriority,
+               retry_policy AS retryPolicy,
+               rate_limit_policy AS rateLimitPolicy,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_alert_provider_config
+        ORDER BY channel_code ASC, id ASC
+    </select>
+
+    <select id="findIssueDutyRosters" resultType="com.abc123.hsp.dto.PaymentIssueDutyRosterDTO">
+        SELECT roster_code AS rosterCode,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               receiver,
+               notify_channels AS notifyChannels,
+               escalation_level AS escalationLevel,
+               escalation_receiver AS escalationReceiver,
+               escalation_policy AS escalationPolicy,
+               escalation_timeout_minutes AS escalationTimeoutMinutes,
+               schedule_tag AS scheduleTag,
+               effective_start_hour AS effectiveStartHour,
+               effective_end_hour AS effectiveEndHour,
+               weekday_scope AS weekdayScope,
+               holiday_strategy AS holidayStrategy,
+               CASE holiday_strategy
+                   WHEN 'WORKDAY_ONLY' THEN '仅工作日'
+                   WHEN 'NON_WORKDAY_ONLY' THEN '仅非工作日'
+                   ELSE '全部日期'
+               END AS applicabilityDesc,
+               CASE
+                   WHEN effective_start_hour <= effective_end_hour
+                       THEN CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-', LPAD(effective_end_hour, 2, '0'), ':00')
+                   ELSE CONCAT(LPAD(effective_start_hour, 2, '0'), ':00-次日', LPAD(effective_end_hour, 2, '0'), ':00')
+               END AS effectiveWindow,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_issue_duty_roster
+        ORDER BY issue_type ASC, severity ASC, id ASC
+    </select>
+
+    <select id="findIssueDutyRosterByCode" resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+        SELECT roster_code AS rosterCode,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               receiver,
+               notify_channels AS notifyChannels,
+               escalation_level AS escalationLevel,
+               escalation_receiver AS escalationReceiver,
+               escalation_policy AS escalationPolicy,
+               escalation_timeout_minutes AS escalationTimeoutMinutes,
+               schedule_tag AS scheduleTag,
+               effective_start_hour AS effectiveStartHour,
+               effective_end_hour AS effectiveEndHour,
+               weekday_scope AS weekdayScope,
+               holiday_strategy AS holidayStrategy,
+               status,
+               status_type AS statusType
+        FROM t_payment_issue_duty_roster
+        WHERE roster_code = #{rosterCode}
+        LIMIT 1
+    </select>
+
+    <select id="findControlPolicyBySourceAppId" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
+        SELECT source_app_id AS sourceAppId,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               access_token_value AS accessTokenValue,
+               strict_mode AS strictMode,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_control_policy
+        WHERE source_app_id = #{sourceAppId}
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledControlPolicySelfCheckItems" resultType="com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO">
+        SELECT source_app_id AS sourceAppId,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage
+        FROM t_payment_control_policy
+        WHERE status = 'ENABLED'
+        ORDER BY id ASC
+    </select>
+
+    <select id="findEnabledChannelsForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
+        SELECT channel_code AS channelCode,
+               payment_method AS paymentMethod,
+               scene_scope AS sceneScope,
+               daily_limit AS dailyLimit,
+               priority
+        FROM t_payment_channel_config
+        WHERE status = 'ENABLED'
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findChannelForRouting" resultType="com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO">
+        SELECT channel_code AS channelCode,
+               payment_method AS paymentMethod,
+               scene_scope AS sceneScope,
+               daily_limit AS dailyLimit,
+               priority
+        FROM t_payment_channel_config
+        WHERE channel_code = #{channelCode}
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledRouteRulesForRouting" resultType="com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO">
+        SELECT rule_code AS ruleCode,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               priority
+        FROM t_payment_route_rule_config
+        WHERE status = 'ENABLED'
+        ORDER BY priority ASC, id ASC
+    </select>
+
+    <update id="updateChannelStatus">
+        UPDATE t_payment_channel_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE channel_code = #{channelCode}
+    </update>
+
+    <update id="updateRouteRuleStatus">
+        UPDATE t_payment_route_rule_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE rule_code = #{ruleCode}
+    </update>
+
+    <update id="updateProtocolStatus">
+        UPDATE t_payment_protocol_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE protocol_code = #{protocolCode}
+    </update>
+
+    <insert id="insertProtocol" parameterType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        INSERT INTO t_payment_protocol_config (
+            protocol_code,
+            protocol_name,
+            protocol_type,
+            protocol_type_name,
+            template_code,
+            template_name,
+            template_version,
+            sign_mode,
+            sign_element_spec,
+            e_signature_provider,
+            scene_scope,
+            channel_scope,
+            merchant_ack_required,
+            risk_control_tag,
+            protocol_body,
+            status,
+            status_type,
+            priority,
+            updated_at
+        ) VALUES (
+            #{protocolCode},
+            #{protocolName},
+            #{protocolType},
+            #{protocolTypeName},
+            #{templateCode},
+            #{templateName},
+            #{templateVersion},
+            #{signMode},
+            #{signElementSpec},
+            #{eSignatureProvider},
+            #{sceneScope},
+            #{channelScope},
+            #{merchantAckRequired},
+            #{riskControlTag},
+            #{protocolBody},
+            #{status},
+            #{statusType},
+            #{priority},
+            NOW()
+        )
+    </insert>
+
+    <update id="updateProtocol" parameterType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        UPDATE t_payment_protocol_config
+        SET protocol_name = #{protocolName},
+            protocol_type = #{protocolType},
+            protocol_type_name = #{protocolTypeName},
+            template_code = #{templateCode},
+            template_name = #{templateName},
+            template_version = #{templateVersion},
+            sign_mode = #{signMode},
+            sign_element_spec = #{signElementSpec},
+            e_signature_provider = #{eSignatureProvider},
+            scene_scope = #{sceneScope},
+            channel_scope = #{channelScope},
+            merchant_ack_required = #{merchantAckRequired},
+            risk_control_tag = #{riskControlTag},
+            protocol_body = #{protocolBody},
+            status = #{status},
+            status_type = #{statusType},
+            priority = #{priority},
+            updated_at = NOW()
+        WHERE protocol_code = #{protocolCode}
+    </update>
+
+    <insert id="insertIssueDutyRoster" parameterType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+        INSERT INTO t_payment_issue_duty_roster (
+            roster_code,
+            issue_type,
+            severity,
+            responsibility_group,
+            receiver,
+            notify_channels,
+            escalation_level,
+            escalation_receiver,
+            escalation_policy,
+            escalation_timeout_minutes,
+            schedule_tag,
+            effective_start_hour,
+            effective_end_hour,
+            weekday_scope,
+            holiday_strategy,
+            status,
+            status_type,
+            updated_at
+        ) VALUES (
+            #{rosterCode},
+            #{issueType},
+            #{severity},
+            #{responsibilityGroup},
+            #{receiver},
+            #{notifyChannels},
+            #{escalationLevel},
+            #{escalationReceiver},
+            #{escalationPolicy},
+            #{escalationTimeoutMinutes},
+            #{scheduleTag},
+            #{effectiveStartHour},
+            #{effectiveEndHour},
+            #{weekdayScope},
+            #{holidayStrategy},
+            #{status},
+            #{statusType},
+            NOW()
+        )
+    </insert>
+
+    <update id="updateIssueDutyRoster" parameterType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+        UPDATE t_payment_issue_duty_roster
+        SET issue_type = #{issueType},
+            severity = #{severity},
+            responsibility_group = #{responsibilityGroup},
+            receiver = #{receiver},
+            notify_channels = #{notifyChannels},
+            escalation_level = #{escalationLevel},
+            escalation_receiver = #{escalationReceiver},
+            escalation_policy = #{escalationPolicy},
+            escalation_timeout_minutes = #{escalationTimeoutMinutes},
+            schedule_tag = #{scheduleTag},
+            effective_start_hour = #{effectiveStartHour},
+            effective_end_hour = #{effectiveEndHour},
+            weekday_scope = #{weekdayScope},
+            holiday_strategy = #{holidayStrategy},
+            status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE roster_code = #{rosterCode}
+    </update>
+
+    <update id="updateReturnCodeMappingStatus">
+        UPDATE t_payment_channel_return_code_map
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE channel_code = #{channelCode}
+          AND channel_return_code = #{channelReturnCode}
+    </update>
+
+    <update id="updateGatewayStatus">
+        UPDATE t_payment_gateway_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE gateway_code = #{gatewayCode}
+    </update>
+
+    <update id="updateControlPolicyStatus">
+        UPDATE t_payment_control_policy
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE source_app_id = #{sourceAppId}
+    </update>
+
+    <update id="updateAlertProviderStatus">
+        UPDATE t_payment_alert_provider_config
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE provider_code = #{providerCode}
+    </update>
+
+    <update id="updateIssueDutyRosterStatus">
+        UPDATE t_payment_issue_duty_roster
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE roster_code = #{rosterCode}
+    </update>
+
+    <update id="updateControlPolicySelfCheck">
+        UPDATE t_payment_control_policy
+        SET self_check_status = #{selfCheckStatus},
+            self_check_status_type = #{selfCheckStatusType},
+            self_check_message = #{selfCheckMessage},
+            updated_at = NOW()
+        WHERE source_app_id = #{sourceAppId}
+    </update>
+</mapper>

@@ -27,10 +27,12 @@
 - `docs/模块开发交付标准.md`
 - `docs/系统分期建设方案.md`
 - `docs/系统目录总览.md`
+- `docs/四类资料对照与系统二次加工规范.md`
 
 `payment-core` 第一阶段B 关键文档：
 
 - `systems/payment-core/docs/第一阶段B-支付交易闭环设计.md`
+- `systems/payment-core/docs/第一阶段B-支付交易闭环需求清单.md`
 - `systems/payment-core/docs/第一阶段B-支付交易闭环数据库设计.md`
 - `systems/payment-core/docs/第一阶段B-支付交易闭环接口文档.md`
 
@@ -40,6 +42,7 @@
 - `systems/accounting-system`
 - `systems/clearing-system`
 - `systems/settlement-system`
+- `systems/wallet-system`
 
 `payment-core` 内部包含：
 

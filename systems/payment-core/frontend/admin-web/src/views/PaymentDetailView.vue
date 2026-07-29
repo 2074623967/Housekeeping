@@ -1,0 +1,332 @@
+<script setup>
+import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { paymentApi } from "../api/client";
+
+const route = useRoute();
+const router = useRouter();
+const detail = ref(null);
+const isLoading = ref(true);
+const errorMessage = ref("");
+const actionMessage = ref("");
+const activeAction = ref("");
+
+const paymentRecordDetailRoute = computed(() => {
+  if (!detail.value?.paymentOrderId) {
+    return "";
+  }
+  return `/payment-records/${detail.value.paymentOrderId}?recordType=ALL`;
+});
+
+const orderRoute = computed(() => {
+  if (!detail.value?.orderNo) {
+    return "";
+  }
+  return `/orders?orderNo=${detail.value.orderNo}`;
+});
+
+const billRoute = computed(() => {
+  if (!detail.value?.billNo && !detail.value?.orderNo) {
+    return "";
+  }
+  const billNo = detail.value?.billNo || "";
+  const orderNo = detail.value?.orderNo || "";
+  return `/bills?billNo=${billNo}&orderNo=${orderNo}`;
+});
+
+const cashierUrl = computed(() => {
+  if (!detail.value?.prepayOrderNo) {
+    return "";
+  }
+  return `http://127.0.0.1:5175/cashier/${detail.value.prepayOrderNo}`;
+});
+
+const metricCards = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  return [
+    {
+      title: "支付金额",
+      value: detail.value.amount || "-",
+      hint: `支付方式 ${detail.value.paymentMethod || "-"}`
+    },
+    {
+      title: "路由轨迹数",
+      value: `${(detail.value.routeLogs || []).length}`,
+      hint: "用于复盘路由选型和渠道命中"
+    },
+    {
+      title: "回调轨迹数",
+      value: `${(detail.value.notifyLogs || []).length}`,
+      hint: "用于确认渠道通知是否已经收口"
+    },
+    {
+      title: "事件轨迹数",
+      value: `${(detail.value.eventLogs || []).length}`,
+      hint: "用于确认下游事件是否完整发布"
+    }
+  ];
+});
+
+const operationSuggestions = computed(() => {
+  if (!detail.value) {
+    return [];
+  }
+  const suggestions = [];
+  if (detail.value.status === "WAIT_CALLBACK") {
+    suggestions.push("当前支付单等待回调，建议先主动查单；确认渠道已成功但未回调时，再进入异常中心排查。");
+  }
+  if (detail.value.status === "PAYING") {
+    suggestions.push("当前支付单处理中，建议优先查看最近一次支付尝试和渠道响应报文，避免重复提交。");
+  }
+  if (detail.value.status === "CLOSED") {
+    suggestions.push("当前支付单已关闭，如业务仍需付款，应从订单侧重新发起预付单，禁止直接恢复旧单。");
+  }
+  if (detail.value.status === "SUCCESS") {
+    suggestions.push("当前支付单已成功，建议联查订单、账单、支付记录和下游事件是否全部收口。");
+  }
+  if (!(detail.value.notifyLogs || []).length) {
+    suggestions.push("当前没有回调轨迹，需关注渠道回调地址、验签和消息落库情况。");
+  }
+  if (!suggestions.length) {
+    suggestions.push("当前状态可结合路由、回调和事件轨迹继续完成支付链路复盘。");
+  }
+  return suggestions;
+});
+
+async function loadDetail() {
+  isLoading.value = true;
+  errorMessage.value = "";
+  try {
+    detail.value = await paymentApi.getDetail(route.params.paymentOrderId);
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function isActionRunning(actionName) {
+  return activeAction.value === actionName;
+}
+
+function canRunCallback() {
+  return detail.value?.status === "WAIT_CALLBACK" || detail.value?.status === "PAYING";
+}
+
+function canRunClose() {
+  return detail.value?.status !== "SUCCESS" && detail.value?.status !== "CLOSED";
+}
+
+async function handleQuery() {
+  activeAction.value = "query";
+  try {
+    const paymentDetail = await paymentApi.query(route.params.paymentOrderId);
+    actionMessage.value = `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = `主动查单失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
+}
+
+async function handleCallback() {
+  activeAction.value = "callback";
+  try {
+    const paymentDetail = await paymentApi.callback("WX_H5", route.params.paymentOrderId);
+    actionMessage.value = `支付单 ${route.params.paymentOrderId} 已模拟回调，当前状态为 ${paymentDetail.status}。`;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = `模拟回调失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
+}
+
+async function handleClose() {
+  activeAction.value = "close";
+  try {
+    const paymentDetail = await paymentApi.close(route.params.paymentOrderId);
+    actionMessage.value = paymentDetail.status === "CLOSED"
+      ? `支付单 ${route.params.paymentOrderId} 已关闭。`
+      : `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
+    await loadDetail();
+  } catch (error) {
+    actionMessage.value = `关闭支付单失败：${error.message}`;
+  } finally {
+    activeAction.value = "";
+  }
+}
+
+onMounted(loadDetail);
+</script>
+
+<template>
+  <div>
+    <div class="topbar">
+      <div>
+        <h2>支付单详情</h2>
+        <p>查看支付主链路、路由轨迹、回调轨迹和事件轨迹</p>
+      </div>
+      <div class="toolbar-actions">
+        <button class="button secondary" @click="router.push('/payments')">返回列表</button>
+        <button class="button secondary" @click="router.push(`/payment-requests?paymentOrderId=${route.params.paymentOrderId}`)">
+          查看支付请求
+        </button>
+        <button
+          class="button secondary"
+          :disabled="!paymentRecordDetailRoute"
+          @click="router.push(paymentRecordDetailRoute)"
+        >
+          查看支付记录
+        </button>
+        <button class="button secondary" @click="router.push(`/payment-logs?paymentOrderId=${route.params.paymentOrderId}`)">
+          查看处理日志
+        </button>
+        <button class="button secondary" :disabled="!!activeAction" @click="handleQuery">
+          {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
+        </button>
+        <button class="button secondary" :disabled="!!activeAction || !canRunCallback()" @click="handleCallback">
+          {{ isActionRunning("callback") ? "回调中..." : "模拟回调" }}
+        </button>
+        <button class="button primary" :disabled="!!activeAction || !canRunClose()" @click="handleClose">
+          {{ isActionRunning("close") ? "关闭中..." : "关闭支付单" }}
+        </button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <div v-if="errorMessage" class="error-banner">
+        支付单详情加载失败：{{ errorMessage }}
+      </div>
+      <div v-if="actionMessage" class="state-banner">
+        {{ actionMessage }}
+      </div>
+      <div v-if="isLoading" class="state-box">支付单详情加载中...</div>
+      <template v-else-if="detail">
+        <div class="detail-card-grid">
+          <div class="detail-card">
+            <div class="detail-label">支付单号</div>
+            <div class="detail-value">{{ detail.paymentOrderId }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">预付单号</div>
+            <div class="detail-value">{{ detail.prepayOrderNo || "-" }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">账单号</div>
+            <div class="detail-value">{{ detail.billNo || "-" }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">当前状态</div>
+            <div class="detail-value"><span :class="['badge', detail.statusType]">{{ detail.status }}</span></div>
+          </div>
+        </div>
+
+        <div class="detail-card-grid detail-panel">
+          <div v-for="card in metricCards" :key="card.title" class="detail-card">
+            <div class="detail-label">{{ card.title }}</div>
+            <div class="detail-value">{{ card.value }}</div>
+            <div class="meta">{{ card.hint }}</div>
+          </div>
+        </div>
+
+        <div class="split-panels detail-panel">
+          <section class="panel mini">
+            <div class="section-title">
+              <h3>支付动作说明</h3>
+              <span class="meta">根据支付单当前状态控制动作</span>
+            </div>
+            <div class="ops-card">
+              <div class="ops-row"><span>主动查单</span><span>始终可用，用于拉取渠道或本地最新状态</span></div>
+              <div class="ops-row"><span>模拟回调</span><span>{{ canRunCallback() ? "当前可执行" : "仅 WAIT_CALLBACK / PAYING 状态可执行" }}</span></div>
+              <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "成功或已关闭支付单不可关闭" }}</span></div>
+            </div>
+          </section>
+
+          <section class="panel mini">
+            <div class="section-title">
+              <h3>处理建议</h3>
+              <span class="meta">按当前状态和轨迹自动整理</span>
+            </div>
+            <div class="suggestion-list">
+              <div v-for="item in operationSuggestions" :key="item" class="timeline-item">{{ item }}</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="detail-grid detail-grid-wide">
+          <div><strong>订单号：</strong>{{ detail.orderNo }}</div>
+          <div><strong>客户：</strong>{{ detail.customerName }}</div>
+          <div><strong>账单号：</strong>{{ detail.billNo || "-" }}</div>
+          <div><strong>金额：</strong>{{ detail.amount }}</div>
+          <div><strong>支付方式：</strong>{{ detail.paymentMethod }}</div>
+          <div><strong>支付渠道：</strong>{{ detail.channel }}</div>
+          <div><strong>渠道交易号：</strong>{{ detail.channelTransactionNo || "-" }}</div>
+          <div><strong>查单来源：</strong>{{ detail.querySource || "-" }}</div>
+          <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
+        </div>
+
+        <section class="panel mini">
+          <h4>最近支付尝试</h4>
+          <div class="detail-grid detail-grid-wide">
+            <div>
+              <strong>尝试状态：</strong>
+              <span :class="['badge', detail.latestAttemptStatusType || 'info']">{{ detail.latestAttemptStatus || "-" }}</span>
+            </div>
+            <div><strong>发起终端：</strong>{{ detail.latestTerminal || "-" }}</div>
+            <div><strong>客户端 IP：</strong>{{ detail.latestClientIp || "-" }}</div>
+            <div><strong>幂等键：</strong>{{ detail.latestIdempotencyKey || "-" }}</div>
+          </div>
+          <div class="payload-grid">
+            <div>
+              <strong>最近一次请求报文</strong>
+              <pre>{{ detail.latestRequestPayload || "暂无请求报文" }}</pre>
+            </div>
+            <div>
+              <strong>最近一次响应报文</strong>
+              <pre>{{ detail.latestResponsePayload || "暂无响应报文" }}</pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel mini">
+          <h4>联查入口</h4>
+          <div class="list-actions">
+            <RouterLink v-if="detail.orderNo" class="link-button" :to="orderRoute">回到订单中心</RouterLink>
+            <RouterLink v-if="detail.billNo || detail.orderNo" class="link-button" :to="billRoute">查看账单中心</RouterLink>
+            <RouterLink v-if="paymentRecordDetailRoute" class="link-button" :to="paymentRecordDetailRoute">查看支付记录详情</RouterLink>
+            <a v-if="cashierUrl" class="link-button" :href="cashierUrl" target="_blank" rel="noreferrer">打开当前收银台</a>
+          </div>
+        </section>
+
+        <div class="split-panels">
+          <section class="panel mini">
+            <h4>路由记录</h4>
+            <div v-for="item in detail.routeLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+            <div v-if="!(detail.routeLogs || []).length" class="state-box">当前暂无路由记录</div>
+          </section>
+          <section class="panel mini">
+            <h4>回调日志</h4>
+            <div v-for="item in detail.notifyLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+            <div v-if="!(detail.notifyLogs || []).length" class="state-box">当前暂无回调日志</div>
+          </section>
+        </div>
+        <section class="panel mini">
+          <h4>事件轨迹</h4>
+          <div v-for="item in detail.eventLogs || []" :key="item" class="timeline-item">{{ item }}</div>
+          <div v-if="!(detail.eventLogs || []).length" class="state-box">当前暂无事件轨迹</div>
+        </section>
+      </template>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+}
+</style>

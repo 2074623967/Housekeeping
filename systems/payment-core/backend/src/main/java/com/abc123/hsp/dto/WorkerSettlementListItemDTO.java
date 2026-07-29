@@ -1,104 +1,33 @@
 package com.abc123.hsp.dto;
 
+import lombok.Data;
+
+/**
+ * 服务者结算单列表行模型。
+ */
+@Data
 public class WorkerSettlementListItemDTO {
 
+    /** 结算单号。 */
     private String settlementOrderId;
+    /** 服务者名称。 */
     private String workerName;
+    /** 结算周期。 */
     private String period;
+    /** 应结金额。 */
     private String amountShouldSettle;
+    /** 扣减金额。 */
     private String deductAmount;
+    /** 实结金额。 */
     private String amountNetSettle;
+    /** 保证金影响金额。 */
     private String depositImpactAmount;
+    /** 结算状态。 */
     private String status;
+    /** 结算状态样式。 */
     private String statusType;
+    /** 出款状态。 */
     private String payoutStatus;
+    /** 出款状态样式。 */
     private String payoutStatusType;
-
-    public String getSettlementOrderId() {
-        return settlementOrderId;
-    }
-
-    public void setSettlementOrderId(String settlementOrderId) {
-        this.settlementOrderId = settlementOrderId;
-    }
-
-    public String getWorkerName() {
-        return workerName;
-    }
-
-    public void setWorkerName(String workerName) {
-        this.workerName = workerName;
-    }
-
-    public String getPeriod() {
-        return period;
-    }
-
-    public void setPeriod(String period) {
-        this.period = period;
-    }
-
-    public String getAmountShouldSettle() {
-        return amountShouldSettle;
-    }
-
-    public void setAmountShouldSettle(String amountShouldSettle) {
-        this.amountShouldSettle = amountShouldSettle;
-    }
-
-    public String getDeductAmount() {
-        return deductAmount;
-    }
-
-    public void setDeductAmount(String deductAmount) {
-        this.deductAmount = deductAmount;
-    }
-
-    public String getAmountNetSettle() {
-        return amountNetSettle;
-    }
-
-    public void setAmountNetSettle(String amountNetSettle) {
-        this.amountNetSettle = amountNetSettle;
-    }
-
-    public String getDepositImpactAmount() {
-        return depositImpactAmount;
-    }
-
-    public void setDepositImpactAmount(String depositImpactAmount) {
-        this.depositImpactAmount = depositImpactAmount;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getStatusType() {
-        return statusType;
-    }
-
-    public void setStatusType(String statusType) {
-        this.statusType = statusType;
-    }
-
-    public String getPayoutStatus() {
-        return payoutStatus;
-    }
-
-    public void setPayoutStatus(String payoutStatus) {
-        this.payoutStatus = payoutStatus;
-    }
-
-    public String getPayoutStatusType() {
-        return payoutStatusType;
-    }
-
-    public void setPayoutStatusType(String payoutStatusType) {
-        this.payoutStatusType = payoutStatusType;
-    }
 }

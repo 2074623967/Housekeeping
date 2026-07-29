@@ -1,0 +1,93 @@
+package com.abc123.hsp.service;
+
+import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
+import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
+import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
+import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+
+/**
+ * 支付任务中心服务。
+ */
+public interface PaymentTaskCenterService {
+
+    /**
+     * 查询支付任务中心总览。
+     */
+    PaymentTaskCenterOverviewDTO overview();
+
+    /**
+     * 查询任务执行日志。
+     */
+    PageResultDTO<PaymentTaskRunLogItemDTO> listTaskRuns(PaymentTaskRunLogQueryDTO query);
+
+    /**
+     * 手动执行超时关单任务。
+     */
+    PaymentTaskActionResultDTO runCloseExpiredPayments();
+
+    /**
+     * 自动执行超时关单任务。
+     */
+    PaymentTaskActionResultDTO runAutoCloseExpiredPayments();
+
+    /**
+     * 手动执行失败事件重发。
+     */
+    PaymentTaskActionResultDTO runRepublishFailedEvents();
+
+    /**
+     * 自动执行失败事件重发。
+     */
+    PaymentTaskActionResultDTO runAutoRepublishFailedEvents();
+
+    /**
+     * 手动执行失败退款重试。
+     */
+    PaymentTaskActionResultDTO runRetryFailedRefunds();
+
+    /**
+     * 自动执行失败退款重试。
+     */
+    PaymentTaskActionResultDTO runAutoRetryFailedRefunds();
+
+    /**
+     * 手动执行异常 SLA 升级巡检。
+     */
+    PaymentTaskActionResultDTO runEscalateOverdueIssues();
+
+    /**
+     * 手动执行异常告警派发。
+     */
+    PaymentTaskActionResultDTO runDispatchIssueAlerts();
+
+    /**
+     * 自动执行异常 SLA 升级巡检。
+     */
+    PaymentTaskActionResultDTO runAutoEscalateOverdueIssues();
+
+    /**
+     * 自动执行异常告警派发。
+     */
+    PaymentTaskActionResultDTO runAutoDispatchIssueAlerts();
+
+    /**
+     * 手动执行异常告警供应商回执回查。
+     */
+    PaymentTaskActionResultDTO runReconcileIssueAlertReceipts();
+
+    /**
+     * 自动执行异常告警供应商回执回查。
+     */
+    PaymentTaskActionResultDTO runAutoReconcileIssueAlertReceipts();
+
+    /**
+     * 手动执行支付控制策略自动巡检。
+     */
+    PaymentTaskActionResultDTO runControlPolicySelfChecks();
+
+    /**
+     * 自动执行支付控制策略自动巡检。
+     */
+    PaymentTaskActionResultDTO runAutoControlPolicySelfChecks();
+}

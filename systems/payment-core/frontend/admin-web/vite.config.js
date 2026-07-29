@@ -3,6 +3,7 @@ import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
+  cacheDir: "/private/tmp/hsp-admin-web-vite-cache",
   server: {
     port: 5174,
     proxy: {

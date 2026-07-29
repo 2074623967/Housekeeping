@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.wallet.mapper.WalletMapper">
+
+    <select id="findAccounts" resultType="com.abc123.wallet.entity.WalletAccountEntity">
+        SELECT account_no AS accountNo,
+               owner_name AS ownerName,
+               wallet_type AS walletType,
+               status,
+               FORMAT(available_amount, 2) AS availableAmount,
+               FORMAT(frozen_amount, 2) AS frozenAmount,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_account
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findAccountByNo" resultType="com.abc123.wallet.entity.WalletAccountEntity">
+        SELECT account_no AS accountNo,
+               owner_name AS ownerName,
+               wallet_type AS walletType,
+               status,
+               FORMAT(available_amount, 2) AS availableAmount,
+               FORMAT(frozen_amount, 2) AS frozenAmount,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_account
+        WHERE account_no = #{accountNo}
+    </select>
+
+    <select id="findLedgersByAccountNo" resultType="com.abc123.wallet.entity.WalletLedgerEntity">
+        SELECT ledger_no AS ledgerNo,
+               account_no AS accountNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               direction,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_ledger
+        WHERE account_no = #{accountNo}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findAllLedgers" resultType="com.abc123.wallet.entity.WalletLedgerEntity">
+        SELECT ledger_no AS ledgerNo,
+               account_no AS accountNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               direction,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_ledger
+        <where>
+            <if test="accountNo != null and accountNo != ''">
+                account_no = #{accountNo}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                AND biz_type = #{bizType}
+            </if>
+            <if test="direction != null and direction != ''">
+                AND direction = #{direction}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="updateAccountAmount">
+        UPDATE t_wallet_account
+        SET available_amount = available_amount + #{amount}
+        WHERE account_no = #{accountNo}
+    </update>
+
+    <insert id="insertRechargeOrder">
+        INSERT INTO t_wallet_recharge_order (recharge_no, account_no, biz_no, amount, status, created_at)
+        VALUES (#{rechargeNo}, #{accountNo}, #{bizNo}, #{amount}, #{status}, NOW())
+    </insert>
+
+    <insert id="insertLedger">
+        INSERT INTO t_wallet_ledger (ledger_no, account_no, biz_type, biz_no, amount, direction, created_at)
+        VALUES (#{ledgerNo}, #{accountNo}, #{bizType}, #{bizNo}, #{amount}, #{direction}, NOW())
+    </insert>
+
+    <select id="findRechargeOrderByNo" resultType="com.abc123.wallet.entity.WalletRechargeOrderEntity">
+        SELECT recharge_no AS rechargeNo,
+               account_no AS accountNo,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_recharge_order
+        WHERE recharge_no = #{rechargeNo}
+    </select>
+
+    <insert id="insertWithdrawOrder">
+        INSERT INTO t_wallet_withdraw_order (withdraw_no, account_no, biz_no, amount, status, created_at)
+        VALUES (#{withdrawNo}, #{accountNo}, #{bizNo}, #{amount}, #{status}, NOW())
+    </insert>
+
+    <select id="findWithdrawOrderByNo" resultType="com.abc123.wallet.entity.WalletWithdrawOrderEntity">
+        SELECT withdraw_no AS withdrawNo,
+               account_no AS accountNo,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_withdraw_order
+        WHERE withdraw_no = #{withdrawNo}
+    </select>
+
+    <insert id="insertTransferOrder">
+        INSERT INTO t_wallet_transfer_order (transfer_no, source_account_no, target_account_no, biz_no, amount, status, created_at)
+        VALUES (#{transferNo}, #{sourceAccountNo}, #{targetAccountNo}, #{bizNo}, #{amount}, #{status}, NOW())
+    </insert>
+
+    <select id="findTransferOrderByNo" resultType="com.abc123.wallet.entity.WalletTransferOrderEntity">
+        SELECT transfer_no AS transferNo,
+               source_account_no AS sourceAccountNo,
+               target_account_no AS targetAccountNo,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_transfer_order
+        WHERE transfer_no = #{transferNo}
+    </select>
+
+    <insert id="insertBalancePaymentOrder">
+        INSERT INTO t_wallet_balance_payment_order (balance_payment_no, account_no, biz_no, amount, status, created_at)
+        VALUES (#{balancePaymentNo}, #{accountNo}, #{bizNo}, #{amount}, #{status}, NOW())
+    </insert>
+
+    <select id="findBalancePaymentOrderByNo" resultType="com.abc123.wallet.entity.WalletBalancePaymentOrderEntity">
+        SELECT balance_payment_no AS balancePaymentNo,
+               account_no AS accountNo,
+               biz_no AS bizNo,
+               FORMAT(amount, 2) AS amount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_balance_payment_order
+        WHERE balance_payment_no = #{balancePaymentNo}
+    </select>
+
+    <select id="findRedPackets" resultType="com.abc123.wallet.entity.WalletRedPacketEntity">
+        SELECT red_packet_no AS redPacketNo,
+               account_no AS accountNo,
+               campaign_name AS campaignName,
+               FORMAT(total_amount, 2) AS totalAmount,
+               packet_count AS packetCount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_red_packet
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findRedPacketByNo" resultType="com.abc123.wallet.entity.WalletRedPacketEntity">
+        SELECT red_packet_no AS redPacketNo,
+               account_no AS accountNo,
+               campaign_name AS campaignName,
+               FORMAT(total_amount, 2) AS totalAmount,
+               packet_count AS packetCount,
+               status,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_wallet_red_packet
+        WHERE red_packet_no = #{redPacketNo}
+    </select>
+
+    <insert id="insertRedPacket">
+        INSERT INTO t_wallet_red_packet (red_packet_no, account_no, campaign_name, total_amount, packet_count, status, created_at)
+        VALUES (#{redPacketNo}, #{accountNo}, #{campaignName}, #{totalAmount}, #{packetCount}, #{status}, NOW())
+    </insert>
+
+    <update id="updateRedPacketStatus">
+        UPDATE t_wallet_red_packet
+        SET status = #{status}
+        WHERE red_packet_no = #{redPacketNo}
+    </update>
+
+    <insert id="insertRiskEvent">
+        INSERT INTO t_wallet_risk_event (event_no, biz_type, biz_no, risk_level, status, risk_reason, created_at)
+        VALUES (#{eventNo}, #{bizType}, #{bizNo}, #{riskLevel}, #{status}, #{riskReason}, NOW())
+    </insert>
+
+    <select id="findRiskEvents" resultType="com.abc123.wallet.entity.WalletRiskEventEntity">
+        SELECT event_no AS eventNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               risk_level AS riskLevel,
+               status,
+               risk_reason AS riskReason,
+               handled_by AS handledBy,
+               handled_remark AS handledRemark,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(handled_at, '%Y-%m-%d %H:%i:%s') AS handledAt
+        FROM t_wallet_risk_event
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findRiskEventByNo" resultType="com.abc123.wallet.entity.WalletRiskEventEntity">
+        SELECT event_no AS eventNo,
+               biz_type AS bizType,
+               biz_no AS bizNo,
+               risk_level AS riskLevel,
+               status,
+               risk_reason AS riskReason,
+               handled_by AS handledBy,
+               handled_remark AS handledRemark,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(handled_at, '%Y-%m-%d %H:%i:%s') AS handledAt
+        FROM t_wallet_risk_event
+        WHERE event_no = #{eventNo}
+    </select>
+
+    <update id="updateRiskEvent">
+        UPDATE t_wallet_risk_event
+        SET status = #{status},
+            handled_by = #{handledBy},
+            handled_remark = #{handledRemark},
+            handled_at = NOW()
+        WHERE event_no = #{eventNo}
+    </update>
+</mapper>

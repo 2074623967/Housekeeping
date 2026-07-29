@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.gatewayaccess.mapper.GatewayAccessMapper">
+
+    <select id="findApplications" resultType="com.abc123.gatewayaccess.dto.GatewayAppDTO">
+        SELECT app_code,
+               app_name,
+               source_system,
+               owner,
+               ip_whitelist,
+               permission_scope,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_app
+        ORDER BY id ASC
+    </select>
+
+    <select id="findGateways" resultType="com.abc123.gatewayaccess.dto.GatewayChannelDTO">
+        SELECT gateway_code,
+               gateway_name,
+               channel_type,
+               protocol_type,
+               sign_algorithm,
+               endpoint,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_channel
+        <where>
+            <if test="query.keyword != null and query.keyword != ''">
+                (
+                    gateway_code LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR gateway_name LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR endpoint LIKE CONCAT('%', #{query.keyword}, '%')
+                )
+            </if>
+            <if test="query.channelType != null and query.channelType != '' and query.channelType != '全部'">
+                AND channel_type = #{query.channelType}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND status = #{query.status}
+            </if>
+        </where>
+        ORDER BY id ASC
+    </select>
+
+    <select id="findCertificates" resultType="com.abc123.gatewayaccess.dto.GatewayCertificateDTO">
+        SELECT certificate_code,
+               gateway_code,
+               certificate_version,
+               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_certificate
+        ORDER BY id ASC
+    </select>
+
+    <select id="findPermissions" resultType="com.abc123.gatewayaccess.dto.GatewayPermissionDTO">
+        SELECT permission_code,
+               app_code,
+               scope,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_permission
+        ORDER BY id ASC
+    </select>
+
+    <select id="findAuditLogs" resultType="com.abc123.gatewayaccess.dto.GatewayAuditLogDTO">
+        SELECT request_id,
+               app_code,
+               gateway_code,
+               operation_type,
+               sign_type,
+               client_ip,
+               result_status,
+               result_status_type,
+               risk_hint,
+               DATE_FORMAT(happened_at, '%Y-%m-%d %H:%i:%s') AS happenedAt
+        FROM t_gateway_audit_log
+        <where>
+            <if test="query.keyword != null and query.keyword != ''">
+                (
+                    request_id LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR app_code LIKE CONCAT('%', #{query.keyword}, '%')
+                    OR gateway_code LIKE CONCAT('%', #{query.keyword}, '%')
+                )
+            </if>
+            <if test="query.appCode != null and query.appCode != '' and query.appCode != '全部'">
+                AND app_code = #{query.appCode}
+            </if>
+            <if test="query.resultStatus != null and query.resultStatus != '' and query.resultStatus != '全部'">
+                AND result_status = #{query.resultStatus}
+            </if>
+        </where>
+        ORDER BY id DESC
+    </select>
+
+    <select id="findReleaseRoutes" resultType="com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO">
+        SELECT route_code,
+               gateway_code,
+               environment,
+               release_strategy,
+               traffic_percent,
+               release_window,
+               status,
+               status_type,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_release_route
+        <where>
+            <if test="query.environment != null and query.environment != '' and query.environment != '全部'">
+                environment = #{query.environment}
+            </if>
+            <if test="query.status != null and query.status != '' and query.status != '全部'">
+                AND status = #{query.status}
+            </if>
+        </where>
+        ORDER BY id ASC
+    </select>
+
+    <select id="countApplications" resultType="long">
+        SELECT COUNT(1) FROM t_gateway_app
+    </select>
+
+    <select id="countEnabledGateways" resultType="long">
+        SELECT COUNT(1)
+        FROM t_gateway_channel
+        WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledCertificates" resultType="long">
+        SELECT COUNT(1)
+        FROM t_gateway_certificate
+        WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledPermissions" resultType="long">
+        SELECT COUNT(1)
+        FROM t_gateway_permission
+        WHERE status = 'ENABLED'
+    </select>
+
+    <update id="updateApplicationStatus">
+        UPDATE t_gateway_app
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE app_code = #{appCode}
+    </update>
+
+    <update id="updateGatewayStatus">
+        UPDATE t_gateway_channel
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE gateway_code = #{gatewayCode}
+    </update>
+
+    <update id="updateCertificateStatus">
+        UPDATE t_gateway_certificate
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE certificate_code = #{certificateCode}
+    </update>
+
+    <update id="updatePermissionStatus">
+        UPDATE t_gateway_permission
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE permission_code = #{permissionCode}
+    </update>
+
+    <update id="updateReleaseRouteStatus">
+        UPDATE t_gateway_release_route
+        SET status = #{status},
+            status_type = #{statusType},
+            updated_at = NOW()
+        WHERE route_code = #{routeCode}
+    </update>
+</mapper>

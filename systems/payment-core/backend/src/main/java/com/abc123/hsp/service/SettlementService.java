@@ -1,20 +1,10 @@
 package com.abc123.hsp.service;
 
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
-import com.abc123.hsp.repository.SettlementRepository;
-import java.util.List;
-import org.springframework.stereotype.Service;
+import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 
-@Service
-public class SettlementService {
+public interface SettlementService {
 
-    private final SettlementRepository settlementRepository;
-
-    public SettlementService(SettlementRepository settlementRepository) {
-        this.settlementRepository = settlementRepository;
-    }
-
-    public List<WorkerSettlementListItemDTO> workerList() {
-        return settlementRepository.findWorkerSettlements();
-    }
+    PageResultDTO<WorkerSettlementListItemDTO> workerList(WorkerSettlementQueryDTO query);
 }

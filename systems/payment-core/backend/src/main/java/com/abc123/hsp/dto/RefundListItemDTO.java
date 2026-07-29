@@ -1,95 +1,31 @@
 package com.abc123.hsp.dto;
 
+import lombok.Data;
+
+/**
+ * 退款列表行模型，供退款查询页展示退款单核心摘要信息。
+ */
+@Data
 public class RefundListItemDTO {
 
+    /** 退款单号。 */
     private String refundOrderId;
+    /** 原支付单号。 */
     private String paymentOrderId;
+    /** 原业务订单号。 */
     private String orderNo;
+    /** 申请退款客户名称。 */
     private String customerName;
+    /** 本次退款金额。 */
     private String refundAmount;
+    /** 本次退款方式。 */
     private String refundMethod;
+    /** 当前退款状态。 */
     private String status;
+    /** 当前退款状态对应的前端展示样式。 */
     private String statusType;
+    /** 退款申请时间。 */
     private String appliedAt;
+    /** 退款成功时间。 */
     private String successAt;
-
-    public String getRefundOrderId() {
-        return refundOrderId;
-    }
-
-    public void setRefundOrderId(String refundOrderId) {
-        this.refundOrderId = refundOrderId;
-    }
-
-    public String getPaymentOrderId() {
-        return paymentOrderId;
-    }
-
-    public void setPaymentOrderId(String paymentOrderId) {
-        this.paymentOrderId = paymentOrderId;
-    }
-
-    public String getOrderNo() {
-        return orderNo;
-    }
-
-    public void setOrderNo(String orderNo) {
-        this.orderNo = orderNo;
-    }
-
-    public String getCustomerName() {
-        return customerName;
-    }
-
-    public void setCustomerName(String customerName) {
-        this.customerName = customerName;
-    }
-
-    public String getRefundAmount() {
-        return refundAmount;
-    }
-
-    public void setRefundAmount(String refundAmount) {
-        this.refundAmount = refundAmount;
-    }
-
-    public String getRefundMethod() {
-        return refundMethod;
-    }
-
-    public void setRefundMethod(String refundMethod) {
-        this.refundMethod = refundMethod;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getStatusType() {
-        return statusType;
-    }
-
-    public void setStatusType(String statusType) {
-        this.statusType = statusType;
-    }
-
-    public String getAppliedAt() {
-        return appliedAt;
-    }
-
-    public void setAppliedAt(String appliedAt) {
-        this.appliedAt = appliedAt;
-    }
-
-    public String getSuccessAt() {
-        return successAt;
-    }
-
-    public void setSuccessAt(String successAt) {
-        this.successAt = successAt;
-    }
 }

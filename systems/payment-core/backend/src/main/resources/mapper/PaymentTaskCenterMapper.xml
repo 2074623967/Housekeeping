@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentTaskCenterMapper">
+
+    <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO">
+        SELECT
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_order p
+                INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                WHERE p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+                  AND pr.expires_at &lt; NOW()
+            ), 0) AS expiredPaymentCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_order
+                WHERE status = 'WAIT_CALLBACK'
+            ), 0) AS pendingCallbackCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_event
+                WHERE publish_status = 'FAILED'
+            ), 0) AS failedEventCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_refund_order
+                WHERE status = 'FAIL'
+            ), 0) AS failedRefundCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_day_end_batch
+                WHERE batch_status = 'WARNING'
+            ), 0) AS warningDayEndBatchCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_control_policy
+                WHERE status = 'ENABLED'
+                  AND COALESCE(self_check_status, 'WARN') <> 'PASS'
+            ), 0) AS controlPolicyWarningCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM (
+                    SELECT po.created_at, 'P1' AS severity
+                    FROM t_payment_order po
+                    WHERE po.status = 'WAIT_CALLBACK'
+                    UNION ALL
+                    SELECT pnl.created_at, 'P1' AS severity
+                    FROM t_payment_notify_log pnl
+                    WHERE pnl.notify_status = '待处理'
+                    UNION ALL
+                    SELECT pe.created_at, 'P2' AS severity
+                    FROM t_payment_event pe
+                    WHERE pe.publish_status = 'FAILED'
+                    UNION ALL
+                    SELECT po.created_at, 'P2' AS severity
+                    FROM t_payment_order po
+                             INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+                    WHERE pcc.status = 'DISABLED'
+                ) issue_sla
+                WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+                   OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
+            ), 0) AS overdueIssueCount
+    </select>
+
+    <select id="countOverduePaymentIssues" resultType="int">
+        SELECT COUNT(1)
+        FROM (
+            SELECT po.created_at, 'P1' AS severity
+            FROM t_payment_order po
+            WHERE po.status = 'WAIT_CALLBACK'
+            UNION ALL
+            SELECT pnl.created_at, 'P1' AS severity
+            FROM t_payment_notify_log pnl
+            WHERE pnl.notify_status = '待处理'
+            UNION ALL
+            SELECT pe.created_at, 'P2' AS severity
+            FROM t_payment_event pe
+            WHERE pe.publish_status = 'FAILED'
+            UNION ALL
+            SELECT po.created_at, 'P2' AS severity
+            FROM t_payment_order po
+                     INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+            WHERE pcc.status = 'DISABLED'
+        ) issue_sla
+        WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+           OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
+    </select>
+
+    <select id="findOverdueIssueAlertCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
+        SELECT issue_sla.issue_no AS issueNo,
+               issue_sla.payment_order_id AS paymentOrderId,
+               issue_sla.issue_type AS issueType,
+               issue_sla.severity AS severity,
+               COALESCE(roster.responsibility_group, '支付运营组') AS responsibilityGroup,
+               COALESCE(roster.receiver, '支付运营') AS receiver,
+               COALESCE(roster.escalation_receiver, '支付值班负责人') AS escalationReceiver,
+               COALESCE(roster.escalation_policy, '超时未确认升级值班负责人') AS escalationPolicy,
+               COALESCE(roster.escalation_timeout_minutes, 30) AS escalationTimeoutMinutes,
+               COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
+               CASE
+                   WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL
+                       THEN '00:00-23:00'
+                   WHEN roster.effective_start_hour <= roster.effective_end_hour
+                       THEN CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-',
+                                   LPAD(roster.effective_end_hour, 2, '0'), ':00')
+                   ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
+                               LPAD(roster.effective_end_hour, 2, '0'), ':00')
+               END AS effectiveWindow,
+               CONCAT('支付异常 ', issue_sla.issue_no, ' 已超过 ', issue_sla.severity, ' SLA，请进入异常中心处理。') AS alertContent
+        FROM (
+            SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
+                   po.payment_order_id,
+                   '待回调未收口' AS issue_type,
+                   'P1' AS severity,
+                   po.created_at
+            FROM t_payment_order po
+            WHERE po.status = 'WAIT_CALLBACK'
+            UNION ALL
+            SELECT CONCAT('ISSUE-NOTIFY-', pnl.notify_no) AS issue_no,
+                   pnl.payment_order_id,
+                   '回调处理待跟进' AS issue_type,
+                   'P1' AS severity,
+                   pnl.created_at
+            FROM t_payment_notify_log pnl
+            WHERE pnl.notify_status = '待处理'
+            UNION ALL
+            SELECT CONCAT('ISSUE-EVENT-', pe.event_no) AS issue_no,
+                   pe.payment_order_id,
+                   '下游事件发布失败' AS issue_type,
+                   'P2' AS severity,
+                   pe.created_at
+            FROM t_payment_event pe
+            WHERE pe.publish_status = 'FAILED'
+            UNION ALL
+            SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
+                   po.payment_order_id,
+                   '命中停用渠道' AS issue_type,
+                   'P2' AS severity,
+                   po.created_at
+            FROM t_payment_order po
+                     INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+            WHERE pcc.status = 'DISABLED'
+        ) issue_sla
+        LEFT JOIN t_payment_issue_duty_roster roster
+            ON roster.issue_type = issue_sla.issue_type
+           AND roster.severity = issue_sla.severity
+           AND roster.status = 'ENABLED'
+           AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
+           AND (
+               roster.holiday_strategy = 'ALL_DAYS'
+               OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+               OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+           )
+           AND (
+               (roster.effective_start_hour <= roster.effective_end_hour
+                   AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
+               OR
+               (roster.effective_start_hour > roster.effective_end_hour
+                   AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+           )
+        WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+            OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_issue_alert_log alert_log
+              WHERE alert_log.issue_no = issue_sla.issue_no
+                AND alert_log.ack_status = '待确认'
+          )
+        ORDER BY issue_sla.created_at ASC, issue_no ASC
+    </select>
+
+    <select id="findUnacknowledgedIssueAlertEscalationCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
+        SELECT source_alert.issue_no AS issueNo,
+               source_alert.alert_no AS sourceAlertNo,
+               source_alert.payment_order_id AS paymentOrderId,
+               source_alert.issue_type AS issueType,
+               source_alert.severity AS severity,
+               source_alert.responsibility_group AS responsibilityGroup,
+               COALESCE(roster.escalation_receiver, source_alert.receiver) AS receiver,
+               COALESCE(roster.escalation_receiver, source_alert.receiver) AS escalationReceiver,
+               COALESCE(roster.escalation_policy, '超时未确认升级值班负责人') AS escalationPolicy,
+               COALESCE(roster.escalation_timeout_minutes, 30) AS escalationTimeoutMinutes,
+               COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
+               CASE
+                   WHEN roster.effective_start_hour IS NULL OR roster.effective_end_hour IS NULL
+                       THEN '00:00-23:00'
+                   WHEN roster.effective_start_hour <= roster.effective_end_hour
+                       THEN CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-',
+                                   LPAD(roster.effective_end_hour, 2, '0'), ':00')
+                   ELSE CONCAT(LPAD(roster.effective_start_hour, 2, '0'), ':00-次日',
+                               LPAD(roster.effective_end_hour, 2, '0'), ':00')
+               END AS effectiveWindow,
+               CONCAT('升级来源告警 ', source_alert.alert_no, ' 已超过 ',
+                      COALESCE(roster.escalation_timeout_minutes, 30),
+                      ' 分钟未确认，请升级跟进。原告警：', source_alert.alert_content) AS alertContent
+        FROM t_payment_issue_alert_log source_alert
+        LEFT JOIN t_payment_issue_duty_roster roster
+               ON roster.issue_type = source_alert.issue_type
+              AND roster.severity = source_alert.severity
+              AND roster.status = 'ENABLED'
+              AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
+              AND (
+                  roster.holiday_strategy = 'ALL_DAYS'
+                  OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+                  OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+              )
+              AND (
+                  (roster.effective_start_hour <= roster.effective_end_hour
+                      AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
+                  OR
+                  (roster.effective_start_hour > roster.effective_end_hour
+                      AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+              )
+        WHERE source_alert.alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert.ack_status = '待确认'
+          AND TIMESTAMPDIFF(MINUTE, source_alert.created_at, NOW()) >= COALESCE(roster.escalation_timeout_minutes, 30)
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_issue_alert_log escalated_alert
+              WHERE escalated_alert.issue_no = source_alert.issue_no
+                AND escalated_alert.alert_channel = 'IN_APP_OUTBOX'
+                AND escalated_alert.alert_content LIKE CONCAT('%升级来源告警 ', source_alert.alert_no, '%')
+          )
+        ORDER BY source_alert.created_at ASC, source_alert.id ASC
+    </select>
+
+    <select id="findRecentTaskRuns" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
+        SELECT task_log_no AS taskLogNo,
+               task_code AS taskCode,
+               task_name AS taskName,
+               run_mode AS runMode,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               processed_count AS processedCount,
+               success_count AS successCount,
+               warning_count AS warningCount,
+               fail_count AS failCount,
+               summary_comment AS summaryComment,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_task_run_log
+        ORDER BY started_at DESC, id DESC
+        LIMIT 10
+    </select>
+
+    <select id="findTaskRunLogs" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO"
+            resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">
+        SELECT task_log_no AS taskLogNo,
+               task_code AS taskCode,
+               task_name AS taskName,
+               run_mode AS runMode,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               severity_level AS severityLevel,
+               severity_level_type AS severityLevelType,
+               escalation_status AS escalationStatus,
+               escalation_status_type AS escalationStatusType,
+               processed_count AS processedCount,
+               success_count AS successCount,
+               warning_count AS warningCount,
+               fail_count AS failCount,
+               summary_comment AS summaryComment,
+               suggested_action AS suggestedAction,
+               recommended_route AS recommendedRoute,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') AS startedAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_task_run_log
+        <where>
+            <if test="taskCode != null and taskCode != ''">
+                AND task_code = #{taskCode}
+            </if>
+            <if test="runMode != null and runMode != '' and runMode != '全部'">
+                AND run_mode = #{runMode}
+            </if>
+            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
+                AND task_status = #{taskStatus}
+            </if>
+            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
+                AND severity_level = #{severityLevel}
+            </if>
+        </where>
+        ORDER BY started_at DESC, id DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countTaskRunLogs" parameterType="com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_task_run_log
+        <where>
+            <if test="taskCode != null and taskCode != ''">
+                AND task_code = #{taskCode}
+            </if>
+            <if test="runMode != null and runMode != '' and runMode != '全部'">
+                AND run_mode = #{runMode}
+            </if>
+            <if test="taskStatus != null and taskStatus != '' and taskStatus != '全部'">
+                AND task_status = #{taskStatus}
+            </if>
+            <if test="severityLevel != null and severityLevel != '' and severityLevel != '全部'">
+                AND severity_level = #{severityLevel}
+            </if>
+        </where>
+    </select>
+
+    <insert id="insertTaskRunLog" parameterType="com.abc123.hsp.entity.PaymentTaskRunLogEntity">
+        INSERT INTO t_payment_task_run_log (
+            task_log_no,
+            task_code,
+            task_name,
+            run_mode,
+            task_status,
+            task_status_type,
+            severity_level,
+            severity_level_type,
+            escalation_status,
+            escalation_status_type,
+            processed_count,
+            success_count,
+            warning_count,
+            fail_count,
+            summary_comment,
+            suggested_action,
+            recommended_route,
+            triggered_by,
+            started_at,
+            completed_at
+        ) VALUES (
+            #{taskLogNo},
+            #{taskCode},
+            #{taskName},
+            #{runMode},
+            #{taskStatus},
+            #{taskStatusType},
+            #{severityLevel},
+            #{severityLevelType},
+            #{escalationStatus},
+            #{escalationStatusType},
+            #{processedCount},
+            #{successCount},
+            #{warningCount},
+            #{failCount},
+            #{summaryComment},
+            #{suggestedAction},
+            #{recommendedRoute},
+            #{triggeredBy},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <insert id="insertIssueAlertLog" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        INSERT INTO t_payment_issue_alert_log (
+            alert_no,
+            source_alert_no,
+            issue_no,
+            payment_order_id,
+            issue_type,
+            severity,
+            responsibility_group,
+            alert_channel,
+            receiver,
+            alert_status,
+            alert_status_type,
+            ack_status,
+            ack_status_type,
+            alert_content,
+            provider_code,
+            provider_name,
+            endpoint_alias,
+            template_code,
+            provider_receipt_snapshot,
+            provider_receipt_no,
+            provider_delivery_status,
+            provider_delivery_message,
+            rendered_content_snapshot,
+            triggered_by,
+            created_at
+        ) VALUES (
+            #{alertNo},
+            #{sourceAlertNo},
+            #{issueNo},
+            #{paymentOrderId},
+            #{issueType},
+            #{severity},
+            #{responsibilityGroup},
+            #{alertChannel},
+            #{receiver},
+            #{alertStatus},
+            #{alertStatusType},
+            #{ackStatus},
+            #{ackStatusType},
+            #{alertContent},
+            #{providerCode},
+            #{providerName},
+            #{endpointAlias},
+            #{templateCode},
+            #{providerReceiptSnapshot},
+            #{providerReceiptNo},
+            #{providerDeliveryStatus},
+            #{providerDeliveryMessage},
+            #{renderedContentSnapshot},
+            #{triggeredBy},
+            NOW()
+        )
+    </insert>
+
+    <select id="findPendingOutboxAlerts" resultType="com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO">
+        SELECT alert_no AS alertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               outbox.issue_type AS issueType,
+               outbox.severity AS severity,
+               outbox.responsibility_group AS responsibilityGroup,
+               outbox.receiver AS receiver,
+               COALESCE(roster.notify_channels, 'IN_APP,IM,SMS,EMAIL') AS notifyChannels,
+               COALESCE(roster.escalation_level, 'L1') AS escalationLevel,
+               COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
+               outbox.alert_content AS alertContent,
+               outbox.triggered_by AS triggeredBy
+        FROM t_payment_issue_alert_log outbox
+        LEFT JOIN t_payment_issue_duty_roster roster
+               ON roster.issue_type = outbox.issue_type
+              AND roster.severity = outbox.severity
+              AND roster.status = 'ENABLED'
+              AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
+              AND (
+                  roster.holiday_strategy = 'ALL_DAYS'
+                  OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+                  OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+              )
+              AND (
+                  (roster.effective_start_hour <= roster.effective_end_hour
+                      AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
+                  OR
+                  (roster.effective_start_hour > roster.effective_end_hour
+                      AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) <= roster.effective_end_hour))
+              )
+        WHERE alert_channel = 'IN_APP_OUTBOX'
+          AND alert_status IN ('已生成', '部分失败', '派发失败')
+        ORDER BY outbox.created_at ASC, outbox.id ASC
+    </select>
+
+    <select id="hasSuccessfulIssueAlertChannelDelivery" resultType="boolean">
+        SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
+        FROM t_payment_issue_alert_log
+        WHERE source_alert_no = #{param1}
+          AND alert_channel = #{param2}
+          AND alert_status = '已派发'
+    </select>
+
+    <select id="countFailedIssueAlertChannelDeliveries" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE source_alert_no = #{param1}
+          AND alert_channel = #{param2}
+          AND alert_status = '派发失败'
+    </select>
+
+    <select id="findLatestIssueAlertChannelDeliveryLog" resultType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        SELECT alert_no AS alertNo,
+               source_alert_no AS sourceAlertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               triggered_by AS triggeredBy
+        FROM t_payment_issue_alert_log
+        WHERE source_alert_no = #{param1}
+          AND alert_channel = #{param2}
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="countIssueAlertProviderDeliveriesSince" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE provider_code = #{providerCode}
+          AND alert_channel = #{alertChannel}
+          AND created_at &gt;= STR_TO_DATE(#{sinceTime}, '%Y-%m-%d %H:%i:%s')
+          AND alert_status = '已派发'
+    </select>
+
+    <select id="countIssueAlertProviderFailedDeliveriesSince" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE provider_code = #{providerCode}
+          AND alert_channel = #{alertChannel}
+          AND created_at &gt;= STR_TO_DATE(#{sinceTime}, '%Y-%m-%d %H:%i:%s')
+          AND alert_status = '派发失败'
+    </select>
+
+    <select id="findEnabledAlertProvidersByChannel" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
+        SELECT provider_code AS providerCode,
+               provider_name AS providerName,
+               channel_code AS channelCode,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               template_body AS templateBody,
+               route_rule AS routeRule,
+               route_priority AS routePriority,
+               retry_policy AS retryPolicy,
+               rate_limit_policy AS rateLimitPolicy,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_alert_provider_config
+        WHERE channel_code = #{param1}
+          AND status = 'ENABLED'
+        ORDER BY route_priority ASC, updated_at DESC, id DESC
+    </select>
+
+    <update id="updateIssueAlertDeliveryStatus" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        UPDATE t_payment_issue_alert_log
+        SET alert_status = #{alertStatus},
+            alert_status_type = #{alertStatusType},
+            ack_status = #{ackStatus},
+            ack_status_type = #{ackStatusType},
+            triggered_by = #{triggeredBy}
+        WHERE alert_no = #{alertNo}
+    </update>
+
+    <select id="findAcceptedIssueAlertDeliveryLogs" resultType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        SELECT alert_no AS alertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               triggered_by AS triggeredBy
+        FROM t_payment_issue_alert_log
+        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
+          AND provider_delivery_status = 'ACCEPTED'
+        ORDER BY created_at ASC, id ASC
+    </select>
+
+    <update id="updateIssueAlertProviderReceipt" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
+        UPDATE t_payment_issue_alert_log
+        SET provider_receipt_snapshot = #{providerReceiptSnapshot},
+            provider_delivery_status = #{providerDeliveryStatus},
+            provider_delivery_message = #{providerDeliveryMessage},
+            ack_status = #{ackStatus},
+            ack_status_type = #{ackStatusType},
+            triggered_by = #{triggeredBy}
+        WHERE alert_no = #{alertNo}
+          AND provider_delivery_status = 'ACCEPTED'
+    </update>
+</mapper>

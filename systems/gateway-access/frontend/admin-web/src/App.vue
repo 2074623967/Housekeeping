@@ -1,0 +1,476 @@
+<script setup>
+import { onMounted, ref } from "vue";
+import { gatewayAccessApi } from "./api/client";
+
+const summary = ref({ metrics: [], highlights: [] });
+const applications = ref([]);
+const gateways = ref([]);
+const certificates = ref([]);
+const permissions = ref([]);
+const auditLogs = ref([]);
+const releaseRoutes = ref([]);
+const loading = ref(true);
+const message = ref("");
+const active = ref("");
+const certificateFilters = ref({ riskLevel: "全部" });
+const gatewayFilters = ref({
+  keyword: "",
+  channelType: "全部",
+  status: "全部"
+});
+const auditFilters = ref({
+  keyword: "",
+  appCode: "全部",
+  resultStatus: "全部"
+});
+const releaseRouteFilters = ref({
+  environment: "全部",
+  status: "全部"
+});
+
+async function loadAll() {
+  loading.value = true;
+  message.value = "";
+  try {
+    const [summaryData, appData, gatewayData, certData, permissionData, auditData, releaseRouteData] = await Promise.all([
+      gatewayAccessApi.getSummary(),
+      gatewayAccessApi.getApplications(),
+      gatewayAccessApi.getGateways(gatewayFilters.value),
+      gatewayAccessApi.getCertificates(certificateFilters.value.riskLevel),
+      gatewayAccessApi.getPermissions(),
+      gatewayAccessApi.getAuditLogs(auditFilters.value),
+      gatewayAccessApi.getReleaseRoutes(releaseRouteFilters.value)
+    ]);
+    summary.value = summaryData;
+    applications.value = appData.records;
+    gateways.value = gatewayData.records;
+    certificates.value = certData.records;
+    permissions.value = permissionData.records;
+    auditLogs.value = auditData.records;
+    releaseRoutes.value = releaseRouteData.records;
+  } catch (error) {
+    message.value = error.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadGateways() {
+  const gatewayData = await gatewayAccessApi.getGateways(gatewayFilters.value);
+  gateways.value = gatewayData.records;
+}
+
+async function loadCertificates() {
+  const certData = await gatewayAccessApi.getCertificates(certificateFilters.value.riskLevel);
+  certificates.value = certData.records;
+}
+
+async function applyGatewayFilters() {
+  message.value = "";
+  try {
+    await loadGateways();
+  } catch (error) {
+    message.value = `网关筛选失败：${error.message}`;
+  }
+}
+
+async function resetGatewayFilters() {
+  gatewayFilters.value = {
+    keyword: "",
+    channelType: "全部",
+    status: "全部"
+  };
+  await applyGatewayFilters();
+}
+
+async function applyCertificateFilters() {
+  message.value = "";
+  try {
+    await loadCertificates();
+  } catch (error) {
+    message.value = `证书筛选失败：${error.message}`;
+  }
+}
+
+async function resetCertificateFilters() {
+  certificateFilters.value = { riskLevel: "全部" };
+  await applyCertificateFilters();
+}
+
+async function applyAuditFilters() {
+  message.value = "";
+  try {
+    const auditData = await gatewayAccessApi.getAuditLogs(auditFilters.value);
+    auditLogs.value = auditData.records;
+  } catch (error) {
+    message.value = `审计筛选失败：${error.message}`;
+  }
+}
+
+async function resetAuditFilters() {
+  auditFilters.value = {
+    keyword: "",
+    appCode: "全部",
+    resultStatus: "全部"
+  };
+  await applyAuditFilters();
+}
+
+async function applyReleaseRouteFilters() {
+  message.value = "";
+  try {
+    const releaseRouteData = await gatewayAccessApi.getReleaseRoutes(releaseRouteFilters.value);
+    releaseRoutes.value = releaseRouteData.records;
+  } catch (error) {
+    message.value = `灰度路由筛选失败：${error.message}`;
+  }
+}
+
+async function resetReleaseRouteFilters() {
+  releaseRouteFilters.value = {
+    environment: "全部",
+    status: "全部"
+  };
+  await applyReleaseRouteFilters();
+}
+
+async function toggle(run, code, enabled, label) {
+  active.value = code;
+  try {
+    const summaryData = await run(code, enabled);
+    summary.value = summaryData;
+    const appData = await gatewayAccessApi.getApplications();
+    const gatewayData = await gatewayAccessApi.getGateways(gatewayFilters.value);
+    const certData = await gatewayAccessApi.getCertificates();
+    const permissionData = await gatewayAccessApi.getPermissions();
+    const auditData = await gatewayAccessApi.getAuditLogs(auditFilters.value);
+    const releaseRouteData = await gatewayAccessApi.getReleaseRoutes(releaseRouteFilters.value);
+    applications.value = appData.records;
+    gateways.value = gatewayData.records;
+    certificates.value = certData.records;
+    permissions.value = permissionData.records;
+    auditLogs.value = auditData.records;
+    releaseRoutes.value = releaseRouteData.records;
+    message.value = `${label} ${code} 已${enabled ? "启用" : "停用"}`;
+  } catch (error) {
+    message.value = `${label} ${code} 操作失败：${error.message}`;
+  } finally {
+    active.value = "";
+  }
+}
+
+onMounted(loadAll);
+</script>
+
+<template>
+  <div class="page">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">gateway-access</p>
+        <h1>支付网关接入管理台</h1>
+        <p class="lead">管理接入应用、渠道网关、证书和权限，作为 payment-core 的真实接入层。</p>
+      </div>
+      <button class="button" @click="loadAll">刷新</button>
+    </header>
+
+    <section v-if="message" class="banner">{{ message }}</section>
+
+    <section v-if="loading" class="card">加载中...</section>
+
+    <template v-else>
+      <section class="metrics">
+        <article v-for="metric in summary.metrics" :key="metric.title" class="metric">
+          <span class="tag" :class="metric.badgeType">{{ metric.badgeText }}</span>
+          <strong>{{ metric.value }}</strong>
+          <span>{{ metric.title }}</span>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>系统说明</h2>
+        <ul>
+          <li v-for="item in summary.highlights" :key="item">{{ item }}</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>接入应用</h2>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>应用编码</th>
+              <th>应用名称</th>
+              <th>来源系统</th>
+              <th>负责人</th>
+              <th>IP 白名单</th>
+              <th>权限范围</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in applications" :key="item.appCode">
+              <td>{{ item.appCode }}</td>
+              <td>{{ item.appName }}</td>
+              <td>{{ item.sourceSystem }}</td>
+              <td>{{ item.owner }}</td>
+              <td>{{ item.ipWhitelist }}</td>
+              <td>{{ item.permissionScope }}</td>
+              <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
+              <td>{{ item.updatedAt }}</td>
+              <td>
+                <button class="link" :disabled="active === item.appCode" @click="toggle(gatewayAccessApi.toggleApplication, item.appCode, item.status !== 'ENABLED', '应用')">
+                  {{ item.status === "ENABLED" ? "停用" : "启用" }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>渠道网关</h2>
+        </div>
+        <div class="toolbar">
+          <input v-model="gatewayFilters.keyword" placeholder="搜索网关编码 / 名称 / 接入地址" />
+          <select v-model="gatewayFilters.channelType">
+            <option>全部</option>
+            <option>WECHAT</option>
+            <option>ALIPAY</option>
+            <option>BANK</option>
+          </select>
+          <select v-model="gatewayFilters.status">
+            <option>全部</option>
+            <option>ENABLED</option>
+            <option>DISABLED</option>
+          </select>
+          <button class="button secondary" @click="applyGatewayFilters">查询</button>
+          <button class="button secondary" @click="resetGatewayFilters">重置</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>网关编码</th>
+              <th>名称</th>
+              <th>渠道类型</th>
+              <th>协议</th>
+              <th>签名算法</th>
+              <th>接入地址</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in gateways" :key="item.gatewayCode">
+              <td>{{ item.gatewayCode }}</td>
+              <td>{{ item.gatewayName }}</td>
+              <td>{{ item.channelType }}</td>
+              <td>{{ item.protocolType }}</td>
+              <td>{{ item.signAlgorithm }}</td>
+              <td>{{ item.endpoint }}</td>
+              <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
+              <td>{{ item.updatedAt }}</td>
+              <td>
+                <button class="link" :disabled="active === item.gatewayCode" @click="toggle(gatewayAccessApi.toggleGateway, item.gatewayCode, item.status !== 'ENABLED', '网关')">
+                  {{ item.status === "ENABLED" ? "停用" : "启用" }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card grid">
+        <div>
+          <div class="section-head"><h2>证书管理</h2></div>
+          <div class="toolbar">
+            <select v-model="certificateFilters.riskLevel">
+              <option>全部</option>
+              <option>已过期</option>
+              <option>7天内到期</option>
+              <option>30天内到期</option>
+              <option>正常</option>
+              <option>日期异常</option>
+            </select>
+            <button class="button secondary" @click="applyCertificateFilters">查询</button>
+            <button class="button secondary" @click="resetCertificateFilters">重置</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>证书编码</th>
+                <th>网关</th>
+                <th>版本</th>
+                <th>到期日</th>
+                <th>风险等级</th>
+                <th>状态</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in certificates" :key="item.certificateCode">
+                <td>{{ item.certificateCode }}</td>
+                <td>{{ item.gatewayCode }}</td>
+                <td>{{ item.certificateVersion }}</td>
+                <td>
+                  <div>{{ item.expireAt }}</div>
+                  <div class="muted">{{ item.remainingDays }} 天</div>
+                </td>
+                <td>
+                  <span class="tag" :class="item.riskLevelType">{{ item.riskLevel }}</span>
+                  <div class="muted">{{ item.riskHint }}</div>
+                </td>
+                <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
+                <td>{{ item.updatedAt }}</td>
+                <td>
+                  <button class="link" :disabled="active === item.certificateCode" @click="toggle(gatewayAccessApi.toggleCertificate, item.certificateCode, item.status !== 'ENABLED', '证书')">
+                    {{ item.status === "ENABLED" ? "停用" : "启用" }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div>
+          <div class="section-head"><h2>接入权限</h2></div>
+          <table>
+            <thead>
+              <tr>
+                <th>权限编码</th>
+                <th>应用</th>
+                <th>权限范围</th>
+                <th>状态</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in permissions" :key="item.permissionCode">
+                <td>{{ item.permissionCode }}</td>
+                <td>{{ item.appCode }}</td>
+                <td>{{ item.scope }}</td>
+                <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
+                <td>{{ item.updatedAt }}</td>
+                <td>
+                  <button class="link" :disabled="active === item.permissionCode" @click="toggle(gatewayAccessApi.togglePermission, item.permissionCode, item.status !== 'ENABLED', '权限')">
+                    {{ item.status === "ENABLED" ? "停用" : "启用" }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>环境隔离与灰度发布</h2>
+        </div>
+        <div class="toolbar">
+          <select v-model="releaseRouteFilters.environment">
+            <option>全部</option>
+            <option>PROD</option>
+            <option>GRAY</option>
+            <option>UAT</option>
+          </select>
+          <select v-model="releaseRouteFilters.status">
+            <option>全部</option>
+            <option>ENABLED</option>
+            <option>DISABLED</option>
+          </select>
+          <button class="button secondary" @click="applyReleaseRouteFilters">查询</button>
+          <button class="button secondary" @click="resetReleaseRouteFilters">重置</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>路由编码</th>
+              <th>网关</th>
+              <th>环境</th>
+              <th>发布策略</th>
+              <th>流量占比</th>
+              <th>发布窗口</th>
+              <th>状态</th>
+              <th>更新时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in releaseRoutes" :key="item.routeCode">
+              <td>{{ item.routeCode }}</td>
+              <td>{{ item.gatewayCode }}</td>
+              <td>{{ item.environment }}</td>
+              <td>{{ item.releaseStrategy }}</td>
+              <td>{{ item.trafficPercent }}%</td>
+              <td>{{ item.releaseWindow }}</td>
+              <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
+              <td>{{ item.updatedAt }}</td>
+              <td>
+                <button class="link" :disabled="active === item.routeCode" @click="toggle(gatewayAccessApi.toggleReleaseRoute, item.routeCode, item.status !== 'ENABLED', '灰度路由')">
+                  {{ item.status === "ENABLED" ? "停用" : "启用" }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>调用方审计台账</h2>
+        </div>
+        <div class="toolbar">
+          <input v-model="auditFilters.keyword" placeholder="请求流水号 / 应用 / 网关编码" />
+          <select v-model="auditFilters.appCode">
+            <option>全部</option>
+            <option>APP_PAY_CORE</option>
+            <option>APP_SETTLEMENT</option>
+            <option>APP_RISK</option>
+          </select>
+          <select v-model="auditFilters.resultStatus">
+            <option>全部</option>
+            <option>SUCCESS</option>
+            <option>FAILED</option>
+          </select>
+          <button class="button secondary" @click="applyAuditFilters">查询</button>
+          <button class="button secondary" @click="resetAuditFilters">重置</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>请求流水号</th>
+              <th>应用</th>
+              <th>网关</th>
+              <th>操作类型</th>
+              <th>签名算法</th>
+              <th>客户端IP</th>
+              <th>结果</th>
+              <th>风险提示</th>
+              <th>发生时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in auditLogs" :key="item.requestId">
+              <td>{{ item.requestId }}</td>
+              <td>{{ item.appCode }}</td>
+              <td>{{ item.gatewayCode }}</td>
+              <td>{{ item.operationType }}</td>
+              <td>{{ item.signType }}</td>
+              <td>{{ item.clientIp }}</td>
+              <td><span class="tag" :class="item.resultStatusType">{{ item.resultStatus }}</span></td>
+              <td>{{ item.riskHint }}</td>
+              <td>{{ item.happenedAt }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </template>
+  </div>
+</template>

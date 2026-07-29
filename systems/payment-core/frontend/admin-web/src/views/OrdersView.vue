@@ -1,20 +1,103 @@
 <script setup>
 import { onMounted, ref } from "vue";
-import { orderApi } from "../api/client";
+import { orderApi, paymentApi } from "../api/client";
 
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
+const actionMessage = ref("");
+const launchPayload = ref(null);
+const activeOrderNo = ref("");
+const total = ref(0);
+const pageNo = ref(1);
+const pageSize = 20;
+const filters = ref({
+  orderNo: "",
+  serviceType: "全部",
+  orderStatus: "全部"
+});
 
-onMounted(async () => {
+const appWebBaseUrl = "http://127.0.0.1:5175";
+
+function buildCashierUrl(prepayOrderNo) {
+  return `${appWebBaseUrl}/cashier/${prepayOrderNo}`;
+}
+
+function resetFilters() {
+  filters.value = {
+    orderNo: "",
+    serviceType: "全部",
+    orderStatus: "全部"
+  };
+  pageNo.value = 1;
+  loadOrders();
+}
+
+function applyFilters() {
+  pageNo.value = 1;
+  loadOrders();
+}
+
+async function loadOrders() {
+  isLoading.value = true;
+  errorMessage.value = "";
   try {
-    items.value = await orderApi.getList();
+    const result = await orderApi.getList({
+      orderNo: filters.value.orderNo,
+      serviceType: filters.value.serviceType,
+      orderStatus: filters.value.orderStatus,
+      pageNo: pageNo.value,
+      pageSize
+    });
+    items.value = result.items;
+    total.value = result.total;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
-});
+}
+
+function canLaunchPayment(orderItem) {
+  return orderItem.orderStatus === "待支付";
+}
+
+function goToPage(nextPage) {
+  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+    return;
+  }
+  pageNo.value = nextPage;
+  loadOrders();
+}
+
+async function launchPayment(orderNo) {
+  activeOrderNo.value = orderNo;
+  actionMessage.value = "";
+  try {
+    const prepay = await paymentApi.prepay({
+      orderNo,
+      payScene: "HOME_CLEAN"
+    });
+    launchPayload.value = {
+      orderNo,
+      prepayOrderNo: prepay.prepayOrderNo,
+      paymentOrderId: prepay.paymentOrderId,
+      cashierUrl: buildCashierUrl(prepay.prepayOrderNo)
+    };
+    actionMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
+    await loadOrders();
+  } catch (error) {
+    actionMessage.value = `发起支付失败：${error.message}`;
+  } finally {
+    activeOrderNo.value = "";
+  }
+}
+
+function canOpenCashier(orderItem) {
+  return Boolean(orderItem.latestPrepayOrderNo);
+}
+
+onMounted(loadOrders);
 </script>
 
 <template>
@@ -22,7 +105,7 @@ onMounted(async () => {
     <div class="topbar">
       <div>
         <h2>订单中心</h2>
-        <p>查看家政订单、支付状态和履约进展</p>
+        <p>查看家政订单、支付状态和履约进展，并从订单侧发起支付</p>
       </div>
       <button class="button primary">导出订单</button>
     </div>
@@ -31,37 +114,53 @@ onMounted(async () => {
       <div v-if="errorMessage" class="error-banner">
         订单数据加载失败：{{ errorMessage }}
       </div>
+      <div v-if="actionMessage" class="state-banner">
+        {{ actionMessage }}
+      </div>
 
       <div class="toolbar">
         <div class="field">
           <label>订单号</label>
-          <input placeholder="请输入订单号" />
-        </div>
-        <div class="field">
-          <label>用户 ID</label>
-          <input placeholder="请输入用户 ID" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" />
         </div>
         <div class="field">
           <label>服务品类</label>
-          <select>
+          <select v-model="filters.serviceType">
             <option>全部</option>
-            <option>保洁</option>
-            <option>月嫂</option>
+            <option>深度保洁</option>
+            <option>月嫂套餐</option>
             <option>企业保洁</option>
           </select>
         </div>
         <div class="field">
           <label>订单状态</label>
-          <select>
+          <select v-model="filters.orderStatus">
             <option>全部</option>
             <option>待支付</option>
             <option>待履约</option>
             <option>已完成</option>
           </select>
         </div>
+        <div class="field">
+          <label>当前说明</label>
+          <input value="当前支持订单号、品类、状态筛选" disabled />
+        </div>
         <div class="toolbar-actions">
-          <button class="button primary">查询</button>
-          <button class="button secondary">重置</button>
+          <button class="button primary" @click="loadOrders">刷新</button>
+          <button class="button secondary" @click="resetFilters">重置</button>
+        </div>
+      </div>
+
+      <div v-if="launchPayload" class="launch-panel">
+        <div>
+          <strong>最新支付发起结果</strong>
+          <div>订单号：{{ launchPayload.orderNo }}</div>
+          <div>预付单号：{{ launchPayload.prepayOrderNo }}</div>
+          <div>支付单号：{{ launchPayload.paymentOrderId }}</div>
+        </div>
+        <div class="launch-actions">
+          <a :href="launchPayload.cashierUrl" class="button primary" target="_blank" rel="noreferrer">打开收银台</a>
+          <div class="meta-link">{{ launchPayload.cashierUrl }}</div>
         </div>
       </div>
 
@@ -74,6 +173,7 @@ onMounted(async () => {
           <thead>
             <tr>
               <th>订单号</th>
+              <th>账单号</th>
               <th>用户</th>
               <th>服务品类</th>
               <th>服务者</th>
@@ -81,6 +181,8 @@ onMounted(async () => {
               <th>已付金额</th>
               <th>订单状态</th>
               <th>履约状态</th>
+              <th>最近支付状态</th>
+              <th>最近收银台状态</th>
               <th>创建时间</th>
               <th>操作</th>
             </tr>
@@ -88,6 +190,7 @@ onMounted(async () => {
           <tbody>
             <tr v-for="item in items" :key="item.orderNo">
               <td>{{ item.orderNo }}</td>
+              <td>{{ item.billNo || "-" }}</td>
               <td>{{ item.customerName }}</td>
               <td>{{ item.serviceType }}</td>
               <td>{{ item.workerName }}</td>
@@ -95,17 +198,73 @@ onMounted(async () => {
               <td>{{ item.paidAmount }}</td>
               <td><span :class="['badge', item.orderStatusType]">{{ item.orderStatus }}</span></td>
               <td><span :class="['badge', item.fulfillmentStatusType]">{{ item.fulfillmentStatus }}</span></td>
+              <td>
+                <span v-if="item.latestPaymentStatus" :class="['badge', item.latestPaymentStatusType]">
+                  {{ item.latestPaymentStatus }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td>
+                <span v-if="item.latestCashierStatus" :class="['badge', item.latestCashierStatusType]">
+                  {{ item.latestCashierStatus }}
+                </span>
+                <span v-else>-</span>
+              </td>
               <td>{{ item.createdAt }}</td>
               <td>
                 <div class="list-actions">
-                  <span>详情</span>
-                  <span>账单</span>
-                  <span>补差价</span>
+                  <span>{{ item.orderStatus === "待支付" ? "待发起" : "已生成支付链路" }}</span>
+                  <span>{{ item.billNo ? `账单 ${item.billNo}` : "尚未生成账单" }}</span>
+                  <RouterLink v-if="item.latestPaymentOrderId" class="link-button" :to="`/payments/${item.latestPaymentOrderId}`">
+                    查看支付单
+                  </RouterLink>
+                  <RouterLink
+                    v-if="item.latestPaymentOrderId"
+                    class="link-button"
+                    :to="`/payment-records/${item.latestPaymentOrderId}?recordType=ALL`"
+                  >
+                    查看支付记录
+                  </RouterLink>
+                  <RouterLink
+                    v-if="item.billNo"
+                    class="link-button"
+                    :to="`/bills?billNo=${item.billNo}&orderNo=${item.orderNo}`"
+                  >
+                    查看账单
+                  </RouterLink>
+                  <a
+                    v-if="canOpenCashier(item)"
+                    class="link-button"
+                    :href="buildCashierUrl(item.latestPrepayOrderNo)"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    打开收银台
+                  </a>
+                  <button
+                    class="link-button"
+                    :disabled="activeOrderNo === item.orderNo || !canLaunchPayment(item)"
+                    @click="launchPayment(item.orderNo)"
+                  >
+                    {{
+                      activeOrderNo === item.orderNo
+                        ? "发起中..."
+                        : canLaunchPayment(item)
+                          ? "发起支付"
+                          : "无需发起"
+                    }}
+                  </button>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="total > pageSize" class="pager">
+        <span>共 {{ total }} 条订单</span>
+        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

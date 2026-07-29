@@ -1,0 +1,554 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentIssueMapper">
+
+    <sql id="issueUnion">
+        SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
+               po.payment_order_id,
+               po.order_no,
+               po.customer_name,
+               po.payment_method,
+               po.channel_code,
+               '待回调未收口' AS issue_type,
+               'danger' AS issue_type_tag,
+               'P1' AS severity,
+               'danger' AS severity_type,
+               po.status AS payment_status,
+               po.status_type AS payment_status_type,
+               CONCAT('支付单仍处于待回调状态，最新回调结果=', COALESCE(latest_notify.notify_status, '无回调记录')) AS issue_summary,
+               CONCAT('最近支付尝试=', COALESCE(latest_attempt.attempt_status, '无支付尝试'), '；建议优先主动查单并核对回调验签与状态收口。') AS root_cause_hint,
+               '查看支付单并核对回调、日志和查单结果' AS recommended_action,
+               CONCAT('/payments/', po.payment_order_id) AS recommended_route,
+               DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+        FROM t_payment_order po
+                 LEFT JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
+                    SELECT pa.id
+                    FROM t_payment_attempt pa
+                    WHERE pa.payment_order_id = po.payment_order_id
+                    ORDER BY pa.created_at DESC, pa.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_notify_log latest_notify ON latest_notify.id = (
+                    SELECT pnl.id
+                    FROM t_payment_notify_log pnl
+                    WHERE pnl.payment_order_id = po.payment_order_id
+                    ORDER BY pnl.created_at DESC, pnl.id DESC
+                    LIMIT 1
+                )
+        WHERE po.status = 'WAIT_CALLBACK'
+
+        UNION ALL
+
+        SELECT CONCAT('ISSUE-NOTIFY-', pnl.notify_no) AS issue_no,
+               pnl.payment_order_id,
+               po.order_no,
+               po.customer_name,
+               po.payment_method,
+               pnl.channel_code,
+               '回调处理待跟进' AS issue_type,
+               'warn' AS issue_type_tag,
+               'P1' AS severity,
+               'danger' AS severity_type,
+               po.status AS payment_status,
+               po.status_type AS payment_status_type,
+               CONCAT('渠道回调状态仍为', pnl.notify_status, '，回调类型=', pnl.notify_type) AS issue_summary,
+               '回调日志已入库但尚未完成状态收敛，建议核对验签、去重、幂等与业务收口逻辑。' AS root_cause_hint,
+               '进入支付处理日志页，联查回调报文与处理日志' AS recommended_action,
+               CONCAT('/payment-logs?paymentOrderId=', pnl.payment_order_id, '&processStage=渠道回调') AS recommended_route,
+               DATE_FORMAT(pnl.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+        FROM t_payment_notify_log pnl
+                 INNER JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id
+        WHERE pnl.notify_status = '待处理'
+
+        UNION ALL
+
+        SELECT CONCAT('ISSUE-EVENT-', pe.event_no) AS issue_no,
+               pe.payment_order_id,
+               po.order_no,
+               po.customer_name,
+               po.payment_method,
+               po.channel_code,
+               '下游事件发布失败' AS issue_type,
+               'info' AS issue_type_tag,
+               'P2' AS severity,
+               'warn' AS severity_type,
+               po.status AS payment_status,
+               po.status_type AS payment_status_type,
+               CONCAT('支付事件发布失败，主题=', pe.event_topic, '，重试次数=', pe.retry_count) AS issue_summary,
+               '支付主链路可能已成功，但下游账务/清分/结算未收到事件，建议优先补发并核对下游消费结果。' AS root_cause_hint,
+               '进入支付事件出站页，复核发布状态并执行重发' AS recommended_action,
+               CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id, '&publishStatus=FAILED') AS recommended_route,
+               DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+        FROM t_payment_event pe
+                 INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
+        WHERE pe.publish_status = 'FAILED'
+
+        UNION ALL
+
+        SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
+               po.payment_order_id,
+               po.order_no,
+               po.customer_name,
+               po.payment_method,
+               po.channel_code,
+               '命中停用渠道' AS issue_type,
+               'warn' AS issue_type_tag,
+               'P2' AS severity,
+               'warn' AS severity_type,
+               po.status AS payment_status,
+               po.status_type AS payment_status_type,
+               CONCAT('支付单命中的渠道 ', po.channel_code, ' 当前已停用') AS issue_summary,
+               '渠道配置已停用但支付单仍引用该渠道，建议核对路由规则、渠道启停和历史存量单据处理策略。' AS root_cause_hint,
+               '进入支付渠道与路由页，复核渠道状态和路由规则' AS recommended_action,
+               '/payment-config' AS recommended_route,
+               DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+        FROM t_payment_order po
+                 INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+        WHERE pcc.status = 'DISABLED'
+    </sql>
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentIssueRowDTO">
+        SELECT issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               payment_method AS paymentMethod,
+               channel_code AS channelCode,
+               issue_type AS issueType,
+               issue_type_tag AS issueTypeTag,
+               severity,
+               severity_type AS severityType,
+               payment_status AS paymentStatus,
+               payment_status_type AS paymentStatusType,
+               issue_summary AS issueSummary,
+               root_cause_hint AS rootCauseHint,
+               recommended_action AS recommendedAction,
+               recommended_route AS recommendedRoute,
+               COALESCE(latest_action.handling_status, '待分派') AS handlingStatus,
+               COALESCE(latest_action.handling_status_type, 'warn') AS handlingStatusType,
+               COALESCE(latest_action.assignee, '未分派') AS assignee,
+               CASE
+                   WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
+                   WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '账务清结算联动组'
+                   WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '渠道配置运营组'
+                   ELSE '支付运营组'
+               END AS responsibilityGroup,
+               CASE
+                   WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN 'danger'
+                   WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN 'warn'
+                   ELSE 'info'
+               END AS responsibilityGroupType,
+               CASE
+                   WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
+                   WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '优先核对事件重发、下游订阅和账务/清分/结算消费结果'
+                   WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
+                   ELSE '由支付运营确认责任方并补充处理备注'
+               END AS responsibilityHint,
+               COALESCE(latest_source_alert.alert_status, '未通知') AS alertStatus,
+               COALESCE(latest_source_alert.alert_status_type, 'info') AS alertStatusType,
+               COALESCE(latest_source_alert.ack_status, '无需回执') AS alertAckStatus,
+               COALESCE(latest_source_alert.ack_status_type, 'info') AS alertAckStatusType,
+               COALESCE(latest_source_alert.receiver, '未分配') AS alertReceiver,
+               COALESCE(channel_delivery_summary.alertChannelSummary, '未派发') AS alertChannelSummary,
+               CASE
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '已派发'
+                       THEN CONCAT('已派发通道：', COALESCE(channel_delivery_summary.successChannels, '无'))
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '部分失败'
+                       THEN CONCAT('成功通道：', COALESCE(channel_delivery_summary.successChannels, '无'), '；失败通道：', COALESCE(channel_delivery_summary.failedChannels, '无'))
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '派发失败'
+                       THEN CONCAT('失败通道：', COALESCE(channel_delivery_summary.failedChannels, '无'))
+                   WHEN COALESCE(latest_source_alert.alert_status, '未通知') = '已生成'
+                       THEN '待派发通道：IM / SMS / EMAIL'
+                   ELSE '暂无派发明细'
+               END AS alertDeliverySummary,
+               CASE
+                   WHEN latest_external_alert.id IS NULL THEN '暂无供应商派发记录'
+                   WHEN latest_external_alert.provider_name IS NOT NULL AND latest_external_alert.template_code IS NOT NULL
+                       THEN CONCAT('供应商：', latest_external_alert.provider_name, ' / 模板：', latest_external_alert.template_code)
+                   WHEN latest_external_alert.provider_name IS NOT NULL
+                       THEN CONCAT('供应商：', latest_external_alert.provider_name)
+                   WHEN latest_external_alert.provider_code IS NOT NULL
+                       THEN CONCAT('供应商编码：', latest_external_alert.provider_code)
+                   ELSE '供应商信息待补齐'
+               END AS latestAlertProviderSummary,
+               CASE
+                   WHEN latest_external_alert.id IS NULL THEN '暂无投递回执'
+                   WHEN latest_external_alert.provider_receipt_no IS NOT NULL AND latest_external_alert.provider_delivery_status IS NOT NULL
+                       THEN CONCAT('回执：', latest_external_alert.provider_receipt_no, ' / 状态：', latest_external_alert.provider_delivery_status)
+                   WHEN latest_external_alert.provider_delivery_message IS NOT NULL
+                       THEN CONCAT('投递说明：', latest_external_alert.provider_delivery_message)
+                   ELSE '回执信息待补齐'
+               END AS latestAlertReceiptSummary,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '已超时'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '已超时'
+                   ELSE 'SLA内'
+               END AS slaStatus,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN 'danger'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN 'danger'
+                   ELSE 'success'
+               END AS slaStatusType,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' THEN CONCAT('P1 SLA 30分钟，已耗时', TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()), '分钟')
+                   ELSE CONCAT('P2 SLA 120分钟，已耗时', TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()), '分钟')
+               END AS slaTimeLeft,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '升级值班负责人'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '升级支付运营负责人'
+                   ELSE '当班跟进'
+               END AS escalationStatus,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN 'danger'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN 'danger'
+                   ELSE 'info'
+               END AS escalationStatusType,
+               CASE
+                   WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN '立即同步支付后端、渠道值班和运营负责人'
+                   WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN '同步支付运营负责人并确认补偿结果'
+                   ELSE '由当前处理人按建议动作继续跟进'
+               END AS escalationSuggestion,
+               COALESCE(CONCAT(latest_action.action_type, '：', latest_action.action_remark), '暂无处理动作') AS latestActionSummary,
+               DATE_FORMAT(latest_action.created_at, '%Y-%m-%d %H:%i:%s') AS latestActionAt,
+               payment_issue_union.created_at AS createdAt
+        FROM (
+            <include refid="issueUnion"/>
+        ) payment_issue_union
+                 LEFT JOIN t_payment_issue_action_log latest_action ON latest_action.id = (
+                    SELECT action_log.id
+                    FROM t_payment_issue_action_log action_log
+                    WHERE action_log.issue_no = payment_issue_union.issue_no
+                    ORDER BY action_log.created_at DESC, action_log.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_issue_alert_log latest_source_alert ON latest_source_alert.id = (
+                    SELECT alert_log.id
+                    FROM t_payment_issue_alert_log alert_log
+                    WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND alert_log.alert_channel = 'IN_APP_OUTBOX'
+                    ORDER BY alert_log.created_at DESC, alert_log.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN t_payment_issue_alert_log latest_external_alert ON latest_external_alert.id = (
+                    SELECT alert_log.id
+                    FROM t_payment_issue_alert_log alert_log
+                    WHERE alert_log.issue_no = payment_issue_union.issue_no
+                      AND alert_log.alert_channel <> 'IN_APP_OUTBOX'
+                    ORDER BY alert_log.created_at DESC, alert_log.id DESC
+                    LIMIT 1
+                )
+                 LEFT JOIN (
+                    SELECT issue_no AS summaryIssueNo,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '未派发') AS alertChannelSummary,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' AND alert_status = '已派发' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS successChannels,
+                           COALESCE(GROUP_CONCAT(DISTINCT CASE WHEN alert_channel <> 'IN_APP_OUTBOX' AND alert_status = '派发失败' THEN alert_channel END ORDER BY alert_channel SEPARATOR ' / '), '无') AS failedChannels
+                    FROM t_payment_issue_alert_log
+                    GROUP BY issue_no
+                ) channel_delivery_summary ON channel_delivery_summary.summaryIssueNo = payment_issue_union.issue_no
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
+                AND issue_type = #{query.issueType}
+            </if>
+            <if test="query.severity != null and query.severity != '' and query.severity != '全部'">
+                AND severity = #{query.severity}
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND payment_method = #{query.paymentMethod}
+            </if>
+        </where>
+        ORDER BY payment_issue_union.created_at DESC, issue_no DESC
+        LIMIT #{query.limit} OFFSET #{query.offset}
+    </select>
+
+    <select id="findByIssueNo" resultType="com.abc123.hsp.dto.PaymentIssueRowDTO">
+        SELECT issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               payment_method AS paymentMethod,
+               channel_code AS channelCode,
+               issue_type AS issueType,
+               issue_type_tag AS issueTypeTag,
+               severity,
+               severity_type AS severityType,
+               payment_status AS paymentStatus,
+               payment_status_type AS paymentStatusType,
+               issue_summary AS issueSummary,
+               root_cause_hint AS rootCauseHint,
+               recommended_action AS recommendedAction,
+               recommended_route AS recommendedRoute,
+               created_at AS createdAt
+        FROM (
+            <include refid="issueUnion"/>
+        ) payment_issue_union
+        WHERE issue_no = #{issueNo}
+        LIMIT 1
+    </select>
+
+    <insert id="insertActionLog">
+        INSERT INTO t_payment_issue_action_log (
+            action_no,
+            issue_no,
+            payment_order_id,
+            issue_type,
+            action_type,
+            assignee,
+            handling_status,
+            handling_status_type,
+            action_remark,
+            operator,
+            created_at
+        ) VALUES (
+            #{actionNo},
+            #{issueNo},
+            #{paymentOrderId},
+            #{issueType},
+            #{actionType},
+            #{assignee},
+            #{handlingStatus},
+            #{handlingStatusType},
+            #{actionRemark},
+            #{operator},
+            NOW()
+        )
+    </insert>
+
+    <select id="responsibilitySummary" resultType="com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO">
+        SELECT responsibility_group AS groupName,
+               CASE
+                   WHEN SUM(overdue_flag) > 0 THEN 'danger'
+                   ELSE MAX(responsibility_group_type)
+               END AS groupType,
+               COUNT(1) AS totalCount,
+               SUM(overdue_flag) AS overdueCount,
+               SUM(CASE WHEN severity = 'P1' THEN 1 ELSE 0 END) AS p1Count,
+               SUM(CASE WHEN severity = 'P2' THEN 1 ELSE 0 END) AS p2Count,
+               MAX(responsibility_hint) AS suggestedAction
+        FROM (
+            SELECT issue_no,
+                   severity,
+                   CASE
+                       WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
+                       WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '账务清结算联动组'
+                       WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '渠道配置运营组'
+                       ELSE '支付运营组'
+                   END AS responsibility_group,
+                   CASE
+                       WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN 'danger'
+                       WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN 'warn'
+                       ELSE 'info'
+                   END AS responsibility_group_type,
+                   CASE
+                       WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
+                       WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '优先核对事件重发、下游订阅和账务/清分/结算消费结果'
+                       WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
+                       ELSE '由支付运营确认责任方并补充处理备注'
+                   END AS responsibility_hint,
+                   CASE
+                       WHEN payment_issue_union.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 30 THEN 1
+                       WHEN payment_issue_union.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, STR_TO_DATE(payment_issue_union.created_at, '%Y-%m-%d %H:%i:%s'), NOW()) >= 120 THEN 1
+                       ELSE 0
+                   END AS overdue_flag
+            FROM (
+                <include refid="issueUnion"/>
+            ) payment_issue_union
+            <where>
+                <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                    payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+                </if>
+                <if test="query.orderNo != null and query.orderNo != ''">
+                    AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+                </if>
+                <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
+                    AND issue_type = #{query.issueType}
+                </if>
+                <if test="query.severity != null and query.severity != '' and query.severity != '全部'">
+                    AND severity = #{query.severity}
+                </if>
+                <if test="query.channelCode != null and query.channelCode != ''">
+                    AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+                </if>
+                <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                    AND payment_method = #{query.paymentMethod}
+                </if>
+            </where>
+        ) responsibility_group_summary
+        GROUP BY responsibility_group
+        ORDER BY overdueCount DESC, totalCount DESC, responsibility_group ASC
+    </select>
+
+    <select id="findAlertLogs" resultType="com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO">
+        SELECT alert_no AS alertNo,
+               source_alert_no AS sourceAlertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               triggered_by AS triggeredBy,
+               ack_operator AS ackOperator,
+               DATE_FORMAT(ack_at, '%Y-%m-%d %H:%i:%s') AS ackAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_issue_alert_log
+        <where>
+            <if test="query.alertNo != null and query.alertNo != ''">
+                alert_no LIKE CONCAT('%', #{query.alertNo}, '%')
+            </if>
+            <if test="query.issueNo != null and query.issueNo != ''">
+                AND issue_no LIKE CONCAT('%', #{query.issueNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
+                AND alert_channel = #{query.alertChannel}
+            </if>
+            <if test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
+                AND alert_status = #{query.alertStatus}
+            </if>
+            <if test="query.ackStatus != null and query.ackStatus != '' and query.ackStatus != '全部'">
+                AND ack_status = #{query.ackStatus}
+            </if>
+            <if test="query.providerDeliveryStatus != null and query.providerDeliveryStatus != '' and query.providerDeliveryStatus != '全部'">
+                AND provider_delivery_status = #{query.providerDeliveryStatus}
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{query.limit} OFFSET #{query.offset}
+    </select>
+
+    <select id="findAlertLogByAlertNo" resultType="com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO">
+        SELECT alert_no AS alertNo,
+               source_alert_no AS sourceAlertNo,
+               issue_no AS issueNo,
+               payment_order_id AS paymentOrderId,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               alert_channel AS alertChannel,
+               receiver,
+               alert_status AS alertStatus,
+               alert_status_type AS alertStatusType,
+               ack_status AS ackStatus,
+               ack_status_type AS ackStatusType,
+               alert_content AS alertContent,
+               provider_code AS providerCode,
+               provider_name AS providerName,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               provider_receipt_snapshot AS providerReceiptSnapshot,
+               provider_receipt_no AS providerReceiptNo,
+               provider_delivery_status AS providerDeliveryStatus,
+               provider_delivery_message AS providerDeliveryMessage,
+               rendered_content_snapshot AS renderedContentSnapshot,
+               triggered_by AS triggeredBy,
+               ack_operator AS ackOperator,
+               DATE_FORMAT(ack_at, '%Y-%m-%d %H:%i:%s') AS ackAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_issue_alert_log
+        WHERE alert_no = #{alertNo}
+        LIMIT 1
+    </select>
+
+    <select id="countAlertLogs" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        <where>
+            <if test="query.alertNo != null and query.alertNo != ''">
+                alert_no LIKE CONCAT('%', #{query.alertNo}, '%')
+            </if>
+            <if test="query.issueNo != null and query.issueNo != ''">
+                AND issue_no LIKE CONCAT('%', #{query.issueNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
+                AND alert_channel = #{query.alertChannel}
+            </if>
+            <if test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
+                AND alert_status = #{query.alertStatus}
+            </if>
+            <if test="query.ackStatus != null and query.ackStatus != '' and query.ackStatus != '全部'">
+                AND ack_status = #{query.ackStatus}
+            </if>
+            <if test="query.providerDeliveryStatus != null and query.providerDeliveryStatus != '' and query.providerDeliveryStatus != '全部'">
+                AND provider_delivery_status = #{query.providerDeliveryStatus}
+            </if>
+        </where>
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM (
+            <include refid="issueUnion"/>
+        ) payment_issue_union
+        <where>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.issueType != null and query.issueType != '' and query.issueType != '全部'">
+                AND issue_type = #{query.issueType}
+            </if>
+            <if test="query.severity != null and query.severity != '' and query.severity != '全部'">
+                AND severity = #{query.severity}
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
+                AND payment_method = #{query.paymentMethod}
+            </if>
+        </where>
+    </select>
+
+    <update id="acknowledgePendingAlerts">
+        UPDATE t_payment_issue_alert_log
+        SET ack_status = '已确认',
+            ack_status_type = 'success',
+            ack_operator = #{operator},
+            ack_at = NOW()
+        WHERE issue_no = #{issueNo}
+          AND ack_status = '待确认'
+    </update>
+
+    <update id="acknowledgeAlertByAlertNo">
+        UPDATE t_payment_issue_alert_log
+        SET ack_status = '已确认',
+            ack_status_type = 'success',
+            ack_operator = #{operator},
+            ack_at = NOW()
+        WHERE alert_no = #{alertNo}
+          AND ack_status = '待确认'
+    </update>
+</mapper>

@@ -1,0 +1,116 @@
+package com.abc123.gatewayaccess.controller;
+
+import com.abc123.gatewayaccess.common.ApiResponse;
+import com.abc123.gatewayaccess.dto.GatewayAccessSummaryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditLogDTO;
+import com.abc123.gatewayaccess.dto.GatewayAuditQueryDTO;
+import com.abc123.gatewayaccess.dto.GatewayAppDTO;
+import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelDTO;
+import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
+import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
+import com.abc123.gatewayaccess.dto.PageResultDTO;
+import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
+import com.abc123.gatewayaccess.service.GatewayAccessService;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 网关接入配置接口。
+ */
+@RestController
+@RequestMapping("/api/gateway-access")
+public class GatewayAccessController {
+
+    private final GatewayAccessService service;
+
+    public GatewayAccessController(GatewayAccessService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/summary")
+    public ApiResponse<GatewayAccessSummaryDTO> summary() {
+        return ApiResponse.success(service.summary());
+    }
+
+    @GetMapping("/applications")
+    public ApiResponse<PageResultDTO<GatewayAppDTO>> applications() {
+        return ApiResponse.success(service.applications());
+    }
+
+    @GetMapping("/gateways")
+    public ApiResponse<PageResultDTO<GatewayChannelDTO>> gateways(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "全部") String channelType,
+            @RequestParam(defaultValue = "全部") String status) {
+        GatewayChannelQueryDTO query = new GatewayChannelQueryDTO();
+        query.setKeyword(keyword);
+        query.setChannelType(channelType);
+        query.setStatus(status);
+        return ApiResponse.success(service.gateways(query));
+    }
+
+    @GetMapping("/certificates")
+    public ApiResponse<PageResultDTO<GatewayCertificateDTO>> certificates(
+            @RequestParam(defaultValue = "全部") String riskLevel) {
+        return ApiResponse.success(service.certificates(riskLevel));
+    }
+
+    @GetMapping("/permissions")
+    public ApiResponse<PageResultDTO<GatewayPermissionDTO>> permissions() {
+        return ApiResponse.success(service.permissions());
+    }
+
+    @GetMapping("/release-routes")
+    public ApiResponse<PageResultDTO<GatewayReleaseRouteDTO>> releaseRoutes(
+            @RequestParam(defaultValue = "全部") String environment,
+            @RequestParam(defaultValue = "全部") String status) {
+        GatewayReleaseRouteQueryDTO query = new GatewayReleaseRouteQueryDTO();
+        query.setEnvironment(environment);
+        query.setStatus(status);
+        return ApiResponse.success(service.releaseRoutes(query));
+    }
+
+    @GetMapping("/audit-logs")
+    public ApiResponse<PageResultDTO<GatewayAuditLogDTO>> auditLogs(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "全部") String appCode,
+            @RequestParam(defaultValue = "全部") String resultStatus) {
+        GatewayAuditQueryDTO query = new GatewayAuditQueryDTO();
+        query.setKeyword(keyword);
+        query.setAppCode(appCode);
+        query.setResultStatus(resultStatus);
+        return ApiResponse.success(service.auditLogs(query));
+    }
+
+    @PostMapping("/applications/toggle")
+    public ApiResponse<GatewayAccessSummaryDTO> toggleApplication(@RequestBody ToggleRequestDTO request) {
+        return ApiResponse.success(service.toggleApplication(request));
+    }
+
+    @PostMapping("/gateways/toggle")
+    public ApiResponse<GatewayAccessSummaryDTO> toggleGateway(@RequestBody ToggleRequestDTO request) {
+        return ApiResponse.success(service.toggleGateway(request));
+    }
+
+    @PostMapping("/certificates/toggle")
+    public ApiResponse<GatewayAccessSummaryDTO> toggleCertificate(@RequestBody ToggleRequestDTO request) {
+        return ApiResponse.success(service.toggleCertificate(request));
+    }
+
+    @PostMapping("/permissions/toggle")
+    public ApiResponse<GatewayAccessSummaryDTO> togglePermission(@RequestBody ToggleRequestDTO request) {
+        return ApiResponse.success(service.togglePermission(request));
+    }
+
+    @PostMapping("/release-routes/toggle")
+    public ApiResponse<GatewayAccessSummaryDTO> toggleReleaseRoute(@RequestBody ToggleRequestDTO request) {
+        return ApiResponse.success(service.toggleReleaseRoute(request));
+    }
+}

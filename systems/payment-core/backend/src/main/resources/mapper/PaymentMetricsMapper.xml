@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentMetricsMapper">
+
+    <select id="findSummary" resultType="com.abc123.hsp.dto.PaymentMetricsDTO">
+        SELECT COUNT(1) AS totalCount,
+               SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS successCount,
+               SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) AS pendingCount,
+               SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) AS closedCount,
+               CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0), 2)) AS successAmount,
+               CONCAT(
+                   FORMAT(
+                       CASE WHEN COUNT(1) = 0 THEN 0
+                            ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
+                       END,
+                       2
+                   ),
+                   '%'
+               ) AS successRate
+        FROM t_payment_order
+    </select>
+</mapper>

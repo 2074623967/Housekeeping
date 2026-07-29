@@ -10,6 +10,8 @@
 frontend
 ├── admin-web
 ├── app-web
+├── h5-web
+├── pc-web
 └── shared
 ```
 
@@ -30,7 +32,7 @@ frontend
 
 ### app-web
 
-用户端 Web/H5 预留目录。
+用户端 App 支付端。
 
 后续主要承接：
 
@@ -38,6 +40,24 @@ frontend
 - 支付结果页
 - 订单支付页
 - 用户退款进度页
+
+### h5-web
+
+用户端 H5 支付端。
+
+当前承接：
+
+- H5 收银台
+- H5 支付结果页
+
+### pc-web
+
+用户端 PC 支付端。
+
+当前承接：
+
+- PC 收银台
+- PC 支付结果页
 
 ### shared
 

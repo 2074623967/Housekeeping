@@ -6,10 +6,87 @@ spring:
     name: home-service-payment-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${HSP_DB_URL:jdbc:mysql://127.0.0.1:3306/housekeeping_payment?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
+    url: ${HSP_DB_URL:jdbc:mysql://127.0.0.1:3306/housekeeping_payment_core?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
     username: ${HSP_DB_USERNAME:root}
     password: ${HSP_DB_PASSWORD:}
   sql:
     init:
       mode: always
       encoding: UTF-8
+
+mybatis:
+  mapper-locations: classpath:/mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+payment:
+  callback:
+    # 模拟环境关闭，真实渠道接入环境必须打开并注入独立密钥。
+    require-signature: ${HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE:false}
+    secret: ${HSP_PAYMENT_CALLBACK_SECRET:}
+    allowed-skew-seconds: ${HSP_PAYMENT_CALLBACK_ALLOWED_SKEW_SECONDS:300}
+    nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:600}
+  expiry-close:
+    fixed-delay-ms: ${HSP_PAYMENT_EXPIRY_CLOSE_DELAY_MS:60000}
+  event-retry:
+    fixed-delay-ms: ${HSP_PAYMENT_EVENT_RETRY_DELAY_MS:300000}
+  refund-retry:
+    fixed-delay-ms: ${HSP_PAYMENT_REFUND_RETRY_DELAY_MS:300000}
+  issue-alert:
+    im:
+      # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
+      webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_IM_WEBHOOK_URL:}
+      timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_IM_TIMEOUT_MS:3000}
+      success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_SUCCESS_CODE_JSON_POINTER:}
+      success-code-expected-value: ${HSP_PAYMENT_ISSUE_ALERT_IM_SUCCESS_CODE_EXPECTED_VALUE:}
+      receipt-no-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_RECEIPT_NO_JSON_POINTER:}
+      auth-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_AUTH_HEADER_NAME:}
+      auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_IM_AUTH_HEADER_VALUE:}
+      signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_HEADER_NAME:}
+      signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_SECRET:}
+      signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_IM_SIGNATURE_ALGORITHM:HMAC_SHA256}
+      timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_TIMESTAMP_HEADER_NAME:}
+      nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_IM_NONCE_HEADER_NAME:}
+      delivery-status-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_DELIVERY_STATUS_JSON_POINTER:}
+      delivered-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_DELIVERED_STATUS_VALUES:}
+      accepted-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_ACCEPTED_STATUS_VALUES:}
+      failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_FAILED_STATUS_VALUES:}
+      failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_FAILURE_CODE_JSON_POINTER:}
+    sms:
+      # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
+      webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
+      timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_SMS_TIMEOUT_MS:3000}
+      success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SUCCESS_CODE_JSON_POINTER:}
+      success-code-expected-value: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SUCCESS_CODE_EXPECTED_VALUE:}
+      receipt-no-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_RECEIPT_NO_JSON_POINTER:}
+      auth-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_AUTH_HEADER_NAME:}
+      auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_SMS_AUTH_HEADER_VALUE:}
+      signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_HEADER_NAME:}
+      signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_SECRET:}
+      signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SIGNATURE_ALGORITHM:HMAC_SHA256}
+      timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_TIMESTAMP_HEADER_NAME:}
+      nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_SMS_NONCE_HEADER_NAME:}
+      delivery-status-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_DELIVERY_STATUS_JSON_POINTER:}
+      delivered-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_DELIVERED_STATUS_VALUES:}
+      accepted-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_ACCEPTED_STATUS_VALUES:}
+      failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_FAILED_STATUS_VALUES:}
+      failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_FAILURE_CODE_JSON_POINTER:}
+    email:
+      # 配置后邮件告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
+      webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_WEBHOOK_URL:}
+      timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_TIMEOUT_MS:3000}
+      success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SUCCESS_CODE_JSON_POINTER:}
+      success-code-expected-value: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SUCCESS_CODE_EXPECTED_VALUE:}
+      receipt-no-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_RECEIPT_NO_JSON_POINTER:}
+      auth-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_AUTH_HEADER_NAME:}
+      auth-header-value: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_AUTH_HEADER_VALUE:}
+      signature-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_HEADER_NAME:}
+      signature-secret: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_SECRET:}
+      signature-algorithm: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SIGNATURE_ALGORITHM:HMAC_SHA256}
+      timestamp-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_TIMESTAMP_HEADER_NAME:}
+      nonce-header-name: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_NONCE_HEADER_NAME:}
+      delivery-status-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_DELIVERY_STATUS_JSON_POINTER:}
+      delivered-status-values: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_DELIVERED_STATUS_VALUES:}
+      accepted-status-values: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_ACCEPTED_STATUS_VALUES:}
+      failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_FAILED_STATUS_VALUES:}
+      failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_FAILURE_CODE_JSON_POINTER:}
