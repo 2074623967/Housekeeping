@@ -2649,3 +2649,21 @@
 1. 当前 `payment-core` 已经把“支付成功回调 -> 事件落库 -> 双下游分发”这条跨系统主链路补成了自动化门禁，而不只是依赖人工 smoke 和记忆口径。
 2. 这一步继续缩小了 `master / release` 前必须验证的跨系统链路缺口。
 3. 真实供应商 API、更大范围跨系统链路矩阵和支付端页面矩阵全量联调仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 86. 2026-07-29 payment-core 后端全量回归刷新验证
+
+### 86.1 本轮验证范围
+
+本轮围绕“近期已经连续补入异常告警通知标准化、供应商回退、自动任务跨实例租约锁、支付成功回调触发双下游分发，但文档里的全量回归基线仍停留在旧测试数量”这一问题进行复核，目标是刷新 `payment-core` 当前真实可引用的后端回归基线。
+
+### 86.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `171` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+
+### 86.3 本轮判断
+
+1. 当前 `payment-core` 的后端自动化门禁已刷新到 `171` 个测试通过，最新补强的异常治理和跨系统主链路能力已经纳入全量回归，而不再只是局部定向验证。
+2. 这提升了 `test` 分支继续迭代时的可信度，也让后续 `master / release` 审计有了更新鲜的测试基线。
+3. 但该结果仍不等同于支付系统整包已可发布，前端跨端统一回归、整包多系统统一回归、MQ 级可靠投递和回滚演练仍需继续补齐。
