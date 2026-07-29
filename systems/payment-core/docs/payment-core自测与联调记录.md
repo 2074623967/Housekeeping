@@ -1258,6 +1258,38 @@
 
 ### 42.3 当前判断
 
+1. 当前异常告警派发已经从固定广播升级为“值班路由配置驱动派发”，更接近真实生产治理模式。
+2. 后续仍需补真实通知网关和值班日历联动，因此仍不满足最终 `release/*` 冻结门槛。
+
+## 43. 2026-07-29 支付事件死信收口验证
+
+### 43.1 本轮验证结论
+
+本轮围绕“支付事件出站失败后不能无限重试，必须进入可见、可查、可人工介入的死信状态”的问题进行了补齐，确认事件出站、任务中心和异常中心已经统一识别 `DEAD_LETTER` 状态。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | 合计 `172` 个用例全部通过，覆盖支付提交、回调、退款、任务中心、异常中心与事件出站 |
+| 后台前端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-20260729-dead-letter --emptyOutDir` | 通过 | `admin-web` 可稳定构建，说明任务中心、异常中心和事件出站页面未被本轮改动破坏 |
+| App 端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-app-web-dist-20260729-dead-letter --emptyOutDir` | 通过 | `app-web` 可稳定构建，支付端共享视图未受影响 |
+| H5 端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-h5-web-dist-20260729-dead-letter --emptyOutDir` | 通过 | `h5-web` 可稳定构建，复用收银台/结果页逻辑通过 |
+| PC 端构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-pc-web-dist-20260729-dead-letter --emptyOutDir` | 通过 | `pc-web` 可稳定构建，桌面端支付页逻辑通过 |
+| 定向单测 | `PaymentEventDispatchServiceImplTest` | 通过 | 新增“超过最大重试次数转死信”断言，验证 `FAILED -> DEAD_LETTER` 收口路径 |
+| 差异检查 | `git diff --check` | 通过 | 未发现空白字符、冲突标记或补丁格式问题 |
+
+### 43.2 本轮补齐项
+
+1. `PaymentEventDispatchServiceImpl` 新增最大重试次数判断，超过阈值后不再继续标记普通失败，而是直接写入 `DEAD_LETTER`。
+2. `PaymentEventMapper` / `PaymentEventMapper.xml` 新增 `markPublishDeadLetter`，统一沉淀事件死信落库动作。
+3. `PaymentTaskCenterMapper.xml` 和 `PaymentIssueMapper.xml` 已把 `DEAD_LETTER` 纳入失败事件检索口径，避免任务中心和异常中心遗漏死信事件。
+4. `PaymentEventDispatchServiceImplTest` 已补齐死信路径单测，避免后续回归把无限重试问题重新带回来。
+
+### 43.3 当前判断
+
+1. `payment-core` 的支付事件出站从“失败重试”升级为“失败重试 + 死信收口”的轻量闭环。
+2. 当前仍未接真实 MQ、死信队列和消费回执，因此这次补齐属于本地 outbox 可靠性增强，不等同于生产级消息中间件治理。
+3. 在补齐真实消息总线、订阅确认和死信二次补偿编排之前，仍不满足 `master / release` 冻结门槛。
+
 1. 当前异常告警派发已经具备“值班路由配置 -> 通知通道选择 -> 派发执行 -> 失败留痕 -> 任务升级文案”的轻量闭环。
 2. 后续仍需补真实通知供应商、发送回执、失败补发和通道限流，才可能接近最终冻结版门槛。
 ## 43. 2026-07-24 告警失败补发与对象规范收口验证

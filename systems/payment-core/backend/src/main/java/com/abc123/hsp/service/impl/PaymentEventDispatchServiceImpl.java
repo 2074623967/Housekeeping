@@ -21,6 +21,7 @@ import org.springframework.web.client.RestTemplate;
 public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchService {
 
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
+    private static final int DEFAULT_MAX_RETRY_COUNT = 3;
 
     private final PaymentMapper paymentMapper;
     private final PaymentEventMapper paymentEventMapper;
@@ -28,6 +29,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private final String clearingUrl;
     private final String accountingUrl;
     private final String accountingPaymentSuccessAccountNo;
+    private final int maxRetryCount;
 
     @Autowired
     public PaymentEventDispatchServiceImpl(
@@ -44,6 +46,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 clearingUrl,
                 accountingUrl,
                 accountingPaymentSuccessAccountNo,
+                DEFAULT_MAX_RETRY_COUNT,
                 AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(3000));
     }
 
@@ -54,11 +57,29 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             String accountingUrl,
             String accountingPaymentSuccessAccountNo,
             RestTemplate restTemplate) {
+        this(paymentMapper,
+                paymentEventMapper,
+                clearingUrl,
+                accountingUrl,
+                accountingPaymentSuccessAccountNo,
+                DEFAULT_MAX_RETRY_COUNT,
+                restTemplate);
+    }
+
+    PaymentEventDispatchServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentEventMapper paymentEventMapper,
+            String clearingUrl,
+            String accountingUrl,
+            String accountingPaymentSuccessAccountNo,
+            int maxRetryCount,
+            RestTemplate restTemplate) {
         this.paymentMapper = paymentMapper;
         this.paymentEventMapper = paymentEventMapper;
         this.clearingUrl = clearingUrl;
         this.accountingUrl = accountingUrl;
         this.accountingPaymentSuccessAccountNo = accountingPaymentSuccessAccountNo;
+        this.maxRetryCount = maxRetryCount <= 0 ? DEFAULT_MAX_RETRY_COUNT : maxRetryCount;
         this.restTemplate = restTemplate;
     }
 
@@ -90,9 +111,22 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             paymentEventMapper.markPublishSuccess(eventNo);
             return true;
         } catch (RuntimeException exception) {
-            paymentEventMapper.markPublishFailed(eventNo);
+            markFailedOrDeadLetter(eventNo);
             return false;
         }
+    }
+
+    /**
+     * 超过最大重试次数后直接进入死信，避免任务中心无限重试同一支付事件。
+     */
+    private void markFailedOrDeadLetter(String eventNo) {
+        PaymentEventListItemDTO event = paymentEventMapper.findByEventNo(eventNo);
+        int currentRetryCount = event == null || event.getRetryCount() == null ? 0 : event.getRetryCount();
+        if (currentRetryCount + 1 >= maxRetryCount) {
+            paymentEventMapper.markPublishDeadLetter(eventNo);
+            return;
+        }
+        paymentEventMapper.markPublishFailed(eventNo);
     }
 
     private void postForSuccess(String url, Object payload) {

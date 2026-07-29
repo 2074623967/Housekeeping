@@ -76,14 +76,14 @@
                'warn' AS severity_type,
                po.status AS payment_status,
                po.status_type AS payment_status_type,
-               CONCAT('支付事件发布失败，主题=', pe.event_topic, '，重试次数=', pe.retry_count) AS issue_summary,
+               CONCAT('支付事件发布异常，主题=', pe.event_topic, '，状态=', pe.publish_status, '，重试次数=', pe.retry_count) AS issue_summary,
                '支付主链路可能已成功，但下游账务/清分/结算未收到事件，建议优先补发并核对下游消费结果。' AS root_cause_hint,
                '进入支付事件出站页，复核发布状态并执行重发' AS recommended_action,
-               CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id, '&amp;publishStatus=FAILED') AS recommended_route,
+               CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id) AS recommended_route,
                DATE_FORMAT(pe.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_event pe
                  INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
-        WHERE pe.publish_status = 'FAILED'
+        WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
 
         UNION ALL
 

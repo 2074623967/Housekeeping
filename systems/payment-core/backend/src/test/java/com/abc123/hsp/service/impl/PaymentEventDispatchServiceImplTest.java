@@ -66,6 +66,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventNo("EVT-001");
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
+        event.setRetryCount(0);
         when(paymentEventMapper.findByEventNo("EVT-001")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
@@ -85,6 +86,37 @@ class PaymentEventDispatchServiceImplTest {
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-001");
+    }
+
+    @Test
+    void shouldMarkDeadLetterWhenRetryCountReachesUpperLimit() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = new PaymentEventListItemDTO();
+        event.setEventNo("EVT-RETRY-003");
+        event.setEventType("PAYMENT_SUCCESS");
+        event.setPaymentOrderId("PAY-001");
+        event.setRetryCount(2);
+        when(paymentEventMapper.findByEventNo("EVT-RETRY-003")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
+                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class)))
+                .thenReturn(new ResponseEntity<String>("fail", HttpStatus.BAD_GATEWAY));
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                3,
+                restTemplate
+        ).republish("EVT-RETRY-003");
+
+        Assertions.assertFalse(success);
+        verify(paymentEventMapper).markPublishDeadLetter("EVT-RETRY-003");
+        verify(paymentEventMapper, never()).markPublishFailed("EVT-RETRY-003");
     }
 
     @Test

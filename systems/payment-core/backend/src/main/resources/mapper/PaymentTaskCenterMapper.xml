@@ -21,7 +21,7 @@
             COALESCE((
                 SELECT COUNT(1)
                 FROM t_payment_event
-                WHERE publish_status = 'FAILED'
+                WHERE publish_status IN ('FAILED', 'DEAD_LETTER')
             ), 0) AS failedEventCount,
             COALESCE((
                 SELECT COUNT(1)
@@ -52,7 +52,7 @@
                     UNION ALL
                     SELECT pe.created_at, 'P2' AS severity
                     FROM t_payment_event pe
-                    WHERE pe.publish_status = 'FAILED'
+                    WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
                     UNION ALL
                     SELECT po.created_at, 'P2' AS severity
                     FROM t_payment_order po
@@ -77,7 +77,7 @@
             UNION ALL
             SELECT pe.created_at, 'P2' AS severity
             FROM t_payment_event pe
-            WHERE pe.publish_status = 'FAILED'
+            WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
             UNION ALL
             SELECT po.created_at, 'P2' AS severity
             FROM t_payment_order po
@@ -132,7 +132,7 @@
                    'P2' AS severity,
                    pe.created_at
             FROM t_payment_event pe
-            WHERE pe.publish_status = 'FAILED'
+            WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
             UNION ALL
             SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
                    po.payment_order_id,

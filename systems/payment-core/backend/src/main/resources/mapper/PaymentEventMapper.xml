@@ -126,4 +126,14 @@
             next_retry_at = DATE_ADD(NOW(), INTERVAL 5 MINUTE)
         WHERE event_no = #{eventNo}
     </update>
+
+    <update id="markPublishDeadLetter">
+        UPDATE t_payment_event
+        SET publish_status = 'DEAD_LETTER',
+            publish_status_type = 'danger',
+            retry_count = retry_count + 1,
+            last_published_at = NOW(),
+            next_retry_at = NULL
+        WHERE event_no = #{eventNo}
+    </update>
 </mapper>

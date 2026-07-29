@@ -41,6 +41,11 @@ public interface PaymentEventMapper {
     int markPublishFailed(@Param("eventNo") String eventNo);
 
     /**
+     * 标记事件进入死信状态。
+     */
+    int markPublishDeadLetter(@Param("eventNo") String eventNo);
+
+    /**
      * 兼容旧测试和旧调用方的重发标记方法。
      */
     default int markRepublished(@Param("eventNo") String eventNo) {
