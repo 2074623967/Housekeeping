@@ -9,5 +9,7 @@ public interface SettlementMapper {
 
     List<WorkerSettlementListItemDTO> findWorkerSettlements(@Param("query") WorkerSettlementQueryDTO query);
 
+    List<WorkerSettlementListItemDTO> findWorkerSettlementsForExport(@Param("query") WorkerSettlementQueryDTO query);
+
     long count(@Param("query") WorkerSettlementQueryDTO query);
 }

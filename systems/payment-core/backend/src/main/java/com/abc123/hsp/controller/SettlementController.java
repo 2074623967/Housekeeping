@@ -5,6 +5,10 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.service.SettlementService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,5 +40,23 @@ public class SettlementController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(settlementService.workerList(query));
+    }
+
+    @GetMapping("/workers/export")
+    public ResponseEntity<byte[]> exportWorkerList(
+            @RequestParam(required = false) String settlementOrderId,
+            @RequestParam(required = false) String workerKeyword,
+            @RequestParam(defaultValue = "全部") String settlementStatus,
+            @RequestParam(defaultValue = "全部") String payoutStatus) {
+        WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
+        query.setSettlementOrderId(settlementOrderId);
+        query.setWorkerKeyword(workerKeyword);
+        query.setSettlementStatus(settlementStatus);
+        query.setPayoutStatus(payoutStatus);
+        byte[] csvBytes = settlementService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=worker-settlements.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 }

@@ -41,6 +41,8 @@
 | `/api/refunds/success` | `POST` | 模拟渠道退款成功回调 |
 | `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
 | `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
+| `/api/settlements/workers` | `GET` | 查询服务者结算单 |
+| `/api/settlements/workers/export` | `GET` | 导出服务者结算单 CSV |
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |

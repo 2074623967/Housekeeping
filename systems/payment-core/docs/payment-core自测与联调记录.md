@@ -2771,3 +2771,22 @@
 
 1. `payment-core` 的导出能力已经从“服务层可用”提升为“控制器层也有显式门禁”，更接近冻结版交付包要求。
 2. 这一步提升的是接口交付可信度，不等于整包已达到 `master / release` 门槛。
+
+## 89. 2026-07-29 服务者结算单导出闭环验证
+
+### 89.1 本轮验证范围
+
+本轮围绕“服务者结算单页面已经有导出按钮，但后端没有 `/api/settlements/workers/export`，导致查询页与接口文档口径不一致”的问题进行补齐。
+
+### 89.2 本轮新增内容
+
+1. `SettlementService` 新增导出接口。
+2. `SettlementServiceImpl` 新增 CSV 导出逻辑，输出服务者结算单快照。
+3. `SettlementMapper` / `SettlementMapper.xml` 新增 `findWorkerSettlementsForExport`。
+4. `SettlementController` 新增 `/api/settlements/workers/export`。
+5. 新增 `SettlementServiceImplTest` 导出场景和 `SettlementControllerTest` 控制器导出场景。
+
+### 89.3 当前判断
+
+1. 服务者结算单已从“只可查询”升级为“可查询 + 可导出”，和前端导出按钮正式闭环。
+2. 这一步提升的是 `payment-core` 轻量结算查询入口的完整性，不等于完整 `settlement-system` 已交付。

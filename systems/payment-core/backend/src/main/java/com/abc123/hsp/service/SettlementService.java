@@ -7,4 +7,6 @@ import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 public interface SettlementService {
 
     PageResultDTO<WorkerSettlementListItemDTO> workerList(WorkerSettlementQueryDTO query);
+
+    String exportCsv(WorkerSettlementQueryDTO query);
 }
