@@ -42,6 +42,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
+    private static final int AUTO_TASK_LEASE_SECONDS = 120;
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
@@ -118,7 +119,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoCloseExpiredPayments() {
-        return runCloseExpiredPaymentsByMode(RUN_MODE_AUTO, "payment-expiry-scheduler", "自动调度");
+        return runAutoTaskWithLease(
+                TASK_CODE_EXPIRE_CLOSE,
+                "支付超时关单",
+                "payment-expiry-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runCloseExpiredPaymentsByMode(RUN_MODE_AUTO, "payment-expiry-scheduler", "自动调度");
+                    }
+                }
+        );
     }
 
     @Override
@@ -130,7 +141,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoRepublishFailedEvents() {
-        return runRepublishFailedEventsByMode(RUN_MODE_AUTO, "payment-event-scheduler");
+        return runAutoTaskWithLease(
+                TASK_CODE_EVENT_RETRY,
+                "失败事件重发",
+                "payment-event-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runRepublishFailedEventsByMode(RUN_MODE_AUTO, "payment-event-scheduler");
+                    }
+                }
+        );
     }
 
     @Override
@@ -142,7 +163,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoRetryFailedRefunds() {
-        return runRetryFailedRefundsByMode(RUN_MODE_AUTO, "refund-retry-scheduler");
+        return runAutoTaskWithLease(
+                TASK_CODE_REFUND_RETRY,
+                "失败退款重试",
+                "refund-retry-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runRetryFailedRefundsByMode(RUN_MODE_AUTO, "refund-retry-scheduler");
+                    }
+                }
+        );
     }
 
     @Override
@@ -162,7 +193,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoEscalateOverdueIssues() {
-        return runEscalateOverdueIssuesByMode(RUN_MODE_AUTO, "payment-issue-sla-scheduler");
+        return runAutoTaskWithLease(
+                TASK_CODE_ISSUE_ESCALATE,
+                "异常 SLA 升级巡检",
+                "payment-issue-sla-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runEscalateOverdueIssuesByMode(RUN_MODE_AUTO, "payment-issue-sla-scheduler");
+                    }
+                }
+        );
     }
 
     @Override
@@ -198,7 +239,33 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     @Transactional
     public PaymentTaskActionResultDTO runAutoControlPolicySelfChecks() {
-        return runControlPolicySelfChecksByMode(RUN_MODE_AUTO, "payment-control-self-check-scheduler");
+        return runAutoTaskWithLease(
+                TASK_CODE_CONTROL_SELF_CHECK,
+                "支付控制策略自动巡检",
+                "payment-control-self-check-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runControlPolicySelfChecksByMode(RUN_MODE_AUTO, "payment-control-self-check-scheduler");
+                    }
+                }
+        );
+    }
+
+    private PaymentTaskActionResultDTO runAutoTaskWithLease(String taskCode,
+                                                            String taskName,
+                                                            String triggeredBy,
+                                                            AutoTaskRunner runner) {
+        paymentTaskCenterMapper.initTaskLease(taskCode);
+        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, triggeredBy, AUTO_TASK_LEASE_SECONDS);
+        if (lockedRows <= 0) {
+            return buildLeaseSkippedResult(taskCode, taskName, triggeredBy);
+        }
+        try {
+            return runner.run();
+        } finally {
+            paymentTaskCenterMapper.releaseTaskLease(taskCode, triggeredBy);
+        }
     }
 
     private PaymentTaskActionResultDTO runControlPolicySelfChecksByMode(String runMode, String triggeredBy) {
@@ -415,6 +482,46 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 0,
                 successCount == 0 ? "当前没有待关闭的超时支付单。" : String.format("%s已关闭 %d 笔超时支付单。", modeLabel, successCount)
         );
+    }
+
+    private PaymentTaskActionResultDTO buildLeaseSkippedResult(String taskCode,
+                                                               String taskName,
+                                                               String triggeredBy) {
+        PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
+        entity.setTaskLogNo(buildTaskLogNo());
+        entity.setTaskCode(taskCode);
+        entity.setTaskName(taskName);
+        entity.setRunMode(RUN_MODE_AUTO);
+        entity.setTaskStatus(TASK_STATUS_WARN);
+        entity.setTaskStatusType("warn");
+        entity.setSeverityLevel("P3");
+        entity.setSeverityLevelType("warn");
+        entity.setEscalationStatus("其他实例执行中");
+        entity.setEscalationStatusType("warn");
+        entity.setProcessedCount(0);
+        entity.setSuccessCount(0);
+        entity.setWarningCount(0);
+        entity.setFailCount(0);
+        entity.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
+        entity.setSuggestedAction("继续观察当前实例执行结果，避免重复调度同一任务。");
+        entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
+        entity.setTriggeredBy(triggeredBy);
+        paymentTaskCenterMapper.insertTaskRunLog(entity);
+
+        PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
+        result.setTaskCode(taskCode);
+        result.setTaskName(taskName);
+        result.setProcessedCount(0);
+        result.setSuccessCount(0);
+        result.setWarningCount(0);
+        result.setFailCount(0);
+        result.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
+        result.setOverview(overview());
+        return result;
+    }
+
+    private interface AutoTaskRunner {
+        PaymentTaskActionResultDTO run();
     }
 
     private List<PaymentAlertItemDTO> buildFocusAlerts(PaymentTaskCenterOverviewDTO overview) {

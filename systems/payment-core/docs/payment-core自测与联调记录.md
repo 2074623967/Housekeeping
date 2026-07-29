@@ -2549,3 +2549,28 @@
 1. 当前 `payment-core` 的异常告警自动派发与自动回执回查已经具备第一版跨实例共享租约锁，不再默认允许多个调度实例同时执行同一任务。
 2. 这一步显著降低了多实例部署时重复派发、重复回查和重复写任务日志的风险，更接近正式生产调度体系的基本门槛。
 3. 真实供应商 API、更多任务类型的跨实例协调和更广范围跨系统门禁仍需继续补齐，因此本轮依旧不触发 `master / release`。
+
+## 82. 2026-07-29 任务中心自动调度跨实例租约锁扩围验证
+
+### 82.1 本轮验证范围
+
+本轮围绕“只有异常告警自动任务具备跨实例租约锁，其余任务中心自动调度在多实例下仍会重复执行”的问题进行补强，目标是让 `payment-core` 任务中心核心自动任务统一纳入共享租约锁治理。
+
+### 82.2 本轮新增内容
+
+1. `PaymentTaskCenterServiceImpl` 的 `runAutoCloseExpiredPayments / runAutoRepublishFailedEvents / runAutoRetryFailedRefunds / runAutoEscalateOverdueIssues / runAutoControlPolicySelfChecks` 统一接入 `runAutoTaskWithLease`。
+2. 自动任务开始前统一执行 `initTaskLease / acquireTaskLease`，执行完成后统一释放租约。
+3. 当租约已被其他实例持有时，本实例直接跳过执行，并写入 `WARNING` 级任务执行日志。
+4. `PaymentTaskCenterServiceImplTest` 补齐自动关单跳过、自动自检抢锁、自动事件重发释放锁、自动退款重试释放锁、自动 SLA 升级释放锁等场景。
+
+### 82.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentTaskCenterServiceImplTest test` | 通过 | `16` 个用例全部通过，新增覆盖任务中心多类自动任务的租约锁跳过与释放 |
+
+### 82.4 当前判断
+
+1. 当前 `payment-core` 的任务中心核心自动调度已从“单任务有锁”升级为“多任务统一租约锁治理”，更接近真实生产多实例部署的任务调度标准。
+2. 这一步继续缩小了 `master / release` 门槛里“跨实例协调”这一类高优先级缺口。
+3. 真实供应商 API、更广范围跨系统门禁和支付主链路/页面矩阵全量联调仍需继续补齐，因此本轮依旧不触发 `master / release`。
