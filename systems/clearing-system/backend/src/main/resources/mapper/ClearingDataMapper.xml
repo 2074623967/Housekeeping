@@ -142,6 +142,26 @@
         WHERE clearing_no = #{clearingNo}
     </select>
 
+    <select id="findOrderByPaymentOrderId" resultType="com.abc123.clearing.entity.ClearingOrderEntity">
+        SELECT clearing_no,
+               batch_no,
+               payment_order_id,
+               order_no,
+               order_amount,
+               merchant_amount,
+               worker_amount,
+               platform_amount,
+               channel_fee_amount,
+               subsidy_amount,
+               clearing_status,
+               rule_no,
+               created_at
+        FROM t_clearing_order
+        WHERE payment_order_id = #{paymentOrderId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <insert id="insertOrder">
         INSERT INTO t_clearing_order (
             clearing_no,
@@ -325,6 +345,21 @@
                created_at
         FROM t_clearing_event
         ORDER BY id DESC
+    </select>
+
+    <select id="findEventByTypeAndBizNo" resultType="com.abc123.clearing.entity.ClearingEventEntity">
+        SELECT event_no,
+               event_type,
+               biz_no,
+               summary,
+               payload,
+               event_status,
+               created_at
+        FROM t_clearing_event
+        WHERE event_type = #{eventType}
+          AND biz_no = #{bizNo}
+        ORDER BY id DESC
+        LIMIT 1
     </select>
 
     <insert id="insertEvent">

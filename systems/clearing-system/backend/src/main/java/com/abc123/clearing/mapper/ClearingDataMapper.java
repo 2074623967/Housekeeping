@@ -63,6 +63,11 @@ public interface ClearingDataMapper {
     ClearingOrderEntity findOrder(@Param("clearingNo") String clearingNo);
 
     /**
+     * 按支付单号查询清分结果。
+     */
+    ClearingOrderEntity findOrderByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId);
+
+    /**
      * 新增清分结果。
      */
     int insertOrder(ClearingOrderEntity entity);
@@ -116,6 +121,12 @@ public interface ClearingDataMapper {
      * 查询事件列表。
      */
     List<ClearingEventEntity> findEvents();
+
+    /**
+     * 按业务单号查询事件。
+     */
+    ClearingEventEntity findEventByTypeAndBizNo(@Param("eventType") String eventType,
+                                                @Param("bizNo") String bizNo);
 
     /**
      * 新增事件。

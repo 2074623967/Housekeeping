@@ -50,4 +50,27 @@ class ClearingEventServiceImplTest {
         assertEquals(1, orders.getTotal());
         assertEquals("PAY202607200099", orders.getItems().get(0).getPaymentOrderId());
     }
+
+    @Test
+    void shouldKeepConsumptionIdempotentWhenPaymentSuccessRepeated() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setPaymentOrderId("PAY202607200188");
+        request.setOrderNo("ORD202607200188");
+        request.setBatchDate("2026-07-20");
+        request.setCustomerName("李女士");
+        request.setMerchantName("徐汇门店");
+        request.setWorkerName("陈阿姨");
+        request.setAmount(new BigDecimal("300.00"));
+
+        ClearingEventDTO first = clearingEventService.consumePaymentSuccess(request);
+        ClearingEventDTO second = clearingEventService.consumePaymentSuccess(request);
+        PageResultDTO<ShareItemDTO> shares = shareService.list("", "", 1, 20);
+        PageResultDTO<ClearingOrderDTO> orders = clearingOrderService.list("", "", "PAY202607200188", "", 1, 20);
+        PageResultDTO<ClearingEventDTO> events = clearingEventService.list("PAYMENT_SUCCESS", "PAY202607200188", 1, 20);
+
+        assertEquals(first.getEventNo(), second.getEventNo());
+        assertEquals(1, orders.getTotal());
+        assertEquals(1, events.getTotal());
+        assertEquals(6, shares.getTotal());
+    }
 }

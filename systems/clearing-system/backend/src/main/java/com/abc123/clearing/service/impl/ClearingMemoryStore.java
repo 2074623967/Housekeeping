@@ -204,8 +204,21 @@ public class ClearingMemoryStore {
         return items;
     }
 
+    public boolean hasConsumedPaymentSuccess(String paymentOrderId) {
+        return paymentOrderId != null && !paymentOrderId.isEmpty()
+                && clearingDataMapper.findOrderByPaymentOrderId(paymentOrderId) != null;
+    }
+
     @Transactional
     public ClearingEventEntity consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
+        ClearingOrderEntity existingOrder = clearingDataMapper.findOrderByPaymentOrderId(request.getPaymentOrderId());
+        if (existingOrder != null) {
+            ClearingEventEntity existingEvent = clearingDataMapper.findEventByTypeAndBizNo("PAYMENT_SUCCESS", request.getPaymentOrderId());
+            if (existingEvent != null) {
+                return existingEvent;
+            }
+            return createPaymentSuccessEvent(request);
+        }
         ClearingRuleEntity activeRule = rules().stream()
                 .filter(item -> "启用".equals(item.getRuleStatus()))
                 .findFirst()
@@ -226,17 +239,7 @@ public class ClearingMemoryStore {
                 refreshedBatch.getVersionNo(),
                 refreshedBatch.getBatchStatus(),
                 refreshedBatch.getFinishedAt());
-
-        ClearingEventEntity event = new ClearingEventEntity();
-        event.setEventNo(nextNo("EVT", eventSeq));
-        event.setEventType("PAYMENT_SUCCESS");
-        event.setBizNo(request.getPaymentOrderId());
-        event.setSummary(request.getCustomerName() + " 支付成功后触发清分");
-        event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId() + "\",\"orderNo\":\"" + request.getOrderNo() + "\"}");
-        event.setEventStatus("已消费");
-        event.setCreatedAt(now());
-        clearingDataMapper.insertEvent(event);
-        return event;
+        return createPaymentSuccessEvent(request);
     }
 
     @Transactional
@@ -309,6 +312,19 @@ public class ClearingMemoryStore {
         request.setWorkerName("李阿姨");
         request.setAmount(new BigDecimal("168.00"));
         return request;
+    }
+
+    private ClearingEventEntity createPaymentSuccessEvent(PaymentSuccessEventRequestDTO request) {
+        ClearingEventEntity event = new ClearingEventEntity();
+        event.setEventNo(nextNo("EVT", eventSeq));
+        event.setEventType("PAYMENT_SUCCESS");
+        event.setBizNo(request.getPaymentOrderId());
+        event.setSummary(request.getCustomerName() + " 支付成功后触发清分");
+        event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId() + "\",\"orderNo\":\"" + request.getOrderNo() + "\"}");
+        event.setEventStatus("已消费");
+        event.setCreatedAt(now());
+        clearingDataMapper.insertEvent(event);
+        return event;
     }
 
     private void syncSequencesFromDatabase() {
