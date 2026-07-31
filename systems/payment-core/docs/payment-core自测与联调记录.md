@@ -2940,3 +2940,27 @@
 3. 原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 后，最新 backend 已能在 `2026-07-31 19:36:42` 成功写出 `PAYMENT_ISSUE_ESCALATE` 任务日志；此前暴露的 `alert_content` 越界问题已通过“候选过滤 + `source_alert_no` 落库 + 512 字符截断”修复，不再阻塞真实运行库启动。
 4. 随后补充并执行 `systems/payment-core/database/migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`，将原始运行库中 `7` 条历史递归升级脏数据从 `待确认` 收口为 `已确认`，并保留 `ack_operator=data-fix-20260731`、`triggered_by=payment-core-alert-cleanup-2026-07-31` 审计痕迹。
 5. 至此，原始运行库上与 `PAYMENT_ISSUE_ESCALATE` 相关的已知结构/历史数据阻断已全部收口；当前剩余阻断已经不再是“导出下载证据不足”或“原始运行库缺关键表”，而是更高层的最终 gate 审计闭环，包括 MQ 级可靠投递、失败重试/死信补偿、正式发布清单与发布后验证清单。
+
+## 96. 2026-07-31 支付事件重投递与死信门禁补强
+
+### 96.1 本轮新增内容
+
+1. 更新 `PaymentEventServiceImplTest`，不再只验证旧的 `markRepublished` 兼容口径，而是显式校验后台“重新投递”动作会调用 `PaymentEventDispatchService.republish(...)` 的真实下游重投递语义。
+2. 为 `PaymentEventServiceImplTest` 增加“下游重投递返回 `false` 时直接拒绝，并返回 `支付事件不存在`”场景，避免把无效事件误当成重投递成功。
+3. 扩展 `PaymentEventDispatchServiceImplTest`，补齐三类可靠投递边界：
+   - 非 `PAYMENT_SUCCESS` 事件禁止进入支付成功下游重投递；
+   - 支付详情缺失时直接标记 `FAILED`，且不触发任何下游请求；
+   - 清分下游非 2xx 时立即停止，不再继续向账务侧投递。
+4. 结合既有用例，当前支付事件出站测试已同时覆盖“成功投递 / 失败重试 / 重试耗尽进 `DEAD_LETTER` / 非法事件拒绝 / 缺详情失败 / 下游短路”六类核心边界。
+
+### 96.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付事件定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentEventServiceImplTest,PaymentEventDispatchServiceImplTest test` | 通过 | `13` 个用例全部通过，其中 `PaymentEventServiceImplTest 5/5`、`PaymentEventDispatchServiceImplTest 8/8` |
+
+### 96.3 当前判断
+
+1. `payment-core` 已经把支付事件出站的“人工重投递入口语义、失败重试、重试耗尽进死信、无效事件拒绝、下游短路保护”补成自动化门禁，而不再只是界面能力或读代码推断。
+2. 这一步收缩了“MQ 级可靠投递/重试/死信补偿”中的应用层证据缺口，但仍不等同于真实 MQ 中间件生产级验证，因为当前仍主要基于本地 HTTP 下游与单测门禁，而非真实消息代理、死信队列、消费组和补偿编排演练。
+3. 因此本轮依旧不推进 `test -> master`，也不基于 `master` 产出 `release/*` 文档或版本。

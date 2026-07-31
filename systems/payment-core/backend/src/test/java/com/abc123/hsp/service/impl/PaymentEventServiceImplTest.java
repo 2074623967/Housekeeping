@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,6 +25,8 @@ class PaymentEventServiceImplTest {
 
     @Mock
     private PaymentEventMapper paymentEventMapper;
+    @Mock
+    private PaymentEventDispatchService paymentEventDispatchService;
 
     @Test
     void shouldListPaymentEvents() {
@@ -67,16 +70,33 @@ class PaymentEventServiceImplTest {
         query.setEventTopic(" payment.trade ");
         query.setSortField(" nextRetryAt ");
         query.setSortOrder(" ASC ");
-        when(paymentEventMapper.markRepublished("EVT001")).thenReturn(1);
+        when(paymentEventDispatchService.republish("EVT001")).thenReturn(true);
         when(paymentEventMapper.findAll(query)).thenReturn(Collections.emptyList());
         when(paymentEventMapper.count(query)).thenReturn(0L);
 
-        new PaymentEventServiceImpl(paymentEventMapper).republish(request, query);
+        new PaymentEventServiceImpl(paymentEventMapper, paymentEventDispatchService).republish(request, query);
 
-        verify(paymentEventMapper).markRepublished("EVT001");
+        verify(paymentEventDispatchService).republish("EVT001");
         assertEquals("payment.trade", query.getEventTopic());
         assertEquals("nextRetryAt", query.getSortField());
         assertEquals("asc", query.getSortOrder());
+    }
+
+    @Test
+    void shouldRejectRepublishWhenDispatchServiceReturnsFalse() {
+        PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
+        request.setEventNo(" EVT404 ");
+
+        when(paymentEventDispatchService.republish("EVT404")).thenReturn(false);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentEventServiceImpl(paymentEventMapper, paymentEventDispatchService)
+                        .republish(request, new PaymentEventQueryDTO())
+        );
+
+        assertEquals("支付事件不存在", exception.getMessage());
+        verify(paymentEventDispatchService).republish("EVT404");
     }
 
     @Test
