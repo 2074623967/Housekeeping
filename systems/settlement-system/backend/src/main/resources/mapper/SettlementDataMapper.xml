@@ -142,6 +142,28 @@
         WHERE settlement_no = #{settlementNo}
     </select>
 
+    <select id="findOrderByClearingTarget" resultType="com.abc123.settlement.entity.SettlementOrderEntity">
+        SELECT settlement_no,
+               batch_no,
+               target_type,
+               target_no,
+               target_name,
+               should_settle_amount,
+               deduct_amount,
+               net_settle_amount,
+               settlement_status,
+               payout_status,
+               audit_status,
+               clearing_no,
+               created_at
+        FROM t_settlement_order
+        WHERE clearing_no = #{clearingNo}
+          AND target_type = #{targetType}
+          AND target_no = #{targetNo}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
     <insert id="insertOrder">
         INSERT INTO t_settlement_order (
             settlement_no,
@@ -372,6 +394,21 @@
                created_at
         FROM t_settlement_event
         ORDER BY id DESC
+    </select>
+
+    <select id="findEventByTypeAndBizNo" resultType="com.abc123.settlement.entity.SettlementEventEntity">
+        SELECT event_no,
+               event_type,
+               biz_no,
+               summary,
+               payload,
+               event_status,
+               created_at
+        FROM t_settlement_event
+        WHERE event_type = #{eventType}
+          AND biz_no = #{bizNo}
+        ORDER BY id DESC
+        LIMIT 1
     </select>
 
     <insert id="insertEvent">

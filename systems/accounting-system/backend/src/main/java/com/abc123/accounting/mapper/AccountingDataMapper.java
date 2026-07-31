@@ -81,6 +81,13 @@ public interface AccountingDataMapper {
     List<AccountLedgerEntity> findLedgers();
 
     /**
+     * 按账户、业务类型和业务单号查询流水。
+     */
+    AccountLedgerEntity findLedgerByBiz(@Param("accountNo") String accountNo,
+                                        @Param("bizType") String bizType,
+                                        @Param("bizNo") String bizNo);
+
+    /**
      * 新增流水。
      */
     int insertLedger(AccountLedgerEntity entity);
@@ -135,6 +142,12 @@ public interface AccountingDataMapper {
      * 查询事件列表。
      */
     List<AccountEventEntity> findEvents();
+
+    /**
+     * 按事件类型和业务单号查询事件。
+     */
+    AccountEventEntity findEventByTypeAndBizNo(@Param("eventType") String eventType,
+                                               @Param("bizNo") String bizNo);
 
     /**
      * 新增事件。

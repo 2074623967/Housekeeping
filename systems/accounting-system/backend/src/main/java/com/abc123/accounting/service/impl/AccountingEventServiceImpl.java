@@ -41,12 +41,14 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     @Override
     public AccountEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
-        accountingMemoryStore.credit(
-                request.getAccountNo(),
-                "PAYMENT_SUCCESS_EVENT",
-                request.getPaymentOrderId(),
-                request.getAmount(),
-                "支付事件消费者");
+        if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "PAYMENT_SUCCESS_EVENT", request.getPaymentOrderId())) {
+            accountingMemoryStore.credit(
+                    request.getAccountNo(),
+                    "PAYMENT_SUCCESS_EVENT",
+                    request.getPaymentOrderId(),
+                    request.getAmount(),
+                    "支付事件消费者");
+        }
         return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
                 "PAYMENT_SUCCESS",
                 request.getPaymentOrderId(),
@@ -56,12 +58,14 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     @Override
     public AccountEventDTO consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
-        accountingMemoryStore.credit(
-                request.getAccountNo(),
-                "CLEARING_GENERATED_EVENT",
-                request.getClearingOrderNo(),
-                request.getAmount(),
-                "清分事件消费者");
+        if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "CLEARING_GENERATED_EVENT", request.getClearingOrderNo())) {
+            accountingMemoryStore.credit(
+                    request.getAccountNo(),
+                    "CLEARING_GENERATED_EVENT",
+                    request.getClearingOrderNo(),
+                    request.getAmount(),
+                    "清分事件消费者");
+        }
         return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
                 "CLEARING_GENERATED",
                 request.getClearingOrderNo(),

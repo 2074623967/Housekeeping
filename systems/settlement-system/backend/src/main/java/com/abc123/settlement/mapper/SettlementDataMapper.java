@@ -64,6 +64,13 @@ public interface SettlementDataMapper {
     SettlementOrderEntity findOrder(@Param("settlementNo") String settlementNo);
 
     /**
+     * 按清分单号与结算对象查询结算单。
+     */
+    SettlementOrderEntity findOrderByClearingTarget(@Param("clearingNo") String clearingNo,
+                                                    @Param("targetType") String targetType,
+                                                    @Param("targetNo") String targetNo);
+
+    /**
      * 新增结算单。
      */
     int insertOrder(SettlementOrderEntity entity);
@@ -143,6 +150,12 @@ public interface SettlementDataMapper {
      * 查询事件列表。
      */
     List<SettlementEventEntity> findEvents();
+
+    /**
+     * 按事件类型和业务单号查询事件。
+     */
+    SettlementEventEntity findEventByTypeAndBizNo(@Param("eventType") String eventType,
+                                                  @Param("bizNo") String bizNo);
 
     /**
      * 新增事件。

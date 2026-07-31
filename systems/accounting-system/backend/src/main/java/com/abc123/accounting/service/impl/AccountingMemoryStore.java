@@ -271,8 +271,24 @@ public class AccountingMemoryStore {
         return accountingDataMapper.findEvents();
     }
 
+    public boolean hasLedger(String accountNo, String bizType, String bizNo) {
+        return accountNo != null && bizType != null && bizNo != null
+                && accountingDataMapper.findLedgerByBiz(accountNo, bizType, bizNo) != null;
+    }
+
+    public AccountEventEntity findEvent(String eventType, String bizNo) {
+        if (eventType == null || bizNo == null) {
+            return null;
+        }
+        return accountingDataMapper.findEventByTypeAndBizNo(eventType, bizNo);
+    }
+
     @Transactional
     public AccountEventEntity recordEvent(String eventType, String bizNo, String summary, String payload) {
+        AccountEventEntity existingEvent = findEvent(eventType, bizNo);
+        if (existingEvent != null) {
+            return existingEvent;
+        }
         AccountEventEntity entity = new AccountEventEntity();
         entity.setEventNo(nextNo("EVT", eventSeq));
         entity.setEventType(eventType);

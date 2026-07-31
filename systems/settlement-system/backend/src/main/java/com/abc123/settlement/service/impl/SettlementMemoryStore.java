@@ -288,8 +288,33 @@ public class SettlementMemoryStore {
         return items;
     }
 
+    public SettlementOrderEntity findOrderByClearingTarget(String clearingNo, String targetType, String targetNo) {
+        if (clearingNo == null || targetType == null || targetNo == null) {
+            return null;
+        }
+        return settlementDataMapper.findOrderByClearingTarget(clearingNo, targetType, targetNo);
+    }
+
+    public SettlementEventEntity findEvent(String eventType, String bizNo) {
+        if (eventType == null || bizNo == null) {
+            return null;
+        }
+        return settlementDataMapper.findEventByTypeAndBizNo(eventType, bizNo);
+    }
+
     @Transactional
     public SettlementEventEntity consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
+        SettlementOrderEntity existingOrder = findOrderByClearingTarget(
+                request.getClearingNo(),
+                request.getTargetType(),
+                request.getTargetNo());
+        if (existingOrder != null) {
+            SettlementEventEntity existingEvent = findEvent("CLEARING_GENERATED", request.getClearingNo());
+            if (existingEvent != null) {
+                return existingEvent;
+            }
+            return createClearingGeneratedEvent(request.getClearingNo());
+        }
         SettlementBatchEntity batch = createBatch("2026-07-20", "EVENT", "系统事件", "EVENT-" + request.getClearingNo());
         SettlementOrderEntity order = createOrder(
                 batch.getBatchNo(),
@@ -303,17 +328,7 @@ public class SettlementMemoryStore {
         createItem(order.getSettlementNo(), "应结金额", "应结", request.getShouldSettleAmount());
         createItem(order.getSettlementNo(), "扣减金额", "扣减", request.getDeductAmount());
         updateBatchSummary(batch.getBatchNo(), "已完成", now());
-
-        SettlementEventEntity entity = new SettlementEventEntity();
-        entity.setEventNo(nextNo("SVE", eventSeq));
-        entity.setEventType("CLEARING_GENERATED");
-        entity.setBizNo(request.getClearingNo());
-        entity.setSummary("清分结果生成后自动生成结算单");
-        entity.setPayload("{\"clearingNo\":\"" + request.getClearingNo() + "\"}");
-        entity.setEventStatus("已消费");
-        entity.setCreatedAt(now());
-        settlementDataMapper.insertEvent(entity);
-        return entity;
+        return createClearingGeneratedEvent(request.getClearingNo());
     }
 
     @Transactional
@@ -496,6 +511,19 @@ public class SettlementMemoryStore {
         request.setDeductAmount(new BigDecimal("8.00"));
         request.setNetSettleAmount(new BigDecimal("112.00"));
         return request;
+    }
+
+    private SettlementEventEntity createClearingGeneratedEvent(String clearingNo) {
+        SettlementEventEntity entity = new SettlementEventEntity();
+        entity.setEventNo(nextNo("SVE", eventSeq));
+        entity.setEventType("CLEARING_GENERATED");
+        entity.setBizNo(clearingNo);
+        entity.setSummary("清分结果生成后自动生成结算单");
+        entity.setPayload("{\"clearingNo\":\"" + clearingNo + "\"}");
+        entity.setEventStatus("已消费");
+        entity.setCreatedAt(now());
+        settlementDataMapper.insertEvent(entity);
+        return entity;
     }
 
     private void syncSequencesFromDatabase() {

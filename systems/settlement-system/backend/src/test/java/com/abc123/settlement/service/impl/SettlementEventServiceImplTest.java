@@ -48,4 +48,26 @@ class SettlementEventServiceImplTest {
         assertEquals(1, orderResult.getTotal());
         assertEquals("CLO88888", orderResult.getItems().get(0).getClearingNo());
     }
+
+    @Test
+    void shouldKeepClearingConsumptionIdempotent() {
+        ClearingGeneratedEventRequestDTO request = new ClearingGeneratedEventRequestDTO();
+        request.setClearingNo("CLO99999");
+        request.setPaymentOrderId("PAY99999");
+        request.setTargetType("WORKER");
+        request.setTargetNo("WRK99999");
+        request.setTargetName("孙阿姨");
+        request.setShouldSettleAmount(new BigDecimal("180.00"));
+        request.setDeductAmount(new BigDecimal("18.00"));
+        request.setNetSettleAmount(new BigDecimal("162.00"));
+
+        SettlementEventDTO first = settlementEventService.consumeClearingGenerated(request);
+        SettlementEventDTO second = settlementEventService.consumeClearingGenerated(request);
+        PageResultDTO<SettlementOrderDTO> orderResult = settlementOrderService.list("", "", "", "CLO99999", 1, 20);
+        PageResultDTO<SettlementEventDTO> eventResult = settlementEventService.list("CLEARING_GENERATED", "CLO99999", 1, 20);
+
+        assertEquals(first.getEventNo(), second.getEventNo());
+        assertEquals(1, orderResult.getTotal());
+        assertEquals(1, eventResult.getTotal());
+    }
 }
