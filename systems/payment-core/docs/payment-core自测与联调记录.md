@@ -2909,3 +2909,29 @@
 1. 退款单页已从“前端已有导出入口、后端缺下载能力”收口为前后端可用的查询加导出闭环。
 2. 截至 2026-07-31，`payment-core` 四个后台导出模块的真实代码闭环已全部落地，且后端全量测试已刷新到 `196` 个用例通过。
 3. 在导出门禁证据、跨端联调和更完整业务闭环完成前，`payment-core` 仍未达到 `test -> master` 或 `master / release` 冻结门槛，本轮先不创建 release 文档或版本。
+
+## 95. 2026-07-31 admin 导出下载链路验证
+
+本轮继续补齐 `payment-core` admin 端导出门禁证据，目标不是再补后端代码，而是确认真实页面点击后，四个导出入口都能生成正确的导出 URL，并收到带 `attachment` 响应头的 CSV 下载响应。
+
+### 95.1 本轮动作
+
+1. 启动本地 `admin-web`（`127.0.0.1:5174`），保留页面真实路由、真实筛选默认值和真实导出按钮逻辑。
+2. 在本地 `127.0.0.1:8080` 启动 mock API server，承接 `/api/bills/export`、`/api/cashier-sessions/export`、`/api/refunds/export`、`/api/payment-flows/export` 及对应列表接口。
+3. 通过系统 Chrome 的 CDP 打开真实页面，点击 `账单中心 / 收银台会话 / 退款单 / 支付流水` 四个页面的导出按钮。
+4. 抓取页面点击后实际执行的 `window.open(...)` 导出 URL，并继续校验代理返回的 `Content-Disposition` 与 CSV 表头。
+
+### 95.2 验证结果
+
+| 页面 | 按钮 | 点击生成的导出 URL | 响应头 | CSV 首行 |
+| --- | --- | --- | --- | --- |
+| `/bills` | `导出账单` | `/api/bills/export?billNo=&orderNo=&customerName=&billStatus=%E5%85%A8%E9%83%A8&sortField=createdAt&sortOrder=desc` | `attachment; filename=bills.csv` | `账单号,订单号,客户,账单应收,已支付,待支付,账单状态` |
+| `/cashier-sessions` | `导出会话` | `/api/cashier-sessions/export?sessionNo=&paymentOrderId=&orderNo=&customerName=&terminal=%E5%85%A8%E9%83%A8&sessionStatus=%E5%85%A8%E9%83%A8&sortField=createdAt&sortOrder=desc` | `attachment; filename=cashier-sessions.csv` | `会话号,预付单号,支付单号,订单号,客户,终端,会话金额,会话状态` |
+| `/refunds` | `导出退款单` | `/api/refunds/export?refundOrderId=&paymentOrderId=&refundStatus=%E5%85%A8%E9%83%A8&refundMethod=%E5%85%A8%E9%83%A8` | `attachment; filename=refunds.csv` | `退款单号,支付单号,退款金额,退款方式,退款状态` |
+| `/payment-flows` | `导出流水` | `/api/payment-flows/export?paymentOrderId=&orderNo=&flowType=%E5%85%A8%E9%83%A8&channelCode=&terminal=%E5%85%A8%E9%83%A8&businessStatus=%E5%85%A8%E9%83%A8&keyword=&sortField=createdAt&sortOrder=desc` | `attachment; filename=payment-flows.csv` | `流水号,支付单号,订单号,流水类型,渠道,终端,业务状态` |
+
+### 95.3 结论
+
+1. 四个 admin 页面已完成真实页面渲染、真实按钮点击、真实导出 URL 拼接与 CSV 下载响应链路验证。
+2. 这份证据说明 admin 前端导出入口本身已不再是阻断项，至少在页面逻辑和下载约定层面可以稳定闭环。
+3. 本轮仍使用本地 mock API server 承接导出响应，因此它证明的是“前端下载链路成立”，不等同于“真实后端联调环境下的最终下载证据”。
