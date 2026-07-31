@@ -18,6 +18,13 @@ public interface PaymentFlowMapper {
     List<PaymentFlowListItemDTO> findAll(@Param("query") PaymentFlowQueryDTO query);
 
     /**
+     * 查询导出使用的支付流水列表。
+     *
+     * @return 支付流水列表
+     */
+    List<PaymentFlowListItemDTO> findAllForExport(@Param("query") PaymentFlowQueryDTO query);
+
+    /**
      * 统计符合条件的支付流水总数。
      */
     long count(@Param("query") PaymentFlowQueryDTO query);

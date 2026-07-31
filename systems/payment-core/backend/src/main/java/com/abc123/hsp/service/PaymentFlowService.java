@@ -15,4 +15,11 @@ public interface PaymentFlowService {
      * @return 支付流水列表
      */
     PageResultDTO<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query);
+
+    /**
+     * 导出支付流水列表。
+     *
+     * @return 支付流水 CSV
+     */
+    String exportCsv(PaymentFlowQueryDTO query);
 }
