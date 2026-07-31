@@ -1,0 +1,39 @@
+{
+  "rabbit_version":"3.13.0", "users":[], "vhosts":[], "permissions":[], "topic_permissions":[], "parameters":[], "global_parameters":[], "policies":[],
+  "queues":[
+    {"name":"clearing.payment-success","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-dead-letter-exchange":"payment.trade.dlq","x-dead-letter-routing-key":"payment.success.dlq.v1"}},
+    {"name":"clearing.payment-success.retry","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-message-ttl":300000,"x-dead-letter-exchange":"payment.trade","x-dead-letter-routing-key":"payment.success.v1"}},
+    {"name":"clearing.payment-success.dlq","vhost":"/","durable":true,"auto_delete":false,"arguments":{}},
+    {"name":"accounting.payment-success","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-dead-letter-exchange":"payment.trade.dlq","x-dead-letter-routing-key":"payment.success.dlq.v1"}},
+    {"name":"accounting.payment-success.retry","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-message-ttl":300000,"x-dead-letter-exchange":"payment.trade","x-dead-letter-routing-key":"payment.success.v1"}},
+    {"name":"accounting.payment-success.dlq","vhost":"/","durable":true,"auto_delete":false,"arguments":{}},
+    {"name":"settlement.clearing-generated","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-dead-letter-exchange":"clearing.trade.dlq","x-dead-letter-routing-key":"clearing.generated.dlq.v1"}},
+    {"name":"settlement.clearing-generated.retry","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-message-ttl":300000,"x-dead-letter-exchange":"clearing.trade","x-dead-letter-routing-key":"clearing.generated.v1"}},
+    {"name":"settlement.clearing-generated.dlq","vhost":"/","durable":true,"auto_delete":false,"arguments":{}},
+    {"name":"accounting.clearing-generated","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-dead-letter-exchange":"clearing.trade.dlq","x-dead-letter-routing-key":"clearing.generated.dlq.v1"}},
+    {"name":"accounting.clearing-generated.retry","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-message-ttl":300000,"x-dead-letter-exchange":"clearing.trade","x-dead-letter-routing-key":"clearing.generated.v1"}},
+    {"name":"accounting.clearing-generated.dlq","vhost":"/","durable":true,"auto_delete":false,"arguments":{}}
+  ],
+  "exchanges":[
+    {"name":"payment.trade","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}},
+    {"name":"payment.trade.retry","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}},
+    {"name":"payment.trade.dlq","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}},
+    {"name":"clearing.trade","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}},
+    {"name":"clearing.trade.retry","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}},
+    {"name":"clearing.trade.dlq","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}}
+  ],
+  "bindings":[
+    {"source":"payment.trade","vhost":"/","destination":"clearing.payment-success","destination_type":"queue","routing_key":"payment.success.v1","arguments":{}},
+    {"source":"payment.trade.retry","vhost":"/","destination":"clearing.payment-success.retry","destination_type":"queue","routing_key":"payment.success.retry.v1","arguments":{}},
+    {"source":"payment.trade.dlq","vhost":"/","destination":"clearing.payment-success.dlq","destination_type":"queue","routing_key":"payment.success.dlq.v1","arguments":{}},
+    {"source":"payment.trade","vhost":"/","destination":"accounting.payment-success","destination_type":"queue","routing_key":"payment.success.v1","arguments":{}},
+    {"source":"payment.trade.retry","vhost":"/","destination":"accounting.payment-success.retry","destination_type":"queue","routing_key":"payment.success.retry.v1","arguments":{}},
+    {"source":"payment.trade.dlq","vhost":"/","destination":"accounting.payment-success.dlq","destination_type":"queue","routing_key":"payment.success.dlq.v1","arguments":{}},
+    {"source":"clearing.trade","vhost":"/","destination":"settlement.clearing-generated","destination_type":"queue","routing_key":"clearing.generated.v1","arguments":{}},
+    {"source":"clearing.trade.retry","vhost":"/","destination":"settlement.clearing-generated.retry","destination_type":"queue","routing_key":"clearing.generated.retry.v1","arguments":{}},
+    {"source":"clearing.trade.dlq","vhost":"/","destination":"settlement.clearing-generated.dlq","destination_type":"queue","routing_key":"clearing.generated.dlq.v1","arguments":{}},
+    {"source":"clearing.trade","vhost":"/","destination":"accounting.clearing-generated","destination_type":"queue","routing_key":"clearing.generated.v1","arguments":{}},
+    {"source":"clearing.trade.retry","vhost":"/","destination":"accounting.clearing-generated.retry","destination_type":"queue","routing_key":"clearing.generated.retry.v1","arguments":{}},
+    {"source":"clearing.trade.dlq","vhost":"/","destination":"accounting.clearing-generated.dlq","destination_type":"queue","routing_key":"clearing.generated.dlq.v1","arguments":{}}
+  ]
+}
