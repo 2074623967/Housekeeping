@@ -2815,3 +2815,97 @@
 
 1. 支付单管理现在已从“可查询”升级为“可查询 + 可导出”，和前端按钮形成闭环。
 2. 这一步继续抬高了 `payment-core` 的冻结版交付完整度，但仍不等于整包已可直接发布。
+
+## 91. 2026-07-31 账单中心导出闭环验证
+
+### 91.1 本轮新增内容
+
+1. `BillService` / `BillServiceImpl` 新增账单 CSV 导出能力，复用列表筛选和排序规则，但不受分页限制。
+2. `BillMapper` / `BillMapper.xml` 新增 `findAllForExport`，输出账单号、订单号、客户、应收/已付/待付金额、状态和时间字段。
+3. `BillController` 新增 `GET /api/bills/export`，以 UTF-8 BOM 返回 `bills.csv`。
+4. 新增 `BillControllerTest`，并扩展 `BillServiceImplTest`，覆盖下载响应、条件标准化和 CSV 双引号转义。
+5. 接口文档同步了账单导出路径、筛选口径和编码约定；后台账单页原有导出按钮已直接复用该路径，无需改动前端交互。
+
+### 91.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml -Dtest=BillServiceImplTest,BillControllerTest test` | 通过 | `4` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml test` | 通过 | `187` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+| 后台前端生产构建 | `npm run build`（`systems/payment-core/frontend/admin-web`） | 通过 | Vite 生产构建完成 |
+
+### 91.3 当前判断
+
+1. 账单中心已从“页面存在导出按钮、后端无落点”收口为前后端可用的查询加导出闭环。
+2. 后端全量回归已刷新到 `187` 个测试通过；支付核心全量跨端验证和跨系统接口联调仍未完成。
+3. `payment-core` 仍未达到 `test -> master` 或 `master / release` 冻结门槛，当前不创建 release 文档或版本。
+
+## 92. 2026-07-31 收银台会话导出闭环验证
+
+### 92.1 本轮新增内容
+
+1. `CashierSessionService` / `CashierSessionServiceImpl` 新增会话 CSV 导出能力，复用列表筛选与排序规则，但不受分页限制。
+2. `CashierSessionMapper` / `CashierSessionMapper.xml` 新增 `findAllForExport`，输出会话、预付单、支付单、订单、账单、客户、金额、终端和失效状态等运营排查字段。
+3. `CashierSessionController` 新增 `GET /api/cashier-sessions/export`，以 UTF-8 BOM 返回 `cashier-sessions.csv`。
+4. 新增 `CashierSessionControllerTest`，并扩展 `CashierSessionServiceImplTest`，覆盖下载响应、条件标准化和 CSV 双引号转义。
+5. 后台会话页原有导出按钮已调用该路径，接口文档同步了导出筛选口径与编码约定。
+
+### 92.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 两模块定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml -Dtest=BillServiceImplTest,BillControllerTest,CashierSessionServiceImplTest,CashierSessionControllerTest test` | 通过 | `8` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml test` | 通过 | `190` 个用例全部通过，`0` failures，`0` errors，`0` skipped |
+
+### 92.3 当前判断
+
+1. 收银台会话已从“前端可发起下载、后端没有出口”收口为前后端可用的查询加导出闭环。
+2. 后端全量回归已刷新到 `190` 个测试通过；支付核心全量跨端验证和跨系统接口联调仍是后续门槛。
+3. `payment-core` 仍未达到 `test -> master` 或 `master / release` 冻结门槛，当前不创建 release 文档或版本。
+
+## 93. 2026-07-31 支付流水导出闭环验证
+
+### 93.1 本轮新增内容
+
+1. `PaymentFlowService` / `PaymentFlowServiceImpl` 新增支付流水 CSV 导出能力，沿用现有列表筛选与排序口径，并直接复用统一流水排障台的 union SQL。
+2. `PaymentFlowController` 新增 `GET /api/payment-flows/export`，以 UTF-8 BOM 返回 `payment-flows.csv`。
+3. 扩展 `PaymentFlowServiceImplTest`，覆盖条件标准化、导出字段完整性和 CSV 双引号转义。
+4. 新增 `PaymentFlowControllerTest`，覆盖导出下载响应和列表入口调用。
+5. 接口文档已同步支付流水导出路径、union SQL 口径、导出字段和 CSV 编码约定；后台支付流水页原有导出按钮可直接闭环复用。
+
+### 93.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付流水定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dtest=PaymentFlowServiceImplTest,PaymentFlowControllerTest test` | 通过 | `4` 个用例全部通过，覆盖导出服务层和控制器层闭环 |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn test` | 通过 | `196` 个用例全部通过，覆盖支付核心既有链路与新增导出控制器/服务层门禁 |
+
+### 93.3 当前判断
+
+1. 支付流水页已从“前端已有导出入口、后端缺下载能力”收口为前后端可用的查询加导出闭环。
+2. 后端全量测试已刷新到 `196` 个用例通过，新增导出闭环未破坏既有支付核心链路。
+3. 在支付核心跨端验证、跨系统接口联调和更完整业务闭环完成前，`payment-core` 仍未达到 `test -> master` 或 `master / release` 冻结门槛，本轮先不创建 release 文档或版本。
+
+## 94. 2026-07-31 退款单导出闭环验证
+
+### 94.1 本轮新增内容
+
+1. `RefundService` / `RefundServiceImpl` 新增退款单 CSV 导出能力，复用现有列表筛选口径与 `normalizeQuery(...)`。
+2. `RefundMapper` / `RefundMapper.xml` 新增 `findAllForExport`，继续保持 `ORDER BY applied_at DESC`。
+3. `RefundController` 新增 `GET /api/refunds/export`，以 UTF-8 BOM 返回 `refunds.csv`。
+4. 扩展 `RefundServiceImplTest`，覆盖筛选条件归一化、状态类型导出和 CSV 双引号转义。
+5. 新增 `RefundControllerTest`，覆盖导出下载响应和列表入口调用。
+6. 接口文档已同步退款导出路径、筛选口径、排序约束和 CSV 编码约定；后台退款页原有导出按钮可直接闭环复用。
+
+### 94.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 退款导出定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dtest=RefundServiceImplTest,RefundControllerTest test` | 通过 | `10` 个用例全部通过，覆盖退款列表、导出、申请、审核、回调、重试与详情链路 |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn test` | 通过 | `196` 个用例全部通过，覆盖支付核心既有链路与新增退款导出门禁 |
+
+### 94.3 当前判断
+
+1. 退款单页已从“前端已有导出入口、后端缺下载能力”收口为前后端可用的查询加导出闭环。
+2. 截至 2026-07-31，`payment-core` 四个后台导出模块的真实代码闭环已全部落地，且后端全量测试已刷新到 `196` 个用例通过。
+3. 在导出门禁证据、跨端联调和更完整业务闭环完成前，`payment-core` 仍未达到 `test -> master` 或 `master / release` 冻结门槛，本轮先不创建 release 文档或版本。

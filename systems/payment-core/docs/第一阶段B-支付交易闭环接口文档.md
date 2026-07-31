@@ -24,7 +24,12 @@
 | `/api/payments` | `GET` | 查询支付单列表 |
 | `/api/payments/export` | `GET` | 导出支付单列表 CSV |
 | `/api/payments/{paymentOrderId}` | `GET` | 查询支付详情 |
+| `/api/bills` | `GET` | 查询交易账单中心 |
+| `/api/bills/export` | `GET` | 导出当前筛选条件下的交易账单 CSV |
+| `/api/cashier-sessions` | `GET` | 查询收银台会话管理列表 |
+| `/api/cashier-sessions/export` | `GET` | 导出当前筛选条件下的收银台会话 CSV |
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
+| `/api/payment-flows/export` | `GET` | 导出统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
@@ -37,6 +42,7 @@
 | `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
 | `/api/payment-issues/responsibility-summary` | `GET` | 查询支付交易异常责任组统计 |
 | `/api/refunds` | `GET` | 分页查询退款单 |
+| `/api/refunds/export` | `GET` | 导出退款单 CSV |
 | `/api/refunds/{refundOrderId}` | `GET` | 查询退款详情与操作日志 |
 | `/api/refunds/apply` | `POST` | 发起退款申请 |
 | `/api/refunds/approve` | `POST` | 审核通过退款单并提交处理 |
@@ -128,6 +134,14 @@
 1. 当前统一聚合支付尝试、渠道回调、路由记录、业务事件四类过程流水。
 2. 不同流水类型会按统一字段口径返回深度排障信息，例如终端、IP、幂等键、回调类型、路由规则、下游系统、事件主题、发布状态和重试次数。
 3. 前端可直接使用 `requestPayload`、`responsePayload` 展开原始报文区，无需再拼接二次接口。
+
+导出接口：`GET /api/payment-flows/export`
+
+1. 导出接口复用列表全部筛选参数和排序规则，不接收分页参数。
+2. 导出文件名固定为 `payment-flows.csv`，以 UTF-8 BOM 返回，兼容 Excel 直接打开。
+3. 导出查询严格复用当前统一流水排障台的 union SQL 口径，不再另起分页循环导出路径。
+4. 导出列包含流水编号、支付单号、订单号、预付单号、流水类型、类型标签、渠道编码、终端、客户端 IP、幂等键、业务状态、状态类型、通知类型、路由规则、下游系统、事件主题、发布状态、重试次数、请求报文、响应报文、摘要、创建时间。
+5. 请求报文、响应报文、摘要等文本列统一按 CSV 双引号规则转义，避免原始 JSON 中的引号破坏文件结构。
 
 ## 4. 支付路由执行结果台查询
 
@@ -607,6 +621,8 @@
 
 1. 已支持 `customerName` 筛选。
 2. 已支持按 `createdAt / dueAt / billAmount / unpaidAmount` 排序。
+3. `GET /api/bills/export` 复用账单号、订单号、客户名称、账单状态和排序条件导出全量匹配数据，不受列表分页影响。
+4. 导出文件名为 `bills.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
 
 接口：`GET /api/cashier-sessions`
 
@@ -614,6 +630,17 @@
 
 1. 已支持 `paymentOrderId`、`customerName` 筛选。
 2. 已支持按 `createdAt / expiresAt / amount` 排序。
+3. `GET /api/cashier-sessions/export` 复用会话号、支付单号、订单号、客户、终端、会话状态和排序条件导出全量匹配数据，不受列表分页影响。
+4. 导出文件名为 `cashier-sessions.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
+
+接口：`GET /api/refunds`
+
+当前补充能力：
+
+1. 已支持 `refundOrderId`、`paymentOrderId`、`refundStatus`、`refundMethod` 筛选。
+2. `GET /api/refunds/export` 复用退款单号、支付单号、退款状态、退款方式导出全量匹配数据，不受列表分页影响。
+3. 导出结果继续保持 `applied_at DESC` 顺序，不引入新的导出排序参数。
+4. 导出文件名为 `refunds.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
 
 查询参数：
 
