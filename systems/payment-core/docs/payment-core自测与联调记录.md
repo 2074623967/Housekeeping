@@ -2964,3 +2964,17 @@
 1. `payment-core` 已经把支付事件出站的“人工重投递入口语义、失败重试、重试耗尽进死信、无效事件拒绝、下游短路保护”补成自动化门禁，而不再只是界面能力或读代码推断。
 2. 这一步收缩了“MQ 级可靠投递/重试/死信补偿”中的应用层证据缺口，但仍不等同于真实 MQ 中间件生产级验证，因为当前仍主要基于本地 HTTP 下游与单测门禁，而非真实消息代理、死信队列、消费组和补偿编排演练。
 3. 因此本轮依旧不推进 `test -> master`，也不基于 `master` 产出 `release/*` 文档或版本。
+
+## 97. 2026-07-31 四块后台导出回归复核
+
+本轮不重复实现导出功能，复核 `bills`、`cashier-sessions`、`refunds`、`payment-flows` 四块已交付导出的服务层和控制器层自动化门禁。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 四块导出定向回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=BillServiceImplTest,BillControllerTest,CashierSessionServiceImplTest,CashierSessionControllerTest,RefundServiceImplTest,RefundControllerTest,PaymentFlowServiceImplTest,PaymentFlowControllerTest test` | 通过 | `22` 个用例通过，`0` failures，`0` errors，`0` skipped |
+
+### 97.1 当前判断
+
+1. 四个导出域的查询条件下推、CSV 字段与转义、UTF-8 下载响应、`attachment` 文件名均有服务层和控制器层回归保护。
+2. 结合第 95 节真实页面下载证据，四块导出已不再是 `test -> master` 阻断项。
+3. 当前仍不推进合并或创建正式 release，原因是缺少真实消息代理上的可靠投递、重试、死信与跨系统补偿演练证据。
