@@ -16,6 +16,7 @@ import com.abc123.hsp.service.RefundService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -50,6 +51,27 @@ public class RefundServiceImpl implements RefundService {
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    @Override
+    public String exportCsv(RefundQueryDTO query) {
+        normalizeQuery(query);
+        List<RefundListItemDTO> items = refundMapper.findAllForExport(query);
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("退款单号,支付单号,订单号,客户名称,退款金额,退款方式,退款状态,状态类型,申请时间,成功时间\n");
+        for (RefundListItemDTO item : items) {
+            builder.append(csvCell(item.getRefundOrderId())).append(',')
+                    .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getCustomerName())).append(',')
+                    .append(csvCell(item.getRefundAmount())).append(',')
+                    .append(csvCell(item.getRefundMethod())).append(',')
+                    .append(csvCell(item.getStatus())).append(',')
+                    .append(csvCell(item.getStatusType())).append(',')
+                    .append(csvCell(item.getAppliedAt())).append(',')
+                    .append(csvCell(item.getSuccessAt())).append('\n');
+        }
+        return builder.toString();
     }
 
     @Override
@@ -277,5 +299,10 @@ public class RefundServiceImpl implements RefundService {
 
     private String safeText(String value) {
         return StringUtils.hasText(value) ? value.trim() : "-";
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }

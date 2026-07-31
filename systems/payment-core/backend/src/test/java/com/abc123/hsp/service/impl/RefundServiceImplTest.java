@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +12,7 @@ import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.mapper.RefundMapper;
@@ -48,10 +51,35 @@ class RefundServiceImplTest {
         when(refundMapper.count(query)).thenReturn(0L);
         new RefundServiceImpl(refundMapper, refundChannelSubmitService).list(query);
 
-        org.junit.jupiter.api.Assertions.assertEquals(1, query.getPageNo());
-        org.junit.jupiter.api.Assertions.assertEquals(100, query.getPageSize());
+        assertEquals(1, query.getPageNo());
+        assertEquals(100, query.getPageSize());
         verify(refundMapper).findAll(query);
         verify(refundMapper).count(query);
+    }
+
+    @Test
+    void shouldExportNormalizedRefundsAsCsv() {
+        RefundQueryDTO query = new RefundQueryDTO();
+        query.setRefundOrderId(" REF-001 ");
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setRefundStatus(" SUCCESS ");
+        query.setRefundMethod(" 原路退款 ");
+        RefundListItemDTO item = new RefundListItemDTO();
+        item.setRefundOrderId("REF-001");
+        item.setCustomerName("张\"女士");
+        item.setStatusType("success");
+        when(refundMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
+
+        String csv = new RefundServiceImpl(refundMapper, refundChannelSubmitService).exportCsv(query);
+
+        assertEquals("REF-001", query.getRefundOrderId());
+        assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("SUCCESS", query.getRefundStatus());
+        assertEquals("原路退款", query.getRefundMethod());
+        assertTrue(csv.startsWith("\uFEFF退款单号,支付单号,订单号,客户名称"));
+        assertTrue(csv.contains("\"success\""));
+        assertTrue(csv.contains("\"张\"\"女士\""));
+        verify(refundMapper).findAllForExport(query);
     }
 
     @Test

@@ -15,6 +15,11 @@ public interface RefundService {
     PageResultDTO<RefundListItemDTO> list(RefundQueryDTO query);
 
     /**
+     * 导出退款单列表。
+     */
+    String exportCsv(RefundQueryDTO query);
+
+    /**
      * 查询退款详情。
      */
     RefundDetailDTO detail(String refundOrderId);

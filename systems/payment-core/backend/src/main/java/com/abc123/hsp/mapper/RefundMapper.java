@@ -20,6 +20,11 @@ public interface RefundMapper {
     List<RefundListItemDTO> findAll(@Param("query") RefundQueryDTO query);
 
     /**
+     * 查询导出使用的退款单列表。
+     */
+    List<RefundListItemDTO> findAllForExport(@Param("query") RefundQueryDTO query);
+
+    /**
      * 统计符合条件的退款单总数。
      */
     long count(@Param("query") RefundQueryDTO query);

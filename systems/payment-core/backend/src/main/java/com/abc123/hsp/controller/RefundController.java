@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.service.RefundService;
+import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 @RestController
 @RequestMapping("/api/refunds")
@@ -42,6 +46,27 @@ public class RefundController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(refundService.list(query));
+    }
+
+    /**
+     * 导出当前筛选条件下的退款单。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String refundOrderId,
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(defaultValue = "全部") String refundStatus,
+            @RequestParam(defaultValue = "全部") String refundMethod) {
+        RefundQueryDTO query = new RefundQueryDTO();
+        query.setRefundOrderId(refundOrderId);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setRefundStatus(refundStatus);
+        query.setRefundMethod(refundMethod);
+        byte[] csvBytes = refundService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=refunds.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**
