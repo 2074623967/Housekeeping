@@ -9,6 +9,12 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  rabbitmq:
+    host: ${HSP_RABBITMQ_HOST:127.0.0.1}
+    port: ${HSP_RABBITMQ_PORT:5672}
+    username: ${HSP_RABBITMQ_USERNAME:hsp}
+    password: ${HSP_RABBITMQ_PASSWORD:}
+    virtual-host: ${HSP_RABBITMQ_VHOST:/}
   sql:
     init:
       mode: always
@@ -17,3 +23,13 @@ mybatis:
   mapper-locations: classpath*:mapper/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+accounting:
+  amqp:
+    enabled: ${HSP_ACCOUNTING_AMQP_ENABLED:false}
+    payment-success-queue: ${HSP_ACCOUNTING_AMQP_PAYMENT_SUCCESS_QUEUE:accounting.payment-success}
+    retry-exchange: ${HSP_ACCOUNTING_AMQP_RETRY_EXCHANGE:payment.trade.retry}
+    retry-routing-key: ${HSP_ACCOUNTING_AMQP_RETRY_ROUTING_KEY:payment.success.retry.v1}
+    dead-letter-exchange: ${HSP_ACCOUNTING_AMQP_DEAD_LETTER_EXCHANGE:payment.trade.dlq}
+    dead-letter-routing-key: ${HSP_ACCOUNTING_AMQP_DEAD_LETTER_ROUTING_KEY:payment.success.dlq.v1}
+    max-retry-count: ${HSP_ACCOUNTING_AMQP_MAX_RETRY_COUNT:3}
