@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessagePostProcessor;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
@@ -33,6 +38,75 @@ class PaymentEventDispatchServiceImplTest {
     private PaymentEventMapper paymentEventMapper;
     @Mock
     private RestTemplate restTemplate;
+    @Mock
+    private RabbitTemplate rabbitTemplate;
+
+    @Test
+    void shouldPublishPaymentSuccessToAmqpWithTraceableMessageProperties() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "ACT10003",
+                3,
+                rabbitTemplate,
+                new ObjectMapper(),
+                "payment.trade",
+                "payment.success.v1"
+        ).publishPaymentSuccess("EVT-001", "PAY-001");
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        ArgumentCaptor<MessagePostProcessor> processorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
+        verify(rabbitTemplate).convertAndSend(
+                eq("payment.trade"),
+                eq("payment.success.v1"),
+                payloadCaptor.capture(),
+                processorCaptor.capture()
+        );
+        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"paymentOrderId\":\"PAY-001\""));
+        Assertions.assertTrue(String.valueOf(payloadCaptor.getValue()).contains("\"accountNo\":\"ACT10003\""));
+
+        Message message = processorCaptor.getValue().postProcessMessage(new Message(new byte[0], new MessageProperties()));
+        Assertions.assertEquals("EVT-001", message.getMessageProperties().getMessageId());
+        Assertions.assertEquals("EVT-001", message.getMessageProperties().getCorrelationId());
+        Assertions.assertEquals("PAYMENT_SUCCESS", message.getMessageProperties().getHeaders().get("eventType"));
+        Assertions.assertEquals("PAY-001", message.getMessageProperties().getHeaders().get("paymentOrderId"));
+        verify(paymentEventMapper).markPublishSuccess("EVT-001");
+        verify(restTemplate, never()).postForEntity(any(), any(), eq(String.class));
+    }
+
+    @Test
+    void shouldMarkFailedWhenAmqpPublishFails() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = new PaymentEventListItemDTO();
+        event.setEventType("PAYMENT_SUCCESS");
+        event.setPaymentOrderId("PAY-001");
+        event.setRetryCount(0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-001")).thenReturn(event);
+        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+                .when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"), any(), any(MessagePostProcessor.class));
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "ACT10003",
+                3,
+                rabbitTemplate,
+                new ObjectMapper(),
+                "payment.trade",
+                "payment.success.v1"
+        ).republish("EVT-001");
+
+        Assertions.assertFalse(success);
+        verify(paymentEventMapper).markPublishFailed("EVT-001");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-001");
+    }
 
     @Test
     void shouldPublishPaymentSuccessToClearingAndAccounting() {

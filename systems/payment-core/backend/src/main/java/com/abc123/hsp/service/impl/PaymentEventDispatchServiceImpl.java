@@ -5,8 +5,15 @@ import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.amqp.core.MessagePostProcessor;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +37,12 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private final String accountingUrl;
     private final String accountingPaymentSuccessAccountNo;
     private final int maxRetryCount;
+    private final String dispatchMode;
+    private final String paymentSuccessExchange;
+    private final String paymentSuccessRoutingKey;
+    private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
+    private final long publisherConfirmTimeoutMs;
 
     @Autowired
     public PaymentEventDispatchServiceImpl(
@@ -40,14 +53,26 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             @Value("${payment.downstream.accounting.payment-success-url:http://127.0.0.1:18110/api/accounting/events/payments/success}")
             String accountingUrl,
             @Value("${payment.downstream.accounting.payment-success-account-no:ACT10003}")
-            String accountingPaymentSuccessAccountNo) {
+            String accountingPaymentSuccessAccountNo,
+            @Value("${payment.event-dispatch.mode:http}") String dispatchMode,
+            @Value("${payment.amqp.payment-success-exchange:payment.trade}") String paymentSuccessExchange,
+            @Value("${payment.amqp.payment-success-routing-key:payment.success.v1}") String paymentSuccessRoutingKey,
+            @Value("${payment.amqp.publisher-confirm-timeout-ms:5000}") long publisherConfirmTimeoutMs,
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper) {
         this(paymentMapper,
                 paymentEventMapper,
                 clearingUrl,
                 accountingUrl,
                 accountingPaymentSuccessAccountNo,
                 DEFAULT_MAX_RETRY_COUNT,
-                AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(3000));
+                AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(3000),
+                dispatchMode,
+                paymentSuccessExchange,
+                paymentSuccessRoutingKey,
+                publisherConfirmTimeoutMs,
+                rabbitTemplate,
+                objectMapper);
     }
 
     PaymentEventDispatchServiceImpl(
@@ -63,7 +88,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 accountingUrl,
                 accountingPaymentSuccessAccountNo,
                 DEFAULT_MAX_RETRY_COUNT,
-                restTemplate);
+                restTemplate,
+                "http",
+                "payment.trade",
+                "payment.success.v1",
+                5000L,
+                null,
+                null);
     }
 
     PaymentEventDispatchServiceImpl(
@@ -74,6 +105,59 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             String accountingPaymentSuccessAccountNo,
             int maxRetryCount,
             RestTemplate restTemplate) {
+        this(paymentMapper,
+                paymentEventMapper,
+                clearingUrl,
+                accountingUrl,
+                accountingPaymentSuccessAccountNo,
+                maxRetryCount,
+                restTemplate,
+                "http",
+                "payment.trade",
+                "payment.success.v1",
+                5000L,
+                null,
+                null);
+    }
+
+    PaymentEventDispatchServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentEventMapper paymentEventMapper,
+            String accountingPaymentSuccessAccountNo,
+            int maxRetryCount,
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper,
+            String paymentSuccessExchange,
+            String paymentSuccessRoutingKey) {
+        this(paymentMapper,
+                paymentEventMapper,
+                null,
+                null,
+                accountingPaymentSuccessAccountNo,
+                maxRetryCount,
+                null,
+                "amqp",
+                paymentSuccessExchange,
+                paymentSuccessRoutingKey,
+                5000L,
+                rabbitTemplate,
+                objectMapper);
+    }
+
+    private PaymentEventDispatchServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentEventMapper paymentEventMapper,
+            String clearingUrl,
+            String accountingUrl,
+            String accountingPaymentSuccessAccountNo,
+            int maxRetryCount,
+            RestTemplate restTemplate,
+            String dispatchMode,
+            String paymentSuccessExchange,
+            String paymentSuccessRoutingKey,
+            long publisherConfirmTimeoutMs,
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper) {
         this.paymentMapper = paymentMapper;
         this.paymentEventMapper = paymentEventMapper;
         this.clearingUrl = clearingUrl;
@@ -81,6 +165,12 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         this.accountingPaymentSuccessAccountNo = accountingPaymentSuccessAccountNo;
         this.maxRetryCount = maxRetryCount <= 0 ? DEFAULT_MAX_RETRY_COUNT : maxRetryCount;
         this.restTemplate = restTemplate;
+        this.dispatchMode = dispatchMode;
+        this.paymentSuccessExchange = paymentSuccessExchange;
+        this.paymentSuccessRoutingKey = paymentSuccessRoutingKey;
+        this.rabbitTemplate = rabbitTemplate;
+        this.objectMapper = objectMapper;
+        this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0 ? 5000L : publisherConfirmTimeoutMs;
     }
 
     @Override
@@ -106,6 +196,11 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         String workerName = paymentMapper.findWorkerNameByOrderNo(detail.getOrderNo());
         BigDecimal amount = parseAmount(detail.getAmount());
         try {
+            if (usesAmqp()) {
+                publishToAmqp(eventNo, detail, workerName, amount);
+                paymentEventMapper.markPublishSuccess(eventNo);
+                return true;
+            }
             postForSuccess(clearingUrl, buildClearingPayload(detail, workerName, amount));
             postForSuccess(accountingUrl, buildAccountingPayload(detail, amount));
             paymentEventMapper.markPublishSuccess(eventNo);
@@ -114,6 +209,52 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             markFailedOrDeadLetter(eventNo);
             return false;
         }
+    }
+
+    private boolean usesAmqp() {
+        return "amqp".equalsIgnoreCase(dispatchMode == null ? "" : dispatchMode.trim());
+    }
+
+    private void publishToAmqp(String eventNo, PaymentDetailDTO detail, String workerName, BigDecimal amount) {
+        if (rabbitTemplate == null || objectMapper == null || !StringUtils.hasText(paymentSuccessExchange)
+                || !StringUtils.hasText(paymentSuccessRoutingKey)) {
+            throw new IllegalStateException("AMQP 支付成功事件配置不完整");
+        }
+        try {
+            rabbitTemplate.convertAndSend(
+                    paymentSuccessExchange.trim(),
+                    paymentSuccessRoutingKey.trim(),
+                    objectMapper.writeValueAsString(buildAmqpPayload(detail, workerName, amount)),
+                    buildMessagePostProcessor(eventNo, detail.getPaymentOrderId()));
+            rabbitTemplate.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("支付成功事件序列化失败", exception);
+        }
+    }
+
+    private Map<String, Object> buildAmqpPayload(PaymentDetailDTO detail, String workerName, BigDecimal amount) {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("accountNo", accountingPaymentSuccessAccountNo);
+        payload.put("paymentOrderId", detail.getPaymentOrderId());
+        payload.put("orderNo", detail.getOrderNo());
+        payload.put("batchDate", LocalDate.now().toString());
+        payload.put("customerName", detail.getCustomerName());
+        payload.put("merchantName", "家政平台");
+        payload.put("workerName", StringUtils.hasText(workerName) ? workerName : "待分配服务者");
+        payload.put("amount", amount);
+        return payload;
+    }
+
+    private MessagePostProcessor buildMessagePostProcessor(final String eventNo, final String paymentOrderId) {
+        return message -> {
+            MessageProperties properties = message.getMessageProperties();
+            properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
+            properties.setMessageId(eventNo);
+            properties.setCorrelationId(eventNo);
+            properties.setHeader("eventType", PAYMENT_SUCCESS_EVENT_TYPE);
+            properties.setHeader("paymentOrderId", paymentOrderId);
+            return message;
+        };
     }
 
     /**

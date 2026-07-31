@@ -9,6 +9,16 @@ spring:
     url: ${HSP_DB_URL:jdbc:mysql://127.0.0.1:3306/housekeeping_payment_core?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true}
     username: ${HSP_DB_USERNAME:root}
     password: ${HSP_DB_PASSWORD:}
+  rabbitmq:
+    host: ${HSP_RABBITMQ_HOST:127.0.0.1}
+    port: ${HSP_RABBITMQ_PORT:5672}
+    username: ${HSP_RABBITMQ_USERNAME:hsp}
+    password: ${HSP_RABBITMQ_PASSWORD:}
+    virtual-host: ${HSP_RABBITMQ_VHOST:/}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   sql:
     init:
       mode: always
@@ -38,6 +48,13 @@ payment:
     accounting:
       payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_ACCOUNTING_PAYMENT_SUCCESS_URL:http://127.0.0.1:18110/api/accounting/events/payments/success}
       payment-success-account-no: ${HSP_PAYMENT_DOWNSTREAM_ACCOUNTING_PAYMENT_SUCCESS_ACCOUNT_NO:ACT10003}
+  event-dispatch:
+    # http keeps existing environments stable; test/pre switch to amqp after the broker is ready.
+    mode: ${HSP_PAYMENT_EVENT_DISPATCH_MODE:http}
+  amqp:
+    payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
+    payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}
+    publisher-confirm-timeout-ms: ${HSP_PAYMENT_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS:5000}
   issue-alert:
     im:
       # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
