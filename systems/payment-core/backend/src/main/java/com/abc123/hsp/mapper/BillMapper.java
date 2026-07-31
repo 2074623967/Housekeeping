@@ -18,6 +18,13 @@ public interface BillMapper {
     List<BillListItemDTO> findAll(@Param("query") BillQueryDTO query);
 
     /**
+     * 查询导出使用的账单列表。
+     *
+     * @return 账单列表
+     */
+    List<BillListItemDTO> findAllForExport(@Param("query") BillQueryDTO query);
+
+    /**
      * 统计符合条件的账单总数。
      */
     long count(@Param("query") BillQueryDTO query);

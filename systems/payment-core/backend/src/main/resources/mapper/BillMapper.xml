@@ -73,4 +73,54 @@
             </if>
         </where>
     </select>
+
+    <select id="findAllForExport" resultType="com.abc123.hsp.dto.BillListItemDTO">
+        SELECT bill_no AS billNo,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               CONCAT('¥', FORMAT(bill_amount, 2)) AS billAmount,
+               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
+               CONCAT('¥', FORMAT(bill_amount - paid_amount, 2)) AS unpaidAmount,
+               bill_status AS billStatus,
+               bill_status_type AS billStatusType,
+               DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_bill
+        <where>
+            <if test="query.billNo != null and query.billNo != ''">
+                bill_no LIKE CONCAT('%', #{query.billNo}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.customerName != null and query.customerName != ''">
+                AND customer_name LIKE CONCAT('%', #{query.customerName}, '%')
+            </if>
+            <if test="query.billStatus != null and query.billStatus != '' and query.billStatus != '全部'">
+                AND bill_status = #{query.billStatus}
+            </if>
+        </where>
+        <choose>
+            <when test="query.sortField == 'dueAt'">
+                ORDER BY due_at
+            </when>
+            <when test="query.sortField == 'billAmount'">
+                ORDER BY bill_amount
+            </when>
+            <when test="query.sortField == 'unpaidAmount'">
+                ORDER BY (bill_amount - paid_amount)
+            </when>
+            <otherwise>
+                ORDER BY created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
+    </select>
 </mapper>

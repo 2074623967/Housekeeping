@@ -21,6 +21,36 @@ public class BillServiceImpl implements BillService {
 
     @Override
     public PageResultDTO<BillListItemDTO> list(BillQueryDTO query) {
+        normalizeQuery(query);
+        return new PageResultDTO<>(
+                billMapper.findAll(query),
+                billMapper.count(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
+    }
+
+    @Override
+    public String exportCsv(BillQueryDTO query) {
+        normalizeQuery(query);
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型,到期时间,创建时间\n");
+        for (BillListItemDTO item : billMapper.findAllForExport(query)) {
+            builder.append(csvCell(item.getBillNo())).append(',')
+                    .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getCustomerName())).append(',')
+                    .append(csvCell(item.getBillAmount())).append(',')
+                    .append(csvCell(item.getPaidAmount())).append(',')
+                    .append(csvCell(item.getUnpaidAmount())).append(',')
+                    .append(csvCell(item.getBillStatus())).append(',')
+                    .append(csvCell(item.getBillStatusType())).append(',')
+                    .append(csvCell(item.getDueAt())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private void normalizeQuery(BillQueryDTO query) {
         query.setBillNo(query.getBillNo() == null ? null : query.getBillNo().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
         query.setCustomerName(query.getCustomerName() == null ? null : query.getCustomerName().trim());
@@ -28,11 +58,10 @@ public class BillServiceImpl implements BillService {
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
-        return new PageResultDTO<>(
-                billMapper.findAll(query),
-                billMapper.count(query),
-                query.getPageNo(),
-                query.getPageSize()
-        );
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }

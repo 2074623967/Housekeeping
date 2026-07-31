@@ -15,4 +15,11 @@ public interface BillService {
      * @return 账单列表
      */
     PageResultDTO<BillListItemDTO> list(BillQueryDTO query);
+
+    /**
+     * 导出账单中心列表。
+     *
+     * @return 账单 CSV
+     */
+    String exportCsv(BillQueryDTO query);
 }
