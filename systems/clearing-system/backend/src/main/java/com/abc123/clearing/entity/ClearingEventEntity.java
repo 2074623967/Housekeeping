@@ -14,5 +14,9 @@ public class ClearingEventEntity {
     private String summary;
     private String payload;
     private String eventStatus;
+    private String publishStatus;
+    private Integer retryCount;
+    private String lastPublishedAt;
+    private String nextRetryAt;
     private String createdAt;
 }

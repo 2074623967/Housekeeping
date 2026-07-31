@@ -128,8 +128,15 @@ public interface ClearingDataMapper {
     ClearingEventEntity findEventByTypeAndBizNo(@Param("eventType") String eventType,
                                                 @Param("bizNo") String bizNo);
 
+    ClearingEventEntity findEventByEventNo(@Param("eventNo") String eventNo);
+
     /**
      * 新增事件。
      */
     int insertEvent(ClearingEventEntity entity);
+
+    int markEventPublishSuccess(@Param("eventNo") String eventNo);
+
+    int markEventPublishFailed(@Param("eventNo") String eventNo,
+                               @Param("nextRetryAt") String nextRetryAt);
 }

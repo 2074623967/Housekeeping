@@ -342,6 +342,10 @@
                summary,
                payload,
                event_status,
+               publish_status,
+               retry_count,
+               last_published_at,
+               next_retry_at,
                created_at
         FROM t_clearing_event
         ORDER BY id DESC
@@ -354,11 +358,32 @@
                summary,
                payload,
                event_status,
+               publish_status,
+               retry_count,
+               last_published_at,
+               next_retry_at,
                created_at
         FROM t_clearing_event
         WHERE event_type = #{eventType}
           AND biz_no = #{bizNo}
         ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findEventByEventNo" resultType="com.abc123.clearing.entity.ClearingEventEntity">
+        SELECT event_no,
+               event_type,
+               biz_no,
+               summary,
+               payload,
+               event_status,
+               publish_status,
+               retry_count,
+               last_published_at,
+               next_retry_at,
+               created_at
+        FROM t_clearing_event
+        WHERE event_no = #{eventNo}
         LIMIT 1
     </select>
 
@@ -370,6 +395,8 @@
             summary,
             payload,
             event_status,
+            publish_status,
+            retry_count,
             created_at
         ) VALUES (
             #{eventNo},
@@ -378,7 +405,27 @@
             #{summary},
             #{payload},
             #{eventStatus},
+            #{publishStatus},
+            #{retryCount},
             #{createdAt}
         )
     </insert>
+
+    <update id="markEventPublishSuccess">
+        UPDATE t_clearing_event
+        SET publish_status = 'SUCCESS',
+            retry_count = retry_count + 1,
+            last_published_at = NOW(),
+            next_retry_at = NULL
+        WHERE event_no = #{eventNo}
+    </update>
+
+    <update id="markEventPublishFailed">
+        UPDATE t_clearing_event
+        SET publish_status = 'FAILED',
+            retry_count = retry_count + 1,
+            last_published_at = NOW(),
+            next_retry_at = #{nextRetryAt}
+        WHERE event_no = #{eventNo}
+    </update>
 </mapper>

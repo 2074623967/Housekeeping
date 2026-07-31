@@ -25,8 +25,15 @@ mybatis:
     map-underscore-to-camel-case: true
 
 clearing:
+  downstream:
+    accounting:
+      clearing-generated-account-no: ${HSP_CLEARING_DOWNSTREAM_ACCOUNTING_CLEARING_GENERATED_ACCOUNT_NO:ACT10002}
   amqp:
     enabled: ${HSP_CLEARING_AMQP_ENABLED:false}
+    dispatch-mode: ${HSP_CLEARING_AMQP_DISPATCH_MODE:http}
+    clearing-generated-exchange: ${HSP_CLEARING_AMQP_CLEARING_GENERATED_EXCHANGE:clearing.trade}
+    clearing-generated-routing-key: ${HSP_CLEARING_AMQP_CLEARING_GENERATED_ROUTING_KEY:clearing.generated.v1}
+    publisher-confirm-timeout-ms: ${HSP_CLEARING_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS:5000}
     payment-success-queue: ${HSP_CLEARING_AMQP_PAYMENT_SUCCESS_QUEUE:clearing.payment-success}
     retry-exchange: ${HSP_CLEARING_AMQP_RETRY_EXCHANGE:payment.trade.retry}
     retry-routing-key: ${HSP_CLEARING_AMQP_RETRY_ROUTING_KEY:payment.success.retry.v1}

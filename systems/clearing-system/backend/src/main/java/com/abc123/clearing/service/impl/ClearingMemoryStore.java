@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import javax.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,9 +37,13 @@ public class ClearingMemoryStore {
     private final AtomicLong shareSeq = new AtomicLong(50000L);
     private final AtomicLong eventSeq = new AtomicLong(60000L);
     private final ClearingDataMapper clearingDataMapper;
+    private final String accountingClearingGeneratedAccountNo;
 
-    public ClearingMemoryStore(ClearingDataMapper clearingDataMapper) {
+    public ClearingMemoryStore(ClearingDataMapper clearingDataMapper,
+                               @Value("${clearing.downstream.accounting.clearing-generated-account-no:ACT10002}")
+                               String accountingClearingGeneratedAccountNo) {
         this.clearingDataMapper = clearingDataMapper;
+        this.accountingClearingGeneratedAccountNo = accountingClearingGeneratedAccountNo;
     }
 
     @PostConstruct
@@ -209,15 +214,35 @@ public class ClearingMemoryStore {
                 && clearingDataMapper.findOrderByPaymentOrderId(paymentOrderId) != null;
     }
 
+    public ClearingEventEntity findClearingGeneratedOutboxEvent(String paymentOrderId) {
+        ClearingOrderEntity clearingOrder = clearingDataMapper.findOrderByPaymentOrderId(paymentOrderId);
+        if (clearingOrder == null) {
+            return null;
+        }
+        return clearingDataMapper.findEventByTypeAndBizNo("CLEARING_GENERATED", clearingOrder.getClearingNo());
+    }
+
+    public void markOutboxPublishSuccess(String eventNo) {
+        clearingDataMapper.markEventPublishSuccess(eventNo);
+    }
+
+    public void markOutboxPublishFailed(String eventNo) {
+        clearingDataMapper.markEventPublishFailed(eventNo,
+                LocalDateTime.now().plusMinutes(5).format(DATE_TIME_FORMATTER));
+    }
+
     @Transactional
     public ClearingEventEntity consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
         ClearingOrderEntity existingOrder = clearingDataMapper.findOrderByPaymentOrderId(request.getPaymentOrderId());
         if (existingOrder != null) {
             ClearingEventEntity existingEvent = clearingDataMapper.findEventByTypeAndBizNo("PAYMENT_SUCCESS", request.getPaymentOrderId());
             if (existingEvent != null) {
+                ensureClearingGeneratedOutboxEvent(existingOrder);
                 return existingEvent;
             }
-            return createPaymentSuccessEvent(request);
+            ClearingEventEntity paymentSuccessEvent = createPaymentSuccessEvent(request);
+            ensureClearingGeneratedOutboxEvent(existingOrder);
+            return paymentSuccessEvent;
         }
         ClearingRuleEntity activeRule = rules().stream()
                 .filter(item -> "启用".equals(item.getRuleStatus()))
@@ -226,7 +251,13 @@ public class ClearingMemoryStore {
 
         String batchDate = request.getBatchDate() == null || request.getBatchDate().isEmpty() ? "2026-07-20" : request.getBatchDate();
         ClearingBatchEntity batch = createBatch(batchDate, "EVENT", "系统事件", "EVT-" + request.getPaymentOrderId());
-        createOrder(batch.getBatchNo(), request.getPaymentOrderId(), request.getOrderNo(), request.getAmount(), activeRule.getRuleNo(), "清分成功");
+        ClearingOrderEntity clearingOrder = createOrder(
+                batch.getBatchNo(),
+                request.getPaymentOrderId(),
+                request.getOrderNo(),
+                request.getAmount(),
+                activeRule.getRuleNo(),
+                "清分成功");
         ClearingBatchEntity refreshedBatch = findBatch(batch.getBatchNo());
         refreshedBatch.setBatchStatus("已完成");
         refreshedBatch.setFinishedAt(now());
@@ -239,7 +270,9 @@ public class ClearingMemoryStore {
                 refreshedBatch.getVersionNo(),
                 refreshedBatch.getBatchStatus(),
                 refreshedBatch.getFinishedAt());
-        return createPaymentSuccessEvent(request);
+        ClearingEventEntity paymentSuccessEvent = createPaymentSuccessEvent(request);
+        ensureClearingGeneratedOutboxEvent(clearingOrder);
+        return paymentSuccessEvent;
     }
 
     @Transactional
@@ -322,6 +355,46 @@ public class ClearingMemoryStore {
         event.setSummary(request.getCustomerName() + " 支付成功后触发清分");
         event.setPayload("{\"paymentOrderId\":\"" + request.getPaymentOrderId() + "\",\"orderNo\":\"" + request.getOrderNo() + "\"}");
         event.setEventStatus("已消费");
+        event.setPublishStatus("NOT_APPLICABLE");
+        event.setRetryCount(0);
+        event.setCreatedAt(now());
+        clearingDataMapper.insertEvent(event);
+        return event;
+    }
+
+    private ClearingEventEntity ensureClearingGeneratedOutboxEvent(ClearingOrderEntity clearingOrder) {
+        ClearingEventEntity existingEvent = clearingDataMapper.findEventByTypeAndBizNo(
+                "CLEARING_GENERATED", clearingOrder.getClearingNo());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
+        ShareItemEntity workerShare = clearingDataMapper.findSharesByClearingNo(clearingOrder.getClearingNo()).stream()
+                .filter(item -> "WORKER".equals(item.getShareType()))
+                .findFirst()
+                .orElse(null);
+        BigDecimal workerAmount = workerShare == null ? clearingOrder.getWorkerAmount() : workerShare.getShareAmount();
+        String targetNo = workerShare == null ? "WRK1001" : workerShare.getShareTargetNo();
+        String targetName = workerShare == null ? "待分配服务者" : workerShare.getShareTargetName();
+
+        ClearingEventEntity event = new ClearingEventEntity();
+        event.setEventNo(nextNo("EVT", eventSeq));
+        event.setEventType("CLEARING_GENERATED");
+        event.setBizNo(clearingOrder.getClearingNo());
+        event.setSummary("清分结果已生成，等待结算和账务消费");
+        event.setPayload("{\"accountNo\":\"" + accountingClearingGeneratedAccountNo
+                + "\",\"clearingNo\":\"" + clearingOrder.getClearingNo()
+                + "\",\"clearingOrderNo\":\"" + clearingOrder.getClearingNo()
+                + "\",\"paymentOrderId\":\"" + clearingOrder.getPaymentOrderId()
+                + "\",\"bizNo\":\"" + clearingOrder.getPaymentOrderId()
+                + "\",\"targetType\":\"WORKER\",\"targetNo\":\"" + targetNo
+                + "\",\"targetName\":\"" + targetName
+                + "\",\"shouldSettleAmount\":" + workerAmount
+                + ",\"deductAmount\":0,\"netSettleAmount\":" + workerAmount
+                + ",\"amount\":" + workerAmount
+                + ",\"summary\":\"清分结果入账至服务者应收\"}");
+        event.setEventStatus("待投递");
+        event.setPublishStatus("PENDING");
+        event.setRetryCount(0);
         event.setCreatedAt(now());
         clearingDataMapper.insertEvent(event);
         return event;

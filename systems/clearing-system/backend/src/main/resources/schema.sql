@@ -100,9 +100,14 @@ CREATE TABLE `t_clearing_event` (
   `summary` VARCHAR(256) NOT NULL COMMENT '事件摘要',
   `payload` TEXT NOT NULL COMMENT '事件负载',
   `event_status` VARCHAR(32) NOT NULL COMMENT '事件状态',
+  `publish_status` VARCHAR(32) NOT NULL DEFAULT 'NOT_APPLICABLE' COMMENT '出站投递状态',
+  `retry_count` INT NOT NULL DEFAULT 0 COMMENT '投递重试次数',
+  `last_published_at` DATETIME DEFAULT NULL COMMENT '最近投递时间',
+  `next_retry_at` DATETIME DEFAULT NULL COMMENT '下次重试时间',
   `created_at` DATETIME NOT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_event_no` (`event_no`),
   KEY `idx_event_type` (`event_type`),
-  KEY `idx_biz_no` (`biz_no`)
+  KEY `idx_biz_no` (`biz_no`),
+  KEY `idx_publish_status` (`publish_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='清分事件表';
