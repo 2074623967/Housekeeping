@@ -2938,5 +2938,5 @@
 1. 四个 admin 页面已完成真实页面渲染、真实按钮点击、真实导出 URL 拼接与真实 backend CSV 下载响应链路验证。
 2. 这份证据说明 admin 前端导出入口、代理链路和真实 backend 下载约定本身已不再是阻断项，`payment-core` 四块导出在联调下载层面已经闭环。
 3. 原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 后，最新 backend 已能在 `2026-07-31 19:36:42` 成功写出 `PAYMENT_ISSUE_ESCALATE` 任务日志；此前暴露的 `alert_content` 越界问题已通过“候选过滤 + `source_alert_no` 落库 + 512 字符截断”修复，不再阻塞真实运行库启动。
-4. 查库还可见 `7` 条历史递归升级脏数据（`source_alert_no IS NULL` 且 `alert_content LIKE '升级来源告警 %'`）；新 SQL 已将它们排除出升级候选，当前不再触发写库越界，但后续仍建议补一轮数据清理脚本。
-5. 因此当前剩余阻断已经不再是“导出下载证据不足”或“原始运行库缺关键表”，而是更高层的最终 gate 审计闭环，包括 MQ 级可靠投递、失败重试/死信补偿、正式发布清单与发布后验证清单。
+4. 随后补充并执行 `systems/payment-core/database/migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`，将原始运行库中 `7` 条历史递归升级脏数据从 `待确认` 收口为 `已确认`，并保留 `ack_operator=data-fix-20260731`、`triggered_by=payment-core-alert-cleanup-2026-07-31` 审计痕迹。
+5. 至此，原始运行库上与 `PAYMENT_ISSUE_ESCALATE` 相关的已知结构/历史数据阻断已全部收口；当前剩余阻断已经不再是“导出下载证据不足”或“原始运行库缺关键表”，而是更高层的最终 gate 审计闭环，包括 MQ 级可靠投递、失败重试/死信补偿、正式发布清单与发布后验证清单。
