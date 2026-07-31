@@ -2916,10 +2916,11 @@
 
 ### 95.1 本轮动作
 
-1. 启动本地 `admin-web`（`127.0.0.1:5174`），保留页面真实路由、真实筛选默认值和真实导出按钮逻辑。
-2. 在本地 `127.0.0.1:8080` 启动 mock API server，承接 `/api/bills/export`、`/api/cashier-sessions/export`、`/api/refunds/export`、`/api/payment-flows/export` 及对应列表接口。
-3. 通过系统 Chrome 的 CDP 打开真实页面，点击 `账单中心 / 收银台会话 / 退款单 / 支付流水` 四个页面的导出按钮。
-4. 抓取页面点击后实际执行的 `window.open(...)` 导出 URL，并继续校验代理返回的 `Content-Disposition` 与 CSV 表头。
+1. 先将原始 `housekeeping_payment_core` 库安全克隆到临时副本，确认旧运行库副本可启动最新 backend，但任务中心会因缺少 `t_payment_task_lease` 报表缺失错误。
+2. 再使用 `backend/src/main/resources/schema.sql + data.sql` 重建最新临时库 `housekeeping_payment_core_latest_verify_20260731`，保证最新 backend 所需表结构完整。
+3. 启动本地 `admin-web`（`127.0.0.1:5174`），并通过本地代理 `127.0.0.1:8080 -> 真实 payment-core backend(127.0.0.1:18080)` 保留页面真实路由、真实筛选默认值和真实导出按钮逻辑。
+4. 通过系统 Chrome 的 CDP 打开真实页面，点击 `账单中心 / 收银台会话 / 退款单 / 支付流水` 四个页面的导出按钮。
+5. 抓取页面点击后实际执行的 `window.open(...)` 导出 URL，并继续校验真实 backend 返回的 `Content-Disposition` 与 CSV 表头。
 
 ### 95.2 验证结果
 
@@ -2932,6 +2933,7 @@
 
 ### 95.3 结论
 
-1. 四个 admin 页面已完成真实页面渲染、真实按钮点击、真实导出 URL 拼接与 CSV 下载响应链路验证。
-2. 这份证据说明 admin 前端导出入口本身已不再是阻断项，至少在页面逻辑和下载约定层面可以稳定闭环。
-3. 本轮仍使用本地 mock API server 承接导出响应，因此它证明的是“前端下载链路成立”，不等同于“真实后端联调环境下的最终下载证据”。
+1. 四个 admin 页面已完成真实页面渲染、真实按钮点击、真实导出 URL 拼接与真实 backend CSV 下载响应链路验证。
+2. 这份证据说明 admin 前端导出入口、代理链路和真实 backend 下载约定本身已不再是阻断项，`payment-core` 四块导出在联调下载层面已经闭环。
+3. 同轮也发现一个新的运行时事实：原始 `housekeeping_payment_core` 库并未完全跟上最新 schema，至少缺少 `t_payment_task_lease`；若直接用旧运行库副本启动最新 backend，任务中心定时任务会报表缺失错误。
+4. 因此当前剩余阻断不再是“导出下载证据不足”，而是“原始运行库仍需补最新数据库结构迁移证据”，以及更高层的最终 gate 审计闭环。
