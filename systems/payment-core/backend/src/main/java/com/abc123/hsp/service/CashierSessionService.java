@@ -15,4 +15,11 @@ public interface CashierSessionService {
      * @return 收银台会话列表
      */
     PageResultDTO<CashierSessionListItemDTO> list(CashierSessionQueryDTO query);
+
+    /**
+     * 导出收银台会话列表。
+     *
+     * @return 收银台会话 CSV
+     */
+    String exportCsv(CashierSessionQueryDTO query);
 }

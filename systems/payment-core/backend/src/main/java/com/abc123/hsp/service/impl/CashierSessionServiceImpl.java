@@ -21,6 +21,39 @@ public class CashierSessionServiceImpl implements CashierSessionService {
 
     @Override
     public PageResultDTO<CashierSessionListItemDTO> list(CashierSessionQueryDTO query) {
+        normalizeQuery(query);
+        return new PageResultDTO<>(
+                cashierSessionMapper.findAll(query),
+                cashierSessionMapper.count(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
+    }
+
+    @Override
+    public String exportCsv(CashierSessionQueryDTO query) {
+        normalizeQuery(query);
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("会话编号,预付单号,支付单号,订单号,账单号,客户名称,收银台标题,终端,金额,会话状态,状态类型,创建时间,失效时间\n");
+        for (CashierSessionListItemDTO item : cashierSessionMapper.findAllForExport(query)) {
+            builder.append(csvCell(item.getSessionNo())).append(',')
+                    .append(csvCell(item.getPrepayOrderNo())).append(',')
+                    .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getBillNo())).append(',')
+                    .append(csvCell(item.getCustomerName())).append(',')
+                    .append(csvCell(item.getCashierTitle())).append(',')
+                    .append(csvCell(item.getTerminal())).append(',')
+                    .append(csvCell(item.getAmount())).append(',')
+                    .append(csvCell(item.getSessionStatus())).append(',')
+                    .append(csvCell(item.getSessionStatusType())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append(',')
+                    .append(csvCell(item.getExpiresAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private void normalizeQuery(CashierSessionQueryDTO query) {
         query.setSessionNo(query.getSessionNo() == null ? null : query.getSessionNo().trim());
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
@@ -29,11 +62,10 @@ public class CashierSessionServiceImpl implements CashierSessionService {
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
-        return new PageResultDTO<>(
-                cashierSessionMapper.findAll(query),
-                cashierSessionMapper.count(query),
-                query.getPageNo(),
-                query.getPageSize()
-        );
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }

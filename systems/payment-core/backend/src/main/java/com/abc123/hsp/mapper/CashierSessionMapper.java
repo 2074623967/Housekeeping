@@ -18,6 +18,13 @@ public interface CashierSessionMapper {
     List<CashierSessionListItemDTO> findAll(@Param("query") CashierSessionQueryDTO query);
 
     /**
+     * 查询导出使用的收银台会话列表。
+     *
+     * @return 收银台会话列表
+     */
+    List<CashierSessionListItemDTO> findAllForExport(@Param("query") CashierSessionQueryDTO query);
+
+    /**
      * 统计符合条件的收银台会话总数。
      */
     long count(@Param("query") CashierSessionQueryDTO query);
