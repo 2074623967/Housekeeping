@@ -245,11 +245,52 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
         verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
-                entity -> "支付技术负责人".equals(entity.getReceiver())
+                entity -> "PIA-SOURCE-001".equals(entity.getSourceAlertNo())
+                        && "支付技术负责人".equals(entity.getReceiver())
                         && "待确认".equals(entity.getAckStatus())
                         && entity.getAlertContent().contains("PIA-SOURCE-001")
                         && entity.getAlertContent().contains("30分钟未确认升级")
         ));
+    }
+
+    @Test
+    void shouldTruncateEscalationAlertContentBeforeInsert() {
+        PaymentIssueAlertCandidateDTO escalationCandidate = new PaymentIssueAlertCandidateDTO();
+        escalationCandidate.setIssueNo("ISSUE-WAIT-PAY-002");
+        escalationCandidate.setSourceAlertNo("PIA-SOURCE-002");
+        escalationCandidate.setPaymentOrderId("PAY-002");
+        escalationCandidate.setIssueType("待回调未收口");
+        escalationCandidate.setSeverity("P1");
+        escalationCandidate.setResponsibilityGroup("支付后端值班组");
+        escalationCandidate.setReceiver("支付技术负责人");
+        escalationCandidate.setEscalationReceiver("支付技术负责人");
+        escalationCandidate.setEscalationPolicy("30分钟未确认升级支付技术负责人");
+        escalationCandidate.setEscalationTimeoutMinutes(30);
+        escalationCandidate.setScheduleTag("交易链路白班");
+        escalationCandidate.setEffectiveWindow("00:00-23:00");
+        escalationCandidate.setAlertContent("升级来源告警 PIA-SOURCE-002 已超过 30 分钟未确认，请升级跟进。原告警："
+                + repeat("原告警内容过长-", 80));
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(0);
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.singletonList(escalationCandidate));
+        when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runEscalateOverdueIssues();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(captor.capture());
+        Assertions.assertEquals("PIA-SOURCE-002", captor.getValue().getSourceAlertNo());
+        Assertions.assertTrue(captor.getValue().getAlertContent().length() <= 512);
+        Assertions.assertTrue(captor.getValue().getAlertContent().endsWith("..."));
     }
 
     @Test
@@ -473,5 +514,13 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentIssueAlertDeliveryService).autoDispatchPendingAlerts();
         Assertions.assertNotNull(result.getOverview());
+    }
+
+    private String repeat(String value, int times) {
+        StringBuilder builder = new StringBuilder(value.length() * times);
+        for (int index = 0; index < times; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 }

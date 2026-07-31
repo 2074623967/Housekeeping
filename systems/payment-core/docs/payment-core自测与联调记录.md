@@ -2916,11 +2916,13 @@
 
 ### 95.1 本轮动作
 
-1. 先将原始 `housekeeping_payment_core` 库安全克隆到临时副本，确认旧运行库副本可启动最新 backend，但任务中心会因缺少 `t_payment_task_lease` 报表缺失错误。
-2. 再使用 `backend/src/main/resources/schema.sql + data.sql` 重建最新临时库 `housekeeping_payment_core_latest_verify_20260731`，保证最新 backend 所需表结构完整。
-3. 启动本地 `admin-web`（`127.0.0.1:5174`），并通过本地代理 `127.0.0.1:8080 -> 真实 payment-core backend(127.0.0.1:18080)` 保留页面真实路由、真实筛选默认值和真实导出按钮逻辑。
-4. 通过系统 Chrome 的 CDP 打开真实页面，点击 `账单中心 / 收银台会话 / 退款单 / 支付流水` 四个页面的导出按钮。
-5. 抓取页面点击后实际执行的 `window.open(...)` 导出 URL，并继续校验真实 backend 返回的 `Content-Disposition` 与 CSV 表头。
+1. 先将原始 `housekeeping_payment_core` 库安全克隆到临时副本，确认旧运行库副本可启动最新 backend，但任务中心最初会因缺少 `t_payment_task_lease` 报表缺失错误。
+2. 使用 `systems/payment-core/database/migrations/2026-07-31-add-payment-task-lease.sql` 给原始运行库补齐 `t_payment_task_lease`，并验证增量 DDL 已落库。
+3. 再使用 `backend/src/main/resources/schema.sql + data.sql` 重建最新临时库 `housekeeping_payment_core_latest_verify_20260731`，保证最新 backend 所需表结构完整。
+4. 启动本地 `admin-web`（`127.0.0.1:5174`），并通过本地代理 `127.0.0.1:8080 -> 真实 payment-core backend(127.0.0.1:18080)` 保留页面真实路由、真实筛选默认值和真实导出按钮逻辑。
+5. 通过系统 Chrome 的 CDP 打开真实页面，点击 `账单中心 / 收银台会话 / 退款单 / 支付流水` 四个页面的导出按钮。
+6. 抓取页面点击后实际执行的 `window.open(...)` 导出 URL，并继续校验真实 backend 返回的 `Content-Disposition` 与 CSV 表头。
+7. 追加修复 `PaymentTaskCenterServiceImpl` 的升级告警递归膨胀问题：为升级 outbox 回写 `source_alert_no`，排除历史递归升级候选，并在写库前截断 `alert_content` 到 `512` 字符；随后以原始运行库重新启动最新 backend 做真实调度验证。
 
 ### 95.2 验证结果
 
@@ -2935,5 +2937,6 @@
 
 1. 四个 admin 页面已完成真实页面渲染、真实按钮点击、真实导出 URL 拼接与真实 backend CSV 下载响应链路验证。
 2. 这份证据说明 admin 前端导出入口、代理链路和真实 backend 下载约定本身已不再是阻断项，`payment-core` 四块导出在联调下载层面已经闭环。
-3. 同轮也发现一个新的运行时事实：原始 `housekeeping_payment_core` 库并未完全跟上最新 schema，至少缺少 `t_payment_task_lease`；若直接用旧运行库副本启动最新 backend，任务中心定时任务会报表缺失错误。
-4. 因此当前剩余阻断不再是“导出下载证据不足”，而是“原始运行库仍需补最新数据库结构迁移证据”，以及更高层的最终 gate 审计闭环。
+3. 原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 后，最新 backend 已能在 `2026-07-31 19:36:42` 成功写出 `PAYMENT_ISSUE_ESCALATE` 任务日志；此前暴露的 `alert_content` 越界问题已通过“候选过滤 + `source_alert_no` 落库 + 512 字符截断”修复，不再阻塞真实运行库启动。
+4. 查库还可见 `7` 条历史递归升级脏数据（`source_alert_no IS NULL` 且 `alert_content LIKE '升级来源告警 %'`）；新 SQL 已将它们排除出升级候选，当前不再触发写库越界，但后续仍建议补一轮数据清理脚本。
+5. 因此当前剩余阻断已经不再是“导出下载证据不足”或“原始运行库缺关键表”，而是更高层的最终 gate 审计闭环，包括 MQ 级可靠投递、失败重试/死信补偿、正式发布清单与发布后验证清单。

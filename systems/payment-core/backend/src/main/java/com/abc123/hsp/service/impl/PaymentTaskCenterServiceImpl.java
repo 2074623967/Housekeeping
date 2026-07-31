@@ -43,6 +43,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
+    private static final int ISSUE_ALERT_CONTENT_MAX_LENGTH = 512;
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
@@ -320,6 +321,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private PaymentIssueAlertLogEntity buildIssueAlertLog(PaymentIssueAlertCandidateDTO candidate, String triggeredBy) {
         PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
         entity.setAlertNo(buildAlertLogNo());
+        entity.setSourceAlertNo(candidate.getSourceAlertNo());
         entity.setIssueNo(candidate.getIssueNo());
         entity.setPaymentOrderId(candidate.getPaymentOrderId());
         entity.setIssueType(candidate.getIssueType());
@@ -331,7 +333,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setAlertStatusType("warn");
         entity.setAckStatus("待确认");
         entity.setAckStatusType("warn");
-        entity.setAlertContent(buildScheduledAlertContent(candidate));
+        entity.setAlertContent(truncateIssueAlertContent(buildScheduledAlertContent(candidate)));
         entity.setTriggeredBy(triggeredBy);
         return entity;
     }
@@ -365,6 +367,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         builder.append("】");
         return builder.toString();
+    }
+
+    private String truncateIssueAlertContent(String alertContent) {
+        if (alertContent == null || alertContent.length() <= ISSUE_ALERT_CONTENT_MAX_LENGTH) {
+            return alertContent;
+        }
+        return alertContent.substring(0, ISSUE_ALERT_CONTENT_MAX_LENGTH - 3) + "...";
     }
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {

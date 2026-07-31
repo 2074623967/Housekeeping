@@ -214,6 +214,8 @@
                        AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
               )
         WHERE source_alert.alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert.source_alert_no IS NULL
+          AND source_alert.alert_content NOT LIKE '升级来源告警 %'
           AND source_alert.ack_status = '待确认'
           AND TIMESTAMPDIFF(MINUTE, source_alert.created_at, NOW()) >= COALESCE(roster.escalation_timeout_minutes, 30)
           AND NOT EXISTS (
@@ -221,7 +223,10 @@
               FROM t_payment_issue_alert_log escalated_alert
               WHERE escalated_alert.issue_no = source_alert.issue_no
                 AND escalated_alert.alert_channel = 'IN_APP_OUTBOX'
-                AND escalated_alert.alert_content LIKE CONCAT('%升级来源告警 ', source_alert.alert_no, '%')
+                AND (
+                    escalated_alert.source_alert_no = source_alert.alert_no
+                    OR escalated_alert.alert_content LIKE CONCAT('%升级来源告警 ', source_alert.alert_no, '%')
+                )
           )
         ORDER BY source_alert.created_at ASC, source_alert.id ASC
     </select>
