@@ -154,7 +154,14 @@
         </choose>
     </select>
 
-    <select id="findFailedEventNos" resultType="string">
+    <select id="findAllFailedEventNos" resultType="string">
+        SELECT event_no
+        FROM t_payment_event
+        WHERE publish_status = 'FAILED'
+        ORDER BY created_at ASC, id ASC
+    </select>
+
+    <select id="findDueFailedEventNos" resultType="string">
         SELECT event_no
         FROM t_payment_event
         WHERE publish_status = 'FAILED'

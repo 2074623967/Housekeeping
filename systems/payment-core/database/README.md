@@ -4,6 +4,12 @@
 
 - `schema.sql`：支付交易、配置治理、异常治理、任务中心、退款、账单与运营台账建表脚本
 - `data.sql`：支付渠道、路由规则、协议、返回码、网关、控制策略、异常值班、支付单与退款演示数据
+
+## 应用启动初始化
+
+- 默认启动不会执行 `schema.sql` 或 `data.sql`，避免支付订单、outbox 和对账事实被应用重启覆盖。
+- 首次本地演示可显式使用 `SPRING_PROFILES_ACTIVE=demo`，或一次性设置 `HSP_SQL_INIT_MODE=always` 重建样例库。
+- 已有演练库、测试库和任何持久环境应保持 `HSP_SQL_INIT_MODE=never`，结构变更通过受控 DDL migration 执行。
 - `migrations/2026-07-31-add-payment-task-lease.sql`：给原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 的最小增量 DDL，用于让最新任务中心租约锁能力安全落库
 - `migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`：把历史递归升级 outbox 告警收口为 `已确认`，保留审计记录但移出待确认/待升级范围
 

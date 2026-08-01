@@ -377,7 +377,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
-        List<String> failedEventNos = paymentEventMapper.findFailedEventNos();
+        List<String> failedEventNos = RUN_MODE_MANUAL.equals(runMode)
+                ? paymentEventMapper.findAllFailedEventNos()
+                : paymentEventMapper.findDueFailedEventNos();
         int successCount = 0;
         for (String eventNo : failedEventNos) {
             if (paymentEventDispatchService.republish(eventNo)) {

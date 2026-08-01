@@ -26,9 +26,14 @@ public interface PaymentEventMapper {
     long count(@Param("query") PaymentEventQueryDTO query);
 
     /**
-     * 查询失败事件号列表。
+     * 查询所有可人工介入的失败事件号。
      */
-    List<String> findFailedEventNos();
+    List<String> findAllFailedEventNos();
+
+    /**
+     * 查询已到自动重试时间的失败事件号。
+     */
+    List<String> findDueFailedEventNos();
 
     /**
      * 按事件号查询支付事件。

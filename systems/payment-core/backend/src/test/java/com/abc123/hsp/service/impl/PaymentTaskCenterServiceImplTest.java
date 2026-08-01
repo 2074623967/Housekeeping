@@ -67,7 +67,7 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldRunRepublishFailedEvents() {
-        when(paymentEventMapper.findFailedEventNos()).thenReturn(Arrays.asList("EVT-1", "EVT-2"));
+        when(paymentEventMapper.findAllFailedEventNos()).thenReturn(Arrays.asList("EVT-1", "EVT-2"));
         when(paymentEventMapper.markRepublished("EVT-1")).thenReturn(1);
         when(paymentEventMapper.markRepublished("EVT-2")).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
@@ -82,7 +82,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentIssueAlertDeliveryService
         ).runRepublishFailedEvents();
 
-        verify(paymentEventMapper).findFailedEventNos();
+        verify(paymentEventMapper).findAllFailedEventNos();
         verify(paymentEventMapper).markRepublished("EVT-1");
         verify(paymentEventMapper).markRepublished("EVT-2");
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -94,7 +94,7 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldRunAutoRepublishFailedEvents() {
-        when(paymentEventMapper.findFailedEventNos()).thenReturn(Collections.singletonList("EVT-AUTO-1"));
+        when(paymentEventMapper.findDueFailedEventNos()).thenReturn(Collections.singletonList("EVT-AUTO-1"));
         when(paymentEventMapper.markRepublished("EVT-AUTO-1")).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -109,7 +109,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentIssueAlertDeliveryService
         ).runAutoRepublishFailedEvents();
 
-        verify(paymentEventMapper).findFailedEventNos();
+        verify(paymentEventMapper).findDueFailedEventNos();
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "payment-event-scheduler".equals(entity.getTriggeredBy())
         ));

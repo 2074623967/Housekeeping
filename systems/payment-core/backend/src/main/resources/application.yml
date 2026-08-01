@@ -21,7 +21,8 @@ spring:
       mandatory: true
   sql:
     init:
-      mode: always
+      # 外部 MySQL 的支付事实不能随应用重启被 schema.sql/data.sql 覆盖。
+      mode: ${HSP_SQL_INIT_MODE:never}
       encoding: UTF-8
 
 mybatis:

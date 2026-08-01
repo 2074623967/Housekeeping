@@ -1,0 +1,8 @@
+spring:
+  config:
+    activate:
+      on-profile: demo
+  sql:
+    init:
+      # 仅演示环境允许用仓库样例数据重建数据库。
+      mode: always
