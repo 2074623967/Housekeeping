@@ -122,6 +122,10 @@ public interface ClearingDataMapper {
      */
     List<ClearingEventEntity> findEvents();
 
+    /** 查询已到重试时间的清分结果 outbox 事件。 */
+    List<ClearingEventEntity> findDueFailedClearingGeneratedEvents(@Param("retryAt") String retryAt,
+                                                                    @Param("limit") int limit);
+
     /**
      * 按业务单号查询事件。
      */

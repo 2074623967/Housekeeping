@@ -209,6 +209,11 @@ public class ClearingMemoryStore {
         return items;
     }
 
+    public List<ClearingEventEntity> dueFailedClearingGeneratedEvents(int limit) {
+        return clearingDataMapper.findDueFailedClearingGeneratedEvents(
+                LocalDateTime.now().format(DATE_TIME_FORMATTER), Math.max(limit, 1));
+    }
+
     public boolean hasConsumedPaymentSuccess(String paymentOrderId) {
         return paymentOrderId != null && !paymentOrderId.isEmpty()
                 && clearingDataMapper.findOrderByPaymentOrderId(paymentOrderId) != null;

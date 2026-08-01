@@ -2,12 +2,14 @@ package com.abc123.clearing;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.mybatis.spring.annotation.MapperScan;
 
 /**
  * 清分清算系统启动入口。
  */
 @SpringBootApplication
+@EnableScheduling
 @MapperScan("com.abc123.clearing.mapper")
 public class ClearingSystemApplication {
 

@@ -351,6 +351,27 @@
         ORDER BY id DESC
     </select>
 
+    <select id="findDueFailedClearingGeneratedEvents" resultType="com.abc123.clearing.entity.ClearingEventEntity">
+        SELECT event_no,
+               event_type,
+               biz_no,
+               summary,
+               payload,
+               event_status,
+               publish_status,
+               retry_count,
+               last_published_at,
+               next_retry_at,
+               created_at
+        FROM t_clearing_event
+        WHERE event_type = 'CLEARING_GENERATED'
+          AND publish_status = 'FAILED'
+          AND next_retry_at IS NOT NULL
+          AND next_retry_at &lt;= #{retryAt}
+        ORDER BY next_retry_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
     <select id="findEventByTypeAndBizNo" resultType="com.abc123.clearing.entity.ClearingEventEntity">
         SELECT event_no,
                event_type,
