@@ -555,6 +555,33 @@ CREATE TABLE t_payment_task_lease (
     KEY idx_lock_expires_at (lock_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付任务分布式租约锁表';
 
+CREATE TABLE t_payment_dead_letter_task (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    task_no VARCHAR(64) NOT NULL COMMENT '死信补偿任务号',
+    message_id VARCHAR(128) NOT NULL COMMENT 'MQ消息ID',
+    correlation_id VARCHAR(128) DEFAULT NULL COMMENT 'MQ关联ID',
+    dead_letter_routing_key VARCHAR(128) NOT NULL COMMENT '死信路由键',
+    target_system VARCHAR(64) NOT NULL COMMENT '原目标系统',
+    replay_exchange VARCHAR(128) NOT NULL COMMENT '定向重放交换机',
+    replay_routing_key VARCHAR(128) NOT NULL COMMENT '定向重放路由键',
+    task_status VARCHAR(32) NOT NULL COMMENT '任务状态',
+    task_status_type VARCHAR(32) NOT NULL COMMENT '任务状态样式',
+    resolution_note VARCHAR(512) DEFAULT NULL COMMENT '人工处置说明',
+    payload_snapshot LONGTEXT NOT NULL COMMENT '原始消息体快照',
+    header_snapshot TEXT DEFAULT NULL COMMENT '原始消息头快照',
+    replay_count INT NOT NULL DEFAULT 0 COMMENT '定向重放次数',
+    last_replay_at DATETIME DEFAULT NULL COMMENT '最近重放时间',
+    operator VARCHAR(64) DEFAULT NULL COMMENT '最后处置人',
+    resolved_at DATETIME DEFAULT NULL COMMENT '最近处置时间',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_dead_letter_message_route (message_id, dead_letter_routing_key),
+    UNIQUE KEY uk_dead_letter_task_no (task_no),
+    KEY idx_dead_letter_status_created (task_status, created_at),
+    KEY idx_dead_letter_target_created (target_system, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付MQ死信补偿任务表';
+
 CREATE TABLE t_payment_task_run_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     task_log_no VARCHAR(64) NOT NULL COMMENT '任务日志号',

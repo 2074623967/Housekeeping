@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.hsp.mapper.PaymentDeadLetterTaskMapper">
+
+    <insert id="insertIgnore" parameterType="com.abc123.hsp.entity.PaymentDeadLetterTaskEntity">
+        INSERT IGNORE INTO t_payment_dead_letter_task (
+            task_no, message_id, correlation_id, dead_letter_routing_key, target_system,
+            replay_exchange, replay_routing_key, task_status, task_status_type,
+            payload_snapshot, header_snapshot, replay_count, created_at, updated_at
+        ) VALUES (
+            #{taskNo}, #{messageId}, #{correlationId}, #{deadLetterRoutingKey}, #{targetSystem},
+            #{replayExchange}, #{replayRoutingKey}, #{taskStatus}, #{taskStatusType},
+            #{payloadSnapshot}, #{headerSnapshot}, #{replayCount}, NOW(), NOW()
+        )
+    </insert>
+
+    <select id="findAll" resultType="com.abc123.hsp.entity.PaymentDeadLetterTaskEntity">
+        SELECT task_no AS taskNo,
+               message_id AS messageId,
+               correlation_id AS correlationId,
+               dead_letter_routing_key AS deadLetterRoutingKey,
+               target_system AS targetSystem,
+               replay_exchange AS replayExchange,
+               replay_routing_key AS replayRoutingKey,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               resolution_note AS resolutionNote,
+               payload_snapshot AS payloadSnapshot,
+               header_snapshot AS headerSnapshot,
+               replay_count AS replayCount,
+               DATE_FORMAT(last_replay_at, '%Y-%m-%d %H:%i:%s') AS lastReplayAt,
+               operator,
+               DATE_FORMAT(resolved_at, '%Y-%m-%d %H:%i:%s') AS resolvedAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_dead_letter_task
+        <where>
+            <if test="query.taskStatus != null and query.taskStatus != ''">
+                task_status = #{query.taskStatus}
+            </if>
+            <if test="query.targetSystem != null and query.targetSystem != ''">
+                AND target_system = #{query.targetSystem}
+            </if>
+            <if test="query.messageId != null and query.messageId != ''">
+                AND message_id LIKE CONCAT('%', #{query.messageId}, '%')
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{query.limit} OFFSET #{query.offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_payment_dead_letter_task
+        <where>
+            <if test="query.taskStatus != null and query.taskStatus != ''">
+                task_status = #{query.taskStatus}
+            </if>
+            <if test="query.targetSystem != null and query.targetSystem != ''">
+                AND target_system = #{query.targetSystem}
+            </if>
+            <if test="query.messageId != null and query.messageId != ''">
+                AND message_id LIKE CONCAT('%', #{query.messageId}, '%')
+            </if>
+        </where>
+    </select>
+
+    <select id="findByTaskNo" resultType="com.abc123.hsp.entity.PaymentDeadLetterTaskEntity">
+        SELECT task_no AS taskNo,
+               message_id AS messageId,
+               correlation_id AS correlationId,
+               dead_letter_routing_key AS deadLetterRoutingKey,
+               target_system AS targetSystem,
+               replay_exchange AS replayExchange,
+               replay_routing_key AS replayRoutingKey,
+               task_status AS taskStatus,
+               task_status_type AS taskStatusType,
+               resolution_note AS resolutionNote,
+               payload_snapshot AS payloadSnapshot,
+               header_snapshot AS headerSnapshot,
+               replay_count AS replayCount,
+               DATE_FORMAT(last_replay_at, '%Y-%m-%d %H:%i:%s') AS lastReplayAt,
+               operator,
+               DATE_FORMAT(resolved_at, '%Y-%m-%d %H:%i:%s') AS resolvedAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_dead_letter_task
+        WHERE task_no = #{taskNo}
+    </select>
+
+    <update id="markReadyToReplay">
+        UPDATE t_payment_dead_letter_task
+        SET task_status = 'READY_TO_REPLAY', task_status_type = 'warn', operator = #{operator},
+            resolution_note = #{resolutionNote}, resolved_at = NOW(), updated_at = NOW()
+        WHERE task_no = #{taskNo}
+          AND task_status IN ('PENDING_REVIEW', 'REPLAY_FAILED')
+    </update>
+
+    <update id="markManuallyResolved">
+        UPDATE t_payment_dead_letter_task
+        SET task_status = 'MANUAL_RESOLVED', task_status_type = 'success', operator = #{operator},
+            resolution_note = #{resolutionNote}, resolved_at = NOW(), updated_at = NOW()
+        WHERE task_no = #{taskNo}
+          AND task_status IN ('PENDING_REVIEW', 'REPLAY_FAILED')
+    </update>
+
+    <update id="markReplaying">
+        UPDATE t_payment_dead_letter_task
+        SET task_status = 'REPLAYING', task_status_type = 'warn', operator = #{operator},
+            replay_count = replay_count + 1, last_replay_at = NOW(), updated_at = NOW()
+        WHERE task_no = #{taskNo}
+          AND task_status = 'READY_TO_REPLAY'
+    </update>
+
+    <update id="markReplayed">
+        UPDATE t_payment_dead_letter_task
+        SET task_status = 'REPLAYED', task_status_type = 'success', updated_at = NOW()
+        WHERE task_no = #{taskNo}
+          AND task_status = 'REPLAYING'
+    </update>
+
+    <update id="markReplayFailed">
+        UPDATE t_payment_dead_letter_task
+        SET task_status = 'REPLAY_FAILED', task_status_type = 'danger', resolution_note = #{resolutionNote},
+            updated_at = NOW()
+        WHERE task_no = #{taskNo}
+          AND task_status = 'REPLAYING'
+    </update>
+</mapper>

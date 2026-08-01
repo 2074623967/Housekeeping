@@ -56,6 +56,8 @@ payment:
     payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
     payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}
     publisher-confirm-timeout-ms: ${HSP_PAYMENT_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS:5000}
+    dead-letter-task-enabled: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_ENABLED:false}
+    dead-letter-task-queue: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_QUEUE:payment.compensation.dlq-intake}
   issue-alert:
     im:
       # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
