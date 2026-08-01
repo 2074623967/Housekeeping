@@ -37,9 +37,9 @@ public class AccountingClearingGeneratedAmqpConsumer {
             RabbitTemplate rabbitTemplate,
             ObjectMapper objectMapper,
             @Value("${accounting.amqp.clearing-generated-retry-exchange:clearing.trade.retry}") String retryExchange,
-            @Value("${accounting.amqp.clearing-generated-retry-routing-key:clearing.generated.retry.v1}") String retryRoutingKey,
+            @Value("${accounting.amqp.clearing-generated-retry-routing-key:clearing.generated.accounting.retry.v1}") String retryRoutingKey,
             @Value("${accounting.amqp.clearing-generated-dead-letter-exchange:clearing.trade.dlq}") String deadLetterExchange,
-            @Value("${accounting.amqp.clearing-generated-dead-letter-routing-key:clearing.generated.dlq.v1}") String deadLetterRoutingKey,
+            @Value("${accounting.amqp.clearing-generated-dead-letter-routing-key:clearing.generated.accounting.dlq.v1}") String deadLetterRoutingKey,
             @Value("${accounting.amqp.max-retry-count:3}") int maxRetryCount) {
         this.accountingEventService = accountingEventService;
         this.rabbitTemplate = rabbitTemplate;

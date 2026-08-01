@@ -29,7 +29,7 @@ settlement:
     enabled: ${HSP_SETTLEMENT_AMQP_ENABLED:false}
     clearing-generated-queue: ${HSP_SETTLEMENT_AMQP_CLEARING_GENERATED_QUEUE:settlement.clearing-generated}
     retry-exchange: ${HSP_SETTLEMENT_AMQP_RETRY_EXCHANGE:clearing.trade.retry}
-    retry-routing-key: ${HSP_SETTLEMENT_AMQP_RETRY_ROUTING_KEY:clearing.generated.retry.v1}
+    retry-routing-key: ${HSP_SETTLEMENT_AMQP_RETRY_ROUTING_KEY:clearing.generated.settlement.retry.v1}
     dead-letter-exchange: ${HSP_SETTLEMENT_AMQP_DEAD_LETTER_EXCHANGE:clearing.trade.dlq}
-    dead-letter-routing-key: ${HSP_SETTLEMENT_AMQP_DEAD_LETTER_ROUTING_KEY:clearing.generated.dlq.v1}
+    dead-letter-routing-key: ${HSP_SETTLEMENT_AMQP_DEAD_LETTER_ROUTING_KEY:clearing.generated.settlement.dlq.v1}
     max-retry-count: ${HSP_SETTLEMENT_AMQP_MAX_RETRY_COUNT:3}

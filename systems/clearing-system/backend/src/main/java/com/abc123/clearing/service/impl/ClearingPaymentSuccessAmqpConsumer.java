@@ -39,9 +39,9 @@ public class ClearingPaymentSuccessAmqpConsumer {
             RabbitTemplate rabbitTemplate,
             ObjectMapper objectMapper,
             @Value("${clearing.amqp.retry-exchange:payment.trade.retry}") String retryExchange,
-            @Value("${clearing.amqp.retry-routing-key:payment.success.retry.v1}") String retryRoutingKey,
+            @Value("${clearing.amqp.retry-routing-key:payment.success.clearing.retry.v1}") String retryRoutingKey,
             @Value("${clearing.amqp.dead-letter-exchange:payment.trade.dlq}") String deadLetterExchange,
-            @Value("${clearing.amqp.dead-letter-routing-key:payment.success.dlq.v1}") String deadLetterRoutingKey,
+            @Value("${clearing.amqp.dead-letter-routing-key:payment.success.clearing.dlq.v1}") String deadLetterRoutingKey,
             @Value("${clearing.amqp.max-retry-count:3}") int maxRetryCount) {
         this.clearingEventService = clearingEventService;
         this.rabbitTemplate = rabbitTemplate;

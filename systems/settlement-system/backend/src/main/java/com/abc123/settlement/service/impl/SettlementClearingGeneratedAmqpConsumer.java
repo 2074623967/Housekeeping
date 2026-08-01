@@ -33,9 +33,9 @@ public class SettlementClearingGeneratedAmqpConsumer {
     public SettlementClearingGeneratedAmqpConsumer(SettlementEventService settlementEventService, RabbitTemplate rabbitTemplate,
                                                     ObjectMapper objectMapper,
                                                     @Value("${settlement.amqp.retry-exchange:clearing.trade.retry}") String retryExchange,
-                                                    @Value("${settlement.amqp.retry-routing-key:clearing.generated.retry.v1}") String retryRoutingKey,
+                                                    @Value("${settlement.amqp.retry-routing-key:clearing.generated.settlement.retry.v1}") String retryRoutingKey,
                                                     @Value("${settlement.amqp.dead-letter-exchange:clearing.trade.dlq}") String deadLetterExchange,
-                                                    @Value("${settlement.amqp.dead-letter-routing-key:clearing.generated.dlq.v1}") String deadLetterRoutingKey,
+                                                    @Value("${settlement.amqp.dead-letter-routing-key:clearing.generated.settlement.dlq.v1}") String deadLetterRoutingKey,
                                                     @Value("${settlement.amqp.max-retry-count:3}") int maxRetryCount) {
         this.settlementEventService = settlementEventService;
         this.rabbitTemplate = rabbitTemplate;

@@ -36,7 +36,7 @@ clearing:
     publisher-confirm-timeout-ms: ${HSP_CLEARING_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS:5000}
     payment-success-queue: ${HSP_CLEARING_AMQP_PAYMENT_SUCCESS_QUEUE:clearing.payment-success}
     retry-exchange: ${HSP_CLEARING_AMQP_RETRY_EXCHANGE:payment.trade.retry}
-    retry-routing-key: ${HSP_CLEARING_AMQP_RETRY_ROUTING_KEY:payment.success.retry.v1}
+    retry-routing-key: ${HSP_CLEARING_AMQP_RETRY_ROUTING_KEY:payment.success.clearing.retry.v1}
     dead-letter-exchange: ${HSP_CLEARING_AMQP_DEAD_LETTER_EXCHANGE:payment.trade.dlq}
-    dead-letter-routing-key: ${HSP_CLEARING_AMQP_DEAD_LETTER_ROUTING_KEY:payment.success.dlq.v1}
+    dead-letter-routing-key: ${HSP_CLEARING_AMQP_DEAD_LETTER_ROUTING_KEY:payment.success.clearing.dlq.v1}
     max-retry-count: ${HSP_CLEARING_AMQP_MAX_RETRY_COUNT:3}
