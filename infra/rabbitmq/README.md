@@ -5,11 +5,10 @@ This directory bootstraps the broker topology defined in `docs/2026-07-31-真实
 ## Start
 
 ```bash
-export RABBITMQ_DEFAULT_PASS='replace-with-a-test-secret'
 docker compose -f infra/rabbitmq/docker-compose.yml up -d
 ```
 
-The management UI is available at `http://127.0.0.1:15672` with the configured `RABBITMQ_DEFAULT_USER` (default: `hsp`). The AMQP endpoint is `amqp://127.0.0.1:5672`.
+The management UI is available at `http://127.0.0.1:15672` with `hsp / hsp-local-drill-20260801`. The AMQP endpoint is `amqp://127.0.0.1:5672`. These credentials are strictly for the checked-in localhost drill topology; do not reuse them outside this environment.
 
 ## Topology
 
@@ -22,5 +21,5 @@ Retry publishing must use the matching `*.retry` exchange and `*.retry.v1` routi
 
 ## Drill rules
 
-- Change the default password before shared use; production must inject credentials and use a dedicated vhost.
+- Do not expose this localhost topology; production must inject credentials and use a dedicated vhost.
 - Do not treat a broker start as a delivery gate pass. Record queue snapshots, business IDs, outbox state and downstream facts in the drill template before closing the gate.

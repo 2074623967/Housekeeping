@@ -4,8 +4,8 @@ services:
     container_name: hsp-rabbitmq
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-hsp}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-change-me-before-shared-use}
+      RABBITMQ_DEFAULT_USER: hsp
+      RABBITMQ_DEFAULT_PASS: hsp-local-drill-20260801
     ports:
       - "5672:5672"
       - "15672:15672"

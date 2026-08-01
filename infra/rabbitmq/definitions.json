@@ -1,5 +1,11 @@
 {
-  "rabbit_version":"3.13.0", "users":[], "vhosts":[], "permissions":[], "topic_permissions":[], "parameters":[], "global_parameters":[], "policies":[],
+  "rabbit_version":"3.13.0",
+  "users":[
+    {"name":"hsp","password_hash":"Gab6Z2Qw9Lfc2DNTOB4yDebvS6o3TVQZhoSolg3YrcH/iSXy","hashing_algorithm":"rabbit_password_hashing_sha256","tags":"administrator","limits":{}}
+  ],
+  "vhosts":[{"name":"/","description":"Local payment drill vhost","tags":[],"default_queue_type":"classic","metadata":{"description":"Local payment drill vhost","tags":[]}}],
+  "permissions":[{"user":"hsp","vhost":"/","configure":".*","write":".*","read":".*"}],
+  "topic_permissions":[], "parameters":[], "global_parameters":[], "policies":[],
   "queues":[
     {"name":"clearing.payment-success","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-dead-letter-exchange":"payment.trade.dlq","x-dead-letter-routing-key":"payment.success.dlq.v1"}},
     {"name":"clearing.payment-success.retry","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-message-ttl":300000,"x-dead-letter-exchange":"payment.trade","x-dead-letter-routing-key":"payment.success.v1"}},
