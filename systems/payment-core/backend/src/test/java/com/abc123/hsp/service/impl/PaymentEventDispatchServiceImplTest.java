@@ -46,6 +46,10 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
 
         new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -89,6 +93,10 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.findByEventNo("EVT-001")).thenReturn(event);
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
                 .when(rabbitTemplate).convertAndSend(eq("payment.trade"), eq("payment.success.v1"), any(), any(MessagePostProcessor.class));
 

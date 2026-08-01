@@ -87,6 +87,10 @@ class ClearingEventDispatchServiceImplTest {
         when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
         when(clearingMemoryStore.sharesByClearingNo("CLR-001")).thenReturn(Collections.<ShareItemEntity>emptyList());
         when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(outboxEvent());
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
 
         boolean result = new ClearingEventDispatchServiceImpl(
                 clearingMemoryStore,

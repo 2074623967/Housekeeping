@@ -286,7 +286,7 @@ class PaymentConfigServiceImplTest {
         policy.setStrictMode("开启");
         policy.setSelfCheckStatus("PASS");
         policy.setAllowedPaymentMethods("微信支付,支付宝");
-        policy.setAllowedMerchantNos("MCH_HOME_APP");
+        policy.setAllowedMerchantNos("MCH_WX_10001,MCH_ALI_20001");
         policy.setTokenAuthRequired("开启");
         when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
         when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
@@ -306,7 +306,7 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(40), actualPolicy.getMinuteSubmitLimit());
         org.junit.jupiter.api.Assertions.assertEquals("开启", actualPolicy.getStrictMode());
         org.junit.jupiter.api.Assertions.assertTrue(actualPolicy.getAllowedPaymentMethods().contains("微信支付"));
-        org.junit.jupiter.api.Assertions.assertEquals("MCH_HOME_APP", actualPolicy.getAllowedMerchantNos());
+        org.junit.jupiter.api.Assertions.assertEquals("MCH_WX_10001,MCH_ALI_20001", actualPolicy.getAllowedMerchantNos());
         org.junit.jupiter.api.Assertions.assertEquals("开启", actualPolicy.getTokenAuthRequired());
     }
 
@@ -318,13 +318,13 @@ class PaymentConfigServiceImplTest {
         policy.setSourceAppId("housekeeping-app-web");
         policy.setAllowedPaymentMethods("微信支付,支付宝");
         policy.setAllowedChannelCodes("wx_h5,alipay_h5");
-        policy.setAllowedMerchantNos("MCH_HOME_APP");
+        policy.setAllowedMerchantNos("MCH_WX_10001,MCH_ALI_20001");
         policy.setTokenAuthRequired("开启");
         policy.setAccessTokenValue("token-housekeeping-app-web");
         when(paymentConfigMapper.findControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(policy);
 
-        PaymentChannelConfigDTO wxChannel = buildChannel("wx_h5", "微信支付", "MCH_HOME_APP", "ENABLED");
-        PaymentChannelConfigDTO aliChannel = buildChannel("alipay_h5", "支付宝", "MCH_HOME_APP", "ENABLED");
+        PaymentChannelConfigDTO wxChannel = buildChannel("wx_h5", "微信支付", "MCH_WX_10001", "ENABLED");
+        PaymentChannelConfigDTO aliChannel = buildChannel("alipay_h5", "支付宝", "MCH_ALI_20001", "ENABLED");
         when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(wxChannel, aliChannel));
         PaymentGatewayConfigDTO gateway = buildGateway("wx_h5,alipay_h5", "ENABLED");
         when(paymentConfigMapper.findGateways()).thenReturn(Arrays.asList(gateway));

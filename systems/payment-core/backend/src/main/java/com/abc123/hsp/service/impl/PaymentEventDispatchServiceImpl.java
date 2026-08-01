@@ -221,12 +221,16 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             throw new IllegalStateException("AMQP 支付成功事件配置不完整");
         }
         try {
-            rabbitTemplate.convertAndSend(
-                    paymentSuccessExchange.trim(),
-                    paymentSuccessRoutingKey.trim(),
-                    objectMapper.writeValueAsString(buildAmqpPayload(detail, workerName, amount)),
-                    buildMessagePostProcessor(eventNo, detail.getPaymentOrderId()));
-            rabbitTemplate.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
+            final String payload = objectMapper.writeValueAsString(buildAmqpPayload(detail, workerName, amount));
+            rabbitTemplate.invoke(operations -> {
+                operations.convertAndSend(
+                        paymentSuccessExchange.trim(),
+                        paymentSuccessRoutingKey.trim(),
+                        payload,
+                        buildMessagePostProcessor(eventNo, detail.getPaymentOrderId()));
+                operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
+                return null;
+            });
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("支付成功事件序列化失败", exception);
         }

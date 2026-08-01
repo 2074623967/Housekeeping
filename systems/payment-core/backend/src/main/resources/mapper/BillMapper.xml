@@ -52,7 +52,7 @@
                 DESC
             </otherwise>
         </choose>
-        LIMIT #{limit} OFFSET #{offset}
+        LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
     <select id="count" resultType="long">

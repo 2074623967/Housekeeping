@@ -66,23 +66,23 @@
                p.status_type AS statusType
         FROM t_payment_order p
         <where>
-            <if test="recordType == 'WECHAT'">
+            <if test="query.recordType == 'WECHAT'">
                 (p.channel_code LIKE 'wx%' OR p.payment_method = '微信'
                  OR p.channel_code LIKE 'alipay%' OR p.payment_method = '支付宝')
             </if>
-            <if test="recordType == 'BANK_CARD'">
+            <if test="query.recordType == 'BANK_CARD'">
                 (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
             </if>
-            <if test="userId != null and userId != ''">
-                AND p.customer_name LIKE CONCAT('%', #{userId}, '%')
+            <if test="query.userId != null and query.userId != ''">
+                AND p.customer_name LIKE CONCAT('%', #{query.userId}, '%')
             </if>
-            <if test="businessOrderNo != null and businessOrderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{businessOrderNo}, '%')
+            <if test="query.businessOrderNo != null and query.businessOrderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNo}, '%')
             </if>
-            <if test="paymentType != null and paymentType != ''">
-                AND '消费支付' = #{paymentType}
+            <if test="query.paymentType != null and query.paymentType != ''">
+                AND '消费支付' = #{query.paymentType}
             </if>
-            <if test="paymentStatus != null and paymentStatus != '' and paymentStatus != '全部'">
+            <if test="query.paymentStatus != null and query.paymentStatus != '' and query.paymentStatus != '全部'">
                 AND (
                     CASE p.status
                         WHEN 'SUCCESS' THEN '支付成功'
@@ -91,17 +91,17 @@
                         WHEN 'FAIL' THEN '支付失败'
                         ELSE p.status
                     END
-                ) = #{paymentStatus}
+                ) = #{query.paymentStatus}
             </if>
-            <if test="paymentChannel != null and paymentChannel != ''">
-                AND p.channel_code LIKE CONCAT('%', #{paymentChannel}, '%')
+            <if test="query.paymentChannel != null and query.paymentChannel != ''">
+                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannel}, '%')
             </if>
         </where>
         <choose>
-            <when test="sortField == 'paymentAmount'">
+            <when test="query.sortField == 'paymentAmount'">
                 ORDER BY p.amount
             </when>
-            <when test="sortField == 'paidAt'">
+            <when test="query.sortField == 'paidAt'">
                 ORDER BY
                 CASE WHEN p.status = 'SUCCESS' THEN p.created_at ELSE NULL END
             </when>
@@ -110,37 +110,37 @@
             </otherwise>
         </choose>
         <choose>
-            <when test="sortOrder == 'asc'">
+            <when test="query.sortOrder == 'asc'">
                 ASC
             </when>
             <otherwise>
                 DESC
             </otherwise>
         </choose>
-        LIMIT #{limit} OFFSET #{offset}
+        LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM t_payment_order p
         <where>
-            <if test="recordType == 'WECHAT'">
+            <if test="query.recordType == 'WECHAT'">
                 (p.channel_code LIKE 'wx%' OR p.payment_method = '微信'
                  OR p.channel_code LIKE 'alipay%' OR p.payment_method = '支付宝')
             </if>
-            <if test="recordType == 'BANK_CARD'">
+            <if test="query.recordType == 'BANK_CARD'">
                 (p.channel_code LIKE '%bank%' OR p.payment_method = '银行卡')
             </if>
-            <if test="userId != null and userId != ''">
-                AND p.customer_name LIKE CONCAT('%', #{userId}, '%')
+            <if test="query.userId != null and query.userId != ''">
+                AND p.customer_name LIKE CONCAT('%', #{query.userId}, '%')
             </if>
-            <if test="businessOrderNo != null and businessOrderNo != ''">
-                AND p.order_no LIKE CONCAT('%', #{businessOrderNo}, '%')
+            <if test="query.businessOrderNo != null and query.businessOrderNo != ''">
+                AND p.order_no LIKE CONCAT('%', #{query.businessOrderNo}, '%')
             </if>
-            <if test="paymentType != null and paymentType != ''">
-                AND '消费支付' = #{paymentType}
+            <if test="query.paymentType != null and query.paymentType != ''">
+                AND '消费支付' = #{query.paymentType}
             </if>
-            <if test="paymentStatus != null and paymentStatus != '' and paymentStatus != '全部'">
+            <if test="query.paymentStatus != null and query.paymentStatus != '' and query.paymentStatus != '全部'">
                 AND (
                     CASE p.status
                         WHEN 'SUCCESS' THEN '支付成功'
@@ -149,10 +149,10 @@
                         WHEN 'FAIL' THEN '支付失败'
                         ELSE p.status
                     END
-                ) = #{paymentStatus}
+                ) = #{query.paymentStatus}
             </if>
-            <if test="paymentChannel != null and paymentChannel != ''">
-                AND p.channel_code LIKE CONCAT('%', #{paymentChannel}, '%')
+            <if test="query.paymentChannel != null and query.paymentChannel != ''">
+                AND p.channel_code LIKE CONCAT('%', #{query.paymentChannel}, '%')
             </if>
         </where>
     </select>

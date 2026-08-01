@@ -146,9 +146,12 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         }
         try {
             objectMapper.readTree(outboxEvent.getPayload());
-            rabbitTemplate.convertAndSend(clearingGeneratedExchange.trim(), clearingGeneratedRoutingKey.trim(),
-                    outboxEvent.getPayload(), buildMessagePostProcessor(outboxEvent));
-            rabbitTemplate.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
+            rabbitTemplate.invoke(operations -> {
+                operations.convertAndSend(clearingGeneratedExchange.trim(), clearingGeneratedRoutingKey.trim(),
+                        outboxEvent.getPayload(), buildMessagePostProcessor(outboxEvent));
+                operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
+                return null;
+            });
         } catch (Exception exception) {
             throw new IllegalStateException("清分结果事件投递失败", exception);
         }
