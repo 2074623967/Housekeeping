@@ -49,7 +49,7 @@ class SettlementClearingGeneratedAmqpConsumerTest {
         consumer(3).consume(message(0), channel, 32L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("clearing.trade.retry"), eq("clearing.generated.settlement.retry.v1"), retryMessage.capture());
         verify(channel).basicAck(32L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1,
                 retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
@@ -62,7 +62,7 @@ class SettlementClearingGeneratedAmqpConsumerTest {
 
         consumer(3).consume(message(3), channel, 33L);
 
-        verify(rabbitTemplate).send(eq("clearing.trade.dlq"), eq("clearing.generated.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("clearing.trade.dlq"), eq("clearing.generated.settlement.dlq.v1"), any(Message.class));
         verify(channel).basicAck(33L, false);
     }
 
@@ -72,9 +72,9 @@ class SettlementClearingGeneratedAmqpConsumerTest {
                 rabbitTemplate,
                 objectMapper,
                 "clearing.trade.retry",
-                "clearing.generated.retry.v1",
+                "clearing.generated.settlement.retry.v1",
                 "clearing.trade.dlq",
-                "clearing.generated.dlq.v1",
+                "clearing.generated.settlement.dlq.v1",
                 maxRetryCount);
     }
 

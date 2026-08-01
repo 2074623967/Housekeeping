@@ -55,7 +55,7 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         consumer.consume(message(0), channel, 12L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), retryMessage.capture());
         verify(channel).basicAck(12L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1, retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
     }
@@ -68,7 +68,7 @@ class ClearingPaymentSuccessAmqpConsumerTest {
 
         consumer.consume(message(3), channel, 13L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.clearing.dlq.v1"), any(Message.class));
         verify(channel).basicAck(13L, false);
     }
 
@@ -78,7 +78,7 @@ class ClearingPaymentSuccessAmqpConsumerTest {
         org.mockito.Mockito.doThrow(new IllegalStateException("business failure"))
                 .when(clearingEventService).consumePaymentSuccess(any(PaymentSuccessEventRequestDTO.class));
         org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
-                .when(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.retry.v1"), any(Message.class));
+                .when(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.clearing.retry.v1"), any(Message.class));
 
         consumer.consume(message(0), channel, 14L);
 
@@ -92,9 +92,9 @@ class ClearingPaymentSuccessAmqpConsumerTest {
                 rabbitTemplate,
                 objectMapper,
                 "payment.trade.retry",
-                "payment.success.retry.v1",
+                "payment.success.clearing.retry.v1",
                 "payment.trade.dlq",
-                "payment.success.dlq.v1",
+                "payment.success.clearing.dlq.v1",
                 maxRetryCount);
     }
 

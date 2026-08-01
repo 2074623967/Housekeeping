@@ -51,7 +51,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
         consumer(3).consume(message(0), channel, 22L);
 
         ArgumentCaptor<Message> retryMessage = ArgumentCaptor.forClass(Message.class);
-        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.retry.v1"), retryMessage.capture());
+        verify(rabbitTemplate).send(eq("payment.trade.retry"), eq("payment.success.accounting.retry.v1"), retryMessage.capture());
         verify(channel).basicAck(22L, false);
         org.junit.jupiter.api.Assertions.assertEquals(1, retryMessage.getValue().getMessageProperties().getHeaders().get("x-retry-count"));
     }
@@ -63,7 +63,7 @@ class AccountingPaymentSuccessAmqpConsumerTest {
 
         consumer(3).consume(message(3), channel, 23L);
 
-        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.dlq.v1"), any(Message.class));
+        verify(rabbitTemplate).send(eq("payment.trade.dlq"), eq("payment.success.accounting.dlq.v1"), any(Message.class));
         verify(channel).basicAck(23L, false);
     }
 
@@ -73,9 +73,9 @@ class AccountingPaymentSuccessAmqpConsumerTest {
                 rabbitTemplate,
                 objectMapper,
                 "payment.trade.retry",
-                "payment.success.retry.v1",
+                "payment.success.accounting.retry.v1",
                 "payment.trade.dlq",
-                "payment.success.dlq.v1",
+                "payment.success.accounting.dlq.v1",
                 maxRetryCount);
     }
 
