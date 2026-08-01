@@ -28,8 +28,13 @@ accounting:
   amqp:
     enabled: ${HSP_ACCOUNTING_AMQP_ENABLED:false}
     payment-success-queue: ${HSP_ACCOUNTING_AMQP_PAYMENT_SUCCESS_QUEUE:accounting.payment-success}
+    clearing-generated-queue: ${HSP_ACCOUNTING_AMQP_CLEARING_GENERATED_QUEUE:accounting.clearing-generated}
     retry-exchange: ${HSP_ACCOUNTING_AMQP_RETRY_EXCHANGE:payment.trade.retry}
     retry-routing-key: ${HSP_ACCOUNTING_AMQP_RETRY_ROUTING_KEY:payment.success.retry.v1}
     dead-letter-exchange: ${HSP_ACCOUNTING_AMQP_DEAD_LETTER_EXCHANGE:payment.trade.dlq}
     dead-letter-routing-key: ${HSP_ACCOUNTING_AMQP_DEAD_LETTER_ROUTING_KEY:payment.success.dlq.v1}
+    clearing-generated-retry-exchange: ${HSP_ACCOUNTING_AMQP_CLEARING_GENERATED_RETRY_EXCHANGE:clearing.trade.retry}
+    clearing-generated-retry-routing-key: ${HSP_ACCOUNTING_AMQP_CLEARING_GENERATED_RETRY_ROUTING_KEY:clearing.generated.retry.v1}
+    clearing-generated-dead-letter-exchange: ${HSP_ACCOUNTING_AMQP_CLEARING_GENERATED_DEAD_LETTER_EXCHANGE:clearing.trade.dlq}
+    clearing-generated-dead-letter-routing-key: ${HSP_ACCOUNTING_AMQP_CLEARING_GENERATED_DEAD_LETTER_ROUTING_KEY:clearing.generated.dlq.v1}
     max-retry-count: ${HSP_ACCOUNTING_AMQP_MAX_RETRY_COUNT:3}
