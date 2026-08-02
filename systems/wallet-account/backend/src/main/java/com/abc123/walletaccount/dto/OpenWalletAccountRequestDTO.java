@@ -31,6 +31,8 @@ public class OpenWalletAccountRequestDTO {
     private String riskLevel = "LOW";
     /** 操作人编号。 */
     private String operatorId = "system";
+    /** 操作人角色。 */
+    private String operatorRole = "FUNDS";
     /** 操作人名称。 */
     private String operatorName = "system";
 }

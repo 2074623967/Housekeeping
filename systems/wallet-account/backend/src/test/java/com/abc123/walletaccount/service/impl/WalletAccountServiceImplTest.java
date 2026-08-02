@@ -39,6 +39,7 @@ class WalletAccountServiceImplTest {
         WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
         WalletAccountStatusChangeRequestDTO requestDTO = new WalletAccountStatusChangeRequestDTO();
         requestDTO.setTargetStatus("CLOSED");
+        requestDTO.setOperatorRole("FUNDS");
         when(dao.findAccountByNo("WA-USER-001"))
                 .thenReturn(createAccount("WA-USER-001", "ACTIVE", "20.00", "5.00", "0.00", "0.00"));
 
@@ -54,6 +55,7 @@ class WalletAccountServiceImplTest {
         WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
         WalletAccountStatusChangeRequestDTO requestDTO = new WalletAccountStatusChangeRequestDTO();
         requestDTO.setTargetStatus("FROZEN");
+        requestDTO.setOperatorRole("FUNDS");
         WalletAccountEntity active = createAccount("WA-USER-001", "ACTIVE", "0.00", "0.00", "0.00", "0.00");
         WalletAccountEntity frozen = createAccount("WA-USER-001", "FROZEN", "0.00", "0.00", "0.00", "0.00");
         when(dao.findAccountByNo("WA-USER-001")).thenReturn(active, frozen);
@@ -102,10 +104,35 @@ class WalletAccountServiceImplTest {
         WalletFlowExportRequestDTO requestDTO = new WalletFlowExportRequestDTO();
         requestDTO.setWalletAccountNo("WA-USER-001");
         requestDTO.setOperatorId("operator-001");
+        requestDTO.setOperatorRole("FINANCE");
         requestDTO.setOperatorName("测试人员");
 
         assertEquals("ACCEPTED", service.exportFlows(requestDTO).getTaskStatus());
         verify(dao).insertExportTask(any());
+    }
+
+    @Test
+    void shouldRejectOpenAccountWhenOperatorRoleIsNotFunds() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        OpenWalletAccountRequestDTO requestDTO = createOpenRequest();
+        requestDTO.setOperatorRole("OPERATIONS");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.openAccount(requestDTO));
+
+        assertEquals("WALLET_ACCOUNT_PERMISSION_DENIED", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectFlowExportWhenOperatorRoleIsNotFinanceOrFunds() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        WalletFlowExportRequestDTO requestDTO = new WalletFlowExportRequestDTO();
+        requestDTO.setOperatorRole("PRODUCT");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.exportFlows(requestDTO));
+
+        assertEquals("WALLET_ACCOUNT_EXPORT_FORBIDDEN", exception.getCode());
     }
 
     private OpenWalletAccountRequestDTO createOpenRequest() {
@@ -117,6 +144,7 @@ class WalletAccountServiceImplTest {
         requestDTO.setAccountType("MAIN");
         requestDTO.setAccountScene("USER_STORE");
         requestDTO.setOperatorId("tester");
+        requestDTO.setOperatorRole("FUNDS");
         requestDTO.setOperatorName("测试人员");
         return requestDTO;
     }

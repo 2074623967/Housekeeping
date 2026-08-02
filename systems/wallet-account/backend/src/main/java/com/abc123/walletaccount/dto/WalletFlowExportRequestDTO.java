@@ -13,6 +13,8 @@ public class WalletFlowExportRequestDTO {
     private String sourceBizNo;
     /** 导出操作人编号。 */
     private String operatorId;
+    /** 导出操作人角色。 */
+    private String operatorRole;
     /** 导出操作人名称。 */
     private String operatorName;
 }

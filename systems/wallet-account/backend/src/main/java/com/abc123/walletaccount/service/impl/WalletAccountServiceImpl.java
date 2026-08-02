@@ -34,6 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WalletAccountServiceImpl implements WalletAccountService {
 
+    private static final String ROLE_FUNDS = "FUNDS";
+    private static final String ROLE_FINANCE = "FINANCE";
+
     private final WalletAccountDao walletAccountDao;
 
     public WalletAccountServiceImpl(WalletAccountDao walletAccountDao) {
@@ -107,6 +110,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
 
     @Override
     public WalletFlowExportTaskDTO exportFlows(WalletFlowExportRequestDTO requestDTO) {
+        validateFlowExportPermission(requestDTO);
         WalletFlowExportTaskDTO taskDTO = new WalletFlowExportTaskDTO();
         taskDTO.setExportTaskNo("WFE-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
         taskDTO.setTaskStatus("ACCEPTED");
@@ -128,6 +132,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
     @Transactional
     public WalletAccountDTO openAccount(OpenWalletAccountRequestDTO requestDTO) {
         validateOpenRequest(requestDTO);
+        validateFundsPermission(requestDTO.getOperatorRole(), "手工开户");
         WalletAccountDTO idempotentAccount = getIdempotentAccount(requestDTO.getRequestNo());
         if (idempotentAccount != null) {
             return idempotentAccount;
@@ -214,6 +219,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         if (requestDTO == null || requestDTO.getTargetStatus() == null || requestDTO.getTargetStatus().trim().isEmpty()) {
             throw new IllegalArgumentException("目标状态不能为空");
         }
+        validateFundsPermission(requestDTO.getOperatorRole(), "账户状态变更");
         String currentStatus = entity.getAccountStatus();
         String targetStatus = requestDTO.getTargetStatus();
         validateStatusChange(entity, targetStatus);
@@ -276,6 +282,24 @@ public class WalletAccountServiceImpl implements WalletAccountService {
             return;
         }
         throw new BusinessException("WALLET_ACCOUNT_STATUS_INVALID", "非法状态流转: " + currentStatus + " -> " + targetStatus);
+    }
+
+    private void validateFlowExportPermission(WalletFlowExportRequestDTO requestDTO) {
+        if (requestDTO == null) {
+            throw new IllegalArgumentException("导出请求不能为空");
+        }
+        String operatorRole = requestDTO.getOperatorRole();
+        if (ROLE_FUNDS.equalsIgnoreCase(operatorRole) || ROLE_FINANCE.equalsIgnoreCase(operatorRole)) {
+            return;
+        }
+        throw new BusinessException("WALLET_ACCOUNT_EXPORT_FORBIDDEN", "当前角色无权导出钱包流水");
+    }
+
+    private void validateFundsPermission(String operatorRole, String actionName) {
+        if (ROLE_FUNDS.equalsIgnoreCase(operatorRole)) {
+            return;
+        }
+        throw new BusinessException("WALLET_ACCOUNT_PERMISSION_DENIED", actionName + "仅允许资金角色操作");
     }
 
     private boolean hasNonZeroBalance(WalletAccountEntity entity) {

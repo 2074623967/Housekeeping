@@ -9,6 +9,8 @@ public class WalletAccountStatusChangeRequestDTO {
     private String targetStatus;
     /** 操作人编号。 */
     private String operatorId;
+    /** 操作人角色。 */
+    private String operatorRole;
     /** 操作人名称。 */
     private String operatorName;
     /** 状态变更原因。 */
