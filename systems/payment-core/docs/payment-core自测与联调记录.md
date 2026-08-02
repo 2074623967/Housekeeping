@@ -338,6 +338,33 @@
 2. 至少在账务支付成功事件这一条样本上，补偿任务重放不会打坏下游已消费事实。
 3. 后续仍需继续核对 clearing / accounting 其余历史演练任务，并补最终结案说明。
 
+### 99.7 2026-08-02 历史演练任务全量收口
+
+本轮继续处理剩余 3 条历史演练任务，处理策略如下：
+
+1. 对合法 JSON 报文的 clearing 死信任务执行“复核 -> 重放”
+2. 对非法演练报文执行“保留原始 DLQ 审计副本，不重放，人工结案”
+
+处理结果：
+
+| taskNo | messageId | routingKey | 最终状态 | 处理说明 |
+| --- | --- | --- | --- | --- |
+| `DLQ51febd7de1a446e4ac4b` | `DRILL-INTAKE-RETRY-20260802130829` | `payment.success.clearing.dlq.v1` | `REPLAYED` | 已完成 clearing 演练死信复核与重放，`replay_count = 1` |
+| `DLQ7d62fb24b6be4c508db6` | `DRILL-DLQ-REPLAY-20260801-001` | `payment.success.accounting.dlq.v1` | `REPLAYED` | 已完成 accounting 演练死信复核与重放，`replay_count = 1` |
+| `DLQ7afb962a1c0642d483ae` | `DRILL-DLQ-TASK-20260801-001` | `payment.success.accounting.dlq.v1` | `MANUAL_RESOLVED` | 非法演练报文，仅保留原始 DLQ 审计副本，人工结案 |
+| `DLQd60e97458069401b8a5b` | `DRILL-DLQ-TASK-20260801-001` | `payment.success.clearing.dlq.v1` | `MANUAL_RESOLVED` | 非法演练报文，仅保留原始 DLQ 审计副本，人工结案 |
+
+补充核对：
+
+1. `PAY-REPLAY-DRILL-20260801-001` 在账务系统查询仍为“已消费”，说明账务重放未破坏幂等。
+2. `PAY-INTAKE-DRILL-20260802-002` 在清分系统查询已生成 `PAYMENT_SUCCESS` 消费事件，说明 clearing 重放已生效。
+3. `payment-core` 补偿任务列表接口与数据库状态一致，4 条演练任务均已收口。
+
+结论：
+
+1. 当前已经完成一轮“演练死信台账建立 -> 可重放任务真实重放 -> 非法报文人工结案”的全量样本收口。
+2. 这意味着 `payment-core` 在补偿任务管理维度已经不再停留在概念设计或单元测试阶段，而是具备真实运行证据。
+
 ### 28.1 本轮验证结论
 
 本轮围绕支付配置中心中的“支付网关接入管理”继续正式化，确认后台已从“网关基础参数展示”升级为“接入治理台账展示”。
