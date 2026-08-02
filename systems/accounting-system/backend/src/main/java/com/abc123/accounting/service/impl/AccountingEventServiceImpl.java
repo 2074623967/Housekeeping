@@ -41,6 +41,10 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     @Override
     public AccountEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("PAYMENT_SUCCESS", request.getPaymentOrderId());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "PAYMENT_SUCCESS_EVENT", request.getPaymentOrderId())) {
             accountingMemoryStore.credit(
                     request.getAccountNo(),
@@ -58,6 +62,10 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     @Override
     public AccountEventDTO consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("CLEARING_GENERATED", request.getClearingOrderNo());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "CLEARING_GENERATED_EVENT", request.getClearingOrderNo())) {
             accountingMemoryStore.credit(
                     request.getAccountNo(),
@@ -71,5 +79,17 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 request.getClearingOrderNo(),
                 request.getSummary(),
                 "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}"));
+    }
+
+    /**
+     * 先按事件台账做幂等收口，兼容历史演练或旧版本留下“有事件、无流水”的数据形态。
+     */
+    private AccountEventDTO findExistingEvent(String eventType, String bizNo) {
+        if (bizNo == null || bizNo.trim().isEmpty()) {
+            return null;
+        }
+        com.abc123.accounting.entity.AccountEventEntity existingEvent =
+                accountingMemoryStore.findEvent(eventType, bizNo);
+        return existingEvent == null ? null : accountingMapper.toEventDTO(existingEvent);
     }
 }

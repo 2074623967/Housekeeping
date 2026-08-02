@@ -25,6 +25,9 @@ class AccountingEventServiceImplTest {
     @Autowired
     private BalanceServiceImpl balanceService;
 
+    @Autowired
+    private AccountingMemoryStore accountingMemoryStore;
+
     @Test
     void shouldCreditBalanceWhenPaymentSuccessEventConsumed() {
         PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
@@ -57,6 +60,30 @@ class AccountingEventServiceImplTest {
 
         assertEquals(first.getEventNo(), second.getEventNo());
         assertEquals("¥120.00", balance.getAvailableAmount());
+        assertEquals(1, events.getTotal());
+    }
+
+    @Test
+    void shouldNotCreditAgainWhenHistoricalEventAlreadyExistsWithoutLedger() {
+        PaymentSuccessEventRequestDTO request = new PaymentSuccessEventRequestDTO();
+        request.setAccountNo("ACT10001");
+        request.setPaymentOrderId("PAY202608020001");
+        request.setOrderNo("ORD202608020001");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("20.00"));
+
+        accountingMemoryStore.recordEvent(
+                "PAYMENT_SUCCESS",
+                "PAY202608020001",
+                "历史演练已消费事件",
+                "{\"orderNo\":\"ORD202608020001\",\"amount\":20.00}");
+
+        AccountEventDTO result = eventService.consumePaymentSuccess(request);
+        BalanceSnapshotDTO balance = balanceService.detail("ACT10001");
+        PageResultDTO<AccountEventDTO> events = eventService.list("PAYMENT_SUCCESS", "PAY202608020001", 1, 20);
+
+        assertEquals("PAYMENT_SUCCESS", result.getEventType());
+        assertEquals("¥100.00", balance.getAvailableAmount());
         assertEquals(1, events.getTotal());
     }
 }
