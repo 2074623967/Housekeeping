@@ -8,15 +8,9 @@ CREATE TABLE IF NOT EXISTS t_wallet_owner (
     tenant_code VARCHAR(64) COMMENT '租户编码',
     ext_ref_no VARCHAR(64) COMMENT '外部主体编号',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wallet_owner_id ON t_wallet_owner(wallet_owner_id);
-COMMENT ON TABLE t_wallet_owner IS '钱包主体表';
-COMMENT ON COLUMN t_wallet_owner.wallet_owner_id IS '钱包主体编号';
-COMMENT ON COLUMN t_wallet_owner.owner_type IS '主体类型';
-COMMENT ON COLUMN t_wallet_owner.owner_name IS '主体名称';
-COMMENT ON COLUMN t_wallet_owner.owner_status IS '主体状态';
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uk_wallet_owner_id (wallet_owner_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包主体表';
 
 CREATE TABLE IF NOT EXISTS t_wallet_account (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
@@ -38,21 +32,11 @@ CREATE TABLE IF NOT EXISTS t_wallet_account (
     opened_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '开户时间',
     closed_at TIMESTAMP NULL COMMENT '销户时间',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wallet_account_no ON t_wallet_account(wallet_account_no);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wallet_account_owner_type_scene
-    ON t_wallet_account(wallet_owner_id, account_type, account_scene);
-COMMENT ON TABLE t_wallet_account IS '钱包账户表';
-COMMENT ON COLUMN t_wallet_account.wallet_account_no IS '钱包账户编号';
-COMMENT ON COLUMN t_wallet_account.wallet_owner_id IS '钱包主体编号';
-COMMENT ON COLUMN t_wallet_account.account_type IS '账户类型';
-COMMENT ON COLUMN t_wallet_account.account_scene IS '账户场景';
-COMMENT ON COLUMN t_wallet_account.account_status IS '账户状态';
-COMMENT ON COLUMN t_wallet_account.total_balance IS '总余额';
-COMMENT ON COLUMN t_wallet_account.available_balance IS '可用余额';
-COMMENT ON COLUMN t_wallet_account.frozen_balance IS '冻结余额';
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uk_wallet_account_no (wallet_account_no),
+    UNIQUE KEY uk_wallet_account_owner_type_scene (wallet_owner_id, account_type, account_scene),
+    KEY idx_wallet_account_status (account_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包账户表';
 
 CREATE TABLE IF NOT EXISTS t_wallet_flow (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
@@ -65,20 +49,14 @@ CREATE TABLE IF NOT EXISTS t_wallet_flow (
     change_amount DECIMAL(18, 2) NOT NULL COMMENT '变更金额',
     before_available_balance DECIMAL(18, 2) NOT NULL COMMENT '变更前可用余额',
     after_available_balance DECIMAL(18, 2) NOT NULL COMMENT '变更后可用余额',
-    operator_name VARCHAR(64) NOT NULL COMMENT '操作人',
+    operator_name VARCHAR(64) NOT NULL COMMENT '操作人名称',
     operation_reason VARCHAR(255) NOT NULL COMMENT '操作原因',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wallet_flow_no ON t_wallet_flow(flow_no);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wallet_flow_idempotency_key ON t_wallet_flow(idempotency_key);
-CREATE INDEX IF NOT EXISTS idx_wallet_flow_account_created ON t_wallet_flow(wallet_account_no, created_at DESC);
-COMMENT ON TABLE t_wallet_flow IS '钱包流水表';
-COMMENT ON COLUMN t_wallet_flow.flow_no IS '钱包流水编号';
-COMMENT ON COLUMN t_wallet_flow.wallet_account_no IS '钱包账户编号';
-COMMENT ON COLUMN t_wallet_flow.source_system IS '来源系统';
-COMMENT ON COLUMN t_wallet_flow.source_biz_no IS '来源业务单号';
-COMMENT ON COLUMN t_wallet_flow.idempotency_key IS '幂等键';
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    UNIQUE KEY uk_wallet_flow_no (flow_no),
+    UNIQUE KEY uk_wallet_flow_idempotency_key (idempotency_key),
+    KEY idx_wallet_flow_account_created (wallet_account_no, created_at DESC),
+    KEY idx_wallet_flow_source_biz (source_system, source_biz_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包流水表';
 
 CREATE TABLE IF NOT EXISTS t_wallet_balance (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
@@ -90,15 +68,9 @@ CREATE TABLE IF NOT EXISTS t_wallet_balance (
     pending_out_balance DECIMAL(18, 2) NOT NULL DEFAULT 0 COMMENT '在途出账金额',
     version_no BIGINT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间'
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uk_wallet_balance_account_no ON t_wallet_balance(wallet_account_no);
-COMMENT ON TABLE t_wallet_balance IS '钱包余额表';
-COMMENT ON COLUMN t_wallet_balance.wallet_account_no IS '钱包账户编号';
-COMMENT ON COLUMN t_wallet_balance.total_balance IS '总余额';
-COMMENT ON COLUMN t_wallet_balance.available_balance IS '可用余额';
-COMMENT ON COLUMN t_wallet_balance.frozen_balance IS '冻结余额';
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uk_wallet_balance_account_no (wallet_account_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包余额表';
 
 CREATE TABLE IF NOT EXISTS t_wallet_account_status_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
@@ -109,12 +81,6 @@ CREATE TABLE IF NOT EXISTS t_wallet_account_status_log (
     reason_desc VARCHAR(255) COMMENT '变更原因说明',
     operator_id VARCHAR(64) COMMENT '操作人编号',
     operator_name VARCHAR(64) NOT NULL COMMENT '操作人名称',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
-);
-
-CREATE INDEX IF NOT EXISTS idx_wallet_status_log_account_created
-    ON t_wallet_account_status_log(wallet_account_no, created_at DESC);
-COMMENT ON TABLE t_wallet_account_status_log IS '钱包账户状态变更日志表';
-COMMENT ON COLUMN t_wallet_account_status_log.wallet_account_no IS '钱包账户编号';
-COMMENT ON COLUMN t_wallet_account_status_log.before_status IS '变更前状态';
-COMMENT ON COLUMN t_wallet_account_status_log.after_status IS '变更后状态';
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    KEY idx_wallet_status_log_account_created (wallet_account_no, created_at DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包账户状态变更日志表';
