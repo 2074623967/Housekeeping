@@ -5,10 +5,13 @@ import { exportWalletFlows, fetchWalletFlows } from "../api";
 const query = reactive({
   walletAccountNo: "",
   sourceSystem: "",
-  sourceBizNo: ""
+  sourceBizNo: "",
+  pageNo: 1,
+  pageSize: 20
 });
 
 const flows = ref([]);
+const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref("");
 const exportMessage = ref("");
@@ -18,7 +21,9 @@ async function loadFlows() {
   loading.value = true;
   errorMessage.value = "";
   try {
-    flows.value = await fetchWalletFlows(query);
+    const result = await fetchWalletFlows(query);
+    flows.value = result.records || [];
+    total.value = result.total || 0;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -63,6 +68,7 @@ onMounted(() => {
         </button>
       </div>
       <p v-if="exportMessage" class="action-message">{{ exportMessage }}</p>
+      <p class="muted">共 {{ total }} 条流水，当前第 {{ query.pageNo }} 页</p>
       <p v-if="loading" class="muted">流水加载中...</p>
       <p v-else-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       <div class="table-wrap">
@@ -92,6 +98,14 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="toolbar">
+        <button class="button button--light" :disabled="query.pageNo <= 1 || loading" @click="query.pageNo -= 1; loadFlows()">
+          上一页
+        </button>
+        <button class="button button--light" :disabled="loading || query.pageNo * query.pageSize >= total" @click="query.pageNo += 1; loadFlows()">
+          下一页
+        </button>
       </div>
     </div>
   </section>

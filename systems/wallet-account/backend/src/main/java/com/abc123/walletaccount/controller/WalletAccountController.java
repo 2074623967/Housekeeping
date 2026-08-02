@@ -68,7 +68,7 @@ public class WalletAccountController {
     }
 
     @GetMapping("/flows")
-    public ApiResponse<List<WalletFlowDTO>> listFlows(WalletFlowQueryDTO queryDTO) {
+    public ApiResponse<PageResultDTO<WalletFlowDTO>> listFlows(WalletFlowQueryDTO queryDTO) {
         return ApiResponse.success(walletAccountService.listFlows(queryDTO));
     }
 

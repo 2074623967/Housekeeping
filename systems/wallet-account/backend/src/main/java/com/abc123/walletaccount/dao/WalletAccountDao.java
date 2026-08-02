@@ -29,7 +29,10 @@ public interface WalletAccountDao {
 
     List<WalletAccountEntity> listBalancesByAccountNos(List<String> walletAccountNos);
 
-    List<WalletFlowEntity> listFlows(String walletAccountNo, String sourceSystem, String sourceBizNo);
+    long countFlows(String walletAccountNo, String sourceSystem, String sourceBizNo);
+
+    List<WalletFlowEntity> listFlows(String walletAccountNo, String sourceSystem, String sourceBizNo,
+            int offset, int limit);
 
     List<WalletFlowEntity> listRecentFlowsByAccountNo(String walletAccountNo, int limit);
 

@@ -126,6 +126,22 @@
         ORDER BY created_at DESC
     </select>
 
+    <select id="countFlows" resultType="long">
+        SELECT COUNT(1)
+        FROM t_wallet_flow
+        <where>
+            <if test="walletAccountNo != null and walletAccountNo != ''">
+                AND wallet_account_no = #{walletAccountNo}
+            </if>
+            <if test="sourceSystem != null and sourceSystem != ''">
+                AND source_system = #{sourceSystem}
+            </if>
+            <if test="sourceBizNo != null and sourceBizNo != ''">
+                AND source_biz_no = #{sourceBizNo}
+            </if>
+        </where>
+    </select>
+
     <select id="listFlows" resultMap="walletFlowMap">
         SELECT *
         FROM t_wallet_flow
@@ -141,6 +157,7 @@
             </if>
         </where>
         ORDER BY created_at DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <select id="listRecentFlowsByAccountNo" resultMap="walletFlowMap">

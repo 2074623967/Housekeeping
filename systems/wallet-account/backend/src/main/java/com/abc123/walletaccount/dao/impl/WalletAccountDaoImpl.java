@@ -53,8 +53,14 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     }
 
     @Override
-    public List<WalletFlowEntity> listFlows(String walletAccountNo, String sourceSystem, String sourceBizNo) {
-        return walletAccountMapper.listFlows(walletAccountNo, sourceSystem, sourceBizNo);
+    public long countFlows(String walletAccountNo, String sourceSystem, String sourceBizNo) {
+        return walletAccountMapper.countFlows(walletAccountNo, sourceSystem, sourceBizNo);
+    }
+
+    @Override
+    public List<WalletFlowEntity> listFlows(String walletAccountNo, String sourceSystem, String sourceBizNo,
+            int offset, int limit) {
+        return walletAccountMapper.listFlows(walletAccountNo, sourceSystem, sourceBizNo, offset, limit);
     }
 
     @Override

@@ -23,7 +23,7 @@ public interface WalletAccountService {
 
     List<WalletBalanceDTO> listBalances(List<String> walletAccountNos);
 
-    List<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO);
+    PageResultDTO<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO);
 
     WalletFlowExportTaskDTO exportFlows(WalletFlowExportRequestDTO requestDTO);
 

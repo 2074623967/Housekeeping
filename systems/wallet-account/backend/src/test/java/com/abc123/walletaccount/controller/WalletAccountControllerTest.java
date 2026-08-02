@@ -13,6 +13,7 @@ import com.abc123.walletaccount.dto.PageResultDTO;
 import com.abc123.walletaccount.dto.WalletAccountDTO;
 import com.abc123.walletaccount.dto.WalletAccountDetailDTO;
 import com.abc123.walletaccount.dto.WalletBalanceDTO;
+import com.abc123.walletaccount.dto.WalletFlowDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
@@ -88,5 +89,20 @@ class WalletAccountControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.exportTaskNo").value("WFE-001"))
                 .andExpect(jsonPath("$.data.taskStatus").value("ACCEPTED"));
+    }
+
+    @Test
+    void shouldReturnPagedFlows() throws Exception {
+        PageResultDTO<WalletFlowDTO> resultDTO = new PageResultDTO<WalletFlowDTO>();
+        WalletFlowDTO flowDTO = new WalletFlowDTO();
+        flowDTO.setFlowNo("WF-001");
+        resultDTO.setTotal(1L);
+        resultDTO.setRecords(Collections.singletonList(flowDTO));
+        when(walletAccountService.listFlows(any())).thenReturn(resultDTO);
+
+        mockMvc.perform(get("/api/wallet/flows?pageNo=1&pageSize=20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].flowNo").value("WF-001"));
     }
 }

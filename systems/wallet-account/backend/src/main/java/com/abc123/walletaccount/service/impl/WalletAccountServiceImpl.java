@@ -88,11 +88,19 @@ public class WalletAccountServiceImpl implements WalletAccountService {
     }
 
     @Override
-    public List<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO) {
-        return walletAccountDao.listFlows(queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo())
+    public PageResultDTO<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO) {
+        int pageNo = queryDTO.getPageNo() == null || queryDTO.getPageNo() < 1 ? 1 : queryDTO.getPageNo();
+        int pageSize = queryDTO.getPageSize() == null || queryDTO.getPageSize() < 1 ? 20 : queryDTO.getPageSize();
+        int offset = (pageNo - 1) * pageSize;
+        PageResultDTO<WalletFlowDTO> pageResultDTO = new PageResultDTO<WalletFlowDTO>();
+        pageResultDTO.setTotal(walletAccountDao.countFlows(
+                queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo()));
+        pageResultDTO.setRecords(walletAccountDao.listFlows(
+                queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo(), offset, pageSize)
                 .stream()
                 .map(this::toFlowDTO)
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()));
+        return pageResultDTO;
     }
 
     @Override

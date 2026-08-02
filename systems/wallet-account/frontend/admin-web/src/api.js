@@ -53,6 +53,8 @@ export async function fetchWalletFlows(params) {
   if (params.sourceBizNo) {
     query.set("sourceBizNo", params.sourceBizNo);
   }
+  query.set("pageNo", String(params.pageNo || 1));
+  query.set("pageSize", String(params.pageSize || 20));
   return request(`/api/wallet/flows?${query.toString()}`);
 }
 

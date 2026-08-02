@@ -33,9 +33,15 @@ public interface WalletAccountMapper {
 
     List<WalletAccountEntity> listBalancesByAccountNos(@Param("walletAccountNos") List<String> walletAccountNos);
 
-    List<WalletFlowEntity> listFlows(@Param("walletAccountNo") String walletAccountNo,
+    long countFlows(@Param("walletAccountNo") String walletAccountNo,
             @Param("sourceSystem") String sourceSystem,
             @Param("sourceBizNo") String sourceBizNo);
+
+    List<WalletFlowEntity> listFlows(@Param("walletAccountNo") String walletAccountNo,
+            @Param("sourceSystem") String sourceSystem,
+            @Param("sourceBizNo") String sourceBizNo,
+            @Param("offset") int offset,
+            @Param("limit") int limit);
 
     List<WalletFlowEntity> listRecentFlowsByAccountNo(@Param("walletAccountNo") String walletAccountNo,
             @Param("limit") int limit);

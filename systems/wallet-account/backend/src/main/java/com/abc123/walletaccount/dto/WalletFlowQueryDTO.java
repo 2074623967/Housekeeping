@@ -11,4 +11,8 @@ public class WalletFlowQueryDTO {
     private String sourceSystem;
     /** 来源业务单号。 */
     private String sourceBizNo;
+    /** 页码，从 1 开始。 */
+    private Integer pageNo = 1;
+    /** 每页条数。 */
+    private Integer pageSize = 20;
 }
