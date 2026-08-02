@@ -158,7 +158,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         flowEntity.setOperationReason("账户开户");
         walletAccountDao.insertFlow(flowEntity);
         recordStatusLog(accountEntity.getWalletAccountNo(), null, "INIT", "OPEN_ACCOUNT", "账户开户",
-                requestDTO.getOperatorName(), requestDTO.getOperatorName());
+                requestDTO.getOperatorId(), requestDTO.getOperatorName());
         return toAccountDTO(walletAccountDao.findAccountByNo(accountEntity.getWalletAccountNo()));
     }
 

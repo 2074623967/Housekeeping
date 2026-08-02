@@ -69,6 +69,8 @@ class WalletAccountServiceImplTest {
         requestDTO.setOwnerName("新用户");
         requestDTO.setAccountType("MAIN");
         requestDTO.setAccountScene("USER_STORE");
+        requestDTO.setOperatorId("tester");
+        requestDTO.setOperatorName("测试人员");
         return requestDTO;
     }
 

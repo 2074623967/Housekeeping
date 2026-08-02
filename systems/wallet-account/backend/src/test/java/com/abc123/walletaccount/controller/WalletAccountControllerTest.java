@@ -70,7 +70,7 @@ class WalletAccountControllerTest {
 
         mockMvc.perform(post("/api/wallet/accounts")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"requestNo\":\"REQ-001\",\"walletOwnerId\":\"WO-001\",\"ownerType\":\"USER\",\"ownerName\":\"测试用户\",\"accountType\":\"MAIN\",\"accountScene\":\"USER_STORE\"}"))
+                        .content("{\"requestNo\":\"REQ-001\",\"walletOwnerId\":\"WO-001\",\"ownerType\":\"USER\",\"ownerName\":\"测试用户\",\"accountType\":\"MAIN\",\"accountScene\":\"USER_STORE\",\"operatorId\":\"tester\",\"operatorName\":\"测试人员\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.walletAccountNo").value("WA-NEW-001"));
     }

@@ -29,6 +29,8 @@ public class OpenWalletAccountRequestDTO {
     private Boolean allowCredit = Boolean.FALSE;
     /** 风险等级，默认 LOW。 */
     private String riskLevel = "LOW";
+    /** 操作人编号。 */
+    private String operatorId = "system";
     /** 操作人名称。 */
     private String operatorName = "system";
 }
