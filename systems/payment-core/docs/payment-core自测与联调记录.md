@@ -259,6 +259,62 @@
 
 ## 28. 2026-07-21 支付网关接入治理增强验证
 
+## 99. 2026-08-02 payment-core DLQ intake 真实运行验证
+
+### 99.1 验证背景
+
+本轮目标是把 `payment.trade.dlq -> payment.compensation.dlq-intake -> t_payment_dead_letter_task` 这条死信补偿入账链路从“单元测试通过”推进到“真实 RabbitMQ + MySQL 运行验证通过”。
+
+### 99.2 本轮环境事实
+
+| 项目 | 结果 |
+| --- | --- |
+| payment-core 新进程 | `127.0.0.1:18080` 启动成功 |
+| MySQL | `127.0.0.1:3306 / housekeeping_payment_core` 连接成功 |
+| RabbitMQ | `127.0.0.1:5672` 连接成功 |
+| 旧 payment-core 进程 | 发现一条监听 `8080` 且连接 `3307` 的旧进程，会抢占 intake 消息 |
+
+### 99.3 本轮排查与修复
+
+1. 初次投递新的演练 DLQ 消息后，`payment.compensation.dlq-intake` 队列被消费，但 `t_payment_dead_letter_task` 仍为 `0` 条。
+2. 排查 RabbitMQ 消费者列表发现 intake 队列存在 `2` 个消费者。
+3. 继续核对端口与进程后，确认旧 `payment-core` 进程监听 `8080`、连接旧库 `3307`，它与当前新进程同时消费 intake 队列。
+4. 停掉旧 `payment-core` 进程后，intake 队列消费者收敛为当前新进程 `1` 个。
+5. 重新投递新的演练 DLQ 消息后，补偿任务成功写入 `t_payment_dead_letter_task`。
+
+结论：
+
+1. 之前“消息被消费但未落库”的根因是旧进程抢消息，不是当前代码实现缺陷。
+2. 当前新进程对应的死信补偿入账逻辑在真实环境下可用。
+
+### 99.4 新增真实入账证据
+
+本轮新增演练消息：
+
+| message_id | routing_key | target_system | task_status | 结果 |
+| --- | --- | --- | --- | --- |
+| `DRILL-INTAKE-RETRY-20260802130829` | `payment.success.clearing.dlq.v1` | `clearing-system` | `PENDING_REVIEW` | 已写入补偿任务账本 |
+
+本轮补录历史演练副本：
+
+| message_id | routing_key | target_system | task_status | 说明 |
+| --- | --- | --- | --- | --- |
+| `DRILL-DLQ-TASK-20260801-001` | `payment.success.clearing.dlq.v1` | `clearing-system` | `PENDING_REVIEW` | 原始 DLQ 队列消息保留，仅补录账本 |
+| `DRILL-DLQ-TASK-20260801-001` | `payment.success.accounting.dlq.v1` | `accounting-system` | `PENDING_REVIEW` | 原始 DLQ 队列消息保留，仅补录账本 |
+| `DRILL-DLQ-REPLAY-20260801-001` | `payment.success.accounting.dlq.v1` | `accounting-system` | `PENDING_REVIEW` | 原始 DLQ 队列消息保留，仅补录账本 |
+
+截至本轮核对，`t_payment_dead_letter_task` 共存在 `4` 条演练补偿任务记录。
+
+### 99.5 本轮门禁结论
+
+1. `payment-core` 已完成 DLQ intake 到补偿任务账本的真实运行验证。
+2. 当前已关闭“没有补偿账本”和“intake 未验证”的门禁缺口。
+3. 下一步还需继续完成：
+   - 人工复核
+   - 定向重放
+   - 下游事实核对
+   - 人工结案或重放成功结案
+
 ### 28.1 本轮验证结论
 
 本轮围绕支付配置中心中的“支付网关接入管理”继续正式化，确认后台已从“网关基础参数展示”升级为“接入治理台账展示”。
