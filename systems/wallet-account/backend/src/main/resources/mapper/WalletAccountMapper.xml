@@ -54,6 +54,18 @@
         <result property="extRefNo" column="ext_ref_no"/>
     </resultMap>
 
+    <resultMap id="walletStatusLogMap" type="com.abc123.walletaccount.entity.WalletAccountStatusLogEntity">
+        <id property="id" column="id"/>
+        <result property="walletAccountNo" column="wallet_account_no"/>
+        <result property="beforeStatus" column="before_status"/>
+        <result property="afterStatus" column="after_status"/>
+        <result property="reasonCode" column="reason_code"/>
+        <result property="reasonDesc" column="reason_desc"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
     <select id="countAccounts" resultType="long">
         SELECT COUNT(1)
         FROM t_wallet_account
@@ -139,6 +151,14 @@
         LIMIT #{limit}
     </select>
 
+    <select id="listStatusLogsByAccountNo" resultMap="walletStatusLogMap">
+        SELECT *
+        FROM t_wallet_account_status_log
+        WHERE wallet_account_no = #{walletAccountNo}
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
     <insert id="insertOwner">
         INSERT INTO t_wallet_owner(wallet_owner_id, owner_type, owner_name, owner_status, biz_line_code, tenant_code, ext_ref_no)
         VALUES(#{walletOwnerId}, #{ownerType}, #{ownerName}, #{ownerStatus}, #{bizLineCode}, #{tenantCode}, #{extRefNo})
@@ -156,6 +176,16 @@
         )
     </insert>
 
+    <insert id="insertBalance">
+        INSERT INTO t_wallet_balance(
+            wallet_account_no, total_balance, available_balance, frozen_balance, pending_in_balance,
+            pending_out_balance, version_no
+        ) VALUES (
+            #{walletAccountNo}, #{totalBalance}, #{availableBalance}, #{frozenBalance}, #{pendingInBalance},
+            #{pendingOutBalance}, 0
+        )
+    </insert>
+
     <insert id="insertFlow">
         INSERT INTO t_wallet_flow(
             flow_no, wallet_account_no, flow_type, source_system, source_biz_no, idempotency_key,
@@ -166,12 +196,21 @@
         )
     </insert>
 
+    <insert id="insertStatusLog">
+        INSERT INTO t_wallet_account_status_log(
+            wallet_account_no, before_status, after_status, reason_code, reason_desc, operator_id, operator_name
+        ) VALUES (
+            #{walletAccountNo}, #{beforeStatus}, #{afterStatus}, #{reasonCode}, #{reasonDesc}, #{operatorId}, #{operatorName}
+        )
+    </insert>
+
     <update id="updateAccountStatus">
         UPDATE t_wallet_account
         SET account_status = #{accountStatus},
             closed_at = #{closedAt},
             updated_at = CURRENT_TIMESTAMP
         WHERE wallet_account_no = #{walletAccountNo}
+          AND account_status = #{currentStatus}
     </update>
 
 </mapper>

@@ -9,6 +9,8 @@ import com.abc123.walletaccount.dto.WalletAccountQueryDTO;
 import com.abc123.walletaccount.dto.WalletAccountStatusChangeRequestDTO;
 import com.abc123.walletaccount.dto.WalletBalanceDTO;
 import com.abc123.walletaccount.dto.WalletFlowDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
 import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.util.Arrays;
@@ -60,9 +62,19 @@ public class WalletAccountController {
         return ApiResponse.success(walletAccountService.listBalances(accountNos));
     }
 
+    @PostMapping("/accounts/balances/query")
+    public ApiResponse<List<WalletBalanceDTO>> queryBalances(@RequestBody List<String> walletAccountNos) {
+        return ApiResponse.success(walletAccountService.listBalances(walletAccountNos));
+    }
+
     @GetMapping("/flows")
     public ApiResponse<List<WalletFlowDTO>> listFlows(WalletFlowQueryDTO queryDTO) {
         return ApiResponse.success(walletAccountService.listFlows(queryDTO));
+    }
+
+    @PostMapping("/flows/export")
+    public ApiResponse<WalletFlowExportTaskDTO> exportFlows(@RequestBody WalletFlowExportRequestDTO requestDTO) {
+        return ApiResponse.success(walletAccountService.exportFlows(requestDTO));
     }
 
     @PostMapping("/accounts")

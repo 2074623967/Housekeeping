@@ -1,6 +1,7 @@
 package com.abc123.walletaccount.mapper;
 
 import com.abc123.walletaccount.entity.WalletAccountEntity;
+import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import java.time.LocalDateTime;
@@ -38,13 +39,21 @@ public interface WalletAccountMapper {
     List<WalletFlowEntity> listRecentFlowsByAccountNo(@Param("walletAccountNo") String walletAccountNo,
             @Param("limit") int limit);
 
+    List<WalletAccountStatusLogEntity> listStatusLogsByAccountNo(@Param("walletAccountNo") String walletAccountNo,
+            @Param("limit") int limit);
+
     void insertOwner(WalletOwnerEntity ownerEntity);
 
     void insertAccount(WalletAccountEntity accountEntity);
 
+    void insertBalance(WalletAccountEntity accountEntity);
+
     void insertFlow(WalletFlowEntity flowEntity);
 
-    void updateAccountStatus(@Param("walletAccountNo") String walletAccountNo,
+    void insertStatusLog(WalletAccountStatusLogEntity statusLogEntity);
+
+    int updateAccountStatus(@Param("walletAccountNo") String walletAccountNo,
+            @Param("currentStatus") String currentStatus,
             @Param("accountStatus") String accountStatus,
             @Param("closedAt") LocalDateTime closedAt);
 }

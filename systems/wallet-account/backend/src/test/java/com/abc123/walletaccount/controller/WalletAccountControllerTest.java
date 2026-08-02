@@ -13,6 +13,7 @@ import com.abc123.walletaccount.dto.PageResultDTO;
 import com.abc123.walletaccount.dto.WalletAccountDTO;
 import com.abc123.walletaccount.dto.WalletAccountDetailDTO;
 import com.abc123.walletaccount.dto.WalletBalanceDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
 import java.util.Collections;
@@ -69,8 +70,23 @@ class WalletAccountControllerTest {
 
         mockMvc.perform(post("/api/wallet/accounts")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"walletOwnerId\":\"WO-001\",\"ownerType\":\"USER\",\"ownerName\":\"测试用户\",\"accountType\":\"MAIN\",\"accountScene\":\"USER_STORE\"}"))
+                        .content("{\"requestNo\":\"REQ-001\",\"walletOwnerId\":\"WO-001\",\"ownerType\":\"USER\",\"ownerName\":\"测试用户\",\"accountType\":\"MAIN\",\"accountScene\":\"USER_STORE\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.walletAccountNo").value("WA-NEW-001"));
+    }
+
+    @Test
+    void shouldExportFlows() throws Exception {
+        WalletFlowExportTaskDTO taskDTO = new WalletFlowExportTaskDTO();
+        taskDTO.setExportTaskNo("WFE-001");
+        taskDTO.setTaskStatus("ACCEPTED");
+        when(walletAccountService.exportFlows(any())).thenReturn(taskDTO);
+
+        mockMvc.perform(post("/api/wallet/flows/export")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"walletAccountNo\":\"WA-001\",\"operatorId\":\"U-1\",\"operatorName\":\"tester\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.exportTaskNo").value("WFE-001"))
+                .andExpect(jsonPath("$.data.taskStatus").value("ACCEPTED"));
     }
 }

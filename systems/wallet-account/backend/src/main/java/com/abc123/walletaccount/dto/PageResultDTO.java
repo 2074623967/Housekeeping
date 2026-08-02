@@ -6,6 +6,8 @@ import lombok.Data;
 @Data
 public class PageResultDTO<T> {
 
+    /** 总记录数。 */
     private long total;
+    /** 当前页数据。 */
     private List<T> records;
 }

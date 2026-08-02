@@ -1,19 +1,23 @@
 package com.abc123.walletaccount.service.impl;
 
 import com.abc123.walletaccount.common.BusinessException;
+import com.abc123.walletaccount.dao.WalletAccountDao;
 import com.abc123.walletaccount.dto.OpenWalletAccountRequestDTO;
 import com.abc123.walletaccount.dto.PageResultDTO;
 import com.abc123.walletaccount.dto.WalletAccountDTO;
 import com.abc123.walletaccount.dto.WalletAccountDetailDTO;
 import com.abc123.walletaccount.dto.WalletAccountQueryDTO;
+import com.abc123.walletaccount.dto.WalletAccountStatusLogDTO;
 import com.abc123.walletaccount.dto.WalletAccountStatusChangeRequestDTO;
 import com.abc123.walletaccount.dto.WalletBalanceDTO;
 import com.abc123.walletaccount.dto.WalletFlowDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
 import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
+import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
-import com.abc123.walletaccount.mapper.WalletAccountMapper;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -27,10 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WalletAccountServiceImpl implements WalletAccountService {
 
-    private final WalletAccountMapper walletAccountMapper;
+    private final WalletAccountDao walletAccountDao;
 
-    public WalletAccountServiceImpl(WalletAccountMapper walletAccountMapper) {
-        this.walletAccountMapper = walletAccountMapper;
+    public WalletAccountServiceImpl(WalletAccountDao walletAccountDao) {
+        this.walletAccountDao = walletAccountDao;
     }
 
     @Override
@@ -39,9 +43,9 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         int pageSize = queryDTO.getPageSize() == null || queryDTO.getPageSize() < 1 ? 20 : queryDTO.getPageSize();
         int offset = (pageNo - 1) * pageSize;
         PageResultDTO<WalletAccountDTO> pageResultDTO = new PageResultDTO<WalletAccountDTO>();
-        pageResultDTO.setTotal(walletAccountMapper.countAccounts(
+        pageResultDTO.setTotal(walletAccountDao.countAccounts(
                 queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountStatus()));
-        pageResultDTO.setRecords(walletAccountMapper.listAccounts(
+        pageResultDTO.setRecords(walletAccountDao.listAccounts(
                 queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountStatus(), offset, pageSize)
                 .stream()
                 .map(this::toAccountDTO)
@@ -55,9 +59,13 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         WalletAccountDetailDTO detailDTO = new WalletAccountDetailDTO();
         detailDTO.setAccount(toAccountDTO(accountEntity));
         detailDTO.setBalance(toBalanceDTO(accountEntity));
-        detailDTO.setRecentFlows(walletAccountMapper.listRecentFlowsByAccountNo(walletAccountNo, 10)
+        detailDTO.setRecentFlows(walletAccountDao.listRecentFlowsByAccountNo(walletAccountNo, 10)
                 .stream()
                 .map(this::toFlowDTO)
+                .collect(Collectors.toList()));
+        detailDTO.setStatusLogs(walletAccountDao.listStatusLogsByAccountNo(walletAccountNo, 10)
+                .stream()
+                .map(this::toStatusLogDTO)
                 .collect(Collectors.toList()));
         return detailDTO;
     }
@@ -72,7 +80,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         if (walletAccountNos == null || walletAccountNos.isEmpty()) {
             return Collections.emptyList();
         }
-        return walletAccountMapper.listBalancesByAccountNos(walletAccountNos)
+        return walletAccountDao.listBalancesByAccountNos(walletAccountNos)
                 .stream()
                 .map(this::toBalanceDTO)
                 .collect(Collectors.toList());
@@ -80,17 +88,25 @@ public class WalletAccountServiceImpl implements WalletAccountService {
 
     @Override
     public List<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO) {
-        return walletAccountMapper.listFlows(queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo())
+        return walletAccountDao.listFlows(queryDTO.getWalletAccountNo(), queryDTO.getSourceSystem(), queryDTO.getSourceBizNo())
                 .stream()
                 .map(this::toFlowDTO)
                 .collect(Collectors.toList());
     }
 
     @Override
+    public WalletFlowExportTaskDTO exportFlows(WalletFlowExportRequestDTO requestDTO) {
+        WalletFlowExportTaskDTO taskDTO = new WalletFlowExportTaskDTO();
+        taskDTO.setExportTaskNo("WFE-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
+        taskDTO.setTaskStatus("ACCEPTED");
+        return taskDTO;
+    }
+
+    @Override
     @Transactional
     public WalletAccountDTO openAccount(OpenWalletAccountRequestDTO requestDTO) {
         validateOpenRequest(requestDTO);
-        WalletAccountEntity existing = walletAccountMapper.findAccountByOwnerAndTypeScene(
+        WalletAccountEntity existing = walletAccountDao.findAccountByOwnerAndTypeScene(
                 requestDTO.getWalletOwnerId(), requestDTO.getAccountType(), requestDTO.getAccountScene());
         if (existing != null) {
             return toAccountDTO(existing);
@@ -103,8 +119,8 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         ownerEntity.setBizLineCode(requestDTO.getBizLineCode());
         ownerEntity.setTenantCode(requestDTO.getTenantCode());
         ownerEntity.setExtRefNo(requestDTO.getExtRefNo());
-        if (walletAccountMapper.findOwnerById(requestDTO.getWalletOwnerId()) == null) {
-            walletAccountMapper.insertOwner(ownerEntity);
+        if (walletAccountDao.findOwnerById(requestDTO.getWalletOwnerId()) == null) {
+            walletAccountDao.insertOwner(ownerEntity);
         }
 
         WalletAccountEntity accountEntity = new WalletAccountEntity();
@@ -124,7 +140,8 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         accountEntity.setPendingInBalance(BigDecimal.ZERO);
         accountEntity.setPendingOutBalance(BigDecimal.ZERO);
         accountEntity.setOpenedAt(LocalDateTime.now());
-        walletAccountMapper.insertAccount(accountEntity);
+        walletAccountDao.insertAccount(accountEntity);
+        walletAccountDao.insertBalance(accountEntity);
 
         WalletFlowEntity flowEntity = new WalletFlowEntity();
         flowEntity.setFlowNo("WF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
@@ -139,8 +156,10 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         flowEntity.setAfterAvailableBalance(BigDecimal.ZERO);
         flowEntity.setOperatorName(requestDTO.getOperatorName() == null ? "system" : requestDTO.getOperatorName());
         flowEntity.setOperationReason("账户开户");
-        walletAccountMapper.insertFlow(flowEntity);
-        return toAccountDTO(walletAccountMapper.findAccountByNo(accountEntity.getWalletAccountNo()));
+        walletAccountDao.insertFlow(flowEntity);
+        recordStatusLog(accountEntity.getWalletAccountNo(), null, "INIT", "OPEN_ACCOUNT", "账户开户",
+                requestDTO.getOperatorName(), requestDTO.getOperatorName());
+        return toAccountDTO(walletAccountDao.findAccountByNo(accountEntity.getWalletAccountNo()));
     }
 
     @Override
@@ -154,7 +173,11 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         String targetStatus = requestDTO.getTargetStatus();
         validateStatusChange(entity, targetStatus);
         LocalDateTime closedAt = "CLOSED".equals(targetStatus) ? LocalDateTime.now() : null;
-        walletAccountMapper.updateAccountStatus(walletAccountNo, targetStatus, closedAt);
+        int updatedRows = walletAccountDao.updateAccountStatus(
+                walletAccountNo, currentStatus, targetStatus, closedAt);
+        if (updatedRows != 1) {
+            throw new BusinessException("WALLET_ACCOUNT_STATUS_CONFLICT", "账户状态已被其他请求更新，请刷新后重试");
+        }
 
         WalletFlowEntity flowEntity = new WalletFlowEntity();
         flowEntity.setFlowNo("WF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
@@ -168,13 +191,19 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         flowEntity.setAfterAvailableBalance(entity.getAvailableBalance());
         flowEntity.setOperatorName(requestDTO.getOperatorName() == null ? "system" : requestDTO.getOperatorName());
         flowEntity.setOperationReason(requestDTO.getOperationReason() == null ? "状态流转" : requestDTO.getOperationReason());
-        walletAccountMapper.insertFlow(flowEntity);
-        return toAccountDTO(walletAccountMapper.findAccountByNo(walletAccountNo));
+        walletAccountDao.insertFlow(flowEntity);
+        recordStatusLog(walletAccountNo, currentStatus, targetStatus, "STATUS_CHANGE",
+                requestDTO.getOperationReason() == null ? "状态流转" : requestDTO.getOperationReason(),
+                requestDTO.getOperatorId(), requestDTO.getOperatorName());
+        return toAccountDTO(walletAccountDao.findAccountByNo(walletAccountNo));
     }
 
     private void validateOpenRequest(OpenWalletAccountRequestDTO requestDTO) {
         if (requestDTO == null) {
             throw new IllegalArgumentException("开户请求不能为空");
+        }
+        if (isBlank(requestDTO.getRequestNo())) {
+            throw new IllegalArgumentException("requestNo不能为空");
         }
         if (isBlank(requestDTO.getWalletOwnerId()) || isBlank(requestDTO.getOwnerType()) || isBlank(requestDTO.getOwnerName())) {
             throw new IllegalArgumentException("钱包主体信息不完整");
@@ -216,11 +245,24 @@ public class WalletAccountServiceImpl implements WalletAccountService {
     }
 
     private WalletAccountEntity getRequiredAccount(String walletAccountNo) {
-        WalletAccountEntity entity = walletAccountMapper.findAccountByNo(walletAccountNo);
+        WalletAccountEntity entity = walletAccountDao.findAccountByNo(walletAccountNo);
         if (entity == null) {
             throw new BusinessException("WALLET_ACCOUNT_NOT_FOUND", "钱包账户不存在");
         }
         return entity;
+    }
+
+    private void recordStatusLog(String walletAccountNo, String beforeStatus, String afterStatus, String reasonCode,
+            String reasonDesc, String operatorId, String operatorName) {
+        WalletAccountStatusLogEntity statusLogEntity = new WalletAccountStatusLogEntity();
+        statusLogEntity.setWalletAccountNo(walletAccountNo);
+        statusLogEntity.setBeforeStatus(beforeStatus);
+        statusLogEntity.setAfterStatus(afterStatus);
+        statusLogEntity.setReasonCode(reasonCode);
+        statusLogEntity.setReasonDesc(reasonDesc);
+        statusLogEntity.setOperatorId(operatorId == null ? "system" : operatorId);
+        statusLogEntity.setOperatorName(operatorName == null ? "system" : operatorName);
+        walletAccountDao.insertStatusLog(statusLogEntity);
     }
 
     private WalletAccountDTO toAccountDTO(WalletAccountEntity entity) {
@@ -267,6 +309,19 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         dto.setAfterAvailableBalance(entity.getAfterAvailableBalance());
         dto.setOperatorName(entity.getOperatorName());
         dto.setOperationReason(entity.getOperationReason());
+        dto.setCreatedAt(entity.getCreatedAt());
+        return dto;
+    }
+
+    private WalletAccountStatusLogDTO toStatusLogDTO(WalletAccountStatusLogEntity entity) {
+        WalletAccountStatusLogDTO dto = new WalletAccountStatusLogDTO();
+        dto.setWalletAccountNo(entity.getWalletAccountNo());
+        dto.setBeforeStatus(entity.getBeforeStatus());
+        dto.setAfterStatus(entity.getAfterStatus());
+        dto.setReasonCode(entity.getReasonCode());
+        dto.setReasonDesc(entity.getReasonDesc());
+        dto.setOperatorId(entity.getOperatorId());
+        dto.setOperatorName(entity.getOperatorName());
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }
