@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.walletaccount.mapper.WalletAccountMapper">
+
+    <resultMap id="walletAccountMap" type="com.abc123.walletaccount.entity.WalletAccountEntity">
+        <id property="id" column="id"/>
+        <result property="walletAccountNo" column="wallet_account_no"/>
+        <result property="walletOwnerId" column="wallet_owner_id"/>
+        <result property="ownerType" column="owner_type"/>
+        <result property="ownerName" column="owner_name"/>
+        <result property="accountType" column="account_type"/>
+        <result property="accountScene" column="account_scene"/>
+        <result property="currencyCode" column="currency_code"/>
+        <result property="accountStatus" column="account_status"/>
+        <result property="allowCredit" column="allow_credit"/>
+        <result property="riskLevel" column="risk_level"/>
+        <result property="totalBalance" column="total_balance"/>
+        <result property="availableBalance" column="available_balance"/>
+        <result property="frozenBalance" column="frozen_balance"/>
+        <result property="pendingInBalance" column="pending_in_balance"/>
+        <result property="pendingOutBalance" column="pending_out_balance"/>
+        <result property="openedAt" column="opened_at"/>
+        <result property="closedAt" column="closed_at"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <resultMap id="walletFlowMap" type="com.abc123.walletaccount.entity.WalletFlowEntity">
+        <id property="id" column="id"/>
+        <result property="flowNo" column="flow_no"/>
+        <result property="walletAccountNo" column="wallet_account_no"/>
+        <result property="flowType" column="flow_type"/>
+        <result property="sourceSystem" column="source_system"/>
+        <result property="sourceBizNo" column="source_biz_no"/>
+        <result property="idempotencyKey" column="idempotency_key"/>
+        <result property="changeAmount" column="change_amount"/>
+        <result property="beforeAvailableBalance" column="before_available_balance"/>
+        <result property="afterAvailableBalance" column="after_available_balance"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="operationReason" column="operation_reason"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="walletOwnerMap" type="com.abc123.walletaccount.entity.WalletOwnerEntity">
+        <id property="id" column="id"/>
+        <result property="walletOwnerId" column="wallet_owner_id"/>
+        <result property="ownerType" column="owner_type"/>
+        <result property="ownerName" column="owner_name"/>
+        <result property="ownerStatus" column="owner_status"/>
+        <result property="bizLineCode" column="biz_line_code"/>
+        <result property="tenantCode" column="tenant_code"/>
+        <result property="extRefNo" column="ext_ref_no"/>
+    </resultMap>
+
+    <resultMap id="walletStatusLogMap" type="com.abc123.walletaccount.entity.WalletAccountStatusLogEntity">
+        <id property="id" column="id"/>
+        <result property="walletAccountNo" column="wallet_account_no"/>
+        <result property="beforeStatus" column="before_status"/>
+        <result property="afterStatus" column="after_status"/>
+        <result property="reasonCode" column="reason_code"/>
+        <result property="reasonDesc" column="reason_desc"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="walletIdempotentRecordMap" type="com.abc123.walletaccount.entity.WalletIdempotentRecordEntity">
+        <id property="id" column="id"/>
+        <result property="requestNo" column="request_no"/>
+        <result property="bizType" column="biz_type"/>
+        <result property="idempotentKey" column="idempotent_key"/>
+        <result property="resultRefNo" column="result_ref_no"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="countAccounts" resultType="long">
+        SELECT COUNT(1)
+        FROM t_wallet_account
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (wallet_account_no = #{keyword} OR owner_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="ownerType != null and ownerType != ''">
+                AND owner_type = #{ownerType}
+            </if>
+            <if test="accountStatus != null and accountStatus != ''">
+                AND account_status = #{accountStatus}
+            </if>
+        </where>
+    </select>
+
+    <select id="listAccounts" resultMap="walletAccountMap">
+        SELECT *
+        FROM t_wallet_account
+        <where>
+            <if test="keyword != null and keyword != ''">
+                AND (wallet_account_no = #{keyword} OR owner_name LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test="ownerType != null and ownerType != ''">
+                AND owner_type = #{ownerType}
+            </if>
+            <if test="accountStatus != null and accountStatus != ''">
+                AND account_status = #{accountStatus}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findAccountByNo" resultMap="walletAccountMap">
+        SELECT * FROM t_wallet_account WHERE wallet_account_no = #{walletAccountNo}
+    </select>
+
+    <select id="findAccountByOwnerAndTypeScene" resultMap="walletAccountMap">
+        SELECT *
+        FROM t_wallet_account
+        WHERE wallet_owner_id = #{walletOwnerId}
+          AND account_type = #{accountType}
+          AND account_scene = #{accountScene}
+    </select>
+
+    <select id="findOwnerById" resultMap="walletOwnerMap">
+        SELECT * FROM t_wallet_owner WHERE wallet_owner_id = #{walletOwnerId}
+    </select>
+
+    <select id="findIdempotentRecordByRequestNo" resultMap="walletIdempotentRecordMap">
+        SELECT * FROM t_wallet_idempotent_record WHERE request_no = #{requestNo}
+    </select>
+
+    <select id="listBalancesByAccountNos" resultMap="walletAccountMap">
+        SELECT *
+        FROM t_wallet_account
+        WHERE wallet_account_no IN
+        <foreach item="item" collection="walletAccountNos" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="countFlows" resultType="long">
+        SELECT COUNT(1)
+        FROM t_wallet_flow
+        <where>
+            <if test="walletAccountNo != null and walletAccountNo != ''">
+                AND wallet_account_no = #{walletAccountNo}
+            </if>
+            <if test="sourceSystem != null and sourceSystem != ''">
+                AND source_system = #{sourceSystem}
+            </if>
+            <if test="sourceBizNo != null and sourceBizNo != ''">
+                AND source_biz_no = #{sourceBizNo}
+            </if>
+        </where>
+    </select>
+
+    <select id="listFlows" resultMap="walletFlowMap">
+        SELECT *
+        FROM t_wallet_flow
+        <where>
+            <if test="walletAccountNo != null and walletAccountNo != ''">
+                AND wallet_account_no = #{walletAccountNo}
+            </if>
+            <if test="sourceSystem != null and sourceSystem != ''">
+                AND source_system = #{sourceSystem}
+            </if>
+            <if test="sourceBizNo != null and sourceBizNo != ''">
+                AND source_biz_no = #{sourceBizNo}
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="listRecentFlowsByAccountNo" resultMap="walletFlowMap">
+        SELECT *
+        FROM t_wallet_flow
+        WHERE wallet_account_no = #{walletAccountNo}
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="listStatusLogsByAccountNo" resultMap="walletStatusLogMap">
+        SELECT *
+        FROM t_wallet_account_status_log
+        WHERE wallet_account_no = #{walletAccountNo}
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insertOwner">
+        INSERT INTO t_wallet_owner(wallet_owner_id, owner_type, owner_name, owner_status, biz_line_code, tenant_code, ext_ref_no)
+        VALUES(#{walletOwnerId}, #{ownerType}, #{ownerName}, #{ownerStatus}, #{bizLineCode}, #{tenantCode}, #{extRefNo})
+    </insert>
+
+    <insert id="insertAccount">
+        INSERT INTO t_wallet_account(
+            wallet_account_no, wallet_owner_id, owner_type, owner_name, account_type, account_scene, currency_code,
+            account_status, allow_credit, risk_level, total_balance, available_balance, frozen_balance,
+            pending_in_balance, pending_out_balance, opened_at, closed_at
+        ) VALUES (
+            #{walletAccountNo}, #{walletOwnerId}, #{ownerType}, #{ownerName}, #{accountType}, #{accountScene}, #{currencyCode},
+            #{accountStatus}, #{allowCredit}, #{riskLevel}, #{totalBalance}, #{availableBalance}, #{frozenBalance},
+            #{pendingInBalance}, #{pendingOutBalance}, #{openedAt}, #{closedAt}
+        )
+    </insert>
+
+    <insert id="insertBalance">
+        INSERT INTO t_wallet_balance(
+            wallet_account_no, total_balance, available_balance, frozen_balance, pending_in_balance,
+            pending_out_balance, version_no
+        ) VALUES (
+            #{walletAccountNo}, #{totalBalance}, #{availableBalance}, #{frozenBalance}, #{pendingInBalance},
+            #{pendingOutBalance}, 0
+        )
+    </insert>
+
+    <insert id="insertFlow">
+        INSERT INTO t_wallet_flow(
+            flow_no, wallet_account_no, flow_type, source_system, source_biz_no, idempotency_key,
+            change_amount, before_available_balance, after_available_balance, operator_name, operation_reason
+        ) VALUES (
+            #{flowNo}, #{walletAccountNo}, #{flowType}, #{sourceSystem}, #{sourceBizNo}, #{idempotencyKey},
+            #{changeAmount}, #{beforeAvailableBalance}, #{afterAvailableBalance}, #{operatorName}, #{operationReason}
+        )
+    </insert>
+
+    <insert id="insertStatusLog">
+        INSERT INTO t_wallet_account_status_log(
+            wallet_account_no, before_status, after_status, reason_code, reason_desc, operator_id, operator_name
+        ) VALUES (
+            #{walletAccountNo}, #{beforeStatus}, #{afterStatus}, #{reasonCode}, #{reasonDesc}, #{operatorId}, #{operatorName}
+        )
+    </insert>
+
+    <insert id="insertExportTask">
+        INSERT INTO t_wallet_flow_export_task(
+            export_task_no, wallet_account_no, source_system, source_biz_no,
+            operator_id, operator_name, task_status
+        ) VALUES (
+            #{exportTaskNo}, #{walletAccountNo}, #{sourceSystem}, #{sourceBizNo},
+            #{operatorId}, #{operatorName}, #{taskStatus}
+        )
+    </insert>
+
+    <insert id="insertIdempotentRecord">
+        INSERT INTO t_wallet_idempotent_record(
+            request_no, biz_type, idempotent_key, result_ref_no, status
+        ) VALUES (
+            #{requestNo}, #{bizType}, #{idempotentKey}, #{resultRefNo}, #{status}
+        )
+    </insert>
+
+    <update id="updateAccountStatus">
+        UPDATE t_wallet_account
+        SET account_status = #{accountStatus},
+            closed_at = #{closedAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE wallet_account_no = #{walletAccountNo}
+          AND account_status = #{currentStatus}
+    </update>
+
+    <update id="updateIdempotentRecordSuccess">
+        UPDATE t_wallet_idempotent_record
+        SET result_ref_no = #{resultRefNo},
+            status = 'SUCCESS',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE request_no = #{requestNo}
+    </update>
+
+</mapper>
