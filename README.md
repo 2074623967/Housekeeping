@@ -39,10 +39,12 @@
 当前已落地系统：
 
 - `systems/payment-core`
+- `systems/wallet-account`
 - `systems/accounting-system`
 - `systems/clearing-system`
 - `systems/settlement-system`
 - `systems/wallet-system`
+- `systems/gateway-access`
 
 `payment-core` 内部包含：
 
@@ -54,6 +56,8 @@
 
 - `admin-web`
 - `app-web`
+- `h5-web`
+- `pc-web`
 - `shared`
 
 ## 系统建设顺序
@@ -73,19 +77,34 @@
 
 ## 当前开发范围
 
-当前代码归属于 `systems/payment-core`，也就是 `一期：支付核心域 MVP`，覆盖：
+当前第一优先级交付仍归属于 `systems/payment-core`，也就是 `一期：支付核心域`，覆盖：
 
 - 支付运营工作台
 - 订单中心
+- 账单中心
 - 支付单管理
-- 退款单管理入口
-- 服务者结算查询入口
-- 后端基础查询 API
+- 支付流水查询
+- 收银台会话管理
+- 支付请求管理
+- 支付处理日志
+- 支付交易异常中心
+- 支付异常告警中心
+- 支付任务中心
+- 支付监控分析
+- 支付日终处理
+- 支付配置中心
+- 支付事件出站台账
+- 退款单管理
+- 服务者结算联查入口
+- 用户端 / H5 / PC 收银台与支付结果页
+- 后端支付交易闭环 API 与自动补偿骨架
 
 说明：
 
-- `退款单管理` 和 `服务者结算单` 当前仅作为后续系统预留入口存在。
-- 真正的退款中心、账户账务、清分结算、对账等能力，会在对应阶段分别展开，而不是在一期一次性做完。
+- `payment-core` 当前已经不是“只做几个查询页”的 MVP，而是支付核心域阶段性交付包。
+- `退款单管理` 当前由 `payment-core` 过渡承载，长期归属仍建议拆到独立 `refund-center`。
+- `服务者结算单` 当前只保留联查入口，完整结算审批、出款和核销继续归属 `settlement-system`。
+- 账户账务、清分清算、对账、保证金、钱包营销等能力，会在对应系统继续展开，而不是继续堆在 `payment-core`。
 
 ## 运行说明
 
