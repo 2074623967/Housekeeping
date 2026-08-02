@@ -17,6 +17,7 @@ import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
+import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
@@ -99,6 +100,17 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         WalletFlowExportTaskDTO taskDTO = new WalletFlowExportTaskDTO();
         taskDTO.setExportTaskNo("WFE-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
         taskDTO.setTaskStatus("ACCEPTED");
+        WalletFlowExportTaskEntity taskEntity = new WalletFlowExportTaskEntity();
+        taskEntity.setExportTaskNo(taskDTO.getExportTaskNo());
+        taskEntity.setWalletAccountNo(requestDTO == null ? null : requestDTO.getWalletAccountNo());
+        taskEntity.setSourceSystem(requestDTO == null ? null : requestDTO.getSourceSystem());
+        taskEntity.setSourceBizNo(requestDTO == null ? null : requestDTO.getSourceBizNo());
+        taskEntity.setOperatorId(requestDTO == null || requestDTO.getOperatorId() == null
+                ? "system" : requestDTO.getOperatorId());
+        taskEntity.setOperatorName(requestDTO == null || requestDTO.getOperatorName() == null
+                ? "system" : requestDTO.getOperatorName());
+        taskEntity.setTaskStatus(taskDTO.getTaskStatus());
+        walletAccountDao.insertExportTask(taskEntity);
         return taskDTO;
     }
 

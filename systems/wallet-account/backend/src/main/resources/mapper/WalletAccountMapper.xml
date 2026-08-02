@@ -204,6 +204,16 @@
         )
     </insert>
 
+    <insert id="insertExportTask">
+        INSERT INTO t_wallet_flow_export_task(
+            export_task_no, wallet_account_no, source_system, source_biz_no,
+            operator_id, operator_name, task_status
+        ) VALUES (
+            #{exportTaskNo}, #{walletAccountNo}, #{sourceSystem}, #{sourceBizNo},
+            #{operatorId}, #{operatorName}, #{taskStatus}
+        )
+    </insert>
+
     <update id="updateAccountStatus">
         UPDATE t_wallet_account
         SET account_status = #{accountStatus},

@@ -4,6 +4,7 @@ import com.abc123.walletaccount.dao.WalletAccountDao;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
+import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import com.abc123.walletaccount.mapper.WalletAccountMapper;
 import java.time.LocalDateTime;
@@ -89,6 +90,11 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     @Override
     public void insertStatusLog(WalletAccountStatusLogEntity statusLogEntity) {
         walletAccountMapper.insertStatusLog(statusLogEntity);
+    }
+
+    @Override
+    public void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity) {
+        walletAccountMapper.insertExportTask(exportTaskEntity);
     }
 
     @Override

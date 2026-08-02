@@ -134,3 +134,26 @@ COMMENT ON COLUMN t_wallet_account_status_log.reason_code IS '变更原因编码
 COMMENT ON COLUMN t_wallet_account_status_log.reason_desc IS '变更原因说明';
 COMMENT ON COLUMN t_wallet_account_status_log.operator_id IS '操作人编号';
 COMMENT ON COLUMN t_wallet_account_status_log.operator_name IS '操作人名称';
+
+CREATE TABLE t_wallet_flow_export_task (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    export_task_no VARCHAR(64) NOT NULL,
+    wallet_account_no VARCHAR(64),
+    source_system VARCHAR(64),
+    source_biz_no VARCHAR(64),
+    operator_id VARCHAR(64),
+    operator_name VARCHAR(64) NOT NULL,
+    task_status VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX uk_wallet_flow_export_task_no ON t_wallet_flow_export_task(export_task_no);
+COMMENT ON TABLE t_wallet_flow_export_task IS '钱包流水导出任务表';
+COMMENT ON COLUMN t_wallet_flow_export_task.export_task_no IS '导出任务编号';
+COMMENT ON COLUMN t_wallet_flow_export_task.wallet_account_no IS '钱包账户编号筛选条件';
+COMMENT ON COLUMN t_wallet_flow_export_task.source_system IS '来源系统筛选条件';
+COMMENT ON COLUMN t_wallet_flow_export_task.source_biz_no IS '来源业务单号筛选条件';
+COMMENT ON COLUMN t_wallet_flow_export_task.operator_id IS '操作人编号';
+COMMENT ON COLUMN t_wallet_flow_export_task.operator_name IS '操作人名称';
+COMMENT ON COLUMN t_wallet_flow_export_task.task_status IS '任务状态';

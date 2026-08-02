@@ -12,6 +12,7 @@ import com.abc123.walletaccount.common.BusinessException;
 import com.abc123.walletaccount.dao.WalletAccountDao;
 import com.abc123.walletaccount.dto.OpenWalletAccountRequestDTO;
 import com.abc123.walletaccount.dto.WalletAccountStatusChangeRequestDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,19 @@ class WalletAccountServiceImplTest {
         verify(dao).updateAccountStatus(eq("WA-USER-001"), eq("ACTIVE"), eq("FROZEN"), eq(null));
         verify(dao).insertFlow(any());
         verify(dao).insertStatusLog(any());
+    }
+
+    @Test
+    void shouldPersistExportTaskWhenExportRequested() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        WalletFlowExportRequestDTO requestDTO = new WalletFlowExportRequestDTO();
+        requestDTO.setWalletAccountNo("WA-USER-001");
+        requestDTO.setOperatorId("operator-001");
+        requestDTO.setOperatorName("测试人员");
+
+        assertEquals("ACCEPTED", service.exportFlows(requestDTO).getTaskStatus());
+        verify(dao).insertExportTask(any());
     }
 
     private OpenWalletAccountRequestDTO createOpenRequest() {

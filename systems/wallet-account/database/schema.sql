@@ -84,3 +84,18 @@ CREATE TABLE IF NOT EXISTS t_wallet_account_status_log (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     KEY idx_wallet_status_log_account_created (wallet_account_no, created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包账户状态变更日志表';
+
+CREATE TABLE IF NOT EXISTS t_wallet_flow_export_task (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
+    export_task_no VARCHAR(64) NOT NULL COMMENT '导出任务编号',
+    wallet_account_no VARCHAR(64) COMMENT '钱包账户编号筛选条件',
+    source_system VARCHAR(64) COMMENT '来源系统筛选条件',
+    source_biz_no VARCHAR(64) COMMENT '来源业务单号筛选条件',
+    operator_id VARCHAR(64) COMMENT '操作人编号',
+    operator_name VARCHAR(64) NOT NULL COMMENT '操作人名称',
+    task_status VARCHAR(32) NOT NULL COMMENT '任务状态',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uk_wallet_flow_export_task_no (export_task_no),
+    KEY idx_wallet_export_task_status_created (task_status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包流水导出任务表';

@@ -3,6 +3,7 @@ package com.abc123.walletaccount.mapper;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
+import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,6 +52,8 @@ public interface WalletAccountMapper {
     void insertFlow(WalletFlowEntity flowEntity);
 
     void insertStatusLog(WalletAccountStatusLogEntity statusLogEntity);
+
+    void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity);
 
     int updateAccountStatus(@Param("walletAccountNo") String walletAccountNo,
             @Param("currentStatus") String currentStatus,
