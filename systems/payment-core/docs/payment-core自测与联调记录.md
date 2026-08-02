@@ -315,6 +315,29 @@
    - 下游事实核对
    - 人工结案或重放成功结案
 
+### 99.6 2026-08-02 首条真实重放闭环
+
+本轮继续选择账务侧合法 JSON 死信任务 `DLQ7d62fb24b6be4c508db6` 做真实接口验证。
+
+验证动作：
+
+1. `POST /api/payment-dead-letter-tasks/DLQ7d62fb24b6be4c508db6/ready-to-replay`
+2. `POST /api/payment-dead-letter-tasks/DLQ7d62fb24b6be4c508db6/replay`
+
+关键结果：
+
+1. 任务状态从 `PENDING_REVIEW` 更新为 `READY_TO_REPLAY`。
+2. 随后任务状态更新为 `REPLAYED`。
+3. `replay_count = 1`
+4. `last_replay_at = 2026-08-02 13:16:30`
+5. 对应业务编号 `PAY-REPLAY-DRILL-20260801-001` 在账务系统查询仍保持“已消费”，说明重放没有打破账务消费幂等。
+
+结论：
+
+1. `payment-core` 已具备“人工复核 -> 定向重放 -> 任务状态收口”的真实运行能力。
+2. 至少在账务支付成功事件这一条样本上，补偿任务重放不会打坏下游已消费事实。
+3. 后续仍需继续核对 clearing / accounting 其余历史演练任务，并补最终结案说明。
+
 ### 28.1 本轮验证结论
 
 本轮围绕支付配置中心中的“支付网关接入管理”继续正式化，确认后台已从“网关基础参数展示”升级为“接入治理台账展示”。
