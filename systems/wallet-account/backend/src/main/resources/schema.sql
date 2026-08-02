@@ -157,3 +157,23 @@ COMMENT ON COLUMN t_wallet_flow_export_task.source_biz_no IS '来源业务单号
 COMMENT ON COLUMN t_wallet_flow_export_task.operator_id IS '操作人编号';
 COMMENT ON COLUMN t_wallet_flow_export_task.operator_name IS '操作人名称';
 COMMENT ON COLUMN t_wallet_flow_export_task.task_status IS '任务状态';
+
+CREATE TABLE t_wallet_idempotent_record (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    request_no VARCHAR(64) NOT NULL,
+    biz_type VARCHAR(64) NOT NULL,
+    idempotent_key VARCHAR(128) NOT NULL,
+    result_ref_no VARCHAR(64),
+    status VARCHAR(32) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX uk_wallet_idempotent_request_no ON t_wallet_idempotent_record(request_no);
+CREATE UNIQUE INDEX uk_wallet_idempotent_key ON t_wallet_idempotent_record(idempotent_key);
+COMMENT ON TABLE t_wallet_idempotent_record IS '钱包幂等记录表';
+COMMENT ON COLUMN t_wallet_idempotent_record.request_no IS '请求号';
+COMMENT ON COLUMN t_wallet_idempotent_record.biz_type IS '业务类型';
+COMMENT ON COLUMN t_wallet_idempotent_record.idempotent_key IS '幂等键';
+COMMENT ON COLUMN t_wallet_idempotent_record.result_ref_no IS '结果引用号';
+COMMENT ON COLUMN t_wallet_idempotent_record.status IS '处理状态';

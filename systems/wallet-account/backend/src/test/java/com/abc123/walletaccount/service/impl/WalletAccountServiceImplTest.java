@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,8 +15,10 @@ import com.abc123.walletaccount.dto.OpenWalletAccountRequestDTO;
 import com.abc123.walletaccount.dto.WalletAccountStatusChangeRequestDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
+import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 
 class WalletAccountServiceImplTest {
 
@@ -60,6 +63,36 @@ class WalletAccountServiceImplTest {
         verify(dao).updateAccountStatus(eq("WA-USER-001"), eq("ACTIVE"), eq("FROZEN"), eq(null));
         verify(dao).insertFlow(any());
         verify(dao).insertStatusLog(any());
+    }
+
+    @Test
+    void shouldReturnExistingAccountWhenRequestNoAlreadySucceeded() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        WalletIdempotentRecordEntity recordEntity = new WalletIdempotentRecordEntity();
+        recordEntity.setRequestNo("REQ-OPEN-001");
+        recordEntity.setResultRefNo("WA-EXISTING-001");
+        WalletAccountEntity existing = createAccount("WA-EXISTING-001", "ACTIVE", "10.00", "0.00", "0.00", "0.00");
+        when(dao.findIdempotentRecordByRequestNo("REQ-OPEN-001")).thenReturn(recordEntity);
+        when(dao.findAccountByNo("WA-EXISTING-001")).thenReturn(existing);
+
+        assertEquals("WA-EXISTING-001", service.openAccount(createOpenRequest()).getWalletAccountNo());
+    }
+
+    @Test
+    void shouldReturnExistingAccountWhenConcurrentInsertHitsUniqueConstraint() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        OpenWalletAccountRequestDTO requestDTO = createOpenRequest();
+        WalletAccountEntity existing = createAccount("WA-EXISTING-002", "INIT", "0.00", "0.00", "0.00", "0.00");
+        when(dao.findIdempotentRecordByRequestNo("REQ-OPEN-001")).thenReturn(null);
+        when(dao.findAccountByOwnerAndTypeScene("WO-NEW-001", "MAIN", "USER_STORE"))
+                .thenReturn(null, existing);
+        when(dao.findOwnerById("WO-NEW-001")).thenReturn(null);
+        doThrow(new DuplicateKeyException("duplicate")).when(dao).insertAccount(any());
+
+        assertEquals("WA-EXISTING-002", service.openAccount(requestDTO).getWalletAccountNo());
+        verify(dao).updateIdempotentRecordSuccess("REQ-OPEN-001", "WA-EXISTING-002");
     }
 
     @Test

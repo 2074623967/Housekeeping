@@ -99,3 +99,17 @@ CREATE TABLE IF NOT EXISTS t_wallet_flow_export_task (
     UNIQUE KEY uk_wallet_flow_export_task_no (export_task_no),
     KEY idx_wallet_export_task_status_created (task_status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包流水导出任务表';
+
+CREATE TABLE IF NOT EXISTS t_wallet_idempotent_record (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
+    request_no VARCHAR(64) NOT NULL COMMENT '请求号',
+    biz_type VARCHAR(64) NOT NULL COMMENT '业务类型',
+    idempotent_key VARCHAR(128) NOT NULL COMMENT '幂等键',
+    result_ref_no VARCHAR(64) COMMENT '结果引用号',
+    status VARCHAR(32) NOT NULL COMMENT '处理状态',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    UNIQUE KEY uk_wallet_idempotent_request_no (request_no),
+    UNIQUE KEY uk_wallet_idempotent_key (idempotent_key),
+    KEY idx_wallet_idempotent_status_created (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='钱包幂等记录表';

@@ -4,6 +4,7 @@ import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
 import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
+import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +28,8 @@ public interface WalletAccountDao {
 
     WalletOwnerEntity findOwnerById(String walletOwnerId);
 
+    WalletIdempotentRecordEntity findIdempotentRecordByRequestNo(String requestNo);
+
     List<WalletAccountEntity> listBalancesByAccountNos(List<String> walletAccountNos);
 
     long countFlows(String walletAccountNo, String sourceSystem, String sourceBizNo);
@@ -49,6 +52,10 @@ public interface WalletAccountDao {
     void insertStatusLog(WalletAccountStatusLogEntity statusLogEntity);
 
     void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity);
+
+    void insertIdempotentRecord(WalletIdempotentRecordEntity idempotentRecordEntity);
+
+    int updateIdempotentRecordSuccess(String requestNo, String resultRefNo);
 
     int updateAccountStatus(String walletAccountNo, String currentStatus, String accountStatus,
             LocalDateTime closedAt);

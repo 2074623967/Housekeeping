@@ -5,6 +5,7 @@ import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
 import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
+import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import com.abc123.walletaccount.mapper.WalletAccountMapper;
 import java.time.LocalDateTime;
@@ -45,6 +46,11 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     @Override
     public WalletOwnerEntity findOwnerById(String walletOwnerId) {
         return walletAccountMapper.findOwnerById(walletOwnerId);
+    }
+
+    @Override
+    public WalletIdempotentRecordEntity findIdempotentRecordByRequestNo(String requestNo) {
+        return walletAccountMapper.findIdempotentRecordByRequestNo(requestNo);
     }
 
     @Override
@@ -101,6 +107,16 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     @Override
     public void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity) {
         walletAccountMapper.insertExportTask(exportTaskEntity);
+    }
+
+    @Override
+    public void insertIdempotentRecord(WalletIdempotentRecordEntity idempotentRecordEntity) {
+        walletAccountMapper.insertIdempotentRecord(idempotentRecordEntity);
+    }
+
+    @Override
+    public int updateIdempotentRecordSuccess(String requestNo, String resultRefNo) {
+        return walletAccountMapper.updateIdempotentRecordSuccess(requestNo, resultRefNo);
     }
 
     @Override

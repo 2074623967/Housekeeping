@@ -18,6 +18,7 @@ import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
 import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
+import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -126,9 +128,20 @@ public class WalletAccountServiceImpl implements WalletAccountService {
     @Transactional
     public WalletAccountDTO openAccount(OpenWalletAccountRequestDTO requestDTO) {
         validateOpenRequest(requestDTO);
+        WalletAccountDTO idempotentAccount = getIdempotentAccount(requestDTO.getRequestNo());
+        if (idempotentAccount != null) {
+            return idempotentAccount;
+        }
+        String idempotentKey = buildOpenAccountIdempotentKey(requestDTO);
+        WalletAccountDTO processingAccount = createIdempotentRecord(requestDTO.getRequestNo(), idempotentKey);
+        if (processingAccount != null) {
+            return processingAccount;
+        }
+
         WalletAccountEntity existing = walletAccountDao.findAccountByOwnerAndTypeScene(
                 requestDTO.getWalletOwnerId(), requestDTO.getAccountType(), requestDTO.getAccountScene());
         if (existing != null) {
+            walletAccountDao.updateIdempotentRecordSuccess(requestDTO.getRequestNo(), existing.getWalletAccountNo());
             return toAccountDTO(existing);
         }
         WalletOwnerEntity ownerEntity = new WalletOwnerEntity();
@@ -160,7 +173,18 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         accountEntity.setPendingInBalance(BigDecimal.ZERO);
         accountEntity.setPendingOutBalance(BigDecimal.ZERO);
         accountEntity.setOpenedAt(LocalDateTime.now());
-        walletAccountDao.insertAccount(accountEntity);
+        try {
+            walletAccountDao.insertAccount(accountEntity);
+        } catch (DuplicateKeyException exception) {
+            WalletAccountEntity duplicateAccount = walletAccountDao.findAccountByOwnerAndTypeScene(
+                    requestDTO.getWalletOwnerId(), requestDTO.getAccountType(), requestDTO.getAccountScene());
+            if (duplicateAccount != null) {
+                walletAccountDao.updateIdempotentRecordSuccess(
+                        requestDTO.getRequestNo(), duplicateAccount.getWalletAccountNo());
+                return toAccountDTO(duplicateAccount);
+            }
+            throw exception;
+        }
         walletAccountDao.insertBalance(accountEntity);
 
         WalletFlowEntity flowEntity = new WalletFlowEntity();
@@ -179,6 +203,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         walletAccountDao.insertFlow(flowEntity);
         recordStatusLog(accountEntity.getWalletAccountNo(), null, "INIT", "OPEN_ACCOUNT", "账户开户",
                 requestDTO.getOperatorId(), requestDTO.getOperatorName());
+        walletAccountDao.updateIdempotentRecordSuccess(requestDTO.getRequestNo(), accountEntity.getWalletAccountNo());
         return toAccountDTO(walletAccountDao.findAccountByNo(accountEntity.getWalletAccountNo()));
     }
 
@@ -283,6 +308,37 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         statusLogEntity.setOperatorId(operatorId == null ? "system" : operatorId);
         statusLogEntity.setOperatorName(operatorName == null ? "system" : operatorName);
         walletAccountDao.insertStatusLog(statusLogEntity);
+    }
+
+    private WalletAccountDTO getIdempotentAccount(String requestNo) {
+        WalletIdempotentRecordEntity recordEntity = walletAccountDao.findIdempotentRecordByRequestNo(requestNo);
+        if (recordEntity == null || isBlank(recordEntity.getResultRefNo())) {
+            return null;
+        }
+        WalletAccountEntity accountEntity = walletAccountDao.findAccountByNo(recordEntity.getResultRefNo());
+        return accountEntity == null ? null : toAccountDTO(accountEntity);
+    }
+
+    private WalletAccountDTO createIdempotentRecord(String requestNo, String idempotentKey) {
+        WalletIdempotentRecordEntity recordEntity = new WalletIdempotentRecordEntity();
+        recordEntity.setRequestNo(requestNo);
+        recordEntity.setBizType("OPEN_ACCOUNT");
+        recordEntity.setIdempotentKey(idempotentKey);
+        recordEntity.setStatus("PROCESSING");
+        try {
+            walletAccountDao.insertIdempotentRecord(recordEntity);
+            return null;
+        } catch (DuplicateKeyException exception) {
+            WalletAccountDTO existingAccount = getIdempotentAccount(requestNo);
+            if (existingAccount != null) {
+                return existingAccount;
+            }
+            throw new BusinessException("WALLET_ACCOUNT_IDEMPOTENT_PROCESSING", "相同请求正在处理中，请稍后重试");
+        }
+    }
+
+    private String buildOpenAccountIdempotentKey(OpenWalletAccountRequestDTO requestDTO) {
+        return requestDTO.getWalletOwnerId() + "|" + requestDTO.getAccountType() + "|" + requestDTO.getAccountScene();
     }
 
     private WalletAccountDTO toAccountDTO(WalletAccountEntity entity) {

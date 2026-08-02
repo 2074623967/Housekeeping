@@ -4,6 +4,7 @@ import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
 import com.abc123.walletaccount.entity.WalletFlowEntity;
 import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
+import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,8 @@ public interface WalletAccountMapper {
             @Param("accountScene") String accountScene);
 
     WalletOwnerEntity findOwnerById(@Param("walletOwnerId") String walletOwnerId);
+
+    WalletIdempotentRecordEntity findIdempotentRecordByRequestNo(@Param("requestNo") String requestNo);
 
     List<WalletAccountEntity> listBalancesByAccountNos(@Param("walletAccountNos") List<String> walletAccountNos);
 
@@ -60,6 +63,11 @@ public interface WalletAccountMapper {
     void insertStatusLog(WalletAccountStatusLogEntity statusLogEntity);
 
     void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity);
+
+    void insertIdempotentRecord(WalletIdempotentRecordEntity idempotentRecordEntity);
+
+    int updateIdempotentRecordSuccess(@Param("requestNo") String requestNo,
+            @Param("resultRefNo") String resultRefNo);
 
     int updateAccountStatus(@Param("walletAccountNo") String walletAccountNo,
             @Param("currentStatus") String currentStatus,

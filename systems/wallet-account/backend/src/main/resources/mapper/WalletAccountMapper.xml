@@ -66,6 +66,17 @@
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
+    <resultMap id="walletIdempotentRecordMap" type="com.abc123.walletaccount.entity.WalletIdempotentRecordEntity">
+        <id property="id" column="id"/>
+        <result property="requestNo" column="request_no"/>
+        <result property="bizType" column="biz_type"/>
+        <result property="idempotentKey" column="idempotent_key"/>
+        <result property="resultRefNo" column="result_ref_no"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
     <select id="countAccounts" resultType="long">
         SELECT COUNT(1)
         FROM t_wallet_account
@@ -114,6 +125,10 @@
 
     <select id="findOwnerById" resultMap="walletOwnerMap">
         SELECT * FROM t_wallet_owner WHERE wallet_owner_id = #{walletOwnerId}
+    </select>
+
+    <select id="findIdempotentRecordByRequestNo" resultMap="walletIdempotentRecordMap">
+        SELECT * FROM t_wallet_idempotent_record WHERE request_no = #{requestNo}
     </select>
 
     <select id="listBalancesByAccountNos" resultMap="walletAccountMap">
@@ -231,6 +246,14 @@
         )
     </insert>
 
+    <insert id="insertIdempotentRecord">
+        INSERT INTO t_wallet_idempotent_record(
+            request_no, biz_type, idempotent_key, result_ref_no, status
+        ) VALUES (
+            #{requestNo}, #{bizType}, #{idempotentKey}, #{resultRefNo}, #{status}
+        )
+    </insert>
+
     <update id="updateAccountStatus">
         UPDATE t_wallet_account
         SET account_status = #{accountStatus},
@@ -238,6 +261,14 @@
             updated_at = CURRENT_TIMESTAMP
         WHERE wallet_account_no = #{walletAccountNo}
           AND account_status = #{currentStatus}
+    </update>
+
+    <update id="updateIdempotentRecordSuccess">
+        UPDATE t_wallet_idempotent_record
+        SET result_ref_no = #{resultRefNo},
+            status = 'SUCCESS',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE request_no = #{requestNo}
     </update>
 
 </mapper>
