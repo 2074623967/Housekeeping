@@ -3004,3 +3004,22 @@
 1. `支付请求管理 / 日终处理 / 任务中心` 三块高频运营后台入口已补齐控制器层回归保护。
 2. 这一步进一步缩小了 `payment-core` 从“页面和服务已落地”到“接口门面可回归”的证据缺口。
 3. 当前仍不推进 `test -> master`，因为整包仍缺真实消息代理可靠投递、跨系统补偿演练和正式发布冻结包。
+
+## 99. 2026-08-02 payment-core test 分支最新快照
+
+### 99.1 本轮复核结果
+
+本轮针对 `test` 分支上的 `payment-core` 进行了最新一轮全量后端回归和后台前端构建复核，目的是确认新增控制器门面测试后，整包主线没有被破坏。
+
+### 99.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | `220` 个用例通过，`0` failures，`0` errors，`0` skipped |
+| 后台前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新 `admin-web` 生产构建通过，输出 `dist/assets/index-BBDWZWVh.js` |
+
+### 99.3 当前意义
+
+1. `payment-core` 最新 test 分支状态已经不只是“局部模块可用”，而是具备了一版较完整的回归证据快照。
+2. 新增控制器测试后，`payment-core` 的后端全量测试总数已提升到 `220`，说明回归保护范围继续扩大。
+3. 当前仍不进入 `master` 或 `release/*`，因为阻断点已经进一步收敛到生产级可靠投递、跨系统补偿、整包正式发布清单和发布后验证项。
