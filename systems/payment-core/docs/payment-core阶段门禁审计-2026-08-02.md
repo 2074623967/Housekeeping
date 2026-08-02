@@ -104,6 +104,7 @@
 2. `admin-web / app-web / pc-web / h5-web` 均已有生产构建通过证据
 3. 已有“订单发起 -> 预付单 -> 收银台 -> 提交支付 -> 回调成功 -> 状态收口”的主链路闭环证据
 4. 已有支付成功事件自动下发清分、账务消费的阶段性 smoke 证据
+5. `PaymentRequestController / PaymentDayEndController / PaymentTaskCenterController` 已补独立控制器测试，新增 `7` 个定向用例全部通过
 
 结论：
 

@@ -2978,3 +2978,29 @@
 1. 四个导出域的查询条件下推、CSV 字段与转义、UTF-8 下载响应、`attachment` 文件名均有服务层和控制器层回归保护。
 2. 结合第 95 节真实页面下载证据，四块导出已不再是 `test -> master` 阻断项。
 3. 当前仍不推进合并或创建正式 release，原因是缺少真实消息代理上的可靠投递、重试、死信与跨系统补偿演练证据。
+
+## 98. 2026-08-02 支付请求、日终、任务中心控制器门面补证
+
+本轮针对 `payment-core` 已经产品化落地、但此前缺少独立控制器测试覆盖的三块后台模块补了接口门面回归：
+
+1. 支付请求管理 `PaymentRequestController`
+2. 支付日终处理 `PaymentDayEndController`
+3. 支付任务中心 `PaymentTaskCenterController`
+
+### 98.1 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 三块控制器定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentRequestControllerTest,PaymentDayEndControllerTest,PaymentTaskCenterControllerTest test` | 通过 | `7` 个用例通过，`0` failures，`0` errors，`0` skipped |
+
+### 98.2 本轮补强点
+
+1. `PaymentRequestControllerTest` 覆盖支付请求列表查询参数绑定和 CSV 导出响应头。
+2. `PaymentDayEndControllerTest` 覆盖支付日终总览和手工跑批请求透传。
+3. `PaymentTaskCenterControllerTest` 覆盖任务中心总览、任务日志查询，以及超时关单、事件重发、退款重试、SLA 升级、告警派发、回执回查、控制策略巡检七类人工任务入口。
+
+### 98.3 当前判断
+
+1. `支付请求管理 / 日终处理 / 任务中心` 三块高频运营后台入口已补齐控制器层回归保护。
+2. 这一步进一步缩小了 `payment-core` 从“页面和服务已落地”到“接口门面可回归”的证据缺口。
+3. 当前仍不推进 `test -> master`，因为整包仍缺真实消息代理可靠投递、跨系统补偿演练和正式发布冻结包。
