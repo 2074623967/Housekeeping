@@ -3121,11 +3121,15 @@
 
 | 项目 | 命令/方式 | 结果 | 说明 |
 | --- | --- | --- | --- |
-| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | `220` 个用例通过，`0` failures，`0` errors，`0` skipped |
-| 后台前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新 `admin-web` 生产构建通过，输出 `dist/assets/index-BBDWZWVh.js` |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -q test` | 通过 | `220` 个用例通过，`0` failures，`0` errors，`0` skipped |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-BBDWZWVh.js` |
+| `app-web` 前端构建 | `cd systems/payment-core/frontend/app-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-DsCUPAzE.js` |
+| `h5-web` 前端构建 | `cd systems/payment-core/frontend/h5-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-Du8sikH_.js` |
+| `pc-web` 前端构建 | `cd systems/payment-core/frontend/pc-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-BDOG789Z.js` |
 
 ### 99.3 当前意义
 
 1. `payment-core` 最新 test 分支状态已经不只是“局部模块可用”，而是具备了一版较完整的回归证据快照。
 2. 新增控制器测试后，`payment-core` 的后端全量测试总数已提升到 `220`，说明回归保护范围继续扩大。
-3. 当前仍不进入 `master` 或 `release/*`，因为阻断点已经进一步收敛到生产级可靠投递、跨系统补偿、整包正式发布清单和发布后验证项。
+3. `admin-web / app-web / h5-web / pc-web` 四端当前都能在最新 `test` 分支上独立完成生产构建，说明多端前端矩阵没有被近期补偿和门面测试改动破坏。
+4. 当前仍不进入 `master` 或 `release/*`，因为阻断点已经进一步收敛到生产级可靠投递、跨系统补偿、整包正式发布清单和发布后验证项。
