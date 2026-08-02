@@ -98,6 +98,22 @@ class WalletAccountServiceImplTest {
     }
 
     @Test
+    void shouldReturnExistingAccountWhenIdempotentKeyConflictWaitsForBusinessAccount() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        OpenWalletAccountRequestDTO requestDTO = createOpenRequest();
+        requestDTO.setRequestNo("REQ-OPEN-002");
+        requestDTO.setWalletOwnerId("WO-NEW-002");
+        WalletAccountEntity existing = createAccount("WA-EXISTING-003", "INIT", "0.00", "0.00", "0.00", "0.00");
+        when(dao.findIdempotentRecordByRequestNo("REQ-OPEN-002")).thenReturn(null);
+        doThrow(new DuplicateKeyException("duplicate")).when(dao).insertIdempotentRecord(any());
+        when(dao.findAccountByOwnerAndTypeScene("WO-NEW-002", "MAIN", "USER_STORE"))
+                .thenReturn(null, null, existing);
+
+        assertEquals("WA-EXISTING-003", service.openAccount(requestDTO).getWalletAccountNo());
+    }
+
+    @Test
     void shouldPersistExportTaskWhenExportRequested() {
         WalletAccountDao dao = mock(WalletAccountDao.class);
         WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);

@@ -138,7 +138,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
             return idempotentAccount;
         }
         String idempotentKey = buildOpenAccountIdempotentKey(requestDTO);
-        WalletAccountDTO processingAccount = createIdempotentRecord(requestDTO.getRequestNo(), idempotentKey);
+        WalletAccountDTO processingAccount = createIdempotentRecord(requestDTO, idempotentKey);
         if (processingAccount != null) {
             return processingAccount;
         }
@@ -343,9 +343,9 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         return accountEntity == null ? null : toAccountDTO(accountEntity);
     }
 
-    private WalletAccountDTO createIdempotentRecord(String requestNo, String idempotentKey) {
+    private WalletAccountDTO createIdempotentRecord(OpenWalletAccountRequestDTO requestDTO, String idempotentKey) {
         WalletIdempotentRecordEntity recordEntity = new WalletIdempotentRecordEntity();
-        recordEntity.setRequestNo(requestNo);
+        recordEntity.setRequestNo(requestDTO.getRequestNo());
         recordEntity.setBizType("OPEN_ACCOUNT");
         recordEntity.setIdempotentKey(idempotentKey);
         recordEntity.setStatus("PROCESSING");
@@ -353,9 +353,14 @@ public class WalletAccountServiceImpl implements WalletAccountService {
             walletAccountDao.insertIdempotentRecord(recordEntity);
             return null;
         } catch (DuplicateKeyException exception) {
-            WalletAccountDTO existingAccount = getIdempotentAccount(requestNo);
+            WalletAccountDTO existingAccount = getIdempotentAccount(requestDTO.getRequestNo());
             if (existingAccount != null) {
                 return existingAccount;
+            }
+            WalletAccountDTO accountByBusinessKey = waitForAccountByBusinessKey(
+                    requestDTO.getWalletOwnerId(), requestDTO.getAccountType(), requestDTO.getAccountScene());
+            if (accountByBusinessKey != null) {
+                return accountByBusinessKey;
             }
             throw new BusinessException("WALLET_ACCOUNT_IDEMPOTENT_PROCESSING", "相同请求正在处理中，请稍后重试");
         }
@@ -363,6 +368,23 @@ public class WalletAccountServiceImpl implements WalletAccountService {
 
     private String buildOpenAccountIdempotentKey(OpenWalletAccountRequestDTO requestDTO) {
         return requestDTO.getWalletOwnerId() + "|" + requestDTO.getAccountType() + "|" + requestDTO.getAccountScene();
+    }
+
+    private WalletAccountDTO waitForAccountByBusinessKey(String walletOwnerId, String accountType, String accountScene) {
+        for (int retry = 0; retry < 5; retry++) {
+            WalletAccountEntity accountEntity = walletAccountDao.findAccountByOwnerAndTypeScene(
+                    walletOwnerId, accountType, accountScene);
+            if (accountEntity != null) {
+                return toAccountDTO(accountEntity);
+            }
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return null;
     }
 
     private WalletAccountDTO toAccountDTO(WalletAccountEntity entity) {
