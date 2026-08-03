@@ -71,6 +71,7 @@ create_payment_topology() {
   declare_binding "payment.trade" "${main_queue}" "payment.success.${SUFFIX}.v1"
   declare_binding "payment.trade.retry" "${retry_queue}" "${retry_key}"
   declare_binding "payment.trade.dlq" "${dlq_queue}" "${dlq_key}"
+  declare_binding "payment.trade.dlq" "payment.compensation.dlq-intake" "${dlq_key}"
   declare_binding "payment.trade.replay" "${main_queue}" "${replay_key}"
 }
 
@@ -90,6 +91,7 @@ create_clearing_topology() {
   declare_binding "clearing.trade" "${main_queue}" "clearing.generated.${SUFFIX}.v1"
   declare_binding "clearing.trade.retry" "${retry_queue}" "${retry_key}"
   declare_binding "clearing.trade.dlq" "${dlq_queue}" "${dlq_key}"
+  declare_binding "clearing.trade.dlq" "payment.compensation.dlq-intake" "${dlq_key}"
   declare_binding "clearing.trade.replay" "${main_queue}" "${replay_key}"
 }
 
