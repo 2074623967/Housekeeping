@@ -3309,3 +3309,25 @@
 1. `payment-core` 的支付交易异常中心正从“支持处理动作的异常列表”升级为“风险面先判断、责任归口更清晰、处理入口更完整”的正式化异常治理台。
 2. 这一步继续缩小了支付核心域在异常优先级判断、责任归口识别和人工处理门禁上的产品化差距，但仍不代表真实外部通知平台、法定节假日值班中心和更复杂升级编排已经生产化。
 3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 108. 2026-08-03 统一支付记录控制器门禁补强验证
+
+### 108.1 本轮补强点
+
+1. 新增 `PaymentRecordControllerTest`，覆盖统一、微信支付宝和银行卡记录共用的列表参数绑定入口。
+2. 新增收款记录详情入口控制器测试，覆盖 `GET /api/payment-records/{paymentOrderId}` 的支付记录详情转发。
+3. 本轮不新增统计口径，继续保持记录列表的分页统计与详情页的轨迹聚合边界，避免前端当前页数据冒充全量指标。
+
+### 108.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 统一支付记录定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentRecordServiceImplTest,PaymentRecordControllerTest test` | 通过 | 支付记录服务层与控制器层门禁均通过，覆盖列表参数绑定和详情转发 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，记录列表和详情相关页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 108.3 当前判断
+
+1. `payment-core` 的统一支付记录入口已从“服务层有测试保护”升级为“列表和详情控制器入口均有门禁保护”。
+2. 这一步继续增强了收款运营、支付单详情和支付记录详情之间的接口稳定性，但不代表收款记录已经具备完整财务对账、会计分录和退款核销能力。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
