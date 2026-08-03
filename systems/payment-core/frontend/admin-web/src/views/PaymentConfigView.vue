@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { paymentConfigApi } from "../api/client";
 
 const channels = ref([]);
@@ -19,6 +19,19 @@ const editingProtocolCode = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
 const rosterForm = ref(createRosterForm());
+
+const governanceMetrics = computed(() => ({
+  enabledChannelCount: channels.value.filter((item) => item.status === "ENABLED").length,
+  enabledRouteRuleCount: routeRules.value.filter((item) => item.status === "ENABLED").length,
+  enabledProtocolCount: protocols.value.filter((item) => item.status === "ENABLED").length,
+  enabledGatewayCount: gateways.value.filter((item) => item.status === "ENABLED").length,
+  enabledControlPolicyCount: controlPolicies.value.filter((item) => item.status === "ENABLED").length,
+  warningControlPolicyCount: controlPolicies.value.filter((item) => item.selfCheckStatus === "WARN").length,
+  failedControlPolicyCount: controlPolicies.value.filter((item) => item.selfCheckStatus === "FAIL").length,
+  enabledAlertProviderCount: alertProviders.value.filter((item) => item.status === "ENABLED").length,
+  enabledIssueDutyRosterCount: issueDutyRosters.value.filter((item) => item.status === "ENABLED").length,
+  archivedReturnCodeCount: returnCodeMappings.value.filter((item) => item.archiveStatus === "ARCHIVED").length
+}));
 
 function createProtocolForm() {
   return {
@@ -359,12 +372,68 @@ function exportGovernanceSnapshot(section = "ALL") {
       <div v-if="isLoading" class="state-box">支付配置加载中...</div>
 
       <template v-else>
+        <section class="card-grid" style="margin-bottom: 16px;">
+          <article class="card">
+            <p class="card-title">启用渠道数</p>
+            <p class="card-value">{{ governanceMetrics.enabledChannelCount }}</p>
+          </article>
+          <article class="card">
+            <p class="card-title">启用路由规则</p>
+            <p class="card-value">{{ governanceMetrics.enabledRouteRuleCount }}</p>
+          </article>
+          <article class="card">
+            <p class="card-title">启用支付协议</p>
+            <p class="card-value">{{ governanceMetrics.enabledProtocolCount }}</p>
+          </article>
+          <article class="card">
+            <p class="card-title">启用网关配置</p>
+            <p class="card-value">{{ governanceMetrics.enabledGatewayCount }}</p>
+          </article>
+          <article class="card">
+            <p class="card-title">启用控制策略</p>
+            <p class="card-value">{{ governanceMetrics.enabledControlPolicyCount }}</p>
+          </article>
+          <article class="card">
+            <p class="card-title">值班路由数</p>
+            <p class="card-value">{{ governanceMetrics.enabledIssueDutyRosterCount }}</p>
+          </article>
+        </section>
+
+        <section class="panel overview-panel">
+          <div class="section-title">
+            <div>
+              <h3>治理风险总览</h3>
+              <p class="meta">按渠道准入、控制策略自检、通知供应商和值班路由四类治理要素统一观察配置健康度</p>
+            </div>
+          </div>
+          <div class="overview-grid">
+            <article class="overview-card danger">
+              <p class="overview-title">控制策略失败</p>
+              <strong>{{ governanceMetrics.failedControlPolicyCount }}</strong>
+              <span>存在 FAIL 时应优先修复来源应用准入、商户号授权或渠道权限配置，避免主链路带病发布。</span>
+            </article>
+            <article class="overview-card warn">
+              <p class="overview-title">控制策略告警</p>
+              <strong>{{ governanceMetrics.warningControlPolicyCount }}</strong>
+              <span>表示自检存在 WARN，建议联查网关接入、渠道启停和通知值班路由是否处于一致状态。</span>
+            </article>
+            <article class="overview-card info">
+              <p class="overview-title">归档返回码 / 通知治理</p>
+              <strong>{{ governanceMetrics.archivedReturnCodeCount }} / {{ governanceMetrics.enabledAlertProviderCount }}</strong>
+              <span>用于判断返回码版本治理是否持续沉淀，以及异常告警外发能力是否具备最小可用覆盖面。</span>
+            </article>
+          </div>
+        </section>
+
         <div class="section-title">
           <div>
             <h3>支付渠道配置</h3>
             <p class="meta">控制渠道商户号、适用场景、单日限额和启停状态</p>
           </div>
-          <button class="button secondary" @click="loadOverview">刷新</button>
+          <div class="toolbar-actions">
+            <button class="button secondary" @click="exportGovernanceSnapshot('CHANNELS')">导出渠道</button>
+            <button class="button secondary" @click="loadOverview">刷新</button>
+          </div>
         </div>
 
         <div class="table-wrap">
@@ -430,6 +499,7 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付路由规则</h3>
               <p class="meta">按业务场景、金额、客户类型等规则决定目标渠道和兜底渠道</p>
             </div>
+            <button class="button secondary" @click="exportGovernanceSnapshot('ROUTE_RULES')">导出路由</button>
           </div>
 
           <div class="table-wrap">
@@ -480,7 +550,10 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付协议管理</h3>
               <p class="meta">维护签约协议、预授权协议和代扣协议模板，控制场景适用范围与启停状态</p>
             </div>
-            <button class="button secondary" @click="startCreateProtocol">新建协议</button>
+            <div class="toolbar-actions">
+              <button class="button secondary" @click="exportGovernanceSnapshot('PROTOCOLS')">导出协议</button>
+              <button class="button secondary" @click="startCreateProtocol">新建协议</button>
+            </div>
           </div>
 
           <div class="panel" style="margin-bottom: 16px;">
@@ -658,6 +731,7 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>渠道返回码映射</h3>
               <p class="meta">统一微信、支付宝、银行通道的错误码口径，沉淀标准化错误文案与处理建议</p>
             </div>
+            <button class="button secondary" @click="exportGovernanceSnapshot('RETURN_CODES')">导出返回码</button>
           </div>
 
           <div class="table-wrap">
@@ -712,6 +786,7 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付网关接入管理</h3>
               <p class="meta">统一维护渠道接入模式、协议算法、超时重试和网关基础地址，支撑真实渠道适配器正式化</p>
             </div>
+            <button class="button secondary" @click="exportGovernanceSnapshot('GATEWAYS')">导出网关</button>
           </div>
 
           <div class="table-wrap">
@@ -780,6 +855,7 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付控制策略</h3>
               <p class="meta">统一维护来源应用的支付方式权限、渠道权限、分钟级限流与自检准入，控制正向支付主链路风险</p>
             </div>
+            <button class="button secondary" @click="exportGovernanceSnapshot('CONTROL_POLICIES')">导出策略</button>
           </div>
 
           <div class="table-wrap">
@@ -845,6 +921,7 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>告警通知供应商配置</h3>
               <p class="meta">统一维护 IM / 短信 / 邮件告警的供应商端点、模板编码、重试和限流策略，作为真实通知中心接入的正式配置入口</p>
             </div>
+            <button class="button secondary" @click="exportGovernanceSnapshot('ALERT_PROVIDERS')">导出供应商</button>
           </div>
 
           <div class="table-wrap">
@@ -901,7 +978,10 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>异常告警值班路由</h3>
               <p class="meta">按异常类型和严重等级配置责任组、值班接收人、通知通道与班次标签，支撑任务中心自动派发异常告警</p>
             </div>
-            <button class="button secondary" @click="startCreateRoster">新建值班路由</button>
+            <div class="toolbar-actions">
+              <button class="button secondary" @click="exportGovernanceSnapshot('ISSUE_DUTY_ROSTERS')">导出值班路由</button>
+              <button class="button secondary" @click="startCreateRoster">新建值班路由</button>
+            </div>
           </div>
 
           <div class="panel" style="margin-bottom: 16px;">

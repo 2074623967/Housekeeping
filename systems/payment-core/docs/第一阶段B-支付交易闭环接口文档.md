@@ -978,6 +978,7 @@ POST /api/payment-config/control-policies/self-check
 
 1. `enabled=true` 时状态更新为 `ENABLED`。
 2. `enabled=false` 时状态更新为 `DISABLED`。
+3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 3. 协议配置当前已支持运营查看、启停、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑和电子签章服务商维护；后续继续补电子签章联调能力。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
 5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示；后续继续补返回码批量导入、渠道差异比对和真正自动归档动作。
