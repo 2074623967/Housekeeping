@@ -3331,3 +3331,25 @@
 1. `payment-core` 的统一支付记录入口已从“服务层有测试保护”升级为“列表和详情控制器入口均有门禁保护”。
 2. 这一步继续增强了收款运营、支付单详情和支付记录详情之间的接口稳定性，但不代表收款记录已经具备完整财务对账、会计分录和退款核销能力。
 3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 109. 2026-08-03 工作台与支付健康指标控制器门禁补强验证
+
+### 109.1 本轮补强点
+
+1. 新增 `DashboardControllerTest`，覆盖工作台汇总接口的服务调用和响应数据透传。
+2. 新增 `PaymentMetricsControllerTest`，覆盖支付健康指标汇总接口的服务调用和响应数据透传。
+3. 前端工作台继续保持“工作台卡片 + 支付健康度 + 待办事项 + 快捷入口”的现有结构，本轮不改变展示口径，仅补后端控制器门禁证据。
+
+### 109.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 工作台与支付指标定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=DashboardControllerTest,PaymentMetricsControllerTest test` | 通过 | 两个总览控制器的服务转发和响应透传均通过门禁验证 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 工作台双接口并行加载相关页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮新增测试和文档无空白符问题 |
+
+### 109.3 当前判断
+
+1. 工作台和支付健康指标入口已具备独立控制器层门禁测试。
+2. 本轮不将工作台当前页展示数据扩展解释为全量财务口径，避免运营指标误读。
+3. 在命令全部通过并提交到 `test` 前，不推进 `master` 合并或 `release/*` 冻结。

@@ -167,3 +167,17 @@
 1. `payment-core` 可以继续作为 `test` 分支的主线系统推进
 2. `payment-core` 当前 **不应直接推动 `test -> master`**
 3. 当前整包仍应保持“持续迭代中的系统”状态，而不是过早冻结发布
+
+## 7. 2026-08-03 工作台与支付健康指标控制器门禁补强
+
+### 7.1 本轮补强点
+
+1. 新增 `DashboardControllerTest`，覆盖 `GET /api/dashboard/summary` 的工作台汇总服务转发和响应透传。
+2. 新增 `PaymentMetricsControllerTest`，覆盖 `GET /api/payment-metrics/summary` 的支付健康指标服务转发和响应透传。
+3. 本轮保持控制器薄层原则，不在控制器中引入指标计算、分页或额外统计口径。
+
+### 7.2 当前门禁结论
+
+1. 工作台和支付健康指标的控制器入口已有独立测试保护。
+2. 该补强只提升接口门禁证据，不改变 `payment-core` 的平台能力范围判断。
+3. 当前仍只在 `test` 分支推进，不合并 `master`，不创建 `release/*`。
