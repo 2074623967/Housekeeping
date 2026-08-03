@@ -1,7 +1,10 @@
 package com.abc123.accounting.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.accounting.common.BusinessException;
+import com.abc123.accounting.common.ErrorCode;
 import com.abc123.accounting.dto.BalanceOperationRequestDTO;
 import com.abc123.accounting.dto.BalanceSnapshotDTO;
 import java.math.BigDecimal;
@@ -32,5 +35,15 @@ class BalanceServiceImplTest {
 
         assertEquals("¥120.00", result.getAvailableAmount());
         assertEquals("¥48.00", result.getFrozenAmount());
+    }
+
+    @Test
+    void shouldThrowBusinessExceptionWhenBalanceAccountMissing() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> balanceService.detail("ACT-MISSING"));
+
+        assertEquals(ErrorCode.ACCOUNT_NOT_FOUND, exception.getCode());
+        assertEquals("账户不存在", exception.getMessage());
     }
 }

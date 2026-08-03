@@ -1,5 +1,7 @@
 package com.abc123.settlement.service.impl;
 
+import com.abc123.settlement.common.BusinessException;
+import com.abc123.settlement.common.ErrorCode;
 import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
@@ -46,17 +48,26 @@ public class PayoutServiceImpl implements PayoutService {
 
     @Override
     public PayoutBatchDTO execute(String payoutBatchNo, ExecutePayoutBatchRequestDTO request) {
+        if (settlementMemoryStore.findPayoutBatch(payoutBatchNo) == null) {
+            throw new BusinessException(ErrorCode.PAYOUT_BATCH_NOT_FOUND, "出款批次不存在");
+        }
         return settlementMapper.toPayoutBatchDTO(
                 settlementMemoryStore.executePendingPayoutBatch(payoutBatchNo, request));
     }
 
     @Override
     public PayoutBatchDTO retry(String payoutBatchNo, RetryPayoutBatchRequestDTO request) {
+        if (settlementMemoryStore.findPayoutBatch(payoutBatchNo) == null) {
+            throw new BusinessException(ErrorCode.PAYOUT_BATCH_NOT_FOUND, "出款批次不存在");
+        }
         return settlementMapper.toPayoutBatchDTO(settlementMemoryStore.retryPayoutBatch(payoutBatchNo, request.getOperatorName(), request.getReason()));
     }
 
     @Override
     public PageResultDTO<PayoutRecordDTO> records(String payoutBatchNo, String payoutStatus, int pageNo, int pageSize) {
+        if (settlementMemoryStore.findPayoutBatch(payoutBatchNo) == null) {
+            throw new BusinessException(ErrorCode.PAYOUT_BATCH_NOT_FOUND, "出款批次不存在");
+        }
         List<PayoutRecordDTO> items = settlementMemoryStore.payoutRecordsByBatchNo(payoutBatchNo).stream()
                 .filter(item -> payoutStatus == null || payoutStatus.isEmpty() || payoutStatus.equals(item.getPayoutStatus()))
                 .map(settlementMapper::toPayoutRecordDTO)

@@ -1,5 +1,7 @@
 package com.abc123.settlement.service.impl;
 
+import com.abc123.settlement.common.BusinessException;
+import com.abc123.settlement.common.ErrorCode;
 import com.abc123.settlement.dto.AuditSettlementRequestDTO;
 import com.abc123.settlement.dto.CreateSettlementOrderRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
@@ -58,7 +60,11 @@ public class SettlementOrderServiceImpl implements SettlementOrderService {
 
     @Override
     public SettlementOrderDTO detail(String settlementNo) {
-        return settlementMapper.toOrderDTO(settlementMemoryStore.findOrder(settlementNo));
+        SettlementOrderEntity orderEntity = settlementMemoryStore.findOrder(settlementNo);
+        if (orderEntity == null) {
+            throw new BusinessException(ErrorCode.SETTLEMENT_ORDER_NOT_FOUND, "结算单不存在");
+        }
+        return settlementMapper.toOrderDTO(orderEntity);
     }
 
     @Override
@@ -76,9 +82,13 @@ public class SettlementOrderServiceImpl implements SettlementOrderService {
 
     @Override
     public SettlementOrderDetailDTO fullDetail(String settlementNo) {
+        SettlementOrderEntity orderEntity = settlementMemoryStore.findOrder(settlementNo);
+        if (orderEntity == null) {
+            throw new BusinessException(ErrorCode.SETTLEMENT_ORDER_NOT_FOUND, "结算单不存在");
+        }
         List<SettlementItemDTO> items = settlementMemoryStore.itemsBySettlementNo(settlementNo).stream().map(settlementMapper::toItemDTO).collect(Collectors.toList());
         List<SettlementAuditLogDTO> logs = settlementMemoryStore.auditLogsBySettlementNo(settlementNo).stream().map(settlementMapper::toAuditDTO).collect(Collectors.toList());
-        return settlementMapper.toOrderDetailDTO(settlementMemoryStore.findOrder(settlementNo), items, logs);
+        return settlementMapper.toOrderDetailDTO(orderEntity, items, logs);
     }
 
     private PageResultDTO<SettlementOrderDTO> page(List<SettlementOrderDTO> items, int pageNo, int pageSize) {

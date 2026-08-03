@@ -1,5 +1,7 @@
 package com.abc123.accounting.service.impl;
 
+import com.abc123.accounting.common.BusinessException;
+import com.abc123.accounting.common.ErrorCode;
 import com.abc123.accounting.dto.BalanceOperationRequestDTO;
 import com.abc123.accounting.dto.BalanceSnapshotDTO;
 import com.abc123.accounting.entity.AccountEntity;
@@ -23,6 +25,9 @@ public class BalanceServiceImpl implements BalanceService {
     @Override
     public BalanceSnapshotDTO detail(String accountNo) {
         AccountEntity accountEntity = accountingMemoryStore.findAccount(accountNo);
+        if (accountEntity == null) {
+            throw new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND, "账户不存在");
+        }
         return accountingMapper.toBalanceDTO(accountEntity, accountingMemoryStore.findBalance(accountNo));
     }
 

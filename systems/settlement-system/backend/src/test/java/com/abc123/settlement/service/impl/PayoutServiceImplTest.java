@@ -1,7 +1,10 @@
 package com.abc123.settlement.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.settlement.common.BusinessException;
+import com.abc123.settlement.common.ErrorCode;
 import com.abc123.settlement.dto.AuditSettlementRequestDTO;
 import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
@@ -111,6 +114,20 @@ class PayoutServiceImplTest {
         assertEquals("已发放", retriedRecords.getItems().get(0).getPayoutStatus());
         assertEquals("1", retriedRecords.getItems().get(0).getRetryCount());
         assertEquals("已出款", settlementOrderService.detail("SLT20001").getSettlementStatus());
+    }
+
+    @Test
+    void shouldThrowBusinessExceptionWhenPayoutBatchMissing() {
+        ExecutePayoutBatchRequestDTO executeRequest = new ExecutePayoutBatchRequestDTO();
+        executeRequest.setOperatorName("出款专员");
+        executeRequest.setRemark("不存在的批次不应执行");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> payoutService.execute("PBT-MISSING", executeRequest));
+
+        assertEquals(ErrorCode.PAYOUT_BATCH_NOT_FOUND, exception.getCode());
+        assertEquals("出款批次不存在", exception.getMessage());
     }
 
     private CreatePayoutBatchRequestDTO createRequest(String batchNo) {
