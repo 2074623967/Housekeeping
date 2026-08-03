@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -93,5 +94,23 @@ class PaymentTaskCenterControllerTest {
         verify(paymentTaskCenterService).runDispatchIssueAlerts();
         verify(paymentTaskCenterService).runReconcileIssueAlertReceipts();
         verify(paymentTaskCenterService).runControlPolicySelfChecks();
+    }
+
+    @Test
+    void shouldExportTaskRuns() {
+        PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
+        when(paymentTaskCenterService.exportTaskRunsCsv(any(PaymentTaskRunLogQueryDTO.class))).thenReturn("task-run-csv");
+
+        String body = new String(controller.exportTaskRuns("PAYMENT_EVENT_RETRY", "MANUAL", "SUCCESS", "P2")
+                .getBody(), java.nio.charset.StandardCharsets.UTF_8);
+
+        ArgumentCaptor<PaymentTaskRunLogQueryDTO> queryCaptor =
+                ArgumentCaptor.forClass(PaymentTaskRunLogQueryDTO.class);
+        verify(paymentTaskCenterService).exportTaskRunsCsv(queryCaptor.capture());
+        assertEquals("PAYMENT_EVENT_RETRY", queryCaptor.getValue().getTaskCode());
+        assertEquals("MANUAL", queryCaptor.getValue().getRunMode());
+        assertEquals("SUCCESS", queryCaptor.getValue().getTaskStatus());
+        assertEquals("P2", queryCaptor.getValue().getSeverityLevel());
+        assertTrue(body.contains("task-run-csv"));
     }
 }

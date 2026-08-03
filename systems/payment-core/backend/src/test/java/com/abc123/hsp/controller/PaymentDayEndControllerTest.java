@@ -1,6 +1,7 @@
 package com.abc123.hsp.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,5 +53,16 @@ class PaymentDayEndControllerTest {
         assertEquals("2026-08-02", requestCaptor.getValue().getBizDate());
         assertEquals("finance-ops", requestCaptor.getValue().getTriggeredBy());
         assertEquals("MANUAL", requestCaptor.getValue().getRunMode());
+    }
+
+    @Test
+    void shouldExportPaymentDayEndBatches() {
+        PaymentDayEndController controller = new PaymentDayEndController(paymentDayEndService);
+        when(paymentDayEndService.exportBatchesCsv()).thenReturn("day-end-csv");
+
+        String body = new String(controller.export().getBody(), java.nio.charset.StandardCharsets.UTF_8);
+
+        verify(paymentDayEndService).exportBatchesCsv();
+        assertTrue(body.contains("day-end-csv"));
     }
 }

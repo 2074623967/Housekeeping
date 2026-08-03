@@ -22,6 +22,11 @@ public interface PaymentTaskCenterService {
     PageResultDTO<PaymentTaskRunLogItemDTO> listTaskRuns(PaymentTaskRunLogQueryDTO query);
 
     /**
+     * 导出任务执行日志，供运营、财务和值班复盘留痕。
+     */
+    String exportTaskRunsCsv(PaymentTaskRunLogQueryDTO query);
+
+    /**
      * 手动执行超时关单任务。
      */
     PaymentTaskActionResultDTO runCloseExpiredPayments();

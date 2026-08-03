@@ -84,6 +84,42 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         return overview();
     }
 
+    @Override
+    public String exportBatchesCsv() {
+        java.util.List<PaymentDayEndBatchListItemDTO> batches =
+                enrichRecentBatches(paymentDayEndMapper.findAllBatchesForExport());
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("批次号,业务日期,运行方式,批次状态,支付总单量,支付成功单量,支付成功金额,渠道成功单量,渠道成功金额,内部成功单量,内部成功金额,成功差异单量,成功差异金额,退款成功单量,退款成功金额,渠道异常,内部异常,待收口退款,待收口退款金额,对账准入,准入说明,备注,触发人,创建时间,完成时间\n");
+        for (PaymentDayEndBatchListItemDTO batch : batches) {
+            builder.append(csvCell(batch.getBatchNo())).append(',')
+                    .append(csvCell(batch.getBizDate())).append(',')
+                    .append(csvCell(batch.getRunMode())).append(',')
+                    .append(csvCell(batch.getBatchStatus())).append(',')
+                    .append(csvCell(valueOf(batch.getPaymentTotalCount()))).append(',')
+                    .append(csvCell(valueOf(batch.getPaymentSuccessCount()))).append(',')
+                    .append(csvCell(batch.getPaymentSuccessAmount())).append(',')
+                    .append(csvCell(valueOf(batch.getChannelSuccessCount()))).append(',')
+                    .append(csvCell(batch.getChannelSuccessAmount())).append(',')
+                    .append(csvCell(valueOf(batch.getInternalSuccessCount()))).append(',')
+                    .append(csvCell(batch.getInternalSuccessAmount())).append(',')
+                    .append(csvCell(valueOf(batch.getPaymentSuccessGapCount()))).append(',')
+                    .append(csvCell(batch.getPaymentSuccessGapAmount())).append(',')
+                    .append(csvCell(valueOf(batch.getRefundSuccessCount()))).append(',')
+                    .append(csvCell(batch.getRefundSuccessAmount())).append(',')
+                    .append(csvCell(valueOf(batch.getChannelAbnormalCount()))).append(',')
+                    .append(csvCell(valueOf(batch.getInternalAbnormalCount()))).append(',')
+                    .append(csvCell(valueOf(batch.getPendingRefundCount()))).append(',')
+                    .append(csvCell(batch.getPendingRefundAmount())).append(',')
+                    .append(csvCell(batch.getReconciliationReadinessStatus())).append(',')
+                    .append(csvCell(batch.getReconciliationReadinessSummary())).append(',')
+                    .append(csvCell(batch.getSummaryComment())).append(',')
+                    .append(csvCell(batch.getTriggeredBy())).append(',')
+                    .append(csvCell(batch.getCreatedAt())).append(',')
+                    .append(csvCell(batch.getCompletedAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
     private String resolveBizDate(PaymentDayEndRunRequestDTO request) {
         String rawBizDate = request == null ? null : request.getBizDate();
         if (!StringUtils.hasText(rawBizDate)) {
@@ -289,5 +325,14 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     private String formatAmount(BigDecimal amount) {
         return "¥" + defaultAmount(amount).setScale(2, BigDecimal.ROUND_HALF_UP).toPlainString();
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
+    }
+
+    private String valueOf(Integer value) {
+        return value == null ? "" : String.valueOf(value);
     }
 }

@@ -7,6 +7,10 @@ import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.service.PaymentTaskCenterService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -53,6 +57,27 @@ public class PaymentTaskCenterController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentTaskCenterService.listTaskRuns(query));
+    }
+
+    /**
+     * 导出支付任务执行日志。
+     */
+    @GetMapping(value = "/task-runs/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportTaskRuns(
+            @RequestParam(required = false) String taskCode,
+            @RequestParam(defaultValue = "全部") String runMode,
+            @RequestParam(defaultValue = "全部") String taskStatus,
+            @RequestParam(defaultValue = "全部") String severityLevel) {
+        PaymentTaskRunLogQueryDTO query = new PaymentTaskRunLogQueryDTO();
+        query.setTaskCode(taskCode);
+        query.setRunMode(runMode);
+        query.setTaskStatus(taskStatus);
+        query.setSeverityLevel(severityLevel);
+        byte[] csvBytes = paymentTaskCenterService.exportTaskRunsCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-task-runs.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**

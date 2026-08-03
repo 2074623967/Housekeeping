@@ -32,6 +32,11 @@ public interface PaymentTaskCenterMapper {
     List<PaymentTaskRunLogItemDTO> findTaskRunLogs(PaymentTaskRunLogQueryDTO query);
 
     /**
+     * 查询任务执行日志导出列表。
+     */
+    List<PaymentTaskRunLogItemDTO> findTaskRunLogsForExport(PaymentTaskRunLogQueryDTO query);
+
+    /**
      * 统计任务执行日志数量。
      */
     long countTaskRunLogs(PaymentTaskRunLogQueryDTO query);

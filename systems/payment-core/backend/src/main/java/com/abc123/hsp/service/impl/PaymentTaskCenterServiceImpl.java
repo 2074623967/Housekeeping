@@ -112,6 +112,35 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     @Override
+    public String exportTaskRunsCsv(PaymentTaskRunLogQueryDTO query) {
+        PaymentTaskRunLogQueryDTO normalizedQuery = normalizeQuery(query);
+        List<PaymentTaskRunLogItemDTO> items =
+                enrichTaskRuns(paymentTaskCenterMapper.findTaskRunLogsForExport(normalizedQuery));
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("日志号,任务编码,任务名称,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
+        for (PaymentTaskRunLogItemDTO item : items) {
+            builder.append(csvCell(item.getTaskLogNo())).append(',')
+                    .append(csvCell(item.getTaskCode())).append(',')
+                    .append(csvCell(item.getTaskName())).append(',')
+                    .append(csvCell(item.getRunMode())).append(',')
+                    .append(csvCell(item.getTaskStatus())).append(',')
+                    .append(csvCell(item.getSeverityLevel())).append(',')
+                    .append(csvCell(item.getEscalationStatus())).append(',')
+                    .append(csvCell(valueOf(item.getProcessedCount()))).append(',')
+                    .append(csvCell(valueOf(item.getSuccessCount()))).append(',')
+                    .append(csvCell(valueOf(item.getWarningCount()))).append(',')
+                    .append(csvCell(valueOf(item.getFailCount()))).append(',')
+                    .append(csvCell(item.getSummaryComment())).append(',')
+                    .append(csvCell(item.getSuggestedAction())).append(',')
+                    .append(csvCell(item.getRecommendedRoute())).append(',')
+                    .append(csvCell(item.getTriggeredBy())).append(',')
+                    .append(csvCell(item.getStartedAt())).append(',')
+                    .append(csvCell(item.getCompletedAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    @Override
     @Transactional
     public PaymentTaskActionResultDTO runCloseExpiredPayments() {
         return runCloseExpiredPaymentsByMode(RUN_MODE_MANUAL, "payment-core-admin", "人工触发");
@@ -724,6 +753,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             item.setRecommendedRoute(resolveRecommendedRoute(item.getTaskCode()));
         }
         return items;
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
+    }
+
+    private String valueOf(Integer value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     /**

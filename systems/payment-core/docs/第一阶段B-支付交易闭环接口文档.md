@@ -61,8 +61,10 @@
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 | `/api/payment-day-end/overview` | `GET` | 查询支付日终处理总览与差异告警 |
 | `/api/payment-day-end/run` | `POST` | 手动触发支付日终处理 |
+| `/api/payment-day-end/export` | `GET` | 导出支付日终批次快照 CSV |
 | `/api/payment-task-center/overview` | `GET` | 查询支付任务中心总览 |
 | `/api/payment-task-center/task-runs` | `GET` | 查询支付任务执行日志 |
+| `/api/payment-task-center/task-runs/export` | `GET` | 导出支付任务执行日志 CSV |
 | `/api/payment-task-center/close-expired-payments` | `POST` | 手动执行超时关单 |
 | `/api/payment-task-center/republish-failed-events` | `POST` | 手动执行失败事件重发 |
 | `/api/payment-task-center/retry-failed-refunds` | `POST` | 手动执行失败退款重试 |
@@ -238,6 +240,12 @@
 接口：`GET /api/payment-logs`
 
 导出接口：`GET /api/payment-logs/export`
+
+## 7. 支付日终处理与任务中心导出补充
+
+1. 新增 `GET /api/payment-day-end/export`，直接导出全部支付日终批次快照，字段覆盖业务日期、运行方式、主链路成功事实、差异事实、退款收口事实、对账准入结论和触发人，供财务对账、测试留档和问题复盘使用。
+2. 新增 `GET /api/payment-task-center/task-runs/export`，复用任务日志列表当前筛选条件导出 CSV，字段覆盖任务编码、运行方式、任务状态、严重等级、升级状态、处理结果、建议动作和推荐路由。
+3. 两个导出接口均以 UTF-8 BOM 返回，文件可直接被 Excel 打开；导出文本列统一按 CSV 双引号规则转义，避免摘要、建议动作和备注中的逗号、引号破坏结构。
 
 查询参数：
 

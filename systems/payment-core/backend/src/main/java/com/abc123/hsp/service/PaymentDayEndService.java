@@ -17,4 +17,9 @@ public interface PaymentDayEndService {
      * 触发支付日终处理。
      */
     PaymentDayEndOverviewDTO run(PaymentDayEndRunRequestDTO request);
+
+    /**
+     * 导出支付日终批次快照，供财务对账和问题复盘留痕。
+     */
+    String exportBatchesCsv();
 }

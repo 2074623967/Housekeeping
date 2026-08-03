@@ -49,6 +49,11 @@ async function runBatch() {
   }
 }
 
+function exportBatches() {
+  const exportUrl = paymentDayEndApi.buildExportUrl();
+  window.open(exportUrl, "_blank", "noopener");
+}
+
 onMounted(loadOverview);
 </script>
 
@@ -59,7 +64,10 @@ onMounted(loadOverview);
         <h2>支付日终处理</h2>
         <p>统一收口支付、退款、渠道回调和内部事件，作为后续对账与差错处理的前置事实</p>
       </div>
-      <button class="button secondary" @click="loadOverview">刷新</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" @click="exportBatches">导出 CSV</button>
+        <button class="button secondary" @click="loadOverview">刷新</button>
+      </div>
     </div>
 
     <section class="panel">
