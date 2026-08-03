@@ -201,6 +201,24 @@ export const orderApi = {
 };
 
 export const billApi = {
+  getOverview: ({
+    billNo = "",
+    orderNo = "",
+    customerName = "",
+    billStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      billNo,
+      orderNo,
+      customerName,
+      billStatus,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/bills/overview?${params.toString()}`);
+  },
   getList: ({
     billNo = "",
     orderNo = "",

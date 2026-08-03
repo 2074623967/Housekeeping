@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -23,6 +24,11 @@ public interface BillMapper {
      * @return 账单列表
      */
     List<BillListItemDTO> findAllForExport(@Param("query") BillQueryDTO query);
+
+    /**
+     * 查询账单中心总览。
+     */
+    BillOverviewDTO findOverview(@Param("query") BillQueryDTO query);
 
     /**
      * 统计符合条件的账单总数。

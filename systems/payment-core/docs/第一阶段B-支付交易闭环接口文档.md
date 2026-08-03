@@ -678,12 +678,15 @@
 
 接口：`GET /api/bills`
 
+总览接口：`GET /api/bills/overview`
+
 当前补充能力：
 
 1. 已支持 `customerName` 筛选。
 2. 已支持按 `createdAt / dueAt / billAmount / unpaidAmount` 排序。
-3. `GET /api/bills/export` 复用账单号、订单号、客户名称、账单状态和排序条件导出全量匹配数据，不受列表分页影响。
-4. 导出文件名为 `bills.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
+3. `GET /api/bills/overview` 复用同一组筛选条件返回账单总数、已支付/待支付/部分支付/逾期账单数，以及应收金额、已付金额、待付金额合计。
+4. `GET /api/bills/export` 复用账单号、订单号、客户名称、账单状态和排序条件导出全量匹配数据，不受列表分页影响。
+5. 导出文件名为 `bills.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
 
 接口：`GET /api/cashier-sessions`
 

@@ -3199,3 +3199,25 @@
 1. `payment-core` 的收银台会话页已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
 2. 这一步继续缩小了支付核心域在终端会话排障和用户跳失识别上的产品化差距，但仍不代表多端收银台的真实终端追踪、埋点分析和自动补偿已生产化。
 3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 103. 2026-08-03 账单中心总览补强验证
+
+### 103.1 本轮补强点
+
+1. 新增 `GET /api/bills/overview`，在列表筛选条件不变的前提下返回账单总数、已支付/待支付/部分支付/逾期账单数，以及应收金额、已付金额、待付金额合计。
+2. `BillsView` 已接入总览指标和风险卡片，避免后台卡片继续基于当前页临时统计。
+3. `BillMapper.xml` 已统一列表、总览、导出三类查询口径，降低页面统计与导出口径不一致的风险。
+
+### 103.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 账单中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=BillServiceImplTest,BillControllerTest test` | 通过 | 账单中心服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与风险卡片已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 103.3 当前判断
+
+1. `payment-core` 的账单中心已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了支付核心域在账单收口、逾期识别和待收风险可视化上的产品化差距，但仍不代表财务会计口径、会计分录和正式对账链路已经生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。

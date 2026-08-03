@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.mapper.BillMapper;
 import java.util.Collections;
@@ -72,5 +73,29 @@ class BillServiceImplTest {
         assertTrue(csv.contains("\"warning\""));
         assertTrue(csv.contains("\"张\"\"女士\""));
         verify(billMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldNormalizeAndReturnBillOverview() {
+        BillQueryDTO query = new BillQueryDTO();
+        query.setBillNo(" BILL-001 ");
+        query.setOrderNo(" ORD-001 ");
+        query.setCustomerName(" 张女士 ");
+        query.setBillStatus(" 待支付 ");
+        BillOverviewDTO overview = new BillOverviewDTO();
+        overview.setTotalBillCount(9L);
+        overview.setOverdueBillCount(2L);
+        when(billMapper.findOverview(query)).thenReturn(overview);
+
+        BillOverviewDTO result = new BillServiceImpl(billMapper).overview(query);
+
+        assertEquals("BILL-001", query.getBillNo());
+        assertEquals("ORD-001", query.getOrderNo());
+        assertEquals("张女士", query.getCustomerName());
+        assertEquals("待支付", query.getBillStatus());
+        assertEquals(9L, result.getTotalBillCount());
+        assertEquals(2L, result.getOverdueBillCount());
+        assertEquals("¥0.00", result.getTotalUnpaidAmount());
+        verify(billMapper).findOverview(query);
     }
 }
