@@ -18,6 +18,12 @@ When the default queues already contain historical retry or DLQ messages, declar
 bash infra/rabbitmq/declare_isolated_topology.sh 20260803-a
 ```
 
+For a fast retry drill, override the retry TTL before declaring the isolated topology:
+
+```bash
+RETRY_TTL_MS=2000 bash infra/rabbitmq/declare_isolated_topology.sh 20260803-fast
+```
+
 The script creates a suffix-scoped queue / retry queue / DLQ set for:
 
 - `clearing.payment-success`
@@ -26,6 +32,7 @@ The script creates a suffix-scoped queue / retry queue / DLQ set for:
 - `accounting.clearing-generated`
 
 It also prints the environment variables that the four local services should use for the isolated drill.
+`RETRY_TTL_MS` defaults to `300000` and can be lowered for rapid replay / retry verification.
 
 ## Queue snapshot
 

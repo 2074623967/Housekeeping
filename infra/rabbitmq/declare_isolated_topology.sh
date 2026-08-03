@@ -14,6 +14,7 @@ RABBIT_PORT="${RABBIT_PORT:-15672}"
 RABBIT_USER="${RABBIT_USER:-hsp}"
 RABBIT_PASSWORD="${RABBIT_PASSWORD:-hsp-local-drill-20260801}"
 RABBIT_VHOST="${RABBIT_VHOST:-/}"
+RETRY_TTL_MS="${RETRY_TTL_MS:-300000}"
 
 urlencode() {
   python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
@@ -65,7 +66,7 @@ create_payment_topology() {
   local dlq_key="payment.success.${consumer_name}.dlq.${SUFFIX}.v1"
 
   declare_queue "${main_queue}" "{\"x-dead-letter-exchange\":\"payment.trade.dlq\",\"x-dead-letter-routing-key\":\"${dlq_key}\"}"
-  declare_queue "${retry_queue}" "{\"x-message-ttl\":300000,\"x-dead-letter-exchange\":\"payment.trade.replay\",\"x-dead-letter-routing-key\":\"${replay_key}\"}"
+  declare_queue "${retry_queue}" "{\"x-message-ttl\":${RETRY_TTL_MS},\"x-dead-letter-exchange\":\"payment.trade.replay\",\"x-dead-letter-routing-key\":\"${replay_key}\"}"
   declare_queue "${dlq_queue}" "{}"
 
   declare_binding "payment.trade" "${main_queue}" "payment.success.${SUFFIX}.v1"
@@ -85,7 +86,7 @@ create_clearing_topology() {
   local dlq_key="clearing.generated.${consumer_name}.dlq.${SUFFIX}.v1"
 
   declare_queue "${main_queue}" "{\"x-dead-letter-exchange\":\"clearing.trade.dlq\",\"x-dead-letter-routing-key\":\"${dlq_key}\"}"
-  declare_queue "${retry_queue}" "{\"x-message-ttl\":300000,\"x-dead-letter-exchange\":\"clearing.trade.replay\",\"x-dead-letter-routing-key\":\"${replay_key}\"}"
+  declare_queue "${retry_queue}" "{\"x-message-ttl\":${RETRY_TTL_MS},\"x-dead-letter-exchange\":\"clearing.trade.replay\",\"x-dead-letter-routing-key\":\"${replay_key}\"}"
   declare_queue "${dlq_queue}" "{}"
 
   declare_binding "clearing.trade" "${main_queue}" "clearing.generated.${SUFFIX}.v1"
@@ -102,6 +103,7 @@ create_clearing_topology "accounting"
 
 cat <<EOF
 Isolated RabbitMQ topology declared for suffix: ${SUFFIX}
+Retry TTL (ms): ${RETRY_TTL_MS}
 
 Recommended environment variables:
 
