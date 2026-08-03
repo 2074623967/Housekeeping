@@ -10,6 +10,18 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const total = ref(0);
+const overview = ref({
+  totalEventCount: 0,
+  successEventCount: 0,
+  pendingEventCount: 0,
+  failedEventCount: 0,
+  deadLetterEventCount: 0,
+  failedOrDeadLetterCount: 0,
+  distinctDownstreamCount: 0,
+  dueRetryEventCount: 0,
+  paymentSuccessEventCount: 0,
+  latestPublishedAt: ""
+});
 const pageNo = ref(1);
 const pageSize = 20;
 const activeEventNo = ref("");
@@ -24,11 +36,15 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  successTotal: items.value.filter((item) => item.publishStatus === "SUCCESS").length,
-  failedTotal: items.value.filter((item) => item.publishStatus === "FAILED" || item.publishStatus === "DEAD_LETTER").length,
-  deadLetterTotal: items.value.filter((item) => item.publishStatus === "DEAD_LETTER").length,
-  downstreamCount: new Set(items.value.map((item) => item.downstreamSystem).filter(Boolean)).size
+  total: overview.value.totalEventCount,
+  successTotal: overview.value.successEventCount,
+  pendingTotal: overview.value.pendingEventCount,
+  failedTotal: overview.value.failedOrDeadLetterCount,
+  deadLetterTotal: overview.value.deadLetterEventCount,
+  downstreamCount: overview.value.distinctDownstreamCount,
+  dueRetryCount: overview.value.dueRetryEventCount,
+  paymentSuccessEventCount: overview.value.paymentSuccessEventCount,
+  latestPublishedAt: overview.value.latestPublishedAt || "-"
 }));
 
 function resetFilters() {
@@ -58,7 +74,7 @@ async function loadEvents() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await paymentEventApi.getList({
+    const query = {
       paymentOrderId: filters.value.paymentOrderId,
       eventType: filters.value.eventType,
       publishStatus: filters.value.publishStatus,
@@ -68,7 +84,15 @@ async function loadEvents() {
       sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
-    });
+    };
+    const [overviewResult, result] = await Promise.all([
+      paymentEventApi.getOverview(query),
+      paymentEventApi.getList(query)
+    ]);
+    overview.value = {
+      ...overview.value,
+      ...overviewResult
+    };
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
@@ -148,6 +172,10 @@ onMounted(loadEvents);
         <p class="card-value">{{ metrics.successTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">发布中</p>
+        <p class="card-value">{{ metrics.pendingTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">发布失败</p>
         <p class="card-value">{{ metrics.failedTotal }}</p>
       </article>
@@ -159,6 +187,30 @@ onMounted(loadEvents);
         <p class="card-title">下游系统数</p>
         <p class="card-value">{{ metrics.downstreamCount }}</p>
       </article>
+    </section>
+
+    <section class="panel overview-panel">
+      <div class="section-title">
+        <h3>出站风险总览</h3>
+        <span class="meta">最近发布时间：{{ metrics.latestPublishedAt }}</span>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card danger">
+          <p class="overview-title">失败或死信事件</p>
+          <strong>{{ metrics.failedTotal }}</strong>
+          <span>优先核对失败投递与死信积压，确认是否需要人工补偿或跨系统追单。</span>
+        </article>
+        <article class="overview-card warn">
+          <p class="overview-title">到期待重试</p>
+          <strong>{{ metrics.dueRetryCount }}</strong>
+          <span>表示已达到下次重试时间但仍未收口的失败事件，适合作为任务中心补跑输入。</span>
+        </article>
+        <article class="overview-card info">
+          <p class="overview-title">支付成功事件</p>
+          <strong>{{ metrics.paymentSuccessEventCount }}</strong>
+          <span>重点关注支付成功事实向账务、清分、结算等下游传播是否完整落地。</span>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -306,6 +358,12 @@ onMounted(loadEvents);
               <div class="ops-row"><span>优先动作</span><span>重发事件、核对下游系统状态</span></div>
               <div class="ops-row"><span>重点核对</span><span>发布状态、重试次数、下次重试时间</span></div>
               <div class="ops-row"><span>典型场景</span><span>下游未消费、消息投递失败、补偿事件积压</span></div>
+              <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信</span></div>
+            </div>
+            <div class="table-inline-actions">
+              <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-logs?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付日志</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
             </div>
           </div>
           <div v-else class="state-box">选择左侧支付事件后，可在这里查看事件快照与排障建议。</div>
@@ -322,6 +380,57 @@ onMounted(loadEvents);
 </template>
 
 <style scoped>
+.overview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe3f0;
+  background: #f8fafc;
+}
+
+.overview-card strong {
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.overview-card span {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overview-title {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.overview-card.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.overview-card.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.overview-card.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) 360px;
@@ -389,5 +498,11 @@ onMounted(loadEvents);
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

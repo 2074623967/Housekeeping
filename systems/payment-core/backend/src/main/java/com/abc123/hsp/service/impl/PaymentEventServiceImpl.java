@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
@@ -51,6 +52,43 @@ public class PaymentEventServiceImpl implements PaymentEventService {
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    @Override
+    public PaymentEventOverviewDTO overview(PaymentEventQueryDTO query) {
+        normalizeQuery(query);
+        PaymentEventOverviewDTO overview = paymentEventMapper.findOverview(query);
+        if (overview == null) {
+            overview = new PaymentEventOverviewDTO();
+        }
+        if (overview.getTotalEventCount() == null) {
+            overview.setTotalEventCount(0L);
+        }
+        if (overview.getSuccessEventCount() == null) {
+            overview.setSuccessEventCount(0L);
+        }
+        if (overview.getPendingEventCount() == null) {
+            overview.setPendingEventCount(0L);
+        }
+        if (overview.getFailedEventCount() == null) {
+            overview.setFailedEventCount(0L);
+        }
+        if (overview.getDeadLetterEventCount() == null) {
+            overview.setDeadLetterEventCount(0L);
+        }
+        if (overview.getFailedOrDeadLetterCount() == null) {
+            overview.setFailedOrDeadLetterCount(0L);
+        }
+        if (overview.getDistinctDownstreamCount() == null) {
+            overview.setDistinctDownstreamCount(0);
+        }
+        if (overview.getDueRetryEventCount() == null) {
+            overview.setDueRetryEventCount(0);
+        }
+        if (overview.getPaymentSuccessEventCount() == null) {
+            overview.setPaymentSuccessEventCount(0);
+        }
+        return overview;
     }
 
     @Override

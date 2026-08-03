@@ -40,6 +40,7 @@
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
 | `/api/payment-events` | `GET` | 查询支付事件出站台账，支持 `FAILED_OR_DEAD_LETTER` 联合口径 |
+| `/api/payment-events/overview` | `GET` | 查询支付事件出站总览指标 |
 | `/api/payment-events/republish` | `POST` | 手动重发支付事件 |
 | `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
 | `/api/payment-issues/responsibility-summary` | `GET` | 查询支付交易异常责任组统计 |
@@ -318,6 +319,8 @@
 
 查询接口：`GET /api/payment-events`
 
+总览接口：`GET /api/payment-events/overview`
+
 重发接口：`POST /api/payment-events/republish`
 
 导出接口：`GET /api/payment-events/export`
@@ -346,6 +349,9 @@
 
 业务说明：
 
+1. 新增 `GET /api/payment-events/overview`，复用同一组筛选条件返回事件总数、发布成功/发布中/失败/死信分布、涉及下游系统数、到期待重试事件数、支付成功事件数和最近发布时间，便于运营和研发先看风险面再下钻列表。
+2. 列表、总览、导出三类接口当前共用统一筛选口径，避免前端页面统计、导出快照和后台查询出现不一致。
+3. `FAILED_OR_DEAD_LETTER` 作为联合筛选口径保留，用于快速圈定需要补偿和人工干预的出站事件。
 1. 重发接口会沿用当前查询条件返回最新分页结果，前端无需额外再发一次查询。
 2. 当前主要支撑支付成功、支付关闭、退款等出站事件的可见化与手动补偿入口。
 3. 后续若接入真实消息总线，需要继续补投递批次、订阅确认和死信处理字段。

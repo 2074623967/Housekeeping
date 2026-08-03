@@ -3133,3 +3133,25 @@
 2. 新增控制器测试后，`payment-core` 的后端全量测试总数已提升到 `220`，说明回归保护范围继续扩大。
 3. `admin-web / app-web / h5-web / pc-web` 四端当前都能在最新 `test` 分支上独立完成生产构建，说明多端前端矩阵没有被近期补偿和门面测试改动破坏。
 4. 当前仍不进入 `master` 或 `release/*`，因为阻断点已经进一步收敛到生产级可靠投递、跨系统补偿、整包正式发布清单和发布后验证项。
+
+## 100. 2026-08-03 支付事件出站总览补强验证
+
+### 100.1 本轮补强点
+
+1. 新增 `GET /api/payment-events/overview`，在列表筛选条件不变的前提下返回事件总数、成功/发布中/失败/死信分布、涉及下游系统数、到期待重试事件数、支付成功事件数和最近发布时间。
+2. `PaymentEventsView` 已接入总览指标、风险卡片和联查入口，避免页面统计仅依赖当前页数据。
+3. `PaymentEventMapper.xml` 已统一列表、总览、导出三类查询口径，降低运营页统计与导出不一致的风险。
+
+### 100.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付事件定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentEventServiceImplTest,PaymentEventControllerTest test` | 通过 | 支付事件服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与联查入口已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 100.3 当前判断
+
+1. `payment-core` 的支付事件出站页已从“基础列表 + 手动重发”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了 `payment-core` 在支付交易闭环中后台上的产品化差距，但仍不代表真实消息总线、订阅确认和跨系统补偿编排已经生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。

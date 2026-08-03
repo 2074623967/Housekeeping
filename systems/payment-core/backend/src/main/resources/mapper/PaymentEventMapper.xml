@@ -4,21 +4,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentEventMapper">
 
-    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
-        SELECT event_no AS eventNo,
-               event_type AS eventType,
-               payment_order_id AS paymentOrderId,
-               biz_no AS bizNo,
-               event_topic AS eventTopic,
-               downstream_system AS downstreamSystem,
-               publish_status AS publishStatus,
-               publish_status_type AS publishStatusType,
-               retry_count AS retryCount,
-               DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
-               DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
-               event_payload AS eventPayload,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
-        FROM t_payment_event
+    <sql id="paymentEventWhere">
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
@@ -43,6 +29,24 @@
                 AND event_topic LIKE CONCAT('%', #{query.eventTopic}, '%')
             </if>
         </where>
+    </sql>
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
+        SELECT event_no AS eventNo,
+               event_type AS eventType,
+               payment_order_id AS paymentOrderId,
+               biz_no AS bizNo,
+               event_topic AS eventTopic,
+               downstream_system AS downstreamSystem,
+               publish_status AS publishStatus,
+               publish_status_type AS publishStatusType,
+               retry_count AS retryCount,
+               DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
+               DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               event_payload AS eventPayload,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_event
+        <include refid="paymentEventWhere"/>
         <choose>
             <when test="query.sortField == 'retryCount'">
                 ORDER BY retry_count
@@ -65,33 +69,25 @@
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
+    <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentEventOverviewDTO">
+        SELECT COUNT(1) AS totalEventCount,
+               SUM(CASE WHEN publish_status = 'SUCCESS' THEN 1 ELSE 0 END) AS successEventCount,
+               SUM(CASE WHEN publish_status = 'PENDING' THEN 1 ELSE 0 END) AS pendingEventCount,
+               SUM(CASE WHEN publish_status = 'FAILED' THEN 1 ELSE 0 END) AS failedEventCount,
+               SUM(CASE WHEN publish_status = 'DEAD_LETTER' THEN 1 ELSE 0 END) AS deadLetterEventCount,
+               SUM(CASE WHEN publish_status IN ('FAILED', 'DEAD_LETTER') THEN 1 ELSE 0 END) AS failedOrDeadLetterCount,
+               COUNT(DISTINCT downstream_system) AS distinctDownstreamCount,
+               SUM(CASE WHEN publish_status = 'FAILED' AND next_retry_at IS NOT NULL AND next_retry_at &lt;= NOW() THEN 1 ELSE 0 END) AS dueRetryEventCount,
+               SUM(CASE WHEN event_type = 'PAYMENT_SUCCESS' THEN 1 ELSE 0 END) AS paymentSuccessEventCount,
+               DATE_FORMAT(MAX(last_published_at), '%Y-%m-%d %H:%i:%s') AS latestPublishedAt
+        FROM t_payment_event
+        <include refid="paymentEventWhere"/>
+    </select>
+
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM t_payment_event
-        <where>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.eventType != null and query.eventType != '' and query.eventType != '全部'">
-                AND event_type = #{query.eventType}
-            </if>
-            <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
-                <choose>
-                    <when test="query.publishStatus == 'FAILED_OR_DEAD_LETTER'">
-                        AND publish_status IN ('FAILED', 'DEAD_LETTER')
-                    </when>
-                    <otherwise>
-                        AND publish_status = #{query.publishStatus}
-                    </otherwise>
-                </choose>
-            </if>
-            <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
-                AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
-            </if>
-            <if test="query.eventTopic != null and query.eventTopic != ''">
-                AND event_topic LIKE CONCAT('%', #{query.eventTopic}, '%')
-            </if>
-        </where>
+        <include refid="paymentEventWhere"/>
     </select>
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
@@ -109,30 +105,7 @@
                event_payload AS eventPayload,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
-        <where>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.eventType != null and query.eventType != '' and query.eventType != '全部'">
-                AND event_type = #{query.eventType}
-            </if>
-            <if test="query.publishStatus != null and query.publishStatus != '' and query.publishStatus != '全部'">
-                <choose>
-                    <when test="query.publishStatus == 'FAILED_OR_DEAD_LETTER'">
-                        AND publish_status IN ('FAILED', 'DEAD_LETTER')
-                    </when>
-                    <otherwise>
-                        AND publish_status = #{query.publishStatus}
-                    </otherwise>
-                </choose>
-            </if>
-            <if test="query.downstreamSystem != null and query.downstreamSystem != '' and query.downstreamSystem != '全部'">
-                AND downstream_system LIKE CONCAT('%', #{query.downstreamSystem}, '%')
-            </if>
-            <if test="query.eventTopic != null and query.eventTopic != ''">
-                AND event_topic LIKE CONCAT('%', #{query.eventTopic}, '%')
-            </if>
-        </where>
+        <include refid="paymentEventWhere"/>
         <choose>
             <when test="query.sortField == 'retryCount'">
                 ORDER BY retry_count

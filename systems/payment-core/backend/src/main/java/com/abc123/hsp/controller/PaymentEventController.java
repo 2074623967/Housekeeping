@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.service.PaymentEventService;
@@ -28,6 +29,29 @@ public class PaymentEventController {
 
     public PaymentEventController(PaymentEventService paymentEventService) {
         this.paymentEventService = paymentEventService;
+    }
+
+    /**
+     * 查询支付事件出站总览。
+     */
+    @GetMapping("/overview")
+    public ApiResponse<PaymentEventOverviewDTO> overview(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(defaultValue = "全部") String eventType,
+            @RequestParam(defaultValue = "全部") String publishStatus,
+            @RequestParam(defaultValue = "全部") String downstreamSystem,
+            @RequestParam(required = false) String eventTopic,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setEventType(eventType);
+        query.setPublishStatus(publishStatus);
+        query.setDownstreamSystem(downstreamSystem);
+        query.setEventTopic(eventTopic);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        return ApiResponse.success(paymentEventService.overview(query));
     }
 
     /**

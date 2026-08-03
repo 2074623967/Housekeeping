@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.util.Collections;
@@ -51,6 +52,32 @@ class PaymentEventServiceImplTest {
         assertEquals("payment.trade", query.getEventTopic());
         assertEquals("retryCount", query.getSortField());
         assertEquals("asc", query.getSortOrder());
+    }
+
+    @Test
+    void shouldNormalizeAndReturnOverview() {
+        PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setEventType(" PAYMENT_SUCCESS ");
+        query.setPublishStatus(" FAILED_OR_DEAD_LETTER ");
+        query.setDownstreamSystem(" accounting-system ");
+        query.setEventTopic(" payment.trade ");
+        PaymentEventOverviewDTO overview = new PaymentEventOverviewDTO();
+        overview.setTotalEventCount(18L);
+        overview.setFailedOrDeadLetterCount(5L);
+        when(paymentEventMapper.findOverview(query)).thenReturn(overview);
+
+        PaymentEventOverviewDTO result = new PaymentEventServiceImpl(paymentEventMapper).overview(query);
+
+        assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("PAYMENT_SUCCESS", query.getEventType());
+        assertEquals("FAILED_OR_DEAD_LETTER", query.getPublishStatus());
+        assertEquals("accounting-system", query.getDownstreamSystem());
+        assertEquals("payment.trade", query.getEventTopic());
+        assertEquals(18L, result.getTotalEventCount());
+        assertEquals(5L, result.getFailedOrDeadLetterCount());
+        assertEquals(0, result.getDueRetryEventCount());
+        verify(paymentEventMapper).findOverview(query);
     }
 
     @Test

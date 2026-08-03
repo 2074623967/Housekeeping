@@ -330,6 +330,26 @@ export const paymentRouteApi = {
 };
 
 export const paymentEventApi = {
+  getOverview: ({
+    paymentOrderId = "",
+    eventType = "全部",
+    publishStatus = "全部",
+    downstreamSystem = "全部",
+    eventTopic = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      eventType,
+      publishStatus,
+      downstreamSystem,
+      eventTopic,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-events/overview?${params.toString()}`);
+  },
   getList: ({
     paymentOrderId = "",
     eventType = "全部",

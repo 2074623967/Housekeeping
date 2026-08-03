@@ -107,9 +107,10 @@
 5. `PaymentRequestController / PaymentDayEndController / PaymentTaskCenterController` 已补独立控制器测试，新增 `7` 个定向用例全部通过
 6. 支付配置中心已补治理快照导出能力，可按分区输出渠道、路由、协议、返回码、网关、控制策略、告警供应商和值班路由的统一 CSV 留痕
 7. 支付日志中心已补总览指标接口，统一输出错误/告警/信息分布、来源数、阶段数、回调错误数和最近日志时间，且对应后端定向测试与 `admin-web` 构建均已通过
-8. 已完成 `payment.trade.dlq -> payment.compensation.dlq-intake -> t_payment_dead_letter_task` 的真实运行验证，并确认新演练消息和历史演练副本均可写入补偿任务账本
-9. 2026-08-02 已重新执行 `payment-core` 后端全量测试，`220` 个用例全部通过
-10. 2026-08-02 已重新执行 `admin-web / app-web / h5-web / pc-web` 四端前端生产构建，全部通过
+8. 支付事件出站已补总览指标接口，统一输出成功/发布中/失败/死信分布、到期待重试事件、支付成功事件和最近发布时间，且对应后端定向测试与 `admin-web` 构建均已通过
+9. 已完成 `payment.trade.dlq -> payment.compensation.dlq-intake -> t_payment_dead_letter_task` 的真实运行验证，并确认新演练消息和历史演练副本均可写入补偿任务账本
+10. 2026-08-02 已重新执行 `payment-core` 后端全量测试，`220` 个用例全部通过
+11. 2026-08-02 已重新执行 `admin-web / app-web / h5-web / pc-web` 四端前端生产构建，全部通过
 
 结论：
 
