@@ -421,6 +421,28 @@ export const paymentEventApi = {
 };
 
 export const cashierSessionApi = {
+  getOverview: ({
+    sessionNo = "",
+    paymentOrderId = "",
+    orderNo = "",
+    customerName = "",
+    terminal = "全部",
+    sessionStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      sessionNo,
+      paymentOrderId,
+      orderNo,
+      customerName,
+      terminal,
+      sessionStatus,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/cashier-sessions/overview?${params.toString()}`);
+  },
   getList: ({
     sessionNo = "",
     paymentOrderId = "",

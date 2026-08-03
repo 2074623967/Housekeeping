@@ -7,6 +7,16 @@ const selectedItem = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const total = ref(0);
+const overview = ref({
+  totalSessionCount: 0,
+  expiredSessionCount: 0,
+  successSessionCount: 0,
+  payingSessionCount: 0,
+  pendingSessionCount: 0,
+  distinctTerminalCount: 0,
+  expiringSoonCount: 0,
+  totalAmount: "¥0.00"
+});
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
@@ -21,10 +31,14 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  expiredTotal: items.value.filter((item) => item.sessionStatus === "已失效").length,
-  successTotal: items.value.filter((item) => item.sessionStatus === "支付成功" || item.sessionStatus === "已完成").length,
-  terminalCount: new Set(items.value.map((item) => item.terminal).filter(Boolean)).size
+  total: overview.value.totalSessionCount,
+  expiredTotal: overview.value.expiredSessionCount,
+  successTotal: overview.value.successSessionCount,
+  payingTotal: overview.value.payingSessionCount,
+  pendingTotal: overview.value.pendingSessionCount,
+  terminalCount: overview.value.distinctTerminalCount,
+  expiringSoonCount: overview.value.expiringSoonCount,
+  totalAmount: overview.value.totalAmount
 }));
 
 function resetFilters() {
@@ -55,7 +69,7 @@ async function loadCashierSessions() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await cashierSessionApi.getList({
+    const query = {
       sessionNo: filters.value.sessionNo,
       paymentOrderId: filters.value.paymentOrderId,
       orderNo: filters.value.orderNo,
@@ -66,7 +80,15 @@ async function loadCashierSessions() {
       sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
-    });
+    };
+    const [overviewResult, result] = await Promise.all([
+      cashierSessionApi.getOverview(query),
+      cashierSessionApi.getList(query)
+    ]);
+    overview.value = {
+      ...overview.value,
+      ...overviewResult
+    };
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
@@ -126,9 +148,41 @@ onMounted(loadCashierSessions);
         <p class="card-value">{{ metrics.successTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">支付中</p>
+        <p class="card-value">{{ metrics.payingTotal }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">待支付</p>
+        <p class="card-value">{{ metrics.pendingTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">涉及终端数</p>
         <p class="card-value">{{ metrics.terminalCount }}</p>
       </article>
+    </section>
+
+    <section class="panel overview-panel">
+      <div class="section-title">
+        <h3>会话风险总览</h3>
+        <span class="meta">用于识别即将失效、金额聚集和终端分布异常</span>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card warn">
+          <p class="overview-title">即将失效会话</p>
+          <strong>{{ metrics.expiringSoonCount }}</strong>
+          <span>15 分钟内即将失效且未成功的会话，适合优先排查用户跳失或终端兼容问题。</span>
+        </article>
+        <article class="overview-card danger">
+          <p class="overview-title">已失效会话</p>
+          <strong>{{ metrics.expiredTotal }}</strong>
+          <span>重点联查预付单、支付单和终端来源，确认是否存在重复拉起和超时未支付问题。</span>
+        </article>
+        <article class="overview-card info">
+          <p class="overview-title">会话金额合计</p>
+          <strong>{{ metrics.totalAmount }}</strong>
+          <span>帮助运营快速识别当前筛选条件下的会话金额体量和终端流量压力。</span>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -261,10 +315,12 @@ onMounted(loadCashierSessions);
               <div class="ops-row"><span>优先联查</span><span>订单中心 / 支付单详情 / 当前收银台</span></div>
               <div class="ops-row"><span>典型问题</span><span>会话失效、终端跳转失败、支付中未收口</span></div>
               <div class="ops-row"><span>重点核对</span><span>终端、失效时间、支付单状态是否一致</span></div>
+              <div class="ops-row"><span>当前风险面</span><span>{{ metrics.expiringSoonCount }} 条即将失效，{{ metrics.expiredTotal }} 条已失效</span></div>
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="`/orders?orderNo=${selectedItem.orderNo}`">查看订单</RouterLink>
               <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
               <a
                 class="link-button"
                 :href="`/cashier/${selectedItem.prepayOrderNo}`"
@@ -289,6 +345,57 @@ onMounted(loadCashierSessions);
 </template>
 
 <style scoped>
+.overview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe3f0;
+  background: #f8fafc;
+}
+
+.overview-card strong {
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.overview-card span {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overview-title {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.overview-card.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.overview-card.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.overview-card.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) 360px;
@@ -355,5 +462,11 @@ onMounted(loadCashierSessions);
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

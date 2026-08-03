@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.service.CashierSessionService;
@@ -25,6 +26,31 @@ public class CashierSessionController {
 
     public CashierSessionController(CashierSessionService cashierSessionService) {
         this.cashierSessionService = cashierSessionService;
+    }
+
+    /**
+     * 查询收银台会话总览，供运营快速识别失效会话和终端分布。
+     */
+    @GetMapping("/overview")
+    public ApiResponse<CashierSessionOverviewDTO> overview(
+            @RequestParam(required = false) String sessionNo,
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String customerName,
+            @RequestParam(defaultValue = "全部") String terminal,
+            @RequestParam(defaultValue = "全部") String sessionStatus,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        CashierSessionQueryDTO query = new CashierSessionQueryDTO();
+        query.setSessionNo(sessionNo);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setCustomerName(customerName);
+        query.setTerminal(terminal);
+        query.setSessionStatus(sessionStatus);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        return ApiResponse.success(cashierSessionService.overview(query));
     }
 
     /**

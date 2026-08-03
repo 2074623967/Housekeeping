@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.service.CashierSessionService;
 import java.nio.charset.StandardCharsets;
@@ -61,5 +62,17 @@ class CashierSessionControllerTest {
         controller.list(null, null, null, null, "全部", "全部", "createdAt", "desc", 1, 20);
 
         verify(cashierSessionService).list(any(CashierSessionQueryDTO.class));
+    }
+
+    @Test
+    void shouldReturnCashierSessionOverview() {
+        CashierSessionController controller = new CashierSessionController(cashierSessionService);
+        CashierSessionOverviewDTO overviewDTO = new CashierSessionOverviewDTO();
+        overviewDTO.setTotalSessionCount(10L);
+        when(cashierSessionService.overview(any(CashierSessionQueryDTO.class))).thenReturn(overviewDTO);
+
+        controller.overview("PRE-001", "PAY-001", "ORD-001", "张女士", "H5", "待支付", "createdAt", "desc");
+
+        verify(cashierSessionService).overview(any(CashierSessionQueryDTO.class));
     }
 }

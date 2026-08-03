@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 
@@ -15,6 +16,13 @@ public interface CashierSessionService {
      * @return 收银台会话列表
      */
     PageResultDTO<CashierSessionListItemDTO> list(CashierSessionQueryDTO query);
+
+    /**
+     * 查询收银台会话总览。
+     *
+     * @return 收银台会话总览
+     */
+    CashierSessionOverviewDTO overview(CashierSessionQueryDTO query);
 
     /**
      * 导出收银台会话列表。

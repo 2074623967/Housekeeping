@@ -3177,3 +3177,25 @@
 1. `payment-core` 的服务者结算页已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化支付侧核对台。
 2. 这一步继续缩小了支付核心域对结算侧可视化与风险识别的产品化差距，但仍不代表完整审批、出款、核销和失败重打作业已经在 `payment-core` 生产化。
 3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 102. 2026-08-03 收银台会话总览补强验证
+
+### 102.1 本轮补强点
+
+1. 新增 `GET /api/cashier-sessions/overview`，在列表筛选条件不变的前提下返回会话总数、已失效/成功/支付中/待支付会话分布、涉及终端数、15 分钟内即将失效会话数和会话金额合计。
+2. `CashierSessionsView` 已接入总览指标、风险卡片和联查入口，避免后台卡片继续基于当前页临时统计。
+3. `CashierSessionMapper.xml` 已统一列表、总览、导出三类查询口径，降低页面统计与导出口径不一致的风险。
+
+### 102.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 收银台会话定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=CashierSessionServiceImplTest,CashierSessionControllerTest test` | 通过 | 收银台会话服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与联查入口已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 102.3 当前判断
+
+1. `payment-core` 的收银台会话页已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了支付核心域在终端会话排障和用户跳失识别上的产品化差距，但仍不代表多端收银台的真实终端追踪、埋点分析和自动补偿已生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。

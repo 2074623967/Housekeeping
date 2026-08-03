@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -23,6 +24,11 @@ public interface CashierSessionMapper {
      * @return 收银台会话列表
      */
     List<CashierSessionListItemDTO> findAllForExport(@Param("query") CashierSessionQueryDTO query);
+
+    /**
+     * 查询收银台会话总览。
+     */
+    CashierSessionOverviewDTO findOverview(@Param("query") CashierSessionQueryDTO query);
 
     /**
      * 统计符合条件的收银台会话总数。

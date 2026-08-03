@@ -27,6 +27,7 @@
 | `/api/bills` | `GET` | 查询交易账单中心 |
 | `/api/bills/export` | `GET` | 导出当前筛选条件下的交易账单 CSV |
 | `/api/cashier-sessions` | `GET` | 查询收银台会话管理列表 |
+| `/api/cashier-sessions/overview` | `GET` | 查询收银台会话总览指标 |
 | `/api/cashier-sessions/export` | `GET` | 导出当前筛选条件下的收银台会话 CSV |
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
 | `/api/payment-flows/export` | `GET` | 导出统一支付流水排障台 |
@@ -686,12 +687,15 @@
 
 接口：`GET /api/cashier-sessions`
 
+总览接口：`GET /api/cashier-sessions/overview`
+
 当前补充能力：
 
 1. 已支持 `paymentOrderId`、`customerName` 筛选。
 2. 已支持按 `createdAt / expiresAt / amount` 排序。
-3. `GET /api/cashier-sessions/export` 复用会话号、支付单号、订单号、客户、终端、会话状态和排序条件导出全量匹配数据，不受列表分页影响。
-4. 导出文件名为 `cashier-sessions.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
+3. `GET /api/cashier-sessions/overview` 复用同一组筛选条件返回会话总数、已失效会话数、成功/已完成会话数、支付中会话数、待支付会话数、涉及终端数、15 分钟内即将失效会话数和会话金额合计。
+4. `GET /api/cashier-sessions/export` 复用会话号、支付单号、订单号、客户、终端、会话状态和排序条件导出全量匹配数据，不受列表分页影响。
+5. 导出文件名为 `cashier-sessions.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
 
 接口：`GET /api/refunds`
 
