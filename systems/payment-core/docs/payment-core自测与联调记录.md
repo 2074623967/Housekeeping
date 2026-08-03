@@ -3265,3 +3265,25 @@
 1. `payment-core` 的支付配置中心正从“治理台账可查看”升级为“治理风险可观察、交付快照可分区导出、控制器门禁更完整”的正式化配置治理台。
 2. 这一步继续缩小了支付核心域在配置审计、发布留痕和跨角色协同评审上的产品化差距，但仍不代表真实密钥托管、证书上传流转和外部通知平台已生产化。
 3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 106. 2026-08-03 支付监控分析风险总览与控制器门禁补强验证
+
+### 106.1 本轮补强点
+
+1. `PaymentMonitorView` 已新增风险总览区，统一展示 `P1` 告警数、存在待处理的渠道数和高风险渠道数，避免首屏只能看摘要卡片和明细表。
+2. 后台支付监控分析页继续保持“摘要卡片 + 风险总览 + 趋势 + 告警 + 渠道下钻”的一致结构，更贴近正式运营台交付标准。
+3. 新增 `PaymentMonitorControllerTest`，补齐支付监控分析控制器层门禁，避免监控总览接口只依赖服务层测试保护。
+
+### 106.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付监控分析定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentMonitorServiceImplTest,PaymentMonitorControllerTest test` | 通过 | 支付监控分析服务层与控制器层门禁均通过，新增覆盖监控总览接口控制器转发 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，风险总览区接入后页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 106.3 当前判断
+
+1. `payment-core` 的支付监控分析页正从“可查看摘要和明细”升级为“风险面先判断、再下钻处理”的正式化监控台。
+2. 这一步继续缩小了支付核心域在趋势观察、渠道风险识别和异常优先级分层上的产品化差距，但仍不代表真实时序监控、外部告警平台和自动扩缩容联动已经生产化。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。

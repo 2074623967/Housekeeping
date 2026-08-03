@@ -69,6 +69,16 @@ const trendSummary = computed(() => {
   };
 });
 
+const riskSummary = computed(() => {
+  const channelMetrics = overview.value.channelMetrics || [];
+  const alerts = overview.value.alerts || [];
+  return {
+    highRiskChannelCount: channelMetrics.filter((item) => item.riskLevel === "高" || item.riskLevel === "HIGH").length,
+    pendingChannelCount: channelMetrics.filter((item) => (item.pendingCount || 0) > 0).length,
+    alertP1Count: alerts.filter((item) => item.alertLevel === "P1").length
+  };
+});
+
 const alertSuggestions = computed(() => {
   if (!selectedAlert.value) {
     return [];
@@ -173,6 +183,30 @@ onMounted(loadOverview);
             <div class="meta">{{ card.hint }}</div>
           </div>
         </div>
+
+        <section class="panel overview-panel">
+          <div class="section-title">
+            <h3>监控风险总览</h3>
+            <span class="meta">按趋势、渠道和告警统一观察风险面</span>
+          </div>
+          <div class="overview-grid">
+            <article class="overview-card danger">
+              <p class="overview-title">P1 告警优先处理</p>
+              <strong>{{ riskSummary.alertP1Count }}</strong>
+              <span>优先联查待回调、退款失败和停用渠道命中告警，避免主链路持续积压。</span>
+            </article>
+            <article class="overview-card warn">
+              <p class="overview-title">存在待处理渠道</p>
+              <strong>{{ riskSummary.pendingChannelCount }}</strong>
+              <span>表示当前仍有渠道存在待收口支付，建议结合支付单与回调链路继续追踪。</span>
+            </article>
+            <article class="overview-card info">
+              <p class="overview-title">高风险渠道数</p>
+              <strong>{{ riskSummary.highRiskChannelCount }}</strong>
+              <span>用于快速判断是否需要回到配置中心复核商户参数、网关状态和路由规则。</span>
+            </article>
+          </div>
+        </section>
 
         <div class="split-panels">
           <section class="panel mini">
