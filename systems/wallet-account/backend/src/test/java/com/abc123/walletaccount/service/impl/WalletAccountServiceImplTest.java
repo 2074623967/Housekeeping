@@ -40,6 +40,7 @@ class WalletAccountServiceImplTest {
         WalletAccountStatusChangeRequestDTO requestDTO = new WalletAccountStatusChangeRequestDTO();
         requestDTO.setTargetStatus("CLOSED");
         requestDTO.setOperatorRole("FUNDS");
+        requestDTO.setOperationReason("主体注销且余额未清零");
         when(dao.findAccountByNo("WA-USER-001"))
                 .thenReturn(createAccount("WA-USER-001", "ACTIVE", "20.00", "5.00", "0.00", "0.00"));
 
@@ -56,6 +57,7 @@ class WalletAccountServiceImplTest {
         WalletAccountStatusChangeRequestDTO requestDTO = new WalletAccountStatusChangeRequestDTO();
         requestDTO.setTargetStatus("FROZEN");
         requestDTO.setOperatorRole("FUNDS");
+        requestDTO.setOperationReason("命中风控预警，先冻结账户");
         WalletAccountEntity active = createAccount("WA-USER-001", "ACTIVE", "0.00", "0.00", "0.00", "0.00");
         WalletAccountEntity frozen = createAccount("WA-USER-001", "FROZEN", "0.00", "0.00", "0.00", "0.00");
         when(dao.findAccountByNo("WA-USER-001")).thenReturn(active, frozen);
@@ -149,6 +151,23 @@ class WalletAccountServiceImplTest {
         BusinessException exception = assertThrows(BusinessException.class, () -> service.exportFlows(requestDTO));
 
         assertEquals("WALLET_ACCOUNT_EXPORT_FORBIDDEN", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectClosingAccountWhenReasonTooShort() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        WalletAccountStatusChangeRequestDTO requestDTO = new WalletAccountStatusChangeRequestDTO();
+        requestDTO.setTargetStatus("CLOSED");
+        requestDTO.setOperatorRole("FUNDS");
+        requestDTO.setOperationReason("余额清零");
+        when(dao.findAccountByNo("WA-USER-001"))
+                .thenReturn(createAccount("WA-USER-001", "ACTIVE", "0.00", "0.00", "0.00", "0.00"));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.changeStatus("WA-USER-001", requestDTO));
+
+        assertEquals("WALLET_ACCOUNT_CLOSE_REASON_INVALID", exception.getCode());
     }
 
     private OpenWalletAccountRequestDTO createOpenRequest() {

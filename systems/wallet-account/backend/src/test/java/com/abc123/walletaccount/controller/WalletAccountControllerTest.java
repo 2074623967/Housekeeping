@@ -71,7 +71,7 @@ class WalletAccountControllerTest {
 
         mockMvc.perform(post("/api/wallet/accounts")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"requestNo\":\"REQ-001\",\"walletOwnerId\":\"WO-001\",\"ownerType\":\"USER\",\"ownerName\":\"测试用户\",\"accountType\":\"MAIN\",\"accountScene\":\"USER_STORE\",\"operatorId\":\"tester\",\"operatorName\":\"测试人员\"}"))
+                        .content("{\"requestNo\":\"REQ-001\",\"walletOwnerId\":\"WO-001\",\"ownerType\":\"USER\",\"ownerName\":\"测试用户\",\"accountType\":\"MAIN\",\"accountScene\":\"USER_STORE\",\"operatorId\":\"tester\",\"operatorRole\":\"FUNDS\",\"operatorName\":\"测试人员\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.walletAccountNo").value("WA-NEW-001"));
     }
@@ -85,7 +85,7 @@ class WalletAccountControllerTest {
 
         mockMvc.perform(post("/api/wallet/flows/export")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"walletAccountNo\":\"WA-001\",\"operatorId\":\"U-1\",\"operatorName\":\"tester\"}"))
+                        .content("{\"walletAccountNo\":\"WA-001\",\"operatorId\":\"U-1\",\"operatorRole\":\"FINANCE\",\"operatorName\":\"tester\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.exportTaskNo").value("WFE-001"))
                 .andExpect(jsonPath("$.data.taskStatus").value("ACCEPTED"));

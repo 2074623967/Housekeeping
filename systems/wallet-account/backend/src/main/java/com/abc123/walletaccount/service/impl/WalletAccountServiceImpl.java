@@ -222,6 +222,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         validateFundsPermission(requestDTO.getOperatorRole(), "账户状态变更");
         String currentStatus = entity.getAccountStatus();
         String targetStatus = requestDTO.getTargetStatus();
+        validateStatusOperationReason(targetStatus, requestDTO.getOperationReason());
         validateStatusChange(entity, targetStatus);
         LocalDateTime closedAt = "CLOSED".equals(targetStatus) ? LocalDateTime.now() : null;
         int updatedRows = walletAccountDao.updateAccountStatus(
@@ -282,6 +283,15 @@ public class WalletAccountServiceImpl implements WalletAccountService {
             return;
         }
         throw new BusinessException("WALLET_ACCOUNT_STATUS_INVALID", "非法状态流转: " + currentStatus + " -> " + targetStatus);
+    }
+
+    private void validateStatusOperationReason(String targetStatus, String operationReason) {
+        if (isBlank(operationReason)) {
+            throw new IllegalArgumentException("状态变更原因不能为空");
+        }
+        if ("CLOSED".equals(targetStatus) && operationReason.trim().length() < 10) {
+            throw new BusinessException("WALLET_ACCOUNT_CLOSE_REASON_INVALID", "销户原因至少需要 10 个字符");
+        }
     }
 
     private void validateFlowExportPermission(WalletFlowExportRequestDTO requestDTO) {

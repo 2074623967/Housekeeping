@@ -24,8 +24,18 @@ const loading = ref(false);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const showOpenDialog = ref(false);
+const showStatusDialog = ref(false);
 const opening = ref(false);
 const changingStatus = ref(false);
+const pendingStatusAccount = ref(null);
+const pendingStatusTarget = ref("");
+const statusForm = reactive({
+  operatorId: "funds-admin",
+  operatorName: "资金管理员",
+  operatorRole: "FUNDS",
+  operationReason: "",
+  confirmWalletAccountNo: ""
+});
 const openForm = reactive({
   requestNo: "",
   walletOwnerId: "",
@@ -37,8 +47,9 @@ const openForm = reactive({
   accountType: "MAIN",
   accountScene: "USER_STORE",
   currencyCode: "CNY",
-  operatorId: "admin",
-  operatorName: "运营管理员"
+  operatorId: "funds-admin",
+  operatorRole: "FUNDS",
+  operatorName: "资金管理员"
 });
 
 async function loadAccounts() {
@@ -82,7 +93,10 @@ function startOpenAccount() {
     ownerName: "",
     extRefNo: "",
     accountType: "MAIN",
-    accountScene: "USER_STORE"
+    accountScene: "USER_STORE",
+    operatorId: "funds-admin",
+    operatorRole: "FUNDS",
+    operatorName: "资金管理员"
   });
   actionMessage.value = "";
   showOpenDialog.value = true;
@@ -113,21 +127,81 @@ function statusAction(account) {
   return null;
 }
 
-async function changeStatus(account, targetStatus) {
-  const actionText = targetStatus === "FROZEN" ? "冻结" : "解冻";
-  if (!window.confirm(`确认${actionText}账户 ${account.walletAccountNo} 吗？`)) {
+function openStatusDialog(account, targetStatus) {
+  pendingStatusAccount.value = account;
+  pendingStatusTarget.value = targetStatus;
+  Object.assign(statusForm, {
+    operatorId: "funds-admin",
+    operatorName: "资金管理员",
+    operatorRole: "FUNDS",
+    operationReason: targetStatus === "CLOSED" ? "" : `${getStatusActionText(targetStatus)}账户`,
+    confirmWalletAccountNo: ""
+  });
+  actionMessage.value = "";
+  showStatusDialog.value = true;
+}
+
+function closeStatusDialog() {
+  showStatusDialog.value = false;
+  pendingStatusAccount.value = null;
+  pendingStatusTarget.value = "";
+}
+
+function getStatusActionText(targetStatus) {
+  if (targetStatus === "FROZEN") {
+    return "冻结";
+  }
+  if (targetStatus === "ACTIVE") {
+    return "解冻";
+  }
+  if (targetStatus === "CLOSED") {
+    return "关闭";
+  }
+  return "变更";
+}
+
+function buildStatusHint(account, targetStatus) {
+  if (!account) {
+    return "";
+  }
+  if (targetStatus === "CLOSED") {
+    return "销户前需确认余额、冻结与在途金额全部清零，并填写可审计的关闭原因。";
+  }
+  return `将把账户 ${account.walletAccountNo} 从 ${account.accountStatus} 变更为 ${targetStatus}。`;
+}
+
+function canSubmitStatusChange() {
+  if (!pendingStatusAccount.value || !pendingStatusTarget.value) {
+    return false;
+  }
+  if (!statusForm.operationReason.trim()) {
+    return false;
+  }
+  if (pendingStatusTarget.value === "CLOSED") {
+    return statusForm.confirmWalletAccountNo.trim() === pendingStatusAccount.value.walletAccountNo;
+  }
+  return true;
+}
+
+async function submitStatusChange() {
+  if (!pendingStatusAccount.value || !pendingStatusTarget.value) {
     return;
   }
+  const account = pendingStatusAccount.value;
+  const targetStatus = pendingStatusTarget.value;
+  const actionText = getStatusActionText(targetStatus);
   changingStatus.value = true;
   actionMessage.value = "";
   try {
     await changeWalletAccountStatus(account.walletAccountNo, {
       targetStatus,
-      operatorId: "admin",
-      operatorName: "运营管理员",
-      operationReason: `${actionText}账户`
+      operatorId: statusForm.operatorId,
+      operatorRole: statusForm.operatorRole,
+      operatorName: statusForm.operatorName,
+      operationReason: statusForm.operationReason.trim()
     });
     actionMessage.value = `${actionText}成功`;
+    closeStatusDialog();
     await loadAccounts();
     await loadDetail(account.walletAccountNo);
   } catch (error) {
@@ -151,15 +225,15 @@ onMounted(() => {
         <div class="toolbar">
           <input v-model="query.keyword" placeholder="账户号 / 主体名称" />
           <select v-model="query.ownerType">
-            <option>全部主体</option>
-            <option>USER</option>
-            <option>WORKER</option>
+            <option value="">全部主体</option>
+            <option value="USER">USER</option>
+            <option value="WORKER">WORKER</option>
           </select>
           <select v-model="query.accountStatus">
-            <option>全部状态</option>
-            <option>ACTIVE</option>
-            <option>FROZEN</option>
-            <option>CLOSED</option>
+            <option value="">全部状态</option>
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="FROZEN">FROZEN</option>
+            <option value="CLOSED">CLOSED</option>
           </select>
           <button class="button" @click="loadAccounts">查询</button>
           <button class="button button--light" type="button" @click="startOpenAccount">新增开户</button>
@@ -208,7 +282,7 @@ onMounted(() => {
                     v-if="statusAction(account)"
                     class="text-button"
                     :disabled="changingStatus"
-                    @click="changeStatus(account, statusAction(account))"
+                    @click="openStatusDialog(account, statusAction(account))"
                   >
                     {{ statusAction(account) === "FROZEN" ? "冻结" : "解冻" }}
                   </button>
@@ -216,7 +290,7 @@ onMounted(() => {
                     v-if="account.accountStatus === 'ACTIVE' || account.accountStatus === 'FROZEN'"
                     class="text-button text-button--danger"
                     :disabled="changingStatus"
-                    @click="changeStatus(account, 'CLOSED')"
+                    @click="openStatusDialog(account, 'CLOSED')"
                   >
                     关闭
                   </button>
@@ -303,6 +377,48 @@ onMounted(() => {
         <div class="modal__actions">
           <button class="button button--light" type="button" @click="showOpenDialog = false">取消</button>
           <button class="button" type="submit" :disabled="opening">{{ opening ? "提交中..." : "确认开户" }}</button>
+        </div>
+      </form>
+    </div>
+
+    <div v-if="showStatusDialog" class="modal-backdrop" @click.self="closeStatusDialog">
+      <form class="modal modal--compact" @submit.prevent="submitStatusChange">
+        <div class="modal__header">
+          <div>
+            <p class="eyebrow">wallet-account</p>
+            <h3>{{ getStatusActionText(pendingStatusTarget) }}钱包账户</h3>
+          </div>
+          <button class="icon-button" type="button" @click="closeStatusDialog">×</button>
+        </div>
+        <div class="alert-block">
+          <strong>{{ pendingStatusAccount?.walletAccountNo || "--" }}</strong>
+          <p>{{ buildStatusHint(pendingStatusAccount, pendingStatusTarget) }}</p>
+        </div>
+        <div class="form-grid form-grid--single">
+          <label>
+            操作原因
+            <textarea
+              v-model="statusForm.operationReason"
+              rows="4"
+              maxlength="120"
+              :placeholder="pendingStatusTarget === 'CLOSED' ? '请输入关闭原因，例如：主体注销且余额清零，完成人工复核' : '请输入本次操作原因'"
+              required
+            />
+          </label>
+          <label v-if="pendingStatusTarget === 'CLOSED'">
+            二次确认账户号
+            <input
+              v-model="statusForm.confirmWalletAccountNo"
+              :placeholder="`请输入 ${pendingStatusAccount?.walletAccountNo || ''}`"
+              required
+            />
+          </label>
+        </div>
+        <div class="modal__actions">
+          <button class="button button--light" type="button" @click="closeStatusDialog">取消</button>
+          <button class="button" type="submit" :disabled="changingStatus || !canSubmitStatusChange()">
+            {{ changingStatus ? "提交中..." : `确认${getStatusActionText(pendingStatusTarget)}` }}
+          </button>
         </div>
       </form>
     </div>
