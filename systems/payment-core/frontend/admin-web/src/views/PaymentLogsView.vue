@@ -9,6 +9,18 @@ const selectedItem = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const total = ref(0);
+const overview = ref({
+  totalLogCount: 0,
+  errorLogCount: 0,
+  warnLogCount: 0,
+  infoLogCount: 0,
+  distinctStageCount: 0,
+  distinctSourceCount: 0,
+  callbackErrorCount: 0,
+  eventWarnCount: 0,
+  callbackKeywordCount: 0,
+  latestLogAt: ""
+});
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
@@ -23,10 +35,16 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  errorTotal: items.value.filter((item) => item.logLevel === "ERROR").length,
-  warnTotal: items.value.filter((item) => item.logLevel === "WARN").length,
-  stageCount: new Set(items.value.map((item) => item.processStage).filter(Boolean)).size
+  total: overview.value.totalLogCount,
+  errorTotal: overview.value.errorLogCount,
+  warnTotal: overview.value.warnLogCount,
+  infoTotal: overview.value.infoLogCount,
+  stageCount: overview.value.distinctStageCount,
+  sourceCount: overview.value.distinctSourceCount,
+  callbackErrorCount: overview.value.callbackErrorCount,
+  eventWarnCount: overview.value.eventWarnCount,
+  callbackKeywordCount: overview.value.callbackKeywordCount,
+  latestLogAt: overview.value.latestLogAt || "-"
 }));
 
 function resetFilters() {
@@ -57,7 +75,7 @@ async function loadPaymentLogs() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await paymentLogApi.getList({
+    const query = {
       paymentOrderId: filters.value.paymentOrderId,
       orderNo: filters.value.orderNo,
       processStage: filters.value.processStage,
@@ -68,7 +86,15 @@ async function loadPaymentLogs() {
       sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
-    });
+    };
+    const [overviewResult, result] = await Promise.all([
+      paymentLogApi.getOverview(query),
+      paymentLogApi.getList(query)
+    ]);
+    overview.value = {
+      ...overview.value,
+      ...overviewResult
+    };
     total.value = result.total;
     items.value = result.items;
     selectedItem.value = result.items[0] || null;
@@ -128,9 +154,53 @@ onMounted(loadPaymentLogs);
         <p class="card-value">{{ metrics.warnTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">信息日志</p>
+        <p class="card-value">{{ metrics.infoTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">涉及阶段数</p>
         <p class="card-value">{{ metrics.stageCount }}</p>
       </article>
+      <article class="card">
+        <p class="card-title">涉及来源数</p>
+        <p class="card-value">{{ metrics.sourceCount }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">回调错误数</p>
+        <p class="card-value">{{ metrics.callbackErrorCount }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">事件告警数</p>
+        <p class="card-value">{{ metrics.eventWarnCount }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">回调关键词命中</p>
+        <p class="card-value">{{ metrics.callbackKeywordCount }}</p>
+      </article>
+    </section>
+
+    <section class="panel overview-panel">
+      <div class="section-title">
+        <h3>风险总览</h3>
+        <span class="meta">最近日志时间：{{ metrics.latestLogAt }}</span>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card danger">
+          <p class="overview-title">回调异常优先排查</p>
+          <strong>{{ metrics.callbackErrorCount }}</strong>
+          <span>聚焦渠道回调阶段 ERROR 日志，优先核对签名、幂等和状态机推进。</span>
+        </article>
+        <article class="overview-card warn">
+          <p class="overview-title">业务事件告警</p>
+          <strong>{{ metrics.eventWarnCount }}</strong>
+          <span>重点检查 `PAYMENT_CLOSED` 等业务事件是否与真实订单状态一致。</span>
+        </article>
+        <article class="overview-card info">
+          <p class="overview-title">关键字命中</p>
+          <strong>{{ metrics.callbackKeywordCount }}</strong>
+          <span>当前筛选条件下命中“回调”关键字的日志量，可快速圈定通知链路问题面。</span>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -259,9 +329,11 @@ onMounted(loadPaymentLogs);
               <div class="ops-row"><span>优先联查</span><span>支付单详情 / 支付请求 / 支付事件</span></div>
               <div class="ops-row"><span>适用角色</span><span>运营 / 研发 / 测试共用同一入口</span></div>
               <div class="ops-row"><span>重点核对</span><span>处理阶段、来源系统、级别和关键字</span></div>
+              <div class="ops-row"><span>当前过滤命中</span><span>{{ metrics.callbackKeywordCount }} 条回调相关日志</span></div>
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
               <RouterLink class="link-button" :to="`/payment-requests?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付请求</RouterLink>
               <RouterLink class="link-button" :to="`/payment-events?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付事件</RouterLink>
             </div>
@@ -280,6 +352,57 @@ onMounted(loadPaymentLogs);
 </template>
 
 <style scoped>
+.overview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe3f0;
+  background: #f8fafc;
+}
+
+.overview-card strong {
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.overview-card span {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overview-title {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.overview-card.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.overview-card.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.overview-card.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) 360px;
@@ -346,5 +469,11 @@ onMounted(loadPaymentLogs);
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

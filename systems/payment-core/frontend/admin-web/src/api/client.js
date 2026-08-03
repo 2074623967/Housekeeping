@@ -531,6 +531,28 @@ export const paymentRequestApi = {
 };
 
 export const paymentLogApi = {
+  getOverview: ({
+    paymentOrderId = "",
+    orderNo = "",
+    processStage = "全部",
+    logLevel = "全部",
+    source = "",
+    keyword = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      processStage,
+      logLevel,
+      source,
+      keyword,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-logs/overview?${params.toString()}`);
+  },
   getList: ({
     paymentOrderId = "",
     orderNo = "",

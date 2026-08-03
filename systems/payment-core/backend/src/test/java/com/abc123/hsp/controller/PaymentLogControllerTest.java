@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
+import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.service.PaymentLogService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
@@ -52,5 +53,17 @@ class PaymentLogControllerTest {
         controller.list(null, null, "全部", "全部", null, null, "createdAt", "desc", 1, 20);
 
         verify(paymentLogService).list(any(PaymentLogQueryDTO.class));
+    }
+
+    @Test
+    void shouldReturnPaymentLogOverview() {
+        PaymentLogController controller = new PaymentLogController(paymentLogService);
+        PaymentLogOverviewDTO overviewDTO = new PaymentLogOverviewDTO();
+        overviewDTO.setTotalLogCount(16L);
+        when(paymentLogService.overview(any(PaymentLogQueryDTO.class))).thenReturn(overviewDTO);
+
+        controller.overview("PAY-001", "ORD-001", "渠道回调", "ERROR", "wx_h5", "回调", "createdAt", "desc");
+
+        verify(paymentLogService).overview(any(PaymentLogQueryDTO.class));
     }
 }

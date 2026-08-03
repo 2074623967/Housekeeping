@@ -34,6 +34,7 @@
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
 | `/api/payment-requests/overview` | `GET` | 查询支付请求总览指标 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
+| `/api/payment-logs/overview` | `GET` | 查询支付处理日志总览指标 |
 | `/api/payment-logs/export` | `GET` | 导出支付处理日志 CSV |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
@@ -242,7 +243,31 @@
 
 接口：`GET /api/payment-logs`
 
+总览接口：`GET /api/payment-logs/overview`
+
 导出接口：`GET /api/payment-logs/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `orderNo` | 订单号，模糊匹配 |
+| `processStage` | 处理阶段，支持 `全部 / 支付提交 / 支付路由 / 渠道回调 / 业务事件` |
+| `logLevel` | 日志级别，支持 `全部 / INFO / WARN / ERROR` |
+| `source` | 日志来源，模糊匹配 |
+| `keyword` | 关键字，按日志消息模糊匹配 |
+| `sortField` | 排序字段，支持 `createdAt / logLevel / processStage` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
+| `pageNo` | 页码，从 `1` 开始，仅列表接口使用 |
+| `pageSize` | 每页条数，最大 `100`，仅列表接口使用 |
+
+业务说明：
+
+1. 当前统一聚合支付提交、支付路由、渠道回调、业务事件四类日志来源，复用统一 union SQL 口径，避免列表、导出、总览三套统计不一致。
+2. 新增 `GET /api/payment-logs/overview`，在列表筛选条件不变的前提下返回日志总数、错误/告警/信息分布、涉及阶段数、涉及来源数、渠道回调错误数、业务事件告警数、回调关键字命中数和最近日志时间。
+3. 前端可先使用总览接口定位风险面，再通过列表接口按支付单号、订单号、日志来源和关键字继续下钻。
+4. 导出接口复用同一套筛选条件与排序规则，输出 UTF-8 BOM CSV，便于测试留档、运营复盘和研发排障。
 
 ## 7. 支付日终处理与任务中心导出补充
 
