@@ -52,6 +52,7 @@
 | `/api/settlements/workers` | `GET` | 查询服务者结算单 |
 | `/api/settlements/workers/export` | `GET` | 导出服务者结算单 CSV |
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
+| `/api/payment-config/export` | `GET` | 导出支付配置治理快照 CSV |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
@@ -246,6 +247,23 @@
 1. 新增 `GET /api/payment-day-end/export`，直接导出全部支付日终批次快照，字段覆盖业务日期、运行方式、主链路成功事实、差异事实、退款收口事实、对账准入结论和触发人，供财务对账、测试留档和问题复盘使用。
 2. 新增 `GET /api/payment-task-center/task-runs/export`，复用任务日志列表当前筛选条件导出 CSV，字段覆盖任务编码、运行方式、任务状态、严重等级、升级状态、处理结果、建议动作和推荐路由。
 3. 两个导出接口均以 UTF-8 BOM 返回，文件可直接被 Excel 打开；导出文本列统一按 CSV 双引号规则转义，避免摘要、建议动作和备注中的逗号、引号破坏结构。
+
+## 8. 支付配置治理快照导出
+
+接口：`GET /api/payment-config/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `section` | 导出分区，支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，默认 `ALL` |
+
+业务说明：
+
+1. 该接口用于导出配置治理快照，而不是导出单一页面截图，供运营、财务、测试、发布评审和事故复盘直接留档。
+2. 导出列统一覆盖 `配置域 / 主键编码 / 次级编码 / 配置名称 / 状态 / 治理摘要 / 适用范围 / 风控或限制 / 运维建议 / 更新时间`。
+3. `ALL` 模式会把渠道、路由、协议、返回码、网关、控制策略、告警供应商和值班路由合并到一张 CSV 中，并通过 `配置域` 字段区分。
+4. 当前版本优先解决“治理快照留痕”问题，后续如要支持更复杂的筛选、异步归档和下载中心，可在此能力之上继续扩展。
 
 查询参数：
 

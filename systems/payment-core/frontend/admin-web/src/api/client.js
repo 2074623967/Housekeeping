@@ -708,6 +708,7 @@ export const settlementApi = {
 
 export const paymentConfigApi = {
   getOverview: () => request("/api/payment-config"),
+  buildExportUrl: (section = "ALL") => `/api/payment-config/export?section=${encodeURIComponent(section)}`,
   toggleChannel: (configCode, enabled) => postJson("/api/payment-config/channels/toggle", { configCode, enabled }),
   toggleRouteRule: (configCode, enabled) => postJson("/api/payment-config/route-rules/toggle", { configCode, enabled }),
   createProtocol: (payload) => postJson("/api/payment-config/protocols", payload),

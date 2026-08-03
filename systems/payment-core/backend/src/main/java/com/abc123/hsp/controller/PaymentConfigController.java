@@ -5,13 +5,18 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.PathVariable;
 import com.abc123.hsp.service.PaymentConfigService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -33,6 +38,19 @@ public class PaymentConfigController {
     @GetMapping
     public ApiResponse<PaymentConfigOverviewDTO> overview() {
         return ApiResponse.success(paymentConfigService.overview());
+    }
+
+    /**
+     * 导出支付配置治理快照。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(@RequestParam(defaultValue = "ALL") String section) {
+        byte[] csvBytes = paymentConfigService.exportGovernanceSnapshotCsv(section)
+                .getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-config-governance-snapshot.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**

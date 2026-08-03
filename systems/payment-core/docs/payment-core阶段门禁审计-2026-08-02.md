@@ -105,6 +105,7 @@
 3. 已有“订单发起 -> 预付单 -> 收银台 -> 提交支付 -> 回调成功 -> 状态收口”的主链路闭环证据
 4. 已有支付成功事件自动下发清分、账务消费的阶段性 smoke 证据
 5. `PaymentRequestController / PaymentDayEndController / PaymentTaskCenterController` 已补独立控制器测试，新增 `7` 个定向用例全部通过
+6. 支付配置中心已补治理快照导出能力，可按分区输出渠道、路由、协议、返回码、网关、控制策略、告警供应商和值班路由的统一 CSV 留痕
 6. 已完成 `payment.trade.dlq -> payment.compensation.dlq-intake -> t_payment_dead_letter_task` 的真实运行验证，并确认新演练消息和历史演练副本均可写入补偿任务账本
 7. 2026-08-02 已重新执行 `payment-core` 后端全量测试，`220` 个用例全部通过
 8. 2026-08-02 已重新执行 `admin-web / app-web / h5-web / pc-web` 四端前端生产构建，全部通过

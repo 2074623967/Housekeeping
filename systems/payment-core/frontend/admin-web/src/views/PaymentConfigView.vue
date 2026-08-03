@@ -328,6 +328,11 @@ async function submitRosterForm() {
 }
 
 onMounted(loadOverview);
+
+function exportGovernanceSnapshot(section = "ALL") {
+  const exportUrl = paymentConfigApi.buildExportUrl(section);
+  window.open(exportUrl, "_blank", "noopener");
+}
 </script>
 
 <template>
@@ -337,7 +342,10 @@ onMounted(loadOverview);
         <h2>支付配置中心</h2>
         <p>统一管理支付渠道、路由规则、支付协议、返回码映射和支付网关接入配置</p>
       </div>
-      <span class="badge info">配置中心 V1</span>
+      <div class="toolbar-actions">
+        <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
+        <span class="badge info">配置中心 V1</span>
+      </div>
     </div>
 
     <section class="panel">

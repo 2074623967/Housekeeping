@@ -1,6 +1,8 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
@@ -8,8 +10,11 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
+import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
@@ -51,6 +56,23 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         overview.setAlertProviders(paymentConfigMapper.findAlertProviders());
         overview.setIssueDutyRosters(paymentConfigMapper.findIssueDutyRosters());
         return overview;
+    }
+
+    @Override
+    public String exportGovernanceSnapshotCsv(String section) {
+        String normalizedSection = normalizeExportSection(section);
+        PaymentConfigOverviewDTO overview = overview();
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("配置域,主键编码,次级编码,配置名称,状态,治理摘要,适用范围,风控/限制,运维建议,更新时间\n");
+        appendChannelRows(builder, normalizedSection, overview.getChannels());
+        appendRouteRuleRows(builder, normalizedSection, overview.getRouteRules());
+        appendProtocolRows(builder, normalizedSection, overview.getProtocols());
+        appendReturnCodeRows(builder, normalizedSection, overview.getReturnCodeMappings());
+        appendGatewayRows(builder, normalizedSection, overview.getGateways());
+        appendControlPolicyRows(builder, normalizedSection, overview.getControlPolicies());
+        appendAlertProviderRows(builder, normalizedSection, overview.getAlertProviders());
+        appendIssueDutyRosterRows(builder, normalizedSection, overview.getIssueDutyRosters());
+        return builder.toString();
     }
 
     @Override
@@ -372,6 +394,305 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("配置子编码不能为空");
         }
         return request.getSubCode().trim();
+    }
+
+    private void appendChannelRows(StringBuilder builder,
+                                   String section,
+                                   List<PaymentChannelConfigDTO> channels) {
+        if (!shouldExportSection(section, "CHANNELS") || channels == null) {
+            return;
+        }
+        for (PaymentChannelConfigDTO channel : channels) {
+            appendCsvRow(builder,
+                    "支付渠道",
+                    channel.getChannelCode(),
+                    channel.getMerchantNo(),
+                    channel.getChannelName(),
+                    channel.getStatus(),
+                    safeJoin(" / ",
+                            "支付方式=" + defaultText(channel.getPaymentMethod()),
+                            "优先级=" + valueOf(channel.getPriority()),
+                            "单日限额=" + defaultText(channel.getDailyLimit())),
+                    safeJoin(" / ",
+                            "场景=" + defaultText(channel.getSceneScope()),
+                            "商户应用=" + defaultText(channel.getMerchantAppId())),
+                    safeJoin(" / ",
+                            "风控标签=" + defaultText(channel.getRiskControlTag()),
+                            "退款时效=" + defaultText(channel.getRefundWindow()),
+                            "验签时间窗=" + defaultText(channel.getNotifySignWindow())),
+                    safeJoin(" / ",
+                            "回调地址=" + defaultText(channel.getCallbackNotifyUrl()),
+                            "证书档案=" + defaultText(channel.getCertificateProfile())),
+                    channel.getUpdatedAt());
+        }
+    }
+
+    private void appendRouteRuleRows(StringBuilder builder,
+                                     String section,
+                                     List<PaymentRouteRuleConfigDTO> routeRules) {
+        if (!shouldExportSection(section, "ROUTE_RULES") || routeRules == null) {
+            return;
+        }
+        for (PaymentRouteRuleConfigDTO routeRule : routeRules) {
+            appendCsvRow(builder,
+                    "路由规则",
+                    routeRule.getRuleCode(),
+                    routeRule.getTargetChannelCode(),
+                    routeRule.getRuleName(),
+                    routeRule.getStatus(),
+                    safeJoin(" / ",
+                            "匹配表达式=" + defaultText(routeRule.getMatchExpression()),
+                            "优先级=" + valueOf(routeRule.getPriority())),
+                    safeJoin(" / ",
+                            "业务场景=" + defaultText(routeRule.getMatchScene()),
+                            "兜底渠道=" + defaultText(routeRule.getFallbackChannelCode())),
+                    "需确认目标渠道启停与规则优先级是否一致",
+                    "路由异常时先联查目标渠道、兜底渠道和命中表达式",
+                    routeRule.getUpdatedAt());
+        }
+    }
+
+    private void appendProtocolRows(StringBuilder builder,
+                                    String section,
+                                    List<PaymentProtocolConfigDTO> protocols) {
+        if (!shouldExportSection(section, "PROTOCOLS") || protocols == null) {
+            return;
+        }
+        for (PaymentProtocolConfigDTO protocol : protocols) {
+            appendCsvRow(builder,
+                    "支付协议",
+                    protocol.getProtocolCode(),
+                    protocol.getTemplateCode(),
+                    protocol.getProtocolName(),
+                    protocol.getStatus(),
+                    safeJoin(" / ",
+                            "协议类型=" + defaultText(protocol.getProtocolTypeName()),
+                            "模板版本=" + defaultText(protocol.getTemplateVersion()),
+                            "优先级=" + valueOf(protocol.getPriority())),
+                    safeJoin(" / ",
+                            "适用场景=" + defaultText(protocol.getSceneScope()),
+                            "适用渠道=" + defaultText(protocol.getChannelScope())),
+                    safeJoin(" / ",
+                            "签约模式=" + defaultText(protocol.getSignMode()),
+                            "风控标签=" + defaultText(protocol.getRiskControlTag())),
+                    safeJoin(" / ",
+                            "签章服务商=" + defaultText(protocol.getESignatureProvider()),
+                            "商户确认=" + defaultText(protocol.getMerchantAckRequired())),
+                    protocol.getUpdatedAt());
+        }
+    }
+
+    private void appendReturnCodeRows(StringBuilder builder,
+                                      String section,
+                                      List<PaymentChannelReturnCodeConfigDTO> returnCodeMappings) {
+        if (!shouldExportSection(section, "RETURN_CODES") || returnCodeMappings == null) {
+            return;
+        }
+        for (PaymentChannelReturnCodeConfigDTO mapping : returnCodeMappings) {
+            appendCsvRow(builder,
+                    "返回码映射",
+                    mapping.getChannelCode(),
+                    mapping.getChannelReturnCode(),
+                    mapping.getStandardizedCode(),
+                    mapping.getStatus(),
+                    safeJoin(" / ",
+                            "标准文案=" + defaultText(mapping.getStandardizedMessage()),
+                            "映射版本=" + defaultText(mapping.getMappingVersion())),
+                    safeJoin(" / ",
+                            "归档状态=" + defaultText(mapping.getArchiveStatus()),
+                            "可重试=" + defaultText(mapping.getRetryable())),
+                    "人工介入=" + defaultText(mapping.getManualInterventionRequired()),
+                    defaultText(mapping.getHandlingSuggestion()),
+                    mapping.getUpdatedAt());
+        }
+    }
+
+    private void appendGatewayRows(StringBuilder builder,
+                                   String section,
+                                   List<PaymentGatewayConfigDTO> gateways) {
+        if (!shouldExportSection(section, "GATEWAYS") || gateways == null) {
+            return;
+        }
+        for (PaymentGatewayConfigDTO gateway : gateways) {
+            appendCsvRow(builder,
+                    "支付网关",
+                    gateway.getGatewayCode(),
+                    gateway.getAccessMode(),
+                    gateway.getGatewayName(),
+                    gateway.getStatus(),
+                    safeJoin(" / ",
+                            "发布阶段=" + defaultText(gateway.getReleaseStage()),
+                            "超时=" + defaultText(gateway.getTimeoutMs()),
+                            "重试策略=" + defaultText(gateway.getRetryPolicy())),
+                    safeJoin(" / ",
+                            "渠道范围=" + defaultText(gateway.getChannelScope()),
+                            "环境范围=" + defaultText(gateway.getEnvironmentScope())),
+                    safeJoin(" / ",
+                            "证书状态=" + defaultText(gateway.getCertificateStatus()),
+                            "灰度策略=" + defaultText(gateway.getGrayStrategy())),
+                    safeJoin(" / ",
+                            "回调白名单=" + defaultText(gateway.getCallbackWhitelist()),
+                            "适配器=" + defaultText(gateway.getAdapterRegistry())),
+                    gateway.getUpdatedAt());
+        }
+    }
+
+    private void appendControlPolicyRows(StringBuilder builder,
+                                         String section,
+                                         List<PaymentControlPolicyDTO> controlPolicies) {
+        if (!shouldExportSection(section, "CONTROL_POLICIES") || controlPolicies == null) {
+            return;
+        }
+        for (PaymentControlPolicyDTO controlPolicy : controlPolicies) {
+            appendCsvRow(builder,
+                    "支付控制策略",
+                    controlPolicy.getSourceAppId(),
+                    null,
+                    controlPolicy.getSourceAppName(),
+                    controlPolicy.getStatus(),
+                    safeJoin(" / ",
+                            "分钟限流=" + valueOf(controlPolicy.getMinuteSubmitLimit()),
+                            "接口限流=" + valueOf(controlPolicy.getInterfaceMinuteSubmitLimit()),
+                            "严格模式=" + defaultText(controlPolicy.getStrictMode())),
+                    safeJoin(" / ",
+                            "支付方式=" + defaultText(controlPolicy.getAllowedPaymentMethods()),
+                            "渠道=" + defaultText(controlPolicy.getAllowedChannelCodes()),
+                            "商户号=" + defaultText(controlPolicy.getAllowedMerchantNos())),
+                    safeJoin(" / ",
+                            "令牌鉴权=" + defaultText(controlPolicy.getTokenAuthRequired()),
+                            "自检状态=" + defaultText(controlPolicy.getSelfCheckStatus())),
+                    defaultText(controlPolicy.getSelfCheckMessage()),
+                    controlPolicy.getUpdatedAt());
+        }
+    }
+
+    private void appendAlertProviderRows(StringBuilder builder,
+                                         String section,
+                                         List<PaymentAlertProviderConfigDTO> alertProviders) {
+        if (!shouldExportSection(section, "ALERT_PROVIDERS") || alertProviders == null) {
+            return;
+        }
+        for (PaymentAlertProviderConfigDTO alertProvider : alertProviders) {
+            appendCsvRow(builder,
+                    "告警供应商",
+                    alertProvider.getProviderCode(),
+                    alertProvider.getChannelCode(),
+                    alertProvider.getProviderName(),
+                    alertProvider.getStatus(),
+                    safeJoin(" / ",
+                            "模板=" + defaultText(alertProvider.getTemplateCode()),
+                            "优先级=" + valueOf(alertProvider.getRoutePriority())),
+                    safeJoin(" / ",
+                            "接入端点=" + defaultText(alertProvider.getEndpointAlias()),
+                            "路由规则=" + defaultText(alertProvider.getRouteRule())),
+                    safeJoin(" / ",
+                            "重试策略=" + defaultText(alertProvider.getRetryPolicy()),
+                            "限流策略=" + defaultText(alertProvider.getRateLimitPolicy())),
+                    "结合异常严重等级与通道容量复核派发优先级",
+                    alertProvider.getUpdatedAt());
+        }
+    }
+
+    private void appendIssueDutyRosterRows(StringBuilder builder,
+                                           String section,
+                                           List<PaymentIssueDutyRosterDTO> issueDutyRosters) {
+        if (!shouldExportSection(section, "ISSUE_DUTY_ROSTERS") || issueDutyRosters == null) {
+            return;
+        }
+        for (PaymentIssueDutyRosterDTO issueDutyRoster : issueDutyRosters) {
+            appendCsvRow(builder,
+                    "值班路由",
+                    issueDutyRoster.getRosterCode(),
+                    issueDutyRoster.getSeverity(),
+                    issueDutyRoster.getIssueType(),
+                    issueDutyRoster.getStatus(),
+                    safeJoin(" / ",
+                            "责任组=" + defaultText(issueDutyRoster.getResponsibilityGroup()),
+                            "接收人=" + defaultText(issueDutyRoster.getReceiver())),
+                    safeJoin(" / ",
+                            "通道=" + defaultText(issueDutyRoster.getNotifyChannels()),
+                            "班次=" + defaultText(issueDutyRoster.getScheduleTag()),
+                            "日期策略=" + defaultText(issueDutyRoster.getApplicabilityDesc())),
+                    safeJoin(" / ",
+                            "升级等级=" + defaultText(issueDutyRoster.getEscalationLevel()),
+                            "升级超时=" + valueOf(issueDutyRoster.getEscalationTimeoutMinutes())),
+                    safeJoin(" / ",
+                            "升级接收人=" + defaultText(issueDutyRoster.getEscalationReceiver()),
+                            "时间窗=" + defaultText(issueDutyRoster.getEffectiveWindow())),
+                    issueDutyRoster.getUpdatedAt());
+        }
+    }
+
+    private void appendCsvRow(StringBuilder builder,
+                              String configDomain,
+                              String primaryCode,
+                              String secondaryCode,
+                              String configName,
+                              String status,
+                              String governanceSummary,
+                              String scopeSummary,
+                              String riskSummary,
+                              String actionSuggestion,
+                              String updatedAt) {
+        builder.append(csvCell(configDomain)).append(',')
+                .append(csvCell(primaryCode)).append(',')
+                .append(csvCell(secondaryCode)).append(',')
+                .append(csvCell(configName)).append(',')
+                .append(csvCell(status)).append(',')
+                .append(csvCell(governanceSummary)).append(',')
+                .append(csvCell(scopeSummary)).append(',')
+                .append(csvCell(riskSummary)).append(',')
+                .append(csvCell(actionSuggestion)).append(',')
+                .append(csvCell(updatedAt)).append('\n');
+    }
+
+    private boolean shouldExportSection(String normalizedSection, String currentSection) {
+        return "ALL".equals(normalizedSection) || currentSection.equals(normalizedSection);
+    }
+
+    private String normalizeExportSection(String section) {
+        if (!StringUtils.hasText(section)) {
+            return "ALL";
+        }
+        String normalized = section.trim().toUpperCase();
+        Set<String> allowedSections = new HashSet<String>(Arrays.asList(
+                "ALL",
+                "CHANNELS",
+                "ROUTE_RULES",
+                "PROTOCOLS",
+                "RETURN_CODES",
+                "GATEWAYS",
+                "CONTROL_POLICIES",
+                "ALERT_PROVIDERS",
+                "ISSUE_DUTY_ROSTERS"
+        ));
+        if (!allowedSections.contains(normalized)) {
+            throw new IllegalArgumentException("导出分区不合法");
+        }
+        return normalized;
+    }
+
+    private String safeJoin(String delimiter, String... values) {
+        StringJoiner joiner = new StringJoiner(delimiter);
+        for (String value : values) {
+            if (StringUtils.hasText(value) && !value.endsWith("=-")) {
+                joiner.add(value);
+            }
+        }
+        return joiner.toString();
+    }
+
+    private String defaultText(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "-";
+    }
+
+    private String valueOf(Integer value) {
+        return value == null ? "-" : String.valueOf(value);
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 
     private PaymentProtocolConfigEntity buildProtocolEntity(PaymentProtocolUpsertRequestDTO request,

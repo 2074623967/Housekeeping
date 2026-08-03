@@ -17,6 +17,11 @@ public interface PaymentConfigService {
     PaymentConfigOverviewDTO overview();
 
     /**
+     * 导出支付配置治理快照，供运营、财务、测试和发布审计留痕。
+     */
+    String exportGovernanceSnapshotCsv(String section);
+
+    /**
      * 启停支付渠道。
      */
     PaymentConfigOverviewDTO toggleChannel(PaymentConfigToggleRequestDTO request);
