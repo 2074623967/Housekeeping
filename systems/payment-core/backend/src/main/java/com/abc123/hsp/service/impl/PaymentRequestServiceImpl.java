@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
+import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -40,6 +41,43 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    @Override
+    public PaymentRequestOverviewDTO overview(PaymentRequestQueryDTO query) {
+        normalizeQuery(query);
+        PaymentRequestOverviewDTO overview = paymentRequestMapper.findOverviewSummary(query);
+        if (overview == null) {
+            overview = new PaymentRequestOverviewDTO();
+        }
+        if (overview.getTotalRequestCount() == null) {
+            overview.setTotalRequestCount(0L);
+        }
+        if (overview.getSuccessRequestCount() == null) {
+            overview.setSuccessRequestCount(0L);
+        }
+        if (overview.getFailedRequestCount() == null) {
+            overview.setFailedRequestCount(0L);
+        }
+        if (overview.getProcessingRequestCount() == null) {
+            overview.setProcessingRequestCount(0L);
+        }
+        if (overview.getWaitingCallbackRequestCount() == null) {
+            overview.setWaitingCallbackRequestCount(0L);
+        }
+        if (overview.getDistinctTerminalCount() == null) {
+            overview.setDistinctTerminalCount(0);
+        }
+        if (overview.getDistinctChannelCount() == null) {
+            overview.setDistinctChannelCount(0);
+        }
+        if (overview.getRepeatedPaymentOrderCount() == null) {
+            overview.setRepeatedPaymentOrderCount(0);
+        }
+        if (overview.getMissingResponseCount() == null) {
+            overview.setMissingResponseCount(0);
+        }
+        return overview;
     }
 
     @Override

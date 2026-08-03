@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
+import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.service.PaymentRequestService;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +60,29 @@ class PaymentRequestControllerTest {
         assertEquals("desc", queryDTO.getSortOrder());
         assertEquals(2, queryDTO.getPageNo());
         assertEquals(50, queryDTO.getPageSize());
+    }
+
+    @Test
+    void shouldReturnPaymentRequestOverview() {
+        PaymentRequestController controller = new PaymentRequestController(paymentRequestService);
+        PaymentRequestOverviewDTO overviewDTO = new PaymentRequestOverviewDTO();
+        overviewDTO.setTotalRequestCount(18L);
+        when(paymentRequestService.overview(any(PaymentRequestQueryDTO.class))).thenReturn(overviewDTO);
+
+        controller.overview("REQ-001", "PAY-001", "ORD-001", "wx_h5", "H5", "127.0.0.1",
+                "请求成功", "createdAt", "desc");
+
+        ArgumentCaptor<PaymentRequestQueryDTO> queryCaptor = ArgumentCaptor.forClass(PaymentRequestQueryDTO.class);
+        verify(paymentRequestService).overview(queryCaptor.capture());
+        PaymentRequestQueryDTO queryDTO = queryCaptor.getValue();
+
+        assertEquals("REQ-001", queryDTO.getRequestNo());
+        assertEquals("PAY-001", queryDTO.getPaymentOrderId());
+        assertEquals("ORD-001", queryDTO.getOrderNo());
+        assertEquals("wx_h5", queryDTO.getChannelCode());
+        assertEquals("H5", queryDTO.getTerminal());
+        assertEquals("127.0.0.1", queryDTO.getClientIp());
+        assertEquals("请求成功", queryDTO.getRequestStatus());
     }
 
     @Test

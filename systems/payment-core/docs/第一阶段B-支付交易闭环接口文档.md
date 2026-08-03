@@ -32,6 +32,7 @@
 | `/api/payment-flows/export` | `GET` | 导出统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
+| `/api/payment-requests/overview` | `GET` | 查询支付请求总览指标 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
 | `/api/payment-logs/export` | `GET` | 导出支付处理日志 CSV |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
@@ -235,6 +236,7 @@
 3. 新增 `GET /api/payment-requests/export` 导出能力，沿用同一组筛选参数输出 CSV 快照，便于测试留档、问题复盘和跨团队对数。
 4. 当前接口已兼容 `请求已发起/请求成功/请求失败` 与底层 `处理中/成功/失败` 状态别名映射，避免页面口径与数据库状态不一致。
 5. 当前已对 `clientIp / idempotencyKey / mobile / cardNo / customerName` 等敏感字段做基础脱敏，生产环境后续继续补权限分域控制和更细粒度脱敏策略。
+6. 新增 `GET /api/payment-requests/overview`，复用同一组筛选条件返回总量、成功/失败/处理中/等待回调分布、涉及渠道数、涉及终端数、重复支付单请求数、缺响应报文数和最近请求时间，方便运营先看全局再下钻列表。
 
 ## 6. 支付处理日志查询
 

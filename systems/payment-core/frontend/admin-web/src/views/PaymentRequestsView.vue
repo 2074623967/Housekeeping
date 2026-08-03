@@ -4,6 +4,18 @@ import { useRoute } from "vue-router";
 import { paymentRequestApi } from "../api/client";
 
 const route = useRoute();
+const overview = ref({
+  totalRequestCount: 0,
+  successRequestCount: 0,
+  failedRequestCount: 0,
+  processingRequestCount: 0,
+  waitingCallbackRequestCount: 0,
+  distinctTerminalCount: 0,
+  distinctChannelCount: 0,
+  repeatedPaymentOrderCount: 0,
+  missingResponseCount: 0,
+  latestRequestAt: ""
+});
 const items = ref([]);
 const isLoading = ref(true);
 const errorMessage = ref("");
@@ -25,10 +37,10 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  successTotal: items.value.filter((item) => item.requestStatus === "请求成功").length,
-  failedTotal: items.value.filter((item) => item.requestStatus === "请求失败").length,
-  terminalCount: new Set(items.value.map((item) => item.terminal).filter(Boolean)).size
+  total: overview.value.totalRequestCount,
+  successTotal: overview.value.successRequestCount,
+  failedTotal: overview.value.failedRequestCount,
+  terminalCount: overview.value.distinctTerminalCount
 }));
 
 function resetFilters() {
@@ -60,6 +72,17 @@ async function loadPaymentRequests() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
+    overview.value = await paymentRequestApi.getOverview({
+      requestNo: filters.value.requestNo,
+      paymentOrderId: filters.value.paymentOrderId,
+      orderNo: filters.value.orderNo,
+      channelCode: filters.value.channelCode,
+      terminal: filters.value.terminal,
+      clientIp: filters.value.clientIp,
+      requestStatus: filters.value.requestStatus,
+      sortField: filters.value.sortField,
+      sortOrder: filters.value.sortOrder
+    });
     const result = await paymentRequestApi.getList({
       requestNo: filters.value.requestNo,
       paymentOrderId: filters.value.paymentOrderId,
@@ -143,6 +166,45 @@ onMounted(loadPaymentRequests);
         <p class="card-title">涉及终端数</p>
         <p class="card-value">{{ metrics.terminalCount }}</p>
       </article>
+    </section>
+
+    <section class="panel">
+      <div class="detail-card-grid">
+        <div class="detail-card">
+          <div class="detail-label">处理中请求</div>
+          <div class="detail-value">{{ overview.processingRequestCount }}</div>
+          <div class="detail-hint">已发起但尚未拿到最终结果的请求</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">等待回调</div>
+          <div class="detail-value">{{ overview.waitingCallbackRequestCount }}</div>
+          <div class="detail-hint">建议联查主动查单、回调日志与支付单状态</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">重复支付单请求</div>
+          <div class="detail-value">{{ overview.repeatedPaymentOrderCount }}</div>
+          <div class="detail-hint">用于识别重复提交、终端切换或幂等复用场景</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">缺响应报文</div>
+          <div class="detail-value">{{ overview.missingResponseCount }}</div>
+          <div class="detail-hint">优先排查渠道超时、网关中断或序列化失败</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">涉及渠道数</div>
+          <div class="detail-value">{{ overview.distinctChannelCount }}</div>
+          <div class="detail-hint">当前筛选范围内命中的渠道广度</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-label">最近请求时间</div>
+          <div class="detail-value">{{ overview.latestRequestAt || "-" }}</div>
+          <div class="detail-hint">用于确认当前问题是否仍在持续发生</div>
+        </div>
+      </div>
+
+      <div class="risk-banner">
+        当前筛选范围内共 {{ overview.totalRequestCount }} 条请求，其中等待回调 {{ overview.waitingCallbackRequestCount }} 条、重复支付单请求 {{ overview.repeatedPaymentOrderCount }} 条、缺响应报文 {{ overview.missingResponseCount }} 条，建议优先联查支付单详情、路由结果、支付流水和处理日志。
+      </div>
     </section>
 
     <section class="panel">
@@ -304,13 +366,15 @@ onMounted(loadPaymentRequests);
               <div class="detail-card detail-card-wide"><span>路由结果</span><strong>{{ selectedItem.routeResult || "-" }}</strong></div>
             </div>
             <div class="ops-card">
-              <div class="ops-title">联查建议</div>
+            <div class="ops-title">联查建议</div>
               <div class="ops-row"><span>排查入口</span><span>支付单详情 / 路由结果 / 处理日志</span></div>
               <div class="ops-row"><span>重点核对</span><span>幂等键、终端、渠道编码、请求状态</span></div>
-              <div class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试</span></div>
+              <div class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试、缺响应报文</span></div>
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
+              <RouterLink class="link-button" :to="`/cashier-sessions?paymentOrderId=${selectedItem.paymentOrderId}`">查看会话</RouterLink>
               <RouterLink class="link-button" :to="`/payment-routes?paymentOrderId=${selectedItem.paymentOrderId}`">查看路由结果</RouterLink>
               <RouterLink class="link-button" :to="`/payment-logs?paymentOrderId=${selectedItem.paymentOrderId}`">查看处理日志</RouterLink>
             </div>

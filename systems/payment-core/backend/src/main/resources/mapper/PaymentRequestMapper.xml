@@ -4,6 +4,32 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentRequestMapper">
 
+    <sql id="paymentRequestWhere">
+        <where>
+            <if test="query.requestNo != null and query.requestNo != ''">
+                pa.attempt_no LIKE CONCAT('%', #{query.requestNo}, '%')
+            </if>
+            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
+                AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
+            </if>
+            <if test="query.orderNo != null and query.orderNo != ''">
+                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.channelCode != null and query.channelCode != ''">
+                AND pa.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
+            </if>
+            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
+                AND pa.terminal = #{query.terminal}
+            </if>
+            <if test="query.clientIp != null and query.clientIp != ''">
+                AND pa.client_ip LIKE CONCAT('%', #{query.clientIp}, '%')
+            </if>
+            <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
+                AND pa.attempt_status = #{query.requestStatus}
+            </if>
+        </where>
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentRequestListItemDTO">
         SELECT pa.attempt_no AS requestNo,
                pa.payment_order_id AS paymentOrderId,
@@ -29,29 +55,7 @@
                     ORDER BY prr.created_at DESC, prr.id DESC
                     LIMIT 1
                 )
-        <where>
-            <if test="query.requestNo != null and query.requestNo != ''">
-                pa.attempt_no LIKE CONCAT('%', #{query.requestNo}, '%')
-            </if>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.channelCode != null and query.channelCode != ''">
-                AND pa.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND pa.terminal = #{query.terminal}
-            </if>
-            <if test="query.clientIp != null and query.clientIp != ''">
-                AND pa.client_ip LIKE CONCAT('%', #{query.clientIp}, '%')
-            </if>
-            <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
-                AND pa.attempt_status = #{query.requestStatus}
-            </if>
-        </where>
+        <include refid="paymentRequestWhere"/>
         <choose>
             <when test="query.sortField == 'channelCode'">
                 ORDER BY pa.channel_code
@@ -85,29 +89,7 @@
                     ORDER BY prr.created_at DESC, prr.id DESC
                     LIMIT 1
                 )
-        <where>
-            <if test="query.requestNo != null and query.requestNo != ''">
-                pa.attempt_no LIKE CONCAT('%', #{query.requestNo}, '%')
-            </if>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.channelCode != null and query.channelCode != ''">
-                AND pa.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND pa.terminal = #{query.terminal}
-            </if>
-            <if test="query.clientIp != null and query.clientIp != ''">
-                AND pa.client_ip LIKE CONCAT('%', #{query.clientIp}, '%')
-            </if>
-            <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
-                AND pa.attempt_status = #{query.requestStatus}
-            </if>
-        </where>
+        <include refid="paymentRequestWhere"/>
     </select>
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.PaymentRequestListItemDTO">
@@ -135,29 +117,7 @@
                     ORDER BY prr.created_at DESC, prr.id DESC
                     LIMIT 1
                 )
-        <where>
-            <if test="query.requestNo != null and query.requestNo != ''">
-                pa.attempt_no LIKE CONCAT('%', #{query.requestNo}, '%')
-            </if>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND pa.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND po.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.channelCode != null and query.channelCode != ''">
-                AND pa.channel_code LIKE CONCAT('%', #{query.channelCode}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND pa.terminal = #{query.terminal}
-            </if>
-            <if test="query.clientIp != null and query.clientIp != ''">
-                AND pa.client_ip LIKE CONCAT('%', #{query.clientIp}, '%')
-            </if>
-            <if test="query.requestStatus != null and query.requestStatus != '' and query.requestStatus != '全部'">
-                AND pa.attempt_status = #{query.requestStatus}
-            </if>
-        </where>
+        <include refid="paymentRequestWhere"/>
         <choose>
             <when test="query.sortField == 'channelCode'">
                 ORDER BY pa.channel_code
@@ -177,5 +137,57 @@
                 DESC
             </otherwise>
         </choose>
+    </select>
+
+    <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentRequestOverviewDTO">
+        SELECT COUNT(1) AS totalRequestCount,
+               COALESCE(SUM(CASE WHEN filtered_requests.attempt_status = '成功' THEN 1 ELSE 0 END), 0) AS successRequestCount,
+               COALESCE(SUM(CASE WHEN filtered_requests.attempt_status = '失败' THEN 1 ELSE 0 END), 0) AS failedRequestCount,
+               COALESCE(SUM(CASE WHEN filtered_requests.attempt_status = '处理中' THEN 1 ELSE 0 END), 0) AS processingRequestCount,
+               COALESCE(SUM(CASE WHEN filtered_requests.attempt_status = '等待回调' THEN 1 ELSE 0 END), 0) AS waitingCallbackRequestCount,
+               COUNT(DISTINCT NULLIF(filtered_requests.terminal, '')) AS distinctTerminalCount,
+               COUNT(DISTINCT NULLIF(filtered_requests.channel_code, '')) AS distinctChannelCount,
+               COALESCE((
+                   SELECT COUNT(1)
+                   FROM (
+                       SELECT repeated_requests.payment_order_id
+                       FROM (
+                           SELECT pa.payment_order_id,
+                                  pa.response_payload,
+                                  pa.attempt_status,
+                                  pa.terminal,
+                                  pa.channel_code,
+                                  pa.client_ip,
+                                  po.order_no,
+                                  pa.attempt_no
+                           FROM t_payment_attempt pa
+                                    LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+                           <include refid="paymentRequestWhere"/>
+                       ) repeated_requests
+                       WHERE repeated_requests.payment_order_id IS NOT NULL
+                       GROUP BY repeated_requests.payment_order_id
+                       HAVING COUNT(1) > 1
+                   ) repeated_payment_orders
+               ), 0) AS repeatedPaymentOrderCount,
+               COALESCE(SUM(CASE
+                                WHEN filtered_requests.response_payload IS NULL OR filtered_requests.response_payload = ''
+                                    THEN 1
+                                ELSE 0
+                            END), 0) AS missingResponseCount,
+               MAX(DATE_FORMAT(filtered_requests.created_at, '%Y-%m-%d %H:%i:%s')) AS latestRequestAt
+        FROM (
+            SELECT pa.payment_order_id,
+                   pa.response_payload,
+                   pa.attempt_status,
+                   pa.terminal,
+                   pa.channel_code,
+                   pa.client_ip,
+                   pa.created_at,
+                   po.order_no,
+                   pa.attempt_no
+            FROM t_payment_attempt pa
+                     LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id
+            <include refid="paymentRequestWhere"/>
+        ) filtered_requests
     </select>
 </mapper>

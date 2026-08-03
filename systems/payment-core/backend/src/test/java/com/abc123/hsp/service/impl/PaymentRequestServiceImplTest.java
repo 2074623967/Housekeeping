@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
+import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.mapper.PaymentRequestMapper;
 import java.util.Collections;
@@ -96,5 +97,25 @@ class PaymentRequestServiceImplTest {
         assertEquals("ORDER-****DEFG", resultItem.getIdempotencyKey());
         assertTrue(resultItem.getRequestPayload().contains("张*"));
         assertTrue(resultItem.getResponsePayload().contains("138****8000"));
+    }
+
+    @Test
+    void shouldNormalizeAndReturnOverview() {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        query.setRequestStatus(" 请求失败 ");
+        query.setChannelCode(" wx_h5 ");
+        PaymentRequestOverviewDTO overview = new PaymentRequestOverviewDTO();
+        overview.setTotalRequestCount(12L);
+        overview.setRepeatedPaymentOrderCount(2);
+        when(paymentRequestMapper.findOverviewSummary(query)).thenReturn(overview);
+
+        PaymentRequestOverviewDTO result = new PaymentRequestServiceImpl(paymentRequestMapper).overview(query);
+
+        assertEquals("失败", query.getRequestStatus());
+        assertEquals("wx_h5", query.getChannelCode());
+        assertEquals(12L, result.getTotalRequestCount());
+        assertEquals(2, result.getRepeatedPaymentOrderCount());
+        assertEquals(0, result.getMissingResponseCount());
+        verify(paymentRequestMapper).findOverviewSummary(query);
     }
 }
