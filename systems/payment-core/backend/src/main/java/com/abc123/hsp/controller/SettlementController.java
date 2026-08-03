@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
+import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.service.SettlementService;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +23,20 @@ public class SettlementController {
 
     public SettlementController(SettlementService settlementService) {
         this.settlementService = settlementService;
+    }
+
+    @GetMapping("/workers/overview")
+    public ApiResponse<WorkerSettlementOverviewDTO> workerOverview(
+            @RequestParam(required = false) String settlementOrderId,
+            @RequestParam(required = false) String workerKeyword,
+            @RequestParam(defaultValue = "全部") String settlementStatus,
+            @RequestParam(defaultValue = "全部") String payoutStatus) {
+        WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
+        query.setSettlementOrderId(settlementOrderId);
+        query.setWorkerKeyword(workerKeyword);
+        query.setSettlementStatus(settlementStatus);
+        query.setPayoutStatus(payoutStatus);
+        return ApiResponse.success(settlementService.workerOverview(query));
     }
 
     @GetMapping("/workers")

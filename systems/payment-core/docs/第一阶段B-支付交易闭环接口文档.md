@@ -53,6 +53,7 @@
 | `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
 | `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
 | `/api/settlements/workers` | `GET` | 查询服务者结算单 |
+| `/api/settlements/workers/overview` | `GET` | 查询服务者结算总览指标 |
 | `/api/settlements/workers/export` | `GET` | 导出服务者结算单 CSV |
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
 | `/api/payment-config/export` | `GET` | 导出支付配置治理快照 CSV |
@@ -868,6 +869,31 @@ POST /api/refunds/retry
 2. `SUCCESS` 会写入 `success_at`，`retry` 会清空成功时间。
 3. 退款原因会落在退款单上，操作备注会进入退款操作日志，便于财务、运营、测试和研发统一复盘。
 4. 当前为本地模拟闭环，真实渠道退款请求、退款回调验签、退款渠道流水和差错补偿在后续渠道网关能力中扩展。
+
+## 11.4 服务者结算单查询与导出
+
+查询接口：`GET /api/settlements/workers`
+
+总览接口：`GET /api/settlements/workers/overview`
+
+导出接口：`GET /api/settlements/workers/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `settlementOrderId` | 结算单号，模糊匹配 |
+| `workerKeyword` | 服务者名称关键字，模糊匹配 |
+| `settlementStatus` | 结算状态，支持 `全部 / 待审核 / 待出款 / 出款成功` |
+| `payoutStatus` | 出款状态，支持 `全部 / 待出款 / 出款中 / 出款成功` |
+| `pageNo` | 页码，从 `1` 开始，仅列表接口使用 |
+| `pageSize` | 每页条数，最大 `100`，仅列表接口使用 |
+
+业务说明：
+
+1. 新增 `GET /api/settlements/workers/overview`，在列表筛选条件不变的前提下返回结算单总数、待审核/待出款/出款中/出款成功分布、实结金额合计、扣减金额合计、保证金影响合计和净额为负结算单数。
+2. 列表、总览、导出三类接口当前共用统一筛选口径，避免页面总览、导出快照和后台查询口径不一致。
+3. 当前模块在 `payment-core` 中仍定位为支付侧快速核对入口，完整审批、出款、核销、失败重打等作业后续由 `settlement-system` 承接。
 
 ## 12. 支付配置中心接口
 

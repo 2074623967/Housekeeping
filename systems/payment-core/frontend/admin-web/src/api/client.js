@@ -738,6 +738,20 @@ export const refundApi = {
 };
 
 export const settlementApi = {
+  getWorkerOverview: ({
+    settlementOrderId = "",
+    workerKeyword = "",
+    settlementStatus = "全部",
+    payoutStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      settlementOrderId,
+      workerKeyword,
+      settlementStatus,
+      payoutStatus
+    });
+    return request(`/api/settlements/workers/overview?${params.toString()}`);
+  },
   getWorkerList: ({
     settlementOrderId = "",
     workerKeyword = "",
