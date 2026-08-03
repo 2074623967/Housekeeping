@@ -3353,3 +3353,25 @@
 1. 工作台和支付健康指标入口已具备独立控制器层门禁测试。
 2. 本轮不将工作台当前页展示数据扩展解释为全量财务口径，避免运营指标误读。
 3. 在命令全部通过并提交到 `test` 前，不推进 `master` 合并或 `release/*` 冻结。
+
+## 110. 2026-08-03 订单中心控制器门禁补强验证
+
+### 110.1 本轮补强点
+
+1. 新增 `OrderControllerTest`，覆盖订单中心列表接口的参数绑定和服务转发。
+2. 订单中心继续保持“查询订单 -> 判断是否存在最新预付单 -> 发起支付”的后台运营入口定位，本轮不改变字段和筛选口径。
+3. 本轮完成后，`payment-core` 当前控制器层已无独立测试缺口。
+
+### 110.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 订单中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=OrderControllerTest,OrderServiceImplTest test` | 通过 | 订单中心控制器入口与服务层分页查询规范化行为均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 订单中心和支付发起入口页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮新增测试和文档无空白符问题 |
+
+### 110.3 当前判断
+
+1. 订单中心作为“订单发起支付 -> 创建预付单”的后台入口，现已具备独立控制器层门禁测试。
+2. `payment-core` 当前控制器层覆盖已收口，但发布门槛仍取决于真实渠道、跨系统联调、冻结版回滚包和整包发布证据。
+3. 在命令全部通过并提交到 `test` 前，不推进 `master` 合并或 `release/*` 冻结。
