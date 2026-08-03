@@ -208,7 +208,7 @@ onMounted(loadPaymentRequests);
         </div>
         <div class="field">
           <label>当前说明</label>
-          <input value="已支持订单号、渠道、终端、IP 筛选与排序，生产环境需继续脱敏和权限控制" disabled />
+          <input value="已支持订单号、渠道、终端、IP 筛选与排序，并对 IP、幂等键和敏感报文字段做基础脱敏；后续继续补权限分域控制" disabled />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

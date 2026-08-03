@@ -231,7 +231,7 @@
 2. 前端可通过 `clientIp + terminal + channelCode` 组合快速反查同一批终端流量。
 3. 新增 `GET /api/payment-requests/export` 导出能力，沿用同一组筛选参数输出 CSV 快照，便于测试留档、问题复盘和跨团队对数。
 4. 当前接口已兼容 `请求已发起/请求成功/请求失败` 与底层 `处理中/成功/失败` 状态别名映射，避免页面口径与数据库状态不一致。
-5. 生产环境仍需叠加报文字段脱敏和权限分域控制。
+5. 当前已对 `clientIp / idempotencyKey / mobile / cardNo / customerName` 等敏感字段做基础脱敏，生产环境后续继续补权限分域控制和更细粒度脱敏策略。
 
 ## 6. 支付处理日志查询
 

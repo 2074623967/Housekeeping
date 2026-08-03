@@ -58,17 +58,43 @@ class PaymentRequestServiceImplTest {
         PaymentRequestListItemDTO item = new PaymentRequestListItemDTO();
         item.setRequestNo("REQ-001");
         item.setPaymentOrderId("PAY-001");
+        item.setClientIp("127.0.0.1");
+        item.setIdempotencyKey("IDEMPOTENCY-1234567890");
         item.setRequestStatus("成功");
-        item.setRequestPayload("{\"amount\":\"88\"}");
-        item.setResponsePayload("{\"message\":\"ok\"}");
+        item.setRequestPayload("{\"amount\":\"88\",\"clientIp\":\"127.0.0.1\",\"idempotencyKey\":\"IDEMPOTENCY-1234567890\",\"mobile\":\"13800138000\"}");
+        item.setResponsePayload("{\"message\":\"ok\",\"cardNo\":\"6222021234567890123\"}");
         when(paymentRequestMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
 
         String csv = new PaymentRequestServiceImpl(paymentRequestMapper).exportCsv(query);
 
         assertEquals("成功", query.getRequestStatus());
         assertTrue(csv.contains("REQ-001"));
-        assertTrue(csv.contains("\"{\"\"amount\"\":\"\"88\"\"}\""));
-        assertTrue(csv.contains("\"{\"\"message\"\":\"\"ok\"\"}\""));
+        assertTrue(csv.contains("127.0.*.*"));
+        assertTrue(csv.contains("IDEMPO****7890"));
+        assertTrue(csv.contains("\"{\"\"amount\"\":\"\"88\"\",\"\"clientIp\"\":\"\"127.0.*.*\"\",\"\"idempotencyKey\"\":\"\"IDEMPO****7890\"\",\"\"mobile\"\":\"\"138****8000\"\"}\""));
+        assertTrue(csv.contains("\"{\"\"message\"\":\"\"ok\"\",\"\"cardNo\"\":\"\"622202******0123\"\"}\""));
         verify(paymentRequestMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldMaskSensitiveFieldsWhenListing() {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        PaymentRequestListItemDTO item = new PaymentRequestListItemDTO();
+        item.setClientIp("10.20.30.40");
+        item.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        item.setRequestPayload("{\"clientIp\":\"10.20.30.40\",\"customerName\":\"张三\"}");
+        item.setResponsePayload("{\"mobile\":\"13800138000\"}");
+        when(paymentRequestMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(paymentRequestMapper.count(query)).thenReturn(1L);
+
+        PaymentRequestListItemDTO resultItem = new PaymentRequestServiceImpl(paymentRequestMapper)
+                .list(query)
+                .getItems()
+                .get(0);
+
+        assertEquals("10.20.*.*", resultItem.getClientIp());
+        assertEquals("ORDER-****DEFG", resultItem.getIdempotencyKey());
+        assertTrue(resultItem.getRequestPayload().contains("张*"));
+        assertTrue(resultItem.getResponsePayload().contains("138****8000"));
     }
 }
