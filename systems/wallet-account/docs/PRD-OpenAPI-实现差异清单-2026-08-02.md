@@ -41,7 +41,7 @@
 | 流水列表筛选 | OpenAPI 声明 `flowNo / walletOwnerId / flowType / bizType / occurredStartTime / occurredEndTime` | 当前仅支持 `walletAccountNo / sourceSystem / sourceBizNo` | 不一致 | 若本阶段不做，需明确写入非目标或后续迭代 |
 | 账户详情形态 | PRD 写“详情抽屉” | 当前为页面右侧卡片区 | 部分不一致 | 若不改 UI，则文档口径要改为“详情卡片区 / 侧栏区” |
 | 状态变更交互 | PRD 写“状态变更弹窗” | 当前为列表按钮 + 浏览器确认框 | 不一致 | 建议补标准弹窗，至少补操作原因与确认文案 |
-| 导出能力 | PRD 写“支持导出” | 当前只做到“导出任务受理” | 部分不一致 | 文档需明确阶段 1 为“异步导出任务受理，不含下载中心” |
+| 导出能力 | PRD 写“支持导出” | 当前已做到“导出任务受理 + 任务中心查询 + 任务编号下载 CSV”，仍未补下载中心聚合页与异步文件归档 | 部分不一致 | 文档需明确当前阶段为“任务中心闭环已可用，生产级文件治理待后续补齐” |
 | 返回契约 | OpenAPI `CommonSuccessResponse` 与当前 `ApiResponse<T>` 不一致 | 当前统一返回 `code/message/data/requestId` | 不一致 | 统一以当前真实返回结构更新 OpenAPI |
 | 本地服务地址 | OpenAPI 本地地址仍写 `127.0.0.1:8080` | 当前服务默认端口 `8095` | 不一致 | 更新 OpenAPI 本地 server 定义 |
 

@@ -43,6 +43,19 @@
         <result property="createdAt" column="created_at"/>
     </resultMap>
 
+    <resultMap id="walletFlowExportTaskMap" type="com.abc123.walletaccount.entity.WalletFlowExportTaskEntity">
+        <id property="id" column="id"/>
+        <result property="exportTaskNo" column="export_task_no"/>
+        <result property="walletAccountNo" column="wallet_account_no"/>
+        <result property="sourceSystem" column="source_system"/>
+        <result property="sourceBizNo" column="source_biz_no"/>
+        <result property="operatorId" column="operator_id"/>
+        <result property="operatorName" column="operator_name"/>
+        <result property="taskStatus" column="task_status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
     <resultMap id="walletOwnerMap" type="com.abc123.walletaccount.entity.WalletOwnerEntity">
         <id property="id" column="id"/>
         <result property="walletOwnerId" column="wallet_owner_id"/>
@@ -173,6 +186,40 @@
         </where>
         ORDER BY created_at DESC, id DESC
         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countExportTasks" resultType="long">
+        SELECT COUNT(1)
+        FROM t_wallet_flow_export_task
+        <where>
+            <if test="operatorId != null and operatorId != ''">
+                AND operator_id = #{operatorId}
+            </if>
+            <if test="taskStatus != null and taskStatus != ''">
+                AND task_status = #{taskStatus}
+            </if>
+        </where>
+    </select>
+
+    <select id="listExportTasks" resultMap="walletFlowExportTaskMap">
+        SELECT *
+        FROM t_wallet_flow_export_task
+        <where>
+            <if test="operatorId != null and operatorId != ''">
+                AND operator_id = #{operatorId}
+            </if>
+            <if test="taskStatus != null and taskStatus != ''">
+                AND task_status = #{taskStatus}
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="findExportTaskByNo" resultMap="walletFlowExportTaskMap">
+        SELECT *
+        FROM t_wallet_flow_export_task
+        WHERE export_task_no = #{exportTaskNo}
     </select>
 
     <select id="listRecentFlowsByAccountNo" resultMap="walletFlowMap">

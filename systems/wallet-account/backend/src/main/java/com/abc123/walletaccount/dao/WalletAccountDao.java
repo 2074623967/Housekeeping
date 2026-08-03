@@ -37,6 +37,12 @@ public interface WalletAccountDao {
     List<WalletFlowEntity> listFlows(String walletAccountNo, String sourceSystem, String sourceBizNo,
             int offset, int limit);
 
+    long countExportTasks(String operatorId, String taskStatus);
+
+    List<WalletFlowExportTaskEntity> listExportTasks(String operatorId, String taskStatus, int offset, int limit);
+
+    WalletFlowExportTaskEntity findExportTaskByNo(String exportTaskNo);
+
     List<WalletFlowEntity> listRecentFlowsByAccountNo(String walletAccountNo, int limit);
 
     List<WalletAccountStatusLogEntity> listStatusLogsByAccountNo(String walletAccountNo, int limit);

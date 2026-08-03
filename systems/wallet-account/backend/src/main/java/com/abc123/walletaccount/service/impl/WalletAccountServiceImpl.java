@@ -13,6 +13,7 @@ import com.abc123.walletaccount.dto.WalletBalanceDTO;
 import com.abc123.walletaccount.dto.WalletFlowDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskQueryDTO;
 import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
 import com.abc123.walletaccount.entity.WalletAccountStatusLogEntity;
@@ -22,6 +23,7 @@ import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import com.abc123.walletaccount.entity.WalletOwnerEntity;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -125,7 +127,61 @@ public class WalletAccountServiceImpl implements WalletAccountService {
                 ? "system" : requestDTO.getOperatorName());
         taskEntity.setTaskStatus(taskDTO.getTaskStatus());
         walletAccountDao.insertExportTask(taskEntity);
-        return taskDTO;
+        return toExportTaskDTO(taskEntity);
+    }
+
+    @Override
+    public PageResultDTO<WalletFlowExportTaskDTO> listFlowExportTasks(WalletFlowExportTaskQueryDTO queryDTO) {
+        validateExportTaskPermission(queryDTO == null ? null : queryDTO.getOperatorRole());
+        int pageNo = queryDTO == null || queryDTO.getPageNo() == null || queryDTO.getPageNo() < 1 ? 1 : queryDTO.getPageNo();
+        int pageSize = queryDTO == null || queryDTO.getPageSize() == null || queryDTO.getPageSize() < 1
+                ? 10 : queryDTO.getPageSize();
+        int offset = (pageNo - 1) * pageSize;
+        String operatorId = queryDTO == null ? null : queryDTO.getOperatorId();
+        String taskStatus = queryDTO == null ? null : queryDTO.getTaskStatus();
+        PageResultDTO<WalletFlowExportTaskDTO> pageResultDTO = new PageResultDTO<WalletFlowExportTaskDTO>();
+        pageResultDTO.setTotal(walletAccountDao.countExportTasks(operatorId, taskStatus));
+        pageResultDTO.setRecords(walletAccountDao.listExportTasks(operatorId, taskStatus, offset, pageSize)
+                .stream()
+                .map(this::toExportTaskDTO)
+                .collect(Collectors.toList()));
+        return pageResultDTO;
+    }
+
+    @Override
+    public WalletFlowExportTaskDTO getFlowExportTask(String exportTaskNo, String operatorRole) {
+        validateExportTaskPermission(operatorRole);
+        return toExportTaskDTO(getRequiredExportTask(exportTaskNo));
+    }
+
+    @Override
+    public byte[] downloadFlowExportTask(String exportTaskNo, String operatorRole) {
+        validateExportTaskPermission(operatorRole);
+        WalletFlowExportTaskEntity taskEntity = getRequiredExportTask(exportTaskNo);
+        long total = walletAccountDao.countFlows(
+                taskEntity.getWalletAccountNo(), taskEntity.getSourceSystem(), taskEntity.getSourceBizNo());
+        List<WalletFlowEntity> flowEntities = total == 0
+                ? Collections.<WalletFlowEntity>emptyList()
+                : walletAccountDao.listFlows(taskEntity.getWalletAccountNo(), taskEntity.getSourceSystem(),
+                        taskEntity.getSourceBizNo(), 0, total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("流水号,账户号,流水类型,来源系统,来源业务单号,变更金额,变更前可用余额,变更后可用余额,操作人,操作原因,创建时间\n");
+        for (WalletFlowEntity flowEntity : flowEntities) {
+            builder.append(csvValue(flowEntity.getFlowNo())).append(',')
+                    .append(csvValue(flowEntity.getWalletAccountNo())).append(',')
+                    .append(csvValue(flowEntity.getFlowType())).append(',')
+                    .append(csvValue(flowEntity.getSourceSystem())).append(',')
+                    .append(csvValue(flowEntity.getSourceBizNo())).append(',')
+                    .append(csvValue(decimalValue(flowEntity.getChangeAmount()))).append(',')
+                    .append(csvValue(decimalValue(flowEntity.getBeforeAvailableBalance()))).append(',')
+                    .append(csvValue(decimalValue(flowEntity.getAfterAvailableBalance()))).append(',')
+                    .append(csvValue(flowEntity.getOperatorName())).append(',')
+                    .append(csvValue(flowEntity.getOperationReason())).append(',')
+                    .append(csvValue(flowEntity.getCreatedAt() == null ? null : flowEntity.getCreatedAt().toString()))
+                    .append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -298,7 +354,10 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         if (requestDTO == null) {
             throw new IllegalArgumentException("导出请求不能为空");
         }
-        String operatorRole = requestDTO.getOperatorRole();
+        validateExportTaskPermission(requestDTO.getOperatorRole());
+    }
+
+    private void validateExportTaskPermission(String operatorRole) {
         if (ROLE_FUNDS.equalsIgnoreCase(operatorRole) || ROLE_FINANCE.equalsIgnoreCase(operatorRole)) {
             return;
         }
@@ -327,6 +386,14 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         WalletAccountEntity entity = walletAccountDao.findAccountByNo(walletAccountNo);
         if (entity == null) {
             throw new BusinessException("WALLET_ACCOUNT_NOT_FOUND", "钱包账户不存在");
+        }
+        return entity;
+    }
+
+    private WalletFlowExportTaskEntity getRequiredExportTask(String exportTaskNo) {
+        WalletFlowExportTaskEntity entity = walletAccountDao.findExportTaskByNo(exportTaskNo);
+        if (entity == null) {
+            throw new BusinessException("WALLET_EXPORT_TASK_NOT_FOUND", "导出任务不存在");
         }
         return entity;
     }
@@ -445,6 +512,20 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         return dto;
     }
 
+    private WalletFlowExportTaskDTO toExportTaskDTO(WalletFlowExportTaskEntity entity) {
+        WalletFlowExportTaskDTO dto = new WalletFlowExportTaskDTO();
+        dto.setExportTaskNo(entity.getExportTaskNo());
+        dto.setTaskStatus(entity.getTaskStatus());
+        dto.setWalletAccountNo(entity.getWalletAccountNo());
+        dto.setSourceSystem(entity.getSourceSystem());
+        dto.setSourceBizNo(entity.getSourceBizNo());
+        dto.setOperatorId(entity.getOperatorId());
+        dto.setOperatorName(entity.getOperatorName());
+        dto.setCreatedAt(entity.getCreatedAt());
+        dto.setDownloadPath("/api/wallet/flows/export-tasks/" + entity.getExportTaskNo() + "/download");
+        return dto;
+    }
+
     private WalletAccountStatusLogDTO toStatusLogDTO(WalletAccountStatusLogEntity entity) {
         WalletAccountStatusLogDTO dto = new WalletAccountStatusLogDTO();
         dto.setWalletAccountNo(entity.getWalletAccountNo());
@@ -460,5 +541,20 @@ public class WalletAccountServiceImpl implements WalletAccountService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String csvValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        String normalized = value.replace("\"", "\"\"");
+        if (normalized.contains(",") || normalized.contains("\"") || normalized.contains("\n")) {
+            return "\"" + normalized + "\"";
+        }
+        return normalized;
+    }
+
+    private String decimalValue(BigDecimal value) {
+        return value == null ? "" : value.toPlainString();
     }
 }

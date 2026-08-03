@@ -17,11 +17,13 @@ import com.abc123.walletaccount.dto.WalletFlowDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -104,5 +106,32 @@ class WalletAccountControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].flowNo").value("WF-001"));
+    }
+
+    @Test
+    void shouldReturnPagedExportTasks() throws Exception {
+        PageResultDTO<WalletFlowExportTaskDTO> resultDTO = new PageResultDTO<WalletFlowExportTaskDTO>();
+        WalletFlowExportTaskDTO taskDTO = new WalletFlowExportTaskDTO();
+        taskDTO.setExportTaskNo("WFE-001");
+        resultDTO.setTotal(1L);
+        resultDTO.setRecords(Collections.singletonList(taskDTO));
+        when(walletAccountService.listFlowExportTasks(any())).thenReturn(resultDTO);
+
+        mockMvc.perform(get("/api/wallet/flows/export-tasks?operatorRole=FINANCE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.records[0].exportTaskNo").value("WFE-001"));
+    }
+
+    @Test
+    void shouldDownloadExportTaskCsv() throws Exception {
+        when(walletAccountService.downloadFlowExportTask(eq("WFE-001"), eq("FINANCE")))
+                .thenReturn("流水号,账户号\nWF-001,WA-001\n".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(get("/api/wallet/flows/export-tasks/WFE-001/download?operatorRole=FINANCE"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string(HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=wallet-flow-export-WFE-001.csv"));
     }
 }

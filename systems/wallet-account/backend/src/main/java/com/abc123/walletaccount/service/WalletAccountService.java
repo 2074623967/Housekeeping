@@ -10,6 +10,7 @@ import com.abc123.walletaccount.dto.WalletBalanceDTO;
 import com.abc123.walletaccount.dto.WalletFlowDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskQueryDTO;
 import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
 import java.util.List;
 
@@ -26,6 +27,12 @@ public interface WalletAccountService {
     PageResultDTO<WalletFlowDTO> listFlows(WalletFlowQueryDTO queryDTO);
 
     WalletFlowExportTaskDTO exportFlows(WalletFlowExportRequestDTO requestDTO);
+
+    PageResultDTO<WalletFlowExportTaskDTO> listFlowExportTasks(WalletFlowExportTaskQueryDTO queryDTO);
+
+    WalletFlowExportTaskDTO getFlowExportTask(String exportTaskNo, String operatorRole);
+
+    byte[] downloadFlowExportTask(String exportTaskNo, String operatorRole);
 
     WalletAccountDTO openAccount(OpenWalletAccountRequestDTO requestDTO);
 

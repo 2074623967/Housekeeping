@@ -46,6 +46,16 @@ public interface WalletAccountMapper {
             @Param("offset") int offset,
             @Param("limit") int limit);
 
+    long countExportTasks(@Param("operatorId") String operatorId,
+            @Param("taskStatus") String taskStatus);
+
+    List<WalletFlowExportTaskEntity> listExportTasks(@Param("operatorId") String operatorId,
+            @Param("taskStatus") String taskStatus,
+            @Param("offset") int offset,
+            @Param("limit") int limit);
+
+    WalletFlowExportTaskEntity findExportTaskByNo(@Param("exportTaskNo") String exportTaskNo);
+
     List<WalletFlowEntity> listRecentFlowsByAccountNo(@Param("walletAccountNo") String walletAccountNo,
             @Param("limit") int limit);
 

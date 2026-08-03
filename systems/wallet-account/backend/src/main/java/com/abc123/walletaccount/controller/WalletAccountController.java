@@ -11,12 +11,16 @@ import com.abc123.walletaccount.dto.WalletBalanceDTO;
 import com.abc123.walletaccount.dto.WalletFlowDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskQueryDTO;
 import com.abc123.walletaccount.dto.WalletFlowQueryDTO;
 import com.abc123.walletaccount.service.WalletAccountService;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -75,6 +79,28 @@ public class WalletAccountController {
     @PostMapping("/flows/export")
     public ApiResponse<WalletFlowExportTaskDTO> exportFlows(@RequestBody WalletFlowExportRequestDTO requestDTO) {
         return ApiResponse.success(walletAccountService.exportFlows(requestDTO));
+    }
+
+    @GetMapping("/flows/export-tasks")
+    public ApiResponse<PageResultDTO<WalletFlowExportTaskDTO>> listFlowExportTasks(WalletFlowExportTaskQueryDTO queryDTO) {
+        return ApiResponse.success(walletAccountService.listFlowExportTasks(queryDTO));
+    }
+
+    @GetMapping("/flows/export-tasks/{exportTaskNo}")
+    public ApiResponse<WalletFlowExportTaskDTO> getFlowExportTask(@PathVariable String exportTaskNo,
+            @RequestParam String operatorRole) {
+        return ApiResponse.success(walletAccountService.getFlowExportTask(exportTaskNo, operatorRole));
+    }
+
+    @GetMapping(value = "/flows/export-tasks/{exportTaskNo}/download", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> downloadFlowExportTask(@PathVariable String exportTaskNo,
+            @RequestParam String operatorRole) {
+        byte[] body = walletAccountService.downloadFlowExportTask(exportTaskNo, operatorRole);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=wallet-flow-export-" + exportTaskNo + ".csv")
+                .body(body);
     }
 
     @PostMapping("/accounts")

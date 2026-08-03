@@ -1,6 +1,11 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { exportWalletFlows, fetchWalletFlows } from "../api";
+import {
+  buildWalletFlowExportDownloadUrl,
+  exportWalletFlows,
+  fetchWalletFlowExportTasks,
+  fetchWalletFlows
+} from "../api";
 
 const query = reactive({
   walletAccountNo: "",
@@ -16,6 +21,16 @@ const loading = ref(false);
 const errorMessage = ref("");
 const exportMessage = ref("");
 const exporting = ref(false);
+const exportTasks = ref([]);
+const exportTaskTotal = ref(0);
+const exportTaskLoading = ref(false);
+const exportTaskQuery = reactive({
+  operatorId: "finance-admin",
+  operatorRole: "FINANCE",
+  taskStatus: "",
+  pageNo: 1,
+  pageSize: 5
+});
 
 async function loadFlows() {
   loading.value = true;
@@ -31,16 +46,31 @@ async function loadFlows() {
   }
 }
 
+async function loadExportTasks() {
+  exportTaskLoading.value = true;
+  try {
+    const result = await fetchWalletFlowExportTasks(exportTaskQuery);
+    exportTasks.value = result.records || [];
+    exportTaskTotal.value = result.total || 0;
+  } catch (error) {
+    exportMessage.value = error.message;
+  } finally {
+    exportTaskLoading.value = false;
+  }
+}
+
 async function exportFlows() {
   exporting.value = true;
   exportMessage.value = "";
   try {
     const task = await exportWalletFlows({
       ...query,
-      operatorId: "admin",
-      operatorName: "运营管理员"
+      operatorId: "finance-admin",
+      operatorRole: "FINANCE",
+      operatorName: "财务管理员"
     });
     exportMessage.value = `导出任务已受理：${task.exportTaskNo}`;
+    await loadExportTasks();
   } catch (error) {
     exportMessage.value = error.message;
   } finally {
@@ -48,8 +78,13 @@ async function exportFlows() {
   }
 }
 
+function downloadTask(task) {
+  window.open(buildWalletFlowExportDownloadUrl(task.exportTaskNo, exportTaskQuery.operatorRole), "_blank");
+}
+
 onMounted(() => {
   loadFlows();
+  loadExportTasks();
 });
 </script>
 
@@ -106,6 +141,45 @@ onMounted(() => {
         <button class="button button--light" :disabled="loading || query.pageNo * query.pageSize >= total" @click="query.pageNo += 1; loadFlows()">
           下一页
         </button>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <div class="toolbar">
+        <h3>导出任务中心</h3>
+        <select v-model="exportTaskQuery.taskStatus" @change="exportTaskQuery.pageNo = 1; loadExportTasks()">
+          <option value="">全部状态</option>
+          <option value="ACCEPTED">ACCEPTED</option>
+        </select>
+        <button class="button button--light" :disabled="exportTaskLoading" @click="loadExportTasks">刷新任务</button>
+      </div>
+      <p class="muted">共 {{ exportTaskTotal }} 个导出任务，支持按任务编号直接下载 CSV。</p>
+      <p v-if="exportTaskLoading" class="muted">导出任务加载中...</p>
+      <div v-else class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>任务编号</th>
+              <th>状态</th>
+              <th>筛选条件</th>
+              <th>操作人</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="task in exportTasks" :key="task.exportTaskNo">
+              <td>{{ task.exportTaskNo }}</td>
+              <td>{{ task.taskStatus }}</td>
+              <td>{{ task.walletAccountNo || "全部账户" }} / {{ task.sourceSystem || "全部系统" }} / {{ task.sourceBizNo || "全部业务单号" }}</td>
+              <td>{{ task.operatorName }} / {{ task.operatorId }}</td>
+              <td>{{ task.createdAt || "--" }}</td>
+              <td>
+                <button class="text-button" type="button" @click="downloadTask(task)">下载 CSV</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>

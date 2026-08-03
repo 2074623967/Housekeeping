@@ -12,11 +12,18 @@ import static org.mockito.Mockito.when;
 import com.abc123.walletaccount.common.BusinessException;
 import com.abc123.walletaccount.dao.WalletAccountDao;
 import com.abc123.walletaccount.dto.OpenWalletAccountRequestDTO;
+import com.abc123.walletaccount.dto.PageResultDTO;
 import com.abc123.walletaccount.dto.WalletAccountStatusChangeRequestDTO;
 import com.abc123.walletaccount.dto.WalletFlowExportRequestDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskDTO;
+import com.abc123.walletaccount.dto.WalletFlowExportTaskQueryDTO;
 import com.abc123.walletaccount.entity.WalletAccountEntity;
+import com.abc123.walletaccount.entity.WalletFlowEntity;
+import com.abc123.walletaccount.entity.WalletFlowExportTaskEntity;
 import com.abc123.walletaccount.entity.WalletIdempotentRecordEntity;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 
@@ -151,6 +158,57 @@ class WalletAccountServiceImplTest {
         BusinessException exception = assertThrows(BusinessException.class, () -> service.exportFlows(requestDTO));
 
         assertEquals("WALLET_ACCOUNT_EXPORT_FORBIDDEN", exception.getCode());
+    }
+
+    @Test
+    void shouldReturnPagedExportTasksForFinanceRole() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        WalletFlowExportTaskQueryDTO queryDTO = new WalletFlowExportTaskQueryDTO();
+        queryDTO.setOperatorRole("FINANCE");
+        WalletFlowExportTaskEntity taskEntity = new WalletFlowExportTaskEntity();
+        taskEntity.setExportTaskNo("WFE-001");
+        taskEntity.setTaskStatus("ACCEPTED");
+        taskEntity.setOperatorId("finance-001");
+        taskEntity.setOperatorName("财务A");
+        when(dao.countExportTasks(null, null)).thenReturn(1L);
+        when(dao.listExportTasks(null, null, 0, 10)).thenReturn(Collections.singletonList(taskEntity));
+
+        PageResultDTO<WalletFlowExportTaskDTO> resultDTO = service.listFlowExportTasks(queryDTO);
+
+        assertEquals(1L, resultDTO.getTotal());
+        assertEquals("WFE-001", resultDTO.getRecords().get(0).getExportTaskNo());
+    }
+
+    @Test
+    void shouldGenerateCsvWhenDownloadingExportTask() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        WalletFlowExportTaskEntity taskEntity = new WalletFlowExportTaskEntity();
+        taskEntity.setExportTaskNo("WFE-001");
+        taskEntity.setWalletAccountNo("WA-001");
+        taskEntity.setSourceSystem("payment-core");
+        taskEntity.setSourceBizNo("PAY-001");
+        WalletFlowEntity flowEntity = new WalletFlowEntity();
+        flowEntity.setFlowNo("WF-001");
+        flowEntity.setWalletAccountNo("WA-001");
+        flowEntity.setFlowType("OPEN_ACCOUNT");
+        flowEntity.setSourceSystem("payment-core");
+        flowEntity.setSourceBizNo("PAY-001");
+        flowEntity.setChangeAmount(BigDecimal.ZERO);
+        flowEntity.setBeforeAvailableBalance(BigDecimal.ZERO);
+        flowEntity.setAfterAvailableBalance(BigDecimal.ZERO);
+        flowEntity.setOperatorName("财务A");
+        flowEntity.setOperationReason("导出校验");
+        when(dao.findExportTaskByNo("WFE-001")).thenReturn(taskEntity);
+        when(dao.countFlows("WA-001", "payment-core", "PAY-001")).thenReturn(1L);
+        when(dao.listFlows("WA-001", "payment-core", "PAY-001", 0, 1))
+                .thenReturn(Collections.singletonList(flowEntity));
+
+        String csv = new String(service.downloadFlowExportTask("WFE-001", "FINANCE"), StandardCharsets.UTF_8);
+
+        assertEquals(true, csv.contains("流水号,账户号,流水类型"));
+        assertEquals(true, csv.contains("WF-001"));
     }
 
     @Test

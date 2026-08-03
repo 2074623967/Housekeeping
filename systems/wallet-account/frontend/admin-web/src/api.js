@@ -69,3 +69,21 @@ export async function changeWalletAccountStatus(walletAccountNo, payload) {
 export async function exportWalletFlows(payload) {
   return post("/api/wallet/flows/export", payload);
 }
+
+export async function fetchWalletFlowExportTasks(params) {
+  const query = new URLSearchParams();
+  if (params.operatorId) {
+    query.set("operatorId", params.operatorId);
+  }
+  if (params.taskStatus) {
+    query.set("taskStatus", params.taskStatus);
+  }
+  query.set("operatorRole", params.operatorRole || "FINANCE");
+  query.set("pageNo", String(params.pageNo || 1));
+  query.set("pageSize", String(params.pageSize || 10));
+  return request(`/api/wallet/flows/export-tasks?${query.toString()}`);
+}
+
+export function buildWalletFlowExportDownloadUrl(exportTaskNo, operatorRole = "FINANCE") {
+  return `${API_BASE_URL}/api/wallet/flows/export-tasks/${encodeURIComponent(exportTaskNo)}/download?operatorRole=${encodeURIComponent(operatorRole)}`;
+}

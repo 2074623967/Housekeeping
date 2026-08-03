@@ -284,4 +284,10 @@ th {
   line-height: 1.6;
 }
 
+.section-divider {
+  height: 1px;
+  margin: 28px 0 20px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.2), rgba(148, 163, 184, 0.7), rgba(148, 163, 184, 0.2));
+}
+
 .modal__actions { justify-content: flex-end; }

@@ -70,6 +70,21 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     }
 
     @Override
+    public long countExportTasks(String operatorId, String taskStatus) {
+        return walletAccountMapper.countExportTasks(operatorId, taskStatus);
+    }
+
+    @Override
+    public List<WalletFlowExportTaskEntity> listExportTasks(String operatorId, String taskStatus, int offset, int limit) {
+        return walletAccountMapper.listExportTasks(operatorId, taskStatus, offset, limit);
+    }
+
+    @Override
+    public WalletFlowExportTaskEntity findExportTaskByNo(String exportTaskNo) {
+        return walletAccountMapper.findExportTaskByNo(exportTaskNo);
+    }
+
+    @Override
     public List<WalletFlowEntity> listRecentFlowsByAccountNo(String walletAccountNo, int limit) {
         return walletAccountMapper.listRecentFlowsByAccountNo(walletAccountNo, limit);
     }
