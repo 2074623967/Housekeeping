@@ -3221,3 +3221,25 @@
 1. `payment-core` 的账单中心已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
 2. 这一步继续缩小了支付核心域在账单收口、逾期识别和待收风险可视化上的产品化差距，但仍不代表财务会计口径、会计分录和正式对账链路已经生产化。
 3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 104. 2026-08-03 支付路由执行结果总览补强验证
+
+### 104.1 本轮补强点
+
+1. 新增 `GET /api/payment-routes/overview`，在列表筛选条件不变的前提下返回路由记录总数、成功命中数、需关注命中数、命中渠道数、线下路由数、微信路由数、支付宝路由数和最近路由时间。
+2. `PaymentRoutesView` 已接入总览指标与风险卡片，避免后台卡片继续基于当前页临时统计。
+3. `PaymentRouteExecutionMapper.xml` 已统一列表与总览两类查询口径，降低页面统计与列表筛选不一致的风险。
+
+### 104.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付路由执行结果定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentRouteExecutionServiceImplTest,PaymentRouteExecutionControllerTest test` | 通过 | 支付路由执行结果服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览卡片、风险总览和联查入口可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 104.3 当前判断
+
+1. `payment-core` 的支付路由执行结果页正从“基础查询 + 展开报文”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了支付核心域在路由误命中、渠道落点偏差和线下兜底识别上的产品化差距，但仍不代表实时渠道健康评分、自动熔断和策略回放已经生产化。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。

@@ -114,6 +114,7 @@
 12. 已完成 `payment.trade.dlq -> payment.compensation.dlq-intake -> t_payment_dead_letter_task` 的真实运行验证，并确认新演练消息和历史演练副本均可写入补偿任务账本
 13. 2026-08-02 已重新执行 `payment-core` 后端全量测试，`220` 个用例全部通过
 14. 2026-08-02 已重新执行 `admin-web / app-web / h5-web / pc-web` 四端前端生产构建，全部通过
+15. 支付路由执行结果台已补总览指标接口，统一输出成功/需关注/线下/微信/支付宝分布与最近路由时间，且对应后端定向测试与 `admin-web` 构建均可形成正式门禁证据
 
 结论：
 

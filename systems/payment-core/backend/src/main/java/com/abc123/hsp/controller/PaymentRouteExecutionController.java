@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
+import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +22,33 @@ public class PaymentRouteExecutionController {
 
     public PaymentRouteExecutionController(PaymentRouteExecutionService paymentRouteExecutionService) {
         this.paymentRouteExecutionService = paymentRouteExecutionService;
+    }
+
+    /**
+     * 查询支付路由执行结果总览。
+     */
+    @GetMapping("/overview")
+    public ApiResponse<PaymentRouteExecutionOverviewDTO> overview(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String routeRule,
+            @RequestParam(required = false) String channelCode,
+            @RequestParam(defaultValue = "全部") String paymentMethod,
+            @RequestParam(defaultValue = "全部") String terminal,
+            @RequestParam(defaultValue = "全部") String routeResult,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setRouteRule(routeRule);
+        query.setChannelCode(channelCode);
+        query.setPaymentMethod(paymentMethod);
+        query.setTerminal(terminal);
+        query.setRouteResult(routeResult);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        return ApiResponse.success(paymentRouteExecutionService.overview(query));
     }
 
     /**

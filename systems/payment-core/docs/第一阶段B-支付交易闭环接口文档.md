@@ -32,6 +32,7 @@
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
 | `/api/payment-flows/export` | `GET` | 导出统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
+| `/api/payment-routes/overview` | `GET` | 查询支付路由执行结果总览指标 |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
 | `/api/payment-requests/overview` | `GET` | 查询支付请求总览指标 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
@@ -155,6 +156,8 @@
 
 接口：`GET /api/payment-routes`
 
+总览接口：`GET /api/payment-routes/overview`
+
 查询参数：
 
 | 参数 | 说明 |
@@ -211,7 +214,8 @@
 
 1. 当前按支付路由记录聚合支付单、订单、预付单和最近一次支付请求上下文。
 2. 前端可直接用本接口查看路由规则、命中渠道、路由结果以及请求/响应报文，无需再跳多页拼装。
-3. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
+3. 新增 `GET /api/payment-routes/overview`，复用同一组筛选条件返回路由记录总数、成功命中数、需关注命中数、命中渠道数、线下路由数、微信路由数、支付宝路由数和最近路由时间，便于运营先看风险面再下钻。
+4. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
 
 ## 5. 支付请求管理查询
 

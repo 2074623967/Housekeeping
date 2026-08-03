@@ -317,6 +317,30 @@ export const paymentFlowApi = {
 };
 
 export const paymentRouteApi = {
+  getOverview: ({
+    paymentOrderId = "",
+    orderNo = "",
+    routeRule = "",
+    channelCode = "",
+    paymentMethod = "全部",
+    terminal = "全部",
+    routeResult = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      routeRule,
+      channelCode,
+      paymentMethod,
+      terminal,
+      routeResult,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-routes/overview?${params.toString()}`);
+  },
   getList: ({
     paymentOrderId = "",
     orderNo = "",

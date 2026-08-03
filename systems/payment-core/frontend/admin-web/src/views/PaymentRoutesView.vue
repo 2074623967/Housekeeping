@@ -10,6 +10,16 @@ const selectedItem = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const total = ref(0);
+const overview = ref({
+  totalRouteCount: 0,
+  successRouteCount: 0,
+  warnRouteCount: 0,
+  distinctChannelCount: 0,
+  offlineRouteCount: 0,
+  wechatRouteCount: 0,
+  alipayRouteCount: 0,
+  latestRouteAt: ""
+});
 const pageNo = ref(1);
 const pageSize = 20;
 const expandedRouteNo = ref("");
@@ -26,10 +36,14 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  successTotal: items.value.filter((item) => item.routeResultType === "success").length,
-  warnTotal: items.value.filter((item) => item.routeResultType === "warn").length,
-  channelCount: new Set(items.value.map((item) => item.channelCode).filter(Boolean)).size
+  total: overview.value.totalRouteCount,
+  successTotal: overview.value.successRouteCount,
+  warnTotal: overview.value.warnRouteCount,
+  channelCount: overview.value.distinctChannelCount,
+  offlineRouteCount: overview.value.offlineRouteCount,
+  wechatRouteCount: overview.value.wechatRouteCount,
+  alipayRouteCount: overview.value.alipayRouteCount,
+  latestRouteAt: overview.value.latestRouteAt || "-"
 }));
 
 function resetFilters() {
@@ -67,7 +81,7 @@ async function loadPaymentRoutes() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await paymentRouteApi.getList({
+    const query = {
       paymentOrderId: filters.value.paymentOrderId,
       orderNo: filters.value.orderNo,
       routeRule: filters.value.routeRule,
@@ -79,7 +93,15 @@ async function loadPaymentRoutes() {
       sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
-    });
+    };
+    const [overviewResult, result] = await Promise.all([
+      paymentRouteApi.getOverview(query),
+      paymentRouteApi.getList(query)
+    ]);
+    overview.value = {
+      ...overview.value,
+      ...overviewResult
+    };
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
@@ -153,6 +175,42 @@ onMounted(loadPaymentRoutes);
         <p class="card-title">命中渠道数</p>
         <p class="card-value">{{ metrics.channelCount }}</p>
       </article>
+      <article class="card">
+        <p class="card-title">线下路由数</p>
+        <p class="card-value">{{ metrics.offlineRouteCount }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">微信路由数</p>
+        <p class="card-value">{{ metrics.wechatRouteCount }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">支付宝路由数</p>
+        <p class="card-value">{{ metrics.alipayRouteCount }}</p>
+      </article>
+    </section>
+
+    <section class="panel overview-panel">
+      <div class="section-title">
+        <h3>路由风险总览</h3>
+        <span class="meta">最近路由时间：{{ metrics.latestRouteAt }}</span>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card danger">
+          <p class="overview-title">需关注命中结果</p>
+          <strong>{{ metrics.warnTotal }}</strong>
+          <span>优先核查兜底渠道和线下路由，确认规则误命中或渠道健康度异常是否已影响支付成功率。</span>
+        </article>
+        <article class="overview-card warn">
+          <p class="overview-title">线下转人工兜底</p>
+          <strong>{{ metrics.offlineRouteCount }}</strong>
+          <span>该指标偏高时，通常需要联查渠道可用性、路由规则优先级和实时限额配置是否合理。</span>
+        </article>
+        <article class="overview-card info">
+          <p class="overview-title">主流方式分布</p>
+          <strong>{{ metrics.wechatRouteCount }} / {{ metrics.alipayRouteCount }}</strong>
+          <span>用于快速判断微信与支付宝链路是否失衡，辅助识别终端维度和场景维度的路由偏差。</span>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -314,6 +372,7 @@ onMounted(loadPaymentRoutes);
               <div class="ops-row"><span>优先联查</span><span>支付单详情 / 路由流水 / 支付请求 / 路由配置</span></div>
               <div class="ops-row"><span>重点核对</span><span>规则命中、渠道落点、终端与幂等键</span></div>
               <div class="ops-row"><span>典型场景</span><span>误命中兜底渠道、渠道落错、桌面/H5 终端规则偏差</span></div>
+              <div class="ops-row"><span>当前总览</span><span>最近路由 {{ metrics.latestRouteAt }} / 线下 {{ metrics.offlineRouteCount }} / 微信 {{ metrics.wechatRouteCount }} / 支付宝 {{ metrics.alipayRouteCount }}</span></div>
             </div>
             <div class="table-inline-actions">
               <button class="link-button" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
