@@ -98,3 +98,52 @@
 1. 当前本机环境已经真实验证 `payment-core -> clearing-system -> settlement-system / accounting-system` 的自动链路。
 2. 这意味着跨系统 smoke 不再依赖人工补投 `CLEARING_GENERATED` 事件。
 3. 当前剩余门禁主要收敛到 MQ 级可靠投递、失败重试、死信补偿和 `test -> master -> release` 稳定性观察。
+
+## 8. 2026-08-03 隔离 RabbitMQ + 隔离 MySQL 真实主链路复核
+
+### 8.1 验证范围
+
+本轮不再沿用历史 HTTP 直推或共享队列口径，而是在隔离 RabbitMQ 拓扑 `20260803a` 和隔离 MySQL 库上，重新验证：
+
+`payment-core 预付单 -> 提交 -> 渠道回调成功 -> PAYMENT_SUCCESS 出站 -> clearing 消费 -> CLEARING_GENERATED 出站 -> settlement/accounting 消费`
+
+### 8.2 隔离环境
+
+| 项目 | 值 |
+| --- | --- |
+| RabbitMQ 容器 | `hsp-rabbitmq` |
+| RabbitMQ 用户 | `hsp` |
+| RabbitMQ 隔离后缀 | `20260803a` |
+| MySQL 容器 | `hsp-payment-mysql-drill` |
+| 支付核心库 | `housekeeping_payment_core` |
+| `payment-core` 端口 | `18081` |
+| `clearing-system` 端口 | `18122` |
+| `settlement-system` 端口 | `18132` |
+| `accounting-system` 端口 | `18112` |
+
+### 8.3 验证步骤与结果
+
+| 步骤 | 接口/动作 | 业务编号 | 结果 |
+| --- | --- | --- | --- |
+| 历史单复核 | `GET /api/payments/PAY1785729963046` | `DRILL-AMQP-20260803A-001` | 发现该笔在 `2026-08-03 05:06:36` 已被超时任务自动关单，状态为 `CLOSED`，不再继续复用 |
+| 新建预付单 | `POST /api/payments/prepay` | `DRILL-AMQP-20260803A-002` | 成功生成 `PRE1785733720393` / `PAY1785733720390` / `BILL1785733720388` |
+| 支付提交 | `POST /api/payments/submit` | `PAY1785733720390` | 按 `housekeeping-h5-web + H5 + 微信支付 + wx_h5` 成功命中 `RULE_HOME_WX`，支付单进入 `WAIT_CALLBACK` |
+| 支付回调成功 | `POST /api/payments/callback/wx_h5` | `PAY1785733720390` | 支付单收口为 `SUCCESS`，`PAYMENT_SUCCESS` 事件出站状态为 `SUCCESS` |
+| 清分单生成 | `GET /api/clearing/orders` | `CLO20002` | 生成清分单 `CLO20002`，关联支付单 `PAY1785733720390` |
+| 清分事件复核 | `GET /api/clearing/events` | `EVT60002` / `EVT60003` | `PAYMENT_SUCCESS` 已消费，`CLEARING_GENERATED` 已生成 |
+| 结算单生成 | `GET /api/settlements/orders` | `SLT20003` | 生成结算单 `SLT20003`，状态 `待审核/待出款` |
+| 账务事件复核 | `GET /api/accounting/events` | `EVT50002` / `EVT50003` | 支付成功与清分生成两类账务事件均已消费 |
+| 账务余额复核 | `GET /api/accounting/accounts` + `GET /api/accounting/balances/ACT10003` | `ACT10002` / `ACT10003` | 服务者应收账户增至 `¥273.16`，平台手续费账户余额为 `¥200.00` |
+| 队列快照复核 | `infra/rabbitmq/queue_snapshot.sh 20260803a` | `2026-08-03 13:09:42 +0800` | 主队列、retry、DLQ 均为 `0` 消息，4 个隔离主队列消费者在线 |
+
+### 8.4 本轮关键结论
+
+1. `payment-core -> clearing-system -> settlement-system / accounting-system` 的真实异步链路已在隔离 RabbitMQ 和隔离 MySQL 条件下再次验证通过，不再只是旧的 HTTP 直推口径。
+2. 本轮也验证了一个真实业务细节：错误的提交参数组合会被路由规则阻断；必须使用与控制策略和场景规则一致的 `sourceAppId / terminal / paymentMethod / channelCode` 才能通过。
+3. 历史隔离单 `DRILL-AMQP-20260803A-001` 被超时任务自动关单，说明支付超时关单任务正在真实运行；后续联调必须始终使用新鲜业务单，避免把过期单误判为主链路失败。
+
+### 8.5 当前仍未关闭的门禁
+
+1. 本轮证明了“隔离真实 MQ 主链路可跑通”，但还没有形成完整的失败重试、DLQ 入池、人工结案、定向 replay 一套最新同批次证据。
+2. `settlement-system` 当前只验证到“结算单生成”，尚未在同一批次里继续验证“审核通过 -> 生成待出款草稿 -> 执行出款 -> 失败重试”。
+3. 因此当前仍不足以单独触发 `test -> master` 或 `release/*`。
