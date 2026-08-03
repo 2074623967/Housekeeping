@@ -9,6 +9,7 @@ const actionLoading = ref(false);
 const recordsLoading = ref(false);
 const filters = ref({ batchNo: "", payoutStatus: "" });
 const form = ref({ batchNo: "SET10001", payoutChannel: "BANK", createdBy: "结算运营" });
+const executeForm = ref({ operatorName: "出款专员", remark: "提交银行出款", executionResult: "SUCCESS", failureReason: "" });
 const selectedBatch = ref(null);
 const recordRows = ref([]);
 const recordMessage = ref("");
@@ -34,6 +35,29 @@ async function createPayout() {
   try {
     await payoutApi.create(form.value);
     await loadRows();
+  } catch (error) {
+    message.value = error.message;
+  } finally {
+    actionLoading.value = false;
+  }
+}
+
+async function executeBatch(row) {
+  if (!window.confirm(`确认执行出款批次 ${row.payoutBatchNo} 吗？`)) {
+    return;
+  }
+  actionLoading.value = true;
+  message.value = "";
+  try {
+    const payload = {
+      ...executeForm.value,
+      failureReason: executeForm.value.executionResult === "FAILED" ? executeForm.value.failureReason : ""
+    };
+    const result = await payoutApi.execute(row.payoutBatchNo, payload);
+    rows.value = rows.value.map((item) => (item.payoutBatchNo === result.payoutBatchNo ? result : item));
+    if (selectedBatch.value?.payoutBatchNo === result.payoutBatchNo) {
+      await loadRecords(result, true);
+    }
   } catch (error) {
     message.value = error.message;
   } finally {
@@ -111,7 +135,22 @@ onMounted(loadRows);
         <div class="field"><label>重试原因</label><input v-model="retryForm.reason" /></div>
         <div class="summary-box">
           <strong>操作说明</strong>
-          <span>先查看失败明细，再对失败批次执行人工补发重试。</span>
+          <span>审核通过后先生成待出款草稿，再执行出款；失败批次可保留原记录后人工重试。</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="field"><label>执行操作人</label><input v-model="executeForm.operatorName" /></div>
+        <div class="field"><label>执行备注</label><input v-model="executeForm.remark" /></div>
+        <div class="field">
+          <label>执行结果</label>
+          <select v-model="executeForm.executionResult">
+            <option value="SUCCESS">SUCCESS</option>
+            <option value="FAILED">FAILED</option>
+          </select>
+        </div>
+        <div class="field" v-if="executeForm.executionResult === 'FAILED'">
+          <label>失败原因</label>
+          <input v-model="executeForm.failureReason" placeholder="例如：银行通道超时" />
         </div>
       </div>
       <div v-if="message" class="state-box">{{ message }}</div>
@@ -125,6 +164,14 @@ onMounted(loadRows);
               <td>{{ row.payoutCount }}</td><td>{{ row.successCount }}</td><td>{{ row.failedCount }}</td><td class="amount">{{ row.totalAmount }}</td><td>{{ row.createdBy }}</td><td>{{ row.finishedAt || "-" }}</td>
               <td class="actions-cell">
                 <button class="button secondary button-inline" :disabled="actionLoading" @click="loadRecords(row)">查看出款记录</button>
+                <button
+                  v-if="row.payoutStatus === '待出款' || row.payoutStatus === '处理中' || row.payoutStatus === '待重试'"
+                  class="button primary button-inline"
+                  :disabled="actionLoading"
+                  @click="executeBatch(row)"
+                >
+                  执行出款
+                </button>
                 <button
                   v-if="row.failedCount > 0 || row.payoutStatus === '部分失败' || row.payoutStatus === '已失败'"
                   class="button danger button-inline"
@@ -206,6 +253,7 @@ onMounted(loadRows);
 
 .actions-cell {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

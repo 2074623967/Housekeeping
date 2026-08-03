@@ -37,9 +37,26 @@ class PayoutServiceImplTest {
         PayoutBatchDTO result = payoutService.create(request);
         PageResultDTO<PayoutRecordDTO> records = payoutService.records(result.getPayoutBatchNo(), "", 1, 20);
 
-        assertEquals("已完成", result.getPayoutStatus());
-        assertEquals(2, records.getTotal());
-        assertEquals("已出款", settlementOrderService.detail("SLT20001").getSettlementStatus());
+        assertEquals("待出款", result.getPayoutStatus());
+        assertEquals(0, records.getTotal());
+        assertEquals("待审核", settlementOrderService.detail("SLT20001").getSettlementStatus());
+    }
+
+    @Test
+    void shouldReuseDraftBatchAndAvoidDuplicatePendingRecords() {
+        AuditSettlementRequestDTO auditRequest = new AuditSettlementRequestDTO();
+        auditRequest.setOperatorName("财务主管");
+        auditRequest.setAuditRemark("通过");
+        settlementOrderService.audit("SLT20001", auditRequest);
+
+        PayoutBatchDTO first = payoutService.create(createRequest("SET10001"));
+        PayoutBatchDTO second = payoutService.create(createRequest("SET10001"));
+        PageResultDTO<PayoutRecordDTO> records = payoutService.records(first.getPayoutBatchNo(), "", 1, 20);
+
+        assertEquals(first.getPayoutBatchNo(), second.getPayoutBatchNo());
+        assertEquals("待出款", second.getPayoutStatus());
+        assertEquals(1, records.getTotal());
+        assertEquals("待出款", records.getItems().get(0).getPayoutStatus());
     }
 
     @Test
@@ -94,5 +111,13 @@ class PayoutServiceImplTest {
         assertEquals("已发放", retriedRecords.getItems().get(0).getPayoutStatus());
         assertEquals("1", retriedRecords.getItems().get(0).getRetryCount());
         assertEquals("已出款", settlementOrderService.detail("SLT20001").getSettlementStatus());
+    }
+
+    private CreatePayoutBatchRequestDTO createRequest(String batchNo) {
+        CreatePayoutBatchRequestDTO request = new CreatePayoutBatchRequestDTO();
+        request.setBatchNo(batchNo);
+        request.setPayoutChannel("BANK");
+        request.setCreatedBy("财务专员");
+        return request;
     }
 }

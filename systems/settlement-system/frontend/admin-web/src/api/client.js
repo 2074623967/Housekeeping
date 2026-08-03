@@ -63,6 +63,7 @@ export const payoutApi = {
     return request(`/api/settlements/payouts?${params.toString()}`);
   },
   create: (payload) => postJson("/api/settlements/payouts", payload),
+  execute: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/execute`, payload),
   retry: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/retry`, payload),
   records: (payoutBatchNo, { payoutStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ payoutStatus, pageNo: String(pageNo), pageSize: String(pageSize) });

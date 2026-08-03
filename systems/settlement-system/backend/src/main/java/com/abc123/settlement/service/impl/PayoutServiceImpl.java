@@ -37,15 +37,11 @@ public class PayoutServiceImpl implements PayoutService {
 
     @Override
     public PayoutBatchDTO create(CreatePayoutBatchRequestDTO request) {
-        PayoutBatchDTO dto = settlementMapper.toPayoutBatchDTO(
-                settlementMemoryStore.createPayoutBatch(request.getBatchNo(), request.getPayoutChannel(), request.getCreatedBy()));
-        settlementMemoryStore.orders().stream()
-                .filter(order -> request.getBatchNo().equals(order.getBatchNo()))
-                .filter(order -> "待出款".equals(order.getPayoutStatus()))
-                .forEach(order -> {
-                    settlementMemoryStore.createPayoutRecord(dto.getPayoutBatchNo(), order);
-                });
-        return settlementMapper.toPayoutBatchDTO(settlementMemoryStore.findPayoutBatch(dto.getPayoutBatchNo()));
+        return settlementMapper.toPayoutBatchDTO(
+                settlementMemoryStore.createOrRefreshDraftPayoutBatch(
+                        request.getBatchNo(),
+                        request.getPayoutChannel(),
+                        request.getCreatedBy()));
     }
 
     @Override
