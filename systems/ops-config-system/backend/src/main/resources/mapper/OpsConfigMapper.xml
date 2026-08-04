@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.opsconfig.mapper.OpsConfigMapper">
+
+    <select id="findAgreementTemplates" resultType="com.abc123.opsconfig.dto.AgreementTemplateDTO">
+        SELECT template_code, template_name, subject_type, sign_fields, esign_provider, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_agreement_template
+        ORDER BY id ASC
+    </select>
+
+    <select id="findBusinessLines" resultType="com.abc123.opsconfig.dto.BusinessLineDTO">
+        SELECT business_code, business_name, default_scene, owner, settlement_policy, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_business_line
+        ORDER BY id ASC
+    </select>
+
+    <select id="findPaymentTypes" resultType="com.abc123.opsconfig.dto.PaymentTypeDTO">
+        SELECT type_code, type_name, transaction_category, fee_policy, refund_capability, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_payment_type
+        ORDER BY id ASC
+    </select>
+
+    <select id="findCashierTemplates" resultType="com.abc123.opsconfig.dto.CashierTemplateDTO">
+        SELECT template_code, template_name, terminal_type, default_pay_method, display_policy, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_cashier_template
+        ORDER BY id ASC
+    </select>
+
+    <select id="findChannelProfiles" resultType="com.abc123.opsconfig.dto.ChannelProfileDTO">
+        SELECT channel_code, channel_name, channel_type, merchant_profile, refund_sla, risk_tag, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_channel_profile
+        ORDER BY id ASC
+    </select>
+
+    <select id="findRoutingRules" resultType="com.abc123.opsconfig.dto.RoutingRuleDTO">
+        SELECT route_code, business_code, pay_type, primary_channel, backup_channel, match_policy, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_routing_rule
+        ORDER BY id ASC
+    </select>
+
+    <select id="findSystemControls" resultType="com.abc123.opsconfig.dto.SystemControlDTO">
+        SELECT control_code, control_name, control_scope, control_value, risk_level, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_system_control
+        ORDER BY id ASC
+    </select>
+
+    <select id="countEnabledAgreementTemplates" resultType="long">
+        SELECT COUNT(1) FROM t_ops_agreement_template WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledBusinessLines" resultType="long">
+        SELECT COUNT(1) FROM t_ops_business_line WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledPaymentTypes" resultType="long">
+        SELECT COUNT(1) FROM t_ops_payment_type WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledChannelProfiles" resultType="long">
+        SELECT COUNT(1) FROM t_ops_channel_profile WHERE status = 'ENABLED'
+    </select>
+
+    <update id="updateAgreementTemplateStatus">
+        UPDATE t_ops_agreement_template
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE template_code = #{templateCode}
+    </update>
+
+    <update id="updateBusinessLineStatus">
+        UPDATE t_ops_business_line
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE business_code = #{businessCode}
+    </update>
+
+    <update id="updatePaymentTypeStatus">
+        UPDATE t_ops_payment_type
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE type_code = #{typeCode}
+    </update>
+
+    <update id="updateCashierTemplateStatus">
+        UPDATE t_ops_cashier_template
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE template_code = #{templateCode}
+    </update>
+
+    <update id="updateChannelProfileStatus">
+        UPDATE t_ops_channel_profile
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE channel_code = #{channelCode}
+    </update>
+
+    <update id="updateRoutingRuleStatus">
+        UPDATE t_ops_routing_rule
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE route_code = #{routeCode}
+    </update>
+
+    <update id="updateSystemControlStatus">
+        UPDATE t_ops_system_control
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE control_code = #{controlCode}
+    </update>
+</mapper>

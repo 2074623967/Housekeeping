@@ -1,0 +1,17 @@
+server:
+  port: ${OPS_CONFIG_PORT:18170}
+spring:
+  application:
+    name: home-service-ops-config-backend
+  datasource:
+    url: ${OPS_CONFIG_DATASOURCE_URL:jdbc:h2:mem:ops_config;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
+    driver-class-name: ${OPS_CONFIG_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${OPS_CONFIG_DATASOURCE_USERNAME:sa}
+    password: ${OPS_CONFIG_DATASOURCE_PASSWORD:}
+  sql:
+    init:
+      mode: ${OPS_CONFIG_SQL_INIT_MODE:always}
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
