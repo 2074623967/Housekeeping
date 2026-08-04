@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.reconciliation.mapper.ReconciliationMapper">
+    <insert id="insertBatch">
+        INSERT INTO t_reconciliation_batch
+        (batch_no, business_date, channel_code, bill_source, status)
+        VALUES (#{batchNo}, #{businessDate}, #{channelCode}, #{billSource}, 'CREATED')
+    </insert>
+
+    <select id="findBatch" resultType="com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO">
+        SELECT batch_no, business_date, channel_code, bill_source, status, channel_count,
+               internal_count, matched_count, difference_count
+        FROM t_reconciliation_batch WHERE batch_no = #{batchNo}
+    </select>
+
+    <select id="findBatches" resultType="com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO">
+        SELECT batch_no, business_date, channel_code, bill_source, status, channel_count,
+               internal_count, matched_count, difference_count
+        FROM t_reconciliation_batch ORDER BY business_date DESC, id DESC
+    </select>
+
+    <insert id="insertChannelRecord">
+        INSERT INTO t_reconciliation_channel_record
+        (batch_no, channel_trade_no, payment_order_id, amount, trade_status, trade_time)
+        VALUES (#{batchNo}, #{record.channelTradeNo}, #{record.paymentOrderId}, #{record.amount},
+                #{record.tradeStatus}, #{record.tradeTime})
+    </insert>
+
+    <insert id="insertInternalRecord">
+        INSERT INTO t_reconciliation_internal_record
+        (batch_no, payment_order_id, amount, internal_status, source_system, paid_time)
+        VALUES (#{batchNo}, #{record.paymentOrderId}, #{record.amount}, #{record.internalStatus},
+                #{record.sourceSystem}, #{record.paidTime})
+    </insert>
+
+    <select id="findChannelRecords" resultType="com.abc123.reconciliation.entity.ChannelRecordEntity">
+        SELECT id, batch_no, channel_trade_no, payment_order_id, amount, trade_status, trade_time
+        FROM t_reconciliation_channel_record WHERE batch_no = #{batchNo}
+    </select>
+
+    <select id="findInternalRecords" resultType="com.abc123.reconciliation.entity.InternalRecordEntity">
+        SELECT id, batch_no, payment_order_id, amount, internal_status, source_system, paid_time
+        FROM t_reconciliation_internal_record WHERE batch_no = #{batchNo}
+    </select>
+
+    <delete id="resetBatchResults">
+        DELETE FROM t_reconciliation_difference WHERE batch_no = #{batchNo}
+    </delete>
+
+    <insert id="insertDifference">
+        INSERT INTO t_reconciliation_difference
+        (difference_no, batch_no, difference_type, payment_order_id, channel_amount, internal_amount, status)
+        VALUES (#{differenceNo}, #{batchNo}, #{differenceType}, #{paymentOrderId}, #{channelAmount},
+                #{internalAmount}, 'OPEN')
+    </insert>
+
+    <update id="updateBatchResult">
+        UPDATE t_reconciliation_batch
+        SET status = 'COMPLETED', channel_count = #{channelCount}, internal_count = #{internalCount},
+            matched_count = #{matchedCount}, difference_count = #{differenceCount}, updated_at = CURRENT_TIMESTAMP
+        WHERE batch_no = #{batchNo}
+    </update>
+
+    <select id="findDifferences" resultType="com.abc123.reconciliation.dto.ReconciliationDifferenceDTO">
+        SELECT difference_no, batch_no, difference_type, payment_order_id, channel_amount, internal_amount,
+               status, resolution, remark, detected_at, resolved_at
+        FROM t_reconciliation_difference
+        <where>
+            <if test="batchNo != null and batchNo != ''">AND batch_no = #{batchNo}</if>
+            <if test="differenceType != null and differenceType != ''">AND difference_type = #{differenceType}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+        </where>
+        ORDER BY detected_at DESC
+        LIMIT #{pageSize} OFFSET ${(pageNo - 1) * pageSize}
+    </select>
+
+    <select id="countDifferences" resultType="long">
+        SELECT COUNT(1) FROM t_reconciliation_difference
+        <where>
+            <if test="batchNo != null and batchNo != ''">AND batch_no = #{batchNo}</if>
+            <if test="differenceType != null and differenceType != ''">AND difference_type = #{differenceType}</if>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+        </where>
+    </select>
+
+    <update id="resolveDifference">
+        UPDATE t_reconciliation_difference
+        SET status = 'RESOLVED', resolution = #{resolution}, remark = #{remark},
+            resolved_at = CURRENT_TIMESTAMP
+        WHERE difference_no = #{differenceNo} AND status = 'OPEN'
+    </update>
+
+    <select id="overview" resultType="com.abc123.reconciliation.dto.ReconciliationOverviewDTO">
+        SELECT
+            (SELECT COUNT(1) FROM t_reconciliation_batch) AS batch_count,
+            (SELECT COUNT(1) FROM t_reconciliation_batch WHERE status = 'RUNNING') AS running_batch_count,
+            (SELECT COUNT(1) FROM t_reconciliation_difference WHERE status = 'OPEN') AS open_difference_count,
+            (SELECT COALESCE(SUM(matched_count), 0) FROM t_reconciliation_batch) AS matched_count
+    </select>
+</mapper>
+
