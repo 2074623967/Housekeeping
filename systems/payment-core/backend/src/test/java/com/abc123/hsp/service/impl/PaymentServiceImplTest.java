@@ -19,6 +19,7 @@ import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
+import com.abc123.hsp.dto.PaymentOpsConfigSnapshotDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -27,6 +28,7 @@ import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
@@ -65,6 +67,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentRiskControlService paymentRiskControlService;
+
+    @Mock
+    private PaymentOpsConfigService paymentOpsConfigService;
 
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
@@ -1192,7 +1197,8 @@ class PaymentServiceImplTest {
                 paymentChannelQueryService,
                 paymentChannelSubmitService,
                 paymentEventDispatchService,
-                paymentRiskControlService)
+                paymentRiskControlService,
+                paymentOpsConfigService)
                 .submit(request);
 
         verify(paymentRiskControlService, times(1)).evaluateSubmitRisk(org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class));
@@ -1200,5 +1206,79 @@ class PaymentServiceImplTest {
         verify(paymentMapper, times(1)).updatePaymentStatus("PAY-RISK-001", "RISK_REVIEW", "warn", "");
         verify(paymentMapper, times(1)).updatePrepayStatusByPaymentOrderId("PAY-RISK-001", "待风控复核", "warn");
         org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-001", result.getPrepayOrderNo());
+    }
+
+    @Test
+    void shouldApplyOpsConfigDefaultsWhenSubmitRequestMissesMethodAndChannel() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-OPS-001");
+        prepayOrder.setPaymentOrderId("PAY-OPS-001");
+        prepayOrder.setOrderNo("ORD-OPS-001");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("268.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-OPS-001");
+        paymentDetail.setOrderNo("ORD-OPS-001");
+        paymentDetail.setStatus("CREATED");
+        paymentDetail.setChannelTransactionNo("");
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_CLEAN");
+        routeDecision.setRouteResult("命中微信 H5");
+
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("PASS");
+        riskDecision.setDecisionType("success");
+        riskDecision.setMessage("允许进入支付主链路");
+
+        PaymentOpsConfigSnapshotDTO snapshot = new PaymentOpsConfigSnapshotDTO();
+        snapshot.setBusinessCode("HOME_CLEAN");
+        snapshot.setPayType("PAY_CONSUME");
+        snapshot.setTerminalType("APP");
+        snapshot.setDefaultPayMethod("微信支付");
+        snapshot.setPrimaryChannelProfileCode("CHANNEL_WX_H5");
+
+        PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
+        submitResult.setChannelTransactionNo("WX-OPS-001");
+        submitResult.setResponsePayload("{\"code\":\"SUCCESS\"}");
+        submitResult.setAttemptStatus("待回调");
+        submitResult.setAttemptStatusType("warn");
+
+        when(paymentMapper.findPrepay("PRE-OPS-001")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-OPS-001")).thenReturn(paymentDetail);
+        when(paymentOpsConfigService.loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP")).thenReturn(snapshot);
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentRiskControlService.evaluateSubmitRisk(org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(riskDecision);
+        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("PRE-OPS-001|微信支付|wx_h5")).thenReturn(false);
+        when(paymentMapper.updatePrepayToPaying("PRE-OPS-001")).thenReturn(1);
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+        when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-OPS-001")).thenReturn("ORD-OPS-001");
+        when(paymentMapper.findPrepay("PRE-OPS-001")).thenReturn(prepayOrder);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-OPS-001");
+        request.setMerchantNo("MCH_HOME_001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService)
+                .submit(request);
+
+        org.junit.jupiter.api.Assertions.assertEquals("微信支付", request.getPaymentMethod());
+        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", request.getChannelCode());
+        verify(paymentOpsConfigService, times(1)).loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP");
+        verify(paymentChannelSubmitService, times(1)).submit(org.mockito.ArgumentMatchers.any());
     }
 }

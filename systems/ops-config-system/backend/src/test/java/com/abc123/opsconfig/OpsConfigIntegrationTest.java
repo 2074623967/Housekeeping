@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.opsconfig.common.BusinessException;
+import com.abc123.opsconfig.dto.OpsConfigEffectiveSnapshotDTO;
+import com.abc123.opsconfig.dto.OpsConfigSnapshotQueryDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import org.junit.jupiter.api.Test;
@@ -40,5 +42,20 @@ class OpsConfigIntegrationTest {
         ToggleRequestDTO request = new ToggleRequestDTO();
         request.setEnabled(true);
         assertThrows(BusinessException.class, () -> service.toggleSystemControl(request));
+    }
+
+    @Test
+    void shouldLoadEnabledEffectiveSnapshot() {
+        OpsConfigSnapshotQueryDTO query = new OpsConfigSnapshotQueryDTO();
+        query.setBusinessCode("HOME_CLEAN");
+        query.setPayType("PAY_CONSUME");
+        query.setTerminalType("APP");
+
+        OpsConfigEffectiveSnapshotDTO snapshot = service.effectiveSnapshot(query);
+
+        assertEquals("微信支付", snapshot.getDefaultPayMethod());
+        assertEquals("CHANNEL_WX_H5", snapshot.getPrimaryChannelProfileCode());
+        assertEquals("CHANNEL_ALI_APP", snapshot.getBackupChannelProfileCode());
+        assertEquals(2, snapshot.getEnabledSystemControls().size());
     }
 }

@@ -60,6 +60,21 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
     }
 
     @Override
+    public CashierTemplateDTO findEnabledCashierTemplateByTerminal(String terminalType) {
+        return mapper.findEnabledCashierTemplateByTerminal(terminalType);
+    }
+
+    @Override
+    public RoutingRuleDTO findEnabledRoutingRule(String businessCode, String payType) {
+        return mapper.findEnabledRoutingRule(businessCode, payType);
+    }
+
+    @Override
+    public List<SystemControlDTO> findEnabledSystemControls() {
+        return mapper.findEnabledSystemControls();
+    }
+
+    @Override
     public long countEnabledAgreementTemplates() {
         return mapper.countEnabledAgreementTemplates();
     }

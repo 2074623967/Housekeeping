@@ -29,6 +29,13 @@ public interface OpsConfigMapper {
 
     List<SystemControlDTO> findSystemControls();
 
+    CashierTemplateDTO findEnabledCashierTemplateByTerminal(@Param("terminalType") String terminalType);
+
+    RoutingRuleDTO findEnabledRoutingRule(@Param("businessCode") String businessCode,
+                                          @Param("payType") String payType);
+
+    List<SystemControlDTO> findEnabledSystemControls();
+
     long countEnabledAgreementTemplates();
 
     long countEnabledBusinessLines();

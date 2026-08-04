@@ -11,6 +11,7 @@ import com.abc123.hsp.dto.PaymentCloseRequestDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PaymentOpsConfigSnapshotDTO;
 import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.dto.PageResultDTO;
@@ -28,6 +29,7 @@ import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -51,6 +53,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentChannelSubmitService paymentChannelSubmitService;
     private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentRiskControlService paymentRiskControlService;
+    private final PaymentOpsConfigService paymentOpsConfigService;
 
     @Autowired
     public PaymentServiceImpl(
@@ -60,7 +63,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentChannelQueryService paymentChannelQueryService,
             PaymentChannelSubmitService paymentChannelSubmitService,
             PaymentEventDispatchService paymentEventDispatchService,
-            PaymentRiskControlService paymentRiskControlService) {
+            PaymentRiskControlService paymentRiskControlService,
+            PaymentOpsConfigService paymentOpsConfigService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
@@ -68,6 +72,7 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentChannelSubmitService = paymentChannelSubmitService;
         this.paymentEventDispatchService = paymentEventDispatchService;
         this.paymentRiskControlService = paymentRiskControlService;
+        this.paymentOpsConfigService = paymentOpsConfigService;
     }
 
     PaymentServiceImpl(
@@ -102,6 +107,12 @@ public class PaymentServiceImpl implements PaymentService {
                         result.setMessage("单元测试兼容构造器默认放行");
                         return result;
                     }
+                },
+                new PaymentOpsConfigService() {
+                    @Override
+                    public PaymentOpsConfigSnapshotDTO loadEffectiveSnapshot(String businessCode, String payType, String terminalType) {
+                        return null;
+                    }
                 });
     }
 
@@ -127,6 +138,12 @@ public class PaymentServiceImpl implements PaymentService {
                         result.setDecisionType("success");
                         result.setMessage("未注入独立风控服务，默认放行");
                         return result;
+                    }
+                },
+                new PaymentOpsConfigService() {
+                    @Override
+                    public PaymentOpsConfigSnapshotDTO loadEffectiveSnapshot(String businessCode, String payType, String terminalType) {
+                        return null;
                     }
                 });
     }
@@ -302,6 +319,7 @@ public class PaymentServiceImpl implements PaymentService {
         String terminal = StringUtils.hasText(request.getTerminal()) ? request.getTerminal().trim() : "UNKNOWN";
         String clientIp = StringUtils.hasText(request.getClientIp()) ? request.getClientIp().trim() : "UNKNOWN";
         String sourceAppId = resolveSourceAppId(request);
+        applyOpsConfigDefaults(request, currentPrepay, terminal);
         PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
                 buildRouteContext(request, currentPrepay, terminal));
         String resolvedChannelCode = routeDecision.getChannelCode();
@@ -682,6 +700,39 @@ public class PaymentServiceImpl implements PaymentService {
                 && paymentMapper.countRecentAttemptsBySourceAppAndMethod(sourceAppId, paymentMethod) >= minuteSubmitLimit.intValue()) {
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_RATE_LIMITED, "当前来源应用支付提交过于频繁，请稍后重试");
         }
+    }
+
+    /**
+     * 优先使用运营配置域的有效快照补齐默认支付方式和默认渠道，避免前端漏传时只能依赖硬编码兜底。
+     */
+    private void applyOpsConfigDefaults(PaymentSubmitRequestDTO request, PrepayOrderDTO currentPrepay, String terminal) {
+        PaymentOpsConfigSnapshotDTO snapshot = paymentOpsConfigService.loadEffectiveSnapshot(
+                currentPrepay.getPayScene(),
+                "PAY_CONSUME",
+                terminal);
+        if (snapshot == null) {
+            return;
+        }
+        if (!StringUtils.hasText(request.getPaymentMethod()) && StringUtils.hasText(snapshot.getDefaultPayMethod())) {
+            request.setPaymentMethod(snapshot.getDefaultPayMethod().trim());
+        }
+        if (!StringUtils.hasText(request.getChannelCode()) && StringUtils.hasText(snapshot.getPrimaryChannelProfileCode())) {
+            request.setChannelCode(resolveOpsChannelCode(snapshot.getPrimaryChannelProfileCode()));
+        }
+    }
+
+    private String resolveOpsChannelCode(String profileCode) {
+        String normalizedProfileCode = profileCode == null ? "" : profileCode.trim().toUpperCase(Locale.ROOT);
+        if (normalizedProfileCode.contains("WX_H5")) {
+            return "wx_h5";
+        }
+        if (normalizedProfileCode.contains("ALI")) {
+            return "alipay_h5";
+        }
+        if (normalizedProfileCode.contains("BANK")) {
+            return "offline_bank";
+        }
+        return profileCode;
     }
 
     private boolean containsConfiguredValue(String configuredValues, String actualValue) {

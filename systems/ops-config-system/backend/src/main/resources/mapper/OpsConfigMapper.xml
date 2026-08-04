@@ -53,6 +53,54 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findEnabledCashierTemplateByTerminal" resultType="com.abc123.opsconfig.dto.CashierTemplateDTO">
+        SELECT template_code AS templateCode,
+               template_name AS templateName,
+               terminal_type AS terminalType,
+               default_pay_method AS defaultPayMethod,
+               display_policy AS displayPolicy,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_cashier_template
+        WHERE status = 'ENABLED'
+          AND terminal_type = #{terminalType}
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledRoutingRule" resultType="com.abc123.opsconfig.dto.RoutingRuleDTO">
+        SELECT route_code AS routeCode,
+               business_code AS businessCode,
+               pay_type AS payType,
+               primary_channel AS primaryChannel,
+               backup_channel AS backupChannel,
+               match_policy AS matchPolicy,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_routing_rule
+        WHERE status = 'ENABLED'
+          AND business_code = #{businessCode}
+          AND pay_type = #{payType}
+        ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledSystemControls" resultType="com.abc123.opsconfig.dto.SystemControlDTO">
+        SELECT control_code AS controlCode,
+               control_name AS controlName,
+               control_scope AS controlScope,
+               control_value AS controlValue,
+               risk_level AS riskLevel,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_system_control
+        WHERE status = 'ENABLED'
+        ORDER BY id ASC
+    </select>
+
     <select id="countEnabledAgreementTemplates" resultType="long">
         SELECT COUNT(1) FROM t_ops_agreement_template WHERE status = 'ENABLED'
     </select>

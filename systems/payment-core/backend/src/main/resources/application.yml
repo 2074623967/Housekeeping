@@ -56,6 +56,10 @@ payment:
     enabled: ${HSP_PAYMENT_RISK_CONTROL_ENABLED:false}
     evaluate-url: ${HSP_PAYMENT_RISK_CONTROL_EVALUATE_URL:http://127.0.0.1:18160/api/risk-control/decisions/evaluate}
     timeout-ms: ${HSP_PAYMENT_RISK_CONTROL_TIMEOUT_MS:2000}
+  ops-config:
+    enabled: ${HSP_PAYMENT_OPS_CONFIG_ENABLED:false}
+    snapshot-url: ${HSP_PAYMENT_OPS_CONFIG_SNAPSHOT_URL:http://127.0.0.1:18170/api/ops-config/effective-snapshot}
+    timeout-ms: ${HSP_PAYMENT_OPS_CONFIG_TIMEOUT_MS:2000}
   amqp:
     payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
     payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}

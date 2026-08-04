@@ -3404,3 +3404,26 @@
 1. 订单中心作为“订单发起支付 -> 创建预付单”的后台入口，现已具备独立控制器层门禁测试。
 2. `payment-core` 当前控制器层覆盖已收口，但发布门槛仍取决于真实渠道、跨系统联调、冻结版回滚包和整包发布证据。
 3. 在命令全部通过并提交到 `test` 前，不推进 `master` 合并或 `release/*` 冻结。
+
+## 111. 2026-08-04 运营配置快照联动复核
+
+### 111.1 本轮新增能力
+
+1. `payment-core` 在提交支付前，已按 `businessCode + payType + terminalType` 调用 `ops-config-system` 的有效配置快照接口。
+2. 当前端未显式传入 `paymentMethod` 时，支付核心会使用运营配置返回的 `defaultPayMethod` 自动补齐。
+3. 当前端未显式传入 `channelCode` 时，支付核心会使用运营配置返回的 `primaryChannelProfileCode` 自动补齐路由输入。
+4. 当前联动顺序已经明确为：运营配置补齐默认值 -> 支付路由决策 -> 风控准入判断 -> 渠道提交。
+
+### 111.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 提交支付定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentServiceImplTest test` | 通过 | `26` 个测试通过，覆盖默认支付方式和默认渠道自动补齐 |
+| `payment-core` 全量后端回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | `263` 个测试通过，`0` failures，`0` errors，`0` skipped |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 111.3 当前判断
+
+1. `payment-core` 已具备从上游运营配置域自动补齐默认支付方式和默认渠道的能力，不再完全依赖前端显式下发。
+2. 当前有效配置快照仍是 V1 读路径，尚未包含灰度发布、版本回滚和审批流，但已经满足支付主链路的配置收口需求。
+3. 本轮仍只面向 `test` 分支持续收口，不推进 `master` 合并或 `release/*` 冻结。

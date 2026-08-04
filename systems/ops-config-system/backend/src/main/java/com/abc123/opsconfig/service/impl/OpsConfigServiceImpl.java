@@ -7,6 +7,8 @@ import com.abc123.opsconfig.dto.BusinessLineDTO;
 import com.abc123.opsconfig.dto.CashierTemplateDTO;
 import com.abc123.opsconfig.dto.ChannelProfileDTO;
 import com.abc123.opsconfig.dto.DashboardMetricDTO;
+import com.abc123.opsconfig.dto.OpsConfigEffectiveSnapshotDTO;
+import com.abc123.opsconfig.dto.OpsConfigSnapshotQueryDTO;
 import com.abc123.opsconfig.dto.OpsConfigSummaryDTO;
 import com.abc123.opsconfig.dto.PageResultDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
@@ -82,6 +84,35 @@ public class OpsConfigServiceImpl implements OpsConfigService {
     @Override
     public PageResultDTO<SystemControlDTO> systemControls() {
         return page(dao.findSystemControls());
+    }
+
+    @Override
+    public OpsConfigEffectiveSnapshotDTO effectiveSnapshot(OpsConfigSnapshotQueryDTO query) {
+        if (query == null || !StringUtils.hasText(query.getBusinessCode())) {
+            throw new BusinessException("业务线编码不能为空");
+        }
+        if (!StringUtils.hasText(query.getPayType())) {
+            throw new BusinessException("支付类型编码不能为空");
+        }
+        if (!StringUtils.hasText(query.getTerminalType())) {
+            throw new BusinessException("终端类型不能为空");
+        }
+        CashierTemplateDTO cashierTemplate = dao.findEnabledCashierTemplateByTerminal(query.getTerminalType().trim());
+        RoutingRuleDTO routingRule = dao.findEnabledRoutingRule(query.getBusinessCode().trim(), query.getPayType().trim());
+        OpsConfigEffectiveSnapshotDTO snapshot = new OpsConfigEffectiveSnapshotDTO();
+        snapshot.setBusinessCode(query.getBusinessCode().trim());
+        snapshot.setPayType(query.getPayType().trim());
+        snapshot.setTerminalType(query.getTerminalType().trim());
+        if (cashierTemplate != null) {
+            snapshot.setDefaultPayMethod(cashierTemplate.getDefaultPayMethod());
+        }
+        if (routingRule != null) {
+            snapshot.setPrimaryChannelProfileCode(routingRule.getPrimaryChannel());
+            snapshot.setBackupChannelProfileCode(routingRule.getBackupChannel());
+            snapshot.setRouteMatchPolicy(routingRule.getMatchPolicy());
+        }
+        snapshot.setEnabledSystemControls(dao.findEnabledSystemControls());
+        return snapshot;
     }
 
     @Override

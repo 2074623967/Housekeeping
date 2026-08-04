@@ -5,6 +5,8 @@ import com.abc123.opsconfig.dto.AgreementTemplateDTO;
 import com.abc123.opsconfig.dto.BusinessLineDTO;
 import com.abc123.opsconfig.dto.CashierTemplateDTO;
 import com.abc123.opsconfig.dto.ChannelProfileDTO;
+import com.abc123.opsconfig.dto.OpsConfigEffectiveSnapshotDTO;
+import com.abc123.opsconfig.dto.OpsConfigSnapshotQueryDTO;
 import com.abc123.opsconfig.dto.OpsConfigSummaryDTO;
 import com.abc123.opsconfig.dto.PageResultDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
@@ -13,6 +15,7 @@ import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -69,6 +72,11 @@ public class OpsConfigController {
     @GetMapping("/system-controls")
     public ApiResponse<PageResultDTO<SystemControlDTO>> systemControls() {
         return ApiResponse.success(service.systemControls());
+    }
+
+    @GetMapping("/effective-snapshot")
+    public ApiResponse<OpsConfigEffectiveSnapshotDTO> effectiveSnapshot(@ModelAttribute OpsConfigSnapshotQueryDTO query) {
+        return ApiResponse.success(service.effectiveSnapshot(query));
     }
 
     @PostMapping("/agreement-templates/toggle")

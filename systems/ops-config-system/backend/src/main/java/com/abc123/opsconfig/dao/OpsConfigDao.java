@@ -4,6 +4,7 @@ import com.abc123.opsconfig.dto.AgreementTemplateDTO;
 import com.abc123.opsconfig.dto.BusinessLineDTO;
 import com.abc123.opsconfig.dto.CashierTemplateDTO;
 import com.abc123.opsconfig.dto.ChannelProfileDTO;
+import com.abc123.opsconfig.dto.CashierTemplateDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
@@ -27,6 +28,12 @@ public interface OpsConfigDao {
     List<RoutingRuleDTO> findRoutingRules();
 
     List<SystemControlDTO> findSystemControls();
+
+    CashierTemplateDTO findEnabledCashierTemplateByTerminal(String terminalType);
+
+    RoutingRuleDTO findEnabledRoutingRule(String businessCode, String payType);
+
+    List<SystemControlDTO> findEnabledSystemControls();
 
     long countEnabledAgreementTemplates();
 

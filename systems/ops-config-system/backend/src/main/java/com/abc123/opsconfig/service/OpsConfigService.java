@@ -5,6 +5,8 @@ import com.abc123.opsconfig.dto.BusinessLineDTO;
 import com.abc123.opsconfig.dto.CashierTemplateDTO;
 import com.abc123.opsconfig.dto.ChannelProfileDTO;
 import com.abc123.opsconfig.dto.OpsConfigSummaryDTO;
+import com.abc123.opsconfig.dto.OpsConfigEffectiveSnapshotDTO;
+import com.abc123.opsconfig.dto.OpsConfigSnapshotQueryDTO;
 import com.abc123.opsconfig.dto.PageResultDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
@@ -31,6 +33,8 @@ public interface OpsConfigService {
     PageResultDTO<RoutingRuleDTO> routingRules();
 
     PageResultDTO<SystemControlDTO> systemControls();
+
+    OpsConfigEffectiveSnapshotDTO effectiveSnapshot(OpsConfigSnapshotQueryDTO query);
 
     OpsConfigSummaryDTO toggleAgreementTemplate(ToggleRequestDTO request);
 
