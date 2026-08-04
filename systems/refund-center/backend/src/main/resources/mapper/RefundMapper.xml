@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.refund.mapper.RefundMapper">
+
+    <select id="findList" resultType="com.abc123.refund.dto.RefundListItemDTO">
+        SELECT refund_order_id, payment_order_id, order_no, customer_name, paid_amount,
+               refund_amount, refund_method, refund_reason, status, channel_refund_id,
+               applied_at, success_at
+        FROM t_refund_order
+        <where>
+            <if test="refundOrderId != null and refundOrderId != ''">
+                AND refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
+            </if>
+            <if test="paymentOrderId != null and paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{paymentOrderId}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="refundMethod != null and refundMethod != ''">
+                AND refund_method = #{refundMethod}
+            </if>
+        </where>
+        ORDER BY applied_at DESC
+        LIMIT #{pageSize} OFFSET ${(pageNo - 1) * pageSize}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM t_refund_order
+        <where>
+            <if test="refundOrderId != null and refundOrderId != ''">
+                AND refund_order_id LIKE CONCAT('%', #{refundOrderId}, '%')
+            </if>
+            <if test="paymentOrderId != null and paymentOrderId != ''">
+                AND payment_order_id LIKE CONCAT('%', #{paymentOrderId}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="refundMethod != null and refundMethod != ''">
+                AND refund_method = #{refundMethod}
+            </if>
+        </where>
+    </select>
+
+    <select id="findByRefundOrderId" resultType="com.abc123.refund.dto.RefundListItemDTO">
+        SELECT refund_order_id, payment_order_id, order_no, customer_name, paid_amount,
+               refund_amount, refund_method, refund_reason, status, channel_refund_id,
+               applied_at, success_at
+        FROM t_refund_order
+        WHERE refund_order_id = #{refundOrderId}
+    </select>
+
+    <select id="findByIdempotencyKey" resultType="com.abc123.refund.dto.RefundListItemDTO">
+        SELECT refund_order_id, payment_order_id, order_no, customer_name, paid_amount,
+               refund_amount, refund_method, refund_reason, status, channel_refund_id,
+               applied_at, success_at
+        FROM t_refund_order
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <select id="findLogs" resultType="com.abc123.refund.dto.RefundOperationLogDTO">
+        SELECT log_no, refund_order_id, action_code, action_name, from_status, to_status,
+               operator_name, operation_remark, operated_at
+        FROM t_refund_operation_log
+        WHERE refund_order_id = #{refundOrderId}
+        ORDER BY operated_at ASC, id ASC
+    </select>
+
+    <select id="findPaymentSource" resultType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
+        SELECT id, payment_order_id, order_no, customer_name, paid_amount, channel_code, paid_at
+        FROM t_refund_payment_source
+        WHERE payment_order_id = #{paymentOrderId}
+    </select>
+
+    <select id="sumActiveRefundAmount" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(refund_amount), 0)
+        FROM t_refund_order
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status IN ('REVIEWING', 'APPROVED', 'PROCESSING', 'SUCCESS')
+    </select>
+
+    <insert id="insertPaymentSource" parameterType="com.abc123.refund.entity.PaymentSuccessProjectionEntity">
+        MERGE INTO t_refund_payment_source
+        (payment_order_id, order_no, customer_name, paid_amount, channel_code, paid_at, updated_at)
+        KEY (payment_order_id)
+        VALUES (#{paymentOrderId}, #{orderNo}, #{customerName}, #{paidAmount},
+                #{channelCode}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+
+    <insert id="insertRefund" parameterType="com.abc123.refund.entity.RefundOrderEntity">
+        INSERT INTO t_refund_order
+        (refund_order_id, payment_order_id, order_no, customer_name, paid_amount, refund_amount,
+         refund_method, refund_reason, status, idempotency_key)
+        VALUES
+        (#{refundOrderId}, #{paymentOrderId}, #{orderNo}, #{customerName}, #{paidAmount}, #{refundAmount},
+         #{refundMethod}, #{refundReason}, #{status}, #{idempotencyKey})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE t_refund_order
+        SET status = #{targetStatus},
+            failure_code = #{failureCode},
+            approved_at = CASE WHEN #{targetStatus} = 'APPROVED' THEN CURRENT_TIMESTAMP ELSE approved_at END,
+            submitted_at = CASE WHEN #{targetStatus} = 'PROCESSING' THEN CURRENT_TIMESTAMP ELSE submitted_at END,
+            version = version + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE refund_order_id = #{refundOrderId}
+          AND status = #{expectedStatus}
+    </update>
+
+    <update id="updateCallback">
+        UPDATE t_refund_order
+        SET status = #{targetStatus},
+            channel_refund_id = COALESCE(#{channelRefundId}, channel_refund_id),
+            failure_code = #{failureCode},
+            success_at = CASE WHEN #{targetStatus} = 'SUCCESS' THEN CURRENT_TIMESTAMP ELSE success_at END,
+            version = version + 1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE refund_order_id = #{refundOrderId}
+          AND status = 'PROCESSING'
+    </update>
+
+    <insert id="insertLog">
+        INSERT INTO t_refund_operation_log
+        (log_no, refund_order_id, action_code, action_name, from_status, to_status,
+         operator_name, operation_remark)
+        VALUES
+        (CONCAT('RLOG-', REPLACE(UUID(), '-', '')), #{refundOrderId}, #{actionCode}, #{actionName},
+         #{fromStatus}, #{toStatus}, #{operatorName}, #{remark})
+    </insert>
+
+    <insert id="insertSuccessOutbox">
+        INSERT INTO t_refund_outbox_event
+        (event_id, event_type, aggregate_id, payload_json, status)
+        VALUES
+        (CONCAT('REVT-', REPLACE(UUID(), '-', '')), 'REFUND_SUCCESS', #{refundOrderId},
+         CONCAT('{"refundOrderId":"', #{refundOrderId},
+                '","paymentOrderId":"', #{paymentOrderId},
+                '","refundAmount":"', #{refundAmount}, '"}'), 'PENDING')
+    </insert>
+
+    <select id="overview" resultType="com.abc123.refund.dto.RefundOverviewDTO">
+        SELECT
+            COUNT(1) AS total_count,
+            SUM(CASE WHEN status = 'REVIEWING' THEN 1 ELSE 0 END) AS reviewing_count,
+            SUM(CASE WHEN status = 'PROCESSING' THEN 1 ELSE 0 END) AS processing_count,
+            SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END) AS fail_count,
+            COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN refund_amount ELSE 0 END), 0) AS success_amount
+        FROM t_refund_order
+    </select>
+</mapper>

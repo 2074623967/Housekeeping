@@ -1,0 +1,23 @@
+server:
+  port: ${REFUND_CENTER_PORT:18140}
+
+spring:
+  application:
+    name: home-service-refund-backend
+  datasource:
+    url: ${REFUND_CENTER_DATASOURCE_URL:jdbc:h2:mem:refund_center;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
+    driver-class-name: ${REFUND_CENTER_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${REFUND_CENTER_DATASOURCE_USERNAME:sa}
+    password: ${REFUND_CENTER_DATASOURCE_PASSWORD:}
+  sql:
+    init:
+      mode: ${REFUND_CENTER_SQL_INIT_MODE:always}
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+refund-center:
+  operator: ${REFUND_CENTER_OPERATOR:refund-center-admin}
+  channel-submit-mode: ${REFUND_CENTER_CHANNEL_SUBMIT_MODE:LOCAL}
