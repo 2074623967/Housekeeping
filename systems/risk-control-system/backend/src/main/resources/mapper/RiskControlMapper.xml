@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.riskcontrol.mapper.RiskControlMapper">
+
+    <select id="findPolicies" resultType="com.abc123.riskcontrol.dto.RiskPolicyDTO">
+        SELECT policy_code, policy_name, risk_dimension, hit_action, risk_level, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_policy
+        ORDER BY id ASC
+    </select>
+
+    <select id="findLimitRules" resultType="com.abc123.riskcontrol.dto.LimitRuleDTO">
+        SELECT rule_code, rule_name, target_type, scene_code, limit_value, time_window, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_limit_rule
+        ORDER BY id ASC
+    </select>
+
+    <select id="findBlocklists" resultType="com.abc123.riskcontrol.dto.BlocklistDTO">
+        SELECT block_code, subject_value, subject_type, reason, action_type, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_blocklist
+        ORDER BY id ASC
+    </select>
+
+    <select id="findInterceptEvents" resultType="com.abc123.riskcontrol.dto.InterceptEventDTO">
+        SELECT event_no, payment_order_id, hit_policy, risk_level, decision_result, source_system,
+               FORMATDATETIME(happened_at, 'yyyy-MM-dd HH:mm:ss') AS happenedAt
+        FROM t_risk_intercept_event
+        ORDER BY happened_at DESC, id DESC
+    </select>
+
+    <select id="findReviewOrders" resultType="com.abc123.riskcontrol.dto.ReviewOrderDTO">
+        SELECT review_no, business_no, risk_tag, review_item, status, status_type, reviewer,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_review_order
+        ORDER BY id ASC
+    </select>
+
+    <select id="findMonitorRules" resultType="com.abc123.riskcontrol.dto.MonitorRuleDTO">
+        SELECT monitor_code, monitor_name, monitor_target, alert_threshold, notify_policy, status, status_type,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_monitor_rule
+        ORDER BY id ASC
+    </select>
+
+    <select id="countEnabledPolicies" resultType="long">
+        SELECT COUNT(1) FROM t_risk_policy WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countEnabledLimits" resultType="long">
+        SELECT COUNT(1) FROM t_risk_limit_rule WHERE status = 'ENABLED'
+    </select>
+
+    <select id="countPendingReviews" resultType="long">
+        SELECT COUNT(1) FROM t_risk_review_order WHERE status = 'PENDING'
+    </select>
+
+    <select id="countInterceptedEvents" resultType="long">
+        SELECT COUNT(1) FROM t_risk_intercept_event
+    </select>
+
+    <update id="updatePolicyStatus">
+        UPDATE t_risk_policy
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE policy_code = #{policyCode}
+    </update>
+
+    <update id="updateLimitRuleStatus">
+        UPDATE t_risk_limit_rule
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE rule_code = #{ruleCode}
+    </update>
+
+    <update id="updateBlocklistStatus">
+        UPDATE t_risk_blocklist
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE block_code = #{blockCode}
+    </update>
+
+    <update id="updateMonitorRuleStatus">
+        UPDATE t_risk_monitor_rule
+        SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
+        WHERE monitor_code = #{monitorCode}
+    </update>
+
+    <update id="updateReviewOrder">
+        UPDATE t_risk_review_order
+        SET status = #{status}, status_type = #{statusType}, reviewer = #{reviewer}, updated_at = CURRENT_TIMESTAMP
+        WHERE review_no = #{reviewNo}
+    </update>
+</mapper>
+
