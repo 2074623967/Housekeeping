@@ -6,6 +6,11 @@ import com.abc123.riskcontrol.dto.LimitRuleDTO;
 import com.abc123.riskcontrol.dto.MonitorRuleDTO;
 import com.abc123.riskcontrol.dto.ReviewOrderDTO;
 import com.abc123.riskcontrol.dto.RiskPolicyDTO;
+import com.abc123.riskcontrol.entity.BlocklistEntity;
+import com.abc123.riskcontrol.entity.InterceptEventEntity;
+import com.abc123.riskcontrol.entity.LimitRuleEntity;
+import com.abc123.riskcontrol.entity.ReviewOrderEntity;
+import com.abc123.riskcontrol.entity.RiskPolicyEntity;
 import java.util.List;
 
 /**
@@ -33,6 +38,20 @@ public interface RiskControlDao {
 
     long countInterceptedEvents();
 
+    List<BlocklistEntity> findEnabledBlocklists();
+
+    List<LimitRuleEntity> findEnabledLimitRulesByScene(String sceneCode);
+
+    List<RiskPolicyEntity> findEnabledPoliciesForDecision();
+
+    ReviewOrderEntity findLatestReviewOrderByBusinessNo(String businessNo);
+
+    InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy, String decisionResult);
+
+    int insertInterceptEvent(InterceptEventEntity entity);
+
+    int insertReviewOrder(ReviewOrderEntity entity);
+
     int updatePolicyStatus(String policyCode, String status, String statusType);
 
     int updateLimitRuleStatus(String ruleCode, String status, String statusType);
@@ -43,4 +62,3 @@ public interface RiskControlDao {
 
     int updateReviewOrder(String reviewNo, String status, String statusType, String reviewer);
 }
-

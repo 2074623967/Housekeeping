@@ -19,12 +19,15 @@ import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
+import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
+import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import com.abc123.hsp.service.PaymentRiskControlService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
@@ -59,6 +62,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentEventDispatchService paymentEventDispatchService;
+
+    @Mock
+    private PaymentRiskControlService paymentRiskControlService;
 
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
@@ -1134,5 +1140,65 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("PAY-001"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("张女士"));
         verify(paymentMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldMarkPaymentAsRiskReviewBeforeChannelSubmit() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-RISK-001");
+        prepayOrder.setPaymentOrderId("PAY-RISK-001");
+        prepayOrder.setOrderNo("ORD-RISK-001");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("168.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-RISK-001");
+        paymentDetail.setOrderNo("ORD-RISK-001");
+        paymentDetail.setStatus("CREATED");
+        paymentDetail.setChannelTransactionNo("");
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_CLEAN");
+        routeDecision.setRouteResult("命中微信 H5");
+
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("REVIEW");
+        riskDecision.setDecisionType("warn");
+        riskDecision.setReviewNo("REVIEW-2001");
+        riskDecision.setEventNo("RISK-EVT-2001");
+        riskDecision.setRiskTag("疑似高风险手机号");
+        riskDecision.setMessage("命中黑名单，需人工复核");
+
+        when(paymentMapper.findPrepay("PRE-RISK-001")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-RISK-001")).thenReturn(paymentDetail);
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentRiskControlService.evaluateSubmitRisk(org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(riskDecision);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-RISK-001");
+        request.setPaymentMethod("微信支付");
+        request.setMerchantNo("MCH_HOME_001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+        request.setPayerPhone("13800008888");
+
+        PrepayOrderDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService)
+                .submit(request);
+
+        verify(paymentRiskControlService, times(1)).evaluateSubmitRisk(org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class));
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, times(1)).updatePaymentStatus("PAY-RISK-001", "RISK_REVIEW", "warn", "");
+        verify(paymentMapper, times(1)).updatePrepayStatusByPaymentOrderId("PAY-RISK-001", "待风控复核", "warn");
+        org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-001", result.getPrepayOrderNo());
     }
 }

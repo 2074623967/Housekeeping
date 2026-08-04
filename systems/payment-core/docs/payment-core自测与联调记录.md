@@ -238,6 +238,35 @@
 5. 为后台配置页补齐协议新增、编辑、重置表单和优先级展示
 6. 修复“编辑已有协议时优先级被默认值覆盖”的隐性配置风险
 
+## 10. 2026-08-04 支付提交接入独立风控中心验证
+
+### 10.1 本轮验证结论
+
+本轮围绕“支付核心虽然已有本地控制策略，但提交支付前尚未真正调用独立风控系统”的问题进行了补强，确认当前已具备 `payment-core -> risk-control-system` 的准入联动基线。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `payment-core` 全量后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `262` 个测试全部通过 |
+| `risk-control-system` 后端测试 | 同环境执行 `systems/risk-control-system/backend` 的 `mvn test` | 通过 | `4` 个测试全部通过 |
+| 定向主链路验证 | `PaymentServiceImplTest.shouldMarkPaymentAsRiskReviewBeforeChannelSubmit` | 通过 | 支付提交命中风控复核时，不再进入渠道提交 |
+
+### 10.2 本轮新增能力
+
+1. `PaymentSubmitRequestDTO` 补齐 `clientDeviceId`、`payerPhone`，为独立风控评估提供准入上下文。
+2. `payment-core` 新增 `PaymentRiskControlService`，支持在提交支付前调用风控中心评估接口。
+3. 支付提交链路新增 `PASS / REVIEW / INTERCEPT / REJECT` 决策收口：
+   - `PASS`：继续路由和渠道提交
+   - `REVIEW`：支付单状态进入 `RISK_REVIEW`，收银台状态进入“待风控复核”
+   - `INTERCEPT`：支付单状态进入 `RISK_BLOCKED`
+   - `REJECT`：支付单状态进入 `RISK_REJECTED`
+4. `risk-control-system` 新增 `/api/risk-control/decisions/evaluate`，支持黑名单、限额规则、基础高危策略和人工复核结果复用。
+
+### 10.3 当前判断
+
+1. 当前支付主链路已不再只是“文档上声明有风控”，而是提交支付前确实会先走独立风控决策。
+2. 这仍属于 V1 联调基线，不等于已经具备生产级实时风控，因为规则发布、流式检测、消息告警、评分模型和大并发压测仍未补齐。
+3. 后续应继续补 `ops-config-system` 配置下发生效、支付端页面态联动和真实运行环境下的跨系统 smoke。
+
 ## 10. 2026-07-22 支付控制限流补强验证
 
 ### 10.1 本轮验证结论

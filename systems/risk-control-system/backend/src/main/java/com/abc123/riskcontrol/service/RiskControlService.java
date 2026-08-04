@@ -6,6 +6,8 @@ import com.abc123.riskcontrol.dto.LimitRuleDTO;
 import com.abc123.riskcontrol.dto.MonitorRuleDTO;
 import com.abc123.riskcontrol.dto.PageResultDTO;
 import com.abc123.riskcontrol.dto.ReviewOrderDTO;
+import com.abc123.riskcontrol.dto.RiskDecisionRequestDTO;
+import com.abc123.riskcontrol.dto.RiskDecisionResultDTO;
 import com.abc123.riskcontrol.dto.RiskPolicyDTO;
 import com.abc123.riskcontrol.dto.RiskReviewActionRequestDTO;
 import com.abc123.riskcontrol.dto.RiskSummaryDTO;
@@ -30,6 +32,8 @@ public interface RiskControlService {
 
     PageResultDTO<MonitorRuleDTO> monitorRules();
 
+    RiskDecisionResultDTO evaluatePaymentDecision(RiskDecisionRequestDTO request);
+
     RiskSummaryDTO togglePolicy(ToggleRequestDTO request);
 
     RiskSummaryDTO toggleLimitRule(ToggleRequestDTO request);
@@ -40,4 +44,3 @@ public interface RiskControlService {
 
     PageResultDTO<ReviewOrderDTO> reviewAction(RiskReviewActionRequestDTO request);
 }
-

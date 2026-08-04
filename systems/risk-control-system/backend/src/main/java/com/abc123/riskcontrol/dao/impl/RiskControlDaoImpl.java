@@ -7,6 +7,11 @@ import com.abc123.riskcontrol.dto.LimitRuleDTO;
 import com.abc123.riskcontrol.dto.MonitorRuleDTO;
 import com.abc123.riskcontrol.dto.ReviewOrderDTO;
 import com.abc123.riskcontrol.dto.RiskPolicyDTO;
+import com.abc123.riskcontrol.entity.BlocklistEntity;
+import com.abc123.riskcontrol.entity.InterceptEventEntity;
+import com.abc123.riskcontrol.entity.LimitRuleEntity;
+import com.abc123.riskcontrol.entity.ReviewOrderEntity;
+import com.abc123.riskcontrol.entity.RiskPolicyEntity;
 import com.abc123.riskcontrol.mapper.RiskControlMapper;
 import java.util.List;
 import org.springframework.stereotype.Repository;
@@ -74,6 +79,41 @@ public class RiskControlDaoImpl implements RiskControlDao {
     }
 
     @Override
+    public List<BlocklistEntity> findEnabledBlocklists() {
+        return mapper.findEnabledBlocklists();
+    }
+
+    @Override
+    public List<LimitRuleEntity> findEnabledLimitRulesByScene(String sceneCode) {
+        return mapper.findEnabledLimitRulesByScene(sceneCode);
+    }
+
+    @Override
+    public List<RiskPolicyEntity> findEnabledPoliciesForDecision() {
+        return mapper.findEnabledPoliciesForDecision();
+    }
+
+    @Override
+    public ReviewOrderEntity findLatestReviewOrderByBusinessNo(String businessNo) {
+        return mapper.findLatestReviewOrderByBusinessNo(businessNo);
+    }
+
+    @Override
+    public InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy, String decisionResult) {
+        return mapper.findLatestInterceptEvent(paymentOrderId, hitPolicy, decisionResult);
+    }
+
+    @Override
+    public int insertInterceptEvent(InterceptEventEntity entity) {
+        return mapper.insertInterceptEvent(entity);
+    }
+
+    @Override
+    public int insertReviewOrder(ReviewOrderEntity entity) {
+        return mapper.insertReviewOrder(entity);
+    }
+
+    @Override
     public int updatePolicyStatus(String policyCode, String status, String statusType) {
         return mapper.updatePolicyStatus(policyCode, status, statusType);
     }
@@ -98,4 +138,3 @@ public class RiskControlDaoImpl implements RiskControlDao {
         return mapper.updateReviewOrder(reviewNo, status, statusType, reviewer);
     }
 }
-

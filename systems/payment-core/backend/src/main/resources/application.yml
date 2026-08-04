@@ -52,6 +52,10 @@ payment:
   event-dispatch:
     # http keeps existing environments stable; test/pre switch to amqp after the broker is ready.
     mode: ${HSP_PAYMENT_EVENT_DISPATCH_MODE:http}
+  risk-control:
+    enabled: ${HSP_PAYMENT_RISK_CONTROL_ENABLED:false}
+    evaluate-url: ${HSP_PAYMENT_RISK_CONTROL_EVALUATE_URL:http://127.0.0.1:18160/api/risk-control/decisions/evaluate}
+    timeout-ms: ${HSP_PAYMENT_RISK_CONTROL_TIMEOUT_MS:2000}
   amqp:
     payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
     payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}

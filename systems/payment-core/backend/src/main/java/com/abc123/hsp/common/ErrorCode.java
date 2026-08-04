@@ -34,4 +34,5 @@ public final class ErrorCode {
     public static final String PAYMENT_ACCESS_TOKEN_INVALID = "PAYMENT-1021";
     public static final String PAYMENT_SUBMIT_CONCURRENCY_BLOCKED = "PAYMENT-1022";
     public static final String PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED = "PAYMENT-1023";
+    public static final String PAYMENT_RISK_SERVICE_UNAVAILABLE = "PAYMENT-1024";
 }

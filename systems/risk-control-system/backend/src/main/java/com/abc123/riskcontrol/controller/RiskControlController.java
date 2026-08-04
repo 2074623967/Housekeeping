@@ -7,6 +7,8 @@ import com.abc123.riskcontrol.dto.LimitRuleDTO;
 import com.abc123.riskcontrol.dto.MonitorRuleDTO;
 import com.abc123.riskcontrol.dto.PageResultDTO;
 import com.abc123.riskcontrol.dto.ReviewOrderDTO;
+import com.abc123.riskcontrol.dto.RiskDecisionRequestDTO;
+import com.abc123.riskcontrol.dto.RiskDecisionResultDTO;
 import com.abc123.riskcontrol.dto.RiskPolicyDTO;
 import com.abc123.riskcontrol.dto.RiskReviewActionRequestDTO;
 import com.abc123.riskcontrol.dto.RiskSummaryDTO;
@@ -66,6 +68,11 @@ public class RiskControlController {
         return ApiResponse.success(service.monitorRules());
     }
 
+    @PostMapping("/decisions/evaluate")
+    public ApiResponse<RiskDecisionResultDTO> evaluateDecision(@RequestBody RiskDecisionRequestDTO request) {
+        return ApiResponse.success(service.evaluatePaymentDecision(request));
+    }
+
     @PostMapping("/policies/toggle")
     public ApiResponse<RiskSummaryDTO> togglePolicy(@RequestBody ToggleRequestDTO request) {
         return ApiResponse.success(service.togglePolicy(request));
@@ -91,4 +98,3 @@ public class RiskControlController {
         return ApiResponse.success(service.reviewAction(request));
     }
 }
-

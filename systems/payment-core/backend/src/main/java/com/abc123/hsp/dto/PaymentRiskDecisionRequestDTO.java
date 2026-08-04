@@ -1,25 +1,28 @@
 package com.abc123.hsp.dto;
 
+import java.math.BigDecimal;
 import lombok.Data;
 
 /**
- * 支付提交请求，除支付方式外还记录终端、IP 和幂等键，便于真实排障。
+ * 支付提交前的风控准入请求。
  */
 @Data
-public class PaymentSubmitRequestDTO {
+public class PaymentRiskDecisionRequestDTO {
 
-    /** 预付单号。 */
-    private String prepayOrderNo;
+    /** 支付单号。 */
+    private String businessNo;
+    /** 来源系统。 */
+    private String sourceSystem;
+    /** 风控场景编码。 */
+    private String sceneCode;
+    /** 支付场景。 */
+    private String payScene;
     /** 支付方式。 */
     private String paymentMethod;
-    /** 渠道编码。 */
+    /** 支付渠道编码。 */
     private String channelCode;
-    /** 来源应用标识。 */
-    private String sourceAppId;
     /** 商户号。 */
     private String merchantNo;
-    /** 接口访问令牌。 */
-    private String accessToken;
     /** 发起终端。 */
     private String terminal;
     /** 客户端 IP。 */
@@ -28,6 +31,6 @@ public class PaymentSubmitRequestDTO {
     private String clientDeviceId;
     /** 付款手机号。 */
     private String payerPhone;
-    /** 幂等键。 */
-    private String idempotencyKey;
+    /** 支付金额。 */
+    private BigDecimal amount;
 }

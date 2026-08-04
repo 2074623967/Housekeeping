@@ -62,6 +62,128 @@
         SELECT COUNT(1) FROM t_risk_intercept_event
     </select>
 
+    <select id="findEnabledBlocklists" resultType="com.abc123.riskcontrol.entity.BlocklistEntity">
+        SELECT id,
+               block_code AS blockCode,
+               subject_value AS subjectValue,
+               subject_type AS subjectType,
+               reason,
+               action_type AS actionType,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_blocklist
+        WHERE status = 'ENABLED'
+        ORDER BY id ASC
+    </select>
+
+    <select id="findEnabledLimitRulesByScene" resultType="com.abc123.riskcontrol.entity.LimitRuleEntity">
+        SELECT id,
+               rule_code AS ruleCode,
+               rule_name AS ruleName,
+               target_type AS targetType,
+               scene_code AS sceneCode,
+               limit_value AS limitValue,
+               time_window AS timeWindow,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_limit_rule
+        WHERE status = 'ENABLED'
+          AND scene_code = #{sceneCode}
+        ORDER BY id ASC
+    </select>
+
+    <select id="findEnabledPoliciesForDecision" resultType="com.abc123.riskcontrol.entity.RiskPolicyEntity">
+        SELECT id,
+               policy_code AS policyCode,
+               policy_name AS policyName,
+               risk_dimension AS riskDimension,
+               hit_action AS hitAction,
+               risk_level AS riskLevel,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_policy
+        WHERE status = 'ENABLED'
+        ORDER BY id ASC
+    </select>
+
+    <select id="findLatestReviewOrderByBusinessNo" resultType="com.abc123.riskcontrol.entity.ReviewOrderEntity">
+        SELECT id,
+               review_no AS reviewNo,
+               business_no AS businessNo,
+               risk_tag AS riskTag,
+               review_item AS reviewItem,
+               status,
+               status_type AS statusType,
+               reviewer,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_review_order
+        WHERE business_no = #{businessNo}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLatestInterceptEvent" resultType="com.abc123.riskcontrol.entity.InterceptEventEntity">
+        SELECT id,
+               event_no AS eventNo,
+               payment_order_id AS paymentOrderId,
+               hit_policy AS hitPolicy,
+               risk_level AS riskLevel,
+               decision_result AS decisionResult,
+               source_system AS sourceSystem,
+               FORMATDATETIME(happened_at, 'yyyy-MM-dd HH:mm:ss') AS happenedAt
+        FROM t_risk_intercept_event
+        WHERE payment_order_id = #{paymentOrderId}
+          AND hit_policy = #{hitPolicy}
+          AND decision_result = #{decisionResult}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insertInterceptEvent" parameterType="com.abc123.riskcontrol.entity.InterceptEventEntity">
+        INSERT INTO t_risk_intercept_event (
+            event_no,
+            payment_order_id,
+            hit_policy,
+            risk_level,
+            decision_result,
+            source_system,
+            happened_at
+        ) VALUES (
+            #{eventNo},
+            #{paymentOrderId},
+            #{hitPolicy},
+            #{riskLevel},
+            #{decisionResult},
+            #{sourceSystem},
+            CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <insert id="insertReviewOrder" parameterType="com.abc123.riskcontrol.entity.ReviewOrderEntity">
+        INSERT INTO t_risk_review_order (
+            review_no,
+            business_no,
+            risk_tag,
+            review_item,
+            status,
+            status_type,
+            reviewer,
+            updated_at
+        ) VALUES (
+            #{reviewNo},
+            #{businessNo},
+            #{riskTag},
+            #{reviewItem},
+            #{status},
+            #{statusType},
+            #{reviewer},
+            CURRENT_TIMESTAMP
+        )
+    </insert>
+
     <update id="updatePolicyStatus">
         UPDATE t_risk_policy
         SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
@@ -92,4 +214,3 @@
         WHERE review_no = #{reviewNo}
     </update>
 </mapper>
-

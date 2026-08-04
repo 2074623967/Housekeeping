@@ -15,6 +15,8 @@ import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
+import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
+import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
@@ -26,6 +28,7 @@ import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.PaymentRiskControlService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -47,6 +50,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentChannelQueryService paymentChannelQueryService;
     private final PaymentChannelSubmitService paymentChannelSubmitService;
     private final PaymentEventDispatchService paymentEventDispatchService;
+    private final PaymentRiskControlService paymentRiskControlService;
 
     @Autowired
     public PaymentServiceImpl(
@@ -55,13 +59,15 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentChannelRoutingService paymentChannelRoutingService,
             PaymentChannelQueryService paymentChannelQueryService,
             PaymentChannelSubmitService paymentChannelSubmitService,
-            PaymentEventDispatchService paymentEventDispatchService) {
+            PaymentEventDispatchService paymentEventDispatchService,
+            PaymentRiskControlService paymentRiskControlService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
         this.paymentChannelQueryService = paymentChannelQueryService;
         this.paymentChannelSubmitService = paymentChannelSubmitService;
         this.paymentEventDispatchService = paymentEventDispatchService;
+        this.paymentRiskControlService = paymentRiskControlService;
     }
 
     PaymentServiceImpl(
@@ -85,6 +91,42 @@ public class PaymentServiceImpl implements PaymentService {
                     @Override
                     public boolean republish(String eventNo) {
                         return false;
+                    }
+                },
+                new PaymentRiskControlService() {
+                    @Override
+                    public PaymentRiskDecisionResultDTO evaluateSubmitRisk(PaymentRiskDecisionRequestDTO request) {
+                        PaymentRiskDecisionResultDTO result = new PaymentRiskDecisionResultDTO();
+                        result.setDecision("PASS");
+                        result.setDecisionType("success");
+                        result.setMessage("单元测试兼容构造器默认放行");
+                        return result;
+                    }
+                });
+    }
+
+    PaymentServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentCallbackSignatureService paymentCallbackSignatureService,
+            PaymentChannelRoutingService paymentChannelRoutingService,
+            PaymentChannelQueryService paymentChannelQueryService,
+            PaymentChannelSubmitService paymentChannelSubmitService,
+            PaymentEventDispatchService paymentEventDispatchService) {
+        this(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                new PaymentRiskControlService() {
+                    @Override
+                    public PaymentRiskDecisionResultDTO evaluateSubmitRisk(PaymentRiskDecisionRequestDTO request) {
+                        PaymentRiskDecisionResultDTO result = new PaymentRiskDecisionResultDTO();
+                        result.setDecision("PASS");
+                        result.setDecisionType("success");
+                        result.setMessage("未注入独立风控服务，默认放行");
+                        return result;
                     }
                 });
     }
@@ -251,7 +293,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if ("WAIT_CALLBACK".equalsIgnoreCase(currentDetail.getStatus())
                 || "SUCCESS".equalsIgnoreCase(currentDetail.getStatus())
-                || "CLOSED".equalsIgnoreCase(currentDetail.getStatus())) {
+                || "CLOSED".equalsIgnoreCase(currentDetail.getStatus())
+                || "RISK_BLOCKED".equalsIgnoreCase(currentDetail.getStatus())
+                || "RISK_REJECTED".equalsIgnoreCase(currentDetail.getStatus())) {
             // 收银台重复点击提交按钮时直接复用当前支付状态，避免重复写支付尝试、路由和待回调日志。
             return currentPrepay;
         }
@@ -269,6 +313,22 @@ public class PaymentServiceImpl implements PaymentService {
                 resolvedChannelCode,
                 terminal,
                 clientIp);
+        PaymentRiskDecisionResultDTO riskDecision = paymentRiskControlService.evaluateSubmitRisk(
+                buildRiskDecisionRequest(
+                        request,
+                        currentPrepay,
+                        paymentOrderId,
+                        resolvedChannelCode,
+                        terminal,
+                        clientIp));
+        if (!"PASS".equalsIgnoreCase(riskDecision.getDecision())) {
+            return handleRiskDecision(
+                    request,
+                    currentPrepay,
+                    currentDetail,
+                    resolvedChannelCode,
+                    riskDecision);
+        }
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
@@ -359,6 +419,58 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.updatePrepayStatusByPaymentOrderId(paymentOrderId, "待支付", "warn");
             throw exception;
         }
+    }
+
+    /**
+     * 风控命中后先在支付核心域留痕，再返回收银台当前态，避免继续进入渠道提交流程。
+     */
+    private PrepayOrderDTO handleRiskDecision(
+            PaymentSubmitRequestDTO request,
+            PrepayOrderDTO currentPrepay,
+            PaymentDetailDTO currentDetail,
+            String resolvedChannelCode,
+            PaymentRiskDecisionResultDTO riskDecision) {
+        paymentMapper.updatePaymentMethodAndChannel(
+                currentDetail.getPaymentOrderId(),
+                request.getPaymentMethod(),
+                resolvedChannelCode,
+                currentDetail.getChannelTransactionNo());
+        String eventType;
+        String paymentStatus;
+        String prepayStatus;
+        String statusType;
+        if ("REVIEW".equalsIgnoreCase(riskDecision.getDecision())) {
+            eventType = "PAYMENT_RISK_REVIEW";
+            paymentStatus = "RISK_REVIEW";
+            prepayStatus = "待风控复核";
+            statusType = "warn";
+        } else if ("REJECT".equalsIgnoreCase(riskDecision.getDecision())) {
+            eventType = "PAYMENT_RISK_REJECTED";
+            paymentStatus = "RISK_REJECTED";
+            prepayStatus = "风控拒绝";
+            statusType = "danger";
+        } else {
+            eventType = "PAYMENT_RISK_BLOCKED";
+            paymentStatus = "RISK_BLOCKED";
+            prepayStatus = "风控拦截";
+            statusType = "danger";
+        }
+        paymentMapper.updatePaymentStatus(
+                currentDetail.getPaymentOrderId(),
+                paymentStatus,
+                statusType,
+                currentDetail.getChannelTransactionNo());
+        paymentMapper.updatePrepayStatusByPaymentOrderId(
+                currentDetail.getPaymentOrderId(),
+                prepayStatus,
+                statusType);
+        paymentMapper.insertEvent(
+                "EVT" + System.currentTimeMillis(),
+                eventType,
+                currentDetail.getPaymentOrderId(),
+                currentDetail.getOrderNo(),
+                buildRiskDecisionPayload(riskDecision, resolvedChannelCode));
+        return paymentMapper.findPrepay(currentPrepay.getPrepayOrderNo());
     }
 
     @Transactional
@@ -638,6 +750,32 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     /**
+     * 提交支付前先请求独立风控中心，确保黑名单、限额和人工复核链路先于渠道出站生效。
+     */
+    private PaymentRiskDecisionRequestDTO buildRiskDecisionRequest(
+            PaymentSubmitRequestDTO request,
+            PrepayOrderDTO currentPrepay,
+            String paymentOrderId,
+            String resolvedChannelCode,
+            String terminal,
+            String clientIp) {
+        PaymentRiskDecisionRequestDTO decisionRequest = new PaymentRiskDecisionRequestDTO();
+        decisionRequest.setBusinessNo(paymentOrderId);
+        decisionRequest.setSourceSystem("payment-core");
+        decisionRequest.setSceneCode("PAY_CONSUME");
+        decisionRequest.setPayScene(currentPrepay.getPayScene());
+        decisionRequest.setPaymentMethod(request.getPaymentMethod());
+        decisionRequest.setChannelCode(resolvedChannelCode);
+        decisionRequest.setMerchantNo(request.getMerchantNo());
+        decisionRequest.setTerminal(terminal);
+        decisionRequest.setClientIp(clientIp);
+        decisionRequest.setClientDeviceId(request.getClientDeviceId());
+        decisionRequest.setPayerPhone(request.getPayerPhone());
+        decisionRequest.setAmount(parseAmount(currentPrepay.getAmount()));
+        return decisionRequest;
+    }
+
+    /**
      * 统一请求留痕口径，便于在支付请求管理页直接复盘一次发起请求。
      */
     private String buildSubmitRequestPayload(
@@ -654,7 +792,22 @@ public class PaymentServiceImpl implements PaymentService {
                 .add("\"resolvedChannelCode\":\"" + resolvedChannelCode + "\"")
                 .add("\"terminal\":\"" + terminal + "\"")
                 .add("\"clientIp\":\"" + clientIp + "\"")
+                .add("\"clientDeviceId\":\"" + defaultText(request.getClientDeviceId()) + "\"")
+                .add("\"payerPhone\":\"" + defaultText(request.getPayerPhone()) + "\"")
                 .add("\"idempotencyKey\":\"" + idempotencyKey + "\"")
+                .toString();
+    }
+
+    private String buildRiskDecisionPayload(PaymentRiskDecisionResultDTO riskDecision, String resolvedChannelCode) {
+        return new StringJoiner(",", "{", "}")
+                .add("\"decision\":\"" + defaultText(riskDecision.getDecision()) + "\"")
+                .add("\"decisionType\":\"" + defaultText(riskDecision.getDecisionType()) + "\"")
+                .add("\"hitCode\":\"" + defaultText(riskDecision.getHitCode()) + "\"")
+                .add("\"riskTag\":\"" + defaultText(riskDecision.getRiskTag()) + "\"")
+                .add("\"reviewNo\":\"" + defaultText(riskDecision.getReviewNo()) + "\"")
+                .add("\"eventNo\":\"" + defaultText(riskDecision.getEventNo()) + "\"")
+                .add("\"channelCode\":\"" + defaultText(resolvedChannelCode) + "\"")
+                .add("\"message\":\"" + defaultText(riskDecision.getMessage()) + "\"")
                 .toString();
     }
 
@@ -697,5 +850,9 @@ public class PaymentServiceImpl implements PaymentService {
     private String csvCell(String value) {
         String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
+    }
+
+    private String defaultText(String value) {
+        return value == null ? "" : value.trim();
     }
 }

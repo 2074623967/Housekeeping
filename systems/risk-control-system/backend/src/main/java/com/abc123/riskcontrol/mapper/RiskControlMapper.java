@@ -6,6 +6,11 @@ import com.abc123.riskcontrol.dto.LimitRuleDTO;
 import com.abc123.riskcontrol.dto.MonitorRuleDTO;
 import com.abc123.riskcontrol.dto.ReviewOrderDTO;
 import com.abc123.riskcontrol.dto.RiskPolicyDTO;
+import com.abc123.riskcontrol.entity.BlocklistEntity;
+import com.abc123.riskcontrol.entity.InterceptEventEntity;
+import com.abc123.riskcontrol.entity.LimitRuleEntity;
+import com.abc123.riskcontrol.entity.ReviewOrderEntity;
+import com.abc123.riskcontrol.entity.RiskPolicyEntity;
 import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
@@ -34,6 +39,22 @@ public interface RiskControlMapper {
 
     long countInterceptedEvents();
 
+    List<BlocklistEntity> findEnabledBlocklists();
+
+    List<LimitRuleEntity> findEnabledLimitRulesByScene(@Param("sceneCode") String sceneCode);
+
+    List<RiskPolicyEntity> findEnabledPoliciesForDecision();
+
+    ReviewOrderEntity findLatestReviewOrderByBusinessNo(@Param("businessNo") String businessNo);
+
+    InterceptEventEntity findLatestInterceptEvent(@Param("paymentOrderId") String paymentOrderId,
+                                                  @Param("hitPolicy") String hitPolicy,
+                                                  @Param("decisionResult") String decisionResult);
+
+    int insertInterceptEvent(InterceptEventEntity entity);
+
+    int insertReviewOrder(ReviewOrderEntity entity);
+
     int updatePolicyStatus(@Param("policyCode") String policyCode,
                            @Param("status") String status,
                            @Param("statusType") String statusType);
@@ -55,4 +76,3 @@ public interface RiskControlMapper {
                           @Param("statusType") String statusType,
                           @Param("reviewer") String reviewer);
 }
-
