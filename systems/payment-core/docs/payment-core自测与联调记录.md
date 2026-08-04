@@ -3427,3 +3427,39 @@
 1. `payment-core` 已具备从上游运营配置域自动补齐默认支付方式和默认渠道的能力，不再完全依赖前端显式下发。
 2. 当前有效配置快照仍是 V1 读路径，尚未包含灰度发布、版本回滚和审批流，但已经满足支付主链路的配置收口需求。
 3. 本轮仍只面向 `test` 分支持续收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 112. 2026-08-04 运营配置 + 风控 + 支付核心跨进程 smoke
+
+### 112.1 本轮验证目标
+
+验证以下真实运行态链路：
+
+1. `payment-core` 提交支付时，不传 `paymentMethod` 与 `channelCode`
+2. `payment-core` 从 `ops-config-system` 自动补齐默认支付方式和默认渠道
+3. `payment-core` 再调用已启动的 `risk-control-system`
+4. `risk-control-system` 从 `ops-config-system` 读取 `CONTROL_BIG_AMOUNT_REVIEW`
+5. 大额交易命中后，支付单与收银台统一进入 `待风控复核`
+
+### 112.2 运行态事实
+
+1. 预付单创建：
+   - `orderNo = SMOKE-OPS-RISK-20260804-001`
+   - `prepayOrderNo = PRE1785811244734`
+   - `paymentOrderId = PAY1785811244732`
+2. 运营配置快照运行态返回：
+   - `defaultPayMethod = 微信支付`
+   - `primaryChannelProfileCode = CHANNEL_WX_H5`
+3. 风控运行态命中：
+   - `reviewNo = REVIEW-1785811212924`
+   - `riskTag = 大额支付人工复核`
+4. 支付核心提交结果：
+   - 收银台状态 `待风控复核`
+   - 支付详情状态 `RISK_REVIEW`
+   - 支付方式已补齐为 `微信支付`
+   - 支付渠道已补齐为 `wx_h5`
+
+### 112.3 本轮结论
+
+1. `payment-core -> ops-config-system -> risk-control-system` 的配置生效链路已经拿到真实 HTTP 运行证据，不再只是单测级别的集成。
+2. 当前这条链路仍停在“准入复核”阶段，尚未继续覆盖人工复核通过后的再次提交、支付成功回调和下游清结算闭环。
+3. 因此本轮显著增强了 `test` 分支门禁，但仍不触发 `master` 合并或 `release/*` 冻结。

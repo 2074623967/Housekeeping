@@ -5,6 +5,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.service.PaymentRiskControlService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -20,6 +21,7 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
     private final String evaluateUrl;
     private final RestTemplate restTemplate;
 
+    @Autowired
     public PaymentRiskControlServiceImpl(
             @Value("${payment.risk-control.enabled:false}") boolean enabled,
             @Value("${payment.risk-control.evaluate-url:}") String evaluateUrl,

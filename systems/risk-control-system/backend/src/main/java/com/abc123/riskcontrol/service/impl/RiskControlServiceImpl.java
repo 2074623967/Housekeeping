@@ -11,6 +11,8 @@ import com.abc123.riskcontrol.dto.PageResultDTO;
 import com.abc123.riskcontrol.dto.ReviewOrderDTO;
 import com.abc123.riskcontrol.dto.RiskDecisionRequestDTO;
 import com.abc123.riskcontrol.dto.RiskDecisionResultDTO;
+import com.abc123.riskcontrol.dto.RiskOpsConfigSnapshotDTO;
+import com.abc123.riskcontrol.dto.RiskOpsSystemControlDTO;
 import com.abc123.riskcontrol.dto.RiskPolicyDTO;
 import com.abc123.riskcontrol.dto.RiskReviewActionRequestDTO;
 import com.abc123.riskcontrol.dto.RiskSummaryDTO;
@@ -21,6 +23,7 @@ import com.abc123.riskcontrol.entity.LimitRuleEntity;
 import com.abc123.riskcontrol.entity.ReviewOrderEntity;
 import com.abc123.riskcontrol.entity.RiskPolicyEntity;
 import com.abc123.riskcontrol.service.RiskControlService;
+import com.abc123.riskcontrol.service.RiskOpsConfigService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -35,10 +38,14 @@ import org.springframework.util.StringUtils;
 @Service
 public class RiskControlServiceImpl implements RiskControlService {
 
-    private final RiskControlDao dao;
+    private static final String CONTROL_BIG_AMOUNT_REVIEW = "CONTROL_BIG_AMOUNT_REVIEW";
 
-    public RiskControlServiceImpl(RiskControlDao dao) {
+    private final RiskControlDao dao;
+    private final RiskOpsConfigService riskOpsConfigService;
+
+    public RiskControlServiceImpl(RiskControlDao dao, RiskOpsConfigService riskOpsConfigService) {
         this.dao = dao;
+        this.riskOpsConfigService = riskOpsConfigService;
     }
 
     @Override
@@ -118,6 +125,11 @@ public class RiskControlServiceImpl implements RiskControlService {
         DecisionHit blocklistHit = evaluateBlocklist(request);
         if (blocklistHit != null) {
             return buildDecisionResult(request, blocklistHit);
+        }
+
+        DecisionHit opsControlHit = evaluateOpsSystemControl(request);
+        if (opsControlHit != null) {
+            return buildDecisionResult(request, opsControlHit);
         }
 
         DecisionHit limitHit = evaluateLimitRule(request);
@@ -222,6 +234,33 @@ public class RiskControlServiceImpl implements RiskControlService {
                     entity.getRuleName() + "超阈值",
                     "交易金额超过风控限额，需人工复核后决定是否放行",
                     buildReviewItemFromLimit(entity, request));
+        }
+        return null;
+    }
+
+    private DecisionHit evaluateOpsSystemControl(RiskDecisionRequestDTO request) {
+        RiskOpsConfigSnapshotDTO snapshot = riskOpsConfigService.loadEffectiveSnapshot(
+                safeTrim(request.getPayScene()),
+                safeTrim(request.getSceneCode()),
+                safeTrim(request.getTerminal()));
+        if (snapshot == null || snapshot.getEnabledSystemControls() == null) {
+            return null;
+        }
+        for (RiskOpsSystemControlDTO control : snapshot.getEnabledSystemControls()) {
+            if (!CONTROL_BIG_AMOUNT_REVIEW.equalsIgnoreCase(control.getControlCode())) {
+                continue;
+            }
+            BigDecimal threshold = parseAmount(control.getControlValue());
+            if (threshold.compareTo(BigDecimal.ZERO) <= 0 || request.getAmount().compareTo(threshold) <= 0) {
+                return null;
+            }
+            return new DecisionHit(
+                    "REVIEW",
+                    control.getControlCode(),
+                    defaultText(control.getRiskLevel()),
+                    control.getControlName(),
+                    "命中运营配置下发的大额支付人工复核阈值，需先转人工审核",
+                    buildReviewItemFromOpsControl(control, request, threshold));
         }
         return null;
     }
@@ -427,6 +466,14 @@ public class RiskControlServiceImpl implements RiskControlService {
     private String buildReviewItemFromPolicy(RiskPolicyEntity entity, RiskDecisionRequestDTO request) {
         return entity.getPolicyName() + "，请核验业务单号 " + request.getBusinessNo()
                 + "、终端 " + defaultText(request.getTerminal()) + " 和渠道 " + defaultText(request.getChannelCode());
+    }
+
+    private String buildReviewItemFromOpsControl(
+            RiskOpsSystemControlDTO control,
+            RiskDecisionRequestDTO request,
+            BigDecimal threshold) {
+        return defaultText(control.getControlName()) + "，本次金额 " + request.getAmount().toPlainString()
+                + " 超过运营配置阈值 " + threshold.toPlainString() + "，请确认大额支付真实性与业务合理性";
     }
 
     private String safeTrim(String value) {
