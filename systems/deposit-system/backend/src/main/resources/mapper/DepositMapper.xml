@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.abc123.deposit.mapper.DepositMapper">
+    <insert id="insertAccount">
+        INSERT INTO t_deposit_account (account_no, owner_id, owner_type, required_amount)
+        VALUES (#{accountNo}, #{ownerId}, #{ownerType}, #{requiredAmount})
+    </insert>
+    <select id="findAccount" resultType="com.abc123.deposit.dto.DepositAccountDTO">
+        SELECT account_no, owner_id, owner_type, required_amount, balance, frozen_amount,
+               balance - frozen_amount AS available_amount, status
+        FROM t_deposit_account WHERE account_no = #{accountNo}
+    </select>
+    <select id="findAccounts" resultType="com.abc123.deposit.dto.DepositAccountDTO">
+        SELECT account_no, owner_id, owner_type, required_amount, balance, frozen_amount,
+               balance - frozen_amount AS available_amount, status
+        FROM t_deposit_account ORDER BY updated_at DESC
+    </select>
+    <update id="updateBalance">
+        UPDATE t_deposit_account
+        SET balance = #{balance}, frozen_amount = #{frozenAmount}, updated_at = CURRENT_TIMESTAMP
+        WHERE account_no = #{accountNo}
+          AND balance = #{expectedBalance}
+          AND frozen_amount = #{expectedFrozenAmount}
+          AND #{balance} >= #{frozenAmount}
+          AND #{frozenAmount} >= 0
+    </update>
+    <insert id="insertFlow">
+        INSERT INTO t_deposit_flow
+        (flow_no, account_no, flow_type, amount, before_balance, after_balance,
+         before_frozen_amount, after_frozen_amount, reference_no, remark)
+        VALUES
+        (CONCAT('DFLOW-', REPLACE(UUID(), '-', '')), #{accountNo}, #{flowType}, #{amount},
+         #{beforeBalance}, #{afterBalance}, #{beforeFrozenAmount}, #{afterFrozenAmount},
+         #{referenceNo}, #{remark})
+    </insert>
+    <select id="findFlows" resultType="com.abc123.deposit.dto.DepositFlowDTO">
+        SELECT flow_no, account_no, flow_type, amount, before_balance, after_balance,
+               before_frozen_amount, after_frozen_amount, reference_no, remark, created_at
+        FROM t_deposit_flow WHERE account_no = #{accountNo} ORDER BY created_at DESC, id DESC
+    </select>
+</mapper>
