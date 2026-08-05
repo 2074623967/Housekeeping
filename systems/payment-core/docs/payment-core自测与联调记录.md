@@ -3771,3 +3771,82 @@
 1. 用户端支付页当前已经不再把关键状态统一折叠成“处理中”，而是能对 `WAIT_CALLBACK / 风控复核 / 风控拦截 / 风控拒绝 / 待发起支付` 做更专业的页面表达。
 2. 收银台动作权限已经更接近真实支付状态机，避免了“待风控复核时还能继续提交”的错误交互。
 3. 这轮补强提升的是四端页面的专业性与可联调性，但仍不等于已经完成最新一轮人工回归；后续还需围绕真实支付单补齐页面级人工验收记录。
+
+## 118. 2026-08-05 fast suffix 自动 retry -> DLQ 真实验证
+
+### 118.1 本轮验证目标
+
+验证以下真实链路：
+
+1. `clearing-system` 与 `accounting-system` 的 AMQP consumer 在消费异常时，会自动投递到各自 retry 路由
+2. retry 队列 TTL 到期后，消息会自动回到主消费队列再次消费
+3. 达到最大重试次数后，消息会自动进入各自 DLQ，而不是停留在 retry 或主队列
+4. `payment-core` 能真实接住 DLQ intake 并创建补偿任务
+5. 非法报文可由运营按“保留审计副本、不安全重放”方式人工结案
+
+### 118.2 运行态事实
+
+1. 本轮新建 fast suffix：
+   - `suffix = 20260805fast`
+   - `RETRY_TTL_MS = 2000`
+2. 演练前队列快照显示：
+   - fast suffix 主队列、retry、DLQ 均为 `0`
+   - 尚无 fast suffix 消费者连接
+3. 本轮以独立端口启动 fast consumer：
+   - `clearing-system`：`18220`
+   - `accounting-system`：`18210`
+   - 均显式注入 RabbitMQ 凭据：
+     - `HSP_RABBITMQ_USERNAME = hsp`
+     - `HSP_RABBITMQ_PASSWORD = hsp-local-drill-20260801`
+4. 通过 RabbitMQ management API 向 `payment.trade` 发布坏报文：
+   - `messageId = MQ-FAST-RETRY-DLQ-20260805-001`
+   - `correlationId = MQ-FAST-RETRY-DLQ-20260805-001`
+   - `routingKey = payment.success.20260805fast.v1`
+   - `payload = {invalid-fast-json`
+5. 当前 HEAD 下游消费者未人工注入 DLQ，而是自动完成失败重试：
+   - `clearing-system` 自动进入 `payment.success.clearing.retry.20260805fast.v1`
+   - `accounting-system` 自动进入 `payment.success.accounting.retry.20260805fast.v1`
+6. `payment-core` 的 `payment.compensation.dlq-intake` 活跃消费者已真实接住两条 fast suffix 死信，并生成补偿任务：
+   - `DLQaba240b93ae346b7b7b9`
+   - `DLQ338493c729064115a467`
+7. 两条任务头信息都保留了自动 retry 的真实轨迹：
+   - `x-retry-count = 3`
+   - `x-first-death-exchange = payment.trade.retry`
+   - `x-last-death-reason = expired`
+   - `x-first-death-queue / x-last-death-queue` 分别为：
+     - `clearing.payment-success.20260805fast.retry`
+     - `accounting.payment-success.20260805fast.retry`
+8. 两条任务均已人工结案：
+   - clearing：`DLQaba240b93ae346b7b7b9`
+   - accounting：`DLQ338493c729064115a467`
+   - 操作人：`支付运营A`
+   - 备注：`2026-08-05 fast suffix 自动重试3次后进入DLQ，报文为非法JSON，保留审计副本并人工结案`
+9. 收尾快照显示：
+   - `clearing.payment-success.20260805fast = 0`
+   - `accounting.payment-success.20260805fast = 0`
+   - 两个 retry 队列均为 `0`
+   - `clearing.payment-success.20260805fast.dlq = 1`
+   - `accounting.payment-success.20260805fast.dlq = 1`
+10. 演练结束后已停止临时 fast consumer，避免对常驻 `20260805a` 运行实例造成干扰。
+
+### 118.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 快速拓扑声明 | `RETRY_TTL_MS=2000 bash infra/rabbitmq/declare_isolated_topology.sh 20260805fast` | 通过 | 生成 fast suffix 的主队列、retry、DLQ 绑定 |
+| 队列基线快照 | `bash infra/rabbitmq/queue_snapshot.sh 20260805fast` | 通过 | 初始主队列、retry、DLQ 均为 `0` |
+| 启动 fast clearing consumer | `SERVER_PORT=18220 ... spring-boot:run` | 通过 | 监听 `clearing.payment-success.20260805fast` |
+| 启动 fast accounting consumer | `SERVER_PORT=18210 ... spring-boot:run` | 通过 | 监听 `accounting.payment-success.20260805fast` |
+| 坏报文注入 | RabbitMQ management publish API | 通过 | `MQ-FAST-RETRY-DLQ-20260805-001` 成功进入 fast suffix 主路由 |
+| DLQ 任务核验 | `GET /api/payment-dead-letter-tasks?pageNo=1&pageSize=20` | 通过 | 生成 clearing/accounting 两条 fast suffix 补偿任务 |
+| 人工结案 clearing | `POST /api/payment-dead-letter-tasks/DLQaba240b93ae346b7b7b9/resolve-manually` | 通过 | 非法 JSON 任务结案成功 |
+| 人工结案 accounting | `POST /api/payment-dead-letter-tasks/DLQ338493c729064115a467/resolve-manually` | 通过 | 非法 JSON 任务结案成功 |
+| 收尾快照 | `bash infra/rabbitmq/queue_snapshot.sh 20260805fast` | 通过 | 主队列和 retry 清零，DLQ 保留审计副本 |
+
+### 118.4 本轮结论
+
+1. 当前 HEAD 已真实证明 `消费失败 -> retry exchange -> retry TTL -> 主队列重试 -> 达到上限后进入 DLQ -> intake 入账补偿任务` 这一整条自动补偿前半链路。
+2. 这意味着 `payment-core` 的 MQ 门禁不再只依赖历史 `20260803fast` 旧证据，而是在 `20260805fast` 下再次完成当前代码基线验证。
+3. 当前剩余门禁继续收敛到两类：
+   - 围绕真实支付单的四端人工回归证据仍需补齐
+   - 正式发布说明、回滚文档、发布后验证清单仍需按当前 HEAD 重算
