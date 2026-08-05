@@ -3463,3 +3463,61 @@
 1. `payment-core -> ops-config-system -> risk-control-system` 的配置生效链路已经拿到真实 HTTP 运行证据，不再只是单测级别的集成。
 2. 当前这条链路仍停在“准入复核”阶段，尚未继续覆盖人工复核通过后的再次提交、支付成功回调和下游清结算闭环。
 3. 因此本轮显著增强了 `test` 分支门禁，但仍不触发 `master` 合并或 `release/*` 冻结。
+
+## 113. 2026-08-05 人工复核通过后再次提交真实 smoke
+
+### 113.1 本轮验证目标
+
+验证以下真实运行态链路是否已经闭环：
+
+1. `payment-core` 在未传 `paymentMethod` 与 `channelCode` 时继续从 `ops-config-system` 自动补齐默认值
+2. 大额支付命中 `risk-control-system` 人工复核后，收银台与支付单统一进入 `待风控复核 / RISK_REVIEW`
+3. 风控人工复核通过后，再次提交同一预付单时，支付链路能够从 `待风控复核` 重新回到支付主链路
+4. 再次提交成功后，支付单真实进入 `WAIT_CALLBACK`
+
+### 113.2 运行态事实
+
+1. 本轮真实预付单：
+   - `orderNo = SMOKE-OPS-RISK-20260805-001`
+   - `prepayOrderNo = PRE1785901653980`
+   - `paymentOrderId = PAY1785901653979`
+   - `billNo = BILL1785901653975`
+2. 运营配置运行态事实：
+   - `CONTROL_BIG_AMOUNT_REVIEW` 已启用
+   - 有效快照返回 `defaultPayMethod = 微信支付`
+   - 有效快照返回 `primaryChannelProfileCode = CHANNEL_WX_H5`
+3. 首次提交支付时：
+   - `payment-core` 未显式传 `paymentMethod` 与 `channelCode`
+   - 支付方式自动补齐为 `微信支付`
+   - 支付渠道自动补齐为 `wx_h5`
+   - 收银台状态从 `待支付` 变为 `待风控复核`
+   - 支付详情状态从 `PREPAY_CREATED` 变为 `RISK_REVIEW`
+4. 风控人工复核运行态事实：
+   - 复核单号 `REVIEW-1785901681130`
+   - 风险标签 `大额支付人工复核`
+   - 风控审核动作 `APPROVE`
+5. 复核通过后再次提交支付：
+   - 收银台状态推进为 `支付中`
+   - 支付详情状态推进为 `WAIT_CALLBACK`
+   - 渠道流水号生成 `WX-1785901790893`
+   - 最近一次尝试状态为 `处理中`
+   - 幂等键为 `PRE1785901653980|微信支付|wx_h5`
+   - 最近一次请求报文已落库，包含 `resolvedChannelCode=wx_h5`
+   - 最近一次响应报文已落库，返回 `USERPAYING`
+   - 事件轨迹新增 `PAYMENT_SUBMIT | payment.trade.submitted.v1 | PENDING`
+
+### 113.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `PaymentServiceImplTest` 定向回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=$JAVA_HOME/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentServiceImplTest test` | 通过 | `27` 个测试全部通过，新增覆盖 `RISK_REVIEW -> PASS -> submit` |
+| `payment-core` 全量回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=$JAVA_HOME/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `264` 个测试全部通过 |
+| `ops-config-system` 运行态开关 | `POST /api/ops-config/system-controls/toggle` | 通过 | `CONTROL_BIG_AMOUNT_REVIEW` 已真实启用 |
+| `risk-control-system` 运行态限额隔离 | `POST /api/risk-control/limit-rules/toggle` | 通过 | `LIMIT_USER_DAY` 已临时关闭，隔离无关限额影响 |
+| 跨进程支付重提 smoke | `ops-config-system + risk-control-system + payment-core` 本机同时启动后，按“预付单 -> 首次提交 -> 人工复核通过 -> 再次提交 -> 主动查单”顺序执行 | 通过 | 已拿到真实 `WAIT_CALLBACK` 证据 |
+
+### 113.4 本轮结论
+
+1. `payment-core` 当前已不只停留在“命中人工复核”，而是已经拿到 `RISK_REVIEW -> APPROVED -> WAIT_CALLBACK` 的真实运行证据。
+2. `PaymentMapper.xml` 对 `待风控复核` 的状态机放行修复已被真实运行态验证有效，不再只是单测级别的修复。
+3. 当前仍未覆盖真实回调成功、清分、结算、账务同批次闭环，因此本轮依然不足以触发 `test -> master` 或 `release/*`。

@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
@@ -1206,6 +1207,75 @@ class PaymentServiceImplTest {
         verify(paymentMapper, times(1)).updatePaymentStatus("PAY-RISK-001", "RISK_REVIEW", "warn", "");
         verify(paymentMapper, times(1)).updatePrepayStatusByPaymentOrderId("PAY-RISK-001", "待风控复核", "warn");
         org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-001", result.getPrepayOrderNo());
+    }
+
+    @Test
+    void shouldContinueSubmitAfterRiskReviewApproved() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-RISK-APPROVED-001");
+        prepayOrder.setPaymentOrderId("PAY-RISK-APPROVED-001");
+        prepayOrder.setOrderNo("ORD-RISK-APPROVED-001");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("6888.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-RISK-APPROVED-001");
+        paymentDetail.setOrderNo("ORD-RISK-APPROVED-001");
+        paymentDetail.setStatus("RISK_REVIEW");
+        paymentDetail.setChannelTransactionNo("");
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_CLEAN");
+        routeDecision.setRouteResult("命中微信 H5");
+
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("PASS");
+        riskDecision.setDecisionType("success");
+        riskDecision.setReviewNo("REVIEW-APPROVED-001");
+        riskDecision.setRiskTag("大额支付人工复核");
+        riskDecision.setMessage("人工复核已通过，允许进入支付主链路");
+
+        PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
+        submitResult.setChannelTransactionNo("WX-APPROVED-001");
+        submitResult.setResponsePayload("{\"code\":\"SUCCESS\"}");
+        submitResult.setAttemptStatus("待回调");
+        submitResult.setAttemptStatusType("warn");
+
+        when(paymentMapper.findPrepay("PRE-RISK-APPROVED-001")).thenReturn(prepayOrder, prepayOrder);
+        when(paymentMapper.findDetail("PAY-RISK-APPROVED-001")).thenReturn(paymentDetail);
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentRiskControlService.evaluateSubmitRisk(org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(riskDecision);
+        when(paymentMapper.updatePrepayToPaying("PRE-RISK-APPROVED-001")).thenReturn(1);
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-RISK-APPROVED-001");
+        request.setPaymentMethod("微信支付");
+        request.setMerchantNo("MCH_DEFAULT");
+        request.setSourceAppId("default-app");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+        request.setPayerPhone("13900001111");
+
+        PrepayOrderDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService)
+                .submit(request);
+
+        verify(paymentRiskControlService, times(1)).evaluateSubmitRisk(org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class));
+        verify(paymentMapper, times(1)).updatePrepayToPaying("PRE-RISK-APPROVED-001");
+        verify(paymentChannelSubmitService, times(1)).submit(org.mockito.ArgumentMatchers.any(PaymentChannelSubmitRequestDTO.class));
+        verify(paymentMapper, never()).updatePaymentStatus("PAY-RISK-APPROVED-001", "RISK_REVIEW", "warn", "");
+        org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-APPROVED-001", result.getPrepayOrderNo());
     }
 
     @Test
