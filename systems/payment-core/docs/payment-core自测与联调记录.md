@@ -3655,3 +3655,76 @@
    - 同批次 retry / DLQ / replay 的完整 MQ 补偿闭环
    - 前端四端围绕该真实 MQ 支付单的整包人工回归
    - 发布说明、回滚说明和版本冻结清单
+
+## 116. 2026-08-05 同后缀 DLQ 人工结案与 Replay 真实验证
+
+### 116.1 本轮验证目标
+
+验证以下真实补偿链路：
+
+1. `payment.trade.dlq` 中的消息可以被 `payment-core` intake 为 `t_payment_dead_letter_task`
+2. 无法安全解析的坏消息可以被运营人工结案，不误触发 Replay
+3. 可安全重放的有效消息可以经过 `READY_TO_REPLAY -> REPLAYED` 状态流转
+4. Replay 后消息可以真实进入下游 `accounting-system`，并产生可核验账务事实
+
+### 116.2 运行态事实
+
+1. 本轮沿用 `20260805a` RabbitMQ 隔离拓扑，与上一轮支付成功事件演练保持同一后缀。
+2. 通过 RabbitMQ management API 注入两条 DLQ 演练消息：
+   - 人工结案消息：
+     - `messageId = MQ-DLQ-20260805A-MANUAL-001`
+     - `routingKey = payment.success.clearing.dlq.20260805a.v1`
+     - `payload = {invalid-manual-json`
+   - 定向 Replay 消息：
+     - `messageId = MQ-DLQ-20260805A-REPLAY-001`
+     - `routingKey = payment.success.accounting.dlq.20260805a.v1`
+     - `payload` 业务字段：
+       - `accountNo = ACT10003`
+       - `paymentOrderId = PAY-DLQ-20260805A-001`
+       - `orderNo = ORD-DLQ-20260805A-001`
+       - `customerName = 补偿演练客户`
+       - `amount = 9.99`
+3. Intake 成功后生成两条死信补偿任务：
+   - `taskNo = DLQb08e16e42e524d739cce`
+   - `taskNo = DLQb8efefb346924a67ac61`
+4. 非法 JSON 消息经运营确认后人工结案：
+   - 接口：`POST /api/payment-dead-letter-tasks/DLQb08e16e42e524d739cce/resolve-manually`
+   - 操作人：`支付运营A`
+   - 备注：`2026-08-05 非法JSON报文，无法安全重放，按隔离演练人工结案`
+   - 最终状态：`MANUAL_RESOLVED`
+5. 有效补偿消息经运营复核后放行重放：
+   - Ready 接口：`POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/ready-to-replay`
+   - Ready 备注：`2026-08-05 已核对账户ACT10003存在且报文字段完整，允许定向重放`
+   - Replay 接口：`POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/replay`
+   - Replay 备注：`2026-08-05 定向重放至accounting专属replay路由`
+   - 最终状态：`REPLAYED`
+   - `replayCount = 1`
+6. Replay 后下游真实账务事实：
+   - `accounting-system` 生成事件 `EVT50004`
+   - `eventType = PAYMENT_SUCCESS`
+   - `bizNo = PAY-DLQ-20260805A-001`
+   - 新增账务流水 `LDG20007`
+   - `accountNo = ACT10003`
+   - `amount = 9.99`
+   - `beforeBalance = 200.00`
+   - `afterBalance = 209.99`
+
+### 116.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| DLQ 注入 | RabbitMQ management publish API | 通过 | 两条演练消息均成功进入对应 DLQ 路由 |
+| 死信任务查询 | `GET /api/payment-dead-letter-tasks` | 通过 | 查到 `DLQb08e16e42e524d739cce`、`DLQb8efefb346924a67ac61` |
+| 人工结案 | `POST /api/payment-dead-letter-tasks/DLQb08e16e42e524d739cce/resolve-manually` | 通过 | 非法 JSON 任务进入 `MANUAL_RESOLVED` |
+| 允许重放 | `POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/ready-to-replay` | 通过 | 有效消息进入可重放状态 |
+| 执行重放 | `POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/replay` | 通过 | 任务状态变为 `REPLAYED`，`replayCount = 1` |
+| 下游账务核验 | `GET /api/accounting/events?eventType=PAYMENT_SUCCESS&bizNo=PAY-DLQ-20260805A-001`、`GET /api/accounting/ledgers?accountNo=ACT10003` | 通过 | 事件 `EVT50004` 与流水 `LDG20007` 已真实生成 |
+
+### 116.4 本轮结论
+
+1. `payment-core` 当前已经拿到同一 RabbitMQ 后缀 `20260805a` 下的 `DLQ 入账 -> 运营人工处置 -> 定向 Replay -> 下游账务恢复` 真实运行证据。
+2. 这意味着 DLQ 补偿链路已经不再只是“有页面、有接口”，而是具备真实任务账本、人工审核痕迹、Replay 结果和下游账务事实。
+3. 当前剩余未补齐的 MQ 门禁已经进一步收敛到：
+   - 自动 retry 后进入 DLQ 的同批次新证据
+   - 围绕这批真实案例的前端四端与后台多台账统一人工回归
+   - 基于当前 HEAD 重算的发布说明、回滚说明和发布后验证清单
