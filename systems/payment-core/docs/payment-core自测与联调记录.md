@@ -3521,3 +3521,73 @@
 1. `payment-core` 当前已不只停留在“命中人工复核”，而是已经拿到 `RISK_REVIEW -> APPROVED -> WAIT_CALLBACK` 的真实运行证据。
 2. `PaymentMapper.xml` 对 `待风控复核` 的状态机放行修复已被真实运行态验证有效，不再只是单测级别的修复。
 3. 当前仍未覆盖真实回调成功、清分、结算、账务同批次闭环，因此本轮依然不足以触发 `test -> master` 或 `release/*`。
+
+## 114. 2026-08-05 支付成功回调后下游联动真实 smoke
+
+### 114.1 本轮验证目标
+
+验证以下真实运行态链路：
+
+1. `payment-core` 在 `WAIT_CALLBACK` 状态下接收 `WX_H5` 成功回调
+2. 支付单、预付单、账单和订单在 `payment-core` 内完成成功收口
+3. `payment-core` 成功事件真实下发至 `clearing-system` 与 `accounting-system`
+4. `clearing-system` 在消费支付成功事件后，真实生成清分结果
+5. `clearing-system` 再向 `settlement-system` 与 `accounting-system` 下发 `CLEARING_GENERATED`
+6. 结算单与账务事件在下游系统真实落库
+
+### 114.2 运行态事实
+
+1. 使用上轮真实支付单继续验证：
+   - `paymentOrderId = PAY1785901653979`
+   - `prepayOrderNo = PRE1785901653980`
+   - `channelTransactionNo = WX-1785901790893`
+2. 回调前基线：
+   - `payment-core` 状态为 `WAIT_CALLBACK`
+   - `clearing-system` 按 `paymentOrderId=PAY1785901653979` 查询结果为 `0`
+   - `accounting-system` 平台手续费账户 `ACT10003` 余额为 `¥12.00`
+   - `settlement-system` 尚无本次支付对应结算事实
+3. 真实回调请求：
+   - 接口 `POST /api/payments/callback/WX_H5`
+   - `tradeStatus = SUCCESS`
+   - 回调后支付详情状态变为 `SUCCESS`
+   - 最近一次支付尝试状态变为 `成功`
+   - 事件轨迹新增 `PAYMENT_SUCCESS | payment.trade.succeeded.v1 | SUCCESS`
+4. 下游真实落地事实：
+   - `clearing-system` 生成清分单 `CLO20002`
+   - 清分批次 `CLB10002`
+   - 清分金额拆分：
+     - 服务者 `¥5647.16`
+     - 商家 `¥688.80`
+     - 平台 `¥551.04`
+     - 渠道费 `¥1.00`
+   - `accounting-system` 对 `ACT10003` 新增 `PAYMENT_SUCCESS_EVENT`
+   - `ACT10003` 可用余额由 `¥12.00` 变为 `¥6900.00`
+   - `accounting-system` 新增 `PAYMENT_SUCCESS` 事件 `EVT50003`
+   - `accounting-system` 新增 `CLEARING_GENERATED` 事件 `EVT50002`
+   - `settlement-system` 新增 `CLEARING_GENERATED` 事件 `SVE70002`
+   - `settlement-system` 新增结算单 `SLT20003`
+   - 结算批次 `SET10002`
+   - 结算单关联清分单 `CLO20002`
+   - 结算单目标 `WRK1001 / 李阿姨`
+   - 结算净额 `¥5647.16`
+
+### 114.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 回调前支付基线 | `GET /api/payments/PAY1785901653979` | 通过 | 回调前状态为 `WAIT_CALLBACK` |
+| 回调前清分基线 | `GET /api/clearing/orders?paymentOrderId=PAY1785901653979` | 通过 | 返回 `0` 条清分结果 |
+| 回调前账务基线 | `GET /api/accounting/accounts/ACT10003` | 通过 | 平台手续费账户余额为 `¥12.00` |
+| 成功回调 | `POST /api/payments/callback/WX_H5` | 通过 | 支付单真实进入 `SUCCESS` |
+| 清分事实核验 | `GET /api/clearing/orders?paymentOrderId=PAY1785901653979` | 通过 | 生成 `CLO20002` |
+| 账务事实核验 | `GET /api/accounting/accounts/ACT10003`、`GET /api/accounting/events?...` | 通过 | 余额与事件均已真实变化 |
+| 结算事实核验 | `GET /api/settlements/events?...`、`GET /api/settlements/orders?...` | 通过 | 结算事件和结算单均已生成 |
+
+### 114.4 本轮结论
+
+1. `payment-core` 当前已经拿到“支付成功回调 -> 清分 -> 账务 -> 结算”的真实跨系统 HTTP 链路证据，不再只停留在 `WAIT_CALLBACK`。
+2. 本轮证明的不是单系统成功，而是同一支付单 `PAY1785901653979` 在四个系统中的支付、清分、账务和结算事实一致推进。
+3. 当前仍未形成可发布证据的部分主要剩余：
+   - RabbitMQ 正式拓扑下同批次链路的 retry / DLQ / replay 复核
+   - 前端四端对 `SUCCESS` 结果页与后台多台账页面的整包回归
+   - 数据库迁移回滚包与正式 release 冻结清单
