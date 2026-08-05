@@ -1,8 +1,8 @@
 import { createApp } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
-import "../../app-web/src/styles.css";
-import BusinessEntryView from "../../app-web/src/views/BusinessEntryView.vue";
+import "../../shared/src/styles/terminal.css";
+import BusinessEntryView from "../../shared/src/views/BusinessEntryView.vue";
 import CashierView from "./views/CashierView.vue";
 import ResultView from "./views/ResultView.vue";
 

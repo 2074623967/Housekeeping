@@ -2,7 +2,7 @@ import { createApp } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import "./styles.css";
-import BusinessEntryView from "../../app-web/src/views/BusinessEntryView.vue";
+import BusinessEntryView from "../../shared/src/views/BusinessEntryView.vue";
 
 const routes = [
   { path: "/", redirect: "/balance-pay" },

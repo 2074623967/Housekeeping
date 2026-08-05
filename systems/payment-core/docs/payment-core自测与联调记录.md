@@ -3850,3 +3850,42 @@
 3. 当前剩余门禁继续收敛到两类：
    - 围绕真实支付单的四端人工回归证据仍需补齐
    - 正式发布说明、回滚文档、发布后验证清单仍需按当前 HEAD 重算
+
+## 119. 2026-08-05 四端共享层收敛与构建复核
+
+### 119.1 本轮目标
+
+1. 收敛 `h5-web` 与 `pc-web` 对 `app-web` 页面文件的直接跨工程引用。
+2. 在不改动支付主链路接口契约的前提下，沉淀终端共享层，降低三端后续页面演进耦合。
+3. 补齐 `.runtime` 忽略规则和关键控制器方法说明，继续贴近冻结交付包标准。
+
+### 119.2 本轮改动
+
+1. 新增 `systems/payment-core/frontend/shared/src/views`：
+   - `BusinessEntryView.vue`
+   - `CashierView.vue`
+   - `ResultView.vue`
+2. 新增 `systems/payment-core/frontend/shared/src/styles/terminal.css`，供多端统一复用终端样式入口。
+3. `h5-web` 与 `pc-web` 的 `main.js / CashierView.vue / ResultView.vue` 已切换为优先引用 `shared` 层，而不是直接引用 `app-web` 目录。
+4. `h5-web` 与 `pc-web` 的 `vite.config.js` 已补齐外部共享目录下 `vue / vue-router` 的 alias 解析，以及 `server.fs.allow`。
+5. 根目录 `.gitignore` 已补齐 `.runtime/` 忽略规则。
+6. 后端补充：
+   - `DashboardController#summary`
+   - `SettlementController#workerOverview`
+   - `SettlementController#workerList`
+   - `SettlementController#exportWorkerList`
+   的中文方法说明。
+
+### 119.3 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `h5-web` 构建 | `npm run build` | 通过 | 共享层切换后，产物正常生成 |
+| `pc-web` 构建 | `npm run build` | 通过 | 共享层切换后，产物正常生成 |
+| 后端编译 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home mvn -DskipTests compile` | 通过 | 显式切换到 JDK 后编译成功 |
+
+### 119.4 结论
+
+1. 本轮证明 `payment-core` 三端终端前台可以继续朝“独立工程 + 共享层”模式演进，而不是继续保留脆弱的跨工程直接引用。
+2. 当前四端运行态联调环境已恢复，且 `h5-web / pc-web / backend` 的最新构建验证已经通过。
+3. 这轮补强提升的是工程可维护性与后续自动化回归基础，但仍不能替代真实支付单页面级人工/自动化回归证据。
