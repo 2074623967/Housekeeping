@@ -3591,3 +3591,67 @@
    - RabbitMQ 正式拓扑下同批次链路的 retry / DLQ / replay 复核
    - 前端四端对 `SUCCESS` 结果页与后台多台账页面的整包回归
    - 数据库迁移回滚包与正式 release 冻结清单
+
+## 115. 2026-08-05 RabbitMQ 隔离拓扑支付成功演练
+
+### 115.1 本轮验证目标
+
+验证以下真实 broker 链路：
+
+1. `payment-core` 在 `payment.event-dispatch.mode=amqp` 下把支付成功事件发布到 `payment.trade`
+2. `clearing-system` 与 `accounting-system` 从隔离 `payment.success.20260805a.v1` 路由真实消费
+3. `clearing-system` 再把清分结果发布到 `clearing.trade`
+4. `settlement-system` 与 `accounting-system` 从隔离 `clearing.generated.20260805a.v1` 路由真实消费
+5. 队列、消费者和下游事实都能对齐，不出现未解释积压
+
+### 115.2 运行态事实
+
+1. 本轮隔离拓扑：
+   - suffix `20260805a`
+   - RabbitMQ 管理端 `http://127.0.0.1:15672`
+   - 管理用户 `hsp`
+2. 本轮业务单：
+   - `orderNo = MQ-DRILL-20260805-001`
+   - `prepayOrderNo = PRE1785907738213`
+   - `paymentOrderId = PAY1785907738212`
+   - `billNo = BILL1785907738209`
+3. 提交支付后基线：
+   - 支付单状态 `WAIT_CALLBACK`
+   - 收银台状态 `支付中`
+   - 隔离主队列、retry、DLQ 均为 `0` 积压
+   - 4 个消费者均在线
+4. 首次回调时：
+   - 支付单已真实进入 `SUCCESS`
+   - `PAYMENT_SUCCESS` 事件 `EVT1785907822039` 首次发布失败
+   - 根因是 `payment-core` 本轮首次 AMQP 启动未注入 `HSP_RABBITMQ_PASSWORD`
+5. 修正 `payment-core` RabbitMQ 凭据并重启后：
+   - 手动重发 `EVT1785907822039`
+   - 事件发布状态变为 `SUCCESS`
+6. 下游真实事实：
+   - `clearing-system` 生成清分单 `CLO20002`
+   - `accounting-system` 生成 `PAYMENT_SUCCESS` 事件 `EVT50002`
+   - `settlement-system` 生成 `CLEARING_GENERATED` 事件 `SVE70002`
+   - 队列快照显示隔离主队列、retry、DLQ 均无积压
+
+### 115.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| RabbitMQ 容器启动 | `docker compose -f infra/rabbitmq/docker-compose.yml up -d` | 通过 | 本地 broker 已启动 |
+| 隔离拓扑声明 | `bash infra/rabbitmq/declare_isolated_topology.sh 20260805a` | 通过 | 已生成四条隔离消费链路 |
+| 队列基线 | `bash infra/rabbitmq/queue_snapshot.sh 20260805a` | 通过 | 4 个消费者在线，队列无积压 |
+| 支付成功回调 | `POST /api/payments/callback/WX_H5` | 通过 | 支付单真实进入 `SUCCESS` |
+| 首次 AMQP 出站 | `GET /api/payment-events?paymentOrderId=PAY1785907738212` | 失败后已恢复 | 首次因 RabbitMQ 密码缺失失败 |
+| 手动重发 | `POST /api/payment-events/republish` | 通过 | `EVT1785907822039` 状态改为 `SUCCESS` |
+| 清分事实核验 | `GET /api/clearing/orders?paymentOrderId=PAY1785907738212` | 通过 | 生成 `CLO20002` |
+| 账务事实核验 | `GET /api/accounting/events?eventType=PAYMENT_SUCCESS&bizNo=PAY1785907738212` | 通过 | 生成 `EVT50002` |
+| 结算事实核验 | `GET /api/settlements/events?eventType=CLEARING_GENERATED&bizNo=CLO20002` | 通过 | 生成 `SVE70002` |
+
+### 115.4 本轮结论
+
+1. `payment-core -> RabbitMQ -> clearing/accounting -> clearing -> RabbitMQ -> settlement/accounting` 的 broker 级真实链路已经重新拿到运行证据，不再只是 HTTP 直连或单测层面证明。
+2. 本轮还额外证明了支付成功出站失败后的手动重发路径可以恢复下游事实，不会把失败事件永久卡死在 `FAILED`。
+3. 当前仍需继续补齐：
+   - 同批次 retry / DLQ / replay 的完整 MQ 补偿闭环
+   - 前端四端围绕该真实 MQ 支付单的整包人工回归
+   - 发布说明、回滚说明和版本冻结清单
