@@ -22,6 +22,7 @@ import com.abc123.hsp.service.PaymentConfigService;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.StringJoiner;
 import org.springframework.stereotype.Service;
@@ -299,7 +300,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private SelfCheckResult evaluateControlPolicy(PaymentControlPolicyDTO controlPolicy) {
         Set<String> allowedChannels = splitToSet(controlPolicy.getAllowedChannelCodes());
-        Set<String> allowedMethods = splitToSet(controlPolicy.getAllowedPaymentMethods());
+        Set<String> allowedMethods = normalizePaymentMethods(splitToSet(controlPolicy.getAllowedPaymentMethods()));
         Set<String> allowedMerchants = splitToSet(controlPolicy.getAllowedMerchantNos());
         if (allowedMethods.isEmpty() || allowedChannels.isEmpty() || allowedMerchants.isEmpty()) {
             return new SelfCheckResult("FAIL", "danger", "支付方式、渠道或商户授权为空，禁止进入严格模式提交");
@@ -311,7 +312,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         for (PaymentChannelConfigDTO channel : channels) {
             if ("ENABLED".equals(channel.getStatus()) && allowedChannels.contains(channel.getChannelCode())) {
                 enabledChannelCodes.add(channel.getChannelCode());
-                enabledPaymentMethods.add(channel.getPaymentMethod());
+                enabledPaymentMethods.add(normalizePaymentMethod(channel.getPaymentMethod()));
             }
         }
 
@@ -322,7 +323,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!enabledPaymentMethods.containsAll(allowedMethods)) {
             warningJoiner.add("存在未被启用渠道覆盖的支付方式");
         }
-        if (!hasConfiguredMerchants(allowedMerchants, channels)) {
+        if (!hasConfiguredMerchants(controlPolicy, allowedMerchants, channels)) {
             warningJoiner.add("存在未配置到启用渠道的授权商户号");
         }
         if (!hasEnabledGatewayForAnyChannel(allowedChannels)) {
@@ -350,14 +351,26 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return false;
     }
 
-    private boolean hasConfiguredMerchants(Set<String> allowedMerchants, List<PaymentChannelConfigDTO> channels) {
+    /**
+     * 控制策略里的授权商户号既可能是渠道商户号，也可能是来源应用层面的业务商户号。
+     * 当策略值与渠道商户号完全不在一个命名空间时，只要来源应用显式配置了非空商户号，就不应误判为缺失。
+     */
+    private boolean hasConfiguredMerchants(PaymentControlPolicyDTO controlPolicy,
+                                           Set<String> allowedMerchants,
+                                           List<PaymentChannelConfigDTO> channels) {
         Set<String> configuredMerchants = new HashSet<String>();
         for (PaymentChannelConfigDTO channel : channels) {
             if ("ENABLED".equals(channel.getStatus()) && StringUtils.hasText(channel.getMerchantNo())) {
                 configuredMerchants.add(channel.getMerchantNo().trim());
             }
         }
-        return configuredMerchants.containsAll(allowedMerchants);
+        if (configuredMerchants.containsAll(allowedMerchants)) {
+            return true;
+        }
+        if (isSourceAppMerchantScope(allowedMerchants, configuredMerchants)) {
+            return hasAnyConfiguredValue(controlPolicy.getAllowedMerchantNos(), allowedMerchants);
+        }
+        return false;
     }
 
     private boolean hasAnyConfiguredValue(String configuredValues, Set<String> expectedValues) {
@@ -380,6 +393,43 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         return result;
+    }
+
+    private boolean isSourceAppMerchantScope(Set<String> allowedMerchants, Set<String> configuredMerchants) {
+        if (allowedMerchants.isEmpty() || configuredMerchants.isEmpty()) {
+            return false;
+        }
+        for (String allowedMerchant : allowedMerchants) {
+            if (configuredMerchants.contains(allowedMerchant)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Set<String> normalizePaymentMethods(Set<String> paymentMethods) {
+        Set<String> normalizedPaymentMethods = new HashSet<String>();
+        for (String paymentMethod : paymentMethods) {
+            normalizedPaymentMethods.add(normalizePaymentMethod(paymentMethod));
+        }
+        return normalizedPaymentMethods;
+    }
+
+    private String normalizePaymentMethod(String paymentMethod) {
+        if (!StringUtils.hasText(paymentMethod)) {
+            return "";
+        }
+        String normalizedPaymentMethod = paymentMethod.trim().toUpperCase(Locale.ROOT);
+        if ("银行卡".equals(paymentMethod.trim()) || "银行转账".equals(paymentMethod.trim())) {
+            return "BANK_CARD";
+        }
+        if (normalizedPaymentMethod.contains("WX") || "微信支付".equals(paymentMethod.trim())) {
+            return "WECHAT_PAY";
+        }
+        if (normalizedPaymentMethod.contains("ALI") || "支付宝".equals(paymentMethod.trim())) {
+            return "ALIPAY";
+        }
+        return normalizedPaymentMethod;
     }
 
     private String requireConfigCode(PaymentConfigToggleRequestDTO request) {

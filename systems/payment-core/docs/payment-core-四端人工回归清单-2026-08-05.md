@@ -156,20 +156,34 @@
 1. `WAIT_CALLBACK` 新样例通过真实接口创建，而不是手工改库：
    - `POST /api/payments/prepay`
    - `POST /api/payments/submit`
-2. 之所以使用 `sourceAppId=default-app` 创建本轮 `WAIT_CALLBACK` 样例，是因为：
-   - `housekeeping-app-web`
-   - `housekeeping-h5-web`
-   - `housekeeping-pc-web`
-   当前控制策略处于 `strictMode=开启` 且 `selfCheckStatus=WARN`
-   - 直接提交会命中 `PAYMENT-1019`
-3. 这说明当前 HEAD 的真实系统结论是：
-   - 页面本身的状态映射与按钮控制逻辑已可验证
-   - 但正式来源应用配置仍存在治理缺口，尚不能据此判定达到冻结发布标准
+2. 2026-08-05 16:24 至 16:29 已完成正式来源应用控制策略和路由别名修复后的回归：
+   - `housekeeping-app-web` 控制策略自检已恢复为 `PASS`
+   - `housekeeping-h5-web` 控制策略自检已恢复为 `PASS`
+   - `housekeeping-pc-web` 控制策略自检已恢复为 `PASS`
+3. 本轮新增正式来源应用支付样例：
+   - `WAIT_CALLBACK` App（正式来源应用）
+     - 支付单：`PAY1785918393972`
+     - 预付单：`PRE1785918393974`
+     - 订单号：`REG-AUTO-APP-20260805-001`
+   - `WAIT_CALLBACK` H5（正式来源应用）
+     - 支付单：`PAY1785918388803`
+     - 预付单：`PRE1785918388806`
+     - 订单号：`REG-AUTO-H5-20260805-001`
+   - `WAIT_CALLBACK` PC（正式来源应用）
+     - 支付单：`PAY1785918388713`
+     - 预付单：`PRE1785918388717`
+     - 订单号：`REG-AUTO-PC-20260805-001`
+4. 本轮结论不再是“只能使用 `default-app` 绕过治理”：
+   - 正式来源应用已可直接创建预付单并提交支付
+   - `PAYMENT-1019` 已从正式提交流程中移除
+   - `MOBILE_WEB / PC_WEB` 与配置中的 `H5 / PC` 场景别名已完成归一化
 
 ### 6.4 本轮结论
 
 1. 当前四端已经具备真实页面级状态证据，不再只有接口和构建证据。
 2. `SUCCESS / RISK_REVIEW / WAIT_CALLBACK / PREPAY_CREATED` 四类核心状态已在当前 HEAD 下得到页面验证。
-3. 当前仍未达到可合并 `master` 的标准，原因不是页面不可用，而是：
-   - 正式来源应用的支付控制策略自检仍是 `WARN`
-   - 围绕真实生产口径来源应用的页面级回归还没有全量闭环
+3. 当前正式来源应用的控制策略门禁已经恢复到 `PASS`，支付主链路可从来源应用直接进入“支付中 / 待回调”阶段。
+4. 当前仍不建议立即合并 `master`，后续还需继续补强：
+   - 正式来源应用样例的页面级截图证据
+   - 回调收口后的 `SUCCESS` 页面级复核
+   - 真实来源应用口径下的异常单、关闭单与重复提交回归

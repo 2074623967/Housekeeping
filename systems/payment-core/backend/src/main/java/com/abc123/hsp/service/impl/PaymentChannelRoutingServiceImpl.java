@@ -142,10 +142,10 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             return true;
         }
         String normalizedPayScene = normalizeText(routeContext.getPayScene());
-        String normalizedTerminal = normalizeText(routeContext.getTerminal());
+        String normalizedTerminal = normalizeTerminal(routeContext.getTerminal());
         String normalizedCustomerType = resolveCustomerType(routeContext.getCustomerName());
         for (String token : matchScene.split("/")) {
-            String normalizedToken = normalizeText(token);
+            String normalizedToken = normalizeSceneToken(token);
             if (normalizedToken.equals(normalizedPayScene)
                     || normalizedToken.equals(normalizedTerminal)
                     || normalizedToken.equals(normalizedCustomerType)) {
@@ -205,7 +205,7 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                 return normalizeChannelCode(routeContext.getRequestedChannelCode()).equals(value);
             }
             if ("terminal".equals(key)) {
-                return normalizeText(routeContext.getTerminal()).equals(value);
+                return normalizeTerminal(routeContext.getTerminal()).equals(normalizeSceneToken(parts[1]));
             }
             return false;
         }
@@ -276,5 +276,23 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             return "offline_bank";
         }
         return normalizedChannel;
+    }
+
+    private String normalizeTerminal(String terminal) {
+        return normalizeSceneToken(terminal);
+    }
+
+    private String normalizeSceneToken(String token) {
+        String normalizedToken = normalizeText(token);
+        if ("mobile_web".equals(normalizedToken) || "mobile".equals(normalizedToken) || "h5".equals(normalizedToken)) {
+            return "h5";
+        }
+        if ("pc_web".equals(normalizedToken) || "pc".equals(normalizedToken) || "web".equals(normalizedToken)) {
+            return "pc";
+        }
+        if ("app".equals(normalizedToken) || "app_native".equals(normalizedToken)) {
+            return "app";
+        }
+        return normalizedToken;
     }
 }
