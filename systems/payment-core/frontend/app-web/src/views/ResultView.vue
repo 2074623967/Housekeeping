@@ -91,6 +91,14 @@ const callbackChannelCode = computed(() => {
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
+const canMockCallback = computed(() => {
+  const status = paymentDetail.value?.status;
+  return status === "WAIT_CALLBACK" || status === "PAYING";
+});
+const canClosePayment = computed(() => {
+  const status = paymentDetail.value?.status;
+  return Boolean(status) && status !== "SUCCESS" && status !== "CLOSED";
+});
 const nextStepChecklist = computed(() => {
   if (resultState.value === "success") {
     return [
@@ -106,6 +114,46 @@ const nextStepChecklist = computed(() => {
       "当前支付单已关闭，建议返回收银台重新发起新的预付单。",
       "若用户已实际付款，请先保留凭证并联系运营核查渠道回调与支付请求。",
       "如关闭前发生重复点击，需对照幂等键和支付请求页确认是否存在重复提交流水。"
+    ];
+  }
+  if (resultState.value === "risk_review") {
+    return [
+      "本次支付已进入风控人工复核，暂不建议继续重复点击支付。",
+      "优先联系风控或运营核对复核单、订单金额、客户信息和设备/IP 风险特征。",
+      "待风控审核通过后，再回到收银台重新提交当前预付单。",
+      "如长时间未收口，需同步核查风控系统审核状态与支付单状态是否一致。"
+    ];
+  }
+  if (resultState.value === "risk_blocked") {
+    return [
+      "本次支付已被策略拦截，需先调整订单、金额或支付方式后再尝试。",
+      "建议后台联查风险策略、限额规则、黑名单和客户端来源信息。",
+      "如确认误拦截，应先处理风控配置，再重新发起新的预付单。",
+      "不要直接模拟成功回调，以免绕过真实风控闭环。"
+    ];
+  }
+  if (resultState.value === "risk_rejected") {
+    return [
+      "本次支付已被风控拒绝，需由运营明确拒绝原因并通知用户。",
+      "建议核对风险复核意见、订单业务背景和用户投诉处理方案。",
+      "如需继续交易，应重新生成新支付单并在风控侧完成放行后再发起。",
+      "不要继续对当前支付单执行成功回调联调。"
+    ];
+  }
+  if (resultState.value === "prepay_created") {
+    return [
+      "当前仅完成预付单创建，尚未真正提交到渠道。",
+      "可返回收银台确认支付方式、幂等键和接入令牌后重新发起支付。",
+      "如后台已发起支付请求，请核对是否存在前端跳转中断或会话刷新不及时。",
+      "若多次停留在待发起状态，建议联查支付请求管理页和收银台会话页。"
+    ];
+  }
+  if (resultState.value === "wait_callback") {
+    return [
+      bizSceneMeta.value.pendingHint,
+      "支付请求已提交成功，当前应优先等待回调或执行主动查单。",
+      "若后台与用户端状态不一致，先核对支付请求、回调轨迹和事件出站状态。",
+      "如需模拟联调，只在 WAIT_CALLBACK / PAYING 状态下执行成功回调。"
     ];
   }
   return [
@@ -126,6 +174,24 @@ const recoveryActions = computed(() => {
     return [
       "重新拉起新的预付单并刷新用户收银台。",
       "同步客服说明当前旧支付单已关闭，避免用户重复付款。"
+    ];
+  }
+  if (resultState.value === "risk_review") {
+    return [
+      "通知风控/运营优先处理当前复核单，再回收银台重新提交。",
+      "保留支付单号、预付单号和风控复核编号，便于跨系统联查。"
+    ];
+  }
+  if (resultState.value === "risk_blocked" || resultState.value === "risk_rejected") {
+    return [
+      "改走其他支付方式或调整交易参数后，再发起新的支付单。",
+      "同步排查风控规则、限额与黑名单命中情况。"
+    ];
+  }
+  if (resultState.value === "prepay_created") {
+    return [
+      "返回收银台完成正式支付提交。",
+      "如页面长期未推进，刷新会话并核对当前预付单状态。"
     ];
   }
   return [
@@ -361,10 +427,10 @@ function resolveBizType() {
           <button class="action-button primary" :disabled="queryLoading" @click="queryResult">
             {{ queryLoading ? "查询中..." : terminalCopy.queryLabel }}
           </button>
-          <button class="action-button secondary" :disabled="callbackLoading" @click="mockSuccessCallback">
+          <button class="action-button secondary" :disabled="callbackLoading || !canMockCallback" @click="mockSuccessCallback">
             {{ callbackLoading ? "回调中..." : terminalCopy.callbackLabel }}
           </button>
-          <button class="action-button ghost" :disabled="closeLoading" @click="closePayment">
+          <button class="action-button ghost" :disabled="closeLoading || !canClosePayment" @click="closePayment">
             {{ closeLoading ? "关闭中..." : terminalCopy.closeLabel }}
           </button>
           <button class="action-button secondary" :disabled="!route.query.prepayOrderNo" @click="backToCashier">

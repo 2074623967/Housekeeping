@@ -3728,3 +3728,46 @@
    - 自动 retry 后进入 DLQ 的同批次新证据
    - 围绕这批真实案例的前端四端与后台多台账统一人工回归
    - 基于当前 HEAD 重算的发布说明、回滚说明和发布后验证清单
+
+## 117. 2026-08-05 四端共享支付页状态补强验证
+
+### 117.1 本轮修复目标
+
+本轮围绕用户端共享支付页存在“关键支付状态被过度简化”的问题补强，重点修复：
+
+1. 支付结果页不再只区分 `success / closed / pending`
+2. `RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED / WAIT_CALLBACK / PREPAY_CREATED` 需要按真实业务状态展示
+3. 收银台在 `待风控复核 / 支付成功 / 会话过期` 等状态下，不应继续允许用户重复提交
+4. `app-web / h5-web / pc-web` 三端需一起验证构建通过
+
+### 117.2 本轮修复内容
+
+1. 更新 `frontend/app-web/src/constants/payment.js`，补齐结果页状态映射：
+   - `WAIT_CALLBACK / PAYING`
+   - `RISK_REVIEW`
+   - `RISK_BLOCKED`
+   - `RISK_REJECTED`
+   - `PREPAY_CREATED`
+2. 更新 `frontend/app-web/src/views/ResultView.vue`：
+   - 按不同支付状态展示更细化的“建议下一步 / 补救动作”
+   - “模拟成功回调”仅在 `WAIT_CALLBACK / PAYING` 状态可执行
+   - “关闭支付单”在 `SUCCESS / CLOSED` 状态下禁用
+3. 更新 `frontend/app-web/src/views/CashierView.vue`：
+   - 新增收银台提交前状态守卫
+   - `待风控复核 / 支付成功 / 会话过期` 状态下禁止继续提交
+   - 页面直接给出禁止提交原因，便于用户、运营和测试联查
+4. 由于 `h5-web`、`pc-web` 复用 `app-web` 共享视图，上述补强已同步覆盖三端
+
+### 117.3 构建验证
+
+| 端 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `app-web` | `npm run build` | 通过 | 共享支付页状态补强后产物正常生成 |
+| `h5-web` | `npm run build` | 通过 | 复用共享视图的 H5 支付页未被破坏 |
+| `pc-web` | `npm run build` | 通过 | PC 端收银台与结果页构建通过 |
+
+### 117.4 本轮结论
+
+1. 用户端支付页当前已经不再把关键状态统一折叠成“处理中”，而是能对 `WAIT_CALLBACK / 风控复核 / 风控拦截 / 风控拒绝 / 待发起支付` 做更专业的页面表达。
+2. 收银台动作权限已经更接近真实支付状态机，避免了“待风控复核时还能继续提交”的错误交互。
+3. 这轮补强提升的是四端页面的专业性与可联调性，但仍不等于已经完成最新一轮人工回归；后续还需围绕真实支付单补齐页面级人工验收记录。

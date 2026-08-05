@@ -203,6 +203,23 @@ const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
 });
+const canSubmit = computed(() => {
+  const status = cashier.value?.status;
+  return hasChannels.value && status !== "待风控复核" && status !== "支付成功" && countdownSeconds.value > 0;
+});
+const submitBlockedHint = computed(() => {
+  const status = cashier.value?.status;
+  if (status === "待风控复核") {
+    return "当前支付单正在等待风控复核，请先完成审核后再继续提交。";
+  }
+  if (status === "支付成功") {
+    return "当前支付单已支付成功，无需再次提交。";
+  }
+  if (countdownSeconds.value <= 0) {
+    return "当前收银台会话已过期，请关闭后重新拉起新的预付单。";
+  }
+  return "";
+});
 const desktopQrCodeValue = computed(() => {
   if (!isPcVariant.value || !cashier.value) {
     return "";
@@ -323,6 +340,10 @@ async function queryCurrentPayment() {
 async function pay() {
   if (!cashier.value || !hasChannels.value) {
     message.value = "当前暂无可用支付方式，请稍后重试。";
+    return;
+  }
+  if (!canSubmit.value) {
+    message.value = submitBlockedHint.value || "当前状态暂不允许继续提交支付。";
     return;
   }
   submitLoading.value = true;
@@ -465,7 +486,7 @@ watch(selectedPaymentMethod, () => {
         </div>
 
         <div class="terminal-actions">
-          <button class="action-button primary" :disabled="submitLoading || !hasChannels" @click="pay">
+          <button class="action-button primary" :disabled="submitLoading || !canSubmit" @click="pay">
             {{ submitLoading ? "支付提交流转中..." : terminalMeta.actionLabel }}
           </button>
           <button class="action-button secondary" :disabled="refreshLoading" @click="refreshCashier">
@@ -483,6 +504,7 @@ watch(selectedPaymentMethod, () => {
         </div>
 
         <p v-if="message" class="feedback-text">{{ message }}</p>
+        <p v-else-if="submitBlockedHint" class="feedback-text">{{ submitBlockedHint }}</p>
 
         <div class="terminal-ops-grid">
           <div class="ops-card">
