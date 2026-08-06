@@ -8,6 +8,7 @@ import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
 import com.abc123.reconciliation.dto.PageResultDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchCreateRequestDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchDetailDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
@@ -110,6 +111,27 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         requiredBatch(batchNo);
         markBatchStatus(batchNo, RUNNING);
         return transactionTemplate.execute(status -> executeRun(batchNo));
+    }
+
+    @Override
+    public ReconciliationBatchDetailDTO detail(String batchNo) {
+        ReconciliationBatchListItemDTO batch = requiredBatch(batchNo);
+        ReconciliationBatchDetailDTO detail = new ReconciliationBatchDetailDTO();
+        detail.setBatchNo(batch.getBatchNo());
+        detail.setBusinessDate(batch.getBusinessDate());
+        detail.setChannelCode(batch.getChannelCode());
+        detail.setBillSource(batch.getBillSource());
+        detail.setStatus(batch.getStatus());
+        detail.setChannelCount(batch.getChannelCount());
+        detail.setInternalCount(batch.getInternalCount());
+        detail.setMatchedCount(batch.getMatchedCount());
+        detail.setDifferenceCount(batch.getDifferenceCount());
+        detail.setOpenDifferenceCount((int) dao.countDifferencesByBatchAndStatus(batch.getBatchNo(), "OPEN"));
+        detail.setResolvedDifferenceCount((int) dao.countDifferencesByBatchAndStatus(batch.getBatchNo(), "RESOLVED"));
+        detail.setChannelRecords(dao.findChannelRecordDetails(batch.getBatchNo()));
+        detail.setInternalRecords(dao.findInternalRecordDetails(batch.getBatchNo()));
+        detail.setDifferences(dao.findDifferencesByBatch(batch.getBatchNo()));
+        return detail;
     }
 
     @Override

@@ -1,7 +1,9 @@
 package com.abc123.reconciliation.dao;
 
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
 import com.abc123.reconciliation.entity.ChannelRecordEntity;
@@ -28,6 +30,10 @@ public interface ReconciliationDao {
 
     List<InternalRecordEntity> findInternalRecords(String batchNo);
 
+    List<ReconciliationBatchChannelRecordDTO> findChannelRecordDetails(String batchNo);
+
+    List<ReconciliationBatchInternalRecordDTO> findInternalRecordDetails(String batchNo);
+
     int updateBatchStatus(String batchNo, String status);
 
     int resetBatchResults(String batchNo);
@@ -40,6 +46,10 @@ public interface ReconciliationDao {
     List<ReconciliationDifferenceDTO> findDifferences(DifferenceQueryDTO query);
 
     long countDifferences(DifferenceQueryDTO query);
+
+    List<ReconciliationDifferenceDTO> findDifferencesByBatch(String batchNo);
+
+    long countDifferencesByBatchAndStatus(String batchNo, String status);
 
     int resolveDifference(String differenceNo, String resolution, String remark);
 

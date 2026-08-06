@@ -2,7 +2,9 @@ package com.abc123.reconciliation.dao.impl;
 
 import com.abc123.reconciliation.dao.ReconciliationDao;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
 import com.abc123.reconciliation.entity.ChannelRecordEntity;
@@ -60,6 +62,16 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     @Override
+    public List<ReconciliationBatchChannelRecordDTO> findChannelRecordDetails(String batchNo) {
+        return mapper.findChannelRecordDetails(batchNo);
+    }
+
+    @Override
+    public List<ReconciliationBatchInternalRecordDTO> findInternalRecordDetails(String batchNo) {
+        return mapper.findInternalRecordDetails(batchNo);
+    }
+
+    @Override
     public int updateBatchStatus(String batchNo, String status) {
         return mapper.updateBatchStatus(batchNo, status);
     }
@@ -90,6 +102,16 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     @Override
     public long countDifferences(DifferenceQueryDTO query) {
         return mapper.countDifferences(query);
+    }
+
+    @Override
+    public List<ReconciliationDifferenceDTO> findDifferencesByBatch(String batchNo) {
+        return mapper.findDifferencesByBatch(batchNo);
+    }
+
+    @Override
+    public long countDifferencesByBatchAndStatus(String batchNo, String status) {
+        return mapper.countDifferencesByBatchAndStatus(batchNo, status);
     }
 
     @Override

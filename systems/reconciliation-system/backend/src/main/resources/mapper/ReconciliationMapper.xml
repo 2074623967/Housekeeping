@@ -45,6 +45,20 @@
         FROM t_reconciliation_internal_record WHERE batch_no = #{batchNo}
     </select>
 
+    <select id="findChannelRecordDetails" resultType="com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO">
+        SELECT channel_trade_no, payment_order_id, amount, trade_status, trade_time
+        FROM t_reconciliation_channel_record
+        WHERE batch_no = #{batchNo}
+        ORDER BY trade_time DESC, id DESC
+    </select>
+
+    <select id="findInternalRecordDetails" resultType="com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO">
+        SELECT payment_order_id, amount, internal_status, source_system, paid_time
+        FROM t_reconciliation_internal_record
+        WHERE batch_no = #{batchNo}
+        ORDER BY paid_time DESC, id DESC
+    </select>
+
     <update id="updateBatchStatus">
         UPDATE t_reconciliation_batch
         SET status = #{status}, updated_at = CURRENT_TIMESTAMP
@@ -89,6 +103,21 @@
             <if test="differenceType != null and differenceType != ''">AND difference_type = #{differenceType}</if>
             <if test="status != null and status != ''">AND status = #{status}</if>
         </where>
+    </select>
+
+    <select id="findDifferencesByBatch" resultType="com.abc123.reconciliation.dto.ReconciliationDifferenceDTO">
+        SELECT difference_no, batch_no, difference_type, payment_order_id, channel_amount, internal_amount,
+               status, resolution, remark, detected_at, resolved_at
+        FROM t_reconciliation_difference
+        WHERE batch_no = #{batchNo}
+        ORDER BY detected_at DESC, id DESC
+    </select>
+
+    <select id="countDifferencesByBatchAndStatus" resultType="long">
+        SELECT COUNT(1)
+        FROM t_reconciliation_difference
+        WHERE batch_no = #{batchNo}
+          AND status = #{status}
     </select>
 
     <update id="resolveDifference">

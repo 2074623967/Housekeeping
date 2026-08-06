@@ -1,7 +1,9 @@
 package com.abc123.reconciliation.mapper;
 
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
 import com.abc123.reconciliation.entity.ChannelRecordEntity;
@@ -32,6 +34,10 @@ public interface ReconciliationMapper {
 
     List<InternalRecordEntity> findInternalRecords(@Param("batchNo") String batchNo);
 
+    List<ReconciliationBatchChannelRecordDTO> findChannelRecordDetails(@Param("batchNo") String batchNo);
+
+    List<ReconciliationBatchInternalRecordDTO> findInternalRecordDetails(@Param("batchNo") String batchNo);
+
     int updateBatchStatus(@Param("batchNo") String batchNo, @Param("status") String status);
 
     int resetBatchResults(@Param("batchNo") String batchNo);
@@ -49,6 +55,10 @@ public interface ReconciliationMapper {
     List<ReconciliationDifferenceDTO> findDifferences(DifferenceQueryDTO query);
 
     long countDifferences(DifferenceQueryDTO query);
+
+    List<ReconciliationDifferenceDTO> findDifferencesByBatch(@Param("batchNo") String batchNo);
+
+    long countDifferencesByBatchAndStatus(@Param("batchNo") String batchNo, @Param("status") String status);
 
     int resolveDifference(@Param("differenceNo") String differenceNo, @Param("resolution") String resolution,
                           @Param("remark") String remark);

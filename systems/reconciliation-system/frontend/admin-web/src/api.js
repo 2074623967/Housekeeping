@@ -10,6 +10,8 @@ const request = async (url, options = {}) => {
 
 export const getOverview = () => request("/api/reconciliation/overview");
 export const getBatches = () => request("/api/reconciliation/batches");
+export const getBatchDetail = (batchNo) =>
+  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`);
 export const getDifferences = (query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => value && params.set(key, value));
@@ -22,4 +24,3 @@ export const resolveDifference = (differenceNo, payload) =>
     method: "POST",
     body: JSON.stringify(payload)
   });
-

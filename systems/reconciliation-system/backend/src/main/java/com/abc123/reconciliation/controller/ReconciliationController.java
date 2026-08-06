@@ -7,6 +7,7 @@ import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
 import com.abc123.reconciliation.dto.PageResultDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchCreateRequestDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchDetailDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
@@ -41,6 +42,11 @@ public class ReconciliationController {
     @GetMapping("/batches")
     public ApiResponse<List<ReconciliationBatchListItemDTO>> batches() {
         return ApiResponse.success(service.batches());
+    }
+
+    @GetMapping("/batches/{batchNo}")
+    public ApiResponse<ReconciliationBatchDetailDTO> detail(@PathVariable String batchNo) {
+        return ApiResponse.success(service.detail(batchNo));
     }
 
     @PostMapping("/batches")
@@ -90,4 +96,3 @@ public class ReconciliationController {
         return ApiResponse.success(null);
     }
 }
-

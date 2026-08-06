@@ -6,6 +6,7 @@ import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
 import com.abc123.reconciliation.dto.PageResultDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchCreateRequestDTO;
+import com.abc123.reconciliation.dto.ReconciliationBatchDetailDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
@@ -23,6 +24,8 @@ public interface ReconciliationService {
 
     ReconciliationBatchListItemDTO run(String batchNo);
 
+    ReconciliationBatchDetailDTO detail(String batchNo);
+
     java.util.List<ReconciliationBatchListItemDTO> batches();
 
     PageResultDTO<ReconciliationDifferenceDTO> differences(DifferenceQueryDTO query);
@@ -31,4 +34,3 @@ public interface ReconciliationService {
 
     ReconciliationOverviewDTO overview();
 }
-
