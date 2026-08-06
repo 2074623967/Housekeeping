@@ -2,7 +2,10 @@ package com.abc123.deposit.dao.impl;
 
 import com.abc123.deposit.dao.DepositDao;
 import com.abc123.deposit.dto.DepositAccountDTO;
+import com.abc123.deposit.dto.DepositAccountDetailDTO;
+import com.abc123.deposit.dto.DepositAccountQueryDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
+import com.abc123.deposit.dto.DepositFlowQueryDTO;
 import com.abc123.deposit.mapper.DepositMapper;
 import java.math.BigDecimal;
 import java.util.List;
@@ -36,8 +39,15 @@ public class DepositDaoImpl implements DepositDao {
     }
 
     @Override
-    public List<DepositAccountDTO> findAccounts() {
-        return mapper.findAccounts();
+    public List<DepositAccountDTO> findAccounts(DepositAccountQueryDTO query) {
+        return mapper.findAccounts(query == null ? null : query.getOwnerType(),
+                query == null ? null : query.getStatus(),
+                query == null ? null : query.getKeyword());
+    }
+
+    @Override
+    public DepositAccountDetailDTO findAccountDetail(String accountNo) {
+        return mapper.findAccountDetail(accountNo);
     }
 
     @Override
@@ -60,7 +70,9 @@ public class DepositDaoImpl implements DepositDao {
     }
 
     @Override
-    public List<DepositFlowDTO> findFlows(String accountNo) {
-        return mapper.findFlows(accountNo);
+    public List<DepositFlowDTO> findFlows(String accountNo, DepositFlowQueryDTO query) {
+        return mapper.findFlows(accountNo,
+                query == null ? null : query.getFlowType(),
+                query == null ? null : query.getReferenceNo());
     }
 }

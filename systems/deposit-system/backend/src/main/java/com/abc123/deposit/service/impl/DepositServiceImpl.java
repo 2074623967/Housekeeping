@@ -4,15 +4,20 @@ import com.abc123.deposit.common.BusinessException;
 import com.abc123.deposit.dao.DepositDao;
 import com.abc123.deposit.dto.DebtOffsetRequestDTO;
 import com.abc123.deposit.dto.DepositAccountCreateRequestDTO;
+import com.abc123.deposit.dto.DepositAccountDetailDTO;
 import com.abc123.deposit.dto.DepositAccountDTO;
+import com.abc123.deposit.dto.DepositAccountQueryDTO;
 import com.abc123.deposit.dto.DepositActionRequestDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
+import com.abc123.deposit.dto.DepositFlowQueryDTO;
+import com.abc123.deposit.dto.DepositOverviewDTO;
 import com.abc123.deposit.service.DepositService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -53,8 +58,39 @@ public class DepositServiceImpl implements DepositService {
     }
 
     @Override
-    public List<DepositAccountDTO> accounts() {
-        return dao.findAccounts();
+    public DepositOverviewDTO overview() {
+        List<DepositAccountDTO> accounts = dao.findAccounts(new DepositAccountQueryDTO());
+        DepositOverviewDTO overview = new DepositOverviewDTO();
+        overview.setAccountCount(accounts.size());
+        overview.setOwnerCount((int) accounts.stream()
+                .map(item -> item.getOwnerType() + ":" + item.getOwnerId())
+                .distinct()
+                .count());
+        overview.setTotalBalance(sum(accounts.stream().map(DepositAccountDTO::getBalance).collect(Collectors.toList())));
+        overview.setTotalFrozenAmount(sum(accounts.stream().map(DepositAccountDTO::getFrozenAmount).collect(Collectors.toList())));
+        overview.setTotalAvailableAmount(sum(accounts.stream().map(DepositAccountDTO::getAvailableAmount).collect(Collectors.toList())));
+        overview.setFullyPaidAccountCount((int) accounts.stream()
+                .filter(this::isFullyPaid)
+                .count());
+        return overview;
+    }
+
+    @Override
+    public List<DepositAccountDTO> accounts(DepositAccountQueryDTO query) {
+        return dao.findAccounts(trimQuery(query));
+    }
+
+    @Override
+    public DepositAccountDetailDTO accountDetail(String accountNo) {
+        DepositAccountDetailDTO detail = dao.findAccountDetail(required(accountNo, "保证金账户号不能为空"));
+        if (detail == null) {
+            throw new BusinessException("保证金账户不存在");
+        }
+        BigDecimal requiredAmount = defaultValue(detail.getRequiredAmount());
+        BigDecimal balance = defaultValue(detail.getBalance());
+        detail.setFullyPaid(balance.compareTo(requiredAmount) >= 0);
+        detail.setOutstandingAmount(requiredAmount.subtract(balance).max(ZERO));
+        return detail;
     }
 
     @Override
@@ -129,8 +165,8 @@ public class DepositServiceImpl implements DepositService {
     }
 
     @Override
-    public List<DepositFlowDTO> flows(String accountNo) {
-        return dao.findFlows(required(accountNo, "保证金账户号不能为空"));
+    public List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query) {
+        return dao.findFlows(required(accountNo, "保证金账户号不能为空"), trimQuery(query));
     }
 
     private DepositAccountDTO change(DepositActionRequestDTO request, String flowType,
@@ -192,6 +228,21 @@ public class DepositServiceImpl implements DepositService {
         return account;
     }
 
+    private DepositAccountQueryDTO trimQuery(DepositAccountQueryDTO query) {
+        DepositAccountQueryDTO safeQuery = query == null ? new DepositAccountQueryDTO() : query;
+        safeQuery.setOwnerType(trimToNull(safeQuery.getOwnerType()));
+        safeQuery.setStatus(trimToNull(safeQuery.getStatus()));
+        safeQuery.setKeyword(trimToNull(safeQuery.getKeyword()));
+        return safeQuery;
+    }
+
+    private DepositFlowQueryDTO trimQuery(DepositFlowQueryDTO query) {
+        DepositFlowQueryDTO safeQuery = query == null ? new DepositFlowQueryDTO() : query;
+        safeQuery.setFlowType(trimToNull(safeQuery.getFlowType()));
+        safeQuery.setReferenceNo(trimToNull(safeQuery.getReferenceNo()));
+        return safeQuery;
+    }
+
     private BigDecimal positive(BigDecimal value) {
         if (value == null || value.compareTo(ZERO) <= 0) throw new BusinessException("操作金额必须大于0");
         return value;
@@ -204,6 +255,22 @@ public class DepositServiceImpl implements DepositService {
     private String required(String value, String message) {
         if (!StringUtils.hasText(value)) throw new BusinessException(message);
         return value.trim();
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private BigDecimal defaultValue(BigDecimal value) {
+        return value == null ? ZERO : value;
+    }
+
+    private BigDecimal sum(List<BigDecimal> values) {
+        return values.stream().map(this::defaultValue).reduce(ZERO, BigDecimal::add);
+    }
+
+    private boolean isFullyPaid(DepositAccountDTO account) {
+        return defaultValue(account.getBalance()).compareTo(defaultValue(account.getRequiredAmount())) >= 0;
     }
 
     private void ensureNotDuplicated(String accountNo, String flowType, String referenceNo) {

@@ -21,7 +21,35 @@
     <select id="findAccounts" resultType="com.abc123.deposit.dto.DepositAccountDTO">
         SELECT account_no, owner_id, owner_type, required_amount, balance, frozen_amount,
                balance - frozen_amount AS available_amount, status
-        FROM t_deposit_account ORDER BY updated_at DESC
+        FROM t_deposit_account
+        <where>
+            <if test="ownerType != null and ownerType != ''">
+                AND owner_type = #{ownerType}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (account_no LIKE CONCAT('%', #{keyword}, '%')
+                OR owner_id LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY updated_at DESC, id DESC
+    </select>
+    <select id="findAccountDetail" resultType="com.abc123.deposit.dto.DepositAccountDetailDTO">
+        SELECT a.account_no, a.owner_id, a.owner_type, a.required_amount, a.balance, a.frozen_amount,
+               a.balance - a.frozen_amount AS available_amount, a.status,
+               COALESCE(flow_stat.flow_count, 0) AS flow_count,
+               flow_stat.latest_flow_time
+        FROM t_deposit_account a
+        LEFT JOIN (
+            SELECT account_no,
+                   COUNT(1) AS flow_count,
+                   MAX(created_at) AS latest_flow_time
+            FROM t_deposit_flow
+            GROUP BY account_no
+        ) flow_stat ON flow_stat.account_no = a.account_no
+        WHERE a.account_no = #{accountNo}
     </select>
     <update id="updateBalance">
         UPDATE t_deposit_account
@@ -51,6 +79,16 @@
     <select id="findFlows" resultType="com.abc123.deposit.dto.DepositFlowDTO">
         SELECT flow_no, account_no, flow_type, amount, before_balance, after_balance,
                before_frozen_amount, after_frozen_amount, reference_no, remark, created_at
-        FROM t_deposit_flow WHERE account_no = #{accountNo} ORDER BY created_at DESC, id DESC
+        FROM t_deposit_flow
+        <where>
+            account_no = #{accountNo}
+            <if test="flowType != null and flowType != ''">
+                AND flow_type = #{flowType}
+            </if>
+            <if test="referenceNo != null and referenceNo != ''">
+                AND reference_no LIKE CONCAT('%', #{referenceNo}, '%')
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
     </select>
 </mapper>

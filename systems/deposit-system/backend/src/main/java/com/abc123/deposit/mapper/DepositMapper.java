@@ -1,6 +1,7 @@
 package com.abc123.deposit.mapper;
 
 import com.abc123.deposit.dto.DepositAccountDTO;
+import com.abc123.deposit.dto.DepositAccountDetailDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
 import java.math.BigDecimal;
 import java.util.List;
@@ -20,7 +21,11 @@ public interface DepositMapper {
 
     DepositAccountDTO findAccountByOwner(@Param("ownerId") String ownerId, @Param("ownerType") String ownerType);
 
-    List<DepositAccountDTO> findAccounts();
+    List<DepositAccountDTO> findAccounts(@Param("ownerType") String ownerType,
+                                         @Param("status") String status,
+                                         @Param("keyword") String keyword);
+
+    DepositAccountDetailDTO findAccountDetail(@Param("accountNo") String accountNo);
 
     int updateBalance(@Param("accountNo") String accountNo,
                       @Param("expectedBalance") BigDecimal expectedBalance,
@@ -38,5 +43,7 @@ public interface DepositMapper {
     long countFlowReference(@Param("accountNo") String accountNo, @Param("flowType") String flowType,
                             @Param("referenceNo") String referenceNo);
 
-    List<DepositFlowDTO> findFlows(@Param("accountNo") String accountNo);
+    List<DepositFlowDTO> findFlows(@Param("accountNo") String accountNo,
+                                   @Param("flowType") String flowType,
+                                   @Param("referenceNo") String referenceNo);
 }

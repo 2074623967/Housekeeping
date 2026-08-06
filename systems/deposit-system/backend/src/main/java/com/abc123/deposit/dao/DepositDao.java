@@ -1,7 +1,10 @@
 package com.abc123.deposit.dao;
 
 import com.abc123.deposit.dto.DepositAccountDTO;
+import com.abc123.deposit.dto.DepositAccountDetailDTO;
+import com.abc123.deposit.dto.DepositAccountQueryDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
+import com.abc123.deposit.dto.DepositFlowQueryDTO;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -16,7 +19,9 @@ public interface DepositDao {
 
     DepositAccountDTO findAccountByOwner(String ownerId, String ownerType);
 
-    List<DepositAccountDTO> findAccounts();
+    List<DepositAccountDTO> findAccounts(DepositAccountQueryDTO query);
+
+    DepositAccountDetailDTO findAccountDetail(String accountNo);
 
     int updateBalance(String accountNo, BigDecimal expectedBalance, BigDecimal expectedFrozenAmount,
                       BigDecimal balance, BigDecimal frozenAmount);
@@ -27,5 +32,5 @@ public interface DepositDao {
 
     boolean existsFlowReference(String accountNo, String flowType, String referenceNo);
 
-    List<DepositFlowDTO> findFlows(String accountNo);
+    List<DepositFlowDTO> findFlows(String accountNo, DepositFlowQueryDTO query);
 }

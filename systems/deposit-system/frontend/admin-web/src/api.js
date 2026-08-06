@@ -11,8 +11,29 @@ const request = async (url, options = {}) => {
 };
 
 export const getAccounts = () => request("/api/deposits/accounts");
-export const getFlows = (accountNo) =>
-  request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows`);
+export const getOverview = () => request("/api/deposits/overview");
+export const getAccountDetail = (accountNo) =>
+  request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}`);
+export const getAccountsByQuery = (query = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request(`/api/deposits/accounts${suffix}`);
+};
+export const getFlows = (accountNo, query = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows${suffix}`);
+};
 export const openAccount = (payload) =>
   request("/api/deposits/accounts", { method: "POST", body: JSON.stringify(payload) });
 export const postAction = (accountNo, action, payload) =>
