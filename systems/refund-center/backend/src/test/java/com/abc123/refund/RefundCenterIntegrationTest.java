@@ -51,6 +51,7 @@ class RefundCenterIntegrationTest {
         callback.setChannelRefundId("CH-IT-1");
         assertEquals("SUCCESS", refundService.callback(callback).getStatus());
         assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+        assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
     }
 }
-

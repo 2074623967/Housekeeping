@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -115,6 +116,40 @@ class RefundServiceImplTest {
 
         assertEquals("SUCCESS", service.callback(request).getStatus());
         verify(refundDao).insertSuccessOutbox("REF-1", "PAY-1", new BigDecimal("10.00"));
+    }
+
+    @Test
+    void shouldReturnExistingRefundWhenSuccessCallbackRepeated() {
+        when(refundDao.updateCallback("REF-1", "SUCCESS", "CH-1", null)).thenReturn(0);
+        RefundListItemDTO result = new RefundListItemDTO();
+        result.setStatus("SUCCESS");
+        result.setRefundOrderId("REF-1");
+        when(refundDao.findByRefundOrderId("REF-1")).thenReturn(result);
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-1");
+        request.setResult("SUCCESS");
+        request.setChannelRefundId("CH-1");
+
+        assertEquals("SUCCESS", service.callback(request).getStatus());
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
+        verify(refundDao, never()).insertSuccessOutbox(any(), any(), any());
+    }
+
+    @Test
+    void shouldReturnExistingRefundWhenFailCallbackRepeated() {
+        when(refundDao.updateCallback("REF-2", "FAIL", "CH-2", "E001")).thenReturn(0);
+        RefundListItemDTO result = new RefundListItemDTO();
+        result.setStatus("FAIL");
+        result.setRefundOrderId("REF-2");
+        when(refundDao.findByRefundOrderId("REF-2")).thenReturn(result);
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-2");
+        request.setResult("FAIL");
+        request.setChannelRefundId("CH-2");
+        request.setFailureCode("E001");
+
+        assertEquals("FAIL", service.callback(request).getStatus());
+        verify(refundDao, never()).insertLog(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

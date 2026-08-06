@@ -155,6 +155,16 @@ public class RefundServiceImpl implements RefundService {
         int affected = refundDao.updateCallback(id, target, trim(request.getChannelRefundId()),
                 trim(request.getFailureCode()));
         if (affected == 0) {
+            RefundListItemDTO existing = refundDao.findByRefundOrderId(id);
+            if (existing == null) {
+                throw new BusinessException("退款单不存在");
+            }
+            if (SUCCESS.equals(target) && SUCCESS.equals(existing.getStatus())) {
+                return existing;
+            }
+            if (FAIL.equals(target) && FAIL.equals(existing.getStatus())) {
+                return existing;
+            }
             throw new BusinessException("退款单不在可回调状态，或回调已处理");
         }
         refundDao.insertLog(id, "CALLBACK_" + target, "渠道退款回调",
