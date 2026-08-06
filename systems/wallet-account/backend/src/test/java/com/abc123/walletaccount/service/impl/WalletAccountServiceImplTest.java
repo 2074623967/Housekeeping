@@ -181,6 +181,27 @@ class WalletAccountServiceImplTest {
     }
 
     @Test
+    void shouldPassAccountListFiltersToDao() {
+        WalletAccountDao dao = mock(WalletAccountDao.class);
+        WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);
+        com.abc123.walletaccount.dto.WalletAccountQueryDTO queryDTO = new com.abc123.walletaccount.dto.WalletAccountQueryDTO();
+        queryDTO.setKeyword("WA-001");
+        queryDTO.setOwnerType("USER");
+        queryDTO.setAccountType("MAIN");
+        queryDTO.setAccountStatus("ACTIVE");
+        queryDTO.setExtRefNo("EXT-001");
+        when(dao.countAccounts("WA-001", "USER", "MAIN", "ACTIVE")).thenReturn(1L);
+        when(dao.listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", 0, 20))
+                .thenReturn(Collections.singletonList(createAccount("WA-001", "ACTIVE", "0.00", "0.00", "0.00", "0.00")));
+
+        PageResultDTO<com.abc123.walletaccount.dto.WalletAccountDTO> resultDTO = service.pageAccounts(queryDTO);
+
+        assertEquals(1L, resultDTO.getTotal());
+        verify(dao).countAccounts("WA-001", "USER", "MAIN", "ACTIVE");
+        verify(dao).listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", 0, 20);
+    }
+
+    @Test
     void shouldGenerateCsvWhenDownloadingExportTask() {
         WalletAccountDao dao = mock(WalletAccountDao.class);
         WalletAccountServiceImpl service = new WalletAccountServiceImpl(dao);

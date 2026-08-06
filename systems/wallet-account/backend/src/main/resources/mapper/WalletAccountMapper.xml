@@ -92,35 +92,49 @@
 
     <select id="countAccounts" resultType="long">
         SELECT COUNT(1)
-        FROM t_wallet_account
+        FROM t_wallet_account a
+        LEFT JOIN t_wallet_owner o ON a.wallet_owner_id = o.wallet_owner_id
         <where>
             <if test="keyword != null and keyword != ''">
-                AND (wallet_account_no = #{keyword} OR owner_name LIKE CONCAT('%', #{keyword}, '%'))
+                AND (a.wallet_account_no = #{keyword} OR a.owner_name LIKE CONCAT('%', #{keyword}, '%'))
             </if>
             <if test="ownerType != null and ownerType != ''">
-                AND owner_type = #{ownerType}
+                AND a.owner_type = #{ownerType}
+            </if>
+            <if test="accountType != null and accountType != ''">
+                AND a.account_type = #{accountType}
             </if>
             <if test="accountStatus != null and accountStatus != ''">
-                AND account_status = #{accountStatus}
+                AND a.account_status = #{accountStatus}
+            </if>
+            <if test="extRefNo != null and extRefNo != ''">
+                AND o.ext_ref_no LIKE CONCAT('%', #{extRefNo}, '%')
             </if>
         </where>
     </select>
 
     <select id="listAccounts" resultMap="walletAccountMap">
-        SELECT *
-        FROM t_wallet_account
+        SELECT a.*
+        FROM t_wallet_account a
+        LEFT JOIN t_wallet_owner o ON a.wallet_owner_id = o.wallet_owner_id
         <where>
             <if test="keyword != null and keyword != ''">
-                AND (wallet_account_no = #{keyword} OR owner_name LIKE CONCAT('%', #{keyword}, '%'))
+                AND (a.wallet_account_no = #{keyword} OR a.owner_name LIKE CONCAT('%', #{keyword}, '%'))
             </if>
             <if test="ownerType != null and ownerType != ''">
-                AND owner_type = #{ownerType}
+                AND a.owner_type = #{ownerType}
+            </if>
+            <if test="accountType != null and accountType != ''">
+                AND a.account_type = #{accountType}
             </if>
             <if test="accountStatus != null and accountStatus != ''">
-                AND account_status = #{accountStatus}
+                AND a.account_status = #{accountStatus}
+            </if>
+            <if test="extRefNo != null and extRefNo != ''">
+                AND o.ext_ref_no LIKE CONCAT('%', #{extRefNo}, '%')
             </if>
         </where>
-        ORDER BY created_at DESC
+        ORDER BY a.created_at DESC
         LIMIT #{limit} OFFSET #{offset}
     </select>
 

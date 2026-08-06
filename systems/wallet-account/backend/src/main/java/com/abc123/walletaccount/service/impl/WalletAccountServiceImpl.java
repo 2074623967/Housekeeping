@@ -52,9 +52,10 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         int offset = (pageNo - 1) * pageSize;
         PageResultDTO<WalletAccountDTO> pageResultDTO = new PageResultDTO<WalletAccountDTO>();
         pageResultDTO.setTotal(walletAccountDao.countAccounts(
-                queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountStatus()));
+                queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountType(), queryDTO.getAccountStatus()));
         pageResultDTO.setRecords(walletAccountDao.listAccounts(
-                queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountStatus(), offset, pageSize)
+                queryDTO.getKeyword(), queryDTO.getOwnerType(), queryDTO.getAccountType(),
+                queryDTO.getAccountStatus(), queryDTO.getExtRefNo(), offset, pageSize)
                 .stream()
                 .map(this::toAccountDTO)
                 .collect(Collectors.toList()));

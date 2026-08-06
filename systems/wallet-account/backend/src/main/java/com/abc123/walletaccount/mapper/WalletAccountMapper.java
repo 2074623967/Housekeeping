@@ -16,11 +16,14 @@ public interface WalletAccountMapper {
 
     long countAccounts(@Param("keyword") String keyword,
             @Param("ownerType") String ownerType,
+            @Param("accountType") String accountType,
             @Param("accountStatus") String accountStatus);
 
     List<WalletAccountEntity> listAccounts(@Param("keyword") String keyword,
             @Param("ownerType") String ownerType,
+            @Param("accountType") String accountType,
             @Param("accountStatus") String accountStatus,
+            @Param("extRefNo") String extRefNo,
             @Param("offset") int offset,
             @Param("limit") int limit);
 

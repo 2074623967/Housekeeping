@@ -36,8 +36,8 @@
 
 | 分类 | 冻结文档口径 | 当前实现 | 结论 | 建议动作 |
 | --- | --- | --- | --- | --- |
-| 账户列表筛选 | PRD 要求支持账户编号、主体类型、外部主体编号、账户类型、账户状态 | 当前仅支持 `keyword / ownerType / accountStatus` | 不一致 | 二选一：补实现，或把阶段 1 冻结范围收窄到当前已交付 |
-| 账户列表 OpenAPI | OpenAPI 声明 `walletAccountNo / extRefNo / accountType / bizLineCode / tenantCode / openedStartTime / openedEndTime` | Controller/DTO 未支持这些字段 | 不一致 | 优先更新 OpenAPI 或补实现，不可继续双口径并存 |
+| 账户列表筛选 | PRD 要求支持账户编号、主体类型、外部主体编号、账户类型、账户状态 | 已支持 `keyword / ownerType / accountType / accountStatus / extRefNo` | 已收口 | `accountType / extRefNo` 已在 2026-08-06 补齐，剩余时间类筛选进入后续迭代 |
+| 账户列表 OpenAPI | OpenAPI 声明 `walletAccountNo / extRefNo / accountType / bizLineCode / tenantCode / openedStartTime / openedEndTime` | 当前已支持 `walletAccountNo(keyword) / extRefNo / accountType`，`bizLineCode / tenantCode / 时间区间` 仍未补 | 部分不一致 | 当前先收口高频筛选项，其余进入后续迭代，不再视为本轮阻断 |
 | 流水列表筛选 | OpenAPI 声明 `flowNo / walletOwnerId / flowType / bizType / occurredStartTime / occurredEndTime` | 当前仅支持 `walletAccountNo / sourceSystem / sourceBizNo` | 不一致 | 若本阶段不做，需明确写入非目标或后续迭代 |
 | 账户详情形态 | PRD 写“详情抽屉” | 当前为页面右侧卡片区 | 部分不一致 | 若不改 UI，则文档口径要改为“详情卡片区 / 侧栏区” |
 | 状态变更交互 | PRD 写“状态变更弹窗” | 当前为列表按钮 + 浏览器确认框 | 不一致 | 建议补标准弹窗，至少补操作原因与确认文案 |

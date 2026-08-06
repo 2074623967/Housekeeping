@@ -9,8 +9,12 @@ public class WalletAccountQueryDTO {
     private String keyword;
     /** 主体类型。 */
     private String ownerType;
+    /** 账户类型。 */
+    private String accountType;
     /** 账户状态。 */
     private String accountStatus;
+    /** 外部主体编号。 */
+    private String extRefNo;
     /** 页码，从 1 开始。 */
     private Integer pageNo = 1;
     /** 每页条数。 */

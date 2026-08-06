@@ -3,6 +3,7 @@ package com.abc123.walletaccount.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.abc123.walletaccount.dto.OpenWalletAccountRequestDTO;
 import com.abc123.walletaccount.dto.PageResultDTO;
 import com.abc123.walletaccount.dto.WalletAccountDTO;
+import com.abc123.walletaccount.dto.WalletAccountQueryDTO;
 import com.abc123.walletaccount.dto.WalletAccountDetailDTO;
 import com.abc123.walletaccount.dto.WalletBalanceDTO;
 import com.abc123.walletaccount.dto.WalletFlowDTO;
@@ -19,6 +21,7 @@ import com.abc123.walletaccount.service.WalletAccountService;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -45,11 +48,20 @@ class WalletAccountControllerTest {
         resultDTO.setRecords(Collections.singletonList(accountDTO));
         when(walletAccountService.pageAccounts(any())).thenReturn(resultDTO);
 
-        mockMvc.perform(get("/api/wallet/accounts"))
+        mockMvc.perform(get("/api/wallet/accounts?keyword=WA-001&ownerType=USER&accountType=MAIN&accountStatus=ACTIVE&extRefNo=EXT-001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].walletAccountNo").value("WA-USER-001"));
+
+        ArgumentCaptor<WalletAccountQueryDTO> captor = ArgumentCaptor.forClass(WalletAccountQueryDTO.class);
+        verify(walletAccountService).pageAccounts(captor.capture());
+        WalletAccountQueryDTO queryDTO = captor.getValue();
+        org.junit.jupiter.api.Assertions.assertEquals("WA-001", queryDTO.getKeyword());
+        org.junit.jupiter.api.Assertions.assertEquals("USER", queryDTO.getOwnerType());
+        org.junit.jupiter.api.Assertions.assertEquals("MAIN", queryDTO.getAccountType());
+        org.junit.jupiter.api.Assertions.assertEquals("ACTIVE", queryDTO.getAccountStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("EXT-001", queryDTO.getExtRefNo());
     }
 
     @Test

@@ -11,7 +11,9 @@ import {
 const query = reactive({
   keyword: "",
   ownerType: "",
+  accountType: "",
   accountStatus: "",
+  extRefNo: "",
   pageNo: 1,
   pageSize: 20
 });
@@ -263,12 +265,18 @@ onMounted(() => {
             <option value="USER">USER</option>
             <option value="WORKER">WORKER</option>
           </select>
+          <select v-model="query.accountType">
+            <option value="">全部账户类型</option>
+            <option value="MAIN">MAIN</option>
+            <option value="SUB">SUB</option>
+          </select>
           <select v-model="query.accountStatus">
             <option value="">全部状态</option>
             <option value="ACTIVE">ACTIVE</option>
             <option value="FROZEN">FROZEN</option>
             <option value="CLOSED">CLOSED</option>
           </select>
+          <input v-model="query.extRefNo" placeholder="外部主体编号" />
           <button class="button" @click="loadAccounts">查询</button>
           <button class="button button--light" type="button" @click="startOpenAccount">新增开户</button>
         </div>

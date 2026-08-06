@@ -22,14 +22,14 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     }
 
     @Override
-    public long countAccounts(String keyword, String ownerType, String accountStatus) {
-        return walletAccountMapper.countAccounts(keyword, ownerType, accountStatus);
+    public long countAccounts(String keyword, String ownerType, String accountType, String accountStatus) {
+        return walletAccountMapper.countAccounts(keyword, ownerType, accountType, accountStatus);
     }
 
     @Override
-    public List<WalletAccountEntity> listAccounts(String keyword, String ownerType, String accountStatus,
-            int offset, int limit) {
-        return walletAccountMapper.listAccounts(keyword, ownerType, accountStatus, offset, limit);
+    public List<WalletAccountEntity> listAccounts(String keyword, String ownerType, String accountType,
+            String accountStatus, String extRefNo, int offset, int limit) {
+        return walletAccountMapper.listAccounts(keyword, ownerType, accountType, accountStatus, extRefNo, offset, limit);
     }
 
     @Override
