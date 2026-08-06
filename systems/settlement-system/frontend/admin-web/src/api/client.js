@@ -46,6 +46,10 @@ export const batchApi = {
   create: (payload) => postJson("/api/settlements/batches", payload)
 };
 
+export const dashboardApi = {
+  get: () => request("/api/settlements/dashboard")
+};
+
 export const orderApi = {
   getList: ({ batchNo = "", targetType = "", settlementStatus = "", clearingNo = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ batchNo, targetType, settlementStatus, clearingNo, pageNo: String(pageNo), pageSize: String(pageSize) });
