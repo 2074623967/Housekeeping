@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import {
+  dispatchRefundOutbox,
   getOverview,
   getRefundDetail,
+  getRefundOutbox,
   getRefunds,
   postRefundAction
 } from "./api";
@@ -27,6 +29,14 @@ const overview = reactive({
   successAmount: 0
 });
 const page = reactive({ items: [], total: 0 });
+const outboxQuery = reactive({
+  eventId: "",
+  aggregateId: "",
+  status: "",
+  pageNo: 1,
+  pageSize: 20
+});
+const outboxPage = reactive({ items: [], total: 0 });
 
 const statusLabel = {
   REVIEWING: "审核中",
@@ -35,8 +45,14 @@ const statusLabel = {
   SUCCESS: "退款成功",
   FAIL: "退款失败"
 };
+const outboxStatusLabel = {
+  PENDING: "待派发",
+  SENT: "已派发",
+  FAIL: "派发失败"
+};
 
 const statusClass = (status) => `status-${status.toLowerCase()}`;
+const outboxStatusClass = (status) => `status-${String(status || "").toLowerCase()}`;
 const selectedStatus = computed(() =>
   selectedRefund.value ? statusLabel[selectedRefund.value.status] || selectedRefund.value.status : ""
 );
@@ -50,6 +66,18 @@ async function loadList() {
   errorMessage.value = "";
   try {
     Object.assign(page, await getRefunds(query));
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadOutbox() {
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    Object.assign(outboxPage, await getRefundOutbox(outboxQuery));
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -92,10 +120,37 @@ async function showList() {
   await loadList();
 }
 
+async function showOutbox() {
+  activeView.value = "outbox";
+  await loadOutbox();
+}
+
+async function runOutboxDispatch(item, simulateResult) {
+  try {
+    await dispatchRefundOutbox(item.eventId, {
+      simulateResult,
+      remark: simulateResult === "FAIL" ? "本地模拟退款成功事件派发失败" : "本地模拟退款成功事件派发成功"
+    });
+    await loadOutbox();
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
+}
+
 onMounted(async () => {
   await loadOverview();
   await loadList();
+  await loadOutbox();
 });
+
+async function refreshCurrentView() {
+  await loadOverview();
+  if (activeView.value === "outbox") {
+    await loadOutbox();
+    return;
+  }
+  await loadList();
+}
 </script>
 
 <template>
@@ -114,6 +169,9 @@ onMounted(async () => {
       <button class="nav-item" :class="{ active: activeView === 'list' }" @click="showList">
         <span>退款单管理</span><small>Refund Orders</small>
       </button>
+      <button class="nav-item" :class="{ active: activeView === 'outbox' }" @click="showOutbox">
+        <span>成功事件出站</span><small>Outbox Relay</small>
+      </button>
       <button class="nav-item" :class="{ active: activeView === 'detail' }" :disabled="!selectedRefund" @click="activeView = 'detail'">
         <span>退款详情</span><small>Operations</small>
       </button>
@@ -127,9 +185,9 @@ onMounted(async () => {
       <header class="topbar">
         <div>
           <p class="eyebrow">HOME SERVICE PAYMENT PLATFORM / REVERSE FLOW</p>
-          <h1>{{ activeView === "detail" ? "退款单详情" : activeView === "list" ? "退款单管理" : "退款运营工作台" }}</h1>
+          <h1>{{ activeView === "detail" ? "退款单详情" : activeView === "list" ? "退款单管理" : activeView === "outbox" ? "退款成功事件出站管理" : "退款运营工作台" }}</h1>
         </div>
-        <button class="refresh-button" @click="loadOverview(); loadList()">刷新数据</button>
+        <button class="refresh-button" @click="refreshCurrentView()">刷新数据</button>
       </header>
 
       <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
@@ -180,6 +238,37 @@ onMounted(async () => {
             <td><span class="status-pill" :class="statusClass(item.status)">{{ statusLabel[item.status] || item.status }}</span></td>
             <td>{{ item.appliedAt?.replace("T", " ") }}</td>
             <td><button class="link-button" @click="openDetail(item)">查看详情</button></td>
+          </tr></tbody>
+        </table>
+      </section>
+
+      <section v-else-if="activeView === 'outbox'" class="panel">
+        <div class="section-header">
+          <div><span class="section-kicker">REFUND SUCCESS OUTBOX</span><h2>退款成功事件出站管理</h2></div>
+          <span class="count-tip">共 {{ outboxPage.total }} 条</span>
+        </div>
+        <div class="filters">
+          <label>事件编号<input v-model="outboxQuery.eventId" placeholder="REVT..." /></label>
+          <label>退款单号<input v-model="outboxQuery.aggregateId" placeholder="REF..." /></label>
+          <label>状态<select v-model="outboxQuery.status"><option value="">全部状态</option><option v-for="(label, value) in outboxStatusLabel" :key="value" :value="value">{{ label }}</option></select></label>
+          <button class="primary-button compact" @click="outboxQuery.pageNo = 1; loadOutbox()">查询</button>
+        </div>
+        <div v-if="loading" class="empty-state">正在加载退款成功事件...</div>
+        <div v-else-if="!outboxPage.items.length" class="empty-state">暂无符合条件的退款成功事件</div>
+        <table v-else class="data-table">
+          <thead><tr><th>事件编号</th><th>退款单号</th><th>事件类型</th><th>状态</th><th>重试次数</th><th>最近派发</th><th>错误信息</th><th>操作</th></tr></thead>
+          <tbody><tr v-for="item in outboxPage.items" :key="item.eventId">
+            <td>{{ item.eventId }}</td>
+            <td>{{ item.aggregateId }}</td>
+            <td>{{ item.eventType }}</td>
+            <td><span class="status-pill" :class="outboxStatusClass(item.status)">{{ outboxStatusLabel[item.status] || item.status }}</span></td>
+            <td>{{ item.retryCount }}</td>
+            <td>{{ item.lastRelayAt ? item.lastRelayAt.replace("T", " ") : "-" }}</td>
+            <td>{{ item.lastErrorMessage || "-" }}</td>
+            <td class="table-actions">
+              <button v-if="item.status !== 'SENT'" class="link-button" @click="runOutboxDispatch(item, 'SUCCESS')">模拟派发成功</button>
+              <button v-if="item.status !== 'SENT'" class="link-button danger-link" @click="runOutboxDispatch(item, 'FAIL')">模拟派发失败</button>
+            </td>
           </tr></tbody>
         </table>
       </section>

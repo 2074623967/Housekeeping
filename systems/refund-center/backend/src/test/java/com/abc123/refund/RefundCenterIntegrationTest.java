@@ -7,6 +7,9 @@ import com.abc123.refund.dto.RefundActionRequestDTO;
 import com.abc123.refund.dto.RefundApplyRequestDTO;
 import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.service.RefundService;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -53,5 +56,14 @@ class RefundCenterIntegrationTest {
         assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
         assertEquals("SUCCESS", refundService.callback(callback).getStatus());
         assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
+
+        RefundOutboxQueryDTO outboxQuery = new RefundOutboxQueryDTO();
+        outboxQuery.setAggregateId(created.getRefundOrderId());
+        RefundOutboxItemDTO outbox = refundService.listOutbox(outboxQuery).getItems().get(0);
+        assertEquals("PENDING", outbox.getStatus());
+
+        RefundOutboxDispatchRequestDTO dispatch = new RefundOutboxDispatchRequestDTO();
+        dispatch.setSimulateResult("SUCCESS");
+        assertEquals("SENT", refundService.dispatchOutbox(outbox.getEventId(), dispatch).getStatus());
     }
 }

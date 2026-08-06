@@ -152,4 +152,67 @@
             COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN refund_amount ELSE 0 END), 0) AS success_amount
         FROM t_refund_order
     </select>
+
+    <select id="findOutboxList" resultType="com.abc123.refund.dto.RefundOutboxItemDTO">
+        SELECT event_id, event_type, aggregate_id, payload_json, status, retry_count,
+               last_error_message, last_relay_at, created_at, updated_at
+        FROM t_refund_outbox_event
+        <where>
+            <if test="eventId != null and eventId != ''">
+                AND event_id LIKE CONCAT('%', #{eventId}, '%')
+            </if>
+            <if test="aggregateId != null and aggregateId != ''">
+                AND aggregate_id LIKE CONCAT('%', #{aggregateId}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{pageSize} OFFSET ${(pageNo - 1) * pageSize}
+    </select>
+
+    <select id="countOutbox" resultType="long">
+        SELECT COUNT(1)
+        FROM t_refund_outbox_event
+        <where>
+            <if test="eventId != null and eventId != ''">
+                AND event_id LIKE CONCAT('%', #{eventId}, '%')
+            </if>
+            <if test="aggregateId != null and aggregateId != ''">
+                AND aggregate_id LIKE CONCAT('%', #{aggregateId}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <select id="findOutboxByEventId" resultType="com.abc123.refund.entity.RefundOutboxEventEntity">
+        SELECT id, event_id, event_type, aggregate_id, payload_json, status, retry_count,
+               last_error_message, last_relay_at, created_at, updated_at
+        FROM t_refund_outbox_event
+        WHERE event_id = #{eventId}
+    </select>
+
+    <update id="markOutboxSent">
+        UPDATE t_refund_outbox_event
+        SET status = 'SENT',
+            last_error_message = NULL,
+            last_relay_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = #{eventId}
+          AND status IN ('PENDING', 'FAIL')
+    </update>
+
+    <update id="markOutboxFailed">
+        UPDATE t_refund_outbox_event
+        SET status = 'FAIL',
+            retry_count = retry_count + 1,
+            last_error_message = #{lastErrorMessage},
+            last_relay_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE event_id = #{eventId}
+          AND status IN ('PENDING', 'FAIL')
+    </update>
 </mapper>

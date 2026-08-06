@@ -15,8 +15,12 @@ import com.abc123.refund.dto.RefundActionRequestDTO;
 import com.abc123.refund.dto.RefundApplyRequestDTO;
 import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
+import com.abc123.refund.entity.RefundOutboxEventEntity;
 import java.math.BigDecimal;
+import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -162,6 +166,46 @@ class RefundServiceImplTest {
         service.projectPaymentSuccess(request);
 
         verify(refundDao).insertPaymentSource(any(PaymentSuccessProjectionEntity.class));
+    }
+
+    @Test
+    void shouldDispatchOutboxSuccessfully() {
+        RefundOutboxEventEntity event = new RefundOutboxEventEntity();
+        event.setEventId("REVT-1");
+        event.setStatus("PENDING");
+        when(refundDao.findOutboxByEventId("REVT-1")).thenReturn(event);
+        when(refundDao.markOutboxSent("REVT-1")).thenReturn(1);
+        RefundOutboxItemDTO item = new RefundOutboxItemDTO();
+        item.setEventId("REVT-1");
+        item.setStatus("SENT");
+        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(item));
+
+        RefundOutboxDispatchRequestDTO request = new RefundOutboxDispatchRequestDTO();
+        request.setSimulateResult("SUCCESS");
+
+        assertEquals("SENT", service.dispatchOutbox("REVT-1", request).getStatus());
+        verify(refundDao).markOutboxSent("REVT-1");
+    }
+
+    @Test
+    void shouldMarkOutboxFailedWhenDispatchFails() {
+        RefundOutboxEventEntity event = new RefundOutboxEventEntity();
+        event.setEventId("REVT-2");
+        event.setStatus("PENDING");
+        when(refundDao.findOutboxByEventId("REVT-2")).thenReturn(event);
+        when(refundDao.markOutboxFailed("REVT-2", "账务系统暂不可用")).thenReturn(1);
+        RefundOutboxItemDTO item = new RefundOutboxItemDTO();
+        item.setEventId("REVT-2");
+        item.setStatus("FAIL");
+        item.setRetryCount(1);
+        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(item));
+
+        RefundOutboxDispatchRequestDTO request = new RefundOutboxDispatchRequestDTO();
+        request.setSimulateResult("FAIL");
+        request.setRemark("账务系统暂不可用");
+
+        assertEquals("FAIL", service.dispatchOutbox("REVT-2", request).getStatus());
+        verify(refundDao).markOutboxFailed("REVT-2", "账务系统暂不可用");
     }
 
     private PaymentSuccessProjectionEntity source(String paymentOrderId, String amount) {

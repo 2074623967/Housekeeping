@@ -2,10 +2,13 @@ package com.abc123.refund.mapper;
 
 import com.abc123.refund.dto.RefundListItemDTO;
 import com.abc123.refund.dto.RefundOperationLogDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOrderEntity;
+import com.abc123.refund.entity.RefundOutboxEventEntity;
 import java.math.BigDecimal;
 import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
@@ -58,4 +61,15 @@ public interface RefundMapper {
                             @Param("refundAmount") BigDecimal refundAmount);
 
     RefundOverviewDTO overview();
+
+    List<RefundOutboxItemDTO> findOutboxList(RefundOutboxQueryDTO query);
+
+    long countOutbox(RefundOutboxQueryDTO query);
+
+    RefundOutboxEventEntity findOutboxByEventId(@Param("eventId") String eventId);
+
+    int markOutboxSent(@Param("eventId") String eventId);
+
+    int markOutboxFailed(@Param("eventId") String eventId,
+                         @Param("lastErrorMessage") String lastErrorMessage);
 }

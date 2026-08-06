@@ -7,6 +7,9 @@ import com.abc123.refund.dto.RefundApplyRequestDTO;
 import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundDetailDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 
@@ -21,6 +24,8 @@ public interface RefundService {
 
     RefundOverviewDTO overview();
 
+    PageResultDTO<RefundOutboxItemDTO> listOutbox(RefundOutboxQueryDTO query);
+
     RefundListItemDTO apply(RefundApplyRequestDTO request);
 
     RefundListItemDTO approve(RefundActionRequestDTO request);
@@ -31,6 +36,7 @@ public interface RefundService {
 
     RefundListItemDTO retry(RefundActionRequestDTO request);
 
+    RefundOutboxItemDTO dispatchOutbox(String eventId, RefundOutboxDispatchRequestDTO request);
+
     void projectPaymentSuccess(PaymentSuccessProjectionDTO request);
 }
-

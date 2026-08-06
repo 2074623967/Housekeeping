@@ -8,6 +8,9 @@ import com.abc123.refund.dto.RefundApplyRequestDTO;
 import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundDetailDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.service.RefundService;
@@ -55,6 +58,22 @@ public class RefundController {
         return ApiResponse.success(refundService.overview());
     }
 
+    @GetMapping("/outbox")
+    public ApiResponse<PageResultDTO<RefundOutboxItemDTO>> listOutbox(
+            @RequestParam(required = false) String eventId,
+            @RequestParam(required = false) String aggregateId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
+        query.setEventId(eventId);
+        query.setAggregateId(aggregateId);
+        query.setStatus(status);
+        query.setPageNo(pageNo);
+        query.setPageSize(pageSize);
+        return ApiResponse.success(refundService.listOutbox(query));
+    }
+
     @GetMapping("/{refundOrderId}")
     public ApiResponse<RefundDetailDTO> detail(@PathVariable String refundOrderId) {
         return ApiResponse.success(refundService.detail(refundOrderId));
@@ -96,6 +115,14 @@ public class RefundController {
         return ApiResponse.success(refundService.retry(action));
     }
 
+    @PostMapping("/outbox/{eventId}/dispatch")
+    public ApiResponse<RefundOutboxItemDTO> dispatchOutbox(@PathVariable String eventId,
+                                                           @RequestBody(required = false) RefundOutboxDispatchRequestDTO request) {
+        return ApiResponse.success(refundService.dispatchOutbox(
+                eventId,
+                request == null ? new RefundOutboxDispatchRequestDTO() : request));
+    }
+
     /**
      * payment-core 或消息消费者使用该接口投影支付成功事实。
      */
@@ -105,4 +132,3 @@ public class RefundController {
         return ApiResponse.success(null);
     }
 }
-

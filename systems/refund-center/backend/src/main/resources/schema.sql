@@ -61,8 +61,9 @@ CREATE TABLE IF NOT EXISTS t_refund_outbox_event (
     payload_json CLOB NOT NULL COMMENT '事件载荷',
     status VARCHAR(32) NOT NULL COMMENT '发送状态',
     retry_count INT NOT NULL DEFAULT 0 COMMENT '重试次数',
+    last_error_message VARCHAR(255) COMMENT '最近一次错误信息',
+    last_relay_at TIMESTAMP NULL COMMENT '最近一次派发时间',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
     CONSTRAINT uk_refund_outbox_event_id UNIQUE (event_id)
 );
-

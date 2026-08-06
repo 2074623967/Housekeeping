@@ -9,10 +9,14 @@ import com.abc123.refund.dto.RefundApplyRequestDTO;
 import com.abc123.refund.dto.RefundCallbackRequestDTO;
 import com.abc123.refund.dto.RefundDetailDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOrderEntity;
+import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.abc123.refund.service.RefundService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,6 +40,8 @@ public class RefundServiceImpl implements RefundService {
     private static final String PROCESSING = "PROCESSING";
     private static final String SUCCESS = "SUCCESS";
     private static final String FAIL = "FAIL";
+    private static final String OUTBOX_SENT = "SENT";
+    private static final String OUTBOX_DISPATCH_FAIL = "FAIL";
     private static final DateTimeFormatter ID_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final RefundDao refundDao;
@@ -85,6 +91,17 @@ public class RefundServiceImpl implements RefundService {
     @Override
     public RefundOverviewDTO overview() {
         return refundDao.overview();
+    }
+
+    @Override
+    public PageResultDTO<RefundOutboxItemDTO> listOutbox(RefundOutboxQueryDTO query) {
+        query = normalize(query);
+        return new PageResultDTO<>(
+                refundDao.findOutboxList(query),
+                refundDao.countOutbox(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
     }
 
     @Override
@@ -186,6 +203,32 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional
+    public RefundOutboxItemDTO dispatchOutbox(String eventId, RefundOutboxDispatchRequestDTO request) {
+        String id = required(eventId, "事件编号不能为空");
+        RefundOutboxEventEntity existing = refundDao.findOutboxByEventId(id);
+        if (existing == null) {
+            throw new BusinessException("退款成功事件不存在");
+        }
+        if (OUTBOX_SENT.equals(existing.getStatus())) {
+            return loadSingleOutbox(id);
+        }
+        String simulateResult = request == null ? null : trim(request.getSimulateResult());
+        String remark = request == null ? null : trim(request.getRemark());
+        if (OUTBOX_DISPATCH_FAIL.equalsIgnoreCase(simulateResult)) {
+            String errorMessage = StringUtils.hasText(remark) ? remark : "本地派发模拟失败";
+            if (refundDao.markOutboxFailed(id, errorMessage) != 1) {
+                throw new BusinessException("退款成功事件派发失败状态回写异常");
+            }
+            return loadSingleOutbox(id);
+        }
+        if (refundDao.markOutboxSent(id) != 1) {
+            throw new BusinessException("退款成功事件派发状态回写异常");
+        }
+        return loadSingleOutbox(id);
+    }
+
+    @Override
+    @Transactional
     public void projectPaymentSuccess(PaymentSuccessProjectionDTO request) {
         if (request == null || !StringUtils.hasText(request.getPaymentOrderId())
                 || request.getPaidAmount() == null
@@ -228,6 +271,28 @@ public class RefundServiceImpl implements RefundService {
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return query;
+    }
+
+    private RefundOutboxQueryDTO normalize(RefundOutboxQueryDTO query) {
+        if (query == null) {
+            query = new RefundOutboxQueryDTO();
+        }
+        query.setEventId(trim(query.getEventId()));
+        query.setAggregateId(trim(query.getAggregateId()));
+        query.setStatus(StringUtils.hasText(query.getStatus()) ? query.getStatus().trim() : null);
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return query;
+    }
+
+    private RefundOutboxItemDTO loadSingleOutbox(String eventId) {
+        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
+        query.setEventId(eventId);
+        query.setPageNo(1);
+        query.setPageSize(1);
+        return refundDao.findOutboxList(query).stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("退款成功事件不存在"));
     }
 
     private String required(String value, String message) {

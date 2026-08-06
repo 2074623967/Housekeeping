@@ -3,9 +3,12 @@ package com.abc123.refund.dao;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.dto.RefundListItemDTO;
 import com.abc123.refund.dto.RefundOperationLogDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.entity.RefundOrderEntity;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
+import com.abc123.refund.entity.RefundOutboxEventEntity;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -42,4 +45,14 @@ public interface RefundDao {
     int insertSuccessOutbox(String refundOrderId, String paymentOrderId, BigDecimal refundAmount);
 
     RefundOverviewDTO overview();
+
+    List<RefundOutboxItemDTO> findOutboxList(RefundOutboxQueryDTO query);
+
+    long countOutbox(RefundOutboxQueryDTO query);
+
+    RefundOutboxEventEntity findOutboxByEventId(String eventId);
+
+    int markOutboxSent(String eventId);
+
+    int markOutboxFailed(String eventId, String lastErrorMessage);
 }

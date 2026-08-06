@@ -67,10 +67,11 @@ CREATE TABLE IF NOT EXISTS t_refund_outbox_event (
     payload_json JSON NOT NULL COMMENT '事件载荷',
     status VARCHAR(32) NOT NULL COMMENT '发送状态',
     retry_count INT NOT NULL DEFAULT 0 COMMENT '重试次数',
+    last_error_message VARCHAR(255) NULL COMMENT '最近一次错误信息',
+    last_relay_at DATETIME NULL COMMENT '最近一次派发时间',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_refund_outbox_event_id (event_id),
     KEY idx_refund_outbox_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款成功事件出站表';
-

@@ -3,10 +3,13 @@ package com.abc123.refund.dao.impl;
 import com.abc123.refund.dao.RefundDao;
 import com.abc123.refund.dto.RefundListItemDTO;
 import com.abc123.refund.dto.RefundOperationLogDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOrderEntity;
+import com.abc123.refund.entity.RefundOutboxEventEntity;
 import com.abc123.refund.mapper.RefundMapper;
 import java.math.BigDecimal;
 import java.util.List;
@@ -94,5 +97,30 @@ public class RefundDaoImpl implements RefundDao {
     @Override
     public RefundOverviewDTO overview() {
         return refundMapper.overview();
+    }
+
+    @Override
+    public List<RefundOutboxItemDTO> findOutboxList(RefundOutboxQueryDTO query) {
+        return refundMapper.findOutboxList(query);
+    }
+
+    @Override
+    public long countOutbox(RefundOutboxQueryDTO query) {
+        return refundMapper.countOutbox(query);
+    }
+
+    @Override
+    public RefundOutboxEventEntity findOutboxByEventId(String eventId) {
+        return refundMapper.findOutboxByEventId(eventId);
+    }
+
+    @Override
+    public int markOutboxSent(String eventId) {
+        return refundMapper.markOutboxSent(eventId);
+    }
+
+    @Override
+    public int markOutboxFailed(String eventId, String lastErrorMessage) {
+        return refundMapper.markOutboxFailed(eventId, lastErrorMessage);
     }
 }
