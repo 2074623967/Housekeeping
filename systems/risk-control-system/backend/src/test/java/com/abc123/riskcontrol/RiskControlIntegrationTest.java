@@ -54,6 +54,36 @@ class RiskControlIntegrationTest {
     }
 
     @Test
+    void shouldRejectRepeatedReviewActionOnSameReviewOrder() {
+        when(riskOpsConfigService.loadEffectiveSnapshot(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
+        RiskDecisionRequestDTO request = new RiskDecisionRequestDTO();
+        request.setBusinessNo("PAY-RISK-REVIEW-GUARD-001");
+        request.setSourceSystem("payment-core");
+        request.setSceneCode("PAY_CONSUME");
+        request.setPayScene("HOME_CLEAN");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setMerchantNo("MCH_HOME_001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+        request.setPayerPhone("13800008888");
+        request.setAmount(new BigDecimal("188.00"));
+
+        RiskDecisionResultDTO reviewing = service.evaluatePaymentDecision(request);
+        assertEquals("REVIEW", reviewing.getDecision());
+
+        RiskReviewActionRequestDTO approveRequest = new RiskReviewActionRequestDTO();
+        approveRequest.setReviewNo(reviewing.getReviewNo());
+        approveRequest.setAction("APPROVE");
+        service.reviewAction(approveRequest);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.reviewAction(approveRequest));
+        assertEquals("仅待审核复核单允许执行审核动作", exception.getMessage());
+    }
+
+    @Test
     void shouldRejectEmptyToggleCode() {
         when(riskOpsConfigService.loadEffectiveSnapshot(org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),

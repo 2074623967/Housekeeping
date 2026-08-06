@@ -194,10 +194,18 @@ public class RiskControlServiceImpl implements RiskControlService {
         if (!"APPROVE".equals(action) && !"REJECT".equals(action)) {
             throw new BusinessException("审核动作仅支持 APPROVE 或 REJECT");
         }
+        ReviewOrderEntity reviewOrder = dao.findReviewOrderByReviewNo(request.getReviewNo().trim());
+        if (reviewOrder == null) {
+            throw new BusinessException("复核单不存在");
+        }
+        if (!"PENDING".equalsIgnoreCase(reviewOrder.getStatus())) {
+            throw new BusinessException("仅待审核复核单允许执行审核动作");
+        }
         String status = "APPROVE".equals(action) ? "APPROVED" : "REJECTED";
         String statusType = "APPROVE".equals(action) ? "success" : "danger";
-        if (dao.updateReviewOrder(request.getReviewNo().trim(), status, statusType, "风险审核员A") != 1) {
-            throw new BusinessException("复核单不存在");
+        // 数据库层补充 PENDING 状态门禁，避免并发下重复审核覆盖最终结果。
+        if (dao.updateReviewOrderWhenPending(request.getReviewNo().trim(), status, statusType, "风险审核员A") != 1) {
+            throw new BusinessException("复核单状态已变化，请刷新后重试");
         }
         return reviewOrders();
     }

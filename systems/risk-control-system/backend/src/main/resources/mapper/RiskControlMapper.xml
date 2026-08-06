@@ -109,6 +109,21 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findReviewOrderByReviewNo" resultType="com.abc123.riskcontrol.entity.ReviewOrderEntity">
+        SELECT id,
+               review_no AS reviewNo,
+               business_no AS businessNo,
+               risk_tag AS riskTag,
+               review_item AS reviewItem,
+               status,
+               status_type AS statusType,
+               reviewer,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_risk_review_order
+        WHERE review_no = #{reviewNo}
+        LIMIT 1
+    </select>
+
     <select id="findLatestReviewOrderByBusinessNo" resultType="com.abc123.riskcontrol.entity.ReviewOrderEntity">
         SELECT id,
                review_no AS reviewNo,
@@ -208,9 +223,10 @@
         WHERE monitor_code = #{monitorCode}
     </update>
 
-    <update id="updateReviewOrder">
+    <update id="updateReviewOrderWhenPending">
         UPDATE t_risk_review_order
         SET status = #{status}, status_type = #{statusType}, reviewer = #{reviewer}, updated_at = CURRENT_TIMESTAMP
         WHERE review_no = #{reviewNo}
+          AND status = 'PENDING'
     </update>
 </mapper>

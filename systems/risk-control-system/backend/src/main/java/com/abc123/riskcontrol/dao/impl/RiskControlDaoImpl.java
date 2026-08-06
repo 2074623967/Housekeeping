@@ -94,6 +94,11 @@ public class RiskControlDaoImpl implements RiskControlDao {
     }
 
     @Override
+    public ReviewOrderEntity findReviewOrderByReviewNo(String reviewNo) {
+        return mapper.findReviewOrderByReviewNo(reviewNo);
+    }
+
+    @Override
     public ReviewOrderEntity findLatestReviewOrderByBusinessNo(String businessNo) {
         return mapper.findLatestReviewOrderByBusinessNo(businessNo);
     }
@@ -134,7 +139,7 @@ public class RiskControlDaoImpl implements RiskControlDao {
     }
 
     @Override
-    public int updateReviewOrder(String reviewNo, String status, String statusType, String reviewer) {
-        return mapper.updateReviewOrder(reviewNo, status, statusType, reviewer);
+    public int updateReviewOrderWhenPending(String reviewNo, String status, String statusType, String reviewer) {
+        return mapper.updateReviewOrderWhenPending(reviewNo, status, statusType, reviewer);
     }
 }

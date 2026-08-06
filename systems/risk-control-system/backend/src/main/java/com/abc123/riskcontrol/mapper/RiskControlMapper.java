@@ -45,6 +45,8 @@ public interface RiskControlMapper {
 
     List<RiskPolicyEntity> findEnabledPoliciesForDecision();
 
+    ReviewOrderEntity findReviewOrderByReviewNo(@Param("reviewNo") String reviewNo);
+
     ReviewOrderEntity findLatestReviewOrderByBusinessNo(@Param("businessNo") String businessNo);
 
     InterceptEventEntity findLatestInterceptEvent(@Param("paymentOrderId") String paymentOrderId,
@@ -71,8 +73,8 @@ public interface RiskControlMapper {
                                 @Param("status") String status,
                                 @Param("statusType") String statusType);
 
-    int updateReviewOrder(@Param("reviewNo") String reviewNo,
-                          @Param("status") String status,
-                          @Param("statusType") String statusType,
-                          @Param("reviewer") String reviewer);
+    int updateReviewOrderWhenPending(@Param("reviewNo") String reviewNo,
+                                     @Param("status") String status,
+                                     @Param("statusType") String statusType,
+                                     @Param("reviewer") String reviewer);
 }

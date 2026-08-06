@@ -44,6 +44,8 @@ public interface RiskControlDao {
 
     List<RiskPolicyEntity> findEnabledPoliciesForDecision();
 
+    ReviewOrderEntity findReviewOrderByReviewNo(String reviewNo);
+
     ReviewOrderEntity findLatestReviewOrderByBusinessNo(String businessNo);
 
     InterceptEventEntity findLatestInterceptEvent(String paymentOrderId, String hitPolicy, String decisionResult);
@@ -60,5 +62,5 @@ public interface RiskControlDao {
 
     int updateMonitorRuleStatus(String monitorCode, String status, String statusType);
 
-    int updateReviewOrder(String reviewNo, String status, String statusType, String reviewer);
+    int updateReviewOrderWhenPending(String reviewNo, String status, String statusType, String reviewer);
 }
