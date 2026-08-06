@@ -13,6 +13,10 @@ import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
+import com.abc123.gatewayaccess.entity.GatewayAppEntity;
+import com.abc123.gatewayaccess.entity.GatewayCertificateEntity;
+import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
+import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
 import java.time.LocalDate;
@@ -164,6 +168,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private void toggleCertificateRequest(ToggleRequestDTO request) {
         String configCode = requireConfigCode(request, "证书");
+        if (Boolean.TRUE.equals(request.getEnabled())) {
+            GatewayCertificateEntity certificate = gatewayAccessMapper.findCertificateByCode(configCode);
+            if (certificate == null) {
+                throw new IllegalArgumentException("证书不存在");
+            }
+            validateCertificateCanBeEnabled(certificate);
+        }
         int affectedRows = gatewayAccessMapper.updateCertificateStatus(
                 configCode,
                 resolveStatus(request.getEnabled()),
@@ -242,6 +253,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private void togglePermissionRequest(ToggleRequestDTO request) {
         String configCode = requireConfigCode(request, "权限");
+        if (Boolean.TRUE.equals(request.getEnabled())) {
+            GatewayPermissionEntity permission = gatewayAccessMapper.findPermissionByCode(configCode);
+            if (permission == null) {
+                throw new IllegalArgumentException("权限不存在");
+            }
+            validatePermissionCanBeEnabled(permission);
+        }
         int affectedRows = gatewayAccessMapper.updatePermissionStatus(
                 configCode,
                 resolveStatus(request.getEnabled()),
@@ -254,6 +272,13 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private void toggleReleaseRouteRequest(ToggleRequestDTO request) {
         String configCode = requireConfigCode(request, "灰度路由");
+        if (Boolean.TRUE.equals(request.getEnabled())) {
+            GatewayReleaseRouteDTO route = gatewayAccessMapper.findReleaseRouteByCode(configCode);
+            if (route == null) {
+                throw new IllegalArgumentException("灰度路由不存在");
+            }
+            validateReleaseRouteCanBeEnabled(route);
+        }
         int affectedRows = gatewayAccessMapper.updateReleaseRouteStatus(
                 configCode,
                 resolveStatus(request.getEnabled()),
@@ -277,5 +302,59 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private String resolveStatusType(Boolean enabled) {
         return Boolean.FALSE.equals(enabled) ? "danger" : "success";
+    }
+
+    /**
+     * 启用证书前校验证书未过期，且所归属网关处于启用状态。
+     */
+    private void validateCertificateCanBeEnabled(GatewayCertificateEntity certificate) {
+        LocalDate expireDate = parseExpireDate(certificate.getExpireAt(), "证书到期日格式异常");
+        if (expireDate.isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("已过期证书不允许启用");
+        }
+        GatewayChannelEntity gateway = gatewayAccessMapper.findGatewayByCode(certificate.getGatewayCode());
+        if (gateway == null) {
+            throw new IllegalArgumentException("证书归属网关不存在");
+        }
+        if (!"ENABLED".equalsIgnoreCase(gateway.getStatus())) {
+            throw new IllegalArgumentException("证书归属网关未启用，不允许启用证书");
+        }
+    }
+
+    /**
+     * 启用权限前校验所属接入应用仍处于启用状态，避免停用应用恢复局部权限。
+     */
+    private void validatePermissionCanBeEnabled(GatewayPermissionEntity permission) {
+        GatewayAppEntity application = gatewayAccessMapper.findApplicationByCode(permission.getAppCode());
+        if (application == null) {
+            throw new IllegalArgumentException("权限归属应用不存在");
+        }
+        if (!"ENABLED".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("权限归属应用未启用，不允许单独启用权限");
+        }
+    }
+
+    /**
+     * 启用灰度路由前校验关联网关已经启用，避免把路由流量切到停用渠道。
+     */
+    private void validateReleaseRouteCanBeEnabled(GatewayReleaseRouteDTO route) {
+        GatewayChannelEntity gateway = gatewayAccessMapper.findGatewayByCode(route.getGatewayCode());
+        if (gateway == null) {
+            throw new IllegalArgumentException("灰度路由归属网关不存在");
+        }
+        if (!"ENABLED".equalsIgnoreCase(gateway.getStatus())) {
+            throw new IllegalArgumentException("灰度路由归属网关未启用，不允许启用路由");
+        }
+    }
+
+    private LocalDate parseExpireDate(String expireAt, String errorMessage) {
+        if (!StringUtils.hasText(expireAt)) {
+            throw new IllegalArgumentException(errorMessage);
+        }
+        try {
+            return LocalDate.parse(expireAt.trim());
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException(errorMessage);
+        }
     }
 }

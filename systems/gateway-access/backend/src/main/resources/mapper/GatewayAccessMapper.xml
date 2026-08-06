@@ -122,6 +122,80 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findApplicationByCode" resultType="com.abc123.gatewayaccess.entity.GatewayAppEntity">
+        SELECT id,
+               app_code AS appCode,
+               app_name AS appName,
+               source_system AS sourceSystem,
+               owner,
+               ip_whitelist AS ipWhitelist,
+               permission_scope AS permissionScope,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_app
+        WHERE app_code = #{appCode}
+        LIMIT 1
+    </select>
+
+    <select id="findGatewayByCode" resultType="com.abc123.gatewayaccess.entity.GatewayChannelEntity">
+        SELECT id,
+               gateway_code AS gatewayCode,
+               gateway_name AS gatewayName,
+               channel_type AS channelType,
+               protocol_type AS protocolType,
+               sign_algorithm AS signAlgorithm,
+               endpoint,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_channel
+        WHERE gateway_code = #{gatewayCode}
+        LIMIT 1
+    </select>
+
+    <select id="findCertificateByCode" resultType="com.abc123.gatewayaccess.entity.GatewayCertificateEntity">
+        SELECT id,
+               certificate_code AS certificateCode,
+               gateway_code AS gatewayCode,
+               certificate_version AS certificateVersion,
+               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_certificate
+        WHERE certificate_code = #{certificateCode}
+        LIMIT 1
+    </select>
+
+    <select id="findPermissionByCode" resultType="com.abc123.gatewayaccess.entity.GatewayPermissionEntity">
+        SELECT id,
+               permission_code AS permissionCode,
+               app_code AS appCode,
+               scope,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_permission
+        WHERE permission_code = #{permissionCode}
+        LIMIT 1
+    </select>
+
+    <select id="findReleaseRouteByCode" resultType="com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO">
+        SELECT route_code AS routeCode,
+               gateway_code AS gatewayCode,
+               environment,
+               release_strategy AS releaseStrategy,
+               traffic_percent AS trafficPercent,
+               release_window AS releaseWindow,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_release_route
+        WHERE route_code = #{routeCode}
+        LIMIT 1
+    </select>
+
     <select id="countApplications" resultType="long">
         SELECT COUNT(1) FROM t_gateway_app
     </select>

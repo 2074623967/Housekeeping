@@ -14,6 +14,10 @@ import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
+import com.abc123.gatewayaccess.entity.GatewayAppEntity;
+import com.abc123.gatewayaccess.entity.GatewayCertificateEntity;
+import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
+import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -114,6 +118,71 @@ class GatewayAccessServiceImplTest {
     @Test
     void shouldRejectMissingAppCode() {
         assertThrows(IllegalArgumentException.class, () -> new GatewayAccessServiceImpl(gatewayAccessMapper).toggleApplication(new ToggleRequestDTO()));
+    }
+
+    @Test
+    void shouldRejectEnableExpiredCertificate() {
+        ToggleRequestDTO request = new ToggleRequestDTO();
+        request.setConfigCode("CERT_BANK_2026");
+        request.setEnabled(true);
+
+        GatewayCertificateEntity certificate = new GatewayCertificateEntity();
+        certificate.setCertificateCode("CERT_BANK_2026");
+        certificate.setGatewayCode("GW_BANK");
+        certificate.setExpireAt(LocalDate.now().minusDays(1).toString());
+        when(gatewayAccessMapper.findCertificateByCode("CERT_BANK_2026")).thenReturn(certificate);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GatewayAccessServiceImpl(gatewayAccessMapper).toggleCertificate(request)
+        );
+        assertEquals("已过期证书不允许启用", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectEnablePermissionWhenApplicationDisabled() {
+        ToggleRequestDTO request = new ToggleRequestDTO();
+        request.setConfigCode("PERM_RISK_SIGNAL");
+        request.setEnabled(true);
+
+        GatewayPermissionEntity permission = new GatewayPermissionEntity();
+        permission.setPermissionCode("PERM_RISK_SIGNAL");
+        permission.setAppCode("APP_RISK");
+        when(gatewayAccessMapper.findPermissionByCode("PERM_RISK_SIGNAL")).thenReturn(permission);
+
+        GatewayAppEntity application = new GatewayAppEntity();
+        application.setAppCode("APP_RISK");
+        application.setStatus("DISABLED");
+        when(gatewayAccessMapper.findApplicationByCode("APP_RISK")).thenReturn(application);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GatewayAccessServiceImpl(gatewayAccessMapper).togglePermission(request)
+        );
+        assertEquals("权限归属应用未启用，不允许单独启用权限", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectEnableReleaseRouteWhenGatewayDisabled() {
+        ToggleRequestDTO request = new ToggleRequestDTO();
+        request.setConfigCode("ROUTE_BANK_UAT");
+        request.setEnabled(true);
+
+        GatewayReleaseRouteDTO route = new GatewayReleaseRouteDTO();
+        route.setRouteCode("ROUTE_BANK_UAT");
+        route.setGatewayCode("GW_BANK");
+        when(gatewayAccessMapper.findReleaseRouteByCode("ROUTE_BANK_UAT")).thenReturn(route);
+
+        GatewayChannelEntity gateway = new GatewayChannelEntity();
+        gateway.setGatewayCode("GW_BANK");
+        gateway.setStatus("DISABLED");
+        when(gatewayAccessMapper.findGatewayByCode("GW_BANK")).thenReturn(gateway);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GatewayAccessServiceImpl(gatewayAccessMapper).toggleReleaseRoute(request)
+        );
+        assertEquals("灰度路由归属网关未启用，不允许启用路由", exception.getMessage());
     }
 
     @Test
