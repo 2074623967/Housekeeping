@@ -99,6 +99,7 @@ const canClosePayment = computed(() => {
   const status = paymentDetail.value?.status;
   return Boolean(status) && status !== "SUCCESS" && status !== "CLOSED";
 });
+const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const nextStepChecklist = computed(() => {
   if (resultState.value === "success") {
     return [
@@ -290,6 +291,10 @@ function backToCashier() {
   });
 }
 
+function backToBusinessEntry() {
+  router.push(businessEntryPath.value);
+}
+
 function resolveBizType() {
   if (typeof route.query.bizType === "string" && route.query.bizType.trim()) {
     return route.query.bizType.trim();
@@ -426,6 +431,9 @@ function resolveBizType() {
         <div class="terminal-actions">
           <button class="action-button primary" :disabled="queryLoading" @click="queryResult">
             {{ queryLoading ? "查询中..." : terminalCopy.queryLabel }}
+          </button>
+          <button class="action-button secondary" @click="backToBusinessEntry">
+            返回业务入口
           </button>
           <button class="action-button secondary" :disabled="callbackLoading || !canMockCallback" @click="mockSuccessCallback">
             {{ callbackLoading ? "回调中..." : terminalCopy.callbackLabel }}

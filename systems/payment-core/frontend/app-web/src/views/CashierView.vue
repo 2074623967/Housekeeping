@@ -246,6 +246,7 @@ const countdownLabel = computed(() => {
   return `${hours}:${minutes}:${seconds}`;
 });
 const canClose = computed(() => Boolean(cashier.value?.paymentOrderId) && countdownSeconds.value > 0);
+const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const countdownRiskLevel = computed(() => {
   if (countdownSeconds.value <= 0) {
     return "danger";
@@ -392,6 +393,10 @@ function regenerateIdempotencyKey() {
   message.value = "已重新生成本次支付的幂等键，可用于重新联调当前支付方式。";
 }
 
+function backToBusinessEntry() {
+  router.push(businessEntryPath.value);
+}
+
 function resolveAccessToken() {
   if (typeof route.query.accessToken === "string") {
     return route.query.accessToken.trim();
@@ -488,6 +493,9 @@ watch(selectedPaymentMethod, () => {
         <div class="terminal-actions">
           <button class="action-button primary" :disabled="submitLoading || !canSubmit" @click="pay">
             {{ submitLoading ? "支付提交流转中..." : terminalMeta.actionLabel }}
+          </button>
+          <button class="action-button secondary" @click="backToBusinessEntry">
+            返回业务入口
           </button>
           <button class="action-button secondary" :disabled="refreshLoading" @click="refreshCashier">
             {{ refreshLoading ? "刷新中..." : terminalMeta.refreshLabel }}
