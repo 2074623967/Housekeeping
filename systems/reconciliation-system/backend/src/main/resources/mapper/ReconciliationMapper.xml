@@ -45,6 +45,12 @@
         FROM t_reconciliation_internal_record WHERE batch_no = #{batchNo}
     </select>
 
+    <update id="updateBatchStatus">
+        UPDATE t_reconciliation_batch
+        SET status = #{status}, updated_at = CURRENT_TIMESTAMP
+        WHERE batch_no = #{batchNo}
+    </update>
+
     <delete id="resetBatchResults">
         DELETE FROM t_reconciliation_difference WHERE batch_no = #{batchNo}
     </delete>
@@ -100,4 +106,3 @@
             (SELECT COALESCE(SUM(matched_count), 0) FROM t_reconciliation_batch) AS matched_count
     </select>
 </mapper>
-

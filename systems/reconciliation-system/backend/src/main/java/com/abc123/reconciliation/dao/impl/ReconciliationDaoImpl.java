@@ -60,6 +60,11 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     @Override
+    public int updateBatchStatus(String batchNo, String status) {
+        return mapper.updateBatchStatus(batchNo, status);
+    }
+
+    @Override
     public int resetBatchResults(String batchNo) {
         return mapper.resetBatchResults(batchNo);
     }
@@ -97,4 +102,3 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
         return mapper.overview();
     }
 }
-

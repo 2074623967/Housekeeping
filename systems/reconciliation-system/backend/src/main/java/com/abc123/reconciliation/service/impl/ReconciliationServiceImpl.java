@@ -24,8 +24,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -43,9 +45,11 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     private static final DateTimeFormatter BATCH_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final ReconciliationDao dao;
+    private final TransactionTemplate transactionTemplate;
 
-    public ReconciliationServiceImpl(ReconciliationDao dao) {
+    public ReconciliationServiceImpl(ReconciliationDao dao, PlatformTransactionManager transactionManager) {
         this.dao = dao;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -102,9 +106,48 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     }
 
     @Override
-    @Transactional
     public ReconciliationBatchListItemDTO run(String batchNo) {
         requiredBatch(batchNo);
+        markBatchStatus(batchNo, RUNNING);
+        return transactionTemplate.execute(status -> executeRun(batchNo));
+    }
+
+    @Override
+    public List<ReconciliationBatchListItemDTO> batches() {
+        return dao.findBatches();
+    }
+
+    @Override
+    public PageResultDTO<ReconciliationDifferenceDTO> differences(DifferenceQueryDTO query) {
+        if (query == null) {
+            query = new DifferenceQueryDTO();
+        }
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        return new PageResultDTO<>(dao.findDifferences(query), dao.countDifferences(query),
+                query.getPageNo(), query.getPageSize());
+    }
+
+    @Override
+    @Transactional
+    public void resolve(DifferenceResolveRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getDifferenceNo())
+                || !StringUtils.hasText(request.getResolution())) {
+            throw new BusinessException("差异编号和处置结论不能为空");
+        }
+        if (dao.resolveDifference(request.getDifferenceNo().trim(), request.getResolution().trim(),
+                StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : null) == 0) {
+            throw new BusinessException("差异不存在或已结案");
+        }
+    }
+
+    @Override
+    public ReconciliationOverviewDTO overview() {
+        return dao.overview();
+    }
+
+    @Transactional
+    protected ReconciliationBatchListItemDTO executeRun(String batchNo) {
         dao.resetBatchResults(batchNo);
         List<ChannelRecordEntity> channels = dao.findChannelRecords(batchNo);
         List<InternalRecordEntity> internals = dao.findInternalRecords(batchNo);
@@ -149,40 +192,6 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         return requiredBatch(batchNo);
     }
 
-    @Override
-    public List<ReconciliationBatchListItemDTO> batches() {
-        return dao.findBatches();
-    }
-
-    @Override
-    public PageResultDTO<ReconciliationDifferenceDTO> differences(DifferenceQueryDTO query) {
-        if (query == null) {
-            query = new DifferenceQueryDTO();
-        }
-        query.setPageNo(Math.max(query.getPageNo(), 1));
-        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
-        return new PageResultDTO<>(dao.findDifferences(query), dao.countDifferences(query),
-                query.getPageNo(), query.getPageSize());
-    }
-
-    @Override
-    @Transactional
-    public void resolve(DifferenceResolveRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getDifferenceNo())
-                || !StringUtils.hasText(request.getResolution())) {
-            throw new BusinessException("差异编号和处置结论不能为空");
-        }
-        if (dao.resolveDifference(request.getDifferenceNo().trim(), request.getResolution().trim(),
-                StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : null) == 0) {
-            throw new BusinessException("差异不存在或已结案");
-        }
-    }
-
-    @Override
-    public ReconciliationOverviewDTO overview() {
-        return dao.overview();
-    }
-
     private ReconciliationBatchListItemDTO requiredBatch(String batchNo) {
         ReconciliationBatchListItemDTO batch = dao.findBatch(required(batchNo, "批次号不能为空"));
         if (batch == null) {
@@ -196,5 +205,11 @@ public class ReconciliationServiceImpl implements ReconciliationService {
             throw new BusinessException(message);
         }
         return value.trim();
+    }
+
+    private void markBatchStatus(String batchNo, String status) {
+        if (dao.updateBatchStatus(batchNo, status) == 0) {
+            throw new BusinessException("对账批次不存在");
+        }
     }
 }

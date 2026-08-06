@@ -32,6 +32,8 @@ public interface ReconciliationMapper {
 
     List<InternalRecordEntity> findInternalRecords(@Param("batchNo") String batchNo);
 
+    int updateBatchStatus(@Param("batchNo") String batchNo, @Param("status") String status);
+
     int resetBatchResults(@Param("batchNo") String batchNo);
 
     int insertDifference(@Param("differenceNo") String differenceNo, @Param("batchNo") String batchNo,
@@ -53,4 +55,3 @@ public interface ReconciliationMapper {
 
     ReconciliationOverviewDTO overview();
 }
-

@@ -28,6 +28,8 @@ public interface ReconciliationDao {
 
     List<InternalRecordEntity> findInternalRecords(String batchNo);
 
+    int updateBatchStatus(String batchNo, String status);
+
     int resetBatchResults(String batchNo);
 
     int insertDifference(String differenceNo, String batchNo, String differenceType, String paymentOrderId,
@@ -43,4 +45,3 @@ public interface ReconciliationDao {
 
     ReconciliationOverviewDTO overview();
 }
-
