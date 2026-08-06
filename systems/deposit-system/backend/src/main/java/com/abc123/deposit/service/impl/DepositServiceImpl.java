@@ -40,10 +40,15 @@ public class DepositServiceImpl implements DepositService {
                 || !StringUtils.hasText(request.getOwnerType())) {
             throw new BusinessException("主体编号和主体类型不能为空");
         }
+        String ownerId = request.getOwnerId().trim();
+        String ownerType = request.getOwnerType().trim();
+        if (dao.findAccountByOwner(ownerId, ownerType) != null) {
+            throw new BusinessException("该主体已存在保证金账户");
+        }
         BigDecimal required = positiveOrZero(request.getRequiredAmount());
         String accountNo = "DEP" + LocalDateTime.now().format(ACCOUNT_FORMATTER)
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
-        dao.insertAccount(accountNo, request.getOwnerId().trim(), request.getOwnerType().trim(), required);
+        dao.insertAccount(accountNo, ownerId, ownerType, required);
         return requiredAccount(accountNo);
     }
 
@@ -131,6 +136,7 @@ public class DepositServiceImpl implements DepositService {
     private DepositAccountDTO change(DepositActionRequestDTO request, String flowType,
                                      boolean addBalance, boolean useFrozen) {
         DepositAccountDTO account = account(request);
+        ensureNotDuplicated(account.getAccountNo(), flowType, request.getReferenceNo());
         BigDecimal amount = positive(request.getAmount());
         BigDecimal before = account.getBalance();
         BigDecimal after = addBalance ? before.add(amount) : before.subtract(amount);
@@ -145,6 +151,7 @@ public class DepositServiceImpl implements DepositService {
 
     private DepositAccountDTO deductWithFlowType(DepositActionRequestDTO request, String flowType) {
         DepositAccountDTO account = account(request);
+        ensureNotDuplicated(account.getAccountNo(), flowType, request.getReferenceNo());
         BigDecimal amount = positive(request.getAmount());
         if (account.getAvailableAmount().compareTo(amount) < 0) {
             throw new BusinessException("可用保证金不足，不能抵扣欠款");
@@ -197,5 +204,14 @@ public class DepositServiceImpl implements DepositService {
     private String required(String value, String message) {
         if (!StringUtils.hasText(value)) throw new BusinessException(message);
         return value.trim();
+    }
+
+    private void ensureNotDuplicated(String accountNo, String flowType, String referenceNo) {
+        if (!StringUtils.hasText(referenceNo)) {
+            return;
+        }
+        if (dao.existsFlowReference(accountNo, flowType, referenceNo.trim())) {
+            throw new BusinessException("该业务关联号已处理，请勿重复提交");
+        }
     }
 }

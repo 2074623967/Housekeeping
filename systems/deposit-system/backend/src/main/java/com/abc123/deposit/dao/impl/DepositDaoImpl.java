@@ -31,6 +31,11 @@ public class DepositDaoImpl implements DepositDao {
     }
 
     @Override
+    public DepositAccountDTO findAccountByOwner(String ownerId, String ownerType) {
+        return mapper.findAccountByOwner(ownerId, ownerType);
+    }
+
+    @Override
     public List<DepositAccountDTO> findAccounts() {
         return mapper.findAccounts();
     }
@@ -47,6 +52,11 @@ public class DepositDaoImpl implements DepositDao {
                           String referenceNo, String remark) {
         return mapper.insertFlow(accountNo, flowType, amount, beforeBalance, afterBalance,
                 beforeFrozenAmount, afterFrozenAmount, referenceNo, remark);
+    }
+
+    @Override
+    public boolean existsFlowReference(String accountNo, String flowType, String referenceNo) {
+        return mapper.countFlowReference(accountNo, flowType, referenceNo) > 0;
     }
 
     @Override

@@ -14,6 +14,8 @@ public interface DepositDao {
 
     DepositAccountDTO findAccount(String accountNo);
 
+    DepositAccountDTO findAccountByOwner(String ownerId, String ownerType);
+
     List<DepositAccountDTO> findAccounts();
 
     int updateBalance(String accountNo, BigDecimal expectedBalance, BigDecimal expectedFrozenAmount,
@@ -22,6 +24,8 @@ public interface DepositDao {
     int insertFlow(String accountNo, String flowType, BigDecimal amount, BigDecimal beforeBalance,
                    BigDecimal afterBalance, BigDecimal beforeFrozenAmount, BigDecimal afterFrozenAmount,
                    String referenceNo, String remark);
+
+    boolean existsFlowReference(String accountNo, String flowType, String referenceNo);
 
     List<DepositFlowDTO> findFlows(String accountNo);
 }

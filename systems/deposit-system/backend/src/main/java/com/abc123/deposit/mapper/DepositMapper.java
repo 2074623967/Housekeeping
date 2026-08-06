@@ -18,6 +18,8 @@ public interface DepositMapper {
 
     DepositAccountDTO findAccount(@Param("accountNo") String accountNo);
 
+    DepositAccountDTO findAccountByOwner(@Param("ownerId") String ownerId, @Param("ownerType") String ownerType);
+
     List<DepositAccountDTO> findAccounts();
 
     int updateBalance(@Param("accountNo") String accountNo,
@@ -32,6 +34,9 @@ public interface DepositMapper {
                    @Param("beforeFrozenAmount") BigDecimal beforeFrozenAmount,
                    @Param("afterFrozenAmount") BigDecimal afterFrozenAmount,
                    @Param("referenceNo") String referenceNo, @Param("remark") String remark);
+
+    long countFlowReference(@Param("accountNo") String accountNo, @Param("flowType") String flowType,
+                            @Param("referenceNo") String referenceNo);
 
     List<DepositFlowDTO> findFlows(@Param("accountNo") String accountNo);
 }

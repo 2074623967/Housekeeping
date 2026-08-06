@@ -12,6 +12,12 @@
                balance - frozen_amount AS available_amount, status
         FROM t_deposit_account WHERE account_no = #{accountNo}
     </select>
+    <select id="findAccountByOwner" resultType="com.abc123.deposit.dto.DepositAccountDTO">
+        SELECT account_no, owner_id, owner_type, required_amount, balance, frozen_amount,
+               balance - frozen_amount AS available_amount, status
+        FROM t_deposit_account
+        WHERE owner_id = #{ownerId} AND owner_type = #{ownerType}
+    </select>
     <select id="findAccounts" resultType="com.abc123.deposit.dto.DepositAccountDTO">
         SELECT account_no, owner_id, owner_type, required_amount, balance, frozen_amount,
                balance - frozen_amount AS available_amount, status
@@ -35,6 +41,13 @@
          #{beforeBalance}, #{afterBalance}, #{beforeFrozenAmount}, #{afterFrozenAmount},
          #{referenceNo}, #{remark})
     </insert>
+    <select id="countFlowReference" resultType="long">
+        SELECT COUNT(1)
+        FROM t_deposit_flow
+        WHERE account_no = #{accountNo}
+          AND flow_type = #{flowType}
+          AND reference_no = #{referenceNo}
+    </select>
     <select id="findFlows" resultType="com.abc123.deposit.dto.DepositFlowDTO">
         SELECT flow_no, account_no, flow_type, amount, before_balance, after_balance,
                before_frozen_amount, after_frozen_amount, reference_no, remark, created_at
