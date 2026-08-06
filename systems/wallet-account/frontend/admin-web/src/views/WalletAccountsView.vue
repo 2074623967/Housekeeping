@@ -4,6 +4,7 @@ import {
   changeWalletAccountStatus,
   fetchWalletAccountDetail,
   fetchWalletAccounts,
+  fetchWalletBalances,
   openWalletAccount
 } from "../api";
 
@@ -27,8 +28,11 @@ const showOpenDialog = ref(false);
 const showStatusDialog = ref(false);
 const opening = ref(false);
 const changingStatus = ref(false);
+const batchBalanceLoading = ref(false);
 const pendingStatusAccount = ref(null);
 const pendingStatusTarget = ref("");
+const batchBalanceQuery = ref("");
+const batchBalances = ref([]);
 const statusForm = reactive({
   operatorId: "funds-admin",
   operatorName: "资金管理员",
@@ -51,6 +55,36 @@ const openForm = reactive({
   operatorRole: "FUNDS",
   operatorName: "资金管理员"
 });
+
+function parseWalletAccountNos() {
+  return batchBalanceQuery.value
+    .split(/[\n,，\s]+/)
+    .map((value) => value.trim())
+    .filter((value, index, array) => value && array.indexOf(value) === index);
+}
+
+function fillBatchBalancesFromAccounts() {
+  batchBalanceQuery.value = accounts.value.map((account) => account.walletAccountNo).join("\n");
+}
+
+async function loadBatchBalances() {
+  const walletAccountNos = parseWalletAccountNos();
+  if (!walletAccountNos.length) {
+    batchBalances.value = [];
+    actionMessage.value = "请输入至少一个钱包账户号";
+    return;
+  }
+  batchBalanceLoading.value = true;
+  actionMessage.value = "";
+  try {
+    batchBalances.value = await fetchWalletBalances(walletAccountNos);
+    actionMessage.value = `批量余额查询成功，共返回 ${batchBalances.value.length} 个账户`;
+  } catch (error) {
+    actionMessage.value = error.message;
+  } finally {
+    batchBalanceLoading.value = false;
+  }
+}
 
 async function loadAccounts() {
   loading.value = true;
@@ -351,6 +385,49 @@ onMounted(() => {
               <div class="muted">{{ log.operatorName || log.operatorId || "system" }}</div>
             </div>
           </div>
+        </div>
+
+        <div class="panel">
+          <h3>批量余额核对</h3>
+          <p class="muted">支持一次性校验多个钱包账户余额，适合财务批量核对、迁移校验和跨系统联调前置检查。</p>
+          <div class="toolbar">
+            <button class="button button--light" type="button" @click="fillBatchBalancesFromAccounts">带入当前列表账户</button>
+            <button class="button" type="button" :disabled="batchBalanceLoading" @click="loadBatchBalances">
+              {{ batchBalanceLoading ? "查询中..." : "查询批量余额" }}
+            </button>
+          </div>
+          <textarea
+            v-model="batchBalanceQuery"
+            class="batch-textarea"
+            rows="6"
+            placeholder="每行一个钱包账户号，或使用逗号、空格分隔"
+          />
+          <p class="muted">已识别 {{ parseWalletAccountNos().length }} 个待查询账户</p>
+          <div v-if="batchBalances.length" class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>账户号</th>
+                  <th>总余额</th>
+                  <th>可用余额</th>
+                  <th>冻结余额</th>
+                  <th>在途入账</th>
+                  <th>在途出账</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in batchBalances" :key="item.walletAccountNo">
+                  <td>{{ item.walletAccountNo }}</td>
+                  <td>{{ item.totalBalance }}</td>
+                  <td>{{ item.availableBalance }}</td>
+                  <td>{{ item.frozenBalance }}</td>
+                  <td>{{ item.pendingInBalance }}</td>
+                  <td>{{ item.pendingOutBalance }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="muted">暂无批量余额结果</div>
         </div>
       </div>
     </div>

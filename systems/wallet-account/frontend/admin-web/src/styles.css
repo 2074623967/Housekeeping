@@ -108,6 +108,17 @@ input, select {
   background: #fff;
 }
 
+textarea,
+.batch-textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+  font: inherit;
+  resize: vertical;
+}
+
 .table-wrap { overflow: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td {

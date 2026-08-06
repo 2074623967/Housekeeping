@@ -42,6 +42,10 @@ export async function fetchWalletAccountDetail(walletAccountNo) {
   return request(`/api/wallet/accounts/${walletAccountNo}`);
 }
 
+export async function fetchWalletBalances(walletAccountNos) {
+  return post("/api/wallet/accounts/balances/query", walletAccountNos);
+}
+
 export async function fetchWalletFlows(params) {
   const query = new URLSearchParams();
   if (params.walletAccountNo) {
