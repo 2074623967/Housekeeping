@@ -53,6 +53,36 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findEnabledBusinessLineByCode" resultType="com.abc123.opsconfig.dto.BusinessLineDTO">
+        SELECT business_code AS businessCode,
+               business_name AS businessName,
+               default_scene AS defaultScene,
+               owner,
+               settlement_policy AS settlementPolicy,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_business_line
+        WHERE status = 'ENABLED'
+          AND business_code = #{businessCode}
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledPaymentTypeByCode" resultType="com.abc123.opsconfig.dto.PaymentTypeDTO">
+        SELECT type_code AS typeCode,
+               type_name AS typeName,
+               transaction_category AS transactionCategory,
+               fee_policy AS feePolicy,
+               refund_capability AS refundCapability,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_payment_type
+        WHERE status = 'ENABLED'
+          AND type_code = #{typeCode}
+        LIMIT 1
+    </select>
+
     <select id="findEnabledCashierTemplateByTerminal" resultType="com.abc123.opsconfig.dto.CashierTemplateDTO">
         SELECT template_code AS templateCode,
                template_name AS templateName,
@@ -66,6 +96,22 @@
         WHERE status = 'ENABLED'
           AND terminal_type = #{terminalType}
         ORDER BY id ASC
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledChannelProfileByCode" resultType="com.abc123.opsconfig.dto.ChannelProfileDTO">
+        SELECT channel_code AS channelCode,
+               channel_name AS channelName,
+               channel_type AS channelType,
+               merchant_profile AS merchantProfile,
+               refund_sla AS refundSla,
+               risk_tag AS riskTag,
+               status,
+               status_type AS statusType,
+               FORMATDATETIME(updated_at, 'yyyy-MM-dd HH:mm:ss') AS updatedAt
+        FROM t_ops_channel_profile
+        WHERE status = 'ENABLED'
+          AND channel_code = #{channelCode}
         LIMIT 1
     </select>
 

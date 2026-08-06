@@ -97,20 +97,36 @@ public class OpsConfigServiceImpl implements OpsConfigService {
         if (!StringUtils.hasText(query.getTerminalType())) {
             throw new BusinessException("终端类型不能为空");
         }
-        CashierTemplateDTO cashierTemplate = dao.findEnabledCashierTemplateByTerminal(query.getTerminalType().trim());
-        RoutingRuleDTO routingRule = dao.findEnabledRoutingRule(query.getBusinessCode().trim(), query.getPayType().trim());
+        String businessCode = query.getBusinessCode().trim();
+        String payType = query.getPayType().trim();
+        String terminalType = query.getTerminalType().trim();
+
+        if (dao.findEnabledBusinessLineByCode(businessCode) == null) {
+            throw new BusinessException("业务线未启用或不存在");
+        }
+        if (dao.findEnabledPaymentTypeByCode(payType) == null) {
+            throw new BusinessException("支付类型未启用或不存在");
+        }
+
+        CashierTemplateDTO cashierTemplate = dao.findEnabledCashierTemplateByTerminal(terminalType);
+        if (cashierTemplate == null) {
+            throw new BusinessException("终端未配置启用中的收银台模板");
+        }
+
+        RoutingRuleDTO routingRule = dao.findEnabledRoutingRule(businessCode, payType);
+        if (routingRule == null) {
+            throw new BusinessException("业务线与支付类型未配置启用中的路由规则");
+        }
+        validateRouteChannelProfiles(routingRule);
+
         OpsConfigEffectiveSnapshotDTO snapshot = new OpsConfigEffectiveSnapshotDTO();
-        snapshot.setBusinessCode(query.getBusinessCode().trim());
-        snapshot.setPayType(query.getPayType().trim());
-        snapshot.setTerminalType(query.getTerminalType().trim());
-        if (cashierTemplate != null) {
-            snapshot.setDefaultPayMethod(cashierTemplate.getDefaultPayMethod());
-        }
-        if (routingRule != null) {
-            snapshot.setPrimaryChannelProfileCode(routingRule.getPrimaryChannel());
-            snapshot.setBackupChannelProfileCode(routingRule.getBackupChannel());
-            snapshot.setRouteMatchPolicy(routingRule.getMatchPolicy());
-        }
+        snapshot.setBusinessCode(businessCode);
+        snapshot.setPayType(payType);
+        snapshot.setTerminalType(terminalType);
+        snapshot.setDefaultPayMethod(cashierTemplate.getDefaultPayMethod());
+        snapshot.setPrimaryChannelProfileCode(routingRule.getPrimaryChannel());
+        snapshot.setBackupChannelProfileCode(routingRule.getBackupChannel());
+        snapshot.setRouteMatchPolicy(routingRule.getMatchPolicy());
         snapshot.setEnabledSystemControls(dao.findEnabledSystemControls());
         return snapshot;
     }
@@ -204,5 +220,18 @@ public class OpsConfigServiceImpl implements OpsConfigService {
 
     private String statusType(ToggleRequestDTO request) {
         return Boolean.TRUE.equals(request.getEnabled()) ? "success" : "danger";
+    }
+
+    /**
+     * 快照下发前校验路由依赖的渠道档案都已启用，避免 payment-core 拿到失效渠道配置。
+     */
+    private void validateRouteChannelProfiles(RoutingRuleDTO routingRule) {
+        if (dao.findEnabledChannelProfileByCode(routingRule.getPrimaryChannel()) == null) {
+            throw new BusinessException("主路由渠道档案未启用或不存在");
+        }
+        if (StringUtils.hasText(routingRule.getBackupChannel())
+                && dao.findEnabledChannelProfileByCode(routingRule.getBackupChannel().trim()) == null) {
+            throw new BusinessException("备选路由渠道档案未启用或不存在");
+        }
     }
 }

@@ -60,6 +60,16 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
     }
 
     @Override
+    public BusinessLineDTO findEnabledBusinessLineByCode(String businessCode) {
+        return mapper.findEnabledBusinessLineByCode(businessCode);
+    }
+
+    @Override
+    public PaymentTypeDTO findEnabledPaymentTypeByCode(String typeCode) {
+        return mapper.findEnabledPaymentTypeByCode(typeCode);
+    }
+
+    @Override
     public CashierTemplateDTO findEnabledCashierTemplateByTerminal(String terminalType) {
         return mapper.findEnabledCashierTemplateByTerminal(terminalType);
     }
@@ -67,6 +77,11 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
     @Override
     public RoutingRuleDTO findEnabledRoutingRule(String businessCode, String payType) {
         return mapper.findEnabledRoutingRule(businessCode, payType);
+    }
+
+    @Override
+    public ChannelProfileDTO findEnabledChannelProfileByCode(String channelCode) {
+        return mapper.findEnabledChannelProfileByCode(channelCode);
     }
 
     @Override

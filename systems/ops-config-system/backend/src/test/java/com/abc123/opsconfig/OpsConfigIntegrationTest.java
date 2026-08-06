@@ -58,4 +58,37 @@ class OpsConfigIntegrationTest {
         assertEquals("CHANNEL_ALI_APP", snapshot.getBackupChannelProfileCode());
         assertEquals(2, snapshot.getEnabledSystemControls().size());
     }
+
+    @Test
+    void shouldRejectDisabledBusinessLineWhenLoadingSnapshot() {
+        OpsConfigSnapshotQueryDTO query = new OpsConfigSnapshotQueryDTO();
+        query.setBusinessCode("HOME_DEPOSIT");
+        query.setPayType("PAY_DEPOSIT");
+        query.setTerminalType("APP");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.effectiveSnapshot(query));
+        assertEquals("业务线未启用或不存在", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectMissingEnabledCashierTemplateWhenLoadingSnapshot() {
+        OpsConfigSnapshotQueryDTO query = new OpsConfigSnapshotQueryDTO();
+        query.setBusinessCode("HOME_CLEAN");
+        query.setPayType("PAY_CONSUME");
+        query.setTerminalType("PC");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.effectiveSnapshot(query));
+        assertEquals("终端未配置启用中的收银台模板", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectMissingEnabledRoutingRuleWhenLoadingSnapshot() {
+        OpsConfigSnapshotQueryDTO query = new OpsConfigSnapshotQueryDTO();
+        query.setBusinessCode("HOME_NANNY");
+        query.setPayType("PAY_DEPOSIT");
+        query.setTerminalType("APP");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.effectiveSnapshot(query));
+        assertEquals("业务线与支付类型未配置启用中的路由规则", exception.getMessage());
+    }
 }

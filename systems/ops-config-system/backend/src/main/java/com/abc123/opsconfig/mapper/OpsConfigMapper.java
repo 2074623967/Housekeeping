@@ -29,10 +29,16 @@ public interface OpsConfigMapper {
 
     List<SystemControlDTO> findSystemControls();
 
+    BusinessLineDTO findEnabledBusinessLineByCode(@Param("businessCode") String businessCode);
+
+    PaymentTypeDTO findEnabledPaymentTypeByCode(@Param("typeCode") String typeCode);
+
     CashierTemplateDTO findEnabledCashierTemplateByTerminal(@Param("terminalType") String terminalType);
 
     RoutingRuleDTO findEnabledRoutingRule(@Param("businessCode") String businessCode,
                                           @Param("payType") String payType);
+
+    ChannelProfileDTO findEnabledChannelProfileByCode(@Param("channelCode") String channelCode);
 
     List<SystemControlDTO> findEnabledSystemControls();
 

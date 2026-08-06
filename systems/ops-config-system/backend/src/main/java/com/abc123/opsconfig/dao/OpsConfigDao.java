@@ -29,9 +29,15 @@ public interface OpsConfigDao {
 
     List<SystemControlDTO> findSystemControls();
 
+    BusinessLineDTO findEnabledBusinessLineByCode(String businessCode);
+
+    PaymentTypeDTO findEnabledPaymentTypeByCode(String typeCode);
+
     CashierTemplateDTO findEnabledCashierTemplateByTerminal(String terminalType);
 
     RoutingRuleDTO findEnabledRoutingRule(String businessCode, String payType);
+
+    ChannelProfileDTO findEnabledChannelProfileByCode(String channelCode);
 
     List<SystemControlDTO> findEnabledSystemControls();
 
