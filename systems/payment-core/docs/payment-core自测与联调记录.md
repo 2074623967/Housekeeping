@@ -4030,3 +4030,28 @@
    - 正式来源应用的支付控制策略自检仍为 `WARN`
    - 围绕正式来源应用的最新四端回归证据尚未全量补齐
    - 正式发布材料仍需按当前 HEAD 重算
+
+## 121. 2026-08-06 支付提交运营配置快照强门禁复核
+
+### 121.1 本轮补强点
+
+1. `PaymentServiceImpl#applyOpsConfigDefaults` 已从“能补则补”的宽松兜底，升级为“缺关键默认值即阻断提交”的强门禁。
+2. 当提交请求未显式传入 `paymentMethod` 时，支付核心必须命中 `ops-config-system` 的有效快照。
+3. 若有效快照不存在，或快照中未配置 `defaultPayMethod`，支付核心会直接抛出：
+   - `PAYMENT-1025`
+   - `当前支付场景缺少有效运营配置，无法补齐支付方式或渠道`
+   - `当前支付场景未配置默认支付方式，无法提交支付`
+4. 当请求已经显式传入 `paymentMethod` 时，本轮不会因为缺少默认渠道而额外阻断，而是继续由现有路由决策链路判断渠道可用性。
+
+### 121.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `PaymentServiceImplTest` 定向回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:/Users/abc123/apache-maven-3.9.16/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentServiceImplTest test` | 通过 | `29` 个测试全部通过，新增覆盖“有效快照缺失”和“默认支付方式缺失”两类阻断场景 |
+| 提交前格式检查 | `git diff --check` | 待执行 | 本节回填完成后统一执行 |
+
+### 121.3 本轮判断
+
+1. `payment-core` 现在不会再把“运营配置没配全”的问题悄悄带进支付主链路，而是会在提交入口前显式失败。
+2. 这条门禁对产品、运营配置和测试都更友好，因为缺的是“配置域事实”还是“支付域路由事实”，现在已经能通过错误码与报错文案直接区分。
+3. 本轮补强的是支付提交准入质量，不等价于正式发布门禁收口；`test -> master` 仍取决于页面级回归、发布材料重算和补偿证据完整性。

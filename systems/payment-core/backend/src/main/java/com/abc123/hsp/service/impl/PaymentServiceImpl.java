@@ -706,18 +706,33 @@ public class PaymentServiceImpl implements PaymentService {
      * 优先使用运营配置域的有效快照补齐默认支付方式和默认渠道，避免前端漏传时只能依赖硬编码兜底。
      */
     private void applyOpsConfigDefaults(PaymentSubmitRequestDTO request, PrepayOrderDTO currentPrepay, String terminal) {
+        boolean paymentMethodMissing = !StringUtils.hasText(request.getPaymentMethod());
+        boolean channelCodeMissing = !StringUtils.hasText(request.getChannelCode());
+        if (!paymentMethodMissing && !channelCodeMissing) {
+            return;
+        }
         PaymentOpsConfigSnapshotDTO snapshot = paymentOpsConfigService.loadEffectiveSnapshot(
                 currentPrepay.getPayScene(),
                 "PAY_CONSUME",
                 terminal);
         if (snapshot == null) {
+            if (paymentMethodMissing) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID,
+                        "当前支付场景缺少有效运营配置，无法补齐支付方式或渠道");
+            }
             return;
         }
-        if (!StringUtils.hasText(request.getPaymentMethod()) && StringUtils.hasText(snapshot.getDefaultPayMethod())) {
+        if (paymentMethodMissing && StringUtils.hasText(snapshot.getDefaultPayMethod())) {
             request.setPaymentMethod(snapshot.getDefaultPayMethod().trim());
         }
-        if (!StringUtils.hasText(request.getChannelCode()) && StringUtils.hasText(snapshot.getPrimaryChannelProfileCode())) {
+        if (channelCodeMissing && StringUtils.hasText(snapshot.getPrimaryChannelProfileCode())) {
             request.setChannelCode(resolveOpsChannelCode(snapshot.getPrimaryChannelProfileCode()));
+        }
+        if (paymentMethodMissing && !StringUtils.hasText(request.getPaymentMethod())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID,
+                    "当前支付场景未配置默认支付方式，无法提交支付");
         }
     }
 

@@ -1351,4 +1351,100 @@ class PaymentServiceImplTest {
         verify(paymentOpsConfigService, times(1)).loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP");
         verify(paymentChannelSubmitService, times(1)).submit(org.mockito.ArgumentMatchers.any());
     }
+
+    @Test
+    void shouldRejectSubmitWhenOpsConfigSnapshotMissingAndRequestNeedsDefaults() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-OPS-MISSING-001");
+        prepayOrder.setPaymentOrderId("PAY-OPS-MISSING-001");
+        prepayOrder.setOrderNo("ORD-OPS-MISSING-001");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("268.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-OPS-MISSING-001");
+        paymentDetail.setOrderNo("ORD-OPS-MISSING-001");
+        paymentDetail.setStatus("CREATED");
+        paymentDetail.setChannelTransactionNo("");
+
+        when(paymentMapper.findPrepay("PRE-OPS-MISSING-001")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-OPS-MISSING-001")).thenReturn(paymentDetail);
+        when(paymentOpsConfigService.loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP")).thenReturn(null);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-OPS-MISSING-001");
+        request.setMerchantNo("MCH_HOME_001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService,
+                        paymentEventDispatchService,
+                        paymentRiskControlService,
+                        paymentOpsConfigService)
+                        .submit(request)
+        );
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID, exception.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals("当前支付场景缺少有效运营配置，无法补齐支付方式或渠道", exception.getMessage());
+        verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRejectSubmitWhenOpsConfigSnapshotMissesDefaultPaymentMethod() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-OPS-INCOMPLETE-001");
+        prepayOrder.setPaymentOrderId("PAY-OPS-INCOMPLETE-001");
+        prepayOrder.setOrderNo("ORD-OPS-INCOMPLETE-001");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("268.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-OPS-INCOMPLETE-001");
+        paymentDetail.setOrderNo("ORD-OPS-INCOMPLETE-001");
+        paymentDetail.setStatus("CREATED");
+        paymentDetail.setChannelTransactionNo("");
+
+        PaymentOpsConfigSnapshotDTO snapshot = new PaymentOpsConfigSnapshotDTO();
+        snapshot.setBusinessCode("HOME_CLEAN");
+        snapshot.setPayType("PAY_CONSUME");
+        snapshot.setTerminalType("APP");
+        snapshot.setPrimaryChannelProfileCode("CHANNEL_WX_H5");
+
+        when(paymentMapper.findPrepay("PRE-OPS-INCOMPLETE-001")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-OPS-INCOMPLETE-001")).thenReturn(paymentDetail);
+        when(paymentOpsConfigService.loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP")).thenReturn(snapshot);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-OPS-INCOMPLETE-001");
+        request.setMerchantNo("MCH_HOME_001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService,
+                        paymentEventDispatchService,
+                        paymentRiskControlService,
+                        paymentOpsConfigService)
+                        .submit(request)
+        );
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID, exception.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals("当前支付场景未配置默认支付方式，无法提交支付", exception.getMessage());
+        verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
 }
