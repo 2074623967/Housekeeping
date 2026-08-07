@@ -40,6 +40,22 @@ async function unfreeze() {
   await loadDetail();
 }
 
+async function exportSnapshot() {
+  try {
+    const blob = await accountApi.downloadDetail(accountNo.value);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `account-detail-${accountNo.value}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
 function openLedgers() {
   router.push({ path: "/ledgers", query: { accountNo: accountNo.value } });
 }
@@ -55,6 +71,7 @@ onMounted(loadDetail);
         <p>余额快照、最近流水和资金操作入口</p>
       </div>
       <div class="toolbar-actions">
+        <button class="button secondary" @click="exportSnapshot">导出快照</button>
         <button class="button secondary" @click="router.push('/accounts')">返回列表</button>
         <button class="button secondary" @click="openLedgers">看流水</button>
       </div>

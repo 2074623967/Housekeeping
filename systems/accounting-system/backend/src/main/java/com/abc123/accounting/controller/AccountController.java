@@ -6,6 +6,9 @@ import com.abc123.accounting.dto.AccountListItemDTO;
 import com.abc123.accounting.dto.OpenAccountRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.service.AccountService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,5 +48,18 @@ public class AccountController {
     @GetMapping("/{accountNo}")
     public ApiResponse<AccountDetailDTO> detail(@PathVariable String accountNo) {
         return ApiResponse.success(accountService.detail(accountNo));
+    }
+
+    /**
+     * 导出账户详情页快照，便于财务复盘、审计留档和联调排查。
+     */
+    @GetMapping("/{accountNo}/export")
+    public ResponseEntity<byte[]> exportDetail(@PathVariable String accountNo) {
+        byte[] body = accountService.exportDetailSnapshot(accountNo);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=account-detail-" + accountNo + ".csv")
+                .body(body);
     }
 }

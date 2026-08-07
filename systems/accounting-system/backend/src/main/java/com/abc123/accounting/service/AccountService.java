@@ -15,4 +15,12 @@ public interface AccountService {
     AccountListItemDTO open(OpenAccountRequestDTO request);
 
     AccountDetailDTO detail(String accountNo);
+
+    /**
+     * 导出账户详情快照，供运营、财务和测试做留档与问题复盘。
+     *
+     * @param accountNo 账户号
+     * @return CSV 二进制内容
+     */
+    byte[] exportDetailSnapshot(String accountNo);
 }
