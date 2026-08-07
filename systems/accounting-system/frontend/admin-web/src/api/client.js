@@ -92,6 +92,14 @@ export const ledgerApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/accounting/ledgers?${params.toString()}`);
+  },
+  buildExportUrl: ({ accountNo = "", bizNo = "", bizType = "" } = {}) => {
+    const params = new URLSearchParams({
+      accountNo,
+      bizNo,
+      bizType
+    });
+    return `/api/accounting/ledgers/export?${params.toString()}`;
   }
 };
 
