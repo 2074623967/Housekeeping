@@ -14,6 +14,9 @@ import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -77,6 +80,18 @@ public class OpsConfigController {
     @GetMapping("/effective-snapshot")
     public ApiResponse<OpsConfigEffectiveSnapshotDTO> effectiveSnapshot(@ModelAttribute OpsConfigSnapshotQueryDTO query) {
         return ApiResponse.success(service.effectiveSnapshot(query));
+    }
+
+    /**
+     * 导出当前业务场景的有效配置快照。
+     */
+    @GetMapping("/effective-snapshot/export")
+    public ResponseEntity<byte[]> exportEffectiveSnapshot(@ModelAttribute OpsConfigSnapshotQueryDTO query) {
+        byte[] body = service.exportEffectiveSnapshot(query);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=ops-config-effective-snapshot.csv")
+                .body(body);
     }
 
     @PostMapping("/agreement-templates/toggle")

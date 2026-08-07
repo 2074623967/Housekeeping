@@ -2,6 +2,7 @@ package com.abc123.opsconfig;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.abc123.opsconfig.common.BusinessException;
 import com.abc123.opsconfig.dto.OpsConfigEffectiveSnapshotDTO;
@@ -57,6 +58,20 @@ class OpsConfigIntegrationTest {
         assertEquals("CHANNEL_WX_H5", snapshot.getPrimaryChannelProfileCode());
         assertEquals("CHANNEL_ALI_APP", snapshot.getBackupChannelProfileCode());
         assertEquals(2, snapshot.getEnabledSystemControls().size());
+    }
+
+    @Test
+    void shouldExportEffectiveSnapshot() {
+        OpsConfigSnapshotQueryDTO query = new OpsConfigSnapshotQueryDTO();
+        query.setBusinessCode("HOME_CLEAN");
+        query.setPayType("PAY_CONSUME");
+        query.setTerminalType("APP");
+
+        String csv = new String(service.exportEffectiveSnapshot(query), java.nio.charset.StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("业务线编码,支付类型,终端类型"));
+        assertTrue(csv.contains("HOME_CLEAN"));
+        assertTrue(csv.contains("CONTROL_TIMEOUT_CLOSE"));
     }
 
     @Test

@@ -36,6 +36,14 @@ public interface OpsConfigService {
 
     OpsConfigEffectiveSnapshotDTO effectiveSnapshot(OpsConfigSnapshotQueryDTO query);
 
+    /**
+     * 导出有效配置快照，便于支付、风控和运营留档。
+     *
+     * @param query 快照查询条件
+     * @return CSV 二进制内容
+     */
+    byte[] exportEffectiveSnapshot(OpsConfigSnapshotQueryDTO query);
+
     OpsConfigSummaryDTO toggleAgreementTemplate(ToggleRequestDTO request);
 
     OpsConfigSummaryDTO toggleBusinessLine(ToggleRequestDTO request);

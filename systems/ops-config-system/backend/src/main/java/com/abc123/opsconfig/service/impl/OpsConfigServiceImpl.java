@@ -16,6 +16,7 @@ import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -131,6 +132,37 @@ public class OpsConfigServiceImpl implements OpsConfigService {
         return snapshot;
     }
 
+    /**
+     * 导出当前业务场景的有效配置快照，便于支付和风控留档。
+     */
+    @Override
+    public byte[] exportEffectiveSnapshot(OpsConfigSnapshotQueryDTO query) {
+        OpsConfigEffectiveSnapshotDTO snapshot = effectiveSnapshot(query);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("业务线编码,支付类型,终端类型,默认支付方式,优先渠道,备选渠道,路由策略\n");
+        builder.append(csv(snapshot.getBusinessCode())).append(',')
+                .append(csv(snapshot.getPayType())).append(',')
+                .append(csv(snapshot.getTerminalType())).append(',')
+                .append(csv(snapshot.getDefaultPayMethod())).append(',')
+                .append(csv(snapshot.getPrimaryChannelProfileCode())).append(',')
+                .append(csv(snapshot.getBackupChannelProfileCode())).append(',')
+                .append(csv(snapshot.getRouteMatchPolicy())).append('\n');
+        builder.append('\n');
+        builder.append("系统控制项\n");
+        builder.append("控制编码,控制名称,控制范围,控制值,风险级别,状态,更新时间\n");
+        for (SystemControlDTO control : snapshot.getEnabledSystemControls()) {
+            builder.append(csv(control.getControlCode())).append(',')
+                    .append(csv(control.getControlName())).append(',')
+                    .append(csv(control.getControlScope())).append(',')
+                    .append(csv(control.getControlValue())).append(',')
+                    .append(csv(control.getRiskLevel())).append(',')
+                    .append(csv(control.getStatus())).append(',')
+                    .append(csv(control.getUpdatedAt())).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     @Override
     @Transactional
     public OpsConfigSummaryDTO toggleAgreementTemplate(ToggleRequestDTO request) {
@@ -220,6 +252,17 @@ public class OpsConfigServiceImpl implements OpsConfigService {
 
     private String statusType(ToggleRequestDTO request) {
         return Boolean.TRUE.equals(request.getEnabled()) ? "success" : "danger";
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 
     /**

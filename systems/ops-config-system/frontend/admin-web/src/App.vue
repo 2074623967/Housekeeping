@@ -10,9 +10,15 @@ const cashierTemplates = ref([]);
 const channelProfiles = ref([]);
 const routingRules = ref([]);
 const systemControls = ref([]);
+const snapshot = ref(null);
 const loading = ref(true);
 const message = ref("");
 const activeCode = ref("");
+const snapshotQuery = ref({
+  businessCode: "HOME_CLEAN",
+  payType: "PAY_CONSUME",
+  terminalType: "APP"
+});
 
 async function loadAll() {
   loading.value = true;
@@ -56,6 +62,32 @@ async function toggle(run, code, enabled, label) {
   }
 }
 
+async function loadSnapshot() {
+  try {
+    snapshot.value = await opsConfigApi.getEffectiveSnapshot(snapshotQuery.value);
+    message.value = "有效配置快照已加载";
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
+async function exportSnapshot() {
+  try {
+    const blob = await opsConfigApi.downloadEffectiveSnapshot(snapshotQuery.value);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "ops-config-effective-snapshot.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    message.value = "有效配置快照已导出";
+  } catch (error) {
+    message.value = `有效配置快照导出失败：${error.message}`;
+  }
+}
+
 onMounted(loadAll);
 </script>
 
@@ -87,6 +119,20 @@ onMounted(loadAll);
         <ul>
           <li v-for="item in summary.highlights" :key="item">{{ item }}</li>
         </ul>
+      </section>
+
+      <section class="card">
+        <h2>有效配置快照</h2>
+        <div class="toolbar">
+          <input v-model="snapshotQuery.businessCode" placeholder="业务线编码" />
+          <input v-model="snapshotQuery.payType" placeholder="支付类型编码" />
+          <input v-model="snapshotQuery.terminalType" placeholder="终端类型" />
+          <button class="button secondary" @click="loadSnapshot">查询快照</button>
+          <button class="button secondary" @click="exportSnapshot">导出快照</button>
+        </div>
+        <div v-if="snapshot" class="banner" style="margin-top: 12px">
+          {{ snapshot.businessCode }} / {{ snapshot.payType }} / {{ snapshot.terminalType }}，默认支付方式：{{ snapshot.defaultPayMethod }}，路由：{{ snapshot.routeMatchPolicy }}
+        </div>
       </section>
 
       <section class="grid">

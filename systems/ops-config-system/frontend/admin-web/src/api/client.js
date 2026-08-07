@@ -21,6 +21,19 @@ export const opsConfigApi = {
   getChannelProfiles: () => request("/api/ops-config/channel-profiles"),
   getRoutingRules: () => request("/api/ops-config/routing-rules"),
   getSystemControls: () => request("/api/ops-config/system-controls"),
+  getEffectiveSnapshot: ({ businessCode = "", payType = "", terminalType = "" } = {}) => {
+    const params = new URLSearchParams({ businessCode, payType, terminalType });
+    return request(`/api/ops-config/effective-snapshot?${params.toString()}`);
+  },
+  downloadEffectiveSnapshot: ({ businessCode = "", payType = "", terminalType = "" } = {}) => {
+    const params = new URLSearchParams({ businessCode, payType, terminalType });
+    return fetch(`/api/ops-config/effective-snapshot/export?${params.toString()}`).then(async (response) => {
+      if (!response.ok) {
+        throw new Error("有效配置快照导出失败");
+      }
+      return response.blob();
+    });
+  },
   toggleAgreementTemplate: (configCode, enabled) => postJson("/api/ops-config/agreement-templates/toggle", { configCode, enabled }),
   toggleBusinessLine: (configCode, enabled) => postJson("/api/ops-config/business-lines/toggle", { configCode, enabled }),
   togglePaymentType: (configCode, enabled) => postJson("/api/ops-config/payment-types/toggle", { configCode, enabled }),
