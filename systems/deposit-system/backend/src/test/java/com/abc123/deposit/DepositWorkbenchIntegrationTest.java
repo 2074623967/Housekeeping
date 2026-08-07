@@ -15,6 +15,7 @@ import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
 import com.abc123.deposit.dto.DepositV2OverviewDTO;
 import com.abc123.deposit.service.DepositService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,5 +117,34 @@ class DepositWorkbenchIntegrationTest {
         assertFalse(detail.getMigrations().isEmpty());
         assertTrue(detail.getMigrations().stream()
                 .anyMatch(item -> workerAccount.getAccountNo().equals(item.getSourceAccountNo())));
+    }
+
+    @Test
+    void shouldExportAccountAndFlowSnapshots() {
+        DepositAccountCreateRequestDTO create = new DepositAccountCreateRequestDTO();
+        create.setOwnerId("WORKER-" + UUID.randomUUID());
+        create.setOwnerType("WORKER");
+        create.setRequiredAmount(new BigDecimal("700.00"));
+        DepositAccountDTO account = service.openAccount(create);
+
+        DepositActionRequestDTO collect = new DepositActionRequestDTO();
+        collect.setAccountNo(account.getAccountNo());
+        collect.setAmount(new BigDecimal("300.00"));
+        collect.setReferenceNo("EXPORT-COLLECT-1");
+        service.collect(collect);
+
+        DepositAccountQueryDTO accountQuery = new DepositAccountQueryDTO();
+        accountQuery.setKeyword(account.getAccountNo());
+        String accountsCsv = new String(service.exportAccounts(accountQuery), StandardCharsets.UTF_8);
+
+        DepositFlowQueryDTO flowQuery = new DepositFlowQueryDTO();
+        flowQuery.setReferenceNo("EXPORT-COLLECT");
+        String flowsCsv = new String(service.exportFlows(account.getAccountNo(), flowQuery), StandardCharsets.UTF_8);
+
+        assertTrue(accountsCsv.contains("账户号,主体编号,主体类型"));
+        assertTrue(accountsCsv.contains(account.getAccountNo()));
+        assertTrue(flowsCsv.contains("流水号,账户号,动作类型"));
+        assertTrue(flowsCsv.contains(account.getAccountNo()));
+        assertTrue(flowsCsv.contains("EXPORT-COLLECT-1"));
     }
 }

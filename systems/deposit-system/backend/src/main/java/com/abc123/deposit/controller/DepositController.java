@@ -14,8 +14,12 @@ import com.abc123.deposit.dto.DepositOverviewDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
 import com.abc123.deposit.dto.DepositV2OverviewDTO;
+import java.nio.charset.StandardCharsets;
 import com.abc123.deposit.service.DepositService;
 import java.util.List;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,6 +55,20 @@ public class DepositController {
         query.setStatus(status);
         query.setKeyword(keyword);
         return ApiResponse.success(service.accounts(query));
+    }
+
+    @GetMapping(value = "/accounts/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportAccounts(@RequestParam(required = false) String ownerType,
+                                                 @RequestParam(required = false) String status,
+                                                 @RequestParam(required = false) String keyword) {
+        DepositAccountQueryDTO query = new DepositAccountQueryDTO();
+        query.setOwnerType(ownerType);
+        query.setStatus(status);
+        query.setKeyword(keyword);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=deposit-accounts.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(service.exportAccounts(query));
     }
 
     @GetMapping("/accounts/{accountNo}")
@@ -106,6 +124,19 @@ public class DepositController {
         query.setFlowType(flowType);
         query.setReferenceNo(referenceNo);
         return ApiResponse.success(service.flows(accountNo, query));
+    }
+
+    @GetMapping(value = "/accounts/{accountNo}/flows/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportFlows(@PathVariable String accountNo,
+                                              @RequestParam(required = false) String flowType,
+                                              @RequestParam(required = false) String referenceNo) {
+        DepositFlowQueryDTO query = new DepositFlowQueryDTO();
+        query.setFlowType(flowType);
+        query.setReferenceNo(referenceNo);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=deposit-flows.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(service.exportFlows(accountNo, query));
     }
 
     @GetMapping("/v2/overview")

@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import {
+  buildAccountsExportUrl,
+  buildFlowsExportUrl,
   getAccountDetail,
   getAccountsByQuery,
   getFlows,
@@ -194,6 +196,17 @@ const applyFlowFilter = async () => {
   } finally {
     loading.value = false;
   }
+};
+
+const exportAccounts = () => {
+  window.open(buildAccountsExportUrl(accountFilter), "_blank", "noopener,noreferrer");
+};
+
+const exportFlows = () => {
+  if (!selected.value) {
+    return;
+  }
+  window.open(buildFlowsExportUrl(selected.value.accountNo, flowFilter), "_blank", "noopener,noreferrer");
 };
 
 watch(
@@ -414,7 +427,10 @@ onMounted(refresh);
             <span>DEPOSIT ACCOUNTS</span>
             <h2>保证金账户</h2>
           </div>
-          <button class="primary" @click="activeView = 'create'">新开账户</button>
+          <div class="top-actions">
+            <button class="ghost" @click="exportAccounts">导出清单</button>
+            <button class="primary" @click="activeView = 'create'">新开账户</button>
+          </div>
         </div>
 
         <div class="filters">
@@ -528,6 +544,7 @@ onMounted(refresh);
               </select>
               <input v-model="flowFilter.referenceNo" placeholder="关联号筛选" />
               <button class="ghost" @click="applyFlowFilter">筛选流水</button>
+              <button class="ghost" @click="exportFlows">导出流水</button>
             </div>
           </div>
           <table class="table">

@@ -29,6 +29,16 @@ export const getAccountsByQuery = (query = {}) => {
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return request(`/api/deposits/accounts${suffix}`);
 };
+export const buildAccountsExportUrl = (query = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return `/api/deposits/accounts/export${suffix}`;
+};
 export const getFlows = (accountNo, query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
@@ -38,6 +48,16 @@ export const getFlows = (accountNo, query = {}) => {
   });
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows${suffix}`);
+};
+export const buildFlowsExportUrl = (accountNo, query = {}) => {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return `/api/deposits/accounts/${encodeURIComponent(accountNo)}/flows/export${suffix}`;
 };
 export const openAccount = (payload) =>
   request("/api/deposits/accounts", { method: "POST", body: JSON.stringify(payload) });

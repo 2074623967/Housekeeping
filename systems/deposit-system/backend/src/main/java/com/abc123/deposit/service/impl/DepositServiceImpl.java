@@ -17,6 +17,7 @@ import com.abc123.deposit.dto.DepositTotalAccountDTO;
 import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
 import com.abc123.deposit.dto.DepositV2OverviewDTO;
 import com.abc123.deposit.service.DepositService;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -87,6 +88,25 @@ public class DepositServiceImpl implements DepositService {
     @Override
     public List<DepositAccountDTO> accounts(DepositAccountQueryDTO query) {
         return dao.findAccounts(trimQuery(query));
+    }
+
+    @Override
+    public byte[] exportAccounts(DepositAccountQueryDTO query) {
+        List<DepositAccountDTO> items = accounts(query);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("账户号,主体编号,主体类型,应缴金额,保证金余额,冻结金额,可用余额,账户状态\n");
+        for (DepositAccountDTO item : items) {
+            builder.append(csv(item.getAccountNo())).append(',')
+                    .append(csv(item.getOwnerId())).append(',')
+                    .append(csv(item.getOwnerType())).append(',')
+                    .append(csv(amount(item.getRequiredAmount()))).append(',')
+                    .append(csv(amount(item.getBalance()))).append(',')
+                    .append(csv(amount(item.getFrozenAmount()))).append(',')
+                    .append(csv(amount(item.getAvailableAmount()))).append(',')
+                    .append(csv(item.getStatus())).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -176,6 +196,28 @@ public class DepositServiceImpl implements DepositService {
     @Override
     public List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query) {
         return dao.findFlows(required(accountNo, "保证金账户号不能为空"), trimQuery(query));
+    }
+
+    @Override
+    public byte[] exportFlows(String accountNo, DepositFlowQueryDTO query) {
+        List<DepositFlowDTO> items = flows(accountNo, query);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("流水号,账户号,动作类型,发生金额,变更前余额,变更后余额,变更前冻结金额,变更后冻结金额,业务关联号,备注,发生时间\n");
+        for (DepositFlowDTO item : items) {
+            builder.append(csv(item.getFlowNo())).append(',')
+                    .append(csv(item.getAccountNo())).append(',')
+                    .append(csv(item.getFlowType())).append(',')
+                    .append(csv(amount(item.getAmount()))).append(',')
+                    .append(csv(amount(item.getBeforeBalance()))).append(',')
+                    .append(csv(amount(item.getAfterBalance()))).append(',')
+                    .append(csv(amount(item.getBeforeFrozenAmount()))).append(',')
+                    .append(csv(amount(item.getAfterFrozenAmount()))).append(',')
+                    .append(csv(item.getReferenceNo())).append(',')
+                    .append(csv(item.getRemark())).append(',')
+                    .append(csv(item.getCreatedAt() == null ? null : item.getCreatedAt().toString())).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -437,5 +479,20 @@ public class DepositServiceImpl implements DepositService {
         if (dao.existsFlowReference(accountNo, flowType, referenceNo.trim())) {
             throw new BusinessException("该业务关联号已处理，请勿重复提交");
         }
+    }
+
+    private String amount(BigDecimal value) {
+        return defaultValue(value).toPlainString();
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 }

@@ -30,6 +30,8 @@ public interface DepositService {
 
     List<DepositAccountDTO> accounts(DepositAccountQueryDTO query);
 
+    byte[] exportAccounts(DepositAccountQueryDTO query);
+
     DepositAccountDetailDTO accountDetail(String accountNo);
 
     DepositAccountDTO collect(DepositActionRequestDTO request);
@@ -49,6 +51,8 @@ public interface DepositService {
     }
 
     List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query);
+
+    byte[] exportFlows(String accountNo, DepositFlowQueryDTO query);
 
     /**
      * 查询 V2 演进概览。
