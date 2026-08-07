@@ -70,6 +70,15 @@ function goToPage(nextPage) {
   loadOrders();
 }
 
+function exportOrders() {
+  const exportUrl = orderApi.buildExportUrl({
+    orderNo: filters.value.orderNo,
+    serviceType: filters.value.serviceType,
+    orderStatus: filters.value.orderStatus
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 async function launchPayment(orderNo) {
   activeOrderNo.value = orderNo;
   actionMessage.value = "";
@@ -107,7 +116,7 @@ onMounted(loadOrders);
         <h2>订单中心</h2>
         <p>查看家政订单、支付状态和履约进展，并从订单侧发起支付</p>
       </div>
-      <button class="button primary">导出订单</button>
+      <button class="button primary" @click="exportOrders">导出订单</button>
     </div>
 
     <section class="panel">

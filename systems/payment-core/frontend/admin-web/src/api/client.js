@@ -197,6 +197,18 @@ export const orderApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/orders?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    orderNo = "",
+    serviceType = "全部",
+    orderStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      orderNo,
+      serviceType,
+      orderStatus
+    });
+    return `/api/orders/export?${params.toString()}`;
   }
 };
 

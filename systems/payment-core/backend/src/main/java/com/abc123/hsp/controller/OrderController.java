@@ -5,6 +5,10 @@ import com.abc123.hsp.dto.OrderListItemDTO;
 import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.service.OrderService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,5 +41,24 @@ public class OrderController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(orderService.list(query));
+    }
+
+    /**
+     * 导出订单中心列表，输出当前筛选条件下的 CSV 快照。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(defaultValue = "全部") String serviceType,
+            @RequestParam(defaultValue = "全部") String orderStatus) {
+        OrderQueryDTO query = new OrderQueryDTO();
+        query.setOrderNo(orderNo);
+        query.setServiceType(serviceType);
+        query.setOrderStatus(orderStatus);
+        byte[] csvBytes = orderService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=orders.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 }
