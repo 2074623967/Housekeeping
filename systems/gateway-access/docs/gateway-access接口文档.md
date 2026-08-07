@@ -44,6 +44,10 @@
 
 支持按请求流水号、应用编码和结果状态筛选，返回签名算法、来源 IP、调用结果和风险提示。
 
+### `GET /api/gateway-access/audit-logs/export`
+
+导出当前筛选条件下的调用方审计快照，便于排障、审计和留档。
+
 ## 7. 灰度发布路由
 
 ### `GET /api/gateway-access/release-routes`

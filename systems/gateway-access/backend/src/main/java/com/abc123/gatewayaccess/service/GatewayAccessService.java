@@ -30,6 +30,14 @@ public interface GatewayAccessService {
 
     PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query);
 
+    /**
+     * 导出调用方审计快照，便于排障、审计和留档。
+     *
+     * @param query 审计查询条件
+     * @return CSV 二进制内容
+     */
+    byte[] exportAuditLogs(GatewayAuditQueryDTO query);
+
     PageResultDTO<GatewayReleaseRouteDTO> releaseRoutes(GatewayReleaseRouteQueryDTO query);
 
     GatewayAccessSummaryDTO toggleApplication(ToggleRequestDTO request);

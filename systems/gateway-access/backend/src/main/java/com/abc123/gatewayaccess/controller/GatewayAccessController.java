@@ -14,6 +14,9 @@ import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.PageResultDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -87,6 +90,25 @@ public class GatewayAccessController {
         query.setAppCode(appCode);
         query.setResultStatus(resultStatus);
         return ApiResponse.success(service.auditLogs(query));
+    }
+
+    /**
+     * 导出调用方审计快照，供运营、排障和审计留档。
+     */
+    @GetMapping("/audit-logs/export")
+    public ResponseEntity<byte[]> exportAuditLogs(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "全部") String appCode,
+            @RequestParam(defaultValue = "全部") String resultStatus) {
+        GatewayAuditQueryDTO query = new GatewayAuditQueryDTO();
+        query.setKeyword(keyword);
+        query.setAppCode(appCode);
+        query.setResultStatus(resultStatus);
+        byte[] body = service.exportAuditLogs(query);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=gateway-audit-logs.csv")
+                .body(body);
     }
 
     @PostMapping("/applications/toggle")

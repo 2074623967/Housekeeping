@@ -2,6 +2,7 @@ package com.abc123.gatewayaccess.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -204,6 +205,28 @@ class GatewayAccessServiceImplTest {
         assertEquals("REQ-001", captor.getValue().getKeyword());
         assertEquals("APP_PAY_CORE", captor.getValue().getAppCode());
         assertEquals("SUCCESS", captor.getValue().getResultStatus());
+    }
+
+    @Test
+    void shouldExportAuditLogsAsCsv() {
+        GatewayAuditLogDTO record = new GatewayAuditLogDTO();
+        record.setRequestId("REQ-001");
+        record.setAppCode("APP_PAY_CORE");
+        record.setGatewayCode("GW_WECHAT");
+        record.setOperationType("SIGN");
+        record.setSignType("RSA2");
+        record.setClientIp("127.0.0.1");
+        record.setResultStatus("SUCCESS");
+        record.setRiskHint("正常");
+        record.setHappenedAt("2026-08-06 10:00:00");
+        when(gatewayAccessMapper.findAuditLogs(org.mockito.ArgumentMatchers.any(GatewayAuditQueryDTO.class)))
+                .thenReturn(Collections.singletonList(record));
+
+        String csv = new String(new GatewayAccessServiceImpl(gatewayAccessMapper).exportAuditLogs(new GatewayAuditQueryDTO()));
+
+        assertTrue(csv.contains("请求流水号,应用编码,网关编码"));
+        assertTrue(csv.contains("REQ-001"));
+        assertTrue(csv.contains("GW_WECHAT"));
     }
 
     @Test

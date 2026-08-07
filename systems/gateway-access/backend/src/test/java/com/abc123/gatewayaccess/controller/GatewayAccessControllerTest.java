@@ -1,14 +1,18 @@
 package com.abc123.gatewayaccess.controller;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 
 /**
  * 网关接入控制器测试。
@@ -80,6 +84,20 @@ class GatewayAccessControllerTest {
         controller.auditLogs("REQ-001", "APP-PAYMENT", "FAILED");
 
         verify(gatewayAccessService).auditLogs(any());
+    }
+
+    @Test
+    void shouldExportAuditLogs() {
+        GatewayAccessController controller = new GatewayAccessController(gatewayAccessService);
+        when(gatewayAccessService.exportAuditLogs(any()))
+                .thenReturn("请求流水号,应用编码\nREQ-001,APP_PAY_CORE\n".getBytes(StandardCharsets.UTF_8));
+
+        org.springframework.http.ResponseEntity<byte[]> response =
+                controller.exportAuditLogs("REQ-001", "APP-PAYMENT", "FAILED");
+
+        verify(gatewayAccessService).exportAuditLogs(any());
+        assertEquals("attachment; filename=gateway-audit-logs.csv",
+                response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
     }
 
     @Test

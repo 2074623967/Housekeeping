@@ -19,6 +19,7 @@ import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
 import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import com.abc123.gatewayaccess.service.GatewayAccessService;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -90,6 +91,29 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
     public PageResultDTO<GatewayAuditLogDTO> auditLogs(GatewayAuditQueryDTO query) {
         List<GatewayAuditLogDTO> records = gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query));
         return page(records, 1, 20);
+    }
+
+    /**
+     * 导出当前筛选条件下的调用方审计快照，便于问题复盘和外部留档。
+     */
+    @Override
+    public byte[] exportAuditLogs(GatewayAuditQueryDTO query) {
+        List<GatewayAuditLogDTO> records = gatewayAccessMapper.findAuditLogs(normalizeAuditQuery(query));
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("请求流水号,应用编码,网关编码,操作类型,签名算法,客户端IP,结果状态,风险提示,发生时间\n");
+        for (GatewayAuditLogDTO record : records) {
+            builder.append(csv(record.getRequestId())).append(',')
+                    .append(csv(record.getAppCode())).append(',')
+                    .append(csv(record.getGatewayCode())).append(',')
+                    .append(csv(record.getOperationType())).append(',')
+                    .append(csv(record.getSignType())).append(',')
+                    .append(csv(record.getClientIp())).append(',')
+                    .append(csv(record.getResultStatus())).append(',')
+                    .append(csv(record.getRiskHint())).append(',')
+                    .append(csv(record.getHappenedAt())).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -302,6 +326,17 @@ public class GatewayAccessServiceImpl implements GatewayAccessService {
 
     private String resolveStatusType(Boolean enabled) {
         return Boolean.FALSE.equals(enabled) ? "danger" : "success";
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 
     /**
