@@ -125,6 +125,11 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     }
 
     @Override
+    public int updateExportTaskDownloadAudit(String exportTaskNo, LocalDateTime lastDownloadedAt) {
+        return walletAccountMapper.updateExportTaskDownloadAudit(exportTaskNo, lastDownloadedAt);
+    }
+
+    @Override
     public void insertIdempotentRecord(WalletIdempotentRecordEntity idempotentRecordEntity) {
         walletAccountMapper.insertIdempotentRecord(idempotentRecordEntity);
     }

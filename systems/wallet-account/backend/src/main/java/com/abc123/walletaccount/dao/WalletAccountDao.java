@@ -59,6 +59,8 @@ public interface WalletAccountDao {
 
     void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity);
 
+    int updateExportTaskDownloadAudit(String exportTaskNo, LocalDateTime lastDownloadedAt);
+
     void insertIdempotentRecord(WalletIdempotentRecordEntity idempotentRecordEntity);
 
     int updateIdempotentRecordSuccess(String requestNo, String resultRefNo);

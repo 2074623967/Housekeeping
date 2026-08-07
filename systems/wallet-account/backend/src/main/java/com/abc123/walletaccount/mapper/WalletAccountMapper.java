@@ -77,6 +77,9 @@ public interface WalletAccountMapper {
 
     void insertExportTask(WalletFlowExportTaskEntity exportTaskEntity);
 
+    int updateExportTaskDownloadAudit(@Param("exportTaskNo") String exportTaskNo,
+            @Param("lastDownloadedAt") LocalDateTime lastDownloadedAt);
+
     void insertIdempotentRecord(WalletIdempotentRecordEntity idempotentRecordEntity);
 
     int updateIdempotentRecordSuccess(@Param("requestNo") String requestNo,

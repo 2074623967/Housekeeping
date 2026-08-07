@@ -52,6 +52,10 @@
         <result property="operatorId" column="operator_id"/>
         <result property="operatorName" column="operator_name"/>
         <result property="taskStatus" column="task_status"/>
+        <result property="archiveStatus" column="archive_status"/>
+        <result property="archiveFileName" column="archive_file_name"/>
+        <result property="downloadCount" column="download_count"/>
+        <result property="lastDownloadedAt" column="last_downloaded_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
@@ -300,12 +304,20 @@
     <insert id="insertExportTask">
         INSERT INTO t_wallet_flow_export_task(
             export_task_no, wallet_account_no, source_system, source_biz_no,
-            operator_id, operator_name, task_status
+            operator_id, operator_name, task_status, archive_status, archive_file_name, download_count, last_downloaded_at
         ) VALUES (
             #{exportTaskNo}, #{walletAccountNo}, #{sourceSystem}, #{sourceBizNo},
-            #{operatorId}, #{operatorName}, #{taskStatus}
+            #{operatorId}, #{operatorName}, #{taskStatus}, #{archiveStatus}, #{archiveFileName}, #{downloadCount}, #{lastDownloadedAt}
         )
     </insert>
+
+    <update id="updateExportTaskDownloadAudit">
+        UPDATE t_wallet_flow_export_task
+        SET download_count = COALESCE(download_count, 0) + 1,
+            last_downloaded_at = #{lastDownloadedAt},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE export_task_no = #{exportTaskNo}
+    </update>
 
     <insert id="insertIdempotentRecord">
         INSERT INTO t_wallet_idempotent_record(

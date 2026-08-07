@@ -80,6 +80,9 @@ async function exportFlows() {
 
 function downloadTask(task) {
   window.open(buildWalletFlowExportDownloadUrl(task.exportTaskNo, exportTaskQuery.operatorRole), "_blank");
+  window.setTimeout(() => {
+    loadExportTasks();
+  }, 300);
 }
 
 onMounted(() => {
@@ -146,14 +149,16 @@ onMounted(() => {
       <div class="section-divider"></div>
 
       <div class="toolbar">
-        <h3>导出任务中心</h3>
+        <h3>下载中心</h3>
         <select v-model="exportTaskQuery.taskStatus" @change="exportTaskQuery.pageNo = 1; loadExportTasks()">
           <option value="">全部状态</option>
           <option value="ACCEPTED">ACCEPTED</option>
         </select>
         <button class="button button--light" :disabled="exportTaskLoading" @click="loadExportTasks">刷新任务</button>
       </div>
-      <p class="muted">共 {{ exportTaskTotal }} 个导出任务，支持按任务编号直接下载 CSV。</p>
+      <div class="toolbar">
+        <p class="muted">共 {{ exportTaskTotal }} 个导出任务，当前页累计下载 {{ exportTasks.reduce((sum, task) => sum + Number(task.downloadCount || 0), 0) }} 次。</p>
+      </div>
       <p v-if="exportTaskLoading" class="muted">导出任务加载中...</p>
       <div v-else class="table-wrap">
         <table>
@@ -161,8 +166,11 @@ onMounted(() => {
             <tr>
               <th>任务编号</th>
               <th>状态</th>
+              <th>归档状态</th>
+              <th>归档文件</th>
               <th>筛选条件</th>
               <th>操作人</th>
+              <th>下载审计</th>
               <th>创建时间</th>
               <th>操作</th>
             </tr>
@@ -171,8 +179,11 @@ onMounted(() => {
             <tr v-for="task in exportTasks" :key="task.exportTaskNo">
               <td>{{ task.exportTaskNo }}</td>
               <td>{{ task.taskStatus }}</td>
+              <td>{{ task.archiveStatus || "--" }}</td>
+              <td>{{ task.archiveFileName || "--" }}</td>
               <td>{{ task.walletAccountNo || "全部账户" }} / {{ task.sourceSystem || "全部系统" }} / {{ task.sourceBizNo || "全部业务单号" }}</td>
               <td>{{ task.operatorName }} / {{ task.operatorId }}</td>
+              <td>{{ task.downloadCount || 0 }} 次 / {{ task.lastDownloadedAt || "--" }}</td>
               <td>{{ task.createdAt || "--" }}</td>
               <td>
                 <button class="text-button" type="button" @click="downloadTask(task)">下载 CSV</button>

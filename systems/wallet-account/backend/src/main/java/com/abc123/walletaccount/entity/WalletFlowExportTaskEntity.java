@@ -22,6 +22,14 @@ public class WalletFlowExportTaskEntity {
     private String operatorName;
     /** 任务状态。 */
     private String taskStatus;
+    /** 归档状态。 */
+    private String archiveStatus;
+    /** 归档文件名。 */
+    private String archiveFileName;
+    /** 下载次数。 */
+    private Integer downloadCount;
+    /** 最后下载时间。 */
+    private LocalDateTime lastDownloadedAt;
     /** 创建时间。 */
     private LocalDateTime createdAt;
     /** 更新时间。 */

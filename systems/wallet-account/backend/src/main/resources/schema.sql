@@ -144,6 +144,10 @@ CREATE TABLE t_wallet_flow_export_task (
     operator_id VARCHAR(64),
     operator_name VARCHAR(64) NOT NULL,
     task_status VARCHAR(32) NOT NULL,
+    archive_status VARCHAR(32) NOT NULL,
+    archive_file_name VARCHAR(128) NOT NULL,
+    download_count INT NOT NULL DEFAULT 0,
+    last_downloaded_at TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -157,6 +161,10 @@ COMMENT ON COLUMN t_wallet_flow_export_task.source_biz_no IS '来源业务单号
 COMMENT ON COLUMN t_wallet_flow_export_task.operator_id IS '操作人编号';
 COMMENT ON COLUMN t_wallet_flow_export_task.operator_name IS '操作人名称';
 COMMENT ON COLUMN t_wallet_flow_export_task.task_status IS '任务状态';
+COMMENT ON COLUMN t_wallet_flow_export_task.archive_status IS '归档状态';
+COMMENT ON COLUMN t_wallet_flow_export_task.archive_file_name IS '归档文件名';
+COMMENT ON COLUMN t_wallet_flow_export_task.download_count IS '下载次数';
+COMMENT ON COLUMN t_wallet_flow_export_task.last_downloaded_at IS '最后下载时间';
 
 CREATE TABLE t_wallet_idempotent_record (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,

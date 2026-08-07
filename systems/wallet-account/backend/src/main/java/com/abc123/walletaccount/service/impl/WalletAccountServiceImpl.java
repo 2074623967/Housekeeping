@@ -127,6 +127,9 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         taskEntity.setOperatorName(requestDTO == null || requestDTO.getOperatorName() == null
                 ? "system" : requestDTO.getOperatorName());
         taskEntity.setTaskStatus(taskDTO.getTaskStatus());
+        taskEntity.setArchiveStatus("DIRECT_READY");
+        taskEntity.setArchiveFileName("wallet-flow-export-" + taskDTO.getExportTaskNo() + ".csv");
+        taskEntity.setDownloadCount(0);
         walletAccountDao.insertExportTask(taskEntity);
         return toExportTaskDTO(taskEntity);
     }
@@ -182,6 +185,7 @@ public class WalletAccountServiceImpl implements WalletAccountService {
                     .append(csvValue(flowEntity.getCreatedAt() == null ? null : flowEntity.getCreatedAt().toString()))
                     .append('\n');
         }
+        walletAccountDao.updateExportTaskDownloadAudit(exportTaskNo, LocalDateTime.now());
         return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
@@ -522,6 +526,10 @@ public class WalletAccountServiceImpl implements WalletAccountService {
         dto.setSourceBizNo(entity.getSourceBizNo());
         dto.setOperatorId(entity.getOperatorId());
         dto.setOperatorName(entity.getOperatorName());
+        dto.setArchiveStatus(entity.getArchiveStatus());
+        dto.setArchiveFileName(entity.getArchiveFileName());
+        dto.setDownloadCount(entity.getDownloadCount());
+        dto.setLastDownloadedAt(entity.getLastDownloadedAt());
         dto.setCreatedAt(entity.getCreatedAt());
         dto.setDownloadPath("/api/wallet/flows/export-tasks/" + entity.getExportTaskNo() + "/download");
         return dto;

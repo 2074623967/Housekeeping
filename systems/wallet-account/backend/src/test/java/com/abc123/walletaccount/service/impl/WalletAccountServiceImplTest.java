@@ -132,7 +132,12 @@ class WalletAccountServiceImplTest {
         requestDTO.setOperatorRole("FINANCE");
         requestDTO.setOperatorName("测试人员");
 
-        assertEquals("ACCEPTED", service.exportFlows(requestDTO).getTaskStatus());
+        WalletFlowExportTaskDTO resultDTO = service.exportFlows(requestDTO);
+
+        assertEquals("ACCEPTED", resultDTO.getTaskStatus());
+        assertEquals("DIRECT_READY", resultDTO.getArchiveStatus());
+        assertEquals("wallet-flow-export-" + resultDTO.getExportTaskNo() + ".csv", resultDTO.getArchiveFileName());
+        assertEquals(0, resultDTO.getDownloadCount());
         verify(dao).insertExportTask(any());
     }
 
@@ -230,6 +235,7 @@ class WalletAccountServiceImplTest {
 
         assertEquals(true, csv.contains("流水号,账户号,流水类型"));
         assertEquals(true, csv.contains("WF-001"));
+        verify(dao).updateExportTaskDownloadAudit(eq("WFE-001"), any());
     }
 
     @Test
