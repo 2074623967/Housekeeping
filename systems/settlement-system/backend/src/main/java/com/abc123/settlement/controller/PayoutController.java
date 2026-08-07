@@ -7,6 +7,10 @@ import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
 import com.abc123.settlement.dto.RetryPayoutBatchRequestDTO;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import com.abc123.settlement.service.PayoutService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,6 +42,16 @@ public class PayoutController {
         return ApiResponse.success(payoutService.list(batchNo, payoutStatus, pageNo, pageSize));
     }
 
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportBatches(
+            @RequestParam(required = false) String batchNo,
+            @RequestParam(required = false) String payoutStatus) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=settlement-payout-batches.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(payoutService.exportBatches(batchNo, payoutStatus));
+    }
+
     @PostMapping
     public ApiResponse<PayoutBatchDTO> create(@RequestBody CreatePayoutBatchRequestDTO request) {
         return ApiResponse.success(payoutService.create(request));
@@ -60,5 +74,15 @@ public class PayoutController {
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         return ApiResponse.success(payoutService.records(payoutBatchNo, payoutStatus, pageNo, pageSize));
+    }
+
+    @GetMapping(value = "/{payoutBatchNo}/records/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportRecords(
+            @PathVariable String payoutBatchNo,
+            @RequestParam(required = false) String payoutStatus) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=settlement-payout-records.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(payoutService.exportRecords(payoutBatchNo, payoutStatus));
     }
 }

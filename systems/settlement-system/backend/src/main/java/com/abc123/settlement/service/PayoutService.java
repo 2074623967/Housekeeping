@@ -14,6 +14,8 @@ public interface PayoutService {
 
     PageResultDTO<PayoutBatchDTO> list(String batchNo, String payoutStatus, int pageNo, int pageSize);
 
+    byte[] exportBatches(String batchNo, String payoutStatus);
+
     PayoutBatchDTO create(CreatePayoutBatchRequestDTO request);
 
     PayoutBatchDTO execute(String payoutBatchNo, ExecutePayoutBatchRequestDTO request);
@@ -21,4 +23,6 @@ public interface PayoutService {
     PayoutBatchDTO retry(String payoutBatchNo, RetryPayoutBatchRequestDTO request);
 
     PageResultDTO<PayoutRecordDTO> records(String payoutBatchNo, String payoutStatus, int pageNo, int pageSize);
+
+    byte[] exportRecords(String payoutBatchNo, String payoutStatus);
 }

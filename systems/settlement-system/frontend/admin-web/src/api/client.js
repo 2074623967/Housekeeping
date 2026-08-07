@@ -66,12 +66,20 @@ export const payoutApi = {
     const params = new URLSearchParams({ batchNo, payoutStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/settlements/payouts?${params.toString()}`);
   },
+  buildBatchExportUrl: ({ batchNo = "", payoutStatus = "" } = {}) => {
+    const params = new URLSearchParams({ batchNo, payoutStatus });
+    return `/api/settlements/payouts/export?${params.toString()}`;
+  },
   create: (payload) => postJson("/api/settlements/payouts", payload),
   execute: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/execute`, payload),
   retry: (payoutBatchNo, payload) => postJson(`/api/settlements/payouts/${payoutBatchNo}/retry`, payload),
   records: (payoutBatchNo, { payoutStatus = "", pageNo = 1, pageSize = 20 } = {}) => {
     const params = new URLSearchParams({ payoutStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/settlements/payouts/${payoutBatchNo}/records?${params.toString()}`);
+  },
+  buildRecordExportUrl: (payoutBatchNo, { payoutStatus = "" } = {}) => {
+    const params = new URLSearchParams({ payoutStatus });
+    return `/api/settlements/payouts/${payoutBatchNo}/records/export?${params.toString()}`;
   }
 };
 

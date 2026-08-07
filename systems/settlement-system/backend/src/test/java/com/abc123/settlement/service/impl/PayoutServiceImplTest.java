@@ -1,6 +1,7 @@
 package com.abc123.settlement.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.settlement.common.BusinessException;
@@ -12,6 +13,7 @@ import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
 import com.abc123.settlement.dto.RetryPayoutBatchRequestDTO;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -114,6 +116,26 @@ class PayoutServiceImplTest {
         assertEquals("已发放", retriedRecords.getItems().get(0).getPayoutStatus());
         assertEquals("1", retriedRecords.getItems().get(0).getRetryCount());
         assertEquals("已出款", settlementOrderService.detail("SLT20001").getSettlementStatus());
+    }
+
+    @Test
+    void shouldExportPayoutBatchAndRecordSnapshots() {
+        AuditSettlementRequestDTO auditRequest = new AuditSettlementRequestDTO();
+        auditRequest.setOperatorName("财务主管");
+        auditRequest.setAuditRemark("通过");
+        settlementOrderService.audit("SLT20001", auditRequest);
+
+        PageResultDTO<PayoutBatchDTO> payoutBatches = payoutService.list("SET10001", "", 1, 20);
+        String payoutBatchNo = payoutBatches.getItems().get(0).getPayoutBatchNo();
+
+        String batchCsv = new String(payoutService.exportBatches("SET10001", ""), StandardCharsets.UTF_8);
+        String recordCsv = new String(payoutService.exportRecords(payoutBatchNo, ""), StandardCharsets.UTF_8);
+
+        assertTrue(batchCsv.contains("出款批次号,结算批次号,出款渠道"));
+        assertTrue(batchCsv.contains("SET10001"));
+        assertTrue(recordCsv.contains("出款单号,出款批次号,结算单号"));
+        assertTrue(recordCsv.contains(payoutBatchNo));
+        assertTrue(recordCsv.contains("SLT20001"));
     }
 
     @Test

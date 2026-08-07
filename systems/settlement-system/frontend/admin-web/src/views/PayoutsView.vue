@@ -102,6 +102,19 @@ async function retryBatch(row) {
   }
 }
 
+function exportBatchRows() {
+  const exportUrl = payoutApi.buildBatchExportUrl(filters.value);
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
+function exportRecordRows() {
+  if (!selectedBatch.value) {
+    return;
+  }
+  const exportUrl = payoutApi.buildRecordExportUrl(selectedBatch.value.payoutBatchNo, recordFilters.value);
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 function resetFilters() {
   filters.value = { batchNo: "", payoutStatus: "" };
   loadRows();
@@ -122,7 +135,11 @@ onMounted(loadRows);
       <div class="toolbar">
         <div class="field"><label>批次号</label><input v-model="filters.batchNo" /></div>
         <div class="field"><label>出款状态</label><input v-model="filters.payoutStatus" /></div>
-        <div class="toolbar-actions"><button class="button primary" @click="loadRows">查询</button><button class="button secondary" @click="resetFilters">重置</button></div>
+        <div class="toolbar-actions">
+          <button class="button primary" @click="loadRows">查询</button>
+          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button success" @click="exportBatchRows">导出批次</button>
+        </div>
       </div>
       <div class="toolbar">
         <div class="field"><label>结算批次号</label><input v-model="form.batchNo" /></div>
@@ -201,6 +218,7 @@ onMounted(loadRows);
         </div>
         <div class="toolbar-actions">
           <button class="button primary" :disabled="recordsLoading" @click="loadRecords(selectedBatch, true)">刷新记录</button>
+          <button class="button success" :disabled="recordsLoading" @click="exportRecordRows">导出记录</button>
         </div>
       </div>
       <div v-if="!selectedBatch" class="state-box">选择上方任一出款批次后，可查看记录明细和失败补发情况。</div>
@@ -249,6 +267,11 @@ onMounted(loadRows);
 
 .button-inline {
   padding: 8px 12px;
+}
+
+.button.success {
+  background: #0f766e;
+  color: #fff;
 }
 
 .actions-cell {
