@@ -24,6 +24,7 @@ import com.abc123.riskcontrol.entity.ReviewOrderEntity;
 import com.abc123.riskcontrol.entity.RiskPolicyEntity;
 import com.abc123.riskcontrol.service.RiskControlService;
 import com.abc123.riskcontrol.service.RiskOpsConfigService;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
@@ -88,6 +89,27 @@ public class RiskControlServiceImpl implements RiskControlService {
     @Override
     public PageResultDTO<ReviewOrderDTO> reviewOrders() {
         return page(dao.findReviewOrders());
+    }
+
+    /**
+     * 导出当前人工复核单列表快照，便于风控复盘、运营留档和审计追溯。
+     */
+    @Override
+    public byte[] exportReviewOrders() {
+        List<ReviewOrderDTO> records = dao.findReviewOrders();
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("复核单号,业务单号,风险标签,待审事项,状态,审核人,更新时间\n");
+        for (ReviewOrderDTO record : records) {
+            builder.append(csv(record.getReviewNo())).append(',')
+                    .append(csv(record.getBusinessNo())).append(',')
+                    .append(csv(record.getRiskTag())).append(',')
+                    .append(csv(record.getReviewItem())).append(',')
+                    .append(csv(record.getStatus())).append(',')
+                    .append(csv(record.getReviewer())).append(',')
+                    .append(csv(record.getUpdatedAt())).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -445,6 +467,17 @@ public class RiskControlServiceImpl implements RiskControlService {
 
     private String statusType(ToggleRequestDTO request) {
         return Boolean.TRUE.equals(request.getEnabled()) ? "success" : "danger";
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 
     private BigDecimal parseAmount(String text) {

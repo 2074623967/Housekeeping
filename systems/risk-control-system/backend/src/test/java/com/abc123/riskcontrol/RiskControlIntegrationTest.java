@@ -2,6 +2,7 @@ package com.abc123.riskcontrol;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.abc123.riskcontrol.common.BusinessException;
@@ -51,6 +52,16 @@ class RiskControlIntegrationTest {
         request.setReviewNo("REVIEW-1001");
         request.setAction("APPROVE");
         assertEquals("APPROVED", service.reviewAction(request).getRecords().get(0).getStatus());
+    }
+
+    @Test
+    void shouldExportReviewOrdersSnapshot() {
+        when(riskOpsConfigService.loadEffectiveSnapshot(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
+        String csv = new String(service.exportReviewOrders(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(csv.contains("复核单号,业务单号,风险标签"));
+        assertTrue(csv.contains("REVIEW-1001"));
     }
 
     @Test

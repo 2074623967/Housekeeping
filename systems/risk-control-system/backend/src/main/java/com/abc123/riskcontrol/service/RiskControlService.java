@@ -30,6 +30,13 @@ public interface RiskControlService {
 
     PageResultDTO<ReviewOrderDTO> reviewOrders();
 
+    /**
+     * 导出人工复核单快照，便于风控、运营和审计留档。
+     *
+     * @return CSV 二进制内容
+     */
+    byte[] exportReviewOrders();
+
     PageResultDTO<MonitorRuleDTO> monitorRules();
 
     RiskDecisionResultDTO evaluatePaymentDecision(RiskDecisionRequestDTO request);

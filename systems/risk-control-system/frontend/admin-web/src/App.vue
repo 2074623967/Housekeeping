@@ -67,6 +67,23 @@ async function review(reviewNo, action) {
   }
 }
 
+async function exportReviewOrders() {
+  try {
+    const blob = await riskControlApi.downloadReviewOrders();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "risk-review-orders.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    message.value = "人工复核单快照已导出";
+  } catch (error) {
+    message.value = `人工复核单快照导出失败：${error.message}`;
+  }
+}
+
 onMounted(loadAll);
 </script>
 
@@ -175,6 +192,9 @@ onMounted(loadAll);
 
         <article class="card">
           <h2>人工复核单</h2>
+          <div class="toolbar" style="margin-bottom: 12px">
+            <button class="button secondary" @click="exportReviewOrders">导出快照</button>
+          </div>
           <table>
             <thead><tr><th>复核单号</th><th>业务单号</th><th>风险标签</th><th>事项</th><th>状态</th><th>审核人</th><th>操作</th></tr></thead>
             <tbody>
@@ -196,4 +216,3 @@ onMounted(loadAll);
     </template>
   </div>
 </template>
-

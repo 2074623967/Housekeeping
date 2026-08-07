@@ -14,6 +14,9 @@ import com.abc123.riskcontrol.dto.RiskReviewActionRequestDTO;
 import com.abc123.riskcontrol.dto.RiskSummaryDTO;
 import com.abc123.riskcontrol.dto.ToggleRequestDTO;
 import com.abc123.riskcontrol.service.RiskControlService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -61,6 +64,18 @@ public class RiskControlController {
     @GetMapping("/review-orders")
     public ApiResponse<PageResultDTO<ReviewOrderDTO>> reviewOrders() {
         return ApiResponse.success(service.reviewOrders());
+    }
+
+    /**
+     * 导出人工复核单快照，供风控复盘和审计留档。
+     */
+    @GetMapping("/review-orders/export")
+    public ResponseEntity<byte[]> exportReviewOrders() {
+        byte[] body = service.exportReviewOrders();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=risk-review-orders.csv")
+                .body(body);
     }
 
     @GetMapping("/monitor-rules")

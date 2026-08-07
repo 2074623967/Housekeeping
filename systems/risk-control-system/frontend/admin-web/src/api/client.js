@@ -19,6 +19,13 @@ export const riskControlApi = {
   getBlocklists: () => request("/api/risk-control/blocklists"),
   getInterceptEvents: () => request("/api/risk-control/intercept-events"),
   getReviewOrders: () => request("/api/risk-control/review-orders"),
+  downloadReviewOrders: () =>
+    fetch("/api/risk-control/review-orders/export").then(async (response) => {
+      if (!response.ok) {
+        throw new Error("人工复核单快照导出失败");
+      }
+      return response.blob();
+    }),
   getMonitorRules: () => request("/api/risk-control/monitor-rules"),
   togglePolicy: (configCode, enabled) => postJson("/api/risk-control/policies/toggle", { configCode, enabled }),
   toggleLimitRule: (configCode, enabled) => postJson("/api/risk-control/limit-rules/toggle", { configCode, enabled }),
@@ -26,4 +33,3 @@ export const riskControlApi = {
   toggleMonitorRule: (configCode, enabled) => postJson("/api/risk-control/monitor-rules/toggle", { configCode, enabled }),
   reviewAction: (reviewNo, action, remark) => postJson("/api/risk-control/review-orders/action", { reviewNo, action, remark })
 };
-
