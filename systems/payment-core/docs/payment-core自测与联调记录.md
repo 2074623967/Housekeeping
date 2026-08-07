@@ -4068,3 +4068,24 @@
 1. `payment-core` 现在不会再把“运营配置没配全”的问题悄悄带进支付主链路，而是会在提交入口前显式失败。
 2. 这条门禁对产品、运营配置和测试都更友好，因为缺的是“配置域事实”还是“支付域路由事实”，现在已经能通过错误码与报错文案直接区分。
 3. 本轮补强的是支付提交准入质量，不等价于正式发布门禁收口；`test -> master` 仍取决于页面级回归、发布材料重算和补偿证据完整性。
+
+## 122. 2026-08-07 异常告警明细导出闭环验证
+
+### 122.1 本轮补强点
+
+1. `PaymentIssueService / PaymentIssueController` 新增异常告警明细 CSV 导出能力，接口为 `GET /api/payment-issues/alerts/export`。
+2. `PaymentIssueServiceImpl` 复用现有告警明细筛选口径，导出告警基础字段、供应商信息、投递状态、确认人、确认时间、内容快照和原始回执快照。
+3. `admin-web` 的“异常告警明细台”页补齐顶部“导出 CSV”入口，支持按当前筛选条件直接导出排障快照。
+4. `PaymentIssueServiceImplTest / PaymentIssueControllerTest` 新增导出门禁，避免页面有按钮但后端无真实接口的再次回归。
+
+### 122.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付异常中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueServiceImplTest,PaymentIssueControllerTest test` | 通过 | 合计 `16` 个用例全部通过，新增覆盖异常告警明细导出服务与控制器映射 |
+| 管理端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | `admin-web` 新增“导出 CSV”入口后仍可稳定构建 |
+
+### 122.3 当前判断
+
+1. 异常告警明细台现在从“可在线看”提升为“可筛选、可确认、可导出”，更接近公司内真实交接班和审计台账的使用方式。
+2. 这一步补的是运营排障闭环，不代表异常告警链路本身已经达到正式发布门槛；真实供应商联调、主链路页面矩阵和发布证据仍需继续补强。

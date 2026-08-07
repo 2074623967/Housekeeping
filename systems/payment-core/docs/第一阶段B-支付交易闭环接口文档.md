@@ -46,6 +46,8 @@
 | `/api/payment-events/republish` | `POST` | 手动重发支付事件 |
 | `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
 | `/api/payment-issues/responsibility-summary` | `GET` | 查询支付交易异常责任组统计 |
+| `/api/payment-issues/alerts` | `GET` | 查询支付异常告警通知明细 |
+| `/api/payment-issues/alerts/export` | `GET` | 导出支付异常告警通知明细 CSV |
 | `/api/refunds` | `GET` | 分页查询退款单 |
 | `/api/refunds/export` | `GET` | 导出退款单 CSV |
 | `/api/refunds/{refundOrderId}` | `GET` | 查询退款详情与操作日志 |
@@ -1161,7 +1163,77 @@ POST /api/payment-config/control-policies/self-check
 ]
 ```
 
-### 13.4 批量处理支付交易异常
+### 13.4 查询支付异常告警通知明细
+
+接口：`GET /api/payment-issues/alerts`
+
+请求参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `alertNo` | `string` | 告警编号，模糊查询 |
+| `issueNo` | `string` | 异常编号，模糊查询 |
+| `paymentOrderId` | `string` | 支付单号，模糊查询 |
+| `alertChannel` | `string` | 告警通道，默认 `全部` |
+| `alertStatus` | `string` | 告警状态，默认 `全部` |
+| `ackStatus` | `string` | 回执状态，默认 `全部` |
+| `providerDeliveryStatus` | `string` | 供应商投递状态，默认 `全部` |
+| `pageNo` | `int` | 页码，默认 `1` |
+| `pageSize` | `int` | 每页条数，默认 `20`，最大 `100` |
+
+返回内容：
+
+1. 返回告警编号、异常编号、支付单号、异常类型、严重等级、责任组、通道、接收人、告警状态、回执状态和创建时间。
+2. 同时返回供应商编码、供应商名称、端点别名、模板编码、投递状态、投递说明、供应商回执号和原始回执快照。
+3. 用于支撑运营、研发和测试统一导出异常通知快照，做离线排障、交班和审计留痕。
+
+返回示例：
+
+```json
+{
+  "items": [
+    {
+      "alertNo": "PIA-202608070001",
+      "issueNo": "ISSUE-WAIT-PAY202608070001",
+      "paymentOrderId": "PAY202608070001",
+      "issueType": "待回调未收口",
+      "severity": "P1",
+      "responsibilityGroup": "支付后端值班组",
+      "alertChannel": "IM",
+      "receiver": "支付运营",
+      "alertStatus": "已派发",
+      "ackStatus": "待确认",
+      "providerCode": "im_provider",
+      "providerName": "企业IM",
+      "endpointAlias": "主Webhook",
+      "templateCode": "PAYMENT_ISSUE_NOTICE",
+      "providerDeliveryStatus": "ACCEPTED",
+      "providerDeliveryMessage": "accepted",
+      "providerReceiptNo": "receipt-001",
+      "providerReceiptSnapshot": "{\"status\":\"accepted\"}",
+      "triggeredBy": "任务中心",
+      "ackOperator": null,
+      "ackAt": null,
+      "createdAt": "2026-08-07 09:30:00"
+    }
+  ],
+  "total": 1,
+  "pageNo": 1,
+  "pageSize": 20
+}
+```
+
+### 13.5 导出支付异常告警通知明细
+
+接口：`GET /api/payment-issues/alerts/export`
+
+请求参数：
+
+1. 与 `GET /api/payment-issues/alerts` 完全一致，但不需要分页参数。
+2. 导出结果使用 UTF-8 CSV，文件名固定为 `payment-issue-alert-logs.csv`。
+3. 导出字段覆盖告警基础信息、供应商信息、投递状态、确认人、确认时间、内容快照和回执快照。
+
+### 13.6 批量处理支付交易异常
 
 接口：`POST /api/payment-issues/actions`
 
@@ -1194,7 +1266,7 @@ POST /api/payment-config/control-policies/self-check
 3. 当 `actionType=标记已处理` 时，后端会同步确认该异常下仍处于 `待确认` 的告警回执。
 4. 接口返回刷新后的异常中心列表，前端可直接更新页面。
 
-### 13.5 查询支付任务中心总览
+### 13.7 查询支付任务中心总览
 
 接口：`GET /api/payment-task-center/overview`
 
@@ -1209,7 +1281,7 @@ POST /api/payment-config/control-policies/self-check
 7. `overdueIssueCount`：超过 SLA 的支付交易异常数。
 8. `recentTaskRuns`：最近 10 条任务执行日志。
 
-### 13.6 查询支付任务执行日志
+### 13.8 查询支付任务执行日志
 
 接口：`GET /api/payment-task-center/task-runs`
 

@@ -10,7 +10,11 @@ import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.service.PaymentIssueService;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -103,6 +107,33 @@ public class PaymentIssueController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentIssueService.listAlertLogs(query));
+    }
+
+    /**
+     * 导出支付异常告警通知明细，供运营离线排障和留痕归档。
+     */
+    @GetMapping(value = "/alerts/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportAlertLogs(
+            @RequestParam(required = false) String alertNo,
+            @RequestParam(required = false) String issueNo,
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(defaultValue = "全部") String alertChannel,
+            @RequestParam(defaultValue = "全部") String alertStatus,
+            @RequestParam(defaultValue = "全部") String ackStatus,
+            @RequestParam(defaultValue = "全部") String providerDeliveryStatus) {
+        PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+        query.setAlertNo(alertNo);
+        query.setIssueNo(issueNo);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setAlertChannel(alertChannel);
+        query.setAlertStatus(alertStatus);
+        query.setAckStatus(ackStatus);
+        query.setProviderDeliveryStatus(providerDeliveryStatus);
+        byte[] csvBytes = paymentIssueService.exportAlertLogsCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-issue-alert-logs.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**

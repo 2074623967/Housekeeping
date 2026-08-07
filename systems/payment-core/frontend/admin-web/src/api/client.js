@@ -128,6 +128,26 @@ export const paymentIssueApi = {
     });
     return request(`/api/payment-issues/alerts?${params.toString()}`);
   },
+  buildAlertExportUrl: ({
+    alertNo = "",
+    issueNo = "",
+    paymentOrderId = "",
+    alertChannel = "全部",
+    alertStatus = "全部",
+    ackStatus = "全部",
+    providerDeliveryStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      alertNo,
+      issueNo,
+      paymentOrderId,
+      alertChannel,
+      alertStatus,
+      ackStatus,
+      providerDeliveryStatus
+    });
+    return `/api/payment-issues/alerts/export?${params.toString()}`;
+  },
   acknowledgeAlert: (alertNo, payload) => postJson(`/api/payment-issues/alerts/${alertNo}/acknowledge`, payload),
   batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };

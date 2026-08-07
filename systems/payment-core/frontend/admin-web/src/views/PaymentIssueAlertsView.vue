@@ -89,6 +89,19 @@ function applyFilters() {
   loadAlertLogs();
 }
 
+function exportAlertLogs() {
+  const exportUrl = paymentIssueApi.buildAlertExportUrl({
+    alertNo: filters.value.alertNo,
+    issueNo: filters.value.issueNo,
+    paymentOrderId: filters.value.paymentOrderId,
+    alertChannel: filters.value.alertChannel,
+    alertStatus: filters.value.alertStatus,
+    ackStatus: filters.value.ackStatus,
+    providerDeliveryStatus: filters.value.providerDeliveryStatus
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 async function loadAlertLogs() {
   isLoading.value = true;
   errorMessage.value = "";
@@ -160,7 +173,10 @@ onMounted(loadAlertLogs);
         <h2>异常告警明细台</h2>
         <p>统一联查 outbox、外部通知通道、供应商投递回执和人工确认状态，方便运营、研发与测试核对异常触达闭环</p>
       </div>
-      <button class="button secondary" @click="loadAlertLogs">刷新</button>
+      <div class="list-actions">
+        <button class="button primary" @click="exportAlertLogs">导出 CSV</button>
+        <button class="button secondary" @click="loadAlertLogs">刷新</button>
+      </div>
     </div>
 
     <section class="panel">

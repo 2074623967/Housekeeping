@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertAcknowledgeRequestDTO;
@@ -47,6 +48,16 @@ class PaymentIssueControllerTest {
         controller.listAlertLogs("ALERT-001", "ISSUE-001", "PAY-001", "IM", "已派发", "待确认", "ACCEPTED", 1, 20);
 
         verify(paymentIssueService).listAlertLogs(any(PaymentIssueAlertLogQueryDTO.class));
+    }
+
+    @Test
+    void shouldExportAlertLogs() {
+        PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
+        when(paymentIssueService.exportAlertLogsCsv(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn("告警编号\n");
+
+        controller.exportAlertLogs("ALERT-001", "ISSUE-001", "PAY-001", "IM", "已派发", "待确认", "ACCEPTED");
+
+        verify(paymentIssueService).exportAlertLogsCsv(any(PaymentIssueAlertLogQueryDTO.class));
     }
 
     @Test
