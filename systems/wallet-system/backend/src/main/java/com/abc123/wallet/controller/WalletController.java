@@ -3,6 +3,7 @@ package com.abc123.wallet.controller;
 import com.abc123.wallet.common.ApiResponse;
 import com.abc123.wallet.dto.WalletAccountDetailDTO;
 import com.abc123.wallet.dto.WalletAccountDTO;
+import com.abc123.wallet.dto.WalletBalanceSnapshotDTO;
 import com.abc123.wallet.dto.WalletBalancePaymentOrderDTO;
 import com.abc123.wallet.dto.WalletBalancePaymentRequestDTO;
 import com.abc123.wallet.dto.WalletRechargeOrderDTO;
@@ -54,6 +55,11 @@ public class WalletController {
     @GetMapping
     public ApiResponse<List<WalletAccountDTO>> list() {
         return ApiResponse.success(walletService.listAccounts());
+    }
+
+    @GetMapping("/balance-snapshots")
+    public ApiResponse<List<WalletBalanceSnapshotDTO>> balanceSnapshots() {
+        return ApiResponse.success(walletService.listBalanceSnapshots());
     }
 
     @GetMapping("/ledgers")

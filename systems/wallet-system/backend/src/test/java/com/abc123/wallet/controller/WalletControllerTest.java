@@ -49,6 +49,15 @@ class WalletControllerTest {
     }
 
     @Test
+    void shouldListWalletBalanceSnapshots() {
+        WalletController controller = controller();
+
+        controller.balanceSnapshots();
+
+        verify(walletService).listBalanceSnapshots();
+    }
+
+    @Test
     void shouldListWalletLedgers() {
         WalletController controller = controller();
 

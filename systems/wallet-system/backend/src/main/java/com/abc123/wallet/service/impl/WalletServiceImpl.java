@@ -2,10 +2,13 @@ package com.abc123.wallet.service.impl;
 
 import com.abc123.wallet.dto.WalletAccountDTO;
 import com.abc123.wallet.dto.WalletAccountDetailDTO;
+import com.abc123.wallet.dto.WalletBalanceSnapshotDTO;
 import com.abc123.wallet.dto.WalletLedgerDTO;
 import com.abc123.wallet.entity.WalletAccountEntity;
 import com.abc123.wallet.entity.WalletLedgerEntity;
 import com.abc123.wallet.mapper.WalletMapper;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import com.abc123.wallet.service.WalletService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -24,6 +27,11 @@ public class WalletServiceImpl implements WalletService {
     @Override
     public List<WalletAccountDTO> listAccounts() {
         return walletMapper.findAccounts().stream().map(this::toAccountDTO).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<WalletBalanceSnapshotDTO> listBalanceSnapshots() {
+        return walletMapper.findAccounts().stream().map(this::toBalanceSnapshotDTO).collect(Collectors.toList());
     }
 
     @Override
@@ -88,6 +96,24 @@ public class WalletServiceImpl implements WalletService {
         return dto;
     }
 
+    private WalletBalanceSnapshotDTO toBalanceSnapshotDTO(WalletAccountEntity entity) {
+        BigDecimal availableAmount = decimal(entity.getAvailableAmount());
+        BigDecimal frozenAmount = decimal(entity.getFrozenAmount());
+        BigDecimal totalAmount = availableAmount.add(frozenAmount);
+        WalletBalanceSnapshotDTO dto = new WalletBalanceSnapshotDTO();
+        dto.setAccountNo(entity.getAccountNo());
+        dto.setOwnerName(entity.getOwnerName());
+        dto.setWalletType(entity.getWalletType());
+        dto.setStatus(entity.getStatus());
+        dto.setAvailableAmount(formatAmount(availableAmount));
+        dto.setFrozenAmount(formatAmount(frozenAmount));
+        dto.setTotalAmount(formatAmount(totalAmount));
+        dto.setFrozenRate(formatRate(frozenAmount, totalAmount));
+        dto.setFocusTag(resolveFocusTag(entity.getStatus(), frozenAmount, totalAmount));
+        dto.setSnapshotAt(entity.getCreatedAt());
+        return dto;
+    }
+
     private String csv(String value) {
         if (value == null) {
             return "";
@@ -97,5 +123,42 @@ public class WalletServiceImpl implements WalletService {
             return "\"" + escaped + "\"";
         }
         return escaped;
+    }
+
+    private BigDecimal decimal(String value) {
+        if (value == null || value.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        return new BigDecimal(value);
+    }
+
+    private String formatAmount(BigDecimal amount) {
+        return amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String formatRate(BigDecimal frozenAmount, BigDecimal totalAmount) {
+        if (BigDecimal.ZERO.compareTo(totalAmount) == 0) {
+            return "0.00%";
+        }
+        return frozenAmount.multiply(new BigDecimal("100"))
+                .divide(totalAmount, 2, RoundingMode.HALF_UP)
+                .toPlainString() + "%";
+    }
+
+    private String resolveFocusTag(String status, BigDecimal frozenAmount, BigDecimal totalAmount) {
+        if ("FROZEN".equals(status)) {
+            return "账户冻结";
+        }
+        if (BigDecimal.ZERO.compareTo(totalAmount) > 0) {
+            return "资金异常";
+        }
+        if (BigDecimal.ZERO.compareTo(totalAmount) == 0) {
+            return "零余额";
+        }
+        if (totalAmount.compareTo(BigDecimal.ZERO) > 0
+                && frozenAmount.divide(totalAmount, 4, RoundingMode.HALF_UP).compareTo(new BigDecimal("0.50")) >= 0) {
+            return "冻结占比高";
+        }
+        return "正常关注";
     }
 }

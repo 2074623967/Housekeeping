@@ -12,6 +12,7 @@ async function request(url, options = {}) {
 
 export const walletApi = {
   getAccounts: () => request("/api/wallet/accounts"),
+  getBalanceSnapshots: () => request("/api/wallet/accounts/balance-snapshots"),
   getLedgers: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
