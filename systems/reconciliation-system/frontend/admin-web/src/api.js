@@ -12,6 +12,12 @@ export const getOverview = () => request("/api/reconciliation/overview");
 export const getBatches = () => request("/api/reconciliation/batches");
 export const getBatchDetail = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}`);
+export const downloadBatchDetail = (batchNo) =>
+  fetch(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/export`)
+    .then(async (response) => {
+      if (!response.ok) throw new Error("导出失败");
+      return response.blob();
+    });
 export const getDifferences = (query = {}) => {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => value && params.set(key, value));

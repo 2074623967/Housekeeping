@@ -15,6 +15,7 @@ import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.service.ReconciliationService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -121,5 +122,33 @@ class ReconciliationIntegrationTest {
         assertEquals(1, detail.getDifferenceCount());
         assertEquals(1, detail.getOpenDifferenceCount());
         assertEquals(0, detail.getResolvedDifferenceCount());
+    }
+
+    @Test
+    void shouldExportBatchDetailSnapshot() {
+        ReconciliationBatchCreateRequestDTO request = new ReconciliationBatchCreateRequestDTO();
+        request.setBusinessDate("2026-08-06");
+        request.setChannelCode("WECHAT");
+        ReconciliationBatchListItemDTO batch = service.createBatch(request);
+
+        ChannelRecordRequestDTO channel = new ChannelRecordRequestDTO();
+        channel.setChannelTradeNo("WX-IT-5");
+        channel.setPaymentOrderId("PAY-IT-5");
+        channel.setAmount(new BigDecimal("50.00"));
+        service.addChannelRecord(batch.getBatchNo(), channel);
+
+        InternalRecordRequestDTO internal = new InternalRecordRequestDTO();
+        internal.setPaymentOrderId("PAY-IT-5");
+        internal.setAmount(new BigDecimal("40.00"));
+        service.addInternalRecord(batch.getBatchNo(), internal);
+
+        service.run(batch.getBatchNo());
+
+        String csv = new String(service.exportBatchDetail(batch.getBatchNo()), StandardCharsets.UTF_8);
+        assertEquals(true, csv.contains("批次号,业务日期,渠道编码"));
+        assertEquals(true, csv.contains(batch.getBatchNo()));
+        assertEquals(true, csv.contains("渠道账单记录"));
+        assertEquals(true, csv.contains("平台支付事实"));
+        assertEquals(true, csv.contains("差异明细"));
     }
 }

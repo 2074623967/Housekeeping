@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { getBatchDetail, getBatches, getDifferences, getOverview, resolveDifference, runBatch } from "./api";
+import { downloadBatchDetail, getBatchDetail, getBatches, getDifferences, getOverview, resolveDifference, runBatch } from "./api";
 
 const view = ref("overview");
 const loading = ref(false);
@@ -71,6 +71,23 @@ async function openBatchDetail(batchNo) {
   }
 }
 
+async function exportBatchDetail(batchNo) {
+  try {
+    const blob = await downloadBatchDetail(batchNo);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `reconciliation-batch-${batchNo}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    message.value = `批次 ${batchNo} 快照已导出`;
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
 onMounted(refresh);
 </script>
 
@@ -98,7 +115,10 @@ onMounted(refresh);
         <template v-else>
           <div class="section-title">
             <div><p class="eyebrow">BATCH DETAIL</p><h2>{{ selectedBatch.batchNo }}</h2></div>
-            <button class="link" @click="view = 'batches'">返回批次列表</button>
+            <div class="actions">
+              <button class="link" @click="exportBatchDetail(selectedBatch.batchNo)">导出快照</button>
+              <button class="link" @click="view = 'batches'">返回批次列表</button>
+            </div>
           </div>
           <div class="detail-grid">
             <article><span>业务日期</span><b>{{ selectedBatch.businessDate }}</b></article>

@@ -12,6 +12,9 @@ import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
 import com.abc123.reconciliation.service.ReconciliationService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,6 +50,16 @@ public class ReconciliationController {
     @GetMapping("/batches/{batchNo}")
     public ApiResponse<ReconciliationBatchDetailDTO> detail(@PathVariable String batchNo) {
         return ApiResponse.success(service.detail(batchNo));
+    }
+
+    @GetMapping("/batches/{batchNo}/export")
+    public ResponseEntity<byte[]> exportDetail(@PathVariable String batchNo) {
+        byte[] body = service.exportBatchDetail(batchNo);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=reconciliation-batch-" + batchNo + ".csv")
+                .body(body);
     }
 
     @PostMapping("/batches")

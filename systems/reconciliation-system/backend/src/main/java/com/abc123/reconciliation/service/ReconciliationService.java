@@ -26,6 +26,8 @@ public interface ReconciliationService {
 
     ReconciliationBatchDetailDTO detail(String batchNo);
 
+    byte[] exportBatchDetail(String batchNo);
+
     java.util.List<ReconciliationBatchListItemDTO> batches();
 
     PageResultDTO<ReconciliationDifferenceDTO> differences(DifferenceQueryDTO query);

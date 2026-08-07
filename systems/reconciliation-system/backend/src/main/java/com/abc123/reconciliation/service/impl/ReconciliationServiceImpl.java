@@ -16,6 +16,7 @@ import com.abc123.reconciliation.entity.ChannelRecordEntity;
 import com.abc123.reconciliation.entity.InternalRecordEntity;
 import com.abc123.reconciliation.service.ReconciliationService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -135,6 +136,67 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     }
 
     @Override
+    public byte[] exportBatchDetail(String batchNo) {
+        ReconciliationBatchDetailDTO detail = detail(batchNo);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("批次号,业务日期,渠道编码,账单来源,批次状态,渠道记录数,平台记录数,已匹配数,差异数,未结案差异数,已结案差异数\n");
+        builder.append(csv(detail.getBatchNo())).append(',')
+                .append(csv(detail.getBusinessDate() == null ? null : detail.getBusinessDate().toString())).append(',')
+                .append(csv(detail.getChannelCode())).append(',')
+                .append(csv(detail.getBillSource())).append(',')
+                .append(csv(detail.getStatus())).append(',')
+                .append(csv(String.valueOf(detail.getChannelCount()))).append(',')
+                .append(csv(String.valueOf(detail.getInternalCount()))).append(',')
+                .append(csv(String.valueOf(detail.getMatchedCount()))).append(',')
+                .append(csv(String.valueOf(detail.getDifferenceCount()))).append(',')
+                .append(csv(String.valueOf(detail.getOpenDifferenceCount()))).append(',')
+                .append(csv(String.valueOf(detail.getResolvedDifferenceCount()))).append('\n');
+        builder.append('\n');
+        builder.append("渠道账单记录\n");
+        builder.append("渠道流水号,支付单号,金额,状态,交易时间\n");
+        for (int i = 0; i < detail.getChannelRecords().size(); i++) {
+            com.abc123.reconciliation.dto.ReconciliationBatchChannelRecordDTO item = detail.getChannelRecords().get(i);
+            builder.append(csv(item.getChannelTradeNo())).append(',')
+                    .append(csv(item.getPaymentOrderId())).append(',')
+                    .append(csv(item.getAmount() == null ? null : item.getAmount().toPlainString())).append(',')
+                    .append(csv(item.getTradeStatus())).append(',')
+                    .append(csv(item.getTradeTime() == null ? null : item.getTradeTime().toString()))
+                    .append('\n');
+        }
+        builder.append('\n');
+        builder.append("平台支付事实\n");
+        builder.append("支付单号,金额,状态,来源系统,支付时间\n");
+        for (int i = 0; i < detail.getInternalRecords().size(); i++) {
+            com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO item = detail.getInternalRecords().get(i);
+            builder.append(csv(item.getPaymentOrderId())).append(',')
+                    .append(csv(item.getAmount() == null ? null : item.getAmount().toPlainString())).append(',')
+                    .append(csv(item.getInternalStatus())).append(',')
+                    .append(csv(item.getSourceSystem())).append(',')
+                    .append(csv(item.getPaidTime() == null ? null : item.getPaidTime().toString()))
+                    .append('\n');
+        }
+        builder.append('\n');
+        builder.append("差异明细\n");
+        builder.append("差异编号,支付单号,差异类型,渠道金额,平台金额,状态,处置结论,处置备注,发现时间,结案时间\n");
+        for (int i = 0; i < detail.getDifferences().size(); i++) {
+            ReconciliationDifferenceDTO item = detail.getDifferences().get(i);
+            builder.append(csv(item.getDifferenceNo())).append(',')
+                    .append(csv(item.getPaymentOrderId())).append(',')
+                    .append(csv(item.getDifferenceType())).append(',')
+                    .append(csv(item.getChannelAmount() == null ? null : item.getChannelAmount().toPlainString())).append(',')
+                    .append(csv(item.getInternalAmount() == null ? null : item.getInternalAmount().toPlainString())).append(',')
+                    .append(csv(item.getStatus())).append(',')
+                    .append(csv(item.getResolution())).append(',')
+                    .append(csv(item.getRemark())).append(',')
+                    .append(csv(item.getDetectedAt() == null ? null : item.getDetectedAt().toString())).append(',')
+                    .append(csv(item.getResolvedAt() == null ? null : item.getResolvedAt().toString()))
+                    .append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Override
     public List<ReconciliationBatchListItemDTO> batches() {
         return dao.findBatches();
     }
@@ -233,5 +295,16 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         if (dao.updateBatchStatus(batchNo, status) == 0) {
             throw new BusinessException("对账批次不存在");
         }
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 }
