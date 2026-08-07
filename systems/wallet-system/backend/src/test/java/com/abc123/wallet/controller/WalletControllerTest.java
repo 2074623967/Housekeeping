@@ -1,11 +1,13 @@
 package com.abc123.wallet.controller;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.abc123.wallet.dto.WalletBalancePaymentRequestDTO;
 import com.abc123.wallet.dto.WalletRechargeRequestDTO;
 import com.abc123.wallet.dto.WalletTransferRequestDTO;
 import com.abc123.wallet.dto.WalletWithdrawRequestDTO;
+import java.nio.charset.StandardCharsets;
 import com.abc123.wallet.service.WalletBalancePaymentService;
 import com.abc123.wallet.service.WalletRechargeService;
 import com.abc123.wallet.service.WalletService;
@@ -53,6 +55,17 @@ class WalletControllerTest {
         controller.ledgers("WALLET-001", "BALANCE_PAYMENT", "OUT");
 
         verify(walletService).listLedgers("WALLET-001", "BALANCE_PAYMENT", "OUT");
+    }
+
+    @Test
+    void shouldExportWalletLedgers() {
+        WalletController controller = controller();
+        when(walletService.exportLedgers("WALLET-001", "BALANCE_PAYMENT", "OUT"))
+                .thenReturn("流水号\n".getBytes(StandardCharsets.UTF_8));
+
+        controller.exportLedgers("WALLET-001", "BALANCE_PAYMENT", "OUT");
+
+        verify(walletService).exportLedgers("WALLET-001", "BALANCE_PAYMENT", "OUT");
     }
 
     @Test

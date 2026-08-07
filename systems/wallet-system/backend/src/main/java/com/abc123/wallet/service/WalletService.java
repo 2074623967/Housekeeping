@@ -9,4 +9,5 @@ public interface WalletService {
     List<WalletAccountDTO> listAccounts();
     WalletAccountDetailDTO getDetail(String accountNo);
     List<WalletLedgerDTO> listLedgers(String accountNo, String bizType, String direction);
+    byte[] exportLedgers(String accountNo, String bizType, String direction);
 }

@@ -7,6 +7,7 @@ import com.abc123.wallet.entity.WalletAccountEntity;
 import com.abc123.wallet.entity.WalletLedgerEntity;
 import com.abc123.wallet.mapper.WalletMapper;
 import com.abc123.wallet.service.WalletService;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,24 @@ public class WalletServiceImpl implements WalletService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    public byte[] exportLedgers(String accountNo, String bizType, String direction) {
+        List<WalletLedgerDTO> records = listLedgers(accountNo, bizType, direction);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("流水号,钱包账户号,业务类型,业务单号,金额,方向,创建时间\n");
+        for (WalletLedgerDTO item : records) {
+            builder.append(csv(item.getLedgerNo())).append(',')
+                    .append(csv(item.getAccountNo())).append(',')
+                    .append(csv(item.getBizType())).append(',')
+                    .append(csv(item.getBizNo())).append(',')
+                    .append(csv(item.getAmount())).append(',')
+                    .append(csv(item.getDirection())).append(',')
+                    .append(csv(item.getCreatedAt())).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     private WalletAccountDTO toAccountDTO(WalletAccountEntity entity) {
         WalletAccountDTO dto = new WalletAccountDTO();
         dto.setAccountNo(entity.getAccountNo());
@@ -67,5 +86,16 @@ public class WalletServiceImpl implements WalletService {
         dto.setDirection(entity.getDirection());
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 }
