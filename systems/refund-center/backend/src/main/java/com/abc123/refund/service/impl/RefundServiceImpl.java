@@ -17,8 +17,10 @@ import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.entity.PaymentSuccessProjectionEntity;
 import com.abc123.refund.entity.RefundOrderEntity;
 import com.abc123.refund.entity.RefundOutboxEventEntity;
+import com.abc123.refund.dto.RefundOperationLogDTO;
 import com.abc123.refund.service.RefundService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -86,6 +88,61 @@ public class RefundServiceImpl implements RefundService {
         detail.setSuccessAt(item.getSuccessAt());
         detail.setOperationLogs(refundDao.findLogs(id));
         return detail;
+    }
+
+    @Override
+    public byte[] exportDetailSnapshot(String refundOrderId) {
+        RefundDetailDTO detail = detail(refundOrderId);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("退款单号,原支付单号,业务订单号,客户名称,原支付金额,退款金额,退款方式,退款原因,状态,渠道退款号,申请时间,成功时间\n");
+        builder.append(csv(detail.getRefundOrderId())).append(',')
+                .append(csv(detail.getPaymentOrderId())).append(',')
+                .append(csv(detail.getOrderNo())).append(',')
+                .append(csv(detail.getCustomerName())).append(',')
+                .append(csv(decimal(detail.getPaidAmount()))).append(',')
+                .append(csv(decimal(detail.getRefundAmount()))).append(',')
+                .append(csv(detail.getRefundMethod())).append(',')
+                .append(csv(detail.getRefundReason())).append(',')
+                .append(csv(detail.getStatus())).append(',')
+                .append(csv(detail.getChannelRefundId())).append(',')
+                .append(csv(time(detail.getAppliedAt()))).append(',')
+                .append(csv(time(detail.getSuccessAt()))).append('\n');
+        builder.append('\n');
+        builder.append("操作日志\n");
+        builder.append("日志号,动作编码,动作名称,原状态,新状态,操作人,备注,操作时间\n");
+        for (int i = 0; i < detail.getOperationLogs().size(); i++) {
+            RefundOperationLogDTO log = detail.getOperationLogs().get(i);
+            builder.append(csv(log.getLogNo())).append(',')
+                    .append(csv(log.getActionCode())).append(',')
+                    .append(csv(log.getActionName())).append(',')
+                    .append(csv(log.getFromStatus())).append(',')
+                    .append(csv(log.getToStatus())).append(',')
+                    .append(csv(log.getOperatorName())).append(',')
+                    .append(csv(log.getOperationRemark())).append(',')
+                    .append(csv(time(log.getOperatedAt()))).append('\n');
+        }
+        builder.append('\n');
+        builder.append("退款成功事件出站\n");
+        builder.append("事件编号,事件类型,聚合编号,出站状态,重试次数,最近错误信息,最近派发时间,创建时间,更新时间\n");
+        RefundOutboxQueryDTO query = new RefundOutboxQueryDTO();
+        query.setAggregateId(detail.getRefundOrderId());
+        query.setPageNo(1);
+        query.setPageSize(10);
+        PageResultDTO<RefundOutboxItemDTO> outboxPage = listOutbox(query);
+        for (int i = 0; i < outboxPage.getItems().size(); i++) {
+            RefundOutboxItemDTO item = outboxPage.getItems().get(i);
+            builder.append(csv(item.getEventId())).append(',')
+                    .append(csv(item.getEventType())).append(',')
+                    .append(csv(item.getAggregateId())).append(',')
+                    .append(csv(item.getStatus())).append(',')
+                    .append(csv(item.getRetryCount() == null ? null : String.valueOf(item.getRetryCount()))).append(',')
+                    .append(csv(item.getLastErrorMessage())).append(',')
+                    .append(csv(time(item.getLastRelayAt()))).append(',')
+                    .append(csv(time(item.getCreatedAt()))).append(',')
+                    .append(csv(time(item.getUpdatedAt()))).append('\n');
+        }
+        return builder.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     @Override
@@ -304,5 +361,24 @@ public class RefundServiceImpl implements RefundService {
 
     private String trim(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
+    }
+
+    private String decimal(BigDecimal value) {
+        return value == null ? null : value.toPlainString();
+    }
+
+    private String time(LocalDateTime value) {
+        return value == null ? null : value.toString();
     }
 }

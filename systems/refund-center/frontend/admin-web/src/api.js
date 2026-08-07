@@ -25,6 +25,14 @@ export const getRefunds = (query) => {
 export const getRefundDetail = (refundOrderId) =>
   jsonRequest(`/api/refunds/${encodeURIComponent(refundOrderId)}`);
 
+export const downloadRefundDetail = (refundOrderId) =>
+  fetch(`/api/refunds/${encodeURIComponent(refundOrderId)}/export`).then(async (response) => {
+    if (!response.ok) {
+      throw new Error("导出失败");
+    }
+    return response.blob();
+  });
+
 export const postRefundAction = (refundOrderId, action, payload = {}) =>
   jsonRequest(`/api/refunds/${encodeURIComponent(refundOrderId)}/${action}`, {
     method: "POST",

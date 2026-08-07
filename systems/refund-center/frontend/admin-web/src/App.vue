@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import {
+  downloadRefundDetail,
   dispatchRefundOutbox,
   getOverview,
   getRefundDetail,
@@ -89,6 +90,23 @@ async function openDetail(item) {
   try {
     selectedRefund.value = await getRefundDetail(item.refundOrderId);
     activeView.value = "detail";
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
+}
+
+async function exportDetail(refundOrderId) {
+  try {
+    const blob = await downloadRefundDetail(refundOrderId);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `refund-detail-${refundOrderId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    errorMessage.value = "";
   } catch (error) {
     errorMessage.value = error.message;
   }
@@ -286,6 +304,7 @@ async function refreshCurrentView() {
             <div class="wide"><span>退款原因</span><strong>{{ selectedRefund.refundReason }}</strong></div>
           </div>
           <div class="actions">
+            <button class="secondary-button" @click="exportDetail(selectedRefund.refundOrderId)">导出快照</button>
             <button v-if="selectedRefund.status === 'REVIEWING'" class="primary-button" @click="runAction('approve')">审核通过</button>
             <button v-if="selectedRefund.status === 'APPROVED'" class="primary-button" @click="runAction('submit')">提交渠道</button>
             <button v-if="selectedRefund.status === 'FAIL'" class="primary-button" @click="runAction('retry')">失败重试</button>

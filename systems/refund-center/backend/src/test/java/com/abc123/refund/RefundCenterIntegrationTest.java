@@ -12,6 +12,7 @@ import com.abc123.refund.dto.RefundOutboxItemDTO;
 import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.service.RefundService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,5 +66,34 @@ class RefundCenterIntegrationTest {
         RefundOutboxDispatchRequestDTO dispatch = new RefundOutboxDispatchRequestDTO();
         dispatch.setSimulateResult("SUCCESS");
         assertEquals("SENT", refundService.dispatchOutbox(outbox.getEventId(), dispatch).getStatus());
+    }
+
+    @Test
+    void shouldExportRefundDetailSnapshot() {
+        String paymentOrderId = "PAY-IT-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-2");
+        source.setCustomerName("导出测试客户");
+        source.setPaidAmount(new BigDecimal("200.00"));
+        source.setChannelCode("ALIPAY");
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("66.00"));
+        apply.setRefundReason("导出快照测试");
+        RefundListItemDTO created = refundService.apply(apply);
+
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(created.getRefundOrderId());
+        refundService.approve(action);
+        refundService.submit(action);
+
+        String csv = new String(refundService.exportDetailSnapshot(created.getRefundOrderId()), StandardCharsets.UTF_8);
+        assertEquals(true, csv.contains("退款单号,原支付单号,业务订单号"));
+        assertEquals(true, csv.contains(created.getRefundOrderId()));
+        assertEquals(true, csv.contains("操作日志"));
+        assertEquals(true, csv.contains("退款成功事件出站"));
     }
 }

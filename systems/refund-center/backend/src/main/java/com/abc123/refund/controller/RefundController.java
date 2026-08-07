@@ -14,6 +14,9 @@ import com.abc123.refund.dto.RefundOutboxQueryDTO;
 import com.abc123.refund.dto.RefundOverviewDTO;
 import com.abc123.refund.dto.RefundQueryDTO;
 import com.abc123.refund.service.RefundService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -77,6 +80,16 @@ public class RefundController {
     @GetMapping("/{refundOrderId}")
     public ApiResponse<RefundDetailDTO> detail(@PathVariable String refundOrderId) {
         return ApiResponse.success(refundService.detail(refundOrderId));
+    }
+
+    @GetMapping(value = "/{refundOrderId}/export")
+    public ResponseEntity<byte[]> exportDetail(@PathVariable String refundOrderId) {
+        byte[] body = refundService.exportDetailSnapshot(refundOrderId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=refund-detail-" + refundOrderId + ".csv")
+                .body(body);
     }
 
     @PostMapping("/apply")

@@ -22,6 +22,8 @@ public interface RefundService {
 
     RefundDetailDTO detail(String refundOrderId);
 
+    byte[] exportDetailSnapshot(String refundOrderId);
+
     RefundOverviewDTO overview();
 
     PageResultDTO<RefundOutboxItemDTO> listOutbox(RefundOutboxQueryDTO query);
