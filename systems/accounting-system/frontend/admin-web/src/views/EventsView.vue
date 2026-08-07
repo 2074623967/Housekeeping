@@ -7,13 +7,26 @@ const selectedRow = ref(null);
 const loading = ref(false);
 const message = ref("");
 const filters = ref({ eventType: "", bizNo: "", paymentOrderId: "" });
-const form = ref({ accountNo: "", paymentOrderId: "", orderNo: "", customerName: "张女士", amount: "18.00", clearingOrderNo: "", bizNo: "", summary: "" });
+const form = ref({
+  accountNo: "",
+  paymentOrderId: "",
+  orderNo: "",
+  customerName: "张女士",
+  amount: "18.00",
+  clearingOrderNo: "",
+  settlementOrderNo: "",
+  bizNo: "",
+  summary: "",
+  compensationDirection: "贷方",
+  operatorName: "财务补偿专员"
+});
 
 const dashboardMetrics = computed(() => ({
   total: rows.value.length,
   successTotal: rows.value.filter((item) => item.eventStatus === "处理成功").length,
   failedTotal: rows.value.filter((item) => item.eventStatus && item.eventStatus !== "处理成功").length,
-  paymentSuccessTotal: rows.value.filter((item) => item.eventType === "PAYMENT_SUCCESS").length
+  paymentSuccessTotal: rows.value.filter((item) => item.eventType === "PAYMENT_SUCCESS").length,
+  settlementCompensationTotal: rows.value.filter((item) => item.eventType === "SETTLEMENT_COMPENSATION").length
 }));
 
 const parsedPayload = computed(() => {
@@ -61,6 +74,20 @@ async function consumeClearingGenerated() {
   }
 }
 
+async function consumeSettlementCompensation() {
+  message.value = "";
+  try {
+    await eventApi.consumeSettlementCompensation({
+      ...form.value,
+      amount: Number(form.value.amount),
+      summary: form.value.summary || "结算差异补偿入账"
+    });
+    await loadRows();
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
 function pickRow(row) {
   selectedRow.value = row;
 }
@@ -99,6 +126,10 @@ onMounted(loadRows);
         <p class="card-title">支付成功事件</p>
         <p class="card-value">{{ dashboardMetrics.paymentSuccessTotal }}</p>
       </article>
+      <article class="card">
+        <p class="card-title">结算补偿事件</p>
+        <p class="card-value">{{ dashboardMetrics.settlementCompensationTotal }}</p>
+      </article>
     </section>
 
     <section class="panel">
@@ -120,6 +151,22 @@ onMounted(loadRows);
         <div class="toolbar-actions">
           <button class="button warn" @click="consumePaymentSuccess">消费支付成功事件</button>
           <button class="button secondary" @click="consumeClearingGenerated">消费清分结果事件</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="field"><label>结算补偿单号</label><input v-model="form.settlementOrderNo" placeholder="结算差异补偿单号" /></div>
+        <div class="field">
+          <label>补偿方向</label>
+          <select v-model="form.compensationDirection">
+            <option value="贷方">贷方补差</option>
+            <option value="借方">借方冲回</option>
+          </select>
+        </div>
+        <div class="field"><label>操作人</label><input v-model="form.operatorName" placeholder="财务补偿专员" /></div>
+        <div class="field"><label>补偿摘要</label><input v-model="form.summary" placeholder="结算差异补偿说明" /></div>
+        <div class="toolbar-actions">
+          <button class="button danger" @click="consumeSettlementCompensation">消费结算补偿事件</button>
         </div>
       </div>
 
@@ -171,6 +218,10 @@ onMounted(loadRows);
               <div class="detail-card"><div class="detail-label">摘要</div><div class="detail-value">{{ selectedRow.summary }}</div></div>
               <div class="detail-card"><div class="detail-label">创建时间</div><div class="detail-value">{{ selectedRow.createdAt }}</div></div>
             </div>
+            <div class="trace-panel" v-if="selectedRow.compensationHint">
+              <h4>补偿排查提示</h4>
+              <p>{{ selectedRow.compensationHint }}</p>
+            </div>
             <div class="trace-panel">
               <h4>链路判断</h4>
               <ul class="trace-list">
@@ -211,6 +262,12 @@ onMounted(loadRows);
 
 .trace-panel h4 {
   margin: 0 0 12px;
+}
+
+.trace-panel p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.7;
 }
 
 .trace-list {

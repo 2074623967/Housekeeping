@@ -4,6 +4,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import java.util.List;
 import java.util.Locale;
@@ -79,6 +80,47 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 request.getClearingOrderNo(),
                 request.getSummary(),
                 "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}"));
+    }
+
+    @Override
+    public AccountEventDTO consumeSettlementCompensation(SettlementCompensationEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("SETTLEMENT_COMPENSATION", request.getSettlementOrderNo());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
+        String operatorName = request.getOperatorName() == null || request.getOperatorName().trim().isEmpty()
+                ? "结算补偿消费者"
+                : request.getOperatorName();
+        if (!accountingMemoryStore.hasLedger(
+                request.getAccountNo(),
+                "SETTLEMENT_COMPENSATION_EVENT",
+                request.getSettlementOrderNo())) {
+            if ("借方".equals(request.getCompensationDirection())) {
+                accountingMemoryStore.debit(
+                        request.getAccountNo(),
+                        "SETTLEMENT_COMPENSATION_EVENT",
+                        request.getSettlementOrderNo(),
+                        request.getAmount(),
+                        operatorName);
+            } else {
+                accountingMemoryStore.credit(
+                        request.getAccountNo(),
+                        "SETTLEMENT_COMPENSATION_EVENT",
+                        request.getSettlementOrderNo(),
+                        request.getAmount(),
+                        operatorName);
+            }
+        }
+        return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
+                "SETTLEMENT_COMPENSATION",
+                request.getSettlementOrderNo(),
+                request.getSummary() == null || request.getSummary().trim().isEmpty()
+                        ? "结算差异补偿入账"
+                        : request.getSummary(),
+                "{\"bizNo\":\"" + request.getBizNo()
+                        + "\",\"amount\":" + request.getAmount()
+                        + ",\"compensationDirection\":\"" + request.getCompensationDirection()
+                        + "\"}"));
     }
 
     /**

@@ -4,6 +4,7 @@ import static org.mockito.Mockito.verify;
 
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,5 +47,15 @@ class AccountingEventControllerTest {
         controller.consumeClearingGenerated(request);
 
         verify(accountingEventService).consumeClearingGenerated(request);
+    }
+
+    @Test
+    void shouldConsumeSettlementCompensationEvent() {
+        AccountingEventController controller = new AccountingEventController(accountingEventService);
+        SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+
+        controller.consumeSettlementCompensation(request);
+
+        verify(accountingEventService).consumeSettlementCompensation(request);
     }
 }

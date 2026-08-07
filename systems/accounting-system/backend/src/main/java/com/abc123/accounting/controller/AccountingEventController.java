@@ -5,6 +5,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,5 +44,11 @@ public class AccountingEventController {
     @PostMapping("/clearing/generated")
     public ApiResponse<AccountEventDTO> consumeClearingGenerated(@RequestBody ClearingGeneratedEventRequestDTO request) {
         return ApiResponse.success(accountingEventService.consumeClearingGenerated(request));
+    }
+
+    @PostMapping("/settlements/compensations")
+    public ApiResponse<AccountEventDTO> consumeSettlementCompensation(
+            @RequestBody SettlementCompensationEventRequestDTO request) {
+        return ApiResponse.success(accountingEventService.consumeSettlementCompensation(request));
     }
 }

@@ -6,6 +6,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.BalanceSnapshotDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,5 +86,45 @@ class AccountingEventServiceImplTest {
         assertEquals("PAYMENT_SUCCESS", result.getEventType());
         assertEquals("¥100.00", balance.getAvailableAmount());
         assertEquals(1, events.getTotal());
+    }
+
+    @Test
+    void shouldConsumeSettlementCompensationAsCreditAndKeepIdempotent() {
+        SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+        request.setAccountNo("ACT10002");
+        request.setSettlementOrderNo("SETTLE-COMP-20260807-001");
+        request.setBizNo("SETTLE-DIFF-20260807-001");
+        request.setAmount(new BigDecimal("15.00"));
+        request.setCompensationDirection("贷方");
+        request.setSummary("服务者补差入账");
+        request.setOperatorName("财务补偿专员");
+
+        AccountEventDTO first = eventService.consumeSettlementCompensation(request);
+        AccountEventDTO second = eventService.consumeSettlementCompensation(request);
+        BalanceSnapshotDTO balance = balanceService.detail("ACT10002");
+        PageResultDTO<AccountEventDTO> events =
+                eventService.list("SETTLEMENT_COMPENSATION", "SETTLE-COMP-20260807-001", 1, 20);
+
+        assertEquals(first.getEventNo(), second.getEventNo());
+        assertEquals("¥135.00", balance.getAvailableAmount());
+        assertEquals(1, events.getTotal());
+    }
+
+    @Test
+    void shouldConsumeSettlementCompensationAsDebit() {
+        SettlementCompensationEventRequestDTO request = new SettlementCompensationEventRequestDTO();
+        request.setAccountNo("ACT10003");
+        request.setSettlementOrderNo("SETTLE-COMP-20260807-002");
+        request.setBizNo("SETTLE-DIFF-20260807-002");
+        request.setAmount(new BigDecimal("5.00"));
+        request.setCompensationDirection("借方");
+        request.setSummary("平台手续费冲回");
+        request.setOperatorName("财务补偿专员");
+
+        AccountEventDTO result = eventService.consumeSettlementCompensation(request);
+        BalanceSnapshotDTO balance = balanceService.detail("ACT10003");
+
+        assertEquals("SETTLEMENT_COMPENSATION", result.getEventType());
+        assertEquals("¥7.00", balance.getAvailableAmount());
     }
 }

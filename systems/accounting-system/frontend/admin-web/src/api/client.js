@@ -143,5 +143,6 @@ export const eventApi = {
     return request(`/api/accounting/events?${params.toString()}`);
   },
   consumePaymentSuccess: (payload) => postJson("/api/accounting/events/payments/success", payload),
-  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload)
+  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload),
+  consumeSettlementCompensation: (payload) => postJson("/api/accounting/events/settlements/compensations", payload)
 };
