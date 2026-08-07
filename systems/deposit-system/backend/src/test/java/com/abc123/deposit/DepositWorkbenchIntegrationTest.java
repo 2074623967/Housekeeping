@@ -11,6 +11,8 @@ import com.abc123.deposit.dto.DepositAccountQueryDTO;
 import com.abc123.deposit.dto.DepositActionRequestDTO;
 import com.abc123.deposit.dto.DepositFlowQueryDTO;
 import com.abc123.deposit.dto.DepositOverviewDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
+import com.abc123.deposit.dto.DepositV2OverviewDTO;
 import com.abc123.deposit.service.DepositService;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -70,5 +72,49 @@ class DepositWorkbenchIntegrationTest {
         flowQuery.setFlowType(null);
         flowQuery.setReferenceNo("COLLECT-WORKBENCH");
         assertEquals(1, service.flows(account.getAccountNo(), flowQuery).size());
+    }
+
+    @Test
+    void shouldExposeV2EvolutionPreview() {
+        DepositAccountCreateRequestDTO worker = new DepositAccountCreateRequestDTO();
+        worker.setOwnerId("WORKER-" + UUID.randomUUID());
+        worker.setOwnerType("WORKER");
+        worker.setRequiredAmount(new BigDecimal("800.00"));
+        DepositAccountDTO workerAccount = service.openAccount(worker);
+
+        DepositActionRequestDTO workerCollect = new DepositActionRequestDTO();
+        workerCollect.setAccountNo(workerAccount.getAccountNo());
+        workerCollect.setAmount(new BigDecimal("300.00"));
+        workerCollect.setReferenceNo("V2-WORKER-COLLECT-1");
+        service.collect(workerCollect);
+
+        DepositAccountCreateRequestDTO merchant = new DepositAccountCreateRequestDTO();
+        merchant.setOwnerId("MERCHANT-" + UUID.randomUUID());
+        merchant.setOwnerType("MERCHANT");
+        merchant.setRequiredAmount(new BigDecimal("1200.00"));
+        DepositAccountDTO merchantAccount = service.openAccount(merchant);
+
+        DepositActionRequestDTO merchantCollect = new DepositActionRequestDTO();
+        merchantCollect.setAccountNo(merchantAccount.getAccountNo());
+        merchantCollect.setAmount(new BigDecimal("500.00"));
+        merchantCollect.setReferenceNo("V2-MERCHANT-COLLECT-1");
+        service.collect(merchantCollect);
+
+        DepositV2OverviewDTO overview = service.v2Overview();
+        assertTrue(overview.getTotalAccountCount() >= 2);
+        assertTrue(overview.getBindingCount() >= 2);
+        assertTrue(overview.getMigrationCandidateCount() >= 2);
+
+        String totalAccountNo = service.totalAccounts().stream()
+                .filter(item -> "WORKER".equals(item.getOwnerType()))
+                .findFirst()
+                .orElseThrow(AssertionError::new)
+                .getTotalAccountNo();
+        DepositTotalAccountDetailDTO detail = service.totalAccountDetail(totalAccountNo);
+        assertEquals("WORKER", detail.getSummary().getOwnerType());
+        assertFalse(detail.getBindings().isEmpty());
+        assertFalse(detail.getMigrations().isEmpty());
+        assertTrue(detail.getMigrations().stream()
+                .anyMatch(item -> workerAccount.getAccountNo().equals(item.getSourceAccountNo())));
     }
 }

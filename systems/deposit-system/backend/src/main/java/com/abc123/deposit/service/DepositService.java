@@ -9,6 +9,10 @@ import com.abc123.deposit.dto.DepositActionRequestDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
 import com.abc123.deposit.dto.DepositFlowQueryDTO;
 import com.abc123.deposit.dto.DepositOverviewDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
+import com.abc123.deposit.dto.DepositV2OverviewDTO;
+import com.abc123.deposit.dto.DepositMigrationPreviewDTO;
 import java.util.List;
 
 /**
@@ -45,4 +49,24 @@ public interface DepositService {
     }
 
     List<DepositFlowDTO> flows(String accountNo, DepositFlowQueryDTO query);
+
+    /**
+     * 查询 V2 演进概览。
+     */
+    DepositV2OverviewDTO v2Overview();
+
+    /**
+     * 查询总保证金账户预览列表。
+     */
+    List<DepositTotalAccountDTO> totalAccounts();
+
+    /**
+     * 查询总保证金账户预览详情。
+     */
+    DepositTotalAccountDetailDTO totalAccountDetail(String totalAccountNo);
+
+    /**
+     * 查询旧账户结转预览列表。
+     */
+    List<DepositMigrationPreviewDTO> migrationPreview();
 }

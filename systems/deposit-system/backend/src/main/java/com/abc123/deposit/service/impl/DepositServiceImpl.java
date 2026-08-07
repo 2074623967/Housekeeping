@@ -10,12 +10,21 @@ import com.abc123.deposit.dto.DepositAccountQueryDTO;
 import com.abc123.deposit.dto.DepositActionRequestDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
 import com.abc123.deposit.dto.DepositFlowQueryDTO;
+import com.abc123.deposit.dto.DepositMigrationPreviewDTO;
 import com.abc123.deposit.dto.DepositOverviewDTO;
+import com.abc123.deposit.dto.DepositRuleBindingPreviewDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
+import com.abc123.deposit.dto.DepositV2OverviewDTO;
 import com.abc123.deposit.service.DepositService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -169,6 +178,59 @@ public class DepositServiceImpl implements DepositService {
         return dao.findFlows(required(accountNo, "保证金账户号不能为空"), trimQuery(query));
     }
 
+    @Override
+    public DepositV2OverviewDTO v2Overview() {
+        List<DepositAccountDTO> accounts = dao.findAccounts(new DepositAccountQueryDTO());
+        List<DepositTotalAccountDTO> totalAccounts = buildTotalAccounts(accounts);
+        DepositV2OverviewDTO overview = new DepositV2OverviewDTO();
+        overview.setTotalAccountCount(totalAccounts.size());
+        overview.setBindingCount(totalAccounts.stream()
+                .map(DepositTotalAccountDTO::getRuleCount)
+                .reduce(0, Integer::sum));
+        overview.setMigrationCandidateCount(totalAccounts.stream()
+                .map(DepositTotalAccountDTO::getMigrationCount)
+                .reduce(0, Integer::sum));
+        overview.setTotalRequiredAmount(sum(accounts.stream().map(DepositAccountDTO::getRequiredAmount).collect(Collectors.toList())));
+        overview.setTotalBalance(sum(accounts.stream().map(DepositAccountDTO::getBalance).collect(Collectors.toList())));
+        overview.setTotalFrozenAmount(sum(accounts.stream().map(DepositAccountDTO::getFrozenAmount).collect(Collectors.toList())));
+        overview.setTotalAvailableAmount(sum(accounts.stream().map(DepositAccountDTO::getAvailableAmount).collect(Collectors.toList())));
+        return overview;
+    }
+
+    @Override
+    public List<DepositTotalAccountDTO> totalAccounts() {
+        return buildTotalAccounts(dao.findAccounts(new DepositAccountQueryDTO()));
+    }
+
+    @Override
+    public DepositTotalAccountDetailDTO totalAccountDetail(String totalAccountNo) {
+        String normalizedTotalAccountNo = required(totalAccountNo, "总保证金账户号不能为空");
+        List<DepositAccountDTO> accounts = dao.findAccounts(new DepositAccountQueryDTO());
+        String ownerType = ownerTypeFromTotalAccountNo(normalizedTotalAccountNo);
+        List<DepositAccountDTO> scopedAccounts = accounts.stream()
+                .filter(item -> ownerType.equals(item.getOwnerType()))
+                .collect(Collectors.toList());
+        if (scopedAccounts.isEmpty()) {
+            throw new BusinessException("总保证金账户预览不存在");
+        }
+        DepositTotalAccountDetailDTO detail = new DepositTotalAccountDetailDTO();
+        detail.setSummary(buildTotalAccount(ownerType, scopedAccounts));
+        detail.setBindings(buildBindings(ownerType, scopedAccounts));
+        detail.setMigrations(buildMigrations(ownerType, scopedAccounts));
+        return detail;
+    }
+
+    @Override
+    public List<DepositMigrationPreviewDTO> migrationPreview() {
+        List<DepositMigrationPreviewDTO> items = new ArrayList<>();
+        for (DepositTotalAccountDTO totalAccount : totalAccounts()) {
+            items.addAll(buildMigrations(totalAccount.getOwnerType(), dao.findAccounts(buildOwnerTypeQuery(totalAccount.getOwnerType()))));
+        }
+        items.sort(Comparator.comparing(DepositMigrationPreviewDTO::getTargetTotalAccountNo)
+                .thenComparing(DepositMigrationPreviewDTO::getSourceAccountNo));
+        return items;
+    }
+
     private DepositAccountDTO change(DepositActionRequestDTO request, String flowType,
                                      boolean addBalance, boolean useFrozen) {
         DepositAccountDTO account = account(request);
@@ -271,6 +333,101 @@ public class DepositServiceImpl implements DepositService {
 
     private boolean isFullyPaid(DepositAccountDTO account) {
         return defaultValue(account.getBalance()).compareTo(defaultValue(account.getRequiredAmount())) >= 0;
+    }
+
+    private List<DepositTotalAccountDTO> buildTotalAccounts(List<DepositAccountDTO> accounts) {
+        Map<String, List<DepositAccountDTO>> grouped = new LinkedHashMap<>();
+        for (DepositAccountDTO account : accounts.stream()
+                .sorted(Comparator.comparing(DepositAccountDTO::getOwnerType).thenComparing(DepositAccountDTO::getAccountNo))
+                .collect(Collectors.toList())) {
+            grouped.computeIfAbsent(account.getOwnerType(), key -> new ArrayList<>()).add(account);
+        }
+        List<DepositTotalAccountDTO> items = new ArrayList<>();
+        for (Map.Entry<String, List<DepositAccountDTO>> entry : grouped.entrySet()) {
+            items.add(buildTotalAccount(entry.getKey(), entry.getValue()));
+        }
+        return items;
+    }
+
+    private DepositTotalAccountDTO buildTotalAccount(String ownerType, List<DepositAccountDTO> accounts) {
+        DepositTotalAccountDTO dto = new DepositTotalAccountDTO();
+        dto.setTotalAccountNo(totalAccountNo(ownerType));
+        dto.setOwnerType(ownerType);
+        dto.setAccountCount(accounts.size());
+        dto.setRuleCount(accounts.size());
+        dto.setMigrationCount((int) accounts.stream()
+                .filter(item -> defaultValue(item.getBalance()).compareTo(ZERO) > 0)
+                .count());
+        dto.setTotalRequiredAmount(sum(accounts.stream().map(DepositAccountDTO::getRequiredAmount).collect(Collectors.toList())));
+        dto.setTotalBalance(sum(accounts.stream().map(DepositAccountDTO::getBalance).collect(Collectors.toList())));
+        dto.setTotalFrozenAmount(sum(accounts.stream().map(DepositAccountDTO::getFrozenAmount).collect(Collectors.toList())));
+        dto.setTotalAvailableAmount(sum(accounts.stream().map(DepositAccountDTO::getAvailableAmount).collect(Collectors.toList())));
+        dto.setStatus(accounts.stream().allMatch(item -> "OPEN".equals(item.getStatus())) ? "PREVIEW_READY" : "CHECK_REQUIRED");
+        return dto;
+    }
+
+    private List<DepositRuleBindingPreviewDTO> buildBindings(String ownerType, List<DepositAccountDTO> accounts) {
+        List<DepositRuleBindingPreviewDTO> items = new ArrayList<>();
+        int index = 1;
+        for (DepositAccountDTO account : accounts.stream()
+                .sorted(Comparator.comparing(DepositAccountDTO::getAccountNo))
+                .collect(Collectors.toList())) {
+            DepositRuleBindingPreviewDTO item = new DepositRuleBindingPreviewDTO();
+            item.setRuleCode(ownerType + "-RULE-" + String.format("%02d", index));
+            item.setRuleName(ownerType + "保证金规则-" + index);
+            item.setBusinessLine("HOME_SERVICE");
+            item.setCategoryCode(ownerType);
+            item.setSourceAccountNo(account.getAccountNo());
+            item.setSourceOwnerId(account.getOwnerId());
+            item.setRuleAmount(defaultValue(account.getRequiredAmount()));
+            item.setCurrentBalance(defaultValue(account.getBalance()));
+            item.setFrozenAmount(defaultValue(account.getFrozenAmount()));
+            item.setBindingStatus(defaultValue(account.getBalance()).compareTo(defaultValue(account.getRequiredAmount())) >= 0
+                    ? "READY_TO_BIND" : "WAIT_BALANCE_FILL");
+            items.add(item);
+            index++;
+        }
+        return items;
+    }
+
+    private List<DepositMigrationPreviewDTO> buildMigrations(String ownerType, List<DepositAccountDTO> accounts) {
+        List<DepositMigrationPreviewDTO> items = new ArrayList<>();
+        String totalAccountNo = totalAccountNo(ownerType);
+        for (DepositAccountDTO account : accounts.stream()
+                .sorted(Comparator.comparing(DepositAccountDTO::getAccountNo))
+                .collect(Collectors.toList())) {
+            DepositMigrationPreviewDTO item = new DepositMigrationPreviewDTO();
+            item.setMigrationNo("MIG-" + account.getAccountNo());
+            item.setSourceAccountNo(account.getAccountNo());
+            item.setSourceOwnerId(account.getOwnerId());
+            item.setSourceOwnerType(account.getOwnerType());
+            item.setTargetTotalAccountNo(totalAccountNo);
+            item.setSourceBalance(defaultValue(account.getBalance()));
+            item.setMigratedBalance(defaultValue(account.getBalance()));
+            item.setMigrationStatus(defaultValue(account.getBalance()).compareTo(ZERO) > 0 ? "PENDING_MIGRATION" : "NO_BALANCE");
+            item.setMigrationRemark(defaultValue(account.getBalance()).compareTo(ZERO) > 0
+                    ? "V1 单账户余额需结转到总保证金账户"
+                    : "当前账户无可迁移余额，保留历史追溯即可");
+            items.add(item);
+        }
+        return items;
+    }
+
+    private String totalAccountNo(String ownerType) {
+        return "TDEP-" + ownerType;
+    }
+
+    private String ownerTypeFromTotalAccountNo(String totalAccountNo) {
+        if (!totalAccountNo.startsWith("TDEP-")) {
+            throw new BusinessException("总保证金账户号格式不正确");
+        }
+        return totalAccountNo.substring("TDEP-".length());
+    }
+
+    private DepositAccountQueryDTO buildOwnerTypeQuery(String ownerType) {
+        DepositAccountQueryDTO query = new DepositAccountQueryDTO();
+        query.setOwnerType(ownerType);
+        return query;
     }
 
     private void ensureNotDuplicated(String accountNo, String flowType, String referenceNo) {

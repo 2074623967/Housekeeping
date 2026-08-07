@@ -9,7 +9,11 @@ import com.abc123.deposit.dto.DepositAccountQueryDTO;
 import com.abc123.deposit.dto.DepositActionRequestDTO;
 import com.abc123.deposit.dto.DepositFlowDTO;
 import com.abc123.deposit.dto.DepositFlowQueryDTO;
+import com.abc123.deposit.dto.DepositMigrationPreviewDTO;
 import com.abc123.deposit.dto.DepositOverviewDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDTO;
+import com.abc123.deposit.dto.DepositTotalAccountDetailDTO;
+import com.abc123.deposit.dto.DepositV2OverviewDTO;
 import com.abc123.deposit.service.DepositService;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -102,5 +106,25 @@ public class DepositController {
         query.setFlowType(flowType);
         query.setReferenceNo(referenceNo);
         return ApiResponse.success(service.flows(accountNo, query));
+    }
+
+    @GetMapping("/v2/overview")
+    public ApiResponse<DepositV2OverviewDTO> v2Overview() {
+        return ApiResponse.success(service.v2Overview());
+    }
+
+    @GetMapping("/v2/total-accounts")
+    public ApiResponse<List<DepositTotalAccountDTO>> totalAccounts() {
+        return ApiResponse.success(service.totalAccounts());
+    }
+
+    @GetMapping("/v2/total-accounts/{totalAccountNo}")
+    public ApiResponse<DepositTotalAccountDetailDTO> totalAccountDetail(@PathVariable String totalAccountNo) {
+        return ApiResponse.success(service.totalAccountDetail(totalAccountNo));
+    }
+
+    @GetMapping("/v2/migrations")
+    public ApiResponse<List<DepositMigrationPreviewDTO>> migrationPreview() {
+        return ApiResponse.success(service.migrationPreview());
     }
 }

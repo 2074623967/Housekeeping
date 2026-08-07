@@ -12,6 +12,11 @@ const request = async (url, options = {}) => {
 
 export const getAccounts = () => request("/api/deposits/accounts");
 export const getOverview = () => request("/api/deposits/overview");
+export const getV2Overview = () => request("/api/deposits/v2/overview");
+export const getV2TotalAccounts = () => request("/api/deposits/v2/total-accounts");
+export const getV2TotalAccountDetail = (totalAccountNo) =>
+  request(`/api/deposits/v2/total-accounts/${encodeURIComponent(totalAccountNo)}`);
+export const getV2Migrations = () => request("/api/deposits/v2/migrations");
 export const getAccountDetail = (accountNo) =>
   request(`/api/deposits/accounts/${encodeURIComponent(accountNo)}`);
 export const getAccountsByQuery = (query = {}) => {

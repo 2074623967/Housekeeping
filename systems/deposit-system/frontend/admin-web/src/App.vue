@@ -1,6 +1,18 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { getAccountDetail, getAccountsByQuery, getFlows, getOverview, offsetDebt, openAccount, postAction } from "./api";
+import {
+  getAccountDetail,
+  getAccountsByQuery,
+  getFlows,
+  getOverview,
+  getV2Migrations,
+  getV2Overview,
+  getV2TotalAccountDetail,
+  getV2TotalAccounts,
+  offsetDebt,
+  openAccount,
+  postAction
+} from "./api";
 
 const overview = ref({
   accountCount: 0,
@@ -14,6 +26,19 @@ const accounts = ref([]);
 const selected = ref(null);
 const selectedDetail = ref(null);
 const flows = ref([]);
+const v2Overview = ref({
+  totalAccountCount: 0,
+  bindingCount: 0,
+  migrationCandidateCount: 0,
+  totalRequiredAmount: 0,
+  totalBalance: 0,
+  totalFrozenAmount: 0,
+  totalAvailableAmount: 0
+});
+const totalAccounts = ref([]);
+const totalAccountDetail = ref(null);
+const migrations = ref([]);
+const selectedTotalAccountNo = ref("");
 const loading = ref(false);
 const errorMessage = ref("");
 const activeView = ref("overview");
@@ -35,6 +60,10 @@ const actionLabels = {
 const totalBalance = computed(() => Number(overview.value.totalBalance || 0).toFixed(2));
 const totalFrozen = computed(() => Number(overview.value.totalFrozenAmount || 0).toFixed(2));
 const totalAvailable = computed(() => Number(overview.value.totalAvailableAmount || 0).toFixed(2));
+const v2TotalBalance = computed(() => Number(v2Overview.value.totalBalance || 0).toFixed(2));
+const v2TotalRequiredAmount = computed(() => Number(v2Overview.value.totalRequiredAmount || 0).toFixed(2));
+const v2TotalFrozen = computed(() => Number(v2Overview.value.totalFrozenAmount || 0).toFixed(2));
+const v2TotalAvailable = computed(() => Number(v2Overview.value.totalAvailableAmount || 0).toFixed(2));
 
 const loadOverview = async () => {
   overview.value = await getOverview();
@@ -58,12 +87,27 @@ const refresh = async () => {
   loading.value = true;
   errorMessage.value = "";
   try {
-    await Promise.all([loadOverview(), loadAccounts(), loadSelected()]);
+    await Promise.all([loadOverview(), loadAccounts(), loadSelected(), loadV2Preview()]);
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
     loading.value = false;
   }
+};
+
+const loadV2Preview = async () => {
+  v2Overview.value = await getV2Overview();
+  totalAccounts.value = await getV2TotalAccounts();
+  migrations.value = await getV2Migrations();
+  if (!totalAccounts.value.length) {
+    totalAccountDetail.value = null;
+    selectedTotalAccountNo.value = "";
+    return;
+  }
+  if (!selectedTotalAccountNo.value || !totalAccounts.value.some((item) => item.totalAccountNo === selectedTotalAccountNo.value)) {
+    selectedTotalAccountNo.value = totalAccounts.value[0].totalAccountNo;
+  }
+  totalAccountDetail.value = await getV2TotalAccountDetail(selectedTotalAccountNo.value);
 };
 
 const searchAccounts = async () => {
@@ -83,6 +127,12 @@ const selectAccount = async (account) => {
   selected.value = account;
   activeView.value = "detail";
   await loadSelected();
+};
+
+const selectTotalAccount = async (item) => {
+  selectedTotalAccountNo.value = item.totalAccountNo;
+  totalAccountDetail.value = await getV2TotalAccountDetail(item.totalAccountNo);
+  activeView.value = "v2";
 };
 
 const create = async () => {
@@ -172,6 +222,9 @@ onMounted(refresh);
       <button class="nav" :class="{ active: activeView === 'accounts' }" @click="activeView = 'accounts'">
         保证金账户 <small>Accounts</small>
       </button>
+      <button class="nav" :class="{ active: activeView === 'v2' }" @click="activeView = 'v2'">
+        V2 演进 <small>Preview</small>
+      </button>
       <button class="nav" :class="{ active: activeView === 'detail' }" :disabled="!selected" @click="activeView = 'detail'">
         账户详情 <small>Detail</small>
       </button>
@@ -185,7 +238,7 @@ onMounted(refresh);
       <header class="topbar">
         <div>
           <p>HOME SERVICE PAYMENT PLATFORM / DEPOSIT DOMAIN</p>
-          <h1>{{ activeView === "overview" ? "保证金运营工作台" : activeView === "accounts" ? "保证金账户" : "账户详情" }}</h1>
+          <h1>{{ activeView === "overview" ? "保证金运营工作台" : activeView === "accounts" ? "保证金账户" : activeView === "v2" ? "V2 演进预览" : "账户详情" }}</h1>
         </div>
         <div class="top-actions">
           <button class="ghost" @click="refresh">刷新</button>
@@ -216,6 +269,142 @@ onMounted(refresh);
           <span>CONTROL RULES</span>
           <h3>保证金生命周期</h3>
           <div><b>开户</b><i>→</i><b>收取</b><i>→</i><b>冻结 / 解冻</b><i>→</i><b>扣罚 / 抵扣</b><i>→</i><b>退还</b></div>
+        </div>
+      </section>
+
+      <section v-else-if="activeView === 'v2'" class="panel">
+        <div class="section-head">
+          <div>
+            <span>DEPOSIT V2</span>
+            <h2>总保证金账户演进预览</h2>
+          </div>
+          <button class="primary" @click="loadV2Preview">刷新预览</button>
+        </div>
+
+        <div class="metrics">
+          <article><span>总账户数</span><strong>{{ v2Overview.totalAccountCount }}</strong><small>按主体类型归集</small></article>
+          <article class="green"><span>规则绑定数</span><strong>{{ v2Overview.bindingCount }}</strong><small>一个总账户对应多条规则</small></article>
+          <article class="warm"><span>迁移候选</span><strong>{{ v2Overview.migrationCandidateCount }}</strong><small>已有余额的历史账户</small></article>
+          <article><span>迁移建议</span><strong>V2 预览</strong><small>尚未正式写库</small></article>
+        </div>
+
+        <div class="summary">
+          <div><small>总应缴</small><strong>¥{{ v2TotalRequiredAmount }}</strong></div>
+          <div><small>总余额</small><strong class="money">¥{{ v2TotalBalance }}</strong></div>
+          <div><small>总冻结</small><strong>¥{{ v2TotalFrozen }}</strong></div>
+          <div><small>总可用</small><strong>¥{{ v2TotalAvailable }}</strong></div>
+        </div>
+
+        <div class="section-head">
+          <div>
+            <span>TOTAL ACCOUNT PREVIEW</span>
+            <h3>总保证金账户列表</h3>
+          </div>
+        </div>
+
+        <table class="table">
+          <thead>
+            <tr>
+              <th>总账户号</th><th>主体类型</th><th>账户数</th><th>规则数</th><th>迁移候选</th><th>总应缴</th><th>总余额</th><th>状态</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in totalAccounts" :key="item.totalAccountNo">
+              <td>{{ item.totalAccountNo }}</td>
+              <td>{{ item.ownerType }}</td>
+              <td>{{ item.accountCount }}</td>
+              <td>{{ item.ruleCount }}</td>
+              <td>{{ item.migrationCount }}</td>
+              <td>¥{{ Number(item.totalRequiredAmount || 0).toFixed(2) }}</td>
+              <td>¥{{ Number(item.totalBalance || 0).toFixed(2) }}</td>
+              <td><em>{{ item.status }}</em></td>
+              <td><button class="link" @click="selectTotalAccount(item)">查看详情</button></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="detail" v-if="totalAccountDetail">
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <span>TOTAL ACCOUNT DETAIL</span>
+                <h2>{{ totalAccountDetail.summary.totalAccountNo }}</h2>
+              </div>
+            </div>
+            <div class="summary">
+              <div><small>主体类型</small><strong>{{ totalAccountDetail.summary.ownerType }}</strong></div>
+              <div><small>账户数</small><strong>{{ totalAccountDetail.summary.accountCount }}</strong></div>
+              <div><small>规则数</small><strong>{{ totalAccountDetail.summary.ruleCount }}</strong></div>
+              <div><small>结转候选</small><strong>{{ totalAccountDetail.summary.migrationCount }}</strong></div>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>规则编码</th><th>规则名称</th><th>来源账户</th><th>应缴金额</th><th>当前余额</th><th>绑定状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in totalAccountDetail.bindings" :key="item.ruleCode">
+                  <td>{{ item.ruleCode }}</td>
+                  <td>{{ item.ruleName }}</td>
+                  <td>{{ item.sourceAccountNo }}</td>
+                  <td>¥{{ Number(item.ruleAmount || 0).toFixed(2) }}</td>
+                  <td>¥{{ Number(item.currentBalance || 0).toFixed(2) }}</td>
+                  <td>{{ item.bindingStatus }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <div>
+                <span>MIGRATION PREVIEW</span>
+                <h3>旧账户结转预览</h3>
+              </div>
+            </div>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>结转号</th><th>来源账户</th><th>迁移金额</th><th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in totalAccountDetail.migrations" :key="item.migrationNo">
+                  <td>{{ item.migrationNo }}</td>
+                  <td>{{ item.sourceAccountNo }}</td>
+                  <td>¥{{ Number(item.migratedBalance || 0).toFixed(2) }}</td>
+                  <td>{{ item.migrationStatus }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel" v-if="migrations.length">
+          <div class="section-head">
+            <div>
+              <span>MIGRATION BOARD</span>
+              <h3>结转预览池</h3>
+            </div>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>结转号</th><th>来源主体</th><th>来源账户</th><th>目标总账户</th><th>迁移金额</th><th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in migrations" :key="item.migrationNo">
+                <td>{{ item.migrationNo }}</td>
+                <td>{{ item.sourceOwnerId }} / {{ item.sourceOwnerType }}</td>
+                <td>{{ item.sourceAccountNo }}</td>
+                <td>{{ item.targetTotalAccountNo }}</td>
+                <td>¥{{ Number(item.migratedBalance || 0).toFixed(2) }}</td>
+                <td>{{ item.migrationRemark }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
