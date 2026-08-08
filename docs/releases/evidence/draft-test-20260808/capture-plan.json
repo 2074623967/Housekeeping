@@ -2,10 +2,10 @@
   "generatedAt": "2026-08-08T01:28:01.284Z",
   "note": "优先补齐 baseUrls 和 sampleValues；若某页需要特殊跳转，也可直接覆盖单条 url。",
   "baseUrls": {
-    "payment-core/admin-web": "",
-    "payment-core/app-web": "",
-    "payment-core/h5-web": "",
-    "payment-core/pc-web": "",
+    "payment-core/admin-web": "http://127.0.0.1:5174",
+    "payment-core/app-web": "http://127.0.0.1:5175",
+    "payment-core/h5-web": "http://127.0.0.1:5176",
+    "payment-core/pc-web": "http://127.0.0.1:5177",
     "clearing-system/admin-web": "",
     "settlement-system/admin-web": "",
     "accounting-system/admin-web": ""

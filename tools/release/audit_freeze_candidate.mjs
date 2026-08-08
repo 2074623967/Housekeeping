@@ -76,7 +76,7 @@ function normalizeStatus(value) {
 }
 
 function isCompletedStatus(value) {
-  return ["DONE", "ARCHIVED", "PASS", "PASSED", "OK"].includes(normalizeStatus(value));
+  return ["DONE", "ARCHIVED", "PASS", "PASSED", "OK", "CAPTURED"].includes(normalizeStatus(value));
 }
 
 function toRelative(rootDir, filePath) {

@@ -74,6 +74,18 @@
 
 1. `records/freeze-candidate-summary.md`
 
+5. 若需要为支付核心四端统一拉起本地页面，再执行截图，可使用：
+
+```bash
+/Users/abc123/workspace/home-service-payment-system/tools/release/start_payment_core_frontends.sh
+```
+
+若要停止本地四端：
+
+```bash
+/Users/abc123/workspace/home-service-payment-system/tools/release/stop_payment_core_frontends.sh
+```
+
 ## 当前已预填样例
 
 当前证据包已预填以下真实样例，后续补截图时可直接复用：
