@@ -1,0 +1,69 @@
+# 冻结候选汇总
+
+- 版本标识：`draft-test-20260808`
+- 生成时间：`2026-08-08T01:46:35.207Z`
+- Git 提交号：`389e008`
+- 发布日期口径：`2026-08-08`
+
+## 1. 当前结论
+
+1. 当前是否允许推进 `test -> master`：`否`
+2. 当前是否允许创建 `release/*`：`否`
+3. 当前冻结候选阻断项数量：`3`
+
+## 2. 发布范围摘要
+
+1. 涉及系统：payment-core
+2. 涉及模块：支付提交、收银台、支付结果、风控复核、支付成功事件、清分/账务/结算联动、死信补偿任务
+3. 证据包目录：`docs/releases/evidence/draft-test-20260808`
+
+## 3. 关键业务样例
+
+1. 主链路样例：`PAY1785918393972 / PRE1785918393974 / REG-AUTO-APP-20260805-001`
+2. 风控样例：`PAY1785811244732 / PRE1785811244734`
+3. 关闭单样例：`PAY1785729963046 / DRILL-AMQP-20260803A-001`
+4. 补偿样例：`DLQa254a62bab904f0d9885 / DLQb151ee3a445c42229730 / DLQ5ef0a4f3bbf24129aef2 / DLQe9f4ca3e5625481eb952 / DLQa55e1d33dfa845aeb296`
+
+## 4. 证据完成度
+
+| 项目 | 当前结果 |
+| --- | --- |
+| 截图总数 | `50` |
+| 已归档截图数 | `0` |
+| 未归档截图数 | `50` |
+| 人工回归 TODO 数 | `19` |
+| 发布说明是否仍为草案 | `是` |
+
+## 5. 当前阻断
+
+1. 截图台账仍有 50 项未归档完成
+2. 人工回归归档中仍有 19 个 TODO 待回填
+3. 发布说明仍处于草案状态
+
+## 6. 最近应优先补的页面
+
+| 系统 | 终端 | 页面 | 样例编号 |
+| --- | --- | --- | --- |
+| payment-core | admin-web | dashboard |  |
+| payment-core | admin-web | orders |  |
+| payment-core | admin-web | payment-list |  |
+| payment-core | admin-web | payment-detail-wait-callback | PAY1785915556767 |
+| payment-core | admin-web | payment-detail-risk-review | PAY1785811244732 |
+| payment-core | admin-web | payment-detail-success | PAY1785918393972 |
+| payment-core | admin-web | payment-detail-closed | PAY1785729963046 |
+| payment-core | admin-web | payment-flows |  |
+| payment-core | admin-web | payment-events |  |
+| payment-core | admin-web | payment-issues |  |
+
+## 7. 下一步建议
+
+1. 先补页面级冻结截图，并同步回填 `screenshot-manifest.csv`。
+2. 再补一体化人工回归归档，把页面、接口、后台、下游事实串起来。
+3. 最后把发布说明从草案升级为冻结候选版，再重新运行自动审计。
+
+## 8. 关联材料
+
+1. `docs/releases/2026-08-05-支付系统发布说明草案.md`
+2. `docs/releases/evidence/draft-test-20260808/records/freeze-audit-report.json`
+3. `docs/releases/evidence/draft-test-20260808/records/final-regression-checklist.md`
+

@@ -61,6 +61,19 @@
 1. 当前是否允许推进 `test -> master`
 2. 当前是否允许创建 `release/*`
 
+4. 生成冻结候选汇总页，便于版本评审快速查看：
+
+```bash
+/Users/abc123/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  /Users/abc123/workspace/home-service-payment-system/tools/release/render_freeze_candidate_summary.mjs \
+  --evidence-dir /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808 \
+  --release-doc /Users/abc123/workspace/home-service-payment-system/docs/releases/2026-08-05-支付系统发布说明草案.md
+```
+
+脚本会输出：
+
+1. `records/freeze-candidate-summary.md`
+
 ## 当前已预填样例
 
 当前证据包已预填以下真实样例，后续补截图时可直接复用：
