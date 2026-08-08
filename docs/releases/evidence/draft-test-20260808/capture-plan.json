@@ -11,13 +11,13 @@
     "accounting-system/admin-web": ""
   },
   "sampleValues": {
-    "paymentOrderIdWaitCallback": "",
-    "paymentOrderIdRiskReview": "",
-    "paymentOrderIdSuccess": "",
-    "paymentOrderIdClosed": "",
-    "prepayOrderNoPrepayCreated": "",
-    "prepayOrderNoWaitCallback": "",
-    "prepayOrderNoRiskReview": ""
+    "paymentOrderIdWaitCallback": "PAY1785915556767",
+    "paymentOrderIdRiskReview": "PAY1785811244732",
+    "paymentOrderIdSuccess": "PAY1785918393972",
+    "paymentOrderIdClosed": "PAY1785729963046",
+    "prepayOrderNoPrepayCreated": "PRE1785915100361",
+    "prepayOrderNoWaitCallback": "PRE1785915556768",
+    "prepayOrderNoRiskReview": "PRE1785811244734"
   },
   "targets": [
     {

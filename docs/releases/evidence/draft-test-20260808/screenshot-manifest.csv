@@ -2,50 +2,50 @@ system,terminal,page_key,page_name,required_state_or_action,sample_biz_no_or_tas
 payment-core,admin-web,dashboard,工作台,总览指标与待处理入口,,,TODO,
 payment-core,admin-web,orders,订单中心,发起支付/查看支付单/查看收银台,,,TODO,
 payment-core,admin-web,payment-list,支付单管理,筛选列表与状态联查,,,TODO,
-payment-core,admin-web,payment-detail-wait-callback,支付单详情,WAIT_CALLBACK,,,TODO,
-payment-core,admin-web,payment-detail-risk-review,支付单详情,RISK_REVIEW,,,TODO,
-payment-core,admin-web,payment-detail-success,支付单详情,SUCCESS,,,TODO,
-payment-core,admin-web,payment-detail-closed,支付单详情,CLOSED,,,TODO,
+payment-core,admin-web,payment-detail-wait-callback,支付单详情,WAIT_CALLBACK,PAY1785915556767,,TODO,使用 2026-08-05 WAIT_CALLBACK 样例
+payment-core,admin-web,payment-detail-risk-review,支付单详情,RISK_REVIEW,PAY1785811244732,,TODO,使用风控复核样例
+payment-core,admin-web,payment-detail-success,支付单详情,SUCCESS,PAY1785918393972,,TODO,使用正式来源应用成功样例
+payment-core,admin-web,payment-detail-closed,支付单详情,CLOSED,PAY1785729963046,,TODO,使用 2026-08-03 已超时关闭样例
 payment-core,admin-web,payment-flows,支付流水查询,支付提交/回调/事件/路由联查,,,TODO,
 payment-core,admin-web,payment-events,支付事件列表,PAYMENT_SUCCESS 出站与处理结果,,,TODO,
 payment-core,admin-web,payment-issues,支付交易异常中心,异常聚合与 SLA,,,TODO,
 payment-core,admin-web,cashier-sessions,收银台会话,会话状态与支付单关联,,,TODO,
-payment-core,admin-web,dead-letter-pending-review,死信补偿任务,PENDING_REVIEW,,,TODO,
-payment-core,admin-web,dead-letter-ready-replay,死信补偿任务,READY_TO_REPLAY,,,TODO,
-payment-core,admin-web,dead-letter-manual-resolved,死信补偿任务,MANUAL_RESOLVED,,,TODO,
-payment-core,admin-web,dead-letter-replayed,死信补偿任务,REPLAYED,,,TODO,
+payment-core,admin-web,dead-letter-pending-review,死信补偿任务,PENDING_REVIEW,,,TODO,当前基线暂无冻结中的 PENDING_REVIEW 样例，需现场补一笔新任务
+payment-core,admin-web,dead-letter-ready-replay,死信补偿任务,READY_TO_REPLAY,,,TODO,当前基线暂无 READY_TO_REPLAY 样例，需现场保留重放前状态
+payment-core,admin-web,dead-letter-manual-resolved,死信补偿任务,MANUAL_RESOLVED,DLQa254a62bab904f0d9885,,TODO,payment.success clearing 人工结案样例
+payment-core,admin-web,dead-letter-replayed,死信补偿任务,REPLAYED,DLQb151ee3a445c42229730,,TODO,payment.success accounting 重放样例
 payment-core,app-web,recharge-entry,充值业务入口,创建预付单入口,,,TODO,
 payment-core,app-web,withdraw-entry,提现业务入口,创建预付单入口,,,TODO,
 payment-core,app-web,transfer-entry,转账业务入口,创建预付单入口,,,TODO,
 payment-core,app-web,balance-pay-entry,余额支付业务入口,创建预付单入口,,,TODO,
-payment-core,app-web,cashier-prepay-created,收银台,PREPAY_CREATED,,,TODO,
-payment-core,app-web,cashier-wait-callback,收银台,WAIT_CALLBACK,,,TODO,
-payment-core,app-web,cashier-risk-review,收银台,RISK_REVIEW,,,TODO,
-payment-core,app-web,result-success,支付结果页,SUCCESS,,,TODO,
-payment-core,app-web,result-closed,支付结果页,CLOSED,,,TODO,
-payment-core,app-web,result-risk-review,支付结果页,RISK_REVIEW,,,TODO,
-payment-core,app-web,result-wait-callback,支付结果页,WAIT_CALLBACK,,,TODO,
+payment-core,app-web,cashier-prepay-created,收银台,PREPAY_CREATED,PRE1785915100361,,TODO,预付单已创建未正式提交样例
+payment-core,app-web,cashier-wait-callback,收银台,WAIT_CALLBACK,PRE1785915556768,,TODO,WAIT_CALLBACK 样例预付单
+payment-core,app-web,cashier-risk-review,收银台,RISK_REVIEW,PRE1785811244734,,TODO,风控复核样例预付单
+payment-core,app-web,result-success,支付结果页,SUCCESS,PAY1785918393972,,TODO,正式来源应用 App 成功样例
+payment-core,app-web,result-closed,支付结果页,CLOSED,PAY1785729963046,,TODO,历史已关闭样例
+payment-core,app-web,result-risk-review,支付结果页,RISK_REVIEW,PAY1785811244732,,TODO,风控复核样例
+payment-core,app-web,result-wait-callback,支付结果页,WAIT_CALLBACK,PAY1785915556566,,TODO,App WAIT_CALLBACK 样例
 payment-core,h5-web,recharge-entry,充值业务入口,创建预付单入口,,,TODO,
 payment-core,h5-web,withdraw-entry,提现业务入口,创建预付单入口,,,TODO,
 payment-core,h5-web,transfer-entry,转账业务入口,创建预付单入口,,,TODO,
 payment-core,h5-web,balance-pay-entry,余额支付业务入口,创建预付单入口,,,TODO,
-payment-core,h5-web,cashier-wait-callback,收银台,WAIT_CALLBACK,,,TODO,
-payment-core,h5-web,cashier-risk-review,收银台,RISK_REVIEW,,,TODO,
-payment-core,h5-web,result-success,支付结果页,SUCCESS,,,TODO,
-payment-core,h5-web,result-closed,支付结果页,CLOSED,,,TODO,
-payment-core,h5-web,result-risk-review,支付结果页,RISK_REVIEW,,,TODO,
-payment-core,h5-web,result-wait-callback,支付结果页,WAIT_CALLBACK,,,TODO,
+payment-core,h5-web,cashier-wait-callback,收银台,WAIT_CALLBACK,PRE1785918388806,,TODO,正式来源应用 H5 提交样例
+payment-core,h5-web,cashier-risk-review,收银台,RISK_REVIEW,PRE1785811244734,,TODO,风控复核样例预付单
+payment-core,h5-web,result-success,支付结果页,SUCCESS,PAY1785918388803,,TODO,正式来源应用 H5 成功样例
+payment-core,h5-web,result-closed,支付结果页,CLOSED,PAY1785729963046,,TODO,历史已关闭样例
+payment-core,h5-web,result-risk-review,支付结果页,RISK_REVIEW,PAY1785811244732,,TODO,风控复核样例
+payment-core,h5-web,result-wait-callback,支付结果页,WAIT_CALLBACK,PAY1785918388803,,TODO,若需保留 WAIT_CALLBACK 截图，应在成功回调前先采图
 payment-core,pc-web,recharge-entry,充值业务入口,创建预付单入口,,,TODO,
 payment-core,pc-web,withdraw-entry,提现业务入口,创建预付单入口,,,TODO,
 payment-core,pc-web,transfer-entry,转账业务入口,创建预付单入口,,,TODO,
 payment-core,pc-web,balance-pay-entry,余额支付业务入口,创建预付单入口,,,TODO,
-payment-core,pc-web,cashier-wait-callback,收银台,WAIT_CALLBACK,,,TODO,
-payment-core,pc-web,cashier-risk-review,收银台,RISK_REVIEW,,,TODO,
-payment-core,pc-web,result-success,支付结果页,SUCCESS,,,TODO,
-payment-core,pc-web,result-closed,支付结果页,CLOSED,,,TODO,
-payment-core,pc-web,result-risk-review,支付结果页,RISK_REVIEW,,,TODO,
-payment-core,pc-web,result-wait-callback,支付结果页,WAIT_CALLBACK,,,TODO,
-clearing-system,admin-web,events,清分事件页,publishStatus/retryCount/replayHint,,,TODO,
-settlement-system,admin-web,orders,结算单页,结算单状态与清分承接事实,,,TODO,
-settlement-system,admin-web,payouts,出款批次页,出款记录与失败重试事实,,,TODO,
-accounting-system,admin-web,events,账务事件页,PAYMENT_SUCCESS/CLEARING_GENERATED,,,TODO,
+payment-core,pc-web,cashier-wait-callback,收银台,WAIT_CALLBACK,PRE1785918388717,,TODO,正式来源应用 PC 提交样例
+payment-core,pc-web,cashier-risk-review,收银台,RISK_REVIEW,PRE1785811244734,,TODO,风控复核样例预付单
+payment-core,pc-web,result-success,支付结果页,SUCCESS,PAY1785918388713,,TODO,正式来源应用 PC 成功样例
+payment-core,pc-web,result-closed,支付结果页,CLOSED,PAY1785729963046,,TODO,历史已关闭样例
+payment-core,pc-web,result-risk-review,支付结果页,RISK_REVIEW,PAY1785811244732,,TODO,风控复核样例
+payment-core,pc-web,result-wait-callback,支付结果页,WAIT_CALLBACK,PAY1785915556767,,TODO,PC WAIT_CALLBACK 样例
+clearing-system,admin-web,events,清分事件页,publishStatus/retryCount/replayHint,PAY1785918393972,,TODO,正式来源应用成功样例对应清分事件
+settlement-system,admin-web,orders,结算单页,结算单状态与清分承接事实,SLT20004,,TODO,正式来源应用 App 结算单样例
+settlement-system,admin-web,payouts,出款批次页,出款记录与失败重试事实,PBT50001,,TODO,2026-08-03 同批次出款批次样例
+accounting-system,admin-web,events,账务事件页,PAYMENT_SUCCESS/CLEARING_GENERATED,EVT50005~EVT50010,,TODO,正式来源应用三笔样例自动消费区间

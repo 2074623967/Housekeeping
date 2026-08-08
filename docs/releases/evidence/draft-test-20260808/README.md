@@ -41,3 +41,42 @@
   --evidence-dir /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808 \
   --dry-run
 ```
+
+## 当前已预填样例
+
+当前证据包已预填以下真实样例，后续补截图时可直接复用：
+
+1. `SUCCESS`
+   - `PAY1785918393972 / PRE1785918393974`
+2. `RISK_REVIEW`
+   - `PAY1785811244732 / PRE1785811244734`
+3. `WAIT_CALLBACK`
+   - `PAY1785915556767 / PRE1785915556768`
+   - `PAY1785915556566`
+4. `PREPAY_CREATED`
+   - `PAY1785915100360 / PRE1785915100361`
+5. `CLOSED`
+   - `PAY1785729963046`
+6. `payment.success` 补偿
+   - `DLQa254a62bab904f0d9885`
+   - `DLQb151ee3a445c42229730`
+7. `clearing.generated` 补偿
+   - `DLQ5ef0a4f3bbf24129aef2`
+   - `DLQe9f4ca3e5625481eb952`
+   - `DLQa55e1d33dfa845aeb296`
+
+仍需现场补的内容：
+
+1. 各端实际访问 `baseUrl`
+2. 若需要保留 `READY_TO_REPLAY / PENDING_REVIEW` 页面截图，需要在重放前保留中间态任务
+3. 若要获取正式来源应用 H5/PC 的 `WAIT_CALLBACK` 截图，需要在成功回调前先完成采图
+
+## 当前阻断判断
+
+基于 `test` 分支 `d40adca` 基线，当前冻结版仍以以下三项为主阻断：
+
+1. 页面级冻结截图尚未形成同批次归档
+2. 页面 + 接口 + 后台 + 下游事实的一体化回归清单尚未全部回填
+3. 最终发布候选说明仍需基于本批次证据再做一次收口
+
+因此，当前策略应继续优先补“证据和归档”，而不是继续零散增加单点功能。
