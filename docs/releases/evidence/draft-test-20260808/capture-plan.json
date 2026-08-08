@@ -6,9 +6,9 @@
     "payment-core/app-web": "http://127.0.0.1:5175",
     "payment-core/h5-web": "http://127.0.0.1:5176",
     "payment-core/pc-web": "http://127.0.0.1:5177",
-    "clearing-system/admin-web": "",
-    "settlement-system/admin-web": "",
-    "accounting-system/admin-web": ""
+    "clearing-system/admin-web": "http://127.0.0.1:5273",
+    "settlement-system/admin-web": "http://127.0.0.1:5274",
+    "accounting-system/admin-web": "http://127.0.0.1:5275"
   },
   "sampleValues": {
     "paymentOrderIdWaitCallback": "PAY1785915556767",
