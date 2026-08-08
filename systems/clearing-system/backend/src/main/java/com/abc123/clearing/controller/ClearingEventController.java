@@ -2,6 +2,7 @@ package com.abc123.clearing.controller;
 
 import com.abc123.clearing.common.ApiResponse;
 import com.abc123.clearing.dto.ClearingEventDTO;
+import com.abc123.clearing.dto.ClearingReplayResultDTO;
 import com.abc123.clearing.dto.PageResultDTO;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.clearing.service.ClearingEventService;
@@ -37,5 +38,10 @@ public class ClearingEventController {
     @PostMapping("/payments/success")
     public ApiResponse<ClearingEventDTO> consumePaymentSuccess(@RequestBody PaymentSuccessEventRequestDTO request) {
         return ApiResponse.success(clearingEventService.consumePaymentSuccess(request));
+    }
+
+    @PostMapping("/replay-failed")
+    public ApiResponse<ClearingReplayResultDTO> replayDueFailedEvents() {
+        return ApiResponse.success(clearingEventService.replayDueFailedEvents());
     }
 }

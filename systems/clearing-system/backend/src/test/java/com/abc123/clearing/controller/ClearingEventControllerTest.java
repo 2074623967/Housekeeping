@@ -36,4 +36,13 @@ class ClearingEventControllerTest {
 
         verify(clearingEventService).consumePaymentSuccess(request);
     }
+
+    @Test
+    void shouldReplayDueFailedEvents() {
+        ClearingEventController controller = new ClearingEventController(clearingEventService);
+
+        controller.replayDueFailedEvents();
+
+        verify(clearingEventService).replayDueFailedEvents();
+    }
 }

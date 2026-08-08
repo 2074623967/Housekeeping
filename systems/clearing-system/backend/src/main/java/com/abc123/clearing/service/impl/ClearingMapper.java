@@ -123,6 +123,10 @@ public class ClearingMapper {
         dto.setPayload(entity.getPayload());
         dto.setEventStatus(entity.getEventStatus());
         dto.setStatusType(statusType(entity.getEventStatus()));
+        dto.setPublishStatus(entity.getPublishStatus());
+        dto.setRetryCount(entity.getRetryCount());
+        dto.setNextRetryAt(entity.getNextRetryAt());
+        dto.setReplayHint(resolveReplayHint(entity));
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }
@@ -145,5 +149,18 @@ public class ClearingMapper {
             return "warn";
         }
         return "info";
+    }
+
+    private String resolveReplayHint(ClearingEventEntity entity) {
+        if ("FAILED".equalsIgnoreCase(entity.getPublishStatus())) {
+            return "建议优先执行失败派发重放，并核对结算/账务下游是否已恢复";
+        }
+        if ("WAIT_RETRY".equalsIgnoreCase(entity.getPublishStatus())) {
+            return "事件已进入待重试窗口，可人工提前重放确认下游状态";
+        }
+        if ("SUCCESS".equalsIgnoreCase(entity.getPublishStatus())) {
+            return "下游派发已成功，重点核对结算单与账务事件是否都已收口";
+        }
+        return "需结合下游系统状态继续排查";
     }
 }

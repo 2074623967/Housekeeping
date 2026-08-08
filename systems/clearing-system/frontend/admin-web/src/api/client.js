@@ -90,5 +90,6 @@ export const eventApi = {
     const params = new URLSearchParams({ eventType, bizNo, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/clearing/events?${params.toString()}`);
   },
-  consumePaymentSuccess: (payload) => postJson("/api/clearing/events/payments/success", payload)
+  consumePaymentSuccess: (payload) => postJson("/api/clearing/events/payments/success", payload),
+  replayFailed: () => postJson("/api/clearing/events/replay-failed", {})
 };
