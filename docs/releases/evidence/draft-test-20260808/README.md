@@ -18,3 +18,26 @@
    - `payment-detail-success-PAY1785918393972.png`
    - `result-risk-review-PAY1785811244732.png`
 4. 完成截图后，务必同步更新 `screenshot-manifest.csv` 与 `final-regression-checklist.md`。
+
+## 建议命令
+
+1. 初始化截图采集计划：
+
+```bash
+/Users/abc123/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  /Users/abc123/workspace/home-service-payment-system/tools/release/capture_freeze_screenshots.mjs \
+  --init-plan \
+  --manifest /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808/screenshot-manifest.csv \
+  --evidence-dir /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808
+```
+
+2. 先用 dry-run 检查哪些页面还没补 URL：
+
+```bash
+/Users/abc123/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  /Users/abc123/workspace/home-service-payment-system/tools/release/capture_freeze_screenshots.mjs \
+  --plan /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808/capture-plan.json \
+  --manifest /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808/screenshot-manifest.csv \
+  --evidence-dir /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808 \
+  --dry-run
+```
