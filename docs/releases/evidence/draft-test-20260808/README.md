@@ -42,6 +42,25 @@
   --dry-run
 ```
 
+3. 自动审计当前冻结候选是否具备放行条件：
+
+```bash
+/Users/abc123/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  /Users/abc123/workspace/home-service-payment-system/tools/release/audit_freeze_candidate.mjs \
+  --evidence-dir /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808 \
+  --release-doc /Users/abc123/workspace/home-service-payment-system/docs/releases/2026-08-05-支付系统发布说明草案.md
+```
+
+脚本会输出：
+
+1. `records/freeze-audit-report.json`
+2. `records/freeze-audit-report.md`
+
+并自动判断：
+
+1. 当前是否允许推进 `test -> master`
+2. 当前是否允许创建 `release/*`
+
 ## 当前已预填样例
 
 当前证据包已预填以下真实样例，后续补截图时可直接复用：
