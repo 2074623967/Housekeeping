@@ -10,6 +10,18 @@ const cashierTemplates = ref([]);
 const channelProfiles = ref([]);
 const routingRules = ref([]);
 const systemControls = ref([]);
+const configChanges = ref([]);
+const changeForm = ref({
+  configType: "ROUTING_RULE",
+  configCode: "ROUTE_HOME_DEPOSIT",
+  enabled: true,
+  reason: "",
+  grayScope: "ALL",
+  grayStartAt: "",
+  grayEndAt: "",
+  applicant: "ops-owner"
+});
+const actionUser = ref("ops-owner");
 const snapshot = ref(null);
 const loading = ref(true);
 const message = ref("");
@@ -24,7 +36,7 @@ async function loadAll() {
   loading.value = true;
   message.value = "";
   try {
-    const [summaryData, agreementData, businessData, paymentTypeData, cashierData, channelData, routeData, controlData] = await Promise.all([
+    const [summaryData, agreementData, businessData, paymentTypeData, cashierData, channelData, routeData, controlData, changeData] = await Promise.all([
       opsConfigApi.getSummary(),
       opsConfigApi.getAgreementTemplates(),
       opsConfigApi.getBusinessLines(),
@@ -32,7 +44,8 @@ async function loadAll() {
       opsConfigApi.getCashierTemplates(),
       opsConfigApi.getChannelProfiles(),
       opsConfigApi.getRoutingRules(),
-      opsConfigApi.getSystemControls()
+      opsConfigApi.getSystemControls(),
+      opsConfigApi.getConfigChanges()
     ]);
     summary.value = summaryData;
     agreementTemplates.value = agreementData.records;
@@ -42,10 +55,51 @@ async function loadAll() {
     channelProfiles.value = channelData.records;
     routingRules.value = routeData.records;
     systemControls.value = controlData.records;
+    configChanges.value = changeData.records;
   } catch (error) {
     message.value = error.message;
   } finally {
     loading.value = false;
+  }
+}
+
+async function createConfigChange() {
+  try {
+    const created = await opsConfigApi.createConfigChange(changeForm.value);
+    configChanges.value = [created, ...configChanges.value];
+    changeForm.value.reason = "";
+    message.value = `${created.requestNo} 已进入待审批`;
+  } catch (error) {
+    message.value = `创建配置变更失败：${error.message}`;
+  }
+}
+
+async function approveConfigChange(change, approved) {
+  try {
+    const updated = await opsConfigApi.approveConfigChange({
+      requestNo: change.requestNo,
+      approved,
+      approver: actionUser.value,
+      approvalComment: approved ? "审批通过，允许按灰度窗口发布" : "审批拒绝"
+    });
+    configChanges.value = configChanges.value.map((item) => item.requestNo === updated.requestNo ? updated : item);
+    message.value = `${updated.requestNo} 已${approved ? "审批通过" : "拒绝"}`;
+  } catch (error) {
+    message.value = `审批失败：${error.message}`;
+  }
+}
+
+async function publishConfigChange(change) {
+  try {
+    const updated = await opsConfigApi.publishConfigChange({
+      requestNo: change.requestNo,
+      operator: actionUser.value
+    });
+    configChanges.value = configChanges.value.map((item) => item.requestNo === updated.requestNo ? updated : item);
+    await loadAll();
+    message.value = `${updated.requestNo} 已发布`;
+  } catch (error) {
+    message.value = `发布失败：${error.message}`;
   }
 }
 
@@ -133,6 +187,60 @@ onMounted(loadAll);
         <div v-if="snapshot" class="banner" style="margin-top: 12px">
           {{ snapshot.businessCode }} / {{ snapshot.payType }} / {{ snapshot.terminalType }}，默认支付方式：{{ snapshot.defaultPayMethod }}，路由：{{ snapshot.routeMatchPolicy }}
         </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>配置版本与灰度发布</h2>
+            <p class="muted">启停变更先申请、再审批，只有审批通过且处于灰度时间窗内才会修改生效配置。</p>
+          </div>
+        </div>
+        <div class="change-form">
+          <select v-model="changeForm.configType">
+            <option value="AGREEMENT_TEMPLATE">协议模板</option>
+            <option value="BUSINESS_LINE">业务线</option>
+            <option value="PAYMENT_TYPE">支付类型</option>
+            <option value="CASHIER_TEMPLATE">收银台模板</option>
+            <option value="CHANNEL_PROFILE">渠道档案</option>
+            <option value="ROUTING_RULE">路由规则</option>
+            <option value="SYSTEM_CONTROL">系统控制</option>
+          </select>
+          <input v-model="changeForm.configCode" placeholder="配置编码" />
+          <select v-model="changeForm.enabled">
+            <option :value="true">启用</option>
+            <option :value="false">停用</option>
+          </select>
+          <input v-model="changeForm.grayScope" placeholder="灰度范围，例如 ALL" />
+          <input v-model="changeForm.grayStartAt" placeholder="开始时间 yyyy-MM-dd HH:mm:ss（可选）" />
+          <input v-model="changeForm.grayEndAt" placeholder="结束时间 yyyy-MM-dd HH:mm:ss（可选）" />
+          <input v-model="changeForm.reason" placeholder="变更原因" />
+          <input v-model="changeForm.applicant" placeholder="申请人" />
+          <button class="button" @click="createConfigChange">提交审批</button>
+        </div>
+        <div class="toolbar">
+          <label class="muted">操作人</label>
+          <input v-model="actionUser" placeholder="审批/发布操作人" />
+        </div>
+        <table>
+          <thead><tr><th>申请号</th><th>配置</th><th>目标状态</th><th>灰度范围</th><th>申请人</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="change in configChanges" :key="change.requestNo">
+              <td>{{ change.requestNo }}</td>
+              <td>{{ change.configType }} / {{ change.configCode }}</td>
+              <td>{{ change.targetStatus }}</td>
+              <td>{{ change.grayScope }}<br />{{ change.grayStartAt || "立即" }} - {{ change.grayEndAt || "不限" }}</td>
+              <td>{{ change.applicant }}</td>
+              <td><span class="tag" :class="change.statusType">{{ change.status }}</span></td>
+              <td class="actions">
+                <button v-if="change.status === 'PENDING_APPROVAL'" class="link" @click="approveConfigChange(change, true)">通过</button>
+                <button v-if="change.status === 'PENDING_APPROVAL'" class="link danger-link" @click="approveConfigChange(change, false)">拒绝</button>
+                <button v-if="change.status === 'APPROVED'" class="link" @click="publishConfigChange(change)">发布</button>
+              </td>
+            </tr>
+            <tr v-if="configChanges.length === 0"><td colspan="7" class="empty">暂无配置变更申请</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="grid">

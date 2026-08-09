@@ -8,6 +8,10 @@ import com.abc123.opsconfig.common.BusinessException;
 import com.abc123.opsconfig.dto.OpsConfigEffectiveSnapshotDTO;
 import com.abc123.opsconfig.dto.OpsConfigSnapshotQueryDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -105,5 +109,48 @@ class OpsConfigIntegrationTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.effectiveSnapshot(query));
         assertEquals("业务线与支付类型未配置启用中的路由规则", exception.getMessage());
+    }
+
+    @Test
+    void shouldApproveAndPublishConfigChangeInsideImmediateWindow() {
+        OpsConfigChangeCreateRequestDTO createRequest = new OpsConfigChangeCreateRequestDTO();
+        createRequest.setConfigType("ROUTING_RULE");
+        createRequest.setConfigCode("ROUTE_HOME_DEPOSIT");
+        createRequest.setEnabled(true);
+        createRequest.setReason("恢复家政保证金支付的备用路由规则");
+        createRequest.setGrayScope("HOME_DEPOSIT");
+        createRequest.setApplicant("product-owner");
+
+        OpsConfigChangeDTO created = service.createConfigChange(createRequest);
+        assertEquals("PENDING_APPROVAL", created.getStatus());
+
+        OpsConfigChangeApprovalRequestDTO approvalRequest = new OpsConfigChangeApprovalRequestDTO();
+        approvalRequest.setRequestNo(created.getRequestNo());
+        approvalRequest.setApproved(true);
+        approvalRequest.setApprover("finance-owner");
+        approvalRequest.setApprovalComment("确认路由档案和业务影响范围");
+        assertEquals("APPROVED", service.approveConfigChange(approvalRequest).getStatus());
+
+        OpsConfigChangePublishRequestDTO publishRequest = new OpsConfigChangePublishRequestDTO();
+        publishRequest.setRequestNo(created.getRequestNo());
+        publishRequest.setOperator("ops-owner");
+        assertEquals("PUBLISHED", service.publishConfigChange(publishRequest).getStatus());
+        assertEquals("ENABLED", service.routingRules().getRecords().get(2).getStatus());
+    }
+
+    @Test
+    void shouldRejectInvalidGrayWindow() {
+        OpsConfigChangeCreateRequestDTO request = new OpsConfigChangeCreateRequestDTO();
+        request.setConfigType("SYSTEM_CONTROL");
+        request.setConfigCode("CONTROL_TIMEOUT_CLOSE");
+        request.setEnabled(false);
+        request.setReason("验证错误时间窗不会进入审批");
+        request.setGrayStartAt("2026-08-10 10:00:00");
+        request.setGrayEndAt("2026-08-10 09:00:00");
+        request.setApplicant("ops-owner");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createConfigChange(request));
+        assertEquals("灰度结束时间不能早于开始时间", exception.getMessage());
     }
 }

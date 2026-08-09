@@ -13,6 +13,10 @@ import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -127,5 +131,40 @@ public class OpsConfigController {
     @PostMapping("/system-controls/toggle")
     public ApiResponse<OpsConfigSummaryDTO> toggleSystemControl(@RequestBody ToggleRequestDTO request) {
         return ApiResponse.success(service.toggleSystemControl(request));
+    }
+
+    /**
+     * 创建配置变更申请，进入待审批状态。
+     */
+    @PostMapping("/changes")
+    public ApiResponse<OpsConfigChangeDTO> createConfigChange(
+            @RequestBody OpsConfigChangeCreateRequestDTO request) {
+        return ApiResponse.success(service.createConfigChange(request));
+    }
+
+    /**
+     * 查询配置变更审批和发布记录。
+     */
+    @GetMapping("/changes")
+    public ApiResponse<PageResultDTO<OpsConfigChangeDTO>> configChanges() {
+        return ApiResponse.success(service.configChanges());
+    }
+
+    /**
+     * 审批配置变更。
+     */
+    @PostMapping("/changes/approve")
+    public ApiResponse<OpsConfigChangeDTO> approveConfigChange(
+            @RequestBody OpsConfigChangeApprovalRequestDTO request) {
+        return ApiResponse.success(service.approveConfigChange(request));
+    }
+
+    /**
+     * 在灰度时间窗内发布配置变更。
+     */
+    @PostMapping("/changes/publish")
+    public ApiResponse<OpsConfigChangeDTO> publishConfigChange(
+            @RequestBody OpsConfigChangePublishRequestDTO request) {
+        return ApiResponse.success(service.publishConfigChange(request));
     }
 }

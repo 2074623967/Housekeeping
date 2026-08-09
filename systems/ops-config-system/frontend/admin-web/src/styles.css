@@ -23,4 +23,13 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 11px 10px; border-bottom: 1px solid #e7eef4; text-align: left; font-size: 13px; vertical-align: top; }
 th { color: #6c7f8f; font-size: 12px; }
 ul { margin: 0; padding-left: 20px; color: #55697b; line-height: 1.8; }
+.section-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.muted { color: #718494; font-size: 13px; line-height: 1.6; }
+.change-form { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+input, select { min-width: 0; border: 1px solid #d8e3eb; border-radius: 10px; padding: 10px 12px; color: #2b4050; background: #fbfdff; }
+.change-form .button { align-self: stretch; }
+.actions { white-space: nowrap; }
+.danger-link { color: #bc4c46; margin-left: 12px; }
+.empty { text-align: center; color: #8a9aa8; padding: 26px 10px; }
+@media (max-width: 900px) { .change-form { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 1200px) { .metrics, .grid { grid-template-columns: 1fr; } .hero { flex-direction: column; align-items: flex-start; } }
