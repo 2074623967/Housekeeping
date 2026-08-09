@@ -8,6 +8,7 @@ import com.abc123.opsconfig.dto.ChannelProfileDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import com.abc123.opsconfig.mapper.OpsConfigMapper;
 import java.util.List;
 import org.springframework.stereotype.Repository;
@@ -142,5 +143,48 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
     @Override
     public int updateSystemControlStatus(String controlCode, String status, String statusType) {
         return mapper.updateSystemControlStatus(controlCode, status, statusType);
+    }
+
+    @Override
+    public List<OpsConfigChangeDTO> findConfigChanges() {
+        return mapper.findConfigChanges();
+    }
+
+    @Override
+    public OpsConfigChangeDTO findConfigChangeByRequestNo(String requestNo) {
+        return mapper.findConfigChangeByRequestNo(requestNo);
+    }
+
+    @Override
+    public int insertConfigChange(String requestNo,
+                                  String configType,
+                                  String configCode,
+                                  String targetStatus,
+                                  String reason,
+                                  String grayScope,
+                                  String grayStartAt,
+                                  String grayEndAt,
+                                  String applicant) {
+        return mapper.insertConfigChange(requestNo, configType, configCode, targetStatus, reason,
+                grayScope, grayStartAt, grayEndAt, applicant);
+    }
+
+    @Override
+    public int approveConfigChange(String requestNo,
+                                   String status,
+                                   String statusType,
+                                   String approver,
+                                   String approvalComment) {
+        return mapper.approveConfigChange(requestNo, status, statusType, approver, approvalComment);
+    }
+
+    @Override
+    public int publishConfigChange(String requestNo) {
+        return mapper.publishConfigChange(requestNo);
+    }
+
+    @Override
+    public int expireConfigChange(String requestNo) {
+        return mapper.expireConfigChange(requestNo);
     }
 }

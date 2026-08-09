@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-08-09T01:23:15.362Z",
+  "rootDir": "/private/tmp/home-service-payment-system-master",
+  "inputs": {
+    "candidateDoc": "docs/releases/v1.1.0-发布说明-候选版.md",
+    "stabilizationDoc": "docs/releases/2026-08-09-master稳定观察起始记录.md",
+    "checklistDoc": "docs/releases/2026-08-09-master稳定观察检查清单.md",
+    "approvalDoc": "docs/releases/2026-08-09-v1.1.0发布审批清单.md",
+    "rollbackDoc": "docs/releases/2026-08-09-v1.1.0回滚演练记录.md",
+    "onSiteDoc": "docs/releases/2026-08-09-v1.1.0发布后现场核验记录模板.md",
+    "stabilizationClosingDoc": "docs/releases/2026-08-09-master稳定观察结束结论模板.md",
+    "decisionDoc": "docs/releases/2026-08-09-v1.1.0切版决策记录.md",
+    "observationCheckpointDoc": "docs/releases/2026-08-09-master稳定观察中间结论.md",
+    "liveVerificationDoc": "docs/releases/2026-08-09-master主链路即时核验记录.md",
+    "deferralDoc": "docs/releases/2026-08-09-v1.1.0暂缓切版说明.md",
+    "gateDayEndDoc": "docs/releases/2026-08-09-release门禁日结.md",
+    "reevaluationChecklistDoc": "docs/releases/2026-08-10-v1.1.0重评清单.md",
+    "releaseNoteChecklistDoc": "docs/releases/v1.1.0-正式版发布说明检查表.md",
+    "prepStatusDoc": "docs/releases/2026-08-09-v1.1.0发布前材料现状记录.md"
+  },
+  "summary": {
+    "candidateDocReady": true,
+    "stabilizationReady": true,
+    "checklistReady": true,
+    "approvalReady": true,
+    "rollbackReady": true,
+    "onSiteReady": true,
+    "stabilizationClosingReady": true,
+    "decisionReady": true,
+    "observationCheckpointReady": true,
+    "liveVerificationReady": true,
+    "deferralReady": true,
+    "gateDayEndReady": true,
+    "reevaluationReady": true,
+    "releaseNoteChecklistReady": true,
+    "prepStatusReady": true,
+    "blockerCount": 1,
+    "canCreateRelease": false
+  },
+  "blockers": [
+    "当前候选版发布说明仍明确暂不切 release/*"
+  ]
+}

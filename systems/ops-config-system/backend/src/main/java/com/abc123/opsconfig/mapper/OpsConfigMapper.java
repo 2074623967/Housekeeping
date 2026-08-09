@@ -7,6 +7,7 @@ import com.abc123.opsconfig.dto.ChannelProfileDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -77,4 +78,28 @@ public interface OpsConfigMapper {
     int updateSystemControlStatus(@Param("controlCode") String controlCode,
                                   @Param("status") String status,
                                   @Param("statusType") String statusType);
+
+    List<OpsConfigChangeDTO> findConfigChanges();
+
+    OpsConfigChangeDTO findConfigChangeByRequestNo(@Param("requestNo") String requestNo);
+
+    int insertConfigChange(@Param("requestNo") String requestNo,
+                           @Param("configType") String configType,
+                           @Param("configCode") String configCode,
+                           @Param("targetStatus") String targetStatus,
+                           @Param("reason") String reason,
+                           @Param("grayScope") String grayScope,
+                           @Param("grayStartAt") String grayStartAt,
+                           @Param("grayEndAt") String grayEndAt,
+                           @Param("applicant") String applicant);
+
+    int approveConfigChange(@Param("requestNo") String requestNo,
+                            @Param("status") String status,
+                            @Param("statusType") String statusType,
+                            @Param("approver") String approver,
+                            @Param("approvalComment") String approvalComment);
+
+    int publishConfigChange(@Param("requestNo") String requestNo);
+
+    int expireConfigChange(@Param("requestNo") String requestNo);
 }

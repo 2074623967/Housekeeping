@@ -204,4 +204,87 @@
         SET status = #{status}, status_type = #{statusType}, updated_at = CURRENT_TIMESTAMP
         WHERE control_code = #{controlCode}
     </update>
+
+    <select id="findConfigChanges" resultType="com.abc123.opsconfig.dto.OpsConfigChangeDTO">
+        SELECT request_no AS requestNo,
+               config_type AS configType,
+               config_code AS configCode,
+               target_status AS targetStatus,
+               reason,
+               gray_scope AS grayScope,
+               gray_start_at AS grayStartAt,
+               gray_end_at AS grayEndAt,
+               applicant,
+               approver,
+               approval_comment AS approvalComment,
+               status,
+               status_type AS statusType,
+               created_at AS createdAt,
+               approved_at AS approvedAt,
+               published_at AS publishedAt
+        FROM t_ops_config_change
+        ORDER BY id DESC
+    </select>
+
+    <select id="findConfigChangeByRequestNo" resultType="com.abc123.opsconfig.dto.OpsConfigChangeDTO">
+        SELECT request_no AS requestNo,
+               config_type AS configType,
+               config_code AS configCode,
+               target_status AS targetStatus,
+               reason,
+               gray_scope AS grayScope,
+               gray_start_at AS grayStartAt,
+               gray_end_at AS grayEndAt,
+               applicant,
+               approver,
+               approval_comment AS approvalComment,
+               status,
+               status_type AS statusType,
+               created_at AS createdAt,
+               approved_at AS approvedAt,
+               published_at AS publishedAt
+        FROM t_ops_config_change
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+    </select>
+
+    <insert id="insertConfigChange">
+        INSERT INTO t_ops_config_change (
+            request_no, config_type, config_code, target_status, reason,
+            gray_scope, gray_start_at, gray_end_at, applicant,
+            status, status_type, created_at
+        ) VALUES (
+            #{requestNo}, #{configType}, #{configCode}, #{targetStatus}, #{reason},
+            #{grayScope}, #{grayStartAt}, #{grayEndAt}, #{applicant},
+            'PENDING_APPROVAL', 'warn', CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <update id="approveConfigChange">
+        UPDATE t_ops_config_change
+        SET status = #{status},
+            status_type = #{statusType},
+            approver = #{approver},
+            approval_comment = #{approvalComment},
+            approved_at = CURRENT_TIMESTAMP
+        WHERE request_no = #{requestNo}
+          AND status = 'PENDING_APPROVAL'
+    </update>
+
+    <update id="publishConfigChange">
+        UPDATE t_ops_config_change
+        SET status = 'PUBLISHED',
+            status_type = 'success',
+            published_at = CURRENT_TIMESTAMP
+        WHERE request_no = #{requestNo}
+          AND status = 'APPROVED'
+    </update>
+
+    <update id="expireConfigChange">
+        UPDATE t_ops_config_change
+        SET status = 'EXPIRED',
+            status_type = 'danger'
+        WHERE request_no = #{requestNo}
+          AND status = 'APPROVED'
+    </update>
 </mapper>

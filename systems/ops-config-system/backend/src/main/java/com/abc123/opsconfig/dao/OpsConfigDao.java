@@ -8,6 +8,7 @@ import com.abc123.opsconfig.dto.CashierTemplateDTO;
 import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import java.util.List;
 
 /**
@@ -62,4 +63,28 @@ public interface OpsConfigDao {
     int updateRoutingRuleStatus(String routeCode, String status, String statusType);
 
     int updateSystemControlStatus(String controlCode, String status, String statusType);
+
+    List<OpsConfigChangeDTO> findConfigChanges();
+
+    OpsConfigChangeDTO findConfigChangeByRequestNo(String requestNo);
+
+    int insertConfigChange(String requestNo,
+                           String configType,
+                           String configCode,
+                           String targetStatus,
+                           String reason,
+                           String grayScope,
+                           String grayStartAt,
+                           String grayEndAt,
+                           String applicant);
+
+    int approveConfigChange(String requestNo,
+                            String status,
+                            String statusType,
+                            String approver,
+                            String approvalComment);
+
+    int publishConfigChange(String requestNo);
+
+    int expireConfigChange(String requestNo);
 }

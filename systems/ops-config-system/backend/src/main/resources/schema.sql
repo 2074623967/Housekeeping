@@ -105,3 +105,27 @@ CREATE TABLE t_ops_system_control (
     PRIMARY KEY (id),
     UNIQUE KEY uk_ops_control_code (control_code)
 );
+
+CREATE TABLE t_ops_config_change (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    request_no VARCHAR(64) NOT NULL COMMENT '配置变更申请号',
+    config_type VARCHAR(64) NOT NULL COMMENT '配置类型',
+    config_code VARCHAR(64) NOT NULL COMMENT '配置编码',
+    target_status VARCHAR(32) NOT NULL COMMENT '目标状态',
+    reason VARCHAR(512) NOT NULL COMMENT '变更原因',
+    gray_scope VARCHAR(128) NOT NULL COMMENT '灰度范围',
+    gray_start_at VARCHAR(32) NULL COMMENT '灰度开始时间',
+    gray_end_at VARCHAR(32) NULL COMMENT '灰度结束时间',
+    applicant VARCHAR(128) NOT NULL COMMENT '申请人',
+    approver VARCHAR(128) NULL COMMENT '审批人',
+    approval_comment VARCHAR(512) NULL COMMENT '审批意见',
+    status VARCHAR(32) NOT NULL COMMENT '变更状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '状态样式',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    approved_at DATETIME NULL COMMENT '审批时间',
+    published_at DATETIME NULL COMMENT '发布时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ops_config_change_request_no (request_no),
+    KEY idx_ops_config_change_status (status),
+    KEY idx_ops_config_change_config (config_type, config_code)
+);

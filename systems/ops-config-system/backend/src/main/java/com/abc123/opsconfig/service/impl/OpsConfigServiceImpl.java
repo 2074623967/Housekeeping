@@ -15,10 +15,20 @@ import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.ToggleRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
+import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,6 +38,12 @@ import org.springframework.util.StringUtils;
  */
 @Service
 public class OpsConfigServiceImpl implements OpsConfigService {
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Set<String> SUPPORTED_CONFIG_TYPES = Collections.unmodifiableSet(new HashSet<>(
+            Arrays.asList("AGREEMENT_TEMPLATE", "BUSINESS_LINE", "PAYMENT_TYPE", "CASHIER_TEMPLATE",
+                    "CHANNEL_PROFILE", "ROUTING_RULE", "SYSTEM_CONTROL")));
 
     private final OpsConfigDao dao;
 
@@ -226,6 +242,111 @@ public class OpsConfigServiceImpl implements OpsConfigService {
         return summary();
     }
 
+    @Override
+    @Transactional
+    public OpsConfigChangeDTO createConfigChange(OpsConfigChangeCreateRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getConfigType())) {
+            throw new BusinessException("配置类型不能为空");
+        }
+        String configType = request.getConfigType().trim().toUpperCase();
+        if (!SUPPORTED_CONFIG_TYPES.contains(configType)) {
+            throw new BusinessException("不支持的配置类型");
+        }
+        if (!StringUtils.hasText(request.getConfigCode())) {
+            throw new BusinessException("配置编码不能为空");
+        }
+        if (request.getEnabled() == null) {
+            throw new BusinessException("目标启停状态不能为空");
+        }
+        if (!StringUtils.hasText(request.getReason())) {
+            throw new BusinessException("变更原因不能为空");
+        }
+        if (!StringUtils.hasText(request.getApplicant())) {
+            throw new BusinessException("申请人不能为空");
+        }
+        validateTimeWindow(request.getGrayStartAt(), request.getGrayEndAt());
+
+        String requestNo = "OPSCHG-" + System.currentTimeMillis() + "-"
+                + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String grayScope = StringUtils.hasText(request.getGrayScope()) ? request.getGrayScope().trim() : "ALL";
+        int affected = dao.insertConfigChange(
+                requestNo,
+                configType,
+                request.getConfigCode().trim(),
+                status(request.getEnabled()),
+                request.getReason().trim(),
+                grayScope,
+                trimToNull(request.getGrayStartAt()),
+                trimToNull(request.getGrayEndAt()),
+                request.getApplicant().trim());
+        if (affected != 1) {
+            throw new BusinessException("创建配置变更失败");
+        }
+        return changeOrFail(requestNo);
+    }
+
+    @Override
+    public PageResultDTO<OpsConfigChangeDTO> configChanges() {
+        List<OpsConfigChangeDTO> records = dao.findConfigChanges();
+        return page(records);
+    }
+
+    @Override
+    @Transactional
+    public OpsConfigChangeDTO approveConfigChange(OpsConfigChangeApprovalRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getRequestNo())) {
+            throw new BusinessException("变更申请号不能为空");
+        }
+        if (request.getApproved() == null) {
+            throw new BusinessException("审批结果不能为空");
+        }
+        if (!StringUtils.hasText(request.getApprover())) {
+            throw new BusinessException("审批人不能为空");
+        }
+        OpsConfigChangeDTO change = changeOrFail(request.getRequestNo().trim());
+        if (!"PENDING_APPROVAL".equals(change.getStatus())) {
+            throw new BusinessException("当前变更不处于待审批状态");
+        }
+        String status = Boolean.TRUE.equals(request.getApproved()) ? "APPROVED" : "REJECTED";
+        String statusType = Boolean.TRUE.equals(request.getApproved()) ? "success" : "danger";
+        if (dao.approveConfigChange(change.getRequestNo(), status, statusType,
+                request.getApprover().trim(), trimToNull(request.getApprovalComment())) != 1) {
+            throw new BusinessException("配置变更审批失败");
+        }
+        return changeOrFail(change.getRequestNo());
+    }
+
+    @Override
+    @Transactional
+    public OpsConfigChangeDTO publishConfigChange(OpsConfigChangePublishRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getRequestNo())) {
+            throw new BusinessException("变更申请号不能为空");
+        }
+        if (!StringUtils.hasText(request.getOperator())) {
+            throw new BusinessException("发布人不能为空");
+        }
+        OpsConfigChangeDTO change = changeOrFail(request.getRequestNo().trim());
+        if (!"APPROVED".equals(change.getStatus())) {
+            throw new BusinessException("只有审批通过的变更才能发布");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startAt = parseTime(change.getGrayStartAt(), "灰度开始时间");
+        LocalDateTime endAt = parseTime(change.getGrayEndAt(), "灰度结束时间");
+        if (startAt != null && now.isBefore(startAt)) {
+            throw new BusinessException("当前尚未到达灰度发布时间窗");
+        }
+        if (endAt != null && now.isAfter(endAt)) {
+            dao.expireConfigChange(change.getRequestNo());
+            throw new BusinessException("配置变更已超过灰度发布时间窗");
+        }
+
+        applyConfigChange(change);
+        if (dao.publishConfigChange(change.getRequestNo()) != 1) {
+            throw new BusinessException("配置变更发布失败");
+        }
+        return changeOrFail(change.getRequestNo());
+    }
+
     private DashboardMetricDTO metric(String title, String value, String badgeType, String badgeText) {
         DashboardMetricDTO metric = new DashboardMetricDTO();
         metric.setTitle(title);
@@ -254,6 +375,10 @@ public class OpsConfigServiceImpl implements OpsConfigService {
         return Boolean.TRUE.equals(request.getEnabled()) ? "success" : "danger";
     }
 
+    private String status(Boolean enabled) {
+        return Boolean.TRUE.equals(enabled) ? "ENABLED" : "DISABLED";
+    }
+
     private String csv(String value) {
         if (value == null) {
             return "";
@@ -276,5 +401,79 @@ public class OpsConfigServiceImpl implements OpsConfigService {
                 && dao.findEnabledChannelProfileByCode(routingRule.getBackupChannel().trim()) == null) {
             throw new BusinessException("备选路由渠道档案未启用或不存在");
         }
+    }
+
+    private OpsConfigChangeDTO changeOrFail(String requestNo) {
+        OpsConfigChangeDTO change = dao.findConfigChangeByRequestNo(requestNo);
+        if (change == null) {
+            throw new BusinessException("配置变更不存在");
+        }
+        return change;
+    }
+
+    private void applyConfigChange(OpsConfigChangeDTO change) {
+        int affected;
+        switch (change.getConfigType()) {
+            case "AGREEMENT_TEMPLATE":
+                affected = dao.updateAgreementTemplateStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            case "BUSINESS_LINE":
+                affected = dao.updateBusinessLineStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            case "PAYMENT_TYPE":
+                affected = dao.updatePaymentTypeStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            case "CASHIER_TEMPLATE":
+                affected = dao.updateCashierTemplateStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            case "CHANNEL_PROFILE":
+                affected = dao.updateChannelProfileStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            case "ROUTING_RULE":
+                affected = dao.updateRoutingRuleStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            case "SYSTEM_CONTROL":
+                affected = dao.updateSystemControlStatus(change.getConfigCode(), change.getTargetStatus(),
+                        statusType(change.getTargetStatus()));
+                break;
+            default:
+                throw new BusinessException("不支持的配置类型");
+        }
+        if (affected != 1) {
+            throw new BusinessException("目标配置不存在");
+        }
+    }
+
+    private String statusType(String targetStatus) {
+        return "ENABLED".equals(targetStatus) ? "success" : "danger";
+    }
+
+    private void validateTimeWindow(String grayStartAt, String grayEndAt) {
+        LocalDateTime startAt = parseTime(grayStartAt, "灰度开始时间");
+        LocalDateTime endAt = parseTime(grayEndAt, "灰度结束时间");
+        if (startAt != null && endAt != null && endAt.isBefore(startAt)) {
+            throw new BusinessException("灰度结束时间不能早于开始时间");
+        }
+    }
+
+    private LocalDateTime parseTime(String value, String label) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value.trim(), DATE_TIME_FORMATTER);
+        } catch (RuntimeException exception) {
+            throw new BusinessException(label + "格式必须为 yyyy-MM-dd HH:mm:ss");
+        }
+    }
+
+    private String trimToNull(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 }
