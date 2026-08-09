@@ -53,8 +53,8 @@ public class SettlementMemoryStore {
             return;
         }
         SettlementBatchEntity batch = createBatch("2026-07-20", "MANUAL", "结算运营", "SETTLE-20260720-INIT");
-        SettlementOrderEntity workerOrder = createOrder(batch.getBatchNo(), "WORKER", "WRK1001", "李阿姨", new BigDecimal("120.00"), new BigDecimal("8.00"), "待审核", "CLO20001");
-        SettlementOrderEntity merchantOrder = createOrder(batch.getBatchNo(), "MERCHANT", "MCH1001", "上海静安门店", new BigDecimal("20.00"), new BigDecimal("0.00"), "待审核", "CLO20001");
+        SettlementOrderEntity workerOrder = createOrder(batch.getBatchNo(), "WORKER", "WRK1001", "李阿姨", new BigDecimal("120.00"), new BigDecimal("8.00"), "待审核", "CLO20001", "CHAIN-PAY202607200001");
+        SettlementOrderEntity merchantOrder = createOrder(batch.getBatchNo(), "MERCHANT", "MCH1001", "上海静安门店", new BigDecimal("20.00"), new BigDecimal("0.00"), "待审核", "CLO20001", "CHAIN-PAY202607200001");
         createItem(workerOrder.getSettlementNo(), "基础结算", "应结金额", new BigDecimal("120.00"));
         createItem(workerOrder.getSettlementNo(), "结算扣减", "扣减金额", new BigDecimal("8.00"));
         createItem(merchantOrder.getSettlementNo(), "商家结算", "应结金额", new BigDecimal("20.00"));
@@ -111,8 +111,10 @@ public class SettlementMemoryStore {
 
     @Transactional
     public SettlementOrderEntity createOrder(String batchNo, String targetType, String targetNo, String targetName,
-            BigDecimal shouldSettleAmount, BigDecimal deductAmount, String settlementStatus, String clearingNo) {
+            BigDecimal shouldSettleAmount, BigDecimal deductAmount, String settlementStatus, String clearingNo,
+            String businessChainId) {
         SettlementOrderEntity entity = new SettlementOrderEntity();
+        entity.setBusinessChainId(resolveBusinessChainId(businessChainId, clearingNo));
         entity.setSettlementNo(nextNo("SLT", orderSeq));
         entity.setBatchNo(batchNo);
         entity.setTargetType(targetType);
@@ -129,6 +131,16 @@ public class SettlementMemoryStore {
         settlementDataMapper.insertOrder(entity);
         updateBatchSummary(batchNo);
         return entity;
+    }
+
+    /**
+     * 兼容历史手工建单入口，未显式传链路 ID 时按来源清分单号生成。
+     */
+    @Transactional
+    public SettlementOrderEntity createOrder(String batchNo, String targetType, String targetNo, String targetName,
+            BigDecimal shouldSettleAmount, BigDecimal deductAmount, String settlementStatus, String clearingNo) {
+        return createOrder(batchNo, targetType, targetNo, targetName, shouldSettleAmount, deductAmount,
+                settlementStatus, clearingNo, null);
     }
 
     public List<SettlementItemEntity> itemsBySettlementNo(String settlementNo) {
@@ -320,6 +332,7 @@ public class SettlementMemoryStore {
 
     @Transactional
     public SettlementEventEntity consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
+        request.setBusinessChainId(resolveBusinessChainId(request.getBusinessChainId(), request.getClearingNo()));
         SettlementOrderEntity existingOrder = findOrderByClearingTarget(
                 request.getClearingNo(),
                 request.getTargetType(),
@@ -340,7 +353,8 @@ public class SettlementMemoryStore {
                 request.getShouldSettleAmount(),
                 request.getDeductAmount(),
                 "待审核",
-                request.getClearingNo());
+                request.getClearingNo(),
+                request.getBusinessChainId());
         createItem(order.getSettlementNo(), "应结金额", "应结", request.getShouldSettleAmount());
         createItem(order.getSettlementNo(), "扣减金额", "扣减", request.getDeductAmount());
         updateBatchSummary(batch.getBatchNo(), "已完成", now());
@@ -526,6 +540,8 @@ public class SettlementMemoryStore {
 
     private SettlementEventEntity createClearingGeneratedEvent(String clearingNo) {
         SettlementEventEntity entity = new SettlementEventEntity();
+        SettlementOrderEntity order = findOrderByClearingTarget(clearingNo, "WORKER", "WRK1001");
+        entity.setBusinessChainId(order == null ? resolveBusinessChainId(null, clearingNo) : order.getBusinessChainId());
         entity.setEventNo(nextNo("SVE", eventSeq));
         entity.setEventType("CLEARING_GENERATED");
         entity.setBizNo(clearingNo);
@@ -535,6 +551,12 @@ public class SettlementMemoryStore {
         entity.setCreatedAt(now());
         settlementDataMapper.insertEvent(entity);
         return entity;
+    }
+
+    private String resolveBusinessChainId(String businessChainId, String businessNo) {
+        return businessChainId == null || businessChainId.trim().isEmpty()
+                ? "CHAIN-" + businessNo
+                : businessChainId.trim();
     }
 
     private void syncSequencesFromDatabase() {

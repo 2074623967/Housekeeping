@@ -22,6 +22,7 @@ CREATE TABLE `t_settlement_batch` (
 
 CREATE TABLE `t_settlement_order` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `business_chain_id` VARCHAR(96) NOT NULL COMMENT '跨系统业务链路ID',
   `settlement_no` VARCHAR(32) NOT NULL COMMENT '结算单号',
   `batch_no` VARCHAR(32) NOT NULL COMMENT '归属批次号',
   `target_type` VARCHAR(32) NOT NULL COMMENT '对象类型',
@@ -37,6 +38,7 @@ CREATE TABLE `t_settlement_order` (
   `created_at` DATETIME NOT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_settlement_no` (`settlement_no`),
+  KEY `idx_settlement_order_business_chain_id` (`business_chain_id`),
   KEY `idx_settlement_order_batch_no` (`batch_no`),
   KEY `idx_settlement_order_target_no` (`target_no`),
   KEY `idx_settlement_order_status` (`settlement_status`)
@@ -107,6 +109,7 @@ CREATE TABLE `t_payout_record` (
 
 CREATE TABLE `t_settlement_event` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `business_chain_id` VARCHAR(96) NOT NULL COMMENT '跨系统业务链路ID',
   `event_no` VARCHAR(32) NOT NULL COMMENT '事件号',
   `event_type` VARCHAR(32) NOT NULL COMMENT '事件类型',
   `biz_no` VARCHAR(64) NOT NULL COMMENT '业务单号',
@@ -117,5 +120,6 @@ CREATE TABLE `t_settlement_event` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_event_no` (`event_no`),
   KEY `idx_settlement_event_type` (`event_type`),
-  KEY `idx_settlement_event_biz_no` (`biz_no`)
+  KEY `idx_settlement_event_biz_no` (`biz_no`),
+  KEY `idx_settlement_event_business_chain_id` (`business_chain_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='结算事件表';

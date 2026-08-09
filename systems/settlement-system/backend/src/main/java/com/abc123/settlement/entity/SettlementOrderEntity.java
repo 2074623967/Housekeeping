@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class SettlementOrderEntity {
 
+    /** 跨系统业务链路 ID。 */
+    private String businessChainId;
     private String settlementNo;
     private String batchNo;
     private String targetType;

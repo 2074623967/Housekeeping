@@ -10,6 +10,8 @@ import com.abc123.reconciliation.dto.ReconciliationBatchDetailDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
+import com.abc123.reconciliation.dto.CrossSystemChainSnapshotDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 
 /**
  * 对账业务服务。
@@ -35,4 +37,8 @@ public interface ReconciliationService {
     void resolve(DifferenceResolveRequestDTO request);
 
     ReconciliationOverviewDTO overview();
+
+    CrossSystemChainSnapshotDTO recordCrossSystemFact(CrossSystemFactRequestDTO request);
+
+    CrossSystemChainSnapshotDTO crossSystemChain(String businessChainId);
 }

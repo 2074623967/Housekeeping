@@ -58,7 +58,8 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 "PAYMENT_SUCCESS",
                 request.getPaymentOrderId(),
                 "消费支付成功后自动入账",
-                "{\"orderNo\":\"" + request.getOrderNo() + "\",\"amount\":" + request.getAmount() + "}"));
+                "{\"orderNo\":\"" + request.getOrderNo() + "\",\"amount\":" + request.getAmount() + "}",
+                resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId())));
     }
 
     @Override
@@ -79,7 +80,8 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 "CLEARING_GENERATED",
                 request.getClearingOrderNo(),
                 request.getSummary(),
-                "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}"));
+                "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}",
+                resolveBusinessChainId(request.getBusinessChainId(), request.getClearingOrderNo())));
     }
 
     @Override
@@ -133,5 +135,11 @@ public class AccountingEventServiceImpl implements AccountingEventService {
         com.abc123.accounting.entity.AccountEventEntity existingEvent =
                 accountingMemoryStore.findEvent(eventType, bizNo);
         return existingEvent == null ? null : accountingMapper.toEventDTO(existingEvent);
+    }
+
+    private String resolveBusinessChainId(String businessChainId, String businessNo) {
+        return businessChainId == null || businessChainId.trim().isEmpty()
+                ? "CHAIN-" + businessNo
+                : businessChainId.trim();
     }
 }

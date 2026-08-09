@@ -107,7 +107,8 @@
     </update>
 
     <select id="findOrders" resultType="com.abc123.settlement.entity.SettlementOrderEntity">
-        SELECT settlement_no,
+        SELECT business_chain_id,
+               settlement_no,
                batch_no,
                target_type,
                target_no,
@@ -125,7 +126,8 @@
     </select>
 
     <select id="findOrder" resultType="com.abc123.settlement.entity.SettlementOrderEntity">
-        SELECT settlement_no,
+        SELECT business_chain_id,
+               settlement_no,
                batch_no,
                target_type,
                target_no,
@@ -143,7 +145,8 @@
     </select>
 
     <select id="findOrderByClearingTarget" resultType="com.abc123.settlement.entity.SettlementOrderEntity">
-        SELECT settlement_no,
+        SELECT business_chain_id,
+               settlement_no,
                batch_no,
                target_type,
                target_no,
@@ -166,6 +169,7 @@
 
     <insert id="insertOrder">
         INSERT INTO t_settlement_order (
+            business_chain_id,
             settlement_no,
             batch_no,
             target_type,
@@ -180,6 +184,7 @@
             clearing_no,
             created_at
         ) VALUES (
+            #{businessChainId},
             #{settlementNo},
             #{batchNo},
             #{targetType},
@@ -385,7 +390,8 @@
     </update>
 
     <select id="findEvents" resultType="com.abc123.settlement.entity.SettlementEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -397,7 +403,8 @@
     </select>
 
     <select id="findEventByTypeAndBizNo" resultType="com.abc123.settlement.entity.SettlementEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -413,6 +420,7 @@
 
     <insert id="insertEvent">
         INSERT INTO t_settlement_event (
+            business_chain_id,
             event_no,
             event_type,
             biz_no,
@@ -421,6 +429,7 @@
             event_status,
             created_at
         ) VALUES (
+            #{businessChainId},
             #{eventNo},
             #{eventType},
             #{bizNo},

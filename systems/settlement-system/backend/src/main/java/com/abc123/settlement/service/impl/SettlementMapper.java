@@ -49,6 +49,7 @@ public class SettlementMapper {
 
     public SettlementOrderDTO toOrderDTO(SettlementOrderEntity entity) {
         SettlementOrderDTO dto = new SettlementOrderDTO();
+        dto.setBusinessChainId(entity.getBusinessChainId());
         dto.setSettlementNo(entity.getSettlementNo());
         dto.setBatchNo(entity.getBatchNo());
         dto.setTargetType(entity.getTargetType());
@@ -133,6 +134,7 @@ public class SettlementMapper {
 
     public SettlementEventDTO toEventDTO(SettlementEventEntity entity) {
         SettlementEventDTO dto = new SettlementEventDTO();
+        dto.setBusinessChainId(entity.getBusinessChainId());
         dto.setEventNo(entity.getEventNo());
         dto.setEventType(entity.getEventType());
         dto.setBizNo(entity.getBizNo());

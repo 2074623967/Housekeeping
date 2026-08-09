@@ -25,5 +25,22 @@ INSERT INTO t_account_freeze (freeze_no, account_no, biz_no, freeze_type, freeze
 INSERT INTO t_account_adjustment (adjust_no, account_no, adjust_direction, adjust_amount, adjust_reason, adjust_status, created_by, approved_by, created_at, approved_at) VALUES
 ('ADJ40001', 'ACT10002', '贷方', 8.00, '履约奖励补贴', '待审批', '财务小李', NULL, '2026-07-20 10:09:00', NULL);
 
-INSERT INTO t_account_event (event_no, event_type, biz_no, summary, payload, event_status, created_at) VALUES
-('EVT50001', 'PAYMENT_SUCCESS', 'PAY202607200001', '消费支付成功后用户入账', '{"paymentOrderId":"PAY202607200001","amount":168.00}', '已消费', '2026-07-20 10:10:00');
+INSERT INTO t_account_event (
+    business_chain_id,
+    event_no,
+    event_type,
+    biz_no,
+    summary,
+    payload,
+    event_status,
+    created_at
+) VALUES (
+    'CHAIN-PAY202607200001',
+    'EVT50001',
+    'PAYMENT_SUCCESS',
+    'PAY202607200001',
+    '消费支付成功后用户入账',
+    '{"paymentOrderId":"PAY202607200001","amount":168.00}',
+    '已消费',
+    '2026-07-20 10:10:00'
+);

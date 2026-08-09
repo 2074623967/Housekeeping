@@ -46,6 +46,7 @@ public class ClearingMapper {
 
     public ClearingOrderDTO toOrderDTO(ClearingOrderEntity entity) {
         ClearingOrderDTO dto = new ClearingOrderDTO();
+        dto.setBusinessChainId(entity.getBusinessChainId());
         dto.setClearingNo(entity.getClearingNo());
         dto.setBatchNo(entity.getBatchNo());
         dto.setPaymentOrderId(entity.getPaymentOrderId());
@@ -116,6 +117,7 @@ public class ClearingMapper {
 
     public ClearingEventDTO toEventDTO(ClearingEventEntity entity) {
         ClearingEventDTO dto = new ClearingEventDTO();
+        dto.setBusinessChainId(entity.getBusinessChainId());
         dto.setEventNo(entity.getEventNo());
         dto.setEventType(entity.getEventType());
         dto.setBizNo(entity.getBizNo());

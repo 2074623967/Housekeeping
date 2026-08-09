@@ -94,6 +94,7 @@ CREATE TABLE t_account_adjustment (
 
 CREATE TABLE t_account_event (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    business_chain_id VARCHAR(96) NOT NULL COMMENT '跨系统业务链路ID',
     event_no VARCHAR(64) NOT NULL COMMENT '事件号',
     event_type VARCHAR(64) NOT NULL COMMENT '事件类型',
     biz_no VARCHAR(64) NOT NULL COMMENT '业务单号',

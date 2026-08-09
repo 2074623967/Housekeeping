@@ -107,7 +107,8 @@
     </update>
 
     <select id="findOrders" resultType="com.abc123.clearing.entity.ClearingOrderEntity">
-        SELECT clearing_no,
+        SELECT business_chain_id,
+               clearing_no,
                batch_no,
                payment_order_id,
                order_no,
@@ -125,7 +126,8 @@
     </select>
 
     <select id="findOrder" resultType="com.abc123.clearing.entity.ClearingOrderEntity">
-        SELECT clearing_no,
+        SELECT business_chain_id,
+               clearing_no,
                batch_no,
                payment_order_id,
                order_no,
@@ -143,7 +145,8 @@
     </select>
 
     <select id="findOrderByPaymentOrderId" resultType="com.abc123.clearing.entity.ClearingOrderEntity">
-        SELECT clearing_no,
+        SELECT business_chain_id,
+               clearing_no,
                batch_no,
                payment_order_id,
                order_no,
@@ -164,6 +167,7 @@
 
     <insert id="insertOrder">
         INSERT INTO t_clearing_order (
+            business_chain_id,
             clearing_no,
             batch_no,
             payment_order_id,
@@ -178,6 +182,7 @@
             rule_no,
             created_at
         ) VALUES (
+            #{businessChainId},
             #{clearingNo},
             #{batchNo},
             #{paymentOrderId},
@@ -336,7 +341,8 @@
     </insert>
 
     <select id="findEvents" resultType="com.abc123.clearing.entity.ClearingEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -352,7 +358,8 @@
     </select>
 
     <select id="findDueFailedClearingGeneratedEvents" resultType="com.abc123.clearing.entity.ClearingEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -373,7 +380,8 @@
     </select>
 
     <select id="findEventByTypeAndBizNo" resultType="com.abc123.clearing.entity.ClearingEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -392,7 +400,8 @@
     </select>
 
     <select id="findEventByEventNo" resultType="com.abc123.clearing.entity.ClearingEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -410,6 +419,7 @@
 
     <insert id="insertEvent">
         INSERT INTO t_clearing_event (
+            business_chain_id,
             event_no,
             event_type,
             biz_no,
@@ -420,6 +430,7 @@
             retry_count,
             created_at
         ) VALUES (
+            #{businessChainId},
             #{eventNo},
             #{eventType},
             #{bizNo},

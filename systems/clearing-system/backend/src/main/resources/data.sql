@@ -83,6 +83,7 @@ INSERT INTO t_clearing_batch (
 );
 
 INSERT INTO t_clearing_order (
+    business_chain_id,
     clearing_no,
     batch_no,
     payment_order_id,
@@ -97,6 +98,7 @@ INSERT INTO t_clearing_order (
     rule_no,
     created_at
 ) VALUES (
+    'CHAIN-PAY202607200001',
     'CLO20001',
     'CLB10001',
     'PAY202607200001',
@@ -154,6 +156,7 @@ INSERT INTO t_clearing_share_item (
 );
 
 INSERT INTO t_clearing_event (
+    business_chain_id,
     event_no,
     event_type,
     biz_no,
@@ -162,6 +165,7 @@ INSERT INTO t_clearing_event (
     event_status,
     created_at
 ) VALUES (
+    'CHAIN-PAY202607200001',
     'EVT60001',
     'PAYMENT_SUCCESS',
     'PAY202607200001',

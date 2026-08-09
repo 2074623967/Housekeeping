@@ -29,6 +29,7 @@ INSERT INTO t_settlement_batch (
 );
 
 INSERT INTO t_settlement_order (
+    business_chain_id,
     settlement_no,
     batch_no,
     target_type,
@@ -44,6 +45,7 @@ INSERT INTO t_settlement_order (
     created_at
 ) VALUES
 (
+    'CHAIN-PAY202607200001',
     'SLT20001',
     'SET10001',
     'WORKER',
@@ -59,6 +61,7 @@ INSERT INTO t_settlement_order (
     '2026-07-20 09:05:00'
 ),
 (
+    'CHAIN-PAY202607200001',
     'SLT20002',
     'SET10001',
     'MERCHANT',
@@ -136,6 +139,7 @@ INSERT INTO t_settlement_audit_log (
 );
 
 INSERT INTO t_settlement_event (
+    business_chain_id,
     event_no,
     event_type,
     biz_no,
@@ -144,6 +148,7 @@ INSERT INTO t_settlement_event (
     event_status,
     created_at
 ) VALUES (
+    'CHAIN-PAY202607200001',
     'SVE70001',
     'CLEARING_GENERATED',
     'CLO20001',

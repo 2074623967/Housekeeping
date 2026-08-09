@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.reconciliation.common.BusinessException;
 import com.abc123.reconciliation.dto.ChannelRecordRequestDTO;
+import com.abc123.reconciliation.dto.CrossSystemChainSnapshotDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 import com.abc123.reconciliation.dto.DifferenceQueryDTO;
 import com.abc123.reconciliation.dto.DifferenceResolveRequestDTO;
 import com.abc123.reconciliation.dto.InternalRecordRequestDTO;
@@ -150,5 +152,47 @@ class ReconciliationIntegrationTest {
         assertEquals(true, csv.contains("渠道账单记录"));
         assertEquals(true, csv.contains("平台支付事实"));
         assertEquals(true, csv.contains("差异明细"));
+    }
+
+    @Test
+    void shouldBuildIdempotentCrossSystemChainSnapshot() {
+        String chainId = "CHAIN-IT-001";
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-001", "SUCCESS");
+        recordFact(chainId, "clearing-system", "CLEARING_GENERATED", "CLR-CHAIN-001", "SUCCESS");
+        recordFact(chainId, "settlement-system", "SETTLEMENT_CREATED", "SET-CHAIN-001", "SUCCESS");
+        recordFact(chainId, "accounting-system", "ACCOUNTING_POSTED", "ACC-CHAIN-001", "SUCCESS");
+
+        CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain(chainId);
+        assertEquals(4, snapshot.getFactCount());
+        assertEquals(false, snapshot.isHasAbnormalFact());
+        assertEquals("已接收跨系统事实，当前未发现失败状态", snapshot.getDiagnosis());
+
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-001", "SUCCESS");
+        assertEquals(4, service.crossSystemChain(chainId).getFactCount());
+    }
+
+    @Test
+    void shouldBlockFinancialCloseWhenChainHasAbnormalFact() {
+        String chainId = "CHAIN-IT-002";
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-002", "SUCCESS");
+        recordFact(chainId, "settlement-system", "PAYOUT", "POU-CHAIN-002", "FAILED");
+
+        CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain(chainId);
+        assertEquals(2, snapshot.getFactCount());
+        assertEquals(true, snapshot.isHasAbnormalFact());
+        assertEquals("链路存在失败或异常事实，禁止直接进入财务收口", snapshot.getDiagnosis());
+    }
+
+    private void recordFact(String chainId, String systemCode, String factType,
+                            String factNo, String factStatus) {
+        CrossSystemFactRequestDTO request = new CrossSystemFactRequestDTO();
+        request.setBusinessChainId(chainId);
+        request.setSystemCode(systemCode);
+        request.setFactType(factType);
+        request.setFactNo(factNo);
+        request.setBusinessNo(factNo);
+        request.setFactStatus(factStatus);
+        request.setAmount(new BigDecimal("168.00"));
+        service.recordCrossSystemFact(request);
     }
 }

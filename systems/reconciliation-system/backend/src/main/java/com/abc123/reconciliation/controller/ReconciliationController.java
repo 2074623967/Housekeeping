@@ -11,6 +11,8 @@ import com.abc123.reconciliation.dto.ReconciliationBatchDetailDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
+import com.abc123.reconciliation.dto.CrossSystemChainSnapshotDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 import com.abc123.reconciliation.service.ReconciliationService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -107,5 +109,17 @@ public class ReconciliationController {
         request.setDifferenceNo(differenceNo);
         service.resolve(request);
         return ApiResponse.success(null);
+    }
+
+    @PostMapping("/cross-system/facts")
+    public ApiResponse<CrossSystemChainSnapshotDTO> recordCrossSystemFact(
+            @RequestBody CrossSystemFactRequestDTO request) {
+        return ApiResponse.success(service.recordCrossSystemFact(request));
+    }
+
+    @GetMapping("/cross-system/chains/{businessChainId}")
+    public ApiResponse<CrossSystemChainSnapshotDTO> crossSystemChain(
+            @PathVariable String businessChainId) {
+        return ApiResponse.success(service.crossSystemChain(businessChainId));
     }
 }

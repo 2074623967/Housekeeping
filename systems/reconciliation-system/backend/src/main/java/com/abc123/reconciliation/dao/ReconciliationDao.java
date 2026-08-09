@@ -6,6 +6,9 @@ import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
+import com.abc123.reconciliation.dto.CrossSystemChainSnapshotDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 import com.abc123.reconciliation.entity.ChannelRecordEntity;
 import com.abc123.reconciliation.entity.InternalRecordEntity;
 import java.math.BigDecimal;
@@ -54,4 +57,8 @@ public interface ReconciliationDao {
     int resolveDifference(String differenceNo, String resolution, String remark);
 
     ReconciliationOverviewDTO overview();
+
+    int insertCrossSystemFact(CrossSystemFactRequestDTO request);
+
+    List<CrossSystemFactDTO> findCrossSystemFacts(String businessChainId);
 }
