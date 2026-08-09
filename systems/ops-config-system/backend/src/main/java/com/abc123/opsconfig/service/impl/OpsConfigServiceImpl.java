@@ -19,6 +19,7 @@ import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -140,6 +141,7 @@ public class OpsConfigServiceImpl implements OpsConfigService {
         snapshot.setBusinessCode(businessCode);
         snapshot.setPayType(payType);
         snapshot.setTerminalType(terminalType);
+        snapshot.setSnapshotVersion(defaultVersion(dao.findLatestSnapshotVersion()));
         snapshot.setDefaultPayMethod(cashierTemplate.getDefaultPayMethod());
         snapshot.setPrimaryChannelProfileCode(routingRule.getPrimaryChannel());
         snapshot.setBackupChannelProfileCode(routingRule.getBackupChannel());
@@ -344,7 +346,37 @@ public class OpsConfigServiceImpl implements OpsConfigService {
         if (dao.publishConfigChange(change.getRequestNo()) != 1) {
             throw new BusinessException("配置变更发布失败");
         }
+        if (dao.insertSnapshotVersion(change.getGrayScope(), change.getRequestNo()) != 1) {
+            throw new BusinessException("配置快照版本生成失败");
+        }
+        Long snapshotVersion = dao.findSnapshotVersionByRequestNo(change.getRequestNo());
+        if (snapshotVersion == null) {
+            throw new BusinessException("配置快照版本查询失败");
+        }
+        String eventNo = "OPSREFRESH-" + snapshotVersion + "-"
+                + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        if (dao.insertRefreshEvent(eventNo, snapshotVersion, change.getGrayScope(), change.getRequestNo()) != 1) {
+            throw new BusinessException("配置刷新事件生成失败");
+        }
         return changeOrFail(change.getRequestNo());
+    }
+
+    @Override
+    public PageResultDTO<OpsConfigRefreshEventDTO> refreshEvents() {
+        List<OpsConfigRefreshEventDTO> records = dao.findRefreshEvents();
+        return page(records);
+    }
+
+    @Override
+    @Transactional
+    public boolean acknowledgeRefreshEvent(String eventNo, String acknowledgedBy) {
+        if (!StringUtils.hasText(eventNo)) {
+            throw new BusinessException("刷新事件号不能为空");
+        }
+        if (!StringUtils.hasText(acknowledgedBy)) {
+            throw new BusinessException("确认人不能为空");
+        }
+        return dao.acknowledgeRefreshEvent(eventNo.trim(), acknowledgedBy.trim()) == 1;
     }
 
     private DashboardMetricDTO metric(String title, String value, String badgeType, String badgeText) {
@@ -475,5 +507,9 @@ public class OpsConfigServiceImpl implements OpsConfigService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private Long defaultVersion(Long version) {
+        return version == null ? 0L : version;
     }
 }

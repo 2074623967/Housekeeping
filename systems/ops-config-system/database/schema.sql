@@ -124,3 +124,28 @@ CREATE TABLE IF NOT EXISTS t_ops_config_change (
     KEY idx_ops_config_change_status (status),
     KEY idx_ops_config_change_config (config_type, config_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营配置变更审批与灰度发布表';
+
+CREATE TABLE IF NOT EXISTS t_ops_config_snapshot_version (
+    version_no BIGINT NOT NULL AUTO_INCREMENT COMMENT '配置快照版本号',
+    gray_scope VARCHAR(128) NOT NULL COMMENT '灰度范围',
+    source_request_no VARCHAR(64) NOT NULL COMMENT '来源变更申请号',
+    status VARCHAR(32) NOT NULL COMMENT '版本状态',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间',
+    PRIMARY KEY (version_no),
+    UNIQUE KEY uk_ops_snapshot_source_request (source_request_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营配置快照版本表';
+
+CREATE TABLE IF NOT EXISTS t_ops_config_refresh_event (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    event_no VARCHAR(64) NOT NULL COMMENT '刷新事件号',
+    snapshot_version BIGINT NOT NULL COMMENT '配置快照版本号',
+    gray_scope VARCHAR(128) NOT NULL COMMENT '灰度范围',
+    status VARCHAR(32) NOT NULL COMMENT '事件状态',
+    source_request_no VARCHAR(64) NOT NULL COMMENT '来源变更申请号',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    acknowledged_by VARCHAR(128) NULL COMMENT '下游确认人',
+    acknowledged_at DATETIME NULL COMMENT '下游确认时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_ops_refresh_event_no (event_no),
+    KEY idx_ops_refresh_event_status (status, snapshot_version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='运营配置快照刷新事件表';

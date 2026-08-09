@@ -8,6 +8,7 @@ import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -102,4 +103,21 @@ public interface OpsConfigMapper {
     int publishConfigChange(@Param("requestNo") String requestNo);
 
     int expireConfigChange(@Param("requestNo") String requestNo);
+
+    int insertSnapshotVersion(@Param("grayScope") String grayScope,
+                              @Param("sourceRequestNo") String sourceRequestNo);
+
+    Long findSnapshotVersionByRequestNo(@Param("sourceRequestNo") String sourceRequestNo);
+
+    Long findLatestSnapshotVersion();
+
+    int insertRefreshEvent(@Param("eventNo") String eventNo,
+                           @Param("snapshotVersion") Long snapshotVersion,
+                           @Param("grayScope") String grayScope,
+                           @Param("sourceRequestNo") String sourceRequestNo);
+
+    List<OpsConfigRefreshEventDTO> findRefreshEvents();
+
+    int acknowledgeRefreshEvent(@Param("eventNo") String eventNo,
+                                @Param("acknowledgedBy") String acknowledgedBy);
 }

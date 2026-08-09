@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class OpsConfigEffectiveSnapshotDTO {
 
+    /** 当前生效配置快照版本号。 */
+    private Long snapshotVersion;
     /** 业务线编码。 */
     private String businessCode;
     /** 支付类型编码。 */

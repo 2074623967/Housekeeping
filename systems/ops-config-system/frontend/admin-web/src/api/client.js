@@ -22,6 +22,7 @@ export const opsConfigApi = {
   getRoutingRules: () => request("/api/ops-config/routing-rules"),
   getSystemControls: () => request("/api/ops-config/system-controls"),
   getConfigChanges: () => request("/api/ops-config/changes"),
+  getRefreshEvents: () => request("/api/ops-config/refresh-events"),
   getEffectiveSnapshot: ({ businessCode = "", payType = "", terminalType = "" } = {}) => {
     const params = new URLSearchParams({ businessCode, payType, terminalType });
     return request(`/api/ops-config/effective-snapshot?${params.toString()}`);
@@ -44,5 +45,6 @@ export const opsConfigApi = {
   toggleSystemControl: (configCode, enabled) => postJson("/api/ops-config/system-controls/toggle", { configCode, enabled }),
   createConfigChange: (payload) => postJson("/api/ops-config/changes", payload),
   approveConfigChange: (payload) => postJson("/api/ops-config/changes/approve", payload),
-  publishConfigChange: (payload) => postJson("/api/ops-config/changes/publish", payload)
+  publishConfigChange: (payload) => postJson("/api/ops-config/changes/publish", payload),
+  acknowledgeRefreshEvent: (payload) => postJson("/api/ops-config/refresh-events/ack", payload)
 };

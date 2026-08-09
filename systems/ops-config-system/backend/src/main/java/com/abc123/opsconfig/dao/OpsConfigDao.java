@@ -9,6 +9,7 @@ import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import java.util.List;
 
 /**
@@ -87,4 +88,16 @@ public interface OpsConfigDao {
     int publishConfigChange(String requestNo);
 
     int expireConfigChange(String requestNo);
+
+    int insertSnapshotVersion(String grayScope, String sourceRequestNo);
+
+    Long findSnapshotVersionByRequestNo(String sourceRequestNo);
+
+    Long findLatestSnapshotVersion();
+
+    int insertRefreshEvent(String eventNo, Long snapshotVersion, String grayScope, String sourceRequestNo);
+
+    List<OpsConfigRefreshEventDTO> findRefreshEvents();
+
+    int acknowledgeRefreshEvent(String eventNo, String acknowledgedBy);
 }

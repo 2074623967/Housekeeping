@@ -9,6 +9,7 @@ import com.abc123.opsconfig.dto.PaymentTypeDTO;
 import com.abc123.opsconfig.dto.RoutingRuleDTO;
 import com.abc123.opsconfig.dto.SystemControlDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import com.abc123.opsconfig.mapper.OpsConfigMapper;
 import java.util.List;
 import org.springframework.stereotype.Repository;
@@ -186,5 +187,35 @@ public class OpsConfigDaoImpl implements OpsConfigDao {
     @Override
     public int expireConfigChange(String requestNo) {
         return mapper.expireConfigChange(requestNo);
+    }
+
+    @Override
+    public int insertSnapshotVersion(String grayScope, String sourceRequestNo) {
+        return mapper.insertSnapshotVersion(grayScope, sourceRequestNo);
+    }
+
+    @Override
+    public Long findSnapshotVersionByRequestNo(String sourceRequestNo) {
+        return mapper.findSnapshotVersionByRequestNo(sourceRequestNo);
+    }
+
+    @Override
+    public Long findLatestSnapshotVersion() {
+        return mapper.findLatestSnapshotVersion();
+    }
+
+    @Override
+    public int insertRefreshEvent(String eventNo, Long snapshotVersion, String grayScope, String sourceRequestNo) {
+        return mapper.insertRefreshEvent(eventNo, snapshotVersion, grayScope, sourceRequestNo);
+    }
+
+    @Override
+    public List<OpsConfigRefreshEventDTO> findRefreshEvents() {
+        return mapper.findRefreshEvents();
+    }
+
+    @Override
+    public int acknowledgeRefreshEvent(String eventNo, String acknowledgedBy) {
+        return mapper.acknowledgeRefreshEvent(eventNo, acknowledgedBy);
     }
 }

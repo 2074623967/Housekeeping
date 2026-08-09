@@ -16,6 +16,7 @@ import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 
 /**
  * 运营配置服务。
@@ -92,4 +93,20 @@ public interface OpsConfigService {
      * @return 最新变更记录
      */
     OpsConfigChangeDTO publishConfigChange(OpsConfigChangePublishRequestDTO request);
+
+    /**
+     * 查询待下游消费的配置刷新事件。
+     *
+     * @return 刷新事件列表
+     */
+    PageResultDTO<OpsConfigRefreshEventDTO> refreshEvents();
+
+    /**
+     * 确认下游已经刷新配置快照。
+     *
+     * @param eventNo 事件号
+     * @param acknowledgedBy 确认人
+     * @return 是否成功
+     */
+    boolean acknowledgeRefreshEvent(String eventNo, String acknowledgedBy);
 }

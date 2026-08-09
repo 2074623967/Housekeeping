@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class PaymentOpsConfigSnapshotDTO {
 
+    /** 运营配置快照版本号，支付提交链路用于记录消费版本。 */
+    private Long snapshotVersion;
     /** 业务线编码。 */
     private String businessCode;
     /** 支付类型编码。 */

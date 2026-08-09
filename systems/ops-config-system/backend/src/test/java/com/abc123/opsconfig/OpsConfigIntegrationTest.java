@@ -12,6 +12,7 @@ import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
 import com.abc123.opsconfig.service.OpsConfigService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -152,5 +153,38 @@ class OpsConfigIntegrationTest {
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.createConfigChange(request));
         assertEquals("灰度结束时间不能早于开始时间", exception.getMessage());
+    }
+
+    @Test
+    void shouldExposeSnapshotVersionAndRefreshEventAfterPublish() {
+        OpsConfigChangeCreateRequestDTO createRequest = new OpsConfigChangeCreateRequestDTO();
+        createRequest.setConfigType("ROUTING_RULE");
+        createRequest.setConfigCode("ROUTE_HOME_DEPOSIT");
+        createRequest.setEnabled(true);
+        createRequest.setReason("启用保证金路由进行版本刷新验证");
+        createRequest.setApplicant("ops-owner");
+
+        OpsConfigChangeDTO created = service.createConfigChange(createRequest);
+        OpsConfigChangeApprovalRequestDTO approvalRequest = new OpsConfigChangeApprovalRequestDTO();
+        approvalRequest.setRequestNo(created.getRequestNo());
+        approvalRequest.setApproved(true);
+        approvalRequest.setApprover("finance-owner");
+        service.approveConfigChange(approvalRequest);
+
+        OpsConfigChangePublishRequestDTO publishRequest = new OpsConfigChangePublishRequestDTO();
+        publishRequest.setRequestNo(created.getRequestNo());
+        publishRequest.setOperator("ops-owner");
+        service.publishConfigChange(publishRequest);
+
+        OpsConfigSnapshotQueryDTO query = new OpsConfigSnapshotQueryDTO();
+        query.setBusinessCode("HOME_CLEAN");
+        query.setPayType("PAY_CONSUME");
+        query.setTerminalType("APP");
+        assertTrue(service.effectiveSnapshot(query).getSnapshotVersion() > 0);
+
+        OpsConfigRefreshEventDTO event = service.refreshEvents().getRecords().get(0);
+        assertEquals("PENDING", event.getStatus());
+        assertTrue(service.acknowledgeRefreshEvent(event.getEventNo(), "payment-core"));
+        assertEquals("ACKNOWLEDGED", service.refreshEvents().getRecords().get(0).getStatus());
     }
 }

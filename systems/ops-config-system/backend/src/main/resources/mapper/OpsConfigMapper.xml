@@ -147,6 +147,33 @@
         ORDER BY id ASC
     </select>
 
+    <select id="findLatestSnapshotVersion" resultType="long">
+        SELECT version_no
+        FROM t_ops_config_snapshot_version
+        ORDER BY version_no DESC
+        LIMIT 1
+    </select>
+
+    <select id="findSnapshotVersionByRequestNo" resultType="long">
+        SELECT version_no
+        FROM t_ops_config_snapshot_version
+        WHERE source_request_no = #{sourceRequestNo}
+        LIMIT 1
+    </select>
+
+    <select id="findRefreshEvents" resultType="com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO">
+        SELECT event_no AS eventNo,
+               snapshot_version AS snapshotVersion,
+               gray_scope AS grayScope,
+               status,
+               source_request_no AS sourceRequestNo,
+               created_at AS createdAt,
+               acknowledged_by AS acknowledgedBy,
+               acknowledged_at AS acknowledgedAt
+        FROM t_ops_config_refresh_event
+        ORDER BY id DESC
+    </select>
+
     <select id="countEnabledAgreementTemplates" resultType="long">
         SELECT COUNT(1) FROM t_ops_agreement_template WHERE status = 'ENABLED'
     </select>
@@ -286,5 +313,30 @@
             status_type = 'danger'
         WHERE request_no = #{requestNo}
           AND status = 'APPROVED'
+    </update>
+
+    <insert id="insertSnapshotVersion">
+        INSERT INTO t_ops_config_snapshot_version (
+            gray_scope, source_request_no, status, created_at
+        ) VALUES (
+            #{grayScope}, #{sourceRequestNo}, 'PUBLISHED', CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <insert id="insertRefreshEvent">
+        INSERT INTO t_ops_config_refresh_event (
+            event_no, snapshot_version, gray_scope, status, source_request_no, created_at
+        ) VALUES (
+            #{eventNo}, #{snapshotVersion}, #{grayScope}, 'PENDING', #{sourceRequestNo}, CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <update id="acknowledgeRefreshEvent">
+        UPDATE t_ops_config_refresh_event
+        SET status = 'ACKNOWLEDGED',
+            acknowledged_by = #{acknowledgedBy},
+            acknowledged_at = CURRENT_TIMESTAMP
+        WHERE event_no = #{eventNo}
+          AND status = 'PENDING'
     </update>
 </mapper>

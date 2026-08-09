@@ -17,6 +17,9 @@ import com.abc123.opsconfig.dto.OpsConfigChangeApprovalRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeCreateRequestDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangeDTO;
 import com.abc123.opsconfig.dto.OpsConfigChangePublishRequestDTO;
+import com.abc123.opsconfig.dto.OpsConfigRefreshEventDTO;
+import java.util.Map;
+import java.util.HashMap;
 import com.abc123.opsconfig.service.OpsConfigService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -166,5 +169,27 @@ public class OpsConfigController {
     public ApiResponse<OpsConfigChangeDTO> publishConfigChange(
             @RequestBody OpsConfigChangePublishRequestDTO request) {
         return ApiResponse.success(service.publishConfigChange(request));
+    }
+
+    /**
+     * 查询配置快照刷新事件，供下游轮询或补偿消费。
+     */
+    @GetMapping("/refresh-events")
+    public ApiResponse<PageResultDTO<OpsConfigRefreshEventDTO>> refreshEvents() {
+        return ApiResponse.success(service.refreshEvents());
+    }
+
+    /**
+     * 确认下游已消费指定配置刷新事件。
+     */
+    @PostMapping("/refresh-events/ack")
+    public ApiResponse<Map<String, Object>> acknowledgeRefreshEvent(
+            @RequestBody Map<String, String> request) {
+        boolean acknowledged = service.acknowledgeRefreshEvent(
+                request == null ? null : request.get("eventNo"),
+                request == null ? null : request.get("acknowledgedBy"));
+        Map<String, Object> result = new HashMap<>();
+        result.put("acknowledged", acknowledged);
+        return ApiResponse.success(result);
     }
 }

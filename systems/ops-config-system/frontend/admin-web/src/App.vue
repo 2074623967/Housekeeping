@@ -11,6 +11,7 @@ const channelProfiles = ref([]);
 const routingRules = ref([]);
 const systemControls = ref([]);
 const configChanges = ref([]);
+const refreshEvents = ref([]);
 const changeForm = ref({
   configType: "ROUTING_RULE",
   configCode: "ROUTE_HOME_DEPOSIT",
@@ -36,7 +37,7 @@ async function loadAll() {
   loading.value = true;
   message.value = "";
   try {
-    const [summaryData, agreementData, businessData, paymentTypeData, cashierData, channelData, routeData, controlData, changeData] = await Promise.all([
+    const [summaryData, agreementData, businessData, paymentTypeData, cashierData, channelData, routeData, controlData, changeData, refreshEventData] = await Promise.all([
       opsConfigApi.getSummary(),
       opsConfigApi.getAgreementTemplates(),
       opsConfigApi.getBusinessLines(),
@@ -45,7 +46,8 @@ async function loadAll() {
       opsConfigApi.getChannelProfiles(),
       opsConfigApi.getRoutingRules(),
       opsConfigApi.getSystemControls(),
-      opsConfigApi.getConfigChanges()
+      opsConfigApi.getConfigChanges(),
+      opsConfigApi.getRefreshEvents()
     ]);
     summary.value = summaryData;
     agreementTemplates.value = agreementData.records;
@@ -56,6 +58,7 @@ async function loadAll() {
     routingRules.value = routeData.records;
     systemControls.value = controlData.records;
     configChanges.value = changeData.records;
+    refreshEvents.value = refreshEventData.records;
   } catch (error) {
     message.value = error.message;
   } finally {
@@ -100,6 +103,19 @@ async function publishConfigChange(change) {
     message.value = `${updated.requestNo} 已发布`;
   } catch (error) {
     message.value = `发布失败：${error.message}`;
+  }
+}
+
+async function acknowledgeRefreshEvent(event) {
+  try {
+    await opsConfigApi.acknowledgeRefreshEvent({
+      eventNo: event.eventNo,
+      acknowledgedBy: actionUser.value
+    });
+    await loadAll();
+    message.value = `${event.eventNo} 已确认下游刷新`;
+  } catch (error) {
+    message.value = `刷新确认失败：${error.message}`;
   }
 }
 
@@ -185,7 +201,7 @@ onMounted(loadAll);
           <button class="button secondary" @click="exportSnapshot">导出快照</button>
         </div>
         <div v-if="snapshot" class="banner" style="margin-top: 12px">
-          {{ snapshot.businessCode }} / {{ snapshot.payType }} / {{ snapshot.terminalType }}，默认支付方式：{{ snapshot.defaultPayMethod }}，路由：{{ snapshot.routeMatchPolicy }}
+          {{ snapshot.businessCode }} / {{ snapshot.payType }} / {{ snapshot.terminalType }}，快照版本：V{{ snapshot.snapshotVersion }}，默认支付方式：{{ snapshot.defaultPayMethod }}，路由：{{ snapshot.routeMatchPolicy }}
         </div>
       </section>
 
@@ -239,6 +255,25 @@ onMounted(loadAll);
               </td>
             </tr>
             <tr v-if="configChanges.length === 0"><td colspan="7" class="empty">暂无配置变更申请</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>下游配置刷新事件</h2>
+        <p class="muted">配置发布后先产生刷新事件，下游系统确认消费后再关闭待处理状态。</p>
+        <table>
+          <thead><tr><th>事件号</th><th>快照版本</th><th>灰度范围</th><th>来源申请</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr v-for="event in refreshEvents" :key="event.eventNo">
+              <td>{{ event.eventNo }}</td>
+              <td>V{{ event.snapshotVersion }}</td>
+              <td>{{ event.grayScope }}</td>
+              <td>{{ event.sourceRequestNo }}</td>
+              <td><span class="tag" :class="event.status === 'ACKNOWLEDGED' ? 'success' : 'warn'">{{ event.status }}</span></td>
+              <td><button v-if="event.status === 'PENDING'" class="link" @click="acknowledgeRefreshEvent(event)">确认刷新</button></td>
+            </tr>
+            <tr v-if="refreshEvents.length === 0"><td colspan="6" class="empty">暂无刷新事件</td></tr>
           </tbody>
         </table>
       </section>
