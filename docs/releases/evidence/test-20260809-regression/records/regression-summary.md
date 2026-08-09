@@ -17,22 +17,22 @@
 
 | 场景编号 | 业务场景 | API | 数据库 | 事件 | 页面 | 补偿/回滚 | 结论 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| REG-01 | 创建预付单 | TODO | TODO | N/A | TODO | TODO | TODO | |
-| REG-02 | 提交支付请求 | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-03 | 渠道回调成功 | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-04 | 支付成功自动清分 | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-05 | 清分结果自动结算 | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-06 | 清分结果自动记账 | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-07 | 跨系统链路诊断 | TODO | TODO | TODO | OPTIONAL | N/A | TODO | |
-| REG-08 | 失败派发重试 / DLQ | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-09 | 结算审核与出款 | TODO | TODO | TODO | TODO | TODO | TODO | |
-| REG-10 | 日终处理与运营巡检 | TODO | TODO | TODO | TODO | TODO | TODO | |
+| REG-01 | 创建预付单 | PASS | PASS | N/A | TODO | TODO | 部分完成 | 历史 smoke 已证明预付单创建成功，缺最新页面与失败回滚证据 |
+| REG-02 | 提交支付请求 | PASS | PASS | N/A | TODO | TODO | 部分完成 | 已有历史提交与路由命中证据 |
+| REG-03 | 渠道回调成功 | PASS | PASS | PASS | TODO | TODO | 部分完成 | 已有历史回调收口与出站事件证据 |
+| REG-04 | 支付成功自动清分 | PASS | PASS | PASS | TODO | TODO | 部分完成 | 已有历史清分承接证据 |
+| REG-05 | 清分结果自动结算 | PASS | PASS | PASS | TODO | TODO | 部分完成 | 已有历史结算承接证据 |
+| REG-06 | 清分结果自动记账 | PASS | PASS | PASS | TODO | TODO | 部分完成 | 已有历史账务承接证据 |
+| REG-07 | 跨系统链路诊断 | PASS | PASS | PASS | OPTIONAL | N/A | 已完成 | 当前 test 基线已具备代码与自动化闭环 |
+| REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | TODO | PASS | 部分完成 | 历史补偿闭环已存在，缺最新同批次页面与任务快照 |
+| REG-09 | 结算审核与出款 | PASS | PASS | PASS | TODO | TODO | 部分完成 | 已有历史审核、出款与回单证据 |
+| REG-10 | 日终处理与运营巡检 | PASS | TODO | TODO | TODO | TODO | 部分完成 | 当前仅有自动化测试覆盖证据 |
 
 ## 3. 阻断项
 
-1. 
-2. 
-3. 
+1. `REG-01 ~ REG-06 / REG-09` 仍缺最新同批次页面冻结与页面矩阵映射。
+2. `REG-08` 仍缺最新同批次 `DLQ -> task -> page snapshot -> downstream fact` 回归证据。
+3. `REG-10` 当前仅有自动化测试覆盖，缺真实日终业务批次证据。
 
 ## 4. 放行结论
 
