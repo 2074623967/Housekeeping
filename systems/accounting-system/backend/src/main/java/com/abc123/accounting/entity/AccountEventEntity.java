@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class AccountEventEntity {
 
+    /** 跨系统业务链路 ID。 */
+    private String businessChainId;
     /** 事件号。 */
     private String eventNo;
     /** 事件类型。 */

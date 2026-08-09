@@ -238,6 +238,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private Map<String, Object> buildAmqpPayload(PaymentDetailDTO detail, String workerName, BigDecimal amount) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("businessChainId", businessChainId(detail.getPaymentOrderId()));
         payload.put("accountNo", accountingPaymentSuccessAccountNo);
         payload.put("paymentOrderId", detail.getPaymentOrderId());
         payload.put("orderNo", detail.getOrderNo());
@@ -286,6 +287,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private PaymentSuccessClearingPayload buildClearingPayload(PaymentDetailDTO detail, String workerName, BigDecimal amount) {
         return new PaymentSuccessClearingPayload(
+                businessChainId(detail.getPaymentOrderId()),
                 detail.getPaymentOrderId(),
                 detail.getOrderNo(),
                 LocalDate.now().toString(),
@@ -297,6 +299,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private PaymentSuccessAccountingPayload buildAccountingPayload(PaymentDetailDTO detail, BigDecimal amount) {
         return new PaymentSuccessAccountingPayload(
+                businessChainId(detail.getPaymentOrderId()),
                 accountingPaymentSuccessAccountNo,
                 detail.getPaymentOrderId(),
                 detail.getOrderNo(),
@@ -310,10 +313,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     /**
+     * 一期以支付单号作为稳定根键，后续可替换为订单域下发的全局链路号。
+     */
+    private String businessChainId(String paymentOrderId) {
+        return "CHAIN-" + paymentOrderId;
+    }
+
+    /**
      * 清分事件载荷。
      */
     private static class PaymentSuccessClearingPayload {
 
+        private final String businessChainId;
         private final String paymentOrderId;
         private final String orderNo;
         private final String batchDate;
@@ -322,13 +333,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         private final String workerName;
         private final BigDecimal amount;
 
-        PaymentSuccessClearingPayload(String paymentOrderId,
+        PaymentSuccessClearingPayload(String businessChainId,
+                                      String paymentOrderId,
                                       String orderNo,
                                       String batchDate,
                                       String customerName,
                                       String merchantName,
                                       String workerName,
                                       BigDecimal amount) {
+            this.businessChainId = businessChainId;
             this.paymentOrderId = paymentOrderId;
             this.orderNo = orderNo;
             this.batchDate = batchDate;
@@ -340,6 +353,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
         public String getPaymentOrderId() {
             return paymentOrderId;
+        }
+
+        public String getBusinessChainId() {
+            return businessChainId;
         }
 
         public String getOrderNo() {
@@ -372,17 +389,20 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
      */
     private static class PaymentSuccessAccountingPayload {
 
+        private final String businessChainId;
         private final String accountNo;
         private final String paymentOrderId;
         private final String orderNo;
         private final String customerName;
         private final BigDecimal amount;
 
-        PaymentSuccessAccountingPayload(String accountNo,
+        PaymentSuccessAccountingPayload(String businessChainId,
+                                        String accountNo,
                                         String paymentOrderId,
                                         String orderNo,
                                         String customerName,
                                         BigDecimal amount) {
+            this.businessChainId = businessChainId;
             this.accountNo = accountNo;
             this.paymentOrderId = paymentOrderId;
             this.orderNo = orderNo;
@@ -392,6 +412,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
         public String getAccountNo() {
             return accountNo;
+        }
+
+        public String getBusinessChainId() {
+            return businessChainId;
         }
 
         public String getPaymentOrderId() {

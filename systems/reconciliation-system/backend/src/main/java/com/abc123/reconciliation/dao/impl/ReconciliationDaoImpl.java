@@ -7,6 +7,8 @@ import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchInternalRecordDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 import com.abc123.reconciliation.entity.ChannelRecordEntity;
 import com.abc123.reconciliation.entity.InternalRecordEntity;
 import com.abc123.reconciliation.mapper.ReconciliationMapper;
@@ -122,5 +124,15 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     @Override
     public ReconciliationOverviewDTO overview() {
         return mapper.overview();
+    }
+
+    @Override
+    public int insertCrossSystemFact(CrossSystemFactRequestDTO request) {
+        return mapper.insertCrossSystemFact(request);
+    }
+
+    @Override
+    public List<CrossSystemFactDTO> findCrossSystemFacts(String businessChainId) {
+        return mapper.findCrossSystemFacts(businessChainId);
     }
 }

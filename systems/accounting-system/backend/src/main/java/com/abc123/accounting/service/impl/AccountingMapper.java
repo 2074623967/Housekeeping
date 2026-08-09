@@ -119,6 +119,7 @@ public class AccountingMapper {
 
     public AccountEventDTO toEventDTO(AccountEventEntity entity) {
         AccountEventDTO dto = new AccountEventDTO();
+        dto.setBusinessChainId(entity.getBusinessChainId());
         dto.setEventNo(entity.getEventNo());
         dto.setEventType(entity.getEventType());
         dto.setBizNo(entity.getBizNo());

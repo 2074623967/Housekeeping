@@ -330,7 +330,8 @@
     </update>
 
     <select id="findEvents" resultType="com.abc123.accounting.entity.AccountEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -342,7 +343,8 @@
     </select>
 
     <select id="findEventByTypeAndBizNo" resultType="com.abc123.accounting.entity.AccountEventEntity">
-        SELECT event_no,
+        SELECT business_chain_id,
+               event_no,
                event_type,
                biz_no,
                summary,
@@ -358,6 +360,7 @@
 
     <insert id="insertEvent">
         INSERT INTO t_account_event (
+            business_chain_id,
             event_no,
             event_type,
             biz_no,
@@ -366,6 +369,7 @@
             event_status,
             created_at
         ) VALUES (
+            #{businessChainId},
             #{eventNo},
             #{eventType},
             #{bizNo},

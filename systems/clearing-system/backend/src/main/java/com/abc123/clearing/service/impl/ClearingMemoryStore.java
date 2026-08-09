@@ -112,7 +112,8 @@ public class ClearingMemoryStore {
                     order.getOrderNo(),
                     order.getOrderAmount(),
                     order.getRuleNo(),
-                    "重跑成功");
+                    "重跑成功",
+                    order.getBusinessChainId());
         }
         rerun.setBatchStatus("已完成");
         rerun.setFinishedAt(now());
@@ -238,6 +239,7 @@ public class ClearingMemoryStore {
 
     @Transactional
     public ClearingEventEntity consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
+        request.setBusinessChainId(resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId()));
         ClearingOrderEntity existingOrder = clearingDataMapper.findOrderByPaymentOrderId(request.getPaymentOrderId());
         if (existingOrder != null) {
             ClearingEventEntity existingEvent = clearingDataMapper.findEventByTypeAndBizNo("PAYMENT_SUCCESS", request.getPaymentOrderId());
@@ -262,7 +264,8 @@ public class ClearingMemoryStore {
                 request.getOrderNo(),
                 request.getAmount(),
                 activeRule.getRuleNo(),
-                "清分成功");
+                "清分成功",
+                request.getBusinessChainId());
         ClearingBatchEntity refreshedBatch = findBatch(batch.getBatchNo());
         refreshedBatch.setBatchStatus("已完成");
         refreshedBatch.setFinishedAt(now());
@@ -282,13 +285,14 @@ public class ClearingMemoryStore {
 
     @Transactional
     protected ClearingOrderEntity createOrder(String batchNo, String paymentOrderId, String orderNo, BigDecimal orderAmount,
-            String ruleNo, String successStatus) {
+            String ruleNo, String successStatus, String businessChainId) {
         BigDecimal platformAmount = orderAmount.multiply(new BigDecimal("0.08")).setScale(2, RoundingMode.HALF_UP);
         BigDecimal channelFeeAmount = new BigDecimal("1.00");
         BigDecimal merchantAmount = orderAmount.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP);
         BigDecimal workerAmount = orderAmount.subtract(platformAmount).subtract(channelFeeAmount).subtract(merchantAmount);
 
         ClearingOrderEntity entity = new ClearingOrderEntity();
+        entity.setBusinessChainId(resolveBusinessChainId(businessChainId, paymentOrderId));
         entity.setClearingNo(nextNo("CLO", orderSeq));
         entity.setBatchNo(batchNo);
         entity.setPaymentOrderId(paymentOrderId);
@@ -354,6 +358,7 @@ public class ClearingMemoryStore {
 
     private ClearingEventEntity createPaymentSuccessEvent(PaymentSuccessEventRequestDTO request) {
         ClearingEventEntity event = new ClearingEventEntity();
+        event.setBusinessChainId(request.getBusinessChainId());
         event.setEventNo(nextNo("EVT", eventSeq));
         event.setEventType("PAYMENT_SUCCESS");
         event.setBizNo(request.getPaymentOrderId());
@@ -382,12 +387,14 @@ public class ClearingMemoryStore {
         String targetName = workerShare == null ? "待分配服务者" : workerShare.getShareTargetName();
 
         ClearingEventEntity event = new ClearingEventEntity();
+        event.setBusinessChainId(clearingOrder.getBusinessChainId());
         event.setEventNo(nextNo("EVT", eventSeq));
         event.setEventType("CLEARING_GENERATED");
         event.setBizNo(clearingOrder.getClearingNo());
         event.setSummary("清分结果已生成，等待结算和账务消费");
         event.setPayload("{\"accountNo\":\"" + accountingClearingGeneratedAccountNo
                 + "\",\"clearingNo\":\"" + clearingOrder.getClearingNo()
+                + "\",\"businessChainId\":\"" + clearingOrder.getBusinessChainId()
                 + "\",\"clearingOrderNo\":\"" + clearingOrder.getClearingNo()
                 + "\",\"paymentOrderId\":\"" + clearingOrder.getPaymentOrderId()
                 + "\",\"bizNo\":\"" + clearingOrder.getPaymentOrderId()
@@ -403,6 +410,12 @@ public class ClearingMemoryStore {
         event.setCreatedAt(now());
         clearingDataMapper.insertEvent(event);
         return event;
+    }
+
+    private String resolveBusinessChainId(String businessChainId, String businessNo) {
+        return businessChainId == null || businessChainId.trim().isEmpty()
+                ? "CHAIN-" + businessNo
+                : businessChainId.trim();
     }
 
     private void syncSequencesFromDatabase() {

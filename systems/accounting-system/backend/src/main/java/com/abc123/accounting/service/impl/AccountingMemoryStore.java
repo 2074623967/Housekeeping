@@ -297,11 +297,18 @@ public class AccountingMemoryStore {
 
     @Transactional
     public AccountEventEntity recordEvent(String eventType, String bizNo, String summary, String payload) {
+        return recordEvent(eventType, bizNo, summary, payload, "CHAIN-" + bizNo);
+    }
+
+    @Transactional
+    public AccountEventEntity recordEvent(String eventType, String bizNo, String summary, String payload,
+            String businessChainId) {
         AccountEventEntity existingEvent = findEvent(eventType, bizNo);
         if (existingEvent != null) {
             return existingEvent;
         }
         AccountEventEntity entity = new AccountEventEntity();
+        entity.setBusinessChainId(businessChainId);
         entity.setEventNo(nextNo("EVT", eventSeq));
         entity.setEventType(eventType);
         entity.setBizNo(bizNo);

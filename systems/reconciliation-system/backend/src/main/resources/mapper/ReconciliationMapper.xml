@@ -134,4 +134,27 @@
             (SELECT COUNT(1) FROM t_reconciliation_difference WHERE status = 'OPEN') AS open_difference_count,
             (SELECT COALESCE(SUM(matched_count), 0) FROM t_reconciliation_batch) AS matched_count
     </select>
+
+    <insert id="insertCrossSystemFact">
+        INSERT INTO t_cross_system_fact_snapshot
+        (business_chain_id, system_code, fact_type, fact_no, business_no, fact_status,
+         amount, snapshot_version, occurred_at, payload)
+        VALUES (#{businessChainId}, #{systemCode}, #{factType}, #{factNo}, #{businessNo},
+                #{factStatus}, #{amount}, #{snapshotVersion}, #{occurredAt}, #{payload})
+        ON DUPLICATE KEY UPDATE
+            fact_status = VALUES(fact_status),
+            amount = VALUES(amount),
+            snapshot_version = VALUES(snapshot_version),
+            occurred_at = VALUES(occurred_at),
+            payload = VALUES(payload)
+    </insert>
+
+    <select id="findCrossSystemFacts"
+            resultType="com.abc123.reconciliation.dto.CrossSystemFactDTO">
+        SELECT business_chain_id, system_code, fact_type, fact_no, business_no, fact_status,
+               amount, snapshot_version, occurred_at, payload, created_at
+        FROM t_cross_system_fact_snapshot
+        WHERE business_chain_id = #{businessChainId}
+        ORDER BY occurred_at ASC, id ASC
+    </select>
 </mapper>

@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class ClearingOrderEntity {
 
+    /** 跨系统业务链路 ID。 */
+    private String businessChainId;
     private String clearingNo;
     private String batchNo;
     private String paymentOrderId;

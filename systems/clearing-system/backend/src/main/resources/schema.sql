@@ -22,6 +22,7 @@ CREATE TABLE `t_clearing_batch` (
 
 CREATE TABLE `t_clearing_order` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `business_chain_id` VARCHAR(96) NOT NULL COMMENT '跨系统业务链路ID',
   `clearing_no` VARCHAR(32) NOT NULL COMMENT '清分单号',
   `batch_no` VARCHAR(32) NOT NULL COMMENT '归属批次号',
   `payment_order_id` VARCHAR(64) NOT NULL COMMENT '支付单号',
@@ -38,6 +39,7 @@ CREATE TABLE `t_clearing_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_clearing_no` (`clearing_no`),
   UNIQUE KEY `uk_payment_order_id` (`payment_order_id`),
+  KEY `idx_business_chain_id` (`business_chain_id`),
   KEY `idx_batch_no` (`batch_no`),
   KEY `idx_order_no` (`order_no`),
   KEY `idx_clearing_status` (`clearing_status`)
@@ -94,6 +96,7 @@ CREATE TABLE `t_clearing_share_item` (
 
 CREATE TABLE `t_clearing_event` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `business_chain_id` VARCHAR(96) NOT NULL COMMENT '跨系统业务链路ID',
   `event_no` VARCHAR(32) NOT NULL COMMENT '事件编号',
   `event_type` VARCHAR(32) NOT NULL COMMENT '事件类型',
   `biz_no` VARCHAR(64) NOT NULL COMMENT '业务单号',
@@ -109,5 +112,6 @@ CREATE TABLE `t_clearing_event` (
   UNIQUE KEY `uk_event_no` (`event_no`),
   KEY `idx_event_type` (`event_type`),
   KEY `idx_biz_no` (`biz_no`),
+  KEY `idx_event_business_chain_id` (`business_chain_id`),
   KEY `idx_publish_status` (`publish_status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='清分事件表';

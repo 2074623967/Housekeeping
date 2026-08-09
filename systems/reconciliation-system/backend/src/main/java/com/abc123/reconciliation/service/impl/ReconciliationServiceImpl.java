@@ -12,6 +12,9 @@ import com.abc123.reconciliation.dto.ReconciliationBatchDetailDTO;
 import com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO;
 import com.abc123.reconciliation.dto.ReconciliationDifferenceDTO;
 import com.abc123.reconciliation.dto.ReconciliationOverviewDTO;
+import com.abc123.reconciliation.dto.CrossSystemChainSnapshotDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactDTO;
+import com.abc123.reconciliation.dto.CrossSystemFactRequestDTO;
 import com.abc123.reconciliation.entity.ChannelRecordEntity;
 import com.abc123.reconciliation.entity.InternalRecordEntity;
 import com.abc123.reconciliation.service.ReconciliationService;
@@ -26,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -228,6 +232,67 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     @Override
     public ReconciliationOverviewDTO overview() {
         return dao.overview();
+    }
+
+    @Override
+    @Transactional
+    public CrossSystemChainSnapshotDTO recordCrossSystemFact(CrossSystemFactRequestDTO request) {
+        validateCrossSystemFact(request);
+        request.setBusinessChainId(request.getBusinessChainId().trim());
+        request.setSystemCode(request.getSystemCode().trim());
+        request.setFactType(request.getFactType().trim());
+        request.setFactNo(request.getFactNo().trim());
+        request.setBusinessNo(required(request.getBusinessNo(), "来源业务编号不能为空"));
+        request.setFactStatus(required(request.getFactStatus(), "事实状态不能为空"));
+        if (request.getOccurredAt() == null) {
+            request.setOccurredAt(LocalDateTime.now());
+        }
+        dao.insertCrossSystemFact(request);
+        return crossSystemChain(request.getBusinessChainId());
+    }
+
+    @Override
+    public CrossSystemChainSnapshotDTO crossSystemChain(String businessChainId) {
+        if (!StringUtils.hasText(businessChainId)) {
+            throw new BusinessException("业务链路 ID 不能为空");
+        }
+        List<CrossSystemFactDTO> facts = dao.findCrossSystemFacts(businessChainId.trim());
+        CrossSystemChainSnapshotDTO snapshot = new CrossSystemChainSnapshotDTO();
+        snapshot.setBusinessChainId(businessChainId.trim());
+        snapshot.setFactCount(facts.size());
+        snapshot.setFacts(facts);
+        boolean abnormal = facts.stream().anyMatch(item -> isAbnormalStatus(item.getFactStatus()));
+        snapshot.setHasAbnormalFact(abnormal);
+        if (facts.isEmpty()) {
+            snapshot.setDiagnosis("未接收到任何跨系统事实");
+        } else if (abnormal) {
+            snapshot.setDiagnosis("链路存在失败或异常事实，禁止直接进入财务收口");
+        } else {
+            snapshot.setDiagnosis("已接收跨系统事实，当前未发现失败状态");
+        }
+        return snapshot;
+    }
+
+    private void validateCrossSystemFact(CrossSystemFactRequestDTO request) {
+        if (request == null
+                || !StringUtils.hasText(request.getBusinessChainId())
+                || !StringUtils.hasText(request.getSystemCode())
+                || !StringUtils.hasText(request.getFactType())
+                || !StringUtils.hasText(request.getFactNo())) {
+            throw new BusinessException("业务链路 ID、来源系统、事实类型和事实编号不能为空");
+        }
+    }
+
+    private boolean isAbnormalStatus(String status) {
+        if (!StringUtils.hasText(status)) {
+            return true;
+        }
+        String normalized = status.trim().toUpperCase();
+        return normalized.contains("FAIL")
+                || normalized.contains("ERROR")
+                || normalized.contains("ABNORMAL")
+                || status.contains("失败")
+                || status.contains("异常");
     }
 
     @Transactional

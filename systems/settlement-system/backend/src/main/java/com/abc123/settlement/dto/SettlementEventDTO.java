@@ -8,6 +8,8 @@ import lombok.Data;
 @Data
 public class SettlementEventDTO {
 
+    /** 跨系统业务链路 ID。 */
+    private String businessChainId;
     private String eventNo;
     private String eventType;
     private String bizNo;
