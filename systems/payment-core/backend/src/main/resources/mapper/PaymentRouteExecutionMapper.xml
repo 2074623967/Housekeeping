@@ -61,6 +61,7 @@
                prr.channel_code AS channelCode,
                prr.route_rule AS routeRule,
                prr.route_result AS routeResult,
+               prr.ops_config_snapshot_version AS opsConfigSnapshotVersion,
                CASE
                    WHEN prr.route_result LIKE '%兜底%' THEN 'warn'
                    WHEN prr.route_result LIKE '%线下%' THEN 'info'

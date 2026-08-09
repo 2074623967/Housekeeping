@@ -5,6 +5,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
@@ -1310,6 +1312,7 @@ class PaymentServiceImplTest {
         snapshot.setTerminalType("APP");
         snapshot.setDefaultPayMethod("微信支付");
         snapshot.setPrimaryChannelProfileCode("CHANNEL_WX_H5");
+        snapshot.setSnapshotVersion(12L);
 
         PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
         submitResult.setChannelTransactionNo("WX-OPS-001");
@@ -1350,6 +1353,8 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("wx_h5", request.getChannelCode());
         verify(paymentOpsConfigService, times(1)).loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP");
         verify(paymentChannelSubmitService, times(1)).submit(org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, times(1)).updateRouteOpsConfigSnapshotVersion(anyString(), eq(12L));
+        verify(paymentMapper, times(1)).updateAttemptOpsConfigSnapshotVersion(anyString(), eq(12L));
     }
 
     @Test

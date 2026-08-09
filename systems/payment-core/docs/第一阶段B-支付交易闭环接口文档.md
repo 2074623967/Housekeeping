@@ -1342,6 +1342,9 @@ POST /api/payment-config/control-policies/self-check
 
 ## 14. 错误与边界说明
 
+支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
+`ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
+
 当前版本重点仍是开发与联调基线，但支付主链路已经补齐第一版业务错误码体系，前端可直接展示 `code + requestId` 做问题定位。
 
 | 错误码 | 当前含义 |

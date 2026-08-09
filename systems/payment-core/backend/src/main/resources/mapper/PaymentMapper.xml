@@ -109,6 +109,7 @@
                pa.idempotency_key AS latestIdempotencyKey,
                pa.attempt_status AS latestAttemptStatus,
                pa.attempt_status_type AS latestAttemptStatusType,
+               pa.ops_config_snapshot_version AS opsConfigSnapshotVersion,
                pa.request_payload AS latestRequestPayload,
                pa.response_payload AS latestResponsePayload,
                p.status,
@@ -426,6 +427,18 @@
         INSERT INTO t_payment_attempt(attempt_no, prepay_order_no, payment_order_id, channel_code, payment_method, source_app_id, terminal, client_ip, idempotency_key, request_payload, response_payload, attempt_status, attempt_status_type, created_at)
         VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{sourceAppId}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
     </insert>
+
+    <update id="updateRouteOpsConfigSnapshotVersion">
+        UPDATE t_payment_route_record
+        SET ops_config_snapshot_version = #{snapshotVersion}
+        WHERE route_no = #{routeNo}
+    </update>
+
+    <update id="updateAttemptOpsConfigSnapshotVersion">
+        UPDATE t_payment_attempt
+        SET ops_config_snapshot_version = #{snapshotVersion}
+        WHERE attempt_no = #{attemptNo}
+    </update>
 
     <select id="existsPaymentAttemptByIdempotencyKey" resultType="boolean">
         SELECT COUNT(1) &gt; 0

@@ -265,6 +265,7 @@ onMounted(loadDetail);
           <div><strong>支付方式：</strong>{{ detail.paymentMethod }}</div>
           <div><strong>支付渠道：</strong>{{ detail.channel }}</div>
           <div><strong>渠道交易号：</strong>{{ detail.channelTransactionNo || "-" }}</div>
+          <div><strong>配置快照版本：</strong>{{ detail.opsConfigSnapshotVersion || "—" }}</div>
           <div><strong>查单来源：</strong>{{ detail.querySource || "-" }}</div>
           <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
         </div>
@@ -278,6 +279,7 @@ onMounted(loadDetail);
             </div>
             <div><strong>发起终端：</strong>{{ detail.latestTerminal || "-" }}</div>
             <div><strong>客户端 IP：</strong>{{ detail.latestClientIp || "-" }}</div>
+            <div><strong>配置快照版本：</strong>{{ detail.opsConfigSnapshotVersion || "—" }}</div>
             <div><strong>幂等键：</strong>{{ detail.latestIdempotencyKey || "-" }}</div>
           </div>
           <div class="payload-grid">

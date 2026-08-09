@@ -303,6 +303,7 @@ onMounted(loadPaymentRoutes);
                 <th>命中渠道</th>
                 <th>路由结果</th>
                 <th>路由规则</th>
+                <th>配置快照版本</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -322,6 +323,7 @@ onMounted(loadPaymentRoutes);
                   <td>{{ item.channelCode }}</td>
                   <td><span :class="['badge', item.routeResultType]">{{ item.routeResult }}</span></td>
                   <td class="flow-summary-cell">{{ item.routeRule }}</td>
+                  <td>{{ formatValue(item.opsConfigSnapshotVersion) }}</td>
                   <td>{{ item.createdAt }}</td>
                   <td>
                     <button class="link-button" @click="pickItem(item)">查看快照</button>
@@ -331,7 +333,7 @@ onMounted(loadPaymentRoutes);
                   </td>
                 </tr>
                 <tr v-if="expandedRouteNo === item.routeNo">
-                  <td colspan="10">
+                  <td colspan="11">
                     <div class="payload-grid">
                       <div>
                         <strong>最近支付请求报文</strong>
@@ -364,13 +366,14 @@ onMounted(loadPaymentRoutes);
               <div class="detail-card"><span>路由结果</span><strong>{{ selectedItem.routeResult }}</strong></div>
               <div class="detail-card"><span>终端</span><strong>{{ formatValue(selectedItem.terminal) }}</strong></div>
               <div class="detail-card"><span>客户端 IP</span><strong>{{ formatValue(selectedItem.clientIp) }}</strong></div>
+              <div class="detail-card"><span>配置快照版本</span><strong>{{ formatValue(selectedItem.opsConfigSnapshotVersion) }}</strong></div>
               <div class="detail-card detail-card-wide"><span>路由规则</span><strong>{{ formatValue(selectedItem.routeRule) }}</strong></div>
               <div class="detail-card detail-card-wide"><span>幂等键</span><strong class="mono-text">{{ formatValue(selectedItem.idempotencyKey) }}</strong></div>
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
               <div class="ops-row"><span>优先联查</span><span>支付单详情 / 路由流水 / 支付请求 / 路由配置</span></div>
-              <div class="ops-row"><span>重点核对</span><span>规则命中、渠道落点、终端与幂等键</span></div>
+              <div class="ops-row"><span>重点核对</span><span>规则命中、渠道落点、配置快照版本、终端与幂等键</span></div>
               <div class="ops-row"><span>典型场景</span><span>误命中兜底渠道、渠道落错、桌面/H5 终端规则偏差</span></div>
               <div class="ops-row"><span>当前总览</span><span>最近路由 {{ metrics.latestRouteAt }} / 线下 {{ metrics.offlineRouteCount }} / 微信 {{ metrics.wechatRouteCount }} / 支付宝 {{ metrics.alipayRouteCount }}</span></div>
             </div>

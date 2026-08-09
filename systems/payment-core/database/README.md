@@ -11,6 +11,7 @@
 - 首次本地演示可显式使用 `SPRING_PROFILES_ACTIVE=demo`，或一次性设置 `HSP_SQL_INIT_MODE=always` 重建样例库。
 - 已有演练库、测试库和任何持久环境应保持 `HSP_SQL_INIT_MODE=never`，结构变更通过受控 DDL migration 执行。
 - `migrations/2026-07-31-add-payment-task-lease.sql`：给原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 的最小增量 DDL，用于让最新任务中心租约锁能力安全落库
+- `migrations/2026-08-09-add-ops-config-snapshot-version.sql`：给支付尝试和路由记录补齐运营配置快照版本字段，支持支付事实按配置版本追溯
 - `migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`：把历史递归升级 outbox 告警收口为 `已确认`，保留审计记录但移出待确认/待升级范围
 
 初始化方式：

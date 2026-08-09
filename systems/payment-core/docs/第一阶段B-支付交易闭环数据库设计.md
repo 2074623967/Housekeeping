@@ -166,6 +166,7 @@ t_order
 | `request_payload` | 请求报文 |
 | `response_payload` | 响应报文 |
 | `attempt_status` | 尝试状态 |
+| `ops_config_snapshot_version` | 本次支付尝试消费的运营配置快照版本 |
 
 ### 4.6 回调日志表 `t_payment_notify_log`
 
@@ -196,6 +197,7 @@ t_order
 | `channel_code` | 渠道编码 |
 | `route_rule` | 路由规则 |
 | `route_result` | 路由结果 |
+| `ops_config_snapshot_version` | 本次路由决策消费的运营配置快照版本 |
 
 ### 4.8 支付事件表 `t_payment_event`
 

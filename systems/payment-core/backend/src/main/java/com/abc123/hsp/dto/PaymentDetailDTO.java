@@ -37,6 +37,8 @@ public class PaymentDetailDTO {
     private String latestAttemptStatus;
     /** 最近一次支付尝试状态对应的前端展示样式。 */
     private String latestAttemptStatusType;
+    /** 最近一次支付尝试消费的运营配置快照版本。 */
+    private Long opsConfigSnapshotVersion;
     /** 最近一次支付请求报文快照。 */
     private String latestRequestPayload;
     /** 最近一次支付响应报文快照。 */

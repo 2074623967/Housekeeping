@@ -28,6 +28,8 @@ public class PaymentRouteExecutionListItemDTO {
     private String routeRule;
     /** 路由结果。 */
     private String routeResult;
+    /** 本次路由消费的运营配置快照版本。 */
+    private Long opsConfigSnapshotVersion;
     /** 路由结果样式。 */
     private String routeResultType;
     /** 发起终端。 */

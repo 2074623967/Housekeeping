@@ -233,6 +233,18 @@ public interface PaymentMapper {
             @Param("attemptStatusType") String attemptStatusType);
 
     /**
+     * 回写路由记录实际消费的运营配置快照版本。
+     */
+    void updateRouteOpsConfigSnapshotVersion(@Param("routeNo") String routeNo,
+                                             @Param("snapshotVersion") Long snapshotVersion);
+
+    /**
+     * 回写支付尝试实际消费的运营配置快照版本。
+     */
+    void updateAttemptOpsConfigSnapshotVersion(@Param("attemptNo") String attemptNo,
+                                               @Param("snapshotVersion") Long snapshotVersion);
+
+    /**
      * 判断幂等键对应的支付尝试是否已经存在。
      */
     boolean existsPaymentAttemptByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
