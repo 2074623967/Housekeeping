@@ -45,8 +45,8 @@ payment-core,pc-web,result-success,支付结果页,SUCCESS,PAY1785918388713,scre
 payment-core,pc-web,result-closed,支付结果页,CLOSED,PAY1785729963046,screenshots/payment-core/pc-web/result-closed.png,CAPTURED,历史已关闭样例
 payment-core,pc-web,result-risk-review,支付结果页,RISK_REVIEW,PAY1785811244732,screenshots/payment-core/pc-web/result-risk-review.png,CAPTURED,风控复核样例
 payment-core,pc-web,result-wait-callback,支付结果页,WAIT_CALLBACK,PAY1785915556767,screenshots/payment-core/pc-web/result-wait-callback.png,CAPTURED,PC WAIT_CALLBACK 样例
-clearing-system,admin-web,events,清分事件页,publishStatus/retryCount/replayHint,PAY1785918393972,screenshots/clearing-system/admin-web/events.png,CAPTURED,正式来源应用成功样例对应清分事件
-settlement-system,admin-web,orders,结算单页,结算单状态与清分承接事实,SLT20004,screenshots/settlement-system/admin-web/orders.png,CAPTURED,正式来源应用 App 结算单样例
-settlement-system,admin-web,payouts,出款批次页,出款记录与失败重试事实,PBT50001,screenshots/settlement-system/admin-web/payouts.png,CAPTURED,2026-08-03 同批次出款批次样例
-accounting-system,admin-web,events,账务事件页,PAYMENT_SUCCESS/CLEARING_GENERATED,EVT50005~EVT50010,screenshots/accounting-system/admin-web/events.png,CAPTURED,正式来源应用三笔样例自动消费区间
+clearing-system,admin-web,events,清分事件页,publishStatus/retryCount/replayHint,PAY-DLQ-CLR-20260809-001,screenshots/clearing-system/admin-web/events.png,CAPTURED,2026-08-09 当前 test 基线 clearing replay 样例对应清分事件
+settlement-system,admin-web,orders,结算单页,结算单状态与清分承接事实,SLT20004,screenshots/settlement-system/admin-web/orders.png,CAPTURED,2026-08-09 当前 test 基线 replay 生成的结算单样例
+settlement-system,admin-web,payouts,出款批次页,出款记录与失败重试事实,PBT50001,screenshots/settlement-system/admin-web/payouts.png,CAPTURED,2026-08-09 当前 test 基线出款失败后重试成功样例
+accounting-system,admin-web,events,账务事件页,PAYMENT_SUCCESS/CLEARING_GENERATED,CLO-DLQ-20260809-002 / EVT50012,screenshots/accounting-system/admin-web/events.png,CAPTURED,2026-08-09 当前 test 基线 replay 后补事实生成的账务事件样例
 reconciliation-system,admin-web,overview,对账工作台,REC-DEMO-1001 / 差异已结案,REC-DEMO-1001,screenshots/reconciliation-system/admin-web/overview.png,CAPTURED,2026-08-09 当前 test 运行态对账批次与结案后工作台
