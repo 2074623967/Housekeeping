@@ -1,0 +1,11 @@
+scenario_id,owner_system,scenario_name,api_status,db_status,event_status,page_status,rollback_or_compensation_status,sample_biz_no_or_task_no,api_evidence_file,db_evidence_file,event_evidence_file,page_evidence_file,notes
+REG-01,payment-core,创建预付单,TODO,TODO,NOT_APPLICABLE,TODO,TODO,,,,,,
+REG-02,payment-core,提交支付请求,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-03,payment-core,渠道回调成功,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-04,clearing-system,支付成功自动清分,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-05,settlement-system,清分结果自动结算,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-06,accounting-system,清分结果自动记账,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-07,reconciliation-system,跨系统链路诊断,TODO,TODO,TODO,OPTIONAL,NOT_APPLICABLE,,,,,,
+REG-08,payment-core,失败派发重试与DLQ,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-09,settlement-system,结算审核与出款,TODO,TODO,TODO,TODO,TODO,,,,,,
+REG-10,payment-core,日终处理与运营巡检,TODO,TODO,TODO,TODO,TODO,,,,,,
