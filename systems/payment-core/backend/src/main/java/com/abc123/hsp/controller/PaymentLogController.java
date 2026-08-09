@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.service.PaymentLogService;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +26,31 @@ public class PaymentLogController {
 
     public PaymentLogController(PaymentLogService paymentLogService) {
         this.paymentLogService = paymentLogService;
+    }
+
+    /**
+     * 查询支付处理日志总览，供运营、研发和测试先看问题分布再下钻明细。
+     */
+    @GetMapping("/overview")
+    public ApiResponse<PaymentLogOverviewDTO> overview(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(defaultValue = "全部") String processStage,
+            @RequestParam(defaultValue = "全部") String logLevel,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setProcessStage(processStage);
+        query.setLogLevel(logLevel);
+        query.setSource(source);
+        query.setKeyword(keyword);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        return ApiResponse.success(paymentLogService.overview(query));
     }
 
     /**

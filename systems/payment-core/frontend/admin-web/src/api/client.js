@@ -128,13 +128,34 @@ export const paymentIssueApi = {
     });
     return request(`/api/payment-issues/alerts?${params.toString()}`);
   },
+  buildAlertExportUrl: ({
+    alertNo = "",
+    issueNo = "",
+    paymentOrderId = "",
+    alertChannel = "全部",
+    alertStatus = "全部",
+    ackStatus = "全部",
+    providerDeliveryStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      alertNo,
+      issueNo,
+      paymentOrderId,
+      alertChannel,
+      alertStatus,
+      ackStatus,
+      providerDeliveryStatus
+    });
+    return `/api/payment-issues/alerts/export?${params.toString()}`;
+  },
   acknowledgeAlert: (alertNo, payload) => postJson(`/api/payment-issues/alerts/${alertNo}/acknowledge`, payload),
   batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };
 
 export const paymentDayEndApi = {
   getOverview: () => request("/api/payment-day-end/overview"),
-  runBatch: (payload) => postJson("/api/payment-day-end/run", payload)
+  runBatch: (payload) => postJson("/api/payment-day-end/run", payload),
+  buildExportUrl: () => "/api/payment-day-end/export"
 };
 
 export const paymentTaskCenterApi = {
@@ -156,6 +177,20 @@ export const paymentTaskCenterApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-task-center/task-runs?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    taskCode = "",
+    runMode = "全部",
+    taskStatus = "全部",
+    severityLevel = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      taskCode,
+      runMode,
+      taskStatus,
+      severityLevel
+    });
+    return `/api/payment-task-center/task-runs/export?${params.toString()}`;
   },
   runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
   runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
@@ -182,10 +217,40 @@ export const orderApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/orders?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    orderNo = "",
+    serviceType = "全部",
+    orderStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      orderNo,
+      serviceType,
+      orderStatus
+    });
+    return `/api/orders/export?${params.toString()}`;
   }
 };
 
 export const billApi = {
+  getOverview: ({
+    billNo = "",
+    orderNo = "",
+    customerName = "",
+    billStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      billNo,
+      orderNo,
+      customerName,
+      billStatus,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/bills/overview?${params.toString()}`);
+  },
   getList: ({
     billNo = "",
     orderNo = "",
@@ -284,6 +349,30 @@ export const paymentFlowApi = {
 };
 
 export const paymentRouteApi = {
+  getOverview: ({
+    paymentOrderId = "",
+    orderNo = "",
+    routeRule = "",
+    channelCode = "",
+    paymentMethod = "全部",
+    terminal = "全部",
+    routeResult = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      routeRule,
+      channelCode,
+      paymentMethod,
+      terminal,
+      routeResult,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-routes/overview?${params.toString()}`);
+  },
   getList: ({
     paymentOrderId = "",
     orderNo = "",
@@ -315,6 +404,26 @@ export const paymentRouteApi = {
 };
 
 export const paymentEventApi = {
+  getOverview: ({
+    paymentOrderId = "",
+    eventType = "全部",
+    publishStatus = "全部",
+    downstreamSystem = "全部",
+    eventTopic = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      eventType,
+      publishStatus,
+      downstreamSystem,
+      eventTopic,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-events/overview?${params.toString()}`);
+  },
   getList: ({
     paymentOrderId = "",
     eventType = "全部",
@@ -386,6 +495,28 @@ export const paymentEventApi = {
 };
 
 export const cashierSessionApi = {
+  getOverview: ({
+    sessionNo = "",
+    paymentOrderId = "",
+    orderNo = "",
+    customerName = "",
+    terminal = "全部",
+    sessionStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      sessionNo,
+      paymentOrderId,
+      orderNo,
+      customerName,
+      terminal,
+      sessionStatus,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/cashier-sessions/overview?${params.toString()}`);
+  },
   getList: ({
     sessionNo = "",
     paymentOrderId = "",
@@ -437,6 +568,30 @@ export const cashierSessionApi = {
 };
 
 export const paymentRequestApi = {
+  getOverview: ({
+    requestNo = "",
+    paymentOrderId = "",
+    orderNo = "",
+    channelCode = "",
+    terminal = "全部",
+    clientIp = "",
+    requestStatus = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      requestNo,
+      paymentOrderId,
+      orderNo,
+      channelCode,
+      terminal,
+      clientIp,
+      requestStatus,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-requests/overview?${params.toString()}`);
+  },
   getList: ({
     requestNo = "",
     paymentOrderId = "",
@@ -492,6 +647,28 @@ export const paymentRequestApi = {
 };
 
 export const paymentLogApi = {
+  getOverview: ({
+    paymentOrderId = "",
+    orderNo = "",
+    processStage = "全部",
+    logLevel = "全部",
+    source = "",
+    keyword = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      processStage,
+      logLevel,
+      source,
+      keyword,
+      sortField,
+      sortOrder
+    });
+    return request(`/api/payment-logs/overview?${params.toString()}`);
+  },
   getList: ({
     paymentOrderId = "",
     orderNo = "",
@@ -657,6 +834,20 @@ export const refundApi = {
 };
 
 export const settlementApi = {
+  getWorkerOverview: ({
+    settlementOrderId = "",
+    workerKeyword = "",
+    settlementStatus = "全部",
+    payoutStatus = "全部"
+  } = {}) => {
+    const params = new URLSearchParams({
+      settlementOrderId,
+      workerKeyword,
+      settlementStatus,
+      payoutStatus
+    });
+    return request(`/api/settlements/workers/overview?${params.toString()}`);
+  },
   getWorkerList: ({
     settlementOrderId = "",
     workerKeyword = "",
@@ -693,6 +884,7 @@ export const settlementApi = {
 
 export const paymentConfigApi = {
   getOverview: () => request("/api/payment-config"),
+  buildExportUrl: (section = "ALL") => `/api/payment-config/export?section=${encodeURIComponent(section)}`,
   toggleChannel: (configCode, enabled) => postJson("/api/payment-config/channels/toggle", { configCode, enabled }),
   toggleRouteRule: (configCode, enabled) => postJson("/api/payment-config/route-rules/toggle", { configCode, enabled }),
   createProtocol: (payload) => postJson("/api/payment-config/protocols", payload),

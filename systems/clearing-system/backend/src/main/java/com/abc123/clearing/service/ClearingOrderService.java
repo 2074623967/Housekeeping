@@ -11,5 +11,9 @@ public interface ClearingOrderService {
 
     PageResultDTO<ClearingOrderDTO> list(String batchNo, String orderNo, String paymentOrderId, String clearingStatus, int pageNo, int pageSize);
 
+    byte[] exportList(String batchNo, String orderNo, String paymentOrderId, String clearingStatus);
+
     ClearingOrderDetailDTO detail(String clearingNo);
+
+    byte[] exportDetail(String clearingNo);
 }

@@ -108,6 +108,35 @@
         LIMIT 10
     </select>
 
+    <select id="findAllBatchesForExport" resultType="com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO">
+        SELECT batch_no AS batchNo,
+               DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
+               run_mode AS runMode,
+               batch_status AS batchStatus,
+               batch_status_type AS batchStatusType,
+               payment_total_count AS paymentTotalCount,
+               payment_success_count AS paymentSuccessCount,
+               CONCAT('¥', FORMAT(payment_success_amount, 2)) AS paymentSuccessAmount,
+               channel_success_count AS channelSuccessCount,
+               CONCAT('¥', FORMAT(channel_success_amount, 2)) AS channelSuccessAmount,
+               internal_success_count AS internalSuccessCount,
+               CONCAT('¥', FORMAT(internal_success_amount, 2)) AS internalSuccessAmount,
+               payment_success_gap_count AS paymentSuccessGapCount,
+               CONCAT('¥', FORMAT(payment_success_gap_amount, 2)) AS paymentSuccessGapAmount,
+               refund_success_count AS refundSuccessCount,
+               CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
+               channel_abnormal_count AS channelAbnormalCount,
+               internal_abnormal_count AS internalAbnormalCount,
+               pending_refund_count AS pendingRefundCount,
+               CONCAT('¥', FORMAT(pending_refund_amount, 2)) AS pendingRefundAmount,
+               summary_comment AS summaryComment,
+               triggered_by AS triggeredBy,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
+        FROM t_payment_day_end_batch
+        ORDER BY biz_date DESC, id DESC
+    </select>
+
     <select id="countPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order

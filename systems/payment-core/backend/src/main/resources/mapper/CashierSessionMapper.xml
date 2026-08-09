@@ -4,29 +4,23 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.CashierSessionMapper">
 
-    <select id="findAll" resultType="com.abc123.hsp.dto.CashierSessionListItemDTO">
-        SELECT pr.prepay_order_no AS sessionNo,
-               pr.prepay_order_no AS prepayOrderNo,
-               pr.payment_order_id AS paymentOrderId,
-               pr.order_no AS orderNo,
-               pr.bill_no AS billNo,
-               pr.customer_name AS customerName,
-               pr.cashier_title AS cashierTitle,
-               pr.pay_scene AS terminal,
-               CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
-               CASE
-                   WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
-                   WHEN pr.expires_at &lt; NOW() THEN '已失效'
-                   ELSE pr.cashier_status
-               END AS sessionStatus,
-               CASE
-                   WHEN pr.cashier_status IN ('已完成', '支付成功') THEN 'success'
-                   WHEN pr.expires_at &lt; NOW() THEN 'danger'
-                   ELSE pr.cashier_status_type
-               END AS sessionStatusType,
-               DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
-               DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
-        FROM t_prepay_order pr
+    <sql id="cashierSessionStatusExpr">
+        CASE
+            WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
+            WHEN pr.expires_at &lt; NOW() THEN '已失效'
+            ELSE pr.cashier_status
+        END
+    </sql>
+
+    <sql id="cashierSessionStatusTypeExpr">
+        CASE
+            WHEN pr.cashier_status IN ('已完成', '支付成功') THEN 'success'
+            WHEN pr.expires_at &lt; NOW() THEN 'danger'
+            ELSE pr.cashier_status_type
+        END
+    </sql>
+
+    <sql id="cashierSessionWhere">
         <where>
             <if test="query.sessionNo != null and query.sessionNo != ''">
                 pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
@@ -45,14 +39,28 @@
             </if>
             <if test="query.sessionStatus != null and query.sessionStatus != '' and query.sessionStatus != '全部'">
                 AND (
-                    CASE
-                        WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
-                        WHEN pr.expires_at &lt; NOW() THEN '已失效'
-                        ELSE pr.cashier_status
-                    END
+                    <include refid="cashierSessionStatusExpr"/>
                 ) = #{query.sessionStatus}
             </if>
         </where>
+    </sql>
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.CashierSessionListItemDTO">
+        SELECT pr.prepay_order_no AS sessionNo,
+               pr.prepay_order_no AS prepayOrderNo,
+               pr.payment_order_id AS paymentOrderId,
+               pr.order_no AS orderNo,
+               pr.bill_no AS billNo,
+               pr.customer_name AS customerName,
+               pr.cashier_title AS cashierTitle,
+               pr.pay_scene AS terminal,
+               CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
+               <include refid="cashierSessionStatusExpr"/> AS sessionStatus,
+               <include refid="cashierSessionStatusTypeExpr"/> AS sessionStatusType,
+               DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
+        FROM t_prepay_order pr
+        <include refid="cashierSessionWhere"/>
         <choose>
             <when test="query.sortField == 'expiresAt'">
                 ORDER BY pr.expires_at
@@ -75,35 +83,23 @@
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
+    <select id="findOverview" resultType="com.abc123.hsp.dto.CashierSessionOverviewDTO">
+        SELECT COUNT(1) AS totalSessionCount,
+               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '已失效' THEN 1 ELSE 0 END) AS expiredSessionCount,
+               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) IN ('支付成功', '已完成') THEN 1 ELSE 0 END) AS successSessionCount,
+               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '支付中' THEN 1 ELSE 0 END) AS payingSessionCount,
+               SUM(CASE WHEN (<include refid="cashierSessionStatusExpr"/>) = '待支付' THEN 1 ELSE 0 END) AS pendingSessionCount,
+               COUNT(DISTINCT pr.pay_scene) AS distinctTerminalCount,
+               SUM(CASE WHEN pr.expires_at &gt; NOW() AND pr.expires_at &lt;= DATE_ADD(NOW(), INTERVAL 15 MINUTE) AND (<include refid="cashierSessionStatusExpr"/>) NOT IN ('支付成功', '已完成', '已失效') THEN 1 ELSE 0 END) AS expiringSoonCount,
+               CONCAT('¥', FORMAT(COALESCE(SUM(pr.amount), 0), 2)) AS totalAmount
+        FROM t_prepay_order pr
+        <include refid="cashierSessionWhere"/>
+    </select>
+
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM t_prepay_order pr
-        <where>
-            <if test="query.sessionNo != null and query.sessionNo != ''">
-                pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
-            </if>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND pr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND pr.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.customerName != null and query.customerName != ''">
-                AND pr.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND pr.pay_scene = #{query.terminal}
-            </if>
-            <if test="query.sessionStatus != null and query.sessionStatus != '' and query.sessionStatus != '全部'">
-                AND (
-                    CASE
-                        WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
-                        WHEN pr.expires_at &lt; NOW() THEN '已失效'
-                        ELSE pr.cashier_status
-                    END
-                ) = #{query.sessionStatus}
-            </if>
-        </where>
+        <include refid="cashierSessionWhere"/>
     </select>
 
     <select id="findAllForExport" resultType="com.abc123.hsp.dto.CashierSessionListItemDTO">
@@ -116,45 +112,12 @@
                pr.cashier_title AS cashierTitle,
                pr.pay_scene AS terminal,
                CONCAT('¥', FORMAT(pr.amount, 2)) AS amount,
-               CASE
-                   WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
-                   WHEN pr.expires_at &lt; NOW() THEN '已失效'
-                   ELSE pr.cashier_status
-               END AS sessionStatus,
-               CASE
-                   WHEN pr.cashier_status IN ('已完成', '支付成功') THEN 'success'
-                   WHEN pr.expires_at &lt; NOW() THEN 'danger'
-                   ELSE pr.cashier_status_type
-               END AS sessionStatusType,
+               <include refid="cashierSessionStatusExpr"/> AS sessionStatus,
+               <include refid="cashierSessionStatusTypeExpr"/> AS sessionStatusType,
                DATE_FORMAT(pr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
-        <where>
-            <if test="query.sessionNo != null and query.sessionNo != ''">
-                pr.prepay_order_no LIKE CONCAT('%', #{query.sessionNo}, '%')
-            </if>
-            <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
-                AND pr.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
-            </if>
-            <if test="query.orderNo != null and query.orderNo != ''">
-                AND pr.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
-            </if>
-            <if test="query.customerName != null and query.customerName != ''">
-                AND pr.customer_name LIKE CONCAT('%', #{query.customerName}, '%')
-            </if>
-            <if test="query.terminal != null and query.terminal != '' and query.terminal != '全部'">
-                AND pr.pay_scene = #{query.terminal}
-            </if>
-            <if test="query.sessionStatus != null and query.sessionStatus != '' and query.sessionStatus != '全部'">
-                AND (
-                    CASE
-                        WHEN pr.cashier_status IN ('已完成', '支付成功') THEN pr.cashier_status
-                        WHEN pr.expires_at &lt; NOW() THEN '已失效'
-                        ELSE pr.cashier_status
-                    END
-                ) = #{query.sessionStatus}
-            </if>
-        </where>
+        <include refid="cashierSessionWhere"/>
         <choose>
             <when test="query.sortField == 'expiresAt'">
                 ORDER BY pr.expires_at

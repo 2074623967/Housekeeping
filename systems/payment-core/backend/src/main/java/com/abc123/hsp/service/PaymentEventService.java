@@ -2,6 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 
@@ -14,6 +15,11 @@ public interface PaymentEventService {
      * 查询支付事件出站列表。
      */
     PageResultDTO<PaymentEventListItemDTO> list(PaymentEventQueryDTO query);
+
+    /**
+     * 查询支付事件出站总览。
+     */
+    PaymentEventOverviewDTO overview(PaymentEventQueryDTO query);
 
     /**
      * 导出支付事件出站列表。

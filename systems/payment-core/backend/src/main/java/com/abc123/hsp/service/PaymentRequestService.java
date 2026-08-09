@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
+import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 
@@ -15,6 +16,11 @@ public interface PaymentRequestService {
      * @return 支付请求列表
      */
     PageResultDTO<PaymentRequestListItemDTO> list(PaymentRequestQueryDTO query);
+
+    /**
+     * 查询支付请求总览，供运营筛选缩圈和复盘使用。
+     */
+    PaymentRequestOverviewDTO overview(PaymentRequestQueryDTO query);
 
     /**
      * 导出支付请求列表，供联调、排障和留痕使用。

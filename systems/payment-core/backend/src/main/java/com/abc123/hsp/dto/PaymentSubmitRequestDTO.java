@@ -24,6 +24,10 @@ public class PaymentSubmitRequestDTO {
     private String terminal;
     /** 客户端 IP。 */
     private String clientIp;
+    /** 客户端设备号。 */
+    private String clientDeviceId;
+    /** 付款手机号。 */
+    private String payerPhone;
     /** 幂等键。 */
     private String idempotencyKey;
 }

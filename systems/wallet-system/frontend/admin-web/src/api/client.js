@@ -12,6 +12,7 @@ async function request(url, options = {}) {
 
 export const walletApi = {
   getAccounts: () => request("/api/wallet/accounts"),
+  getBalanceSnapshots: () => request("/api/wallet/accounts/balance-snapshots"),
   getLedgers: (params = {}) => {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -21,6 +22,16 @@ export const walletApi = {
     });
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return request(`/api/wallet/accounts/ledgers${suffix}`);
+  },
+  buildLedgerExportUrl: (params = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        query.set(key, value);
+      }
+    });
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return `/api/wallet/accounts/ledgers/export${suffix}`;
   },
   getDetail: (accountNo) => request(`/api/wallet/accounts/${accountNo}`),
   balancePayment: (payload) => request("/api/wallet/accounts/balance-payments", {

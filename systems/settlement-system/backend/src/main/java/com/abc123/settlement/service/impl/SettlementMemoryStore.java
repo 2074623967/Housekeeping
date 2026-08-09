@@ -194,7 +194,7 @@ public class SettlementMemoryStore {
         entity.setPayoutBatchNo(nextNo("PBT", payoutSeq));
         entity.setBatchNo(batchNo);
         entity.setPayoutChannel(payoutChannel);
-        entity.setPayoutStatus("处理中");
+        entity.setPayoutStatus("待出款");
         entity.setPayoutCount(0);
         entity.setSuccessCount(0);
         entity.setFailedCount(0);
@@ -216,6 +216,22 @@ public class SettlementMemoryStore {
                 .filter(item -> settlementNo.equals(item.getSettlementNo()))
                 .findFirst()
                 .orElse(null);
+    }
+
+    @Transactional
+    public PayoutBatchEntity createOrRefreshDraftPayoutBatch(String batchNo, String payoutChannel, String createdBy) {
+        PayoutBatchEntity payoutBatch = findLatestPayoutBatchByBatchNo(batchNo);
+        if (payoutBatch == null || "已完成".equals(payoutBatch.getPayoutStatus())) {
+            payoutBatch = createPayoutBatch(batchNo, payoutChannel, createdBy);
+        }
+        for (SettlementOrderEntity order : pendingPayoutOrders(batchNo)) {
+            if (findPayoutRecordBySettlementNo(order.getSettlementNo()) == null) {
+                createPendingPayoutRecord(payoutBatch.getPayoutBatchNo(), order);
+            }
+        }
+        updatePayoutBatchSummary(payoutBatch.getPayoutBatchNo());
+        updateBatchSummary(batchNo, "待出款", findBatch(batchNo) == null ? null : findBatch(batchNo).getFinishedAt());
+        return findPayoutBatch(payoutBatch.getPayoutBatchNo());
     }
 
     @Transactional
@@ -359,21 +375,7 @@ public class SettlementMemoryStore {
         if (existingRecord != null) {
             return findPayoutBatch(existingRecord.getPayoutBatchNo());
         }
-        PayoutBatchEntity payoutBatch = findLatestPayoutBatchByBatchNo(order.getBatchNo());
-        if (payoutBatch == null || "已完成".equals(payoutBatch.getPayoutStatus())) {
-            payoutBatch = createPayoutBatch(order.getBatchNo(), "AUTO_BANK", operatorName);
-            settlementDataMapper.updatePayoutBatch(
-                    payoutBatch.getPayoutBatchNo(),
-                    "待出款",
-                    payoutBatch.getPayoutCount(),
-                    payoutBatch.getSuccessCount(),
-                    payoutBatch.getFailedCount(),
-                    payoutBatch.getTotalAmount(),
-                    payoutBatch.getFinishedAt());
-        }
-        createPendingPayoutRecord(payoutBatch.getPayoutBatchNo(), order);
-        updateBatchSummary(order.getBatchNo(), "待出款", findBatch(order.getBatchNo()).getFinishedAt());
-        return findPayoutBatch(payoutBatch.getPayoutBatchNo());
+        return createOrRefreshDraftPayoutBatch(order.getBatchNo(), "AUTO_BANK", operatorName);
     }
 
     @Transactional
@@ -481,6 +483,15 @@ public class SettlementMemoryStore {
                 failedCount,
                 totalAmount,
                 finishedAt);
+    }
+
+    private List<SettlementOrderEntity> pendingPayoutOrders(String batchNo) {
+        return orders().stream()
+                .filter(item -> batchNo.equals(item.getBatchNo()))
+                .filter(item -> "已通过".equals(item.getAuditStatus()))
+                .filter(item -> "待出款".equals(item.getSettlementStatus()))
+                .filter(item -> "待出款".equals(item.getPayoutStatus()))
+                .collect(Collectors.toList());
     }
 
     private String normalizeExecutionResult(ExecutePayoutBatchRequestDTO request) {

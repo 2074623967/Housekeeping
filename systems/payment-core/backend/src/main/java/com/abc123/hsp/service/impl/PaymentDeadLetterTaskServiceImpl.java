@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -30,6 +32,10 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private static final String STATUS_MANUAL_RESOLVED = "MANUAL_RESOLVED";
     private static final String STATUS_REPLAYED = "REPLAYED";
     private static final int DEFAULT_CONFIRM_TIMEOUT_MS = 5000;
+    private static final Pattern PAYMENT_DLQ_PATTERN = Pattern.compile(
+            "^payment\\.success\\.(clearing|accounting)\\.dlq(?:\\.([^.]+))?\\.v1$");
+    private static final Pattern CLEARING_DLQ_PATTERN = Pattern.compile(
+            "^clearing\\.generated\\.(settlement|accounting)\\.dlq(?:\\.([^.]+))?\\.v1$");
 
     private final PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper;
     private final RabbitTemplate rabbitTemplate;
@@ -204,19 +210,33 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         }
 
         private static ReplayRoute fromDeadLetterRoutingKey(String routingKey) {
-            if ("payment.success.clearing.dlq.v1".equals(routingKey)) {
-                return new ReplayRoute("clearing-system", "payment.trade.replay", "payment.success.clearing.replay.v1");
+            Matcher paymentMatcher = PAYMENT_DLQ_PATTERN.matcher(routingKey);
+            if (paymentMatcher.matches()) {
+                String consumerName = paymentMatcher.group(1);
+                String suffix = paymentMatcher.group(2);
+                return new ReplayRoute(
+                        toTargetSystem(consumerName),
+                        "payment.trade.replay",
+                        suffix == null
+                                ? "payment.success." + consumerName + ".replay.v1"
+                                : "payment.success." + consumerName + ".replay." + suffix + ".v1");
             }
-            if ("payment.success.accounting.dlq.v1".equals(routingKey)) {
-                return new ReplayRoute("accounting-system", "payment.trade.replay", "payment.success.accounting.replay.v1");
-            }
-            if ("clearing.generated.settlement.dlq.v1".equals(routingKey)) {
-                return new ReplayRoute("settlement-system", "clearing.trade.replay", "clearing.generated.settlement.replay.v1");
-            }
-            if ("clearing.generated.accounting.dlq.v1".equals(routingKey)) {
-                return new ReplayRoute("accounting-system", "clearing.trade.replay", "clearing.generated.accounting.replay.v1");
+            Matcher clearingMatcher = CLEARING_DLQ_PATTERN.matcher(routingKey);
+            if (clearingMatcher.matches()) {
+                String consumerName = clearingMatcher.group(1);
+                String suffix = clearingMatcher.group(2);
+                return new ReplayRoute(
+                        toTargetSystem(consumerName),
+                        "clearing.trade.replay",
+                        suffix == null
+                                ? "clearing.generated." + consumerName + ".replay.v1"
+                                : "clearing.generated." + consumerName + ".replay." + suffix + ".v1");
             }
             return null;
+        }
+
+        private static String toTargetSystem(String consumerName) {
+            return consumerName + "-system";
         }
     }
 }

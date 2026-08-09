@@ -218,6 +218,83 @@
 8. 补齐支付监控分析 V1：支付趋势、渠道表现、异常告警接口与后台页面，并增加监控服务单测。
 9. 将支付回调安全能力升级为生产化 V1：渠道独立回调密钥、持久化 nonce 防重放、渠道编码统一归一化，并更新配置展示页。
 
+## 8. 2026-08-05 正式来源应用控制策略与路由回归
+
+### 8.1 本轮问题定位
+
+本轮针对正式来源应用提交流程进行复核时，发现 `housekeeping-app-web`、`housekeeping-h5-web`、`housekeeping-pc-web` 在严格模式下会命中 `PAYMENT-1019`，导致正式来源应用无法直接提交支付。
+
+进一步排查确认有两类根因：
+
+1. 支付控制策略自检把“来源应用商户号”误当成“渠道商户号”校验，导致 `MCH_HOME_APP / MCH_HOME_PC` 被误判为未配置。
+2. 渠道路由场景判断未对 `MOBILE_WEB / PC_WEB` 和配置中的 `H5 / PC` 做别名归一化，导致 H5 与 PC 终端明明已开通渠道，但路由阶段仍报 `PAYMENT-1003 unsupported payment channel`。
+
+### 8.2 本轮修复
+
+本轮已完成：
+
+1. 在 `PaymentConfigServiceImpl` 中补齐支付方式别名归一化：
+   - `银行卡` 与 `银行转账` 统一归一为同一业务支付方式口径
+2. 在 `PaymentConfigServiceImpl` 中修正商户号自检语义：
+   - 支持区分“来源应用授权商户号”与“渠道商户号”
+   - 避免正式来源应用控制策略被误判为 `WARN`
+3. 在 `PaymentChannelRoutingServiceImpl` 中补齐终端场景归一化：
+   - `MOBILE_WEB -> h5`
+   - `PC_WEB -> pc`
+   - `APP -> app`
+4. 使用 JDK `1.8.0_202` 与 Maven `3.9.16` 完成后端重新编译并重启本地服务。
+
+### 8.3 本轮验证结果
+
+#### 控制策略自检
+
+2026-08-05 16:24 至 16:25，通过 `POST /api/payment-config/control-policies/self-check` 重新执行正式来源应用自检后：
+
+1. `housekeeping-app-web` = `PASS`
+2. `housekeeping-h5-web` = `PASS`
+3. `housekeeping-pc-web` = `PASS`
+
+#### 正式来源应用真实提交验证
+
+本轮新增正式来源应用样例：
+
+1. App
+   - 订单号：`REG-AUTO-APP-20260805-001`
+   - 预付单：`PRE1785918393974`
+   - 支付单：`PAY1785918393972`
+   - 提交结果：成功进入 `支付中`
+   - 支付详情结果：`WAIT_CALLBACK`
+   - 成功回调收口后状态：`SUCCESS`
+2. H5
+   - 订单号：`REG-AUTO-H5-20260805-001`
+   - 预付单：`PRE1785918388806`
+   - 支付单：`PAY1785918388803`
+   - 提交结果：成功进入 `支付中`
+   - 支付详情结果：`WAIT_CALLBACK`
+   - 路由轨迹：`RULE_HOME_WX | 家政 H5 微信优先 -> wx_h5`
+   - 成功回调收口后状态：`SUCCESS`
+3. PC
+   - 订单号：`REG-AUTO-PC-20260805-001`
+   - 预付单：`PRE1785918388717`
+   - 支付单：`PAY1785918388713`
+   - 提交结果：成功进入 `支付中`
+   - 支付详情结果：`WAIT_CALLBACK`
+   - 路由轨迹：`RULE_HOME_ALI | 家政 H5 支付宝兜底 -> alipay_h5`
+   - 成功回调收口后状态：`SUCCESS`
+
+### 8.4 本轮结论
+
+1. `PAYMENT-1019` 已不再阻断正式来源应用支付提交。
+2. H5 / PC 的“渠道不支持”问题已从路由别名层修复。
+3. 正式来源应用已经恢复到可直接走“预付单 -> 提交支付 -> 待回调 -> 成功回调收口”主链路的状态。
+4. 2026-08-05 17:15 至 17:16 已补正式来源应用防误操作验证：
+   - 对 App / H5 / PC 三笔成功单重复发送 `SUCCESS` 回调，请求均保持原 `SUCCESS` 状态，未出现重复收口副作用。
+   - 对 App / H5 / PC 三笔成功单执行关闭接口，请求均返回原 `SUCCESS` 状态，未被错误关闭。
+5. 当前 `payment-core` 仍不建议直接合并 `master`，后续还需要继续补齐：
+   - 正式来源应用 `SUCCESS` 页、`CLOSED` 页和异常页的人肉回归截图
+   - 更多页面级人工截图证据
+   - 异常单、关闭单、重复提交与回调幂等的页面级留痕
+
 ## 9. 2026-07-20 支付协议管理增强验证
 
 ### 9.1 本轮验证结论
@@ -237,6 +314,35 @@
 4. 为 `PaymentConfigMapper` 补齐协议单条查询、插入、更新 `mapper.xml`
 5. 为后台配置页补齐协议新增、编辑、重置表单和优先级展示
 6. 修复“编辑已有协议时优先级被默认值覆盖”的隐性配置风险
+
+## 10. 2026-08-04 支付提交接入独立风控中心验证
+
+### 10.1 本轮验证结论
+
+本轮围绕“支付核心虽然已有本地控制策略，但提交支付前尚未真正调用独立风控系统”的问题进行了补强，确认当前已具备 `payment-core -> risk-control-system` 的准入联动基线。
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `payment-core` 全量后端测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `262` 个测试全部通过 |
+| `risk-control-system` 后端测试 | 同环境执行 `systems/risk-control-system/backend` 的 `mvn test` | 通过 | `4` 个测试全部通过 |
+| 定向主链路验证 | `PaymentServiceImplTest.shouldMarkPaymentAsRiskReviewBeforeChannelSubmit` | 通过 | 支付提交命中风控复核时，不再进入渠道提交 |
+
+### 10.2 本轮新增能力
+
+1. `PaymentSubmitRequestDTO` 补齐 `clientDeviceId`、`payerPhone`，为独立风控评估提供准入上下文。
+2. `payment-core` 新增 `PaymentRiskControlService`，支持在提交支付前调用风控中心评估接口。
+3. 支付提交链路新增 `PASS / REVIEW / INTERCEPT / REJECT` 决策收口：
+   - `PASS`：继续路由和渠道提交
+   - `REVIEW`：支付单状态进入 `RISK_REVIEW`，收银台状态进入“待风控复核”
+   - `INTERCEPT`：支付单状态进入 `RISK_BLOCKED`
+   - `REJECT`：支付单状态进入 `RISK_REJECTED`
+4. `risk-control-system` 新增 `/api/risk-control/decisions/evaluate`，支持黑名单、限额规则、基础高危策略和人工复核结果复用。
+
+### 10.3 当前判断
+
+1. 当前支付主链路已不再只是“文档上声明有风控”，而是提交支付前确实会先走独立风控决策。
+2. 这仍属于 V1 联调基线，不等于已经具备生产级实时风控，因为规则发布、流式检测、消息告警、评分模型和大并发压测仍未补齐。
+3. 后续应继续补 `ops-config-system` 配置下发生效、支付端页面态联动和真实运行环境下的跨系统 smoke。
 
 ## 10. 2026-07-22 支付控制限流补强验证
 
@@ -258,6 +364,112 @@
 4. 后台控制策略页面补齐接口级限流展示列，避免配置项只后端生效、前台不可见
 
 ## 28. 2026-07-21 支付网关接入治理增强验证
+
+## 99. 2026-08-02 payment-core DLQ intake 真实运行验证
+
+### 99.1 验证背景
+
+本轮目标是把 `payment.trade.dlq -> payment.compensation.dlq-intake -> t_payment_dead_letter_task` 这条死信补偿入账链路从“单元测试通过”推进到“真实 RabbitMQ + MySQL 运行验证通过”。
+
+### 99.2 本轮环境事实
+
+| 项目 | 结果 |
+| --- | --- |
+| payment-core 新进程 | `127.0.0.1:18080` 启动成功 |
+| MySQL | `127.0.0.1:3306 / housekeeping_payment_core` 连接成功 |
+| RabbitMQ | `127.0.0.1:5672` 连接成功 |
+| 旧 payment-core 进程 | 发现一条监听 `8080` 且连接 `3307` 的旧进程，会抢占 intake 消息 |
+
+### 99.3 本轮排查与修复
+
+1. 初次投递新的演练 DLQ 消息后，`payment.compensation.dlq-intake` 队列被消费，但 `t_payment_dead_letter_task` 仍为 `0` 条。
+2. 排查 RabbitMQ 消费者列表发现 intake 队列存在 `2` 个消费者。
+3. 继续核对端口与进程后，确认旧 `payment-core` 进程监听 `8080`、连接旧库 `3307`，它与当前新进程同时消费 intake 队列。
+4. 停掉旧 `payment-core` 进程后，intake 队列消费者收敛为当前新进程 `1` 个。
+5. 重新投递新的演练 DLQ 消息后，补偿任务成功写入 `t_payment_dead_letter_task`。
+
+结论：
+
+1. 之前“消息被消费但未落库”的根因是旧进程抢消息，不是当前代码实现缺陷。
+2. 当前新进程对应的死信补偿入账逻辑在真实环境下可用。
+
+### 99.4 新增真实入账证据
+
+本轮新增演练消息：
+
+| message_id | routing_key | target_system | task_status | 结果 |
+| --- | --- | --- | --- | --- |
+| `DRILL-INTAKE-RETRY-20260802130829` | `payment.success.clearing.dlq.v1` | `clearing-system` | `PENDING_REVIEW` | 已写入补偿任务账本 |
+
+本轮补录历史演练副本：
+
+| message_id | routing_key | target_system | task_status | 说明 |
+| --- | --- | --- | --- | --- |
+| `DRILL-DLQ-TASK-20260801-001` | `payment.success.clearing.dlq.v1` | `clearing-system` | `PENDING_REVIEW` | 原始 DLQ 队列消息保留，仅补录账本 |
+| `DRILL-DLQ-TASK-20260801-001` | `payment.success.accounting.dlq.v1` | `accounting-system` | `PENDING_REVIEW` | 原始 DLQ 队列消息保留，仅补录账本 |
+| `DRILL-DLQ-REPLAY-20260801-001` | `payment.success.accounting.dlq.v1` | `accounting-system` | `PENDING_REVIEW` | 原始 DLQ 队列消息保留，仅补录账本 |
+
+截至本轮核对，`t_payment_dead_letter_task` 共存在 `4` 条演练补偿任务记录。
+
+### 99.5 本轮门禁结论
+
+1. `payment-core` 已完成 DLQ intake 到补偿任务账本的真实运行验证。
+2. 当前已关闭“没有补偿账本”和“intake 未验证”的门禁缺口。
+3. 下一步还需继续完成：
+   - 人工复核
+   - 定向重放
+   - 下游事实核对
+   - 人工结案或重放成功结案
+
+### 99.6 2026-08-02 首条真实重放闭环
+
+本轮继续选择账务侧合法 JSON 死信任务 `DLQ7d62fb24b6be4c508db6` 做真实接口验证。
+
+验证动作：
+
+1. `POST /api/payment-dead-letter-tasks/DLQ7d62fb24b6be4c508db6/ready-to-replay`
+2. `POST /api/payment-dead-letter-tasks/DLQ7d62fb24b6be4c508db6/replay`
+
+关键结果：
+
+1. 任务状态从 `PENDING_REVIEW` 更新为 `READY_TO_REPLAY`。
+2. 随后任务状态更新为 `REPLAYED`。
+3. `replay_count = 1`
+4. `last_replay_at = 2026-08-02 13:16:30`
+5. 对应业务编号 `PAY-REPLAY-DRILL-20260801-001` 在账务系统查询仍保持“已消费”，说明重放没有打破账务消费幂等。
+
+结论：
+
+1. `payment-core` 已具备“人工复核 -> 定向重放 -> 任务状态收口”的真实运行能力。
+2. 至少在账务支付成功事件这一条样本上，补偿任务重放不会打坏下游已消费事实。
+3. 后续仍需继续核对 clearing / accounting 其余历史演练任务，并补最终结案说明。
+
+### 99.7 2026-08-02 历史演练任务全量收口
+
+本轮继续处理剩余 3 条历史演练任务，处理策略如下：
+
+1. 对合法 JSON 报文的 clearing 死信任务执行“复核 -> 重放”
+2. 对非法演练报文执行“保留原始 DLQ 审计副本，不重放，人工结案”
+
+处理结果：
+
+| taskNo | messageId | routingKey | 最终状态 | 处理说明 |
+| --- | --- | --- | --- | --- |
+| `DLQ51febd7de1a446e4ac4b` | `DRILL-INTAKE-RETRY-20260802130829` | `payment.success.clearing.dlq.v1` | `REPLAYED` | 已完成 clearing 演练死信复核与重放，`replay_count = 1` |
+| `DLQ7d62fb24b6be4c508db6` | `DRILL-DLQ-REPLAY-20260801-001` | `payment.success.accounting.dlq.v1` | `REPLAYED` | 已完成 accounting 演练死信复核与重放，`replay_count = 1` |
+| `DLQ7afb962a1c0642d483ae` | `DRILL-DLQ-TASK-20260801-001` | `payment.success.accounting.dlq.v1` | `MANUAL_RESOLVED` | 非法演练报文，仅保留原始 DLQ 审计副本，人工结案 |
+| `DLQd60e97458069401b8a5b` | `DRILL-DLQ-TASK-20260801-001` | `payment.success.clearing.dlq.v1` | `MANUAL_RESOLVED` | 非法演练报文，仅保留原始 DLQ 审计副本，人工结案 |
+
+补充核对：
+
+1. `PAY-REPLAY-DRILL-20260801-001` 在账务系统查询仍为“已消费”，说明账务重放未破坏幂等。
+2. `PAY-INTAKE-DRILL-20260802-002` 在清分系统查询已生成 `PAYMENT_SUCCESS` 消费事件，说明 clearing 重放已生效。
+3. `payment-core` 补偿任务列表接口与数据库状态一致，4 条演练任务均已收口。
+
+结论：
+
+1. 当前已经完成一轮“演练死信台账建立 -> 可重放任务真实重放 -> 非法报文人工结案”的全量样本收口。
+2. 这意味着 `payment-core` 在补偿任务管理维度已经不再停留在概念设计或单元测试阶段，而是具备真实运行证据。
 
 ### 28.1 本轮验证结论
 
@@ -2978,3 +3190,902 @@
 1. 四个导出域的查询条件下推、CSV 字段与转义、UTF-8 下载响应、`attachment` 文件名均有服务层和控制器层回归保护。
 2. 结合第 95 节真实页面下载证据，四块导出已不再是 `test -> master` 阻断项。
 3. 当前仍不推进合并或创建正式 release，原因是缺少真实消息代理上的可靠投递、重试、死信与跨系统补偿演练证据。
+
+## 98. 2026-08-02 支付请求、日终、任务中心控制器门面补证
+
+本轮针对 `payment-core` 已经产品化落地、但此前缺少独立控制器测试覆盖的三块后台模块补了接口门面回归：
+
+1. 支付请求管理 `PaymentRequestController`
+2. 支付日终处理 `PaymentDayEndController`
+3. 支付任务中心 `PaymentTaskCenterController`
+
+### 98.1 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 三块控制器定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentRequestControllerTest,PaymentDayEndControllerTest,PaymentTaskCenterControllerTest test` | 通过 | `7` 个用例通过，`0` failures，`0` errors，`0` skipped |
+
+### 98.2 本轮补强点
+
+1. `PaymentRequestControllerTest` 覆盖支付请求列表查询参数绑定和 CSV 导出响应头。
+2. `PaymentDayEndControllerTest` 覆盖支付日终总览和手工跑批请求透传。
+3. `PaymentTaskCenterControllerTest` 覆盖任务中心总览、任务日志查询，以及超时关单、事件重发、退款重试、SLA 升级、告警派发、回执回查、控制策略巡检七类人工任务入口。
+
+### 98.3 当前判断
+
+1. `支付请求管理 / 日终处理 / 任务中心` 三块高频运营后台入口已补齐控制器层回归保护。
+2. 这一步进一步缩小了 `payment-core` 从“页面和服务已落地”到“接口门面可回归”的证据缺口。
+3. 当前仍不推进 `test -> master`，因为整包仍缺真实消息代理可靠投递、跨系统补偿演练和正式发布冻结包。
+
+## 99. 2026-08-02 payment-core test 分支最新快照
+
+### 99.1 本轮复核结果
+
+本轮针对 `test` 分支上的 `payment-core` 进行了最新一轮全量后端回归和后台前端构建复核，目的是确认新增控制器门面测试后，整包主线没有被破坏。
+
+### 99.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -q test` | 通过 | `220` 个用例通过，`0` failures，`0` errors，`0` skipped |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-BBDWZWVh.js` |
+| `app-web` 前端构建 | `cd systems/payment-core/frontend/app-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-DsCUPAzE.js` |
+| `h5-web` 前端构建 | `cd systems/payment-core/frontend/h5-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-Du8sikH_.js` |
+| `pc-web` 前端构建 | `cd systems/payment-core/frontend/pc-web && npm run build` | 通过 | 最新生产构建通过，输出 `dist/assets/index-BDOG789Z.js` |
+
+### 99.3 当前意义
+
+1. `payment-core` 最新 test 分支状态已经不只是“局部模块可用”，而是具备了一版较完整的回归证据快照。
+2. 新增控制器测试后，`payment-core` 的后端全量测试总数已提升到 `220`，说明回归保护范围继续扩大。
+3. `admin-web / app-web / h5-web / pc-web` 四端当前都能在最新 `test` 分支上独立完成生产构建，说明多端前端矩阵没有被近期补偿和门面测试改动破坏。
+4. 当前仍不进入 `master` 或 `release/*`，因为阻断点已经进一步收敛到生产级可靠投递、跨系统补偿、整包正式发布清单和发布后验证项。
+
+## 100. 2026-08-03 支付事件出站总览补强验证
+
+### 100.1 本轮补强点
+
+1. 新增 `GET /api/payment-events/overview`，在列表筛选条件不变的前提下返回事件总数、成功/发布中/失败/死信分布、涉及下游系统数、到期待重试事件数、支付成功事件数和最近发布时间。
+2. `PaymentEventsView` 已接入总览指标、风险卡片和联查入口，避免页面统计仅依赖当前页数据。
+3. `PaymentEventMapper.xml` 已统一列表、总览、导出三类查询口径，降低运营页统计与导出不一致的风险。
+
+### 100.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付事件定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentEventServiceImplTest,PaymentEventControllerTest test` | 通过 | 支付事件服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与联查入口已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 100.3 当前判断
+
+1. `payment-core` 的支付事件出站页已从“基础列表 + 手动重发”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了 `payment-core` 在支付交易闭环中后台上的产品化差距，但仍不代表真实消息总线、订阅确认和跨系统补偿编排已经生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 101. 2026-08-03 服务者结算总览补强验证
+
+### 101.1 本轮补强点
+
+1. 新增 `GET /api/settlements/workers/overview`，在列表筛选条件不变的前提下返回结算单总数、待审核/待出款/出款中/出款成功分布、实结金额合计、扣减金额合计、保证金影响合计和净额为负结算单数。
+2. `WorkerSettlementsView` 已接入总览指标和风险卡片，避免后台卡片继续基于当前页临时统计。
+3. `SettlementMapper.xml` 已统一列表、总览、导出三类查询口径，降低页面与导出口径不一致的风险。
+
+### 101.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 服务者结算定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=SettlementServiceImplTest,SettlementControllerTest test` | 通过 | 服务者结算服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与风险卡片已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 101.3 当前判断
+
+1. `payment-core` 的服务者结算页已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化支付侧核对台。
+2. 这一步继续缩小了支付核心域对结算侧可视化与风险识别的产品化差距，但仍不代表完整审批、出款、核销和失败重打作业已经在 `payment-core` 生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 102. 2026-08-03 收银台会话总览补强验证
+
+### 102.1 本轮补强点
+
+1. 新增 `GET /api/cashier-sessions/overview`，在列表筛选条件不变的前提下返回会话总数、已失效/成功/支付中/待支付会话分布、涉及终端数、15 分钟内即将失效会话数和会话金额合计。
+2. `CashierSessionsView` 已接入总览指标、风险卡片和联查入口，避免后台卡片继续基于当前页临时统计。
+3. `CashierSessionMapper.xml` 已统一列表、总览、导出三类查询口径，降低页面统计与导出口径不一致的风险。
+
+### 102.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 收银台会话定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=CashierSessionServiceImplTest,CashierSessionControllerTest test` | 通过 | 收银台会话服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与联查入口已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 102.3 当前判断
+
+1. `payment-core` 的收银台会话页已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了支付核心域在终端会话排障和用户跳失识别上的产品化差距，但仍不代表多端收银台的真实终端追踪、埋点分析和自动补偿已生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 103. 2026-08-03 账单中心总览补强验证
+
+### 103.1 本轮补强点
+
+1. 新增 `GET /api/bills/overview`，在列表筛选条件不变的前提下返回账单总数、已支付/待支付/部分支付/逾期账单数，以及应收金额、已付金额、待付金额合计。
+2. `BillsView` 已接入总览指标和风险卡片，避免后台卡片继续基于当前页临时统计。
+3. `BillMapper.xml` 已统一列表、总览、导出三类查询口径，降低页面统计与导出口径不一致的风险。
+
+### 103.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 账单中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=BillServiceImplTest,BillControllerTest test` | 通过 | 账单中心服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览与风险卡片已接入 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 103.3 当前判断
+
+1. `payment-core` 的账单中心已从“基础查询 + 导出”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了支付核心域在账单收口、逾期识别和待收风险可视化上的产品化差距，但仍不代表财务会计口径、会计分录和正式对账链路已经生产化。
+3. 因此本轮仍只提交到 `test`，不推进 `master` 合并或 `release/*` 冻结。
+
+## 104. 2026-08-03 支付路由执行结果总览补强验证
+
+### 104.1 本轮补强点
+
+1. 新增 `GET /api/payment-routes/overview`，在列表筛选条件不变的前提下返回路由记录总数、成功命中数、需关注命中数、命中渠道数、线下路由数、微信路由数、支付宝路由数和最近路由时间。
+2. `PaymentRoutesView` 已接入总览指标与风险卡片，避免后台卡片继续基于当前页临时统计。
+3. `PaymentRouteExecutionMapper.xml` 已统一列表与总览两类查询口径，降低页面统计与列表筛选不一致的风险。
+
+### 104.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付路由执行结果定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentRouteExecutionServiceImplTest,PaymentRouteExecutionControllerTest test` | 通过 | 支付路由执行结果服务层和控制器层总览能力均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，页面总览卡片、风险总览和联查入口可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 104.3 当前判断
+
+1. `payment-core` 的支付路由执行结果页正从“基础查询 + 展开报文”升级为“总览 + 风险面判断 + 列表下钻”的正式化运营台。
+2. 这一步继续缩小了支付核心域在路由误命中、渠道落点偏差和线下兜底识别上的产品化差距，但仍不代表实时渠道健康评分、自动熔断和策略回放已经生产化。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 105. 2026-08-03 支付配置中心治理总览与分区导出补强验证
+
+### 105.1 本轮补强点
+
+1. `PaymentConfigView` 已新增治理总览卡片与风险总览区，统一展示启用渠道、启用路由、启用协议、控制策略 WARN/FAIL、返回码归档和通知供应商覆盖情况。
+2. 配置中心各治理分区已补齐独立导出入口，支持渠道、路由、协议、返回码、网关、控制策略、告警供应商和值班路由按分区输出 CSV 快照。
+3. `PaymentConfigControllerTest` 已补齐协议新增/编辑、值班路由新增/编辑、各类启停接口和控制策略自检的控制器层门禁用例，避免配置中心能力退化时只剩服务层保护。
+
+### 105.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付配置中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentConfigControllerTest test` | 通过 | 支付配置中心控制器层新增门禁用例全部通过，覆盖协议新增/编辑、值班路由新增/编辑、启停接口和控制策略自检 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，治理总览卡片与分区导出入口可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 105.3 当前判断
+
+1. `payment-core` 的支付配置中心正从“治理台账可查看”升级为“治理风险可观察、交付快照可分区导出、控制器门禁更完整”的正式化配置治理台。
+2. 这一步继续缩小了支付核心域在配置审计、发布留痕和跨角色协同评审上的产品化差距，但仍不代表真实密钥托管、证书上传流转和外部通知平台已生产化。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 106. 2026-08-03 支付监控分析风险总览与控制器门禁补强验证
+
+### 106.1 本轮补强点
+
+1. `PaymentMonitorView` 已新增风险总览区，统一展示 `P1` 告警数、存在待处理的渠道数和高风险渠道数，避免首屏只能看摘要卡片和明细表。
+2. 后台支付监控分析页继续保持“摘要卡片 + 风险总览 + 趋势 + 告警 + 渠道下钻”的一致结构，更贴近正式运营台交付标准。
+3. 新增 `PaymentMonitorControllerTest`，补齐支付监控分析控制器层门禁，避免监控总览接口只依赖服务层测试保护。
+
+### 106.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付监控分析定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentMonitorServiceImplTest,PaymentMonitorControllerTest test` | 通过 | 支付监控分析服务层与控制器层门禁均通过，新增覆盖监控总览接口控制器转发 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，风险总览区接入后页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 106.3 当前判断
+
+1. `payment-core` 的支付监控分析页正从“可查看摘要和明细”升级为“风险面先判断、再下钻处理”的正式化监控台。
+2. 这一步继续缩小了支付核心域在趋势观察、渠道风险识别和异常优先级分层上的产品化差距，但仍不代表真实时序监控、外部告警平台和自动扩缩容联动已经生产化。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 107. 2026-08-03 支付交易异常中心风险总览与控制器门禁补强验证
+
+### 107.1 本轮补强点
+
+1. `PaymentIssuesView` 已新增异常风险总览区，统一展示 `SLA` 超时异常数、`P1` 高优先级异常数以及责任组数量 / 异常总量，避免运营首屏只能看责任组卡片和明细表。
+2. 后台支付交易异常中心继续保持“筛选 + 风险总览 + 责任组统计 + 异常列表 + 批量处理”的一致结构，更贴近正式异常治理台交付标准。
+3. 新增 `PaymentIssueControllerTest`，补齐异常列表、责任组统计、告警明细、人工确认和批量处理入口的控制器层门禁。
+
+### 107.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付交易异常中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentIssueServiceImplTest,PaymentIssueControllerTest test` | 通过 | 支付交易异常中心服务层与控制器层门禁均通过，新增覆盖异常列表、责任组统计、告警明细、人工确认和批量处理入口 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，异常风险总览区接入后页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 107.3 当前判断
+
+1. `payment-core` 的支付交易异常中心正从“支持处理动作的异常列表”升级为“风险面先判断、责任归口更清晰、处理入口更完整”的正式化异常治理台。
+2. 这一步继续缩小了支付核心域在异常优先级判断、责任归口识别和人工处理门禁上的产品化差距，但仍不代表真实外部通知平台、法定节假日值班中心和更复杂升级编排已经生产化。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 108. 2026-08-03 统一支付记录控制器门禁补强验证
+
+### 108.1 本轮补强点
+
+1. 新增 `PaymentRecordControllerTest`，覆盖统一、微信支付宝和银行卡记录共用的列表参数绑定入口。
+2. 新增收款记录详情入口控制器测试，覆盖 `GET /api/payment-records/{paymentOrderId}` 的支付记录详情转发。
+3. 本轮不新增统计口径，继续保持记录列表的分页统计与详情页的轨迹聚合边界，避免前端当前页数据冒充全量指标。
+
+### 108.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 统一支付记录定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=PaymentRecordServiceImplTest,PaymentRecordControllerTest test` | 通过 | 支付记录服务层与控制器层门禁均通过，覆盖列表参数绑定和详情转发 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 最新生产构建通过，记录列表和详情相关页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 108.3 当前判断
+
+1. `payment-core` 的统一支付记录入口已从“服务层有测试保护”升级为“列表和详情控制器入口均有门禁保护”。
+2. 这一步继续增强了收款运营、支付单详情和支付记录详情之间的接口稳定性，但不代表收款记录已经具备完整财务对账、会计分录和退款核销能力。
+3. 因此本轮仍只面向 `test` 分支收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 109. 2026-08-03 工作台与支付健康指标控制器门禁补强验证
+
+### 109.1 本轮补强点
+
+1. 新增 `DashboardControllerTest`，覆盖工作台汇总接口的服务调用和响应数据透传。
+2. 新增 `PaymentMetricsControllerTest`，覆盖支付健康指标汇总接口的服务调用和响应数据透传。
+3. 前端工作台继续保持“工作台卡片 + 支付健康度 + 待办事项 + 快捷入口”的现有结构，本轮不改变展示口径，仅补后端控制器门禁证据。
+
+### 109.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 工作台与支付指标定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=DashboardControllerTest,PaymentMetricsControllerTest test` | 通过 | 两个总览控制器的服务转发和响应透传均通过门禁验证 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 工作台双接口并行加载相关页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮新增测试和文档无空白符问题 |
+
+### 109.3 当前判断
+
+1. 工作台和支付健康指标入口已具备独立控制器层门禁测试。
+2. 本轮不将工作台当前页展示数据扩展解释为全量财务口径，避免运营指标误读。
+3. 在命令全部通过并提交到 `test` 前，不推进 `master` 合并或 `release/*` 冻结。
+
+## 110. 2026-08-03 订单中心控制器门禁补强验证
+
+### 110.1 本轮补强点
+
+1. 新增 `OrderControllerTest`，覆盖订单中心列表接口的参数绑定和服务转发。
+2. 订单中心继续保持“查询订单 -> 判断是否存在最新预付单 -> 发起支付”的后台运营入口定位，本轮不改变字段和筛选口径。
+3. 本轮完成后，`payment-core` 当前控制器层已无独立测试缺口。
+
+### 110.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 订单中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dtest=OrderControllerTest,OrderServiceImplTest test` | 通过 | 订单中心控制器入口与服务层分页查询规范化行为均通过 |
+| `admin-web` 前端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | 订单中心和支付发起入口页面可稳定打包 |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮新增测试和文档无空白符问题 |
+
+### 110.3 当前判断
+
+1. 订单中心作为“订单发起支付 -> 创建预付单”的后台入口，现已具备独立控制器层门禁测试。
+2. `payment-core` 当前控制器层覆盖已收口，但发布门槛仍取决于真实渠道、跨系统联调、冻结版回滚包和整包发布证据。
+3. 在命令全部通过并提交到 `test` 前，不推进 `master` 合并或 `release/*` 冻结。
+
+## 111. 2026-08-07 订单中心导出补齐验证
+
+### 111.1 本轮新增能力
+
+1. 订单中心已补齐 `GET /api/orders/export`，支持按当前筛选条件导出订单快照。
+2. 导出链路与列表口径保持一致，避免页面、列表和导出三套口径不一致。
+3. 前端 `OrdersView` 的“导出订单”按钮已绑定到真实订单导出接口。
+
+### 111.2 验证待办
+
+1. 后端补跑 `OrderControllerTest` 与 `OrderServiceImplTest`。
+2. 前端补跑 `admin-web` 构建。
+
+## 111. 2026-08-04 运营配置快照联动复核
+
+### 111.1 本轮新增能力
+
+1. `payment-core` 在提交支付前，已按 `businessCode + payType + terminalType` 调用 `ops-config-system` 的有效配置快照接口。
+2. 当前端未显式传入 `paymentMethod` 时，支付核心会使用运营配置返回的 `defaultPayMethod` 自动补齐。
+3. 当前端未显式传入 `channelCode` 时，支付核心会使用运营配置返回的 `primaryChannelProfileCode` 自动补齐路由输入。
+4. 当前联动顺序已经明确为：运营配置补齐默认值 -> 支付路由决策 -> 风控准入判断 -> 渠道提交。
+
+### 111.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 提交支付定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentServiceImplTest test` | 通过 | `26` 个测试通过，覆盖默认支付方式和默认渠道自动补齐 |
+| `payment-core` 全量后端回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository test` | 通过 | `263` 个测试通过，`0` failures，`0` errors，`0` skipped |
+| 提交前格式检查 | `git diff --check` | 通过 | 本轮改动无空白符和补丁格式问题 |
+
+### 111.3 当前判断
+
+1. `payment-core` 已具备从上游运营配置域自动补齐默认支付方式和默认渠道的能力，不再完全依赖前端显式下发。
+2. 当前有效配置快照仍是 V1 读路径，尚未包含灰度发布、版本回滚和审批流，但已经满足支付主链路的配置收口需求。
+3. 本轮仍只面向 `test` 分支持续收口，不推进 `master` 合并或 `release/*` 冻结。
+
+## 112. 2026-08-04 运营配置 + 风控 + 支付核心跨进程 smoke
+
+### 112.1 本轮验证目标
+
+验证以下真实运行态链路：
+
+1. `payment-core` 提交支付时，不传 `paymentMethod` 与 `channelCode`
+2. `payment-core` 从 `ops-config-system` 自动补齐默认支付方式和默认渠道
+3. `payment-core` 再调用已启动的 `risk-control-system`
+4. `risk-control-system` 从 `ops-config-system` 读取 `CONTROL_BIG_AMOUNT_REVIEW`
+5. 大额交易命中后，支付单与收银台统一进入 `待风控复核`
+
+### 112.2 运行态事实
+
+1. 预付单创建：
+   - `orderNo = SMOKE-OPS-RISK-20260804-001`
+   - `prepayOrderNo = PRE1785811244734`
+   - `paymentOrderId = PAY1785811244732`
+2. 运营配置快照运行态返回：
+   - `defaultPayMethod = 微信支付`
+   - `primaryChannelProfileCode = CHANNEL_WX_H5`
+3. 风控运行态命中：
+   - `reviewNo = REVIEW-1785811212924`
+   - `riskTag = 大额支付人工复核`
+4. 支付核心提交结果：
+   - 收银台状态 `待风控复核`
+   - 支付详情状态 `RISK_REVIEW`
+   - 支付方式已补齐为 `微信支付`
+   - 支付渠道已补齐为 `wx_h5`
+
+### 112.3 本轮结论
+
+1. `payment-core -> ops-config-system -> risk-control-system` 的配置生效链路已经拿到真实 HTTP 运行证据，不再只是单测级别的集成。
+2. 当前这条链路仍停在“准入复核”阶段，尚未继续覆盖人工复核通过后的再次提交、支付成功回调和下游清结算闭环。
+3. 因此本轮显著增强了 `test` 分支门禁，但仍不触发 `master` 合并或 `release/*` 冻结。
+
+## 113. 2026-08-05 人工复核通过后再次提交真实 smoke
+
+### 113.1 本轮验证目标
+
+验证以下真实运行态链路是否已经闭环：
+
+1. `payment-core` 在未传 `paymentMethod` 与 `channelCode` 时继续从 `ops-config-system` 自动补齐默认值
+2. 大额支付命中 `risk-control-system` 人工复核后，收银台与支付单统一进入 `待风控复核 / RISK_REVIEW`
+3. 风控人工复核通过后，再次提交同一预付单时，支付链路能够从 `待风控复核` 重新回到支付主链路
+4. 再次提交成功后，支付单真实进入 `WAIT_CALLBACK`
+
+### 113.2 运行态事实
+
+1. 本轮真实预付单：
+   - `orderNo = SMOKE-OPS-RISK-20260805-001`
+   - `prepayOrderNo = PRE1785901653980`
+   - `paymentOrderId = PAY1785901653979`
+   - `billNo = BILL1785901653975`
+2. 运营配置运行态事实：
+   - `CONTROL_BIG_AMOUNT_REVIEW` 已启用
+   - 有效快照返回 `defaultPayMethod = 微信支付`
+   - 有效快照返回 `primaryChannelProfileCode = CHANNEL_WX_H5`
+3. 首次提交支付时：
+   - `payment-core` 未显式传 `paymentMethod` 与 `channelCode`
+   - 支付方式自动补齐为 `微信支付`
+   - 支付渠道自动补齐为 `wx_h5`
+   - 收银台状态从 `待支付` 变为 `待风控复核`
+   - 支付详情状态从 `PREPAY_CREATED` 变为 `RISK_REVIEW`
+4. 风控人工复核运行态事实：
+   - 复核单号 `REVIEW-1785901681130`
+   - 风险标签 `大额支付人工复核`
+   - 风控审核动作 `APPROVE`
+5. 复核通过后再次提交支付：
+   - 收银台状态推进为 `支付中`
+   - 支付详情状态推进为 `WAIT_CALLBACK`
+   - 渠道流水号生成 `WX-1785901790893`
+   - 最近一次尝试状态为 `处理中`
+   - 幂等键为 `PRE1785901653980|微信支付|wx_h5`
+   - 最近一次请求报文已落库，包含 `resolvedChannelCode=wx_h5`
+   - 最近一次响应报文已落库，返回 `USERPAYING`
+   - 事件轨迹新增 `PAYMENT_SUBMIT | payment.trade.submitted.v1 | PENDING`
+
+### 113.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `PaymentServiceImplTest` 定向回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=$JAVA_HOME/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml -Dtest=PaymentServiceImplTest test` | 通过 | `27` 个测试全部通过，新增覆盖 `RISK_REVIEW -> PASS -> submit` |
+| `payment-core` 全量回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=$JAVA_HOME/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -f systems/payment-core/backend/pom.xml test` | 通过 | `264` 个测试全部通过 |
+| `ops-config-system` 运行态开关 | `POST /api/ops-config/system-controls/toggle` | 通过 | `CONTROL_BIG_AMOUNT_REVIEW` 已真实启用 |
+| `risk-control-system` 运行态限额隔离 | `POST /api/risk-control/limit-rules/toggle` | 通过 | `LIMIT_USER_DAY` 已临时关闭，隔离无关限额影响 |
+| 跨进程支付重提 smoke | `ops-config-system + risk-control-system + payment-core` 本机同时启动后，按“预付单 -> 首次提交 -> 人工复核通过 -> 再次提交 -> 主动查单”顺序执行 | 通过 | 已拿到真实 `WAIT_CALLBACK` 证据 |
+
+### 113.4 本轮结论
+
+1. `payment-core` 当前已不只停留在“命中人工复核”，而是已经拿到 `RISK_REVIEW -> APPROVED -> WAIT_CALLBACK` 的真实运行证据。
+2. `PaymentMapper.xml` 对 `待风控复核` 的状态机放行修复已被真实运行态验证有效，不再只是单测级别的修复。
+3. 当前仍未覆盖真实回调成功、清分、结算、账务同批次闭环，因此本轮依然不足以触发 `test -> master` 或 `release/*`。
+
+## 114. 2026-08-05 支付成功回调后下游联动真实 smoke
+
+### 114.1 本轮验证目标
+
+验证以下真实运行态链路：
+
+1. `payment-core` 在 `WAIT_CALLBACK` 状态下接收 `WX_H5` 成功回调
+2. 支付单、预付单、账单和订单在 `payment-core` 内完成成功收口
+3. `payment-core` 成功事件真实下发至 `clearing-system` 与 `accounting-system`
+4. `clearing-system` 在消费支付成功事件后，真实生成清分结果
+5. `clearing-system` 再向 `settlement-system` 与 `accounting-system` 下发 `CLEARING_GENERATED`
+6. 结算单与账务事件在下游系统真实落库
+
+### 114.2 运行态事实
+
+1. 使用上轮真实支付单继续验证：
+   - `paymentOrderId = PAY1785901653979`
+   - `prepayOrderNo = PRE1785901653980`
+   - `channelTransactionNo = WX-1785901790893`
+2. 回调前基线：
+   - `payment-core` 状态为 `WAIT_CALLBACK`
+   - `clearing-system` 按 `paymentOrderId=PAY1785901653979` 查询结果为 `0`
+   - `accounting-system` 平台手续费账户 `ACT10003` 余额为 `¥12.00`
+   - `settlement-system` 尚无本次支付对应结算事实
+3. 真实回调请求：
+   - 接口 `POST /api/payments/callback/WX_H5`
+   - `tradeStatus = SUCCESS`
+   - 回调后支付详情状态变为 `SUCCESS`
+   - 最近一次支付尝试状态变为 `成功`
+   - 事件轨迹新增 `PAYMENT_SUCCESS | payment.trade.succeeded.v1 | SUCCESS`
+4. 下游真实落地事实：
+   - `clearing-system` 生成清分单 `CLO20002`
+   - 清分批次 `CLB10002`
+   - 清分金额拆分：
+     - 服务者 `¥5647.16`
+     - 商家 `¥688.80`
+     - 平台 `¥551.04`
+     - 渠道费 `¥1.00`
+   - `accounting-system` 对 `ACT10003` 新增 `PAYMENT_SUCCESS_EVENT`
+   - `ACT10003` 可用余额由 `¥12.00` 变为 `¥6900.00`
+   - `accounting-system` 新增 `PAYMENT_SUCCESS` 事件 `EVT50003`
+   - `accounting-system` 新增 `CLEARING_GENERATED` 事件 `EVT50002`
+   - `settlement-system` 新增 `CLEARING_GENERATED` 事件 `SVE70002`
+   - `settlement-system` 新增结算单 `SLT20003`
+   - 结算批次 `SET10002`
+   - 结算单关联清分单 `CLO20002`
+   - 结算单目标 `WRK1001 / 李阿姨`
+   - 结算净额 `¥5647.16`
+
+### 114.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 回调前支付基线 | `GET /api/payments/PAY1785901653979` | 通过 | 回调前状态为 `WAIT_CALLBACK` |
+| 回调前清分基线 | `GET /api/clearing/orders?paymentOrderId=PAY1785901653979` | 通过 | 返回 `0` 条清分结果 |
+| 回调前账务基线 | `GET /api/accounting/accounts/ACT10003` | 通过 | 平台手续费账户余额为 `¥12.00` |
+| 成功回调 | `POST /api/payments/callback/WX_H5` | 通过 | 支付单真实进入 `SUCCESS` |
+| 清分事实核验 | `GET /api/clearing/orders?paymentOrderId=PAY1785901653979` | 通过 | 生成 `CLO20002` |
+| 账务事实核验 | `GET /api/accounting/accounts/ACT10003`、`GET /api/accounting/events?...` | 通过 | 余额与事件均已真实变化 |
+| 结算事实核验 | `GET /api/settlements/events?...`、`GET /api/settlements/orders?...` | 通过 | 结算事件和结算单均已生成 |
+
+### 114.4 本轮结论
+
+1. `payment-core` 当前已经拿到“支付成功回调 -> 清分 -> 账务 -> 结算”的真实跨系统 HTTP 链路证据，不再只停留在 `WAIT_CALLBACK`。
+2. 本轮证明的不是单系统成功，而是同一支付单 `PAY1785901653979` 在四个系统中的支付、清分、账务和结算事实一致推进。
+3. 当前仍未形成可发布证据的部分主要剩余：
+   - RabbitMQ 正式拓扑下同批次链路的 retry / DLQ / replay 复核
+   - 前端四端对 `SUCCESS` 结果页与后台多台账页面的整包回归
+   - 数据库迁移回滚包与正式 release 冻结清单
+
+## 115. 2026-08-05 RabbitMQ 隔离拓扑支付成功演练
+
+### 115.1 本轮验证目标
+
+验证以下真实 broker 链路：
+
+1. `payment-core` 在 `payment.event-dispatch.mode=amqp` 下把支付成功事件发布到 `payment.trade`
+2. `clearing-system` 与 `accounting-system` 从隔离 `payment.success.20260805a.v1` 路由真实消费
+3. `clearing-system` 再把清分结果发布到 `clearing.trade`
+4. `settlement-system` 与 `accounting-system` 从隔离 `clearing.generated.20260805a.v1` 路由真实消费
+5. 队列、消费者和下游事实都能对齐，不出现未解释积压
+
+### 115.2 运行态事实
+
+1. 本轮隔离拓扑：
+   - suffix `20260805a`
+   - RabbitMQ 管理端 `http://127.0.0.1:15672`
+   - 管理用户 `hsp`
+2. 本轮业务单：
+   - `orderNo = MQ-DRILL-20260805-001`
+   - `prepayOrderNo = PRE1785907738213`
+   - `paymentOrderId = PAY1785907738212`
+   - `billNo = BILL1785907738209`
+3. 提交支付后基线：
+   - 支付单状态 `WAIT_CALLBACK`
+   - 收银台状态 `支付中`
+   - 隔离主队列、retry、DLQ 均为 `0` 积压
+   - 4 个消费者均在线
+4. 首次回调时：
+   - 支付单已真实进入 `SUCCESS`
+   - `PAYMENT_SUCCESS` 事件 `EVT1785907822039` 首次发布失败
+   - 根因是 `payment-core` 本轮首次 AMQP 启动未注入 `HSP_RABBITMQ_PASSWORD`
+5. 修正 `payment-core` RabbitMQ 凭据并重启后：
+   - 手动重发 `EVT1785907822039`
+   - 事件发布状态变为 `SUCCESS`
+6. 下游真实事实：
+   - `clearing-system` 生成清分单 `CLO20002`
+   - `accounting-system` 生成 `PAYMENT_SUCCESS` 事件 `EVT50002`
+   - `settlement-system` 生成 `CLEARING_GENERATED` 事件 `SVE70002`
+   - 队列快照显示隔离主队列、retry、DLQ 均无积压
+
+### 115.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| RabbitMQ 容器启动 | `docker compose -f infra/rabbitmq/docker-compose.yml up -d` | 通过 | 本地 broker 已启动 |
+| 隔离拓扑声明 | `bash infra/rabbitmq/declare_isolated_topology.sh 20260805a` | 通过 | 已生成四条隔离消费链路 |
+| 队列基线 | `bash infra/rabbitmq/queue_snapshot.sh 20260805a` | 通过 | 4 个消费者在线，队列无积压 |
+| 支付成功回调 | `POST /api/payments/callback/WX_H5` | 通过 | 支付单真实进入 `SUCCESS` |
+| 首次 AMQP 出站 | `GET /api/payment-events?paymentOrderId=PAY1785907738212` | 失败后已恢复 | 首次因 RabbitMQ 密码缺失失败 |
+| 手动重发 | `POST /api/payment-events/republish` | 通过 | `EVT1785907822039` 状态改为 `SUCCESS` |
+| 清分事实核验 | `GET /api/clearing/orders?paymentOrderId=PAY1785907738212` | 通过 | 生成 `CLO20002` |
+| 账务事实核验 | `GET /api/accounting/events?eventType=PAYMENT_SUCCESS&bizNo=PAY1785907738212` | 通过 | 生成 `EVT50002` |
+| 结算事实核验 | `GET /api/settlements/events?eventType=CLEARING_GENERATED&bizNo=CLO20002` | 通过 | 生成 `SVE70002` |
+
+### 115.4 本轮结论
+
+1. `payment-core -> RabbitMQ -> clearing/accounting -> clearing -> RabbitMQ -> settlement/accounting` 的 broker 级真实链路已经重新拿到运行证据，不再只是 HTTP 直连或单测层面证明。
+2. 本轮还额外证明了支付成功出站失败后的手动重发路径可以恢复下游事实，不会把失败事件永久卡死在 `FAILED`。
+3. 当前仍需继续补齐：
+   - 同批次 retry / DLQ / replay 的完整 MQ 补偿闭环
+   - 前端四端围绕该真实 MQ 支付单的整包人工回归
+   - 发布说明、回滚说明和版本冻结清单
+
+## 116. 2026-08-05 同后缀 DLQ 人工结案与 Replay 真实验证
+
+### 116.1 本轮验证目标
+
+验证以下真实补偿链路：
+
+1. `payment.trade.dlq` 中的消息可以被 `payment-core` intake 为 `t_payment_dead_letter_task`
+2. 无法安全解析的坏消息可以被运营人工结案，不误触发 Replay
+3. 可安全重放的有效消息可以经过 `READY_TO_REPLAY -> REPLAYED` 状态流转
+4. Replay 后消息可以真实进入下游 `accounting-system`，并产生可核验账务事实
+
+### 116.2 运行态事实
+
+1. 本轮沿用 `20260805a` RabbitMQ 隔离拓扑，与上一轮支付成功事件演练保持同一后缀。
+2. 通过 RabbitMQ management API 注入两条 DLQ 演练消息：
+   - 人工结案消息：
+     - `messageId = MQ-DLQ-20260805A-MANUAL-001`
+     - `routingKey = payment.success.clearing.dlq.20260805a.v1`
+     - `payload = {invalid-manual-json`
+   - 定向 Replay 消息：
+     - `messageId = MQ-DLQ-20260805A-REPLAY-001`
+     - `routingKey = payment.success.accounting.dlq.20260805a.v1`
+     - `payload` 业务字段：
+       - `accountNo = ACT10003`
+       - `paymentOrderId = PAY-DLQ-20260805A-001`
+       - `orderNo = ORD-DLQ-20260805A-001`
+       - `customerName = 补偿演练客户`
+       - `amount = 9.99`
+3. Intake 成功后生成两条死信补偿任务：
+   - `taskNo = DLQb08e16e42e524d739cce`
+   - `taskNo = DLQb8efefb346924a67ac61`
+4. 非法 JSON 消息经运营确认后人工结案：
+   - 接口：`POST /api/payment-dead-letter-tasks/DLQb08e16e42e524d739cce/resolve-manually`
+   - 操作人：`支付运营A`
+   - 备注：`2026-08-05 非法JSON报文，无法安全重放，按隔离演练人工结案`
+   - 最终状态：`MANUAL_RESOLVED`
+5. 有效补偿消息经运营复核后放行重放：
+   - Ready 接口：`POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/ready-to-replay`
+   - Ready 备注：`2026-08-05 已核对账户ACT10003存在且报文字段完整，允许定向重放`
+   - Replay 接口：`POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/replay`
+   - Replay 备注：`2026-08-05 定向重放至accounting专属replay路由`
+   - 最终状态：`REPLAYED`
+   - `replayCount = 1`
+6. Replay 后下游真实账务事实：
+   - `accounting-system` 生成事件 `EVT50004`
+   - `eventType = PAYMENT_SUCCESS`
+   - `bizNo = PAY-DLQ-20260805A-001`
+   - 新增账务流水 `LDG20007`
+   - `accountNo = ACT10003`
+   - `amount = 9.99`
+   - `beforeBalance = 200.00`
+   - `afterBalance = 209.99`
+
+### 116.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| DLQ 注入 | RabbitMQ management publish API | 通过 | 两条演练消息均成功进入对应 DLQ 路由 |
+| 死信任务查询 | `GET /api/payment-dead-letter-tasks` | 通过 | 查到 `DLQb08e16e42e524d739cce`、`DLQb8efefb346924a67ac61` |
+| 人工结案 | `POST /api/payment-dead-letter-tasks/DLQb08e16e42e524d739cce/resolve-manually` | 通过 | 非法 JSON 任务进入 `MANUAL_RESOLVED` |
+| 允许重放 | `POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/ready-to-replay` | 通过 | 有效消息进入可重放状态 |
+| 执行重放 | `POST /api/payment-dead-letter-tasks/DLQb8efefb346924a67ac61/replay` | 通过 | 任务状态变为 `REPLAYED`，`replayCount = 1` |
+| 下游账务核验 | `GET /api/accounting/events?eventType=PAYMENT_SUCCESS&bizNo=PAY-DLQ-20260805A-001`、`GET /api/accounting/ledgers?accountNo=ACT10003` | 通过 | 事件 `EVT50004` 与流水 `LDG20007` 已真实生成 |
+
+### 116.4 本轮结论
+
+1. `payment-core` 当前已经拿到同一 RabbitMQ 后缀 `20260805a` 下的 `DLQ 入账 -> 运营人工处置 -> 定向 Replay -> 下游账务恢复` 真实运行证据。
+2. 这意味着 DLQ 补偿链路已经不再只是“有页面、有接口”，而是具备真实任务账本、人工审核痕迹、Replay 结果和下游账务事实。
+3. 当前剩余未补齐的 MQ 门禁已经进一步收敛到：
+   - 自动 retry 后进入 DLQ 的同批次新证据
+   - 围绕这批真实案例的前端四端与后台多台账统一人工回归
+   - 基于当前 HEAD 重算的发布说明、回滚说明和发布后验证清单
+
+## 117. 2026-08-05 四端共享支付页状态补强验证
+
+### 117.1 本轮修复目标
+
+本轮围绕用户端共享支付页存在“关键支付状态被过度简化”的问题补强，重点修复：
+
+1. 支付结果页不再只区分 `success / closed / pending`
+2. `RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED / WAIT_CALLBACK / PREPAY_CREATED` 需要按真实业务状态展示
+3. 收银台在 `待风控复核 / 支付成功 / 会话过期` 等状态下，不应继续允许用户重复提交
+4. `app-web / h5-web / pc-web` 三端需一起验证构建通过
+
+### 117.2 本轮修复内容
+
+1. 更新 `frontend/app-web/src/constants/payment.js`，补齐结果页状态映射：
+   - `WAIT_CALLBACK / PAYING`
+   - `RISK_REVIEW`
+   - `RISK_BLOCKED`
+   - `RISK_REJECTED`
+   - `PREPAY_CREATED`
+2. 更新 `frontend/app-web/src/views/ResultView.vue`：
+   - 按不同支付状态展示更细化的“建议下一步 / 补救动作”
+   - “模拟成功回调”仅在 `WAIT_CALLBACK / PAYING` 状态可执行
+   - “关闭支付单”在 `SUCCESS / CLOSED` 状态下禁用
+3. 更新 `frontend/app-web/src/views/CashierView.vue`：
+   - 新增收银台提交前状态守卫
+   - `待风控复核 / 支付成功 / 会话过期` 状态下禁止继续提交
+   - 页面直接给出禁止提交原因，便于用户、运营和测试联查
+4. 由于 `h5-web`、`pc-web` 复用 `app-web` 共享视图，上述补强已同步覆盖三端
+
+### 117.3 构建验证
+
+| 端 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `app-web` | `npm run build` | 通过 | 共享支付页状态补强后产物正常生成 |
+| `h5-web` | `npm run build` | 通过 | 复用共享视图的 H5 支付页未被破坏 |
+| `pc-web` | `npm run build` | 通过 | PC 端收银台与结果页构建通过 |
+
+### 117.4 本轮结论
+
+1. 用户端支付页当前已经不再把关键状态统一折叠成“处理中”，而是能对 `WAIT_CALLBACK / 风控复核 / 风控拦截 / 风控拒绝 / 待发起支付` 做更专业的页面表达。
+2. 收银台动作权限已经更接近真实支付状态机，避免了“待风控复核时还能继续提交”的错误交互。
+3. 这轮补强提升的是四端页面的专业性与可联调性，但仍不等于已经完成最新一轮人工回归；后续还需围绕真实支付单补齐页面级人工验收记录。
+
+## 118. 2026-08-05 fast suffix 自动 retry -> DLQ 真实验证
+
+### 118.1 本轮验证目标
+
+验证以下真实链路：
+
+1. `clearing-system` 与 `accounting-system` 的 AMQP consumer 在消费异常时，会自动投递到各自 retry 路由
+2. retry 队列 TTL 到期后，消息会自动回到主消费队列再次消费
+3. 达到最大重试次数后，消息会自动进入各自 DLQ，而不是停留在 retry 或主队列
+4. `payment-core` 能真实接住 DLQ intake 并创建补偿任务
+5. 非法报文可由运营按“保留审计副本、不安全重放”方式人工结案
+
+### 118.2 运行态事实
+
+1. 本轮新建 fast suffix：
+   - `suffix = 20260805fast`
+   - `RETRY_TTL_MS = 2000`
+2. 演练前队列快照显示：
+   - fast suffix 主队列、retry、DLQ 均为 `0`
+   - 尚无 fast suffix 消费者连接
+3. 本轮以独立端口启动 fast consumer：
+   - `clearing-system`：`18220`
+   - `accounting-system`：`18210`
+   - 均显式注入 RabbitMQ 凭据：
+     - `HSP_RABBITMQ_USERNAME = hsp`
+     - `HSP_RABBITMQ_PASSWORD = hsp-local-drill-20260801`
+4. 通过 RabbitMQ management API 向 `payment.trade` 发布坏报文：
+   - `messageId = MQ-FAST-RETRY-DLQ-20260805-001`
+   - `correlationId = MQ-FAST-RETRY-DLQ-20260805-001`
+   - `routingKey = payment.success.20260805fast.v1`
+   - `payload = {invalid-fast-json`
+5. 当前 HEAD 下游消费者未人工注入 DLQ，而是自动完成失败重试：
+   - `clearing-system` 自动进入 `payment.success.clearing.retry.20260805fast.v1`
+   - `accounting-system` 自动进入 `payment.success.accounting.retry.20260805fast.v1`
+6. `payment-core` 的 `payment.compensation.dlq-intake` 活跃消费者已真实接住两条 fast suffix 死信，并生成补偿任务：
+   - `DLQaba240b93ae346b7b7b9`
+   - `DLQ338493c729064115a467`
+7. 两条任务头信息都保留了自动 retry 的真实轨迹：
+   - `x-retry-count = 3`
+   - `x-first-death-exchange = payment.trade.retry`
+   - `x-last-death-reason = expired`
+   - `x-first-death-queue / x-last-death-queue` 分别为：
+     - `clearing.payment-success.20260805fast.retry`
+     - `accounting.payment-success.20260805fast.retry`
+8. 两条任务均已人工结案：
+   - clearing：`DLQaba240b93ae346b7b7b9`
+   - accounting：`DLQ338493c729064115a467`
+   - 操作人：`支付运营A`
+   - 备注：`2026-08-05 fast suffix 自动重试3次后进入DLQ，报文为非法JSON，保留审计副本并人工结案`
+9. 收尾快照显示：
+   - `clearing.payment-success.20260805fast = 0`
+   - `accounting.payment-success.20260805fast = 0`
+   - 两个 retry 队列均为 `0`
+   - `clearing.payment-success.20260805fast.dlq = 1`
+   - `accounting.payment-success.20260805fast.dlq = 1`
+10. 演练结束后已停止临时 fast consumer，避免对常驻 `20260805a` 运行实例造成干扰。
+
+### 118.3 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 快速拓扑声明 | `RETRY_TTL_MS=2000 bash infra/rabbitmq/declare_isolated_topology.sh 20260805fast` | 通过 | 生成 fast suffix 的主队列、retry、DLQ 绑定 |
+| 队列基线快照 | `bash infra/rabbitmq/queue_snapshot.sh 20260805fast` | 通过 | 初始主队列、retry、DLQ 均为 `0` |
+| 启动 fast clearing consumer | `SERVER_PORT=18220 ... spring-boot:run` | 通过 | 监听 `clearing.payment-success.20260805fast` |
+| 启动 fast accounting consumer | `SERVER_PORT=18210 ... spring-boot:run` | 通过 | 监听 `accounting.payment-success.20260805fast` |
+| 坏报文注入 | RabbitMQ management publish API | 通过 | `MQ-FAST-RETRY-DLQ-20260805-001` 成功进入 fast suffix 主路由 |
+| DLQ 任务核验 | `GET /api/payment-dead-letter-tasks?pageNo=1&pageSize=20` | 通过 | 生成 clearing/accounting 两条 fast suffix 补偿任务 |
+| 人工结案 clearing | `POST /api/payment-dead-letter-tasks/DLQaba240b93ae346b7b7b9/resolve-manually` | 通过 | 非法 JSON 任务结案成功 |
+| 人工结案 accounting | `POST /api/payment-dead-letter-tasks/DLQ338493c729064115a467/resolve-manually` | 通过 | 非法 JSON 任务结案成功 |
+| 收尾快照 | `bash infra/rabbitmq/queue_snapshot.sh 20260805fast` | 通过 | 主队列和 retry 清零，DLQ 保留审计副本 |
+
+### 118.4 本轮结论
+
+1. 当前 HEAD 已真实证明 `消费失败 -> retry exchange -> retry TTL -> 主队列重试 -> 达到上限后进入 DLQ -> intake 入账补偿任务` 这一整条自动补偿前半链路。
+2. 这意味着 `payment-core` 的 MQ 门禁不再只依赖历史 `20260803fast` 旧证据，而是在 `20260805fast` 下再次完成当前代码基线验证。
+3. 当前剩余门禁继续收敛到两类：
+   - 围绕真实支付单的四端人工回归证据仍需补齐
+   - 正式发布说明、回滚文档、发布后验证清单仍需按当前 HEAD 重算
+
+## 119. 2026-08-05 四端共享层收敛与构建复核
+
+### 119.1 本轮目标
+
+1. 收敛 `h5-web` 与 `pc-web` 对 `app-web` 页面文件的直接跨工程引用。
+2. 在不改动支付主链路接口契约的前提下，沉淀终端共享层，降低三端后续页面演进耦合。
+3. 补齐 `.runtime` 忽略规则和关键控制器方法说明，继续贴近冻结交付包标准。
+
+### 119.2 本轮改动
+
+1. 新增 `systems/payment-core/frontend/shared/src/views`：
+   - `BusinessEntryView.vue`
+   - `CashierView.vue`
+   - `ResultView.vue`
+2. 新增 `systems/payment-core/frontend/shared/src/styles/terminal.css`，供多端统一复用终端样式入口。
+3. `h5-web` 与 `pc-web` 的 `main.js / CashierView.vue / ResultView.vue` 已切换为优先引用 `shared` 层，而不是直接引用 `app-web` 目录。
+4. `h5-web` 与 `pc-web` 的 `vite.config.js` 已补齐外部共享目录下 `vue / vue-router` 的 alias 解析，以及 `server.fs.allow`。
+5. 根目录 `.gitignore` 已补齐 `.runtime/` 忽略规则。
+6. 后端补充：
+   - `DashboardController#summary`
+   - `SettlementController#workerOverview`
+   - `SettlementController#workerList`
+   - `SettlementController#exportWorkerList`
+   的中文方法说明。
+
+### 119.3 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `h5-web` 构建 | `npm run build` | 通过 | 共享层切换后，产物正常生成 |
+| `pc-web` 构建 | `npm run build` | 通过 | 共享层切换后，产物正常生成 |
+| 后端编译 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home mvn -DskipTests compile` | 通过 | 显式切换到 JDK 后编译成功 |
+
+### 119.4 结论
+
+1. 本轮证明 `payment-core` 三端终端前台可以继续朝“独立工程 + 共享层”模式演进，而不是继续保留脆弱的跨工程直接引用。
+2. 当前四端运行态联调环境已恢复，且 `h5-web / pc-web / backend` 的最新构建验证已经通过。
+3. 这轮补强提升的是工程可维护性与后续自动化回归基础，但仍不能替代真实支付单页面级人工/自动化回归证据。
+
+## 120. 2026-08-05 四端页面级真实回归补证
+
+### 120.1 本轮目标
+
+1. 用真实支付单补齐 `app-web / h5-web / pc-web / admin-web` 四端页面级状态证据。
+2. 不只验证接口返回，还要验证页面标题、关键按钮可用性和状态文案。
+3. 明确当前 HEAD 距离 `test -> master` 还差什么，而不是只给“构建通过”结论。
+
+### 120.2 本轮样例
+
+#### 既有样例
+
+1. `SUCCESS`
+   - 支付单：`PAY1785901653979`
+   - 预付单：`PRE1785901653980`
+2. `RISK_REVIEW`
+   - 支付单：`PAY1785811244732`
+   - 预付单：`PRE1785811244734`
+
+#### 本轮新增样例
+
+1. `WAIT_CALLBACK` App
+   - 支付单：`PAY1785915556566`
+   - 预付单：`PRE1785915556567`
+   - 订单号：`REG-DEFAULT-APP-WAIT-CALLBACK-20260805-001`
+2. `WAIT_CALLBACK` PC
+   - 支付单：`PAY1785915556767`
+   - 预付单：`PRE1785915556768`
+   - 订单号：`REG-DEFAULT-PC-WAIT-CALLBACK-20260805-001`
+3. `PREPAY_CREATED`
+   - 支付单：`PAY1785915100360`
+   - 预付单：`PRE1785915100361`
+   - 订单号：`REG-WAIT-CALLBACK-20260805-001`
+
+### 120.3 页面级回归结果
+
+| 端 | 页面 | 样例 | 结果 | 页面事实 |
+| --- | --- | --- | --- | --- |
+| `app-web` | `payment-result/PAY1785901653979` | `SUCCESS` | 通过 | 页面标题 `支付成功`；`模拟成功回调` 与 `关闭支付单` 均禁用 |
+| `h5-web` | `payment-result/PAY1785811244732` | `RISK_REVIEW` | 通过 | 页面标题 `待风控复核`；`模拟成功回调` 禁用；`结束本次支付` 可用 |
+| `pc-web` | `payment-result/PAY1785915556767` | `WAIT_CALLBACK` | 通过 | 页面标题 `支付处理中`；`模拟成功回调` 与 `关闭当前支付单` 均可用 |
+| `admin-web` | `payments/PAY1785811244732` | `RISK_REVIEW` | 通过 | 详情页展示 `RISK_REVIEW`；`主动查单` 可用；`模拟回调` 禁用；`关闭支付单` 可用 |
+
+### 120.4 配置治理事实
+
+1. 直接使用正式来源应用创建 `WAIT_CALLBACK` 样例时，实际命中了 `PAYMENT-1019`：
+   - `housekeeping-app-web`
+   - `housekeeping-pc-web`
+2. 根因是当前控制策略为：
+   - `strictMode = 开启`
+   - `selfCheckStatus = WARN`
+   - `selfCheckMessage` 包含：
+     - `存在未被启用渠道覆盖的支付方式`
+     - `存在未配置到启用渠道的授权商户号`
+3. 因此本轮 `WAIT_CALLBACK` 样例使用 `sourceAppId=default-app` 创建，目的是验证页面和主链路状态映射，而不是回避真实问题。
+
+### 120.5 本轮结论
+
+1. 页面维度已经补到了当前 HEAD 的真实证据，不再只停留在“接口能调通、前端能构建”。
+2. 当前仍不能推进 `test -> master`，阻断点已经进一步收敛为：
+   - 正式来源应用的支付控制策略自检仍为 `WARN`
+   - 围绕正式来源应用的最新四端回归证据尚未全量补齐
+   - 正式发布材料仍需按当前 HEAD 重算
+
+## 121. 2026-08-06 支付提交运营配置快照强门禁复核
+
+### 121.1 本轮补强点
+
+1. `PaymentServiceImpl#applyOpsConfigDefaults` 已从“能补则补”的宽松兜底，升级为“缺关键默认值即阻断提交”的强门禁。
+2. 当提交请求未显式传入 `paymentMethod` 时，支付核心必须命中 `ops-config-system` 的有效快照。
+3. 若有效快照不存在，或快照中未配置 `defaultPayMethod`，支付核心会直接抛出：
+   - `PAYMENT-1025`
+   - `当前支付场景缺少有效运营配置，无法补齐支付方式或渠道`
+   - `当前支付场景未配置默认支付方式，无法提交支付`
+4. 当请求已经显式传入 `paymentMethod` 时，本轮不会因为缺少默认渠道而额外阻断，而是继续由现有路由决策链路判断渠道可用性。
+
+### 121.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| `PaymentServiceImplTest` 定向回归 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:/Users/abc123/apache-maven-3.9.16/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentServiceImplTest test` | 通过 | `29` 个测试全部通过，新增覆盖“有效快照缺失”和“默认支付方式缺失”两类阻断场景 |
+| 提交前格式检查 | `git diff --check` | 待执行 | 本节回填完成后统一执行 |
+
+### 121.3 本轮判断
+
+1. `payment-core` 现在不会再把“运营配置没配全”的问题悄悄带进支付主链路，而是会在提交入口前显式失败。
+2. 这条门禁对产品、运营配置和测试都更友好，因为缺的是“配置域事实”还是“支付域路由事实”，现在已经能通过错误码与报错文案直接区分。
+3. 本轮补强的是支付提交准入质量，不等价于正式发布门禁收口；`test -> master` 仍取决于页面级回归、发布材料重算和补偿证据完整性。
+
+## 122. 2026-08-07 异常告警明细导出闭环验证
+
+### 122.1 本轮补强点
+
+1. `PaymentIssueService / PaymentIssueController` 新增异常告警明细 CSV 导出能力，接口为 `GET /api/payment-issues/alerts/export`。
+2. `PaymentIssueServiceImpl` 复用现有告警明细筛选口径，导出告警基础字段、供应商信息、投递状态、确认人、确认时间、内容快照和原始回执快照。
+3. `admin-web` 的“异常告警明细台”页补齐顶部“导出 CSV”入口，支持按当前筛选条件直接导出排障快照。
+4. `PaymentIssueServiceImplTest / PaymentIssueControllerTest` 新增导出门禁，避免页面有按钮但后端无真实接口的再次回归。
+
+### 122.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付异常中心定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -q -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -Dtest=PaymentIssueServiceImplTest,PaymentIssueControllerTest test` | 通过 | 合计 `16` 个用例全部通过，新增覆盖异常告警明细导出服务与控制器映射 |
+| 管理端构建 | `cd systems/payment-core/frontend/admin-web && npm run build` | 通过 | `admin-web` 新增“导出 CSV”入口后仍可稳定构建 |
+
+### 122.3 当前判断
+
+1. 异常告警明细台现在从“可在线看”提升为“可筛选、可确认、可导出”，更接近公司内真实交接班和审计台账的使用方式。
+2. 这一步补的是运营排障闭环，不代表异常告警链路本身已经达到正式发布门槛；真实供应商联调、主链路页面矩阵和发布证据仍需继续补强。

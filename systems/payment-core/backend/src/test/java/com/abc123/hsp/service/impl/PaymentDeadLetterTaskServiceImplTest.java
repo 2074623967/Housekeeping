@@ -52,6 +52,26 @@ class PaymentDeadLetterTaskServiceImplTest {
     }
 
     @Test
+    void shouldCreateTraceableTaskForIsolatedDeadLetterRoute() {
+        PaymentDeadLetterTaskServiceImpl service = service();
+        MessageProperties properties = new MessageProperties();
+        properties.setMessageId("MSG-ISO-001");
+        properties.setCorrelationId("CORR-ISO-001");
+
+        service.intake(new Message("{invalid}".getBytes(java.nio.charset.StandardCharsets.UTF_8), properties),
+                "payment.success.clearing.dlq.20260803a.v1");
+
+        ArgumentCaptor<PaymentDeadLetterTaskEntity> captor = ArgumentCaptor.forClass(PaymentDeadLetterTaskEntity.class);
+        verify(paymentDeadLetterTaskMapper).insertIgnore(captor.capture());
+        PaymentDeadLetterTaskEntity task = captor.getValue();
+        assertEquals("MSG-ISO-001", task.getMessageId());
+        assertEquals("clearing-system", task.getTargetSystem());
+        assertEquals("payment.trade.replay", task.getReplayExchange());
+        assertEquals("payment.success.clearing.replay.20260803a.v1", task.getReplayRoutingKey());
+        assertEquals("PENDING_REVIEW", task.getTaskStatus());
+    }
+
+    @Test
     void shouldRejectUnsupportedDeadLetterRoute() {
         assertThrows(IllegalArgumentException.class,
                 () -> service().intake(new Message(new byte[0], new MessageProperties()), "unknown.dlq.v1"));

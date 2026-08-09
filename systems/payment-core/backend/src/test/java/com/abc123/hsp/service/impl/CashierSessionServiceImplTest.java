@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.mapper.CashierSessionMapper;
 import java.util.Collections;
@@ -73,5 +74,33 @@ class CashierSessionServiceImplTest {
         assertTrue(csv.contains("\"danger\""));
         assertTrue(csv.contains("\"张\"\"女士的收银台\""));
         verify(cashierSessionMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldNormalizeAndReturnCashierSessionOverview() {
+        CashierSessionQueryDTO query = new CashierSessionQueryDTO();
+        query.setSessionNo(" PRE-001 ");
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setOrderNo(" ORD-001 ");
+        query.setCustomerName(" 王先生 ");
+        query.setTerminal(" H5 ");
+        query.setSessionStatus(" 待支付 ");
+        CashierSessionOverviewDTO overview = new CashierSessionOverviewDTO();
+        overview.setTotalSessionCount(12L);
+        overview.setExpiringSoonCount(2);
+        when(cashierSessionMapper.findOverview(query)).thenReturn(overview);
+
+        CashierSessionOverviewDTO result = new CashierSessionServiceImpl(cashierSessionMapper).overview(query);
+
+        assertEquals("PRE-001", query.getSessionNo());
+        assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("ORD-001", query.getOrderNo());
+        assertEquals("王先生", query.getCustomerName());
+        assertEquals("H5", query.getTerminal());
+        assertEquals("待支付", query.getSessionStatus());
+        assertEquals(12L, result.getTotalSessionCount());
+        assertEquals(2, result.getExpiringSoonCount());
+        assertEquals("¥0.00", result.getTotalAmount());
+        verify(cashierSessionMapper).findOverview(query);
     }
 }

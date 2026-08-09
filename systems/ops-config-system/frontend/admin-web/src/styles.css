@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "PingFang SC", "Noto Sans SC", sans-serif; background: linear-gradient(180deg, #f5f8fb 0, #eef4f7 100%); color: #1d2a39; }
+.page { max-width: 1500px; margin: 0 auto; padding: 30px; }
+.hero, .card, .banner, .metric { background: #ffffff; border: 1px solid #dde7ef; box-shadow: 0 16px 34px rgba(31, 54, 79, 0.08); }
+.hero { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 28px; border-radius: 24px; background: linear-gradient(135deg, #fffdf8, #f4fbff); }
+.eyebrow { margin: 0 0 8px; color: #97744a; letter-spacing: .18em; text-transform: uppercase; font-size: 12px; }
+h1, h2, p { margin-top: 0; } h1 { margin-bottom: 8px; font-size: 34px; color: #163047; } .lead { margin-bottom: 0; color: #617486; line-height: 1.7; }
+.button, .link { border: 0; border-radius: 999px; padding: 12px 18px; cursor: pointer; }
+.button { background: linear-gradient(135deg, #0f8b7e, #1f6fb2); color: #fff; }
+.link { background: transparent; color: #0f8b7e; padding: 6px 0; font-weight: 700; }
+.link:disabled { opacity: .4; cursor: not-allowed; }
+.banner, .card { margin-top: 20px; border-radius: 20px; padding: 20px; }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 20px; }
+.metric { border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.metric strong { font-size: 30px; color: #18344b; }
+.tag { display: inline-flex; width: fit-content; padding: 6px 12px; border-radius: 999px; font-size: 12px; }
+.tag.success { background: #e5f7ef; color: #117a53; }
+.tag.warn { background: #fff1d8; color: #b1700b; }
+.tag.info { background: #e6f0fb; color: #245f9a; }
+.tag.danger { background: #ffe8e6; color: #bc4c46; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 11px 10px; border-bottom: 1px solid #e7eef4; text-align: left; font-size: 13px; vertical-align: top; }
+th { color: #6c7f8f; font-size: 12px; }
+ul { margin: 0; padding-left: 20px; color: #55697b; line-height: 1.8; }
+@media (max-width: 1200px) { .metrics, .grid { grid-template-columns: 1fr; } .hero { flex-direction: column; align-items: flex-start; } }

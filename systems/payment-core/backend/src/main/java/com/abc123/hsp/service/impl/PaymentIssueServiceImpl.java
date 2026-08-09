@@ -56,6 +56,41 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     }
 
     @Override
+    public String exportAlertLogsCsv(PaymentIssueAlertLogQueryDTO query) {
+        PaymentIssueAlertLogQueryDTO normalizedQuery = normalizeAlertLogQuery(query);
+        List<PaymentIssueAlertLogRowDTO> records = paymentIssueMapper.findAlertLogs(normalizedQuery);
+        StringBuilder builder = new StringBuilder();
+        builder.append('\uFEFF');
+        builder.append("告警编号,异常编号,支付单号,异常类型,严重等级,责任组,告警通道,接收人,告警状态,回执状态,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
+        for (PaymentIssueAlertLogRowDTO item : records) {
+            builder.append(csv(item.getAlertNo())).append(',')
+                    .append(csv(item.getIssueNo())).append(',')
+                    .append(csv(item.getPaymentOrderId())).append(',')
+                    .append(csv(item.getIssueType())).append(',')
+                    .append(csv(item.getSeverity())).append(',')
+                    .append(csv(item.getResponsibilityGroup())).append(',')
+                    .append(csv(item.getAlertChannel())).append(',')
+                    .append(csv(item.getReceiver())).append(',')
+                    .append(csv(item.getAlertStatus())).append(',')
+                    .append(csv(item.getAckStatus())).append(',')
+                    .append(csv(item.getProviderCode())).append(',')
+                    .append(csv(item.getProviderName())).append(',')
+                    .append(csv(item.getEndpointAlias())).append(',')
+                    .append(csv(item.getTemplateCode())).append(',')
+                    .append(csv(item.getProviderDeliveryStatus())).append(',')
+                    .append(csv(item.getProviderDeliveryMessage())).append(',')
+                    .append(csv(item.getProviderReceiptNo())).append(',')
+                    .append(csv(item.getAckOperator())).append(',')
+                    .append(csv(item.getAckAt())).append(',')
+                    .append(csv(item.getTriggeredBy())).append(',')
+                    .append(csv(item.getCreatedAt())).append(',')
+                    .append(csv(item.getAlertContent())).append(',')
+                    .append(csv(item.getProviderReceiptSnapshot())).append('\n');
+        }
+        return builder.toString();
+    }
+
+    @Override
     @Transactional
     public PaymentIssueAlertLogRowDTO acknowledgeAlert(String alertNo, PaymentIssueAlertAcknowledgeRequestDTO request) {
         String normalizedAlertNo = requireText(alertNo, "告警编号不能为空");
@@ -148,6 +183,17 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             throw new IllegalArgumentException(message);
         }
         return text.trim();
+    }
+
+    private String csv(String value) {
+        if (value == null) {
+            return "";
+        }
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
+            return "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 
     private void acknowledgeSourceAlertIfNeeded(PaymentIssueAlertLogRowDTO alertLog, String operator) {

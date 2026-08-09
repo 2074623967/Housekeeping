@@ -52,7 +52,12 @@ export const orderApi = {
     const params = new URLSearchParams({ batchNo, orderNo, paymentOrderId, clearingStatus, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/clearing/orders?${params.toString()}`);
   },
-  getDetail: (clearingNo) => request(`/api/clearing/orders/${clearingNo}`)
+  buildListExportUrl: ({ batchNo = "", orderNo = "", paymentOrderId = "", clearingStatus = "" } = {}) => {
+    const params = new URLSearchParams({ batchNo, orderNo, paymentOrderId, clearingStatus });
+    return `/api/clearing/orders/export?${params.toString()}`;
+  },
+  getDetail: (clearingNo) => request(`/api/clearing/orders/${clearingNo}`),
+  buildDetailExportUrl: (clearingNo) => `/api/clearing/orders/${clearingNo}/export`
 };
 
 export const ruleApi = {
@@ -85,5 +90,6 @@ export const eventApi = {
     const params = new URLSearchParams({ eventType, bizNo, pageNo: String(pageNo), pageSize: String(pageSize) });
     return request(`/api/clearing/events?${params.toString()}`);
   },
-  consumePaymentSuccess: (payload) => postJson("/api/clearing/events/payments/success", payload)
+  consumePaymentSuccess: (payload) => postJson("/api/clearing/events/payments/success", payload),
+  replayFailed: () => postJson("/api/clearing/events/replay-failed", {})
 };

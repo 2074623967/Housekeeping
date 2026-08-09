@@ -116,6 +116,23 @@ async function resetAuditFilters() {
   await applyAuditFilters();
 }
 
+async function exportAuditLogs() {
+  try {
+    const blob = await gatewayAccessApi.downloadAuditLogs(auditFilters.value);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "gateway-audit-logs.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    message.value = "审计快照已导出";
+  } catch (error) {
+    message.value = `审计快照导出失败：${error.message}`;
+  }
+}
+
 async function applyReleaseRouteFilters() {
   message.value = "";
   try {
@@ -441,6 +458,7 @@ onMounted(loadAll);
           </select>
           <button class="button secondary" @click="applyAuditFilters">查询</button>
           <button class="button secondary" @click="resetAuditFilters">重置</button>
+          <button class="button secondary" @click="exportAuditLogs">导出快照</button>
         </div>
         <table>
           <thead>

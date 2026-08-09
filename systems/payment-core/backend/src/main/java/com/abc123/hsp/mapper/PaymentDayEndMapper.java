@@ -23,6 +23,11 @@ public interface PaymentDayEndMapper {
     List<PaymentDayEndBatchListItemDTO> findRecentBatches();
 
     /**
+     * 查询全部日终批次导出列表。
+     */
+    List<PaymentDayEndBatchListItemDTO> findAllBatchesForExport();
+
+    /**
      * 查询指定业务日的支付总单量。
      */
     Integer countPaymentsByDate(@Param("bizDate") String bizDate);

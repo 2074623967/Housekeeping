@@ -1,11 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { batchApi, eventApi, orderApi, payoutApi } from "../api/client";
+import { dashboardApi } from "../api/client";
 
 const loading = ref(false);
 const message = ref("");
-const metrics = ref({
+const dashboard = ref({
   batchCount: 0,
   orderCount: 0,
   payoutCount: 0,
@@ -13,39 +13,41 @@ const metrics = ref({
   pendingAuditCount: 0,
   rejectedCount: 0,
   failedPayoutCount: 0,
-  pendingEventCount: 0
+  pendingEventCount: 0,
+  draftPayoutCount: 0,
+  processingPayoutCount: 0,
+  recentBatches: [],
+  recentOrders: [],
+  riskPayouts: [],
+  recentEvents: []
 });
-const recentOrders = ref([]);
-const riskPayouts = ref([]);
-const recentEvents = ref([]);
-const recentBatches = ref([]);
 
 const actionCards = computed(() => [
   {
     title: "待审核结算单",
-    value: metrics.value.pendingAuditCount,
+    value: dashboard.value.pendingAuditCount,
     description: "优先处理待审核单据，避免出款阻塞",
     route: "/audit",
     actionText: "进入审核工作台"
   },
   {
     title: "驳回待修正",
-    value: metrics.value.rejectedCount,
+    value: dashboard.value.rejectedCount,
     description: "关注被退回单据，推动业务回补材料",
     route: "/orders",
     actionText: "查看退回结算单"
   },
   {
     title: "失败出款批次",
-    value: metrics.value.failedPayoutCount,
+    value: dashboard.value.failedPayoutCount,
     description: "失败批次需尽快补发，避免账务和体验风险",
     route: "/payouts",
     actionText: "处理失败出款"
   },
   {
-    title: "事件消费追踪",
-    value: metrics.value.eventCount,
-    description: "检查清分事件是否成功生成结算单",
+    title: "待处理事件",
+    value: dashboard.value.pendingEventCount,
+    description: "检查清分事件是否成功生成结算单并完成消费",
     route: "/events",
     actionText: "查看事件链路"
   }
@@ -55,28 +57,7 @@ async function loadDashboard() {
   loading.value = true;
   message.value = "";
   try {
-    const [batchResult, orderResult, payoutResult, eventResult] = await Promise.all([
-      batchApi.getList({ pageNo: 1, pageSize: 50 }),
-      orderApi.getList({ pageNo: 1, pageSize: 50 }),
-      payoutApi.getList({ pageNo: 1, pageSize: 50 }),
-      eventApi.getList({ pageNo: 1, pageSize: 50 })
-    ]);
-
-    recentOrders.value = orderResult.items.slice(0, 6);
-    riskPayouts.value = payoutResult.items.filter((item) => item.failedCount > 0 || item.payoutStatus === "部分失败" || item.payoutStatus === "已失败").slice(0, 6);
-    recentEvents.value = eventResult.items.slice(0, 6);
-    recentBatches.value = batchResult.items.slice(0, 6);
-
-    metrics.value = {
-      batchCount: batchResult.total,
-      orderCount: orderResult.total,
-      payoutCount: payoutResult.total,
-      eventCount: eventResult.total,
-      pendingAuditCount: orderResult.items.filter((item) => item.auditStatus === "待审核").length,
-      rejectedCount: orderResult.items.filter((item) => item.auditStatus === "已退回").length,
-      failedPayoutCount: payoutResult.items.filter((item) => item.failedCount > 0 || item.payoutStatus === "部分失败" || item.payoutStatus === "已失败").length,
-      pendingEventCount: eventResult.items.filter((item) => item.eventStatus !== "已消费").length
-    };
+    dashboard.value = await dashboardApi.get();
   } catch (error) {
     message.value = error.message;
   } finally {
@@ -105,19 +86,38 @@ onMounted(loadDashboard);
       <section class="card-grid metric-grid">
         <article class="card">
           <p class="card-title">结算批次数</p>
-          <p class="card-value">{{ metrics.batchCount }}</p>
+          <p class="card-value">{{ dashboard.batchCount }}</p>
         </article>
         <article class="card">
           <p class="card-title">结算单数</p>
-          <p class="card-value">{{ metrics.orderCount }}</p>
+          <p class="card-value">{{ dashboard.orderCount }}</p>
         </article>
         <article class="card">
           <p class="card-title">出款批次数</p>
-          <p class="card-value">{{ metrics.payoutCount }}</p>
+          <p class="card-value">{{ dashboard.payoutCount }}</p>
         </article>
         <article class="card">
           <p class="card-title">结算事件数</p>
-          <p class="card-value">{{ metrics.eventCount }}</p>
+          <p class="card-value">{{ dashboard.eventCount }}</p>
+        </article>
+      </section>
+
+      <section class="card-grid metric-grid">
+        <article class="card">
+          <p class="card-title">待出款草稿</p>
+          <p class="card-value">{{ dashboard.draftPayoutCount }}</p>
+        </article>
+        <article class="card">
+          <p class="card-title">处理中出款</p>
+          <p class="card-value">{{ dashboard.processingPayoutCount }}</p>
+        </article>
+        <article class="card">
+          <p class="card-title">失败出款批次</p>
+          <p class="card-value risk-count">{{ dashboard.failedPayoutCount }}</p>
+        </article>
+        <article class="card">
+          <p class="card-title">待处理事件</p>
+          <p class="card-value">{{ dashboard.pendingEventCount }}</p>
         </article>
       </section>
 
@@ -160,14 +160,14 @@ onMounted(loadDashboard);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in recentBatches" :key="row.batchNo">
+                  <tr v-for="row in dashboard.recentBatches" :key="row.batchNo">
                     <td>{{ row.batchNo }}</td>
                     <td><span class="badge" :class="row.batchStatusType">{{ row.batchStatus }}</span></td>
                     <td class="amount">{{ row.totalAmount }}</td>
                     <td>{{ row.auditedCount }}</td>
                     <td>{{ row.payoutCount }}</td>
                   </tr>
-                  <tr v-if="recentBatches.length === 0">
+                  <tr v-if="dashboard.recentBatches.length === 0">
                     <td colspan="5" class="empty-cell">暂无批次数据。</td>
                   </tr>
                 </tbody>
@@ -189,14 +189,14 @@ onMounted(loadDashboard);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in riskPayouts" :key="row.payoutBatchNo">
+                  <tr v-for="row in dashboard.riskPayouts" :key="row.payoutBatchNo">
                     <td>{{ row.payoutBatchNo }}</td>
                     <td><span class="badge" :class="row.payoutStatusType">{{ row.payoutStatus }}</span></td>
                     <td class="risk-count">{{ row.failedCount }}</td>
                     <td>{{ row.successCount }}</td>
                     <td class="amount">{{ row.totalAmount }}</td>
                   </tr>
-                  <tr v-if="riskPayouts.length === 0">
+                  <tr v-if="dashboard.riskPayouts.length === 0">
                     <td colspan="5" class="empty-cell">当前没有失败出款批次。</td>
                   </tr>
                 </tbody>
@@ -228,14 +228,14 @@ onMounted(loadDashboard);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in recentOrders" :key="row.settlementNo">
+                  <tr v-for="row in dashboard.recentOrders" :key="row.settlementNo">
                     <td>{{ row.settlementNo }}</td>
                     <td>{{ row.targetName }}</td>
                     <td class="amount">{{ row.netSettleAmount }}</td>
                     <td><span class="badge" :class="row.auditStatusType">{{ row.auditStatus }}</span></td>
                     <td><span class="badge" :class="row.settlementStatusType">{{ row.settlementStatus }}</span></td>
                   </tr>
-                  <tr v-if="recentOrders.length === 0">
+                  <tr v-if="dashboard.recentOrders.length === 0">
                     <td colspan="5" class="empty-cell">暂无结算单数据。</td>
                   </tr>
                 </tbody>
@@ -256,14 +256,14 @@ onMounted(loadDashboard);
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="row in recentEvents" :key="row.eventNo">
+                  <tr v-for="row in dashboard.recentEvents" :key="row.eventNo">
                     <td>{{ row.eventNo }}</td>
                     <td>{{ row.bizNo }}</td>
                     <td><span class="badge" :class="row.statusType">{{ row.eventStatus }}</span></td>
                     <td>{{ row.summary }}</td>
                   </tr>
-                  <tr v-if="recentEvents.length === 0">
-                    <td colspan="4" class="empty-cell">暂无结算事件数据。</td>
+                  <tr v-if="dashboard.recentEvents.length === 0">
+                    <td colspan="4" class="empty-cell">暂无事件数据。</td>
                   </tr>
                 </tbody>
               </table>
@@ -274,94 +274,3 @@ onMounted(loadDashboard);
     </template>
   </div>
 </template>
-
-<style scoped>
-.metric-grid {
-  margin-bottom: 18px;
-}
-
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.section-head h3 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.section-head p {
-  margin: 4px 0 0;
-  color: #64748b;
-}
-
-.action-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.action-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 16px;
-  border: 1px solid #dbeafe;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
-}
-
-.action-title {
-  margin: 0;
-  font-size: 14px;
-  color: #475569;
-}
-
-.action-value {
-  margin: 0;
-  font-size: 32px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.action-desc {
-  margin: 0;
-  min-height: 40px;
-  color: #64748b;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.action-link {
-  color: #059669;
-  font-weight: 600;
-}
-
-.dual-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.summary-panel h4 {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-
-.amount {
-  color: #b45309;
-  font-weight: 700;
-}
-
-.risk-count {
-  color: #b91c1c;
-  font-weight: 700;
-}
-
-.empty-cell {
-  text-align: center;
-  color: #64748b;
-}
-</style>

@@ -16,6 +16,15 @@ const metrics = computed(() => ({
   amountTotal: rows.value.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2)
 }));
 
+function exportRows() {
+  const exportUrl = ledgerApi.buildExportUrl({
+    accountNo: filters.value.accountNo,
+    bizNo: filters.value.bizNo,
+    bizType: filters.value.bizType
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 async function loadRows() {
   loading.value = true;
   message.value = "";
@@ -49,7 +58,10 @@ onMounted(() => {
 
 <template>
   <div>
-    <div class="topbar"><div><h2>账户流水</h2><p>所有入账、出账、冻结、解冻、调账动作留痕</p></div></div>
+    <div class="topbar">
+      <div><h2>账户流水</h2><p>所有入账、出账、冻结、解冻、调账动作留痕</p></div>
+      <button class="button secondary" @click="exportRows">导出流水</button>
+    </div>
     <section class="card-grid metric-grid">
       <article class="card">
         <p class="card-title">流水总数</p>

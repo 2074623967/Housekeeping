@@ -47,6 +47,18 @@ async function loadDetail(row) {
   }
 }
 
+function exportListRows() {
+  const exportUrl = orderApi.buildListExportUrl(filters.value);
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
+function exportDetailRows() {
+  if (!selectedOrder.value) {
+    return;
+  }
+  window.open(orderApi.buildDetailExportUrl(selectedOrder.value.clearingNo), "_blank", "noopener,noreferrer");
+}
+
 function resetFilters() {
   filters.value = { batchNo: "", orderNo: "", paymentOrderId: "", clearingStatus: "" };
   loadRows();
@@ -72,6 +84,7 @@ onMounted(loadRows);
         <div class="toolbar-actions">
           <button class="button primary" @click="loadRows">查询</button>
           <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button success" @click="exportListRows">导出清单</button>
         </div>
       </div>
       <div class="summary-box">
@@ -138,6 +151,10 @@ onMounted(loadRows);
         <div class="summary-card">
           <strong>金额摘要</strong>
           <span>订单 {{ selectedOrder.orderAmount }}，平台 {{ selectedOrder.platformAmount }}，服务者 {{ selectedOrder.workerAmount }}</span>
+        </div>
+        <div class="summary-card action-card">
+          <strong>详情留档</strong>
+          <button class="button success" @click="exportDetailRows">导出详情快照</button>
         </div>
       </div>
       <div v-if="!selectedOrder" class="state-box">从上方清分结果列表选择一笔清分单后，可查看费用规则快照和分账明细。</div>
@@ -249,6 +266,11 @@ onMounted(loadRows);
   border: 1px solid #e2e8f0;
 }
 
+.summary-card.action-card {
+  align-items: flex-start;
+  justify-content: center;
+}
+
 .detail-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -262,6 +284,11 @@ onMounted(loadRows);
 
 .button-inline {
   padding: 8px 12px;
+}
+
+.button.success {
+  background: #0f766e;
+  color: #fff;
 }
 
 .amount {

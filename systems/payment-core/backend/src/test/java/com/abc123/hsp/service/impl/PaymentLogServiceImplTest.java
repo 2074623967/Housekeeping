@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
 import java.util.Collections;
@@ -65,5 +66,27 @@ class PaymentLogServiceImplTest {
         assertTrue(csv.contains("LOG-001"));
         assertTrue(csv.contains("\"{\"\"trace\"\":\"\"ok\"\"}\""));
         verify(paymentLogMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldNormalizeAndReturnOverview() {
+        PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setSource(" wx_h5 ");
+        query.setKeyword(" 回调 ");
+        PaymentLogOverviewDTO overview = new PaymentLogOverviewDTO();
+        overview.setTotalLogCount(20L);
+        overview.setCallbackErrorCount(3);
+        when(paymentLogMapper.findOverviewSummary(query)).thenReturn(overview);
+
+        PaymentLogOverviewDTO result = new PaymentLogServiceImpl(paymentLogMapper).overview(query);
+
+        assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("wx_h5", query.getSource());
+        assertEquals("回调", query.getKeyword());
+        assertEquals(20L, result.getTotalLogCount());
+        assertEquals(3, result.getCallbackErrorCount());
+        assertEquals(0, result.getEventWarnCount());
+        verify(paymentLogMapper).findOverviewSummary(query);
     }
 }

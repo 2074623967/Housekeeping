@@ -1,0 +1,511 @@
+<script setup>
+import { onMounted, reactive, ref } from "vue";
+import {
+  changeWalletAccountStatus,
+  fetchWalletAccountDetail,
+  fetchWalletAccounts,
+  fetchWalletBalances,
+  openWalletAccount
+} from "../api";
+
+const query = reactive({
+  keyword: "",
+  ownerType: "",
+  accountType: "",
+  accountStatus: "",
+  extRefNo: "",
+  pageNo: 1,
+  pageSize: 20
+});
+
+const accounts = ref([]);
+const recentFlows = ref([]);
+const statusLogs = ref([]);
+const balance = ref(null);
+const detailAccount = ref(null);
+const loading = ref(false);
+const errorMessage = ref("");
+const actionMessage = ref("");
+const showOpenDialog = ref(false);
+const showStatusDialog = ref(false);
+const opening = ref(false);
+const changingStatus = ref(false);
+const batchBalanceLoading = ref(false);
+const pendingStatusAccount = ref(null);
+const pendingStatusTarget = ref("");
+const batchBalanceQuery = ref("");
+const batchBalances = ref([]);
+const statusForm = reactive({
+  operatorId: "funds-admin",
+  operatorName: "资金管理员",
+  operatorRole: "FUNDS",
+  operationReason: "",
+  confirmWalletAccountNo: ""
+});
+const openForm = reactive({
+  requestNo: "",
+  walletOwnerId: "",
+  ownerType: "USER",
+  ownerName: "",
+  extRefNo: "",
+  bizLineCode: "HOME_SERVICE",
+  tenantCode: "DEFAULT",
+  accountType: "MAIN",
+  accountScene: "USER_STORE",
+  currencyCode: "CNY",
+  operatorId: "funds-admin",
+  operatorRole: "FUNDS",
+  operatorName: "资金管理员"
+});
+
+function parseWalletAccountNos() {
+  return batchBalanceQuery.value
+    .split(/[\n,，\s]+/)
+    .map((value) => value.trim())
+    .filter((value, index, array) => value && array.indexOf(value) === index);
+}
+
+function fillBatchBalancesFromAccounts() {
+  batchBalanceQuery.value = accounts.value.map((account) => account.walletAccountNo).join("\n");
+}
+
+async function loadBatchBalances() {
+  const walletAccountNos = parseWalletAccountNos();
+  if (!walletAccountNos.length) {
+    batchBalances.value = [];
+    actionMessage.value = "请输入至少一个钱包账户号";
+    return;
+  }
+  batchBalanceLoading.value = true;
+  actionMessage.value = "";
+  try {
+    batchBalances.value = await fetchWalletBalances(walletAccountNos);
+    actionMessage.value = `批量余额查询成功，共返回 ${batchBalances.value.length} 个账户`;
+  } catch (error) {
+    actionMessage.value = error.message;
+  } finally {
+    batchBalanceLoading.value = false;
+  }
+}
+
+async function loadAccounts() {
+  loading.value = true;
+  errorMessage.value = "";
+  try {
+    const data = await fetchWalletAccounts(query);
+    accounts.value = data.records || [];
+    if (accounts.value.length > 0) {
+      await loadDetail(accounts.value[0].walletAccountNo);
+    } else {
+      detailAccount.value = null;
+      balance.value = null;
+      recentFlows.value = [];
+      statusLogs.value = [];
+    }
+  } catch (error) {
+    errorMessage.value = error.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function loadDetail(walletAccountNo) {
+  try {
+    const data = await fetchWalletAccountDetail(walletAccountNo);
+    detailAccount.value = data.account;
+    balance.value = data.balance;
+    recentFlows.value = data.recentFlows || [];
+    statusLogs.value = data.statusLogs || [];
+  } catch (error) {
+    errorMessage.value = error.message;
+  }
+}
+
+function startOpenAccount() {
+  Object.assign(openForm, {
+    requestNo: `REQ-${Date.now()}`,
+    walletOwnerId: "",
+    ownerType: "USER",
+    ownerName: "",
+    extRefNo: "",
+    accountType: "MAIN",
+    accountScene: "USER_STORE",
+    operatorId: "funds-admin",
+    operatorRole: "FUNDS",
+    operatorName: "资金管理员"
+  });
+  actionMessage.value = "";
+  showOpenDialog.value = true;
+}
+
+async function submitOpenAccount() {
+  opening.value = true;
+  actionMessage.value = "";
+  try {
+    await openWalletAccount(openForm);
+    showOpenDialog.value = false;
+    actionMessage.value = "开户成功，列表已刷新";
+    await loadAccounts();
+  } catch (error) {
+    actionMessage.value = error.message;
+  } finally {
+    opening.value = false;
+  }
+}
+
+function statusAction(account) {
+  if (account.accountStatus === "ACTIVE") {
+    return "FROZEN";
+  }
+  if (account.accountStatus === "FROZEN") {
+    return "ACTIVE";
+  }
+  return null;
+}
+
+function openStatusDialog(account, targetStatus) {
+  pendingStatusAccount.value = account;
+  pendingStatusTarget.value = targetStatus;
+  Object.assign(statusForm, {
+    operatorId: "funds-admin",
+    operatorName: "资金管理员",
+    operatorRole: "FUNDS",
+    operationReason: targetStatus === "CLOSED" ? "" : `${getStatusActionText(targetStatus)}账户`,
+    confirmWalletAccountNo: ""
+  });
+  actionMessage.value = "";
+  showStatusDialog.value = true;
+}
+
+function closeStatusDialog() {
+  showStatusDialog.value = false;
+  pendingStatusAccount.value = null;
+  pendingStatusTarget.value = "";
+}
+
+function getStatusActionText(targetStatus) {
+  if (targetStatus === "FROZEN") {
+    return "冻结";
+  }
+  if (targetStatus === "ACTIVE") {
+    return "解冻";
+  }
+  if (targetStatus === "CLOSED") {
+    return "关闭";
+  }
+  return "变更";
+}
+
+function buildStatusHint(account, targetStatus) {
+  if (!account) {
+    return "";
+  }
+  if (targetStatus === "CLOSED") {
+    return "销户前需确认余额、冻结与在途金额全部清零，并填写可审计的关闭原因。";
+  }
+  return `将把账户 ${account.walletAccountNo} 从 ${account.accountStatus} 变更为 ${targetStatus}。`;
+}
+
+function canSubmitStatusChange() {
+  if (!pendingStatusAccount.value || !pendingStatusTarget.value) {
+    return false;
+  }
+  if (!statusForm.operationReason.trim()) {
+    return false;
+  }
+  if (pendingStatusTarget.value === "CLOSED") {
+    return statusForm.confirmWalletAccountNo.trim() === pendingStatusAccount.value.walletAccountNo;
+  }
+  return true;
+}
+
+async function submitStatusChange() {
+  if (!pendingStatusAccount.value || !pendingStatusTarget.value) {
+    return;
+  }
+  const account = pendingStatusAccount.value;
+  const targetStatus = pendingStatusTarget.value;
+  const actionText = getStatusActionText(targetStatus);
+  changingStatus.value = true;
+  actionMessage.value = "";
+  try {
+    await changeWalletAccountStatus(account.walletAccountNo, {
+      targetStatus,
+      operatorId: statusForm.operatorId,
+      operatorRole: statusForm.operatorRole,
+      operatorName: statusForm.operatorName,
+      operationReason: statusForm.operationReason.trim()
+    });
+    actionMessage.value = `${actionText}成功`;
+    closeStatusDialog();
+    await loadAccounts();
+    await loadDetail(account.walletAccountNo);
+  } catch (error) {
+    actionMessage.value = error.message;
+  } finally {
+    changingStatus.value = false;
+  }
+}
+
+onMounted(() => {
+  loadAccounts();
+});
+</script>
+
+<template>
+  <section class="page">
+    <div class="layout">
+      <div class="panel">
+        <h2>钱包账户列表</h2>
+        <p class="muted">账户查询、开户和状态流转均通过 wallet-account 真实接口完成。</p>
+        <div class="toolbar">
+          <input v-model="query.keyword" placeholder="账户号 / 主体名称" />
+          <select v-model="query.ownerType">
+            <option value="">全部主体</option>
+            <option value="USER">USER</option>
+            <option value="WORKER">WORKER</option>
+          </select>
+          <select v-model="query.accountType">
+            <option value="">全部账户类型</option>
+            <option value="MAIN">MAIN</option>
+            <option value="SUB">SUB</option>
+          </select>
+          <select v-model="query.accountStatus">
+            <option value="">全部状态</option>
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="FROZEN">FROZEN</option>
+            <option value="CLOSED">CLOSED</option>
+          </select>
+          <input v-model="query.extRefNo" placeholder="外部主体编号" />
+          <button class="button" @click="loadAccounts">查询</button>
+          <button class="button button--light" type="button" @click="startOpenAccount">新增开户</button>
+        </div>
+        <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
+        <p v-if="loading" class="muted">账户加载中...</p>
+        <p v-else-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>账户号</th>
+                <th>主体</th>
+                <th>场景</th>
+                <th>状态</th>
+                <th>可用余额</th>
+                <th>冻结余额</th>
+                <th>在途入账</th>
+                <th>在途出账</th>
+                <th>总余额</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="account in accounts"
+                :key="account.walletAccountNo"
+                class="clickable-row"
+                @click="loadDetail(account.walletAccountNo)"
+              >
+                <td>{{ account.walletAccountNo }}</td>
+                <td>{{ account.ownerName }} / {{ account.ownerType }}</td>
+                <td>{{ account.accountScene }}</td>
+                <td>
+                  <span class="badge" :class="account.accountStatus === 'ACTIVE' ? 'badge--ok' : 'badge--warn'">
+                    {{ account.accountStatus }}
+                  </span>
+                </td>
+                <td>{{ account.availableBalance }}</td>
+                <td>{{ account.frozenBalance }}</td>
+                <td>{{ account.pendingInBalance }}</td>
+                <td>{{ account.pendingOutBalance }}</td>
+                <td>{{ account.totalBalance }}</td>
+                <td class="action-cell" @click.stop>
+                  <button
+                    v-if="statusAction(account)"
+                    class="text-button"
+                    :disabled="changingStatus"
+                    @click="openStatusDialog(account, statusAction(account))"
+                  >
+                    {{ statusAction(account) === "FROZEN" ? "冻结" : "解冻" }}
+                  </button>
+                  <button
+                    v-if="account.accountStatus === 'ACTIVE' || account.accountStatus === 'FROZEN'"
+                    class="text-button text-button--danger"
+                    :disabled="changingStatus"
+                    @click="openStatusDialog(account, 'CLOSED')"
+                  >
+                    关闭
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="panel">
+          <h3>账户详情骨架</h3>
+          <div class="detail-card">
+            <div class="detail-label">主体与账户</div>
+            <div class="detail-value">
+              {{ detailAccount ? `${detailAccount.ownerName} / ${detailAccount.walletAccountNo}` : "暂无详情" }}
+            </div>
+          </div>
+          <div class="kpi-grid">
+            <div class="detail-card">
+              <div class="detail-label">可用余额</div>
+              <div class="detail-value">{{ balance?.availableBalance ?? "--" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">冻结余额</div>
+              <div class="detail-value">{{ balance?.frozenBalance ?? "--" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">在途入账</div>
+              <div class="detail-value">{{ balance?.pendingInBalance ?? "--" }}</div>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">在途出账</div>
+              <div class="detail-value">{{ balance?.pendingOutBalance ?? "--" }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>最近流水</h3>
+          <div class="detail-grid">
+            <div v-for="flow in recentFlows" :key="flow.flowNo" class="detail-card">
+              <div class="detail-label">{{ flow.flowType }} / {{ flow.flowNo }}</div>
+              <div class="detail-value">{{ flow.changeAmount }}</div>
+              <div class="muted">{{ flow.sourceSystem }} · {{ flow.sourceBizNo }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>状态日志</h3>
+          <div v-if="statusLogs.length === 0" class="muted">当前账户暂无状态变更日志</div>
+          <div v-else class="detail-grid">
+            <div v-for="log in statusLogs" :key="`${log.walletAccountNo}-${log.createdAt}`" class="detail-card">
+              <div class="detail-label">{{ log.beforeStatus || "EMPTY" }} → {{ log.afterStatus }}</div>
+              <div class="detail-value">{{ log.reasonDesc || log.reasonCode || "状态变更" }}</div>
+              <div class="muted">{{ log.operatorName || log.operatorId || "system" }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>批量余额核对</h3>
+          <p class="muted">支持一次性校验多个钱包账户余额，适合财务批量核对、迁移校验和跨系统联调前置检查。</p>
+          <div class="toolbar">
+            <button class="button button--light" type="button" @click="fillBatchBalancesFromAccounts">带入当前列表账户</button>
+            <button class="button" type="button" :disabled="batchBalanceLoading" @click="loadBatchBalances">
+              {{ batchBalanceLoading ? "查询中..." : "查询批量余额" }}
+            </button>
+          </div>
+          <textarea
+            v-model="batchBalanceQuery"
+            class="batch-textarea"
+            rows="6"
+            placeholder="每行一个钱包账户号，或使用逗号、空格分隔"
+          />
+          <p class="muted">已识别 {{ parseWalletAccountNos().length }} 个待查询账户</p>
+          <div v-if="batchBalances.length" class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>账户号</th>
+                  <th>总余额</th>
+                  <th>可用余额</th>
+                  <th>冻结余额</th>
+                  <th>在途入账</th>
+                  <th>在途出账</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in batchBalances" :key="item.walletAccountNo">
+                  <td>{{ item.walletAccountNo }}</td>
+                  <td>{{ item.totalBalance }}</td>
+                  <td>{{ item.availableBalance }}</td>
+                  <td>{{ item.frozenBalance }}</td>
+                  <td>{{ item.pendingInBalance }}</td>
+                  <td>{{ item.pendingOutBalance }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="muted">暂无批量余额结果</div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showOpenDialog" class="modal-backdrop" @click.self="showOpenDialog = false">
+      <form class="modal" @submit.prevent="submitOpenAccount">
+        <div class="modal__header">
+          <div>
+            <p class="eyebrow">wallet-account</p>
+            <h3>新增钱包开户</h3>
+          </div>
+          <button class="icon-button" type="button" @click="showOpenDialog = false">×</button>
+        </div>
+        <div class="form-grid">
+          <label>主体编号<input v-model="openForm.walletOwnerId" required /></label>
+          <label>外部主体编号<input v-model="openForm.extRefNo" required /></label>
+          <label>主体名称<input v-model="openForm.ownerName" required /></label>
+          <label>主体类型<select v-model="openForm.ownerType"><option>USER</option><option>WORKER</option><option>MERCHANT</option><option>PLATFORM</option></select></label>
+          <label>账户类型<select v-model="openForm.accountType"><option>MAIN</option><option>MARKETING</option><option>DEPOSIT</option><option>DEBT_OFFSET</option></select></label>
+          <label>账户场景<input v-model="openForm.accountScene" required /></label>
+          <label>业务线<input v-model="openForm.bizLineCode" required /></label>
+          <label>租户<input v-model="openForm.tenantCode" required /></label>
+        </div>
+        <div class="modal__actions">
+          <button class="button button--light" type="button" @click="showOpenDialog = false">取消</button>
+          <button class="button" type="submit" :disabled="opening">{{ opening ? "提交中..." : "确认开户" }}</button>
+        </div>
+      </form>
+    </div>
+
+    <div v-if="showStatusDialog" class="modal-backdrop" @click.self="closeStatusDialog">
+      <form class="modal modal--compact" @submit.prevent="submitStatusChange">
+        <div class="modal__header">
+          <div>
+            <p class="eyebrow">wallet-account</p>
+            <h3>{{ getStatusActionText(pendingStatusTarget) }}钱包账户</h3>
+          </div>
+          <button class="icon-button" type="button" @click="closeStatusDialog">×</button>
+        </div>
+        <div class="alert-block">
+          <strong>{{ pendingStatusAccount?.walletAccountNo || "--" }}</strong>
+          <p>{{ buildStatusHint(pendingStatusAccount, pendingStatusTarget) }}</p>
+        </div>
+        <div class="form-grid form-grid--single">
+          <label>
+            操作原因
+            <textarea
+              v-model="statusForm.operationReason"
+              rows="4"
+              maxlength="120"
+              :placeholder="pendingStatusTarget === 'CLOSED' ? '请输入关闭原因，例如：主体注销且余额清零，完成人工复核' : '请输入本次操作原因'"
+              required
+            />
+          </label>
+          <label v-if="pendingStatusTarget === 'CLOSED'">
+            二次确认账户号
+            <input
+              v-model="statusForm.confirmWalletAccountNo"
+              :placeholder="`请输入 ${pendingStatusAccount?.walletAccountNo || ''}`"
+              required
+            />
+          </label>
+        </div>
+        <div class="modal__actions">
+          <button class="button button--light" type="button" @click="closeStatusDialog">取消</button>
+          <button class="button" type="submit" :disabled="changingStatus || !canSubmitStatusChange()">
+            {{ changingStatus ? "提交中..." : `确认${getStatusActionText(pendingStatusTarget)}` }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+</template>

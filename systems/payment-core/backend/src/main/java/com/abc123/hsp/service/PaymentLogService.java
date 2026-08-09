@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 
@@ -15,6 +16,11 @@ public interface PaymentLogService {
      * @return 支付处理日志列表
      */
     PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query);
+
+    /**
+     * 查询支付处理日志总览。
+     */
+    PaymentLogOverviewDTO overview(PaymentLogQueryDTO query);
 
     /**
      * 导出支付处理日志。

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.service.PaymentEventService;
 import java.nio.charset.StandardCharsets;
@@ -60,5 +61,17 @@ class PaymentEventControllerTest {
         controller.list(null, "全部", "全部", "全部", null, "createdAt", "desc", 1, 20);
 
         verify(paymentEventService).list(any(PaymentEventQueryDTO.class));
+    }
+
+    @Test
+    void shouldReturnPaymentEventOverview() {
+        PaymentEventController controller = new PaymentEventController(paymentEventService);
+        PaymentEventOverviewDTO overviewDTO = new PaymentEventOverviewDTO();
+        overviewDTO.setTotalEventCount(12L);
+        when(paymentEventService.overview(any(PaymentEventQueryDTO.class))).thenReturn(overviewDTO);
+
+        controller.overview("PAY-001", "PAYMENT_SUCCESS", "FAILED_OR_DEAD_LETTER", "accounting-system", "payment.trade", "createdAt", "desc");
+
+        verify(paymentEventService).overview(any(PaymentEventQueryDTO.class));
     }
 }

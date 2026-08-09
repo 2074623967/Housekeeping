@@ -7,6 +7,17 @@ const selectedItem = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const total = ref(0);
+const overview = ref({
+  totalSettlementCount: 0,
+  pendingAuditCount: 0,
+  payoutPendingCount: 0,
+  payingCount: 0,
+  payoutSuccessCount: 0,
+  totalNetSettleAmount: "¥0.00",
+  totalDeductAmount: "¥0.00",
+  totalDepositImpactAmount: "¥0.00",
+  negativeNetSettleCount: 0
+});
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
@@ -17,10 +28,15 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  pendingAuditTotal: items.value.filter((item) => item.status === "待审核").length,
-  payoutPendingTotal: items.value.filter((item) => item.payoutStatus === "待出款").length,
-  netSettleTotal: items.value.reduce((sum, item) => sum + Number(item.amountNetSettle || 0), 0).toFixed(2)
+  total: overview.value.totalSettlementCount,
+  pendingAuditTotal: overview.value.pendingAuditCount,
+  payoutPendingTotal: overview.value.payoutPendingCount,
+  payingTotal: overview.value.payingCount,
+  payoutSuccessTotal: overview.value.payoutSuccessCount,
+  netSettleTotal: overview.value.totalNetSettleAmount,
+  deductTotal: overview.value.totalDeductAmount,
+  depositImpactTotal: overview.value.totalDepositImpactAmount,
+  negativeNetSettleCount: overview.value.negativeNetSettleCount
 }));
 
 function resetFilters() {
@@ -47,14 +63,22 @@ async function loadWorkerSettlements() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await settlementApi.getWorkerList({
+    const query = {
       settlementOrderId: filters.value.settlementOrderId,
       workerKeyword: filters.value.workerKeyword,
       settlementStatus: filters.value.settlementStatus,
       payoutStatus: filters.value.payoutStatus,
       pageNo: pageNo.value,
       pageSize
-    });
+    };
+    const [overviewResult, result] = await Promise.all([
+      settlementApi.getWorkerOverview(query),
+      settlementApi.getWorkerList(query)
+    ]);
+    overview.value = {
+      ...overview.value,
+      ...overviewResult
+    };
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
@@ -110,9 +134,41 @@ onMounted(loadWorkerSettlements);
         <p class="card-value">{{ metrics.payoutPendingTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">出款中</p>
+        <p class="card-value">{{ metrics.payingTotal }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">出款成功</p>
+        <p class="card-value">{{ metrics.payoutSuccessTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">实结金额合计</p>
         <p class="card-value">{{ metrics.netSettleTotal }}</p>
       </article>
+    </section>
+
+    <section class="panel overview-panel">
+      <div class="section-title">
+        <h3>结算风险总览</h3>
+        <span class="meta">用于支付侧快速判断服务者出款压力与欠款风险</span>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card warn">
+          <p class="overview-title">扣减金额合计</p>
+          <strong>{{ metrics.deductTotal }}</strong>
+          <span>聚焦投诉赔付、罚款、欠款冲抵等扣减因素对结算净额的影响。</span>
+        </article>
+        <article class="overview-card info">
+          <p class="overview-title">保证金影响合计</p>
+          <strong>{{ metrics.depositImpactTotal }}</strong>
+          <span>用于识别保证金抵扣、冻结释放对服务者本期结算的联动影响。</span>
+        </article>
+        <article class="overview-card danger">
+          <p class="overview-title">净额为负结算单</p>
+          <strong>{{ metrics.negativeNetSettleCount }}</strong>
+          <span>重点关注欠款承接、后续调账和保证金补扣是否需要跨系统继续收口。</span>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -216,6 +272,7 @@ onMounted(loadWorkerSettlements);
               <div class="ops-row"><span>当前定位</span><span>payment-core 只保留轻量查询入口</span></div>
               <div class="ops-row"><span>后续归属</span><span>完整审批、出款、核销作业迁入 settlement-system</span></div>
               <div class="ops-row"><span>当前用途</span><span>支付侧快速核对服务者结算状态和金额影响</span></div>
+              <div class="ops-row"><span>风险提示</span><span>{{ metrics.negativeNetSettleCount }} 笔净额为负，需关注欠款和保证金联动</span></div>
             </div>
           </div>
           <div v-else class="state-box">选择左侧结算单后，可在这里查看结算快照与定位说明。</div>
@@ -232,6 +289,57 @@ onMounted(loadWorkerSettlements);
 </template>
 
 <style scoped>
+.overview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe3f0;
+  background: #f8fafc;
+}
+
+.overview-card strong {
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.overview-card span {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overview-title {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.overview-card.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.overview-card.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.overview-card.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) 360px;
@@ -294,5 +402,11 @@ onMounted(loadWorkerSettlements);
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 
@@ -15,6 +16,13 @@ public interface BillService {
      * @return 账单列表
      */
     PageResultDTO<BillListItemDTO> list(BillQueryDTO query);
+
+    /**
+     * 查询账单中心总览。
+     *
+     * @return 账单总览
+     */
+    BillOverviewDTO overview(BillQueryDTO query);
 
     /**
      * 导出账单中心列表。

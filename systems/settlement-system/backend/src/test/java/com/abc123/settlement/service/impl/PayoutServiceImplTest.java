@@ -1,7 +1,11 @@
 package com.abc123.settlement.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.settlement.common.BusinessException;
+import com.abc123.settlement.common.ErrorCode;
 import com.abc123.settlement.dto.AuditSettlementRequestDTO;
 import com.abc123.settlement.dto.CreatePayoutBatchRequestDTO;
 import com.abc123.settlement.dto.ExecutePayoutBatchRequestDTO;
@@ -9,6 +13,7 @@ import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
 import com.abc123.settlement.dto.PayoutRecordDTO;
 import com.abc123.settlement.dto.RetryPayoutBatchRequestDTO;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,9 +42,26 @@ class PayoutServiceImplTest {
         PayoutBatchDTO result = payoutService.create(request);
         PageResultDTO<PayoutRecordDTO> records = payoutService.records(result.getPayoutBatchNo(), "", 1, 20);
 
-        assertEquals("已完成", result.getPayoutStatus());
-        assertEquals(2, records.getTotal());
-        assertEquals("已出款", settlementOrderService.detail("SLT20001").getSettlementStatus());
+        assertEquals("待出款", result.getPayoutStatus());
+        assertEquals(0, records.getTotal());
+        assertEquals("待审核", settlementOrderService.detail("SLT20001").getSettlementStatus());
+    }
+
+    @Test
+    void shouldReuseDraftBatchAndAvoidDuplicatePendingRecords() {
+        AuditSettlementRequestDTO auditRequest = new AuditSettlementRequestDTO();
+        auditRequest.setOperatorName("财务主管");
+        auditRequest.setAuditRemark("通过");
+        settlementOrderService.audit("SLT20001", auditRequest);
+
+        PayoutBatchDTO first = payoutService.create(createRequest("SET10001"));
+        PayoutBatchDTO second = payoutService.create(createRequest("SET10001"));
+        PageResultDTO<PayoutRecordDTO> records = payoutService.records(first.getPayoutBatchNo(), "", 1, 20);
+
+        assertEquals(first.getPayoutBatchNo(), second.getPayoutBatchNo());
+        assertEquals("待出款", second.getPayoutStatus());
+        assertEquals(1, records.getTotal());
+        assertEquals("待出款", records.getItems().get(0).getPayoutStatus());
     }
 
     @Test
@@ -94,5 +116,47 @@ class PayoutServiceImplTest {
         assertEquals("已发放", retriedRecords.getItems().get(0).getPayoutStatus());
         assertEquals("1", retriedRecords.getItems().get(0).getRetryCount());
         assertEquals("已出款", settlementOrderService.detail("SLT20001").getSettlementStatus());
+    }
+
+    @Test
+    void shouldExportPayoutBatchAndRecordSnapshots() {
+        AuditSettlementRequestDTO auditRequest = new AuditSettlementRequestDTO();
+        auditRequest.setOperatorName("财务主管");
+        auditRequest.setAuditRemark("通过");
+        settlementOrderService.audit("SLT20001", auditRequest);
+
+        PageResultDTO<PayoutBatchDTO> payoutBatches = payoutService.list("SET10001", "", 1, 20);
+        String payoutBatchNo = payoutBatches.getItems().get(0).getPayoutBatchNo();
+
+        String batchCsv = new String(payoutService.exportBatches("SET10001", ""), StandardCharsets.UTF_8);
+        String recordCsv = new String(payoutService.exportRecords(payoutBatchNo, ""), StandardCharsets.UTF_8);
+
+        assertTrue(batchCsv.contains("出款批次号,结算批次号,出款渠道"));
+        assertTrue(batchCsv.contains("SET10001"));
+        assertTrue(recordCsv.contains("出款单号,出款批次号,结算单号"));
+        assertTrue(recordCsv.contains(payoutBatchNo));
+        assertTrue(recordCsv.contains("SLT20001"));
+    }
+
+    @Test
+    void shouldThrowBusinessExceptionWhenPayoutBatchMissing() {
+        ExecutePayoutBatchRequestDTO executeRequest = new ExecutePayoutBatchRequestDTO();
+        executeRequest.setOperatorName("出款专员");
+        executeRequest.setRemark("不存在的批次不应执行");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> payoutService.execute("PBT-MISSING", executeRequest));
+
+        assertEquals(ErrorCode.PAYOUT_BATCH_NOT_FOUND, exception.getCode());
+        assertEquals("出款批次不存在", exception.getMessage());
+    }
+
+    private CreatePayoutBatchRequestDTO createRequest(String batchNo) {
+        CreatePayoutBatchRequestDTO request = new CreatePayoutBatchRequestDTO();
+        request.setBatchNo(batchNo);
+        request.setPayoutChannel("BANK");
+        request.setCreatedBy("财务专员");
+        return request;
     }
 }

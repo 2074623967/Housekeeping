@@ -2,6 +2,7 @@ package com.abc123.gatewayaccess.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,10 @@ import com.abc123.gatewayaccess.dto.GatewayCertificateDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
 import com.abc123.gatewayaccess.dto.ToggleRequestDTO;
+import com.abc123.gatewayaccess.entity.GatewayAppEntity;
+import com.abc123.gatewayaccess.entity.GatewayCertificateEntity;
+import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
+import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -117,6 +122,71 @@ class GatewayAccessServiceImplTest {
     }
 
     @Test
+    void shouldRejectEnableExpiredCertificate() {
+        ToggleRequestDTO request = new ToggleRequestDTO();
+        request.setConfigCode("CERT_BANK_2026");
+        request.setEnabled(true);
+
+        GatewayCertificateEntity certificate = new GatewayCertificateEntity();
+        certificate.setCertificateCode("CERT_BANK_2026");
+        certificate.setGatewayCode("GW_BANK");
+        certificate.setExpireAt(LocalDate.now().minusDays(1).toString());
+        when(gatewayAccessMapper.findCertificateByCode("CERT_BANK_2026")).thenReturn(certificate);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GatewayAccessServiceImpl(gatewayAccessMapper).toggleCertificate(request)
+        );
+        assertEquals("已过期证书不允许启用", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectEnablePermissionWhenApplicationDisabled() {
+        ToggleRequestDTO request = new ToggleRequestDTO();
+        request.setConfigCode("PERM_RISK_SIGNAL");
+        request.setEnabled(true);
+
+        GatewayPermissionEntity permission = new GatewayPermissionEntity();
+        permission.setPermissionCode("PERM_RISK_SIGNAL");
+        permission.setAppCode("APP_RISK");
+        when(gatewayAccessMapper.findPermissionByCode("PERM_RISK_SIGNAL")).thenReturn(permission);
+
+        GatewayAppEntity application = new GatewayAppEntity();
+        application.setAppCode("APP_RISK");
+        application.setStatus("DISABLED");
+        when(gatewayAccessMapper.findApplicationByCode("APP_RISK")).thenReturn(application);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GatewayAccessServiceImpl(gatewayAccessMapper).togglePermission(request)
+        );
+        assertEquals("权限归属应用未启用，不允许单独启用权限", exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectEnableReleaseRouteWhenGatewayDisabled() {
+        ToggleRequestDTO request = new ToggleRequestDTO();
+        request.setConfigCode("ROUTE_BANK_UAT");
+        request.setEnabled(true);
+
+        GatewayReleaseRouteDTO route = new GatewayReleaseRouteDTO();
+        route.setRouteCode("ROUTE_BANK_UAT");
+        route.setGatewayCode("GW_BANK");
+        when(gatewayAccessMapper.findReleaseRouteByCode("ROUTE_BANK_UAT")).thenReturn(route);
+
+        GatewayChannelEntity gateway = new GatewayChannelEntity();
+        gateway.setGatewayCode("GW_BANK");
+        gateway.setStatus("DISABLED");
+        when(gatewayAccessMapper.findGatewayByCode("GW_BANK")).thenReturn(gateway);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new GatewayAccessServiceImpl(gatewayAccessMapper).toggleReleaseRoute(request)
+        );
+        assertEquals("灰度路由归属网关未启用，不允许启用路由", exception.getMessage());
+    }
+
+    @Test
     void shouldNormalizeAuditFilters() {
         GatewayAuditLogDTO record = new GatewayAuditLogDTO();
         record.setRequestId("REQ-001");
@@ -135,6 +205,28 @@ class GatewayAccessServiceImplTest {
         assertEquals("REQ-001", captor.getValue().getKeyword());
         assertEquals("APP_PAY_CORE", captor.getValue().getAppCode());
         assertEquals("SUCCESS", captor.getValue().getResultStatus());
+    }
+
+    @Test
+    void shouldExportAuditLogsAsCsv() {
+        GatewayAuditLogDTO record = new GatewayAuditLogDTO();
+        record.setRequestId("REQ-001");
+        record.setAppCode("APP_PAY_CORE");
+        record.setGatewayCode("GW_WECHAT");
+        record.setOperationType("SIGN");
+        record.setSignType("RSA2");
+        record.setClientIp("127.0.0.1");
+        record.setResultStatus("SUCCESS");
+        record.setRiskHint("正常");
+        record.setHappenedAt("2026-08-06 10:00:00");
+        when(gatewayAccessMapper.findAuditLogs(org.mockito.ArgumentMatchers.any(GatewayAuditQueryDTO.class)))
+                .thenReturn(Collections.singletonList(record));
+
+        String csv = new String(new GatewayAccessServiceImpl(gatewayAccessMapper).exportAuditLogs(new GatewayAuditQueryDTO()));
+
+        assertTrue(csv.contains("请求流水号,应用编码,网关编码"));
+        assertTrue(csv.contains("REQ-001"));
+        assertTrue(csv.contains("GW_WECHAT"));
     }
 
     @Test

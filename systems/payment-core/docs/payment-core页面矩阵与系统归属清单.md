@@ -37,9 +37,9 @@
 截至 `2026-07-25`，`payment-core/frontend` 不是单一后台，而是已经存在四套实际工程：
 
 1. `admin-web`：当前真实路由包括 `/dashboard`、`/orders`、`/bills`、`/payment-flows`、`/payment-routes`、`/payment-events`、`/payment-issues`、`/payment-issue-alerts`、`/cashier-sessions`、`/payment-requests`、`/payment-logs`、`/payment-records/*`、`/payments/*`、`/refunds/*`、`/payment-config`、`/payment-monitor`、`/payment-task-center`、`/payment-day-end`、`/worker-settlements`
-2. `app-web`：当前真实路由包括 `/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
-3. `h5-web`：当前真实路由包括 `/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
-4. `pc-web`：当前真实路由包括 `/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+2. `app-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+3. `h5-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+4. `pc-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 
 因此后续做边界判定时，不能只看资料里的“目标页面”，还要同时看当前仓库里“已经先落在 payment-core”的实际页面。下面的归属结论，都是在这个真实路由事实之上做的。
 

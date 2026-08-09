@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
+import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.service.PaymentRequestService;
 import java.nio.charset.StandardCharsets;
@@ -25,6 +26,33 @@ public class PaymentRequestController {
 
     public PaymentRequestController(PaymentRequestService paymentRequestService) {
         this.paymentRequestService = paymentRequestService;
+    }
+
+    /**
+     * 查询支付请求总览，供运营、研发和测试先看全局态势再下钻列表。
+     */
+    @GetMapping("/overview")
+    public ApiResponse<PaymentRequestOverviewDTO> overview(
+            @RequestParam(required = false) String requestNo,
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String channelCode,
+            @RequestParam(required = false) String terminal,
+            @RequestParam(required = false) String clientIp,
+            @RequestParam(defaultValue = "全部") String requestStatus,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentRequestQueryDTO query = new PaymentRequestQueryDTO();
+        query.setRequestNo(requestNo);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setChannelCode(channelCode);
+        query.setTerminal(terminal);
+        query.setClientIp(clientIp);
+        query.setRequestStatus(requestStatus);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        return ApiResponse.success(paymentRequestService.overview(query));
     }
 
     /**

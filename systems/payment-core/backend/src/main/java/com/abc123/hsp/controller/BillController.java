@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.service.BillService;
@@ -25,6 +26,27 @@ public class BillController {
 
     public BillController(BillService billService) {
         this.billService = billService;
+    }
+
+    /**
+     * 查询交易账单中心总览，供运营先看金额和逾期风险再下钻列表。
+     */
+    @GetMapping("/overview")
+    public ApiResponse<BillOverviewDTO> overview(
+            @RequestParam(required = false) String billNo,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String customerName,
+            @RequestParam(defaultValue = "全部") String billStatus,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        BillQueryDTO query = new BillQueryDTO();
+        query.setBillNo(billNo);
+        query.setOrderNo(orderNo);
+        query.setCustomerName(customerName);
+        query.setBillStatus(billStatus);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        return ApiResponse.success(billService.overview(query));
     }
 
     /**

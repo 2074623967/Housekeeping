@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.service.BillService;
 import java.nio.charset.StandardCharsets;
@@ -59,5 +60,17 @@ class BillControllerTest {
         controller.list(null, null, null, "全部", "createdAt", "desc", 1, 20);
 
         verify(billService).list(any(BillQueryDTO.class));
+    }
+
+    @Test
+    void shouldReturnBillOverview() {
+        BillController controller = new BillController(billService);
+        BillOverviewDTO overviewDTO = new BillOverviewDTO();
+        overviewDTO.setTotalBillCount(10L);
+        when(billService.overview(any(BillQueryDTO.class))).thenReturn(overviewDTO);
+
+        controller.overview("BILL-001", "ORD-001", "张女士", "待支付", "dueAt", "asc");
+
+        verify(billService).overview(any(BillQueryDTO.class));
     }
 }

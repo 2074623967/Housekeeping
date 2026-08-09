@@ -1,0 +1,53 @@
+package com.abc123.riskcontrol.service;
+
+import com.abc123.riskcontrol.dto.BlocklistDTO;
+import com.abc123.riskcontrol.dto.InterceptEventDTO;
+import com.abc123.riskcontrol.dto.LimitRuleDTO;
+import com.abc123.riskcontrol.dto.MonitorRuleDTO;
+import com.abc123.riskcontrol.dto.PageResultDTO;
+import com.abc123.riskcontrol.dto.ReviewOrderDTO;
+import com.abc123.riskcontrol.dto.RiskDecisionRequestDTO;
+import com.abc123.riskcontrol.dto.RiskDecisionResultDTO;
+import com.abc123.riskcontrol.dto.RiskPolicyDTO;
+import com.abc123.riskcontrol.dto.RiskReviewActionRequestDTO;
+import com.abc123.riskcontrol.dto.RiskSummaryDTO;
+import com.abc123.riskcontrol.dto.ToggleRequestDTO;
+
+/**
+ * 风控服务。
+ */
+public interface RiskControlService {
+
+    RiskSummaryDTO summary();
+
+    PageResultDTO<RiskPolicyDTO> policies();
+
+    PageResultDTO<LimitRuleDTO> limitRules();
+
+    PageResultDTO<BlocklistDTO> blocklists();
+
+    PageResultDTO<InterceptEventDTO> interceptEvents();
+
+    PageResultDTO<ReviewOrderDTO> reviewOrders();
+
+    /**
+     * 导出人工复核单快照，便于风控、运营和审计留档。
+     *
+     * @return CSV 二进制内容
+     */
+    byte[] exportReviewOrders();
+
+    PageResultDTO<MonitorRuleDTO> monitorRules();
+
+    RiskDecisionResultDTO evaluatePaymentDecision(RiskDecisionRequestDTO request);
+
+    RiskSummaryDTO togglePolicy(ToggleRequestDTO request);
+
+    RiskSummaryDTO toggleLimitRule(ToggleRequestDTO request);
+
+    RiskSummaryDTO toggleBlocklist(ToggleRequestDTO request);
+
+    RiskSummaryDTO toggleMonitorRule(ToggleRequestDTO request);
+
+    PageResultDTO<ReviewOrderDTO> reviewAction(RiskReviewActionRequestDTO request);
+}

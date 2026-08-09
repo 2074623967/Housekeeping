@@ -32,13 +32,21 @@ function reset() {
   load();
 }
 
+function exportRows() {
+  const exportUrl = walletApi.buildLedgerExportUrl(filters.value);
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 onMounted(load);
 </script>
 
 <template>
   <div class="page">
     <div class="panel">
-      <h2>钱包流水</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px">
+        <h2 style="margin:0">钱包流水</h2>
+        <button class="button" style="background:#0f766e;color:#fff" @click="exportRows">导出流水</button>
+      </div>
       <div v-if="message" style="margin-bottom:12px;color:#1d4ed8">{{ message }}</div>
       <div class="toolbar">
         <input v-model="filters.accountNo" placeholder="账户号" />

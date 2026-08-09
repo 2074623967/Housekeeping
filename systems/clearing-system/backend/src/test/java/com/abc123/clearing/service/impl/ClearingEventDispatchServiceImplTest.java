@@ -110,6 +110,34 @@ class ClearingEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldSkipDownstreamDispatchWhenOutboxAlreadyPublished() {
+        ClearingOrderEntity clearingOrder = new ClearingOrderEntity();
+        clearingOrder.setClearingNo("CLR-001");
+        clearingOrder.setPaymentOrderId("PAY-001");
+        clearingOrder.setWorkerAmount(new BigDecimal("120.00"));
+        when(clearingMemoryStore.orders()).thenReturn(Collections.singletonList(clearingOrder));
+
+        ClearingEventEntity publishedEvent = outboxEvent();
+        publishedEvent.setPublishStatus("SUCCESS");
+        when(clearingMemoryStore.findClearingGeneratedOutboxEvent("PAY-001")).thenReturn(publishedEvent);
+
+        ClearingEventDispatchServiceImpl dispatchService = new ClearingEventDispatchServiceImpl(
+                clearingMemoryStore,
+                "http://settlement",
+                "http://accounting",
+                "ACT10002",
+                restTemplate);
+
+        boolean result = dispatchService.publishClearingGenerated("PAY-001");
+
+        assertTrue(result);
+        verify(restTemplate, times(0)).postForEntity(eq("http://settlement"), any(), eq(String.class));
+        verify(restTemplate, times(0)).postForEntity(eq("http://accounting"), any(), eq(String.class));
+        verify(clearingMemoryStore, times(0)).markOutboxPublishSuccess("EVT-001");
+        verify(clearingMemoryStore, times(0)).markOutboxPublishFailed("EVT-001");
+    }
+
+    @Test
     void shouldReturnFalseWhenPaymentOrderMissing() {
         when(clearingMemoryStore.orders()).thenReturn(Collections.<ClearingOrderEntity>emptyList());
 

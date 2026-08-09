@@ -1,0 +1,19 @@
+server:
+  port: 8095
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:walletaccountdb;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+  h2:
+    console:
+      enabled: true
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.abc123.walletaccount.entity

@@ -3,6 +3,7 @@ package com.abc123.wallet.controller;
 import com.abc123.wallet.common.ApiResponse;
 import com.abc123.wallet.dto.WalletAccountDetailDTO;
 import com.abc123.wallet.dto.WalletAccountDTO;
+import com.abc123.wallet.dto.WalletBalanceSnapshotDTO;
 import com.abc123.wallet.dto.WalletBalancePaymentOrderDTO;
 import com.abc123.wallet.dto.WalletBalancePaymentRequestDTO;
 import com.abc123.wallet.dto.WalletRechargeOrderDTO;
@@ -16,7 +17,11 @@ import com.abc123.wallet.service.WalletRechargeService;
 import com.abc123.wallet.service.WalletService;
 import com.abc123.wallet.service.WalletTransferService;
 import com.abc123.wallet.service.WalletWithdrawService;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,12 +57,28 @@ public class WalletController {
         return ApiResponse.success(walletService.listAccounts());
     }
 
+    @GetMapping("/balance-snapshots")
+    public ApiResponse<List<WalletBalanceSnapshotDTO>> balanceSnapshots() {
+        return ApiResponse.success(walletService.listBalanceSnapshots());
+    }
+
     @GetMapping("/ledgers")
     public ApiResponse<List<com.abc123.wallet.dto.WalletLedgerDTO>> ledgers(
             @RequestParam(required = false) String accountNo,
             @RequestParam(required = false) String bizType,
             @RequestParam(required = false) String direction) {
         return ApiResponse.success(walletService.listLedgers(accountNo, bizType, direction));
+    }
+
+    @GetMapping(value = "/ledgers/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> exportLedgers(
+            @RequestParam(required = false) String accountNo,
+            @RequestParam(required = false) String bizType,
+            @RequestParam(required = false) String direction) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=wallet-ledgers.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(walletService.exportLedgers(accountNo, bizType, direction));
     }
 
     @GetMapping("/{accountNo}")

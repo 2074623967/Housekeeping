@@ -66,6 +66,43 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExportTaskRunsCsv() {
+        PaymentTaskRunLogItemDTO item = new PaymentTaskRunLogItemDTO();
+        item.setTaskLogNo("LOG-001");
+        item.setTaskCode("PAYMENT_EVENT_RETRY");
+        item.setTaskName("失败事件重发");
+        item.setRunMode("MANUAL");
+        item.setTaskStatus("SUCCESS");
+        item.setSeverityLevel("P2");
+        item.setEscalationStatus("纳入当班跟进");
+        item.setProcessedCount(2);
+        item.setSuccessCount(2);
+        item.setWarningCount(0);
+        item.setFailCount(0);
+        item.setSummaryComment("已完成");
+        item.setSuggestedAction("继续观察");
+        item.setRecommendedRoute("/payment-events");
+        item.setTriggeredBy("payment-core-admin");
+        item.setStartedAt("2026-08-03 10:00:00");
+        item.setCompletedAt("2026-08-03 10:00:03");
+        when(paymentTaskCenterMapper.findTaskRunLogsForExport(org.mockito.ArgumentMatchers.any(PaymentTaskRunLogQueryDTO.class)))
+                .thenReturn(Collections.singletonList(item));
+
+        String csv = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).exportTaskRunsCsv(new PaymentTaskRunLogQueryDTO());
+
+        verify(paymentTaskCenterMapper).findTaskRunLogsForExport(org.mockito.ArgumentMatchers.any(PaymentTaskRunLogQueryDTO.class));
+        Assertions.assertTrue(csv.contains("日志号,任务编码"));
+        Assertions.assertTrue(csv.contains("\"LOG-001\""));
+    }
+
+    @Test
     void shouldRunRepublishFailedEvents() {
         when(paymentEventMapper.findAllFailedEventNos()).thenReturn(Arrays.asList("EVT-1", "EVT-2"));
         when(paymentEventMapper.markRepublished("EVT-1")).thenReturn(1);

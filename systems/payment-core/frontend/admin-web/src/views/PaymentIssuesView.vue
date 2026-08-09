@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 
@@ -29,6 +29,14 @@ const filters = ref({
   channelCode: route.query.channelCode || "",
   paymentMethod: route.query.paymentMethod || "全部"
 });
+
+const issueOverview = computed(() => ({
+  groupCount: responsibilitySummaries.value.length,
+  totalCount: responsibilitySummaries.value.reduce((sum, item) => sum + (item.totalCount || 0), 0),
+  overdueCount: responsibilitySummaries.value.reduce((sum, item) => sum + (item.overdueCount || 0), 0),
+  p1Count: responsibilitySummaries.value.reduce((sum, item) => sum + (item.p1Count || 0), 0),
+  p2Count: responsibilitySummaries.value.reduce((sum, item) => sum + (item.p2Count || 0), 0)
+}));
 
 function resetFilters() {
   filters.value = {
@@ -234,7 +242,30 @@ onMounted(loadIssues);
       </div>
 
       <div v-if="isSummaryLoading" class="state-box">责任组统计加载中...</div>
-      <div v-else-if="responsibilitySummaries.length" class="detail-card-grid">
+      <section v-else-if="responsibilitySummaries.length" class="panel overview-panel">
+        <div class="section-title">
+          <h3>异常风险总览</h3>
+          <span class="meta">按责任组、严重等级和 SLA 超时统一观察风险面</span>
+        </div>
+        <div class="overview-grid">
+          <article class="overview-card danger">
+            <p class="overview-title">SLA 超时异常</p>
+            <strong>{{ issueOverview.overdueCount }}</strong>
+            <span>优先升级已超时未收口异常，避免影响支付回调、下游事件和日终准入。</span>
+          </article>
+          <article class="overview-card warn">
+            <p class="overview-title">P1 高优先级异常</p>
+            <strong>{{ issueOverview.p1Count }}</strong>
+            <span>建议优先联查支付单、任务中心和异常告警明细，确认是否已触发升级和值班派发。</span>
+          </article>
+          <article class="overview-card info">
+            <p class="overview-title">责任组覆盖</p>
+            <strong>{{ issueOverview.groupCount }} / {{ issueOverview.totalCount }}</strong>
+            <span>展示当前筛选范围涉及的责任组数量与异常总量，便于判断归口是否集中或扩散。</span>
+          </article>
+        </div>
+      </section>
+      <div v-if="!isSummaryLoading && responsibilitySummaries.length" class="detail-card-grid">
         <div v-for="summary in responsibilitySummaries" :key="summary.groupName" class="detail-card">
           <div class="detail-label">责任组</div>
           <div class="detail-value">{{ summary.groupName }}</div>

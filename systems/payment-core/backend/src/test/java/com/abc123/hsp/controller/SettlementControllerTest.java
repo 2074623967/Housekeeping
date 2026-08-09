@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.service.SettlementService;
 import java.nio.charset.StandardCharsets;
@@ -49,5 +50,17 @@ class SettlementControllerTest {
         controller.workerList(null, null, "全部", "全部", 1, 20);
 
         verify(settlementService).workerList(any(WorkerSettlementQueryDTO.class));
+    }
+
+    @Test
+    void shouldReturnWorkerSettlementOverview() {
+        SettlementController controller = new SettlementController(settlementService);
+        WorkerSettlementOverviewDTO overviewDTO = new WorkerSettlementOverviewDTO();
+        overviewDTO.setTotalSettlementCount(8L);
+        when(settlementService.workerOverview(any(WorkerSettlementQueryDTO.class))).thenReturn(overviewDTO);
+
+        controller.workerOverview("SETTLE-001", "李师傅", "待审核", "待出款");
+
+        verify(settlementService).workerOverview(any(WorkerSettlementQueryDTO.class));
     }
 }

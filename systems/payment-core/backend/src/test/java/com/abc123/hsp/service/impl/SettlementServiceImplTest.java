@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
+import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.mapper.SettlementMapper;
 import java.util.Collections;
@@ -62,5 +63,29 @@ class SettlementServiceImplTest {
         assertTrue(csv.contains("李师傅"));
         assertTrue(csv.contains("¥888.00"));
         verify(settlementMapper).findWorkerSettlementsForExport(query);
+    }
+
+    @Test
+    void shouldReturnWorkerSettlementOverview() {
+        WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
+        query.setSettlementOrderId(" SETTLE-001 ");
+        query.setWorkerKeyword(" 李师傅 ");
+        query.setSettlementStatus(" 待审核 ");
+        query.setPayoutStatus(" 待出款 ");
+        WorkerSettlementOverviewDTO overview = new WorkerSettlementOverviewDTO();
+        overview.setTotalSettlementCount(6L);
+        overview.setNegativeNetSettleCount(1);
+        when(settlementMapper.findWorkerOverview(query)).thenReturn(overview);
+
+        WorkerSettlementOverviewDTO result = new SettlementServiceImpl(settlementMapper).workerOverview(query);
+
+        assertEquals("SETTLE-001", query.getSettlementOrderId());
+        assertEquals("李师傅", query.getWorkerKeyword());
+        assertEquals("待审核", query.getSettlementStatus());
+        assertEquals("待出款", query.getPayoutStatus());
+        assertEquals(6L, result.getTotalSettlementCount());
+        assertEquals(1, result.getNegativeNetSettleCount());
+        assertEquals("¥0.00", result.getTotalNetSettleAmount());
+        verify(settlementMapper).findWorkerOverview(query);
     }
 }

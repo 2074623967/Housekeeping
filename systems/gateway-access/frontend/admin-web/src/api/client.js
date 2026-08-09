@@ -28,6 +28,15 @@ export const gatewayAccessApi = {
     const params = new URLSearchParams({ keyword, appCode, resultStatus });
     return request(`/api/gateway-access/audit-logs?${params.toString()}`);
   },
+  downloadAuditLogs: ({ keyword = "", appCode = "全部", resultStatus = "全部" } = {}) => {
+    const params = new URLSearchParams({ keyword, appCode, resultStatus });
+    return fetch(`/api/gateway-access/audit-logs/export?${params.toString()}`).then(async (response) => {
+      if (!response.ok) {
+        throw new Error("审计快照导出失败");
+      }
+      return response.blob();
+    });
+  },
   getReleaseRoutes: ({ environment = "全部", status = "全部" } = {}) => {
     const params = new URLSearchParams({ environment, status });
     return request(`/api/gateway-access/release-routes?${params.toString()}`);

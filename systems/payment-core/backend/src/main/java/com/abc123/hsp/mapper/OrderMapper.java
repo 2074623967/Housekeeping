@@ -16,6 +16,11 @@ public interface OrderMapper {
     List<OrderListItemDTO> findAll(@Param("query") OrderQueryDTO query);
 
     /**
+     * 查询订单中心导出列表，不分页。
+     */
+    List<OrderListItemDTO> findForExport(@Param("query") OrderQueryDTO query);
+
+    /**
      * 统计符合条件的订单总数。
      */
     long count(@Param("query") OrderQueryDTO query);

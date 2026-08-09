@@ -1,8 +1,10 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 
 import com.abc123.hsp.dto.OrderQueryDTO;
+import com.abc123.hsp.dto.OrderListItemDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -38,5 +40,34 @@ class OrderServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(100, query.getPageSize());
         verify(orderMapper).findAll(query);
         verify(orderMapper).count(query);
+    }
+
+    @Test
+    void shouldExportOrderCsv() {
+        OrderQueryDTO query = new OrderQueryDTO();
+        query.setOrderNo("ORD-001");
+        query.setServiceType("深度保洁");
+        query.setOrderStatus("待支付");
+
+        OrderListItemDTO item = new OrderListItemDTO();
+        item.setOrderNo("ORD-001");
+        item.setCustomerName("王阿姨");
+        item.setServiceType("深度保洁");
+        item.setWorkerName("李师傅");
+        item.setOrderAmount("¥188.00");
+        item.setPaidAmount("¥0.00");
+        item.setOrderStatus("待支付");
+        item.setFulfillmentStatus("待履约");
+        item.setLatestPaymentStatus("未发起");
+        item.setLatestCashierStatus("未生成");
+        item.setCreatedAt("2026-08-07 10:00:00");
+
+        org.mockito.Mockito.when(orderMapper.findForExport(query)).thenReturn(Collections.singletonList(item));
+
+        String csv = new OrderServiceImpl(orderMapper).exportCsv(query);
+
+        assertTrue(csv.contains("订单号,账单号,客户名称"));
+        assertTrue(csv.contains("ORD-001"));
+        assertTrue(csv.contains("王阿姨"));
     }
 }

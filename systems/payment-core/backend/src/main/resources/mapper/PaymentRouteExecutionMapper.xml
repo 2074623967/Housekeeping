@@ -103,4 +103,25 @@
         <include refid="routeExecutionFromClause" />
         <include refid="routeExecutionWhereClause" />
     </select>
+
+    <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO">
+        SELECT COUNT(1) AS totalRouteCount,
+               SUM(CASE
+                       WHEN prr.route_result LIKE '%兜底%' THEN 0
+                       WHEN prr.route_result LIKE '%线下%' THEN 0
+                       ELSE 1
+                   END) AS successRouteCount,
+               SUM(CASE
+                       WHEN prr.route_result LIKE '%兜底%' THEN 1
+                       WHEN prr.route_result LIKE '%线下%' THEN 1
+                       ELSE 0
+                   END) AS warnRouteCount,
+               COUNT(DISTINCT prr.channel_code) AS distinctChannelCount,
+               SUM(CASE WHEN prr.route_result LIKE '%线下%' THEN 1 ELSE 0 END) AS offlineRouteCount,
+               SUM(CASE WHEN latest_pa.payment_method = '微信' THEN 1 ELSE 0 END) AS wechatRouteCount,
+               SUM(CASE WHEN latest_pa.payment_method = '支付宝' THEN 1 ELSE 0 END) AS alipayRouteCount,
+               DATE_FORMAT(MAX(prr.created_at), '%Y-%m-%d %H:%i:%s') AS latestRouteAt
+        <include refid="routeExecutionFromClause" />
+        <include refid="routeExecutionWhereClause" />
+    </select>
 </mapper>

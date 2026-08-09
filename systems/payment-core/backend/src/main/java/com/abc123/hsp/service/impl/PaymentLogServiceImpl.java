@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
+import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
@@ -21,14 +22,7 @@ public class PaymentLogServiceImpl implements PaymentLogService {
 
     @Override
     public PageResultDTO<PaymentLogListItemDTO> list(PaymentLogQueryDTO query) {
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setSource(query.getSource() == null ? null : query.getSource().trim());
-        query.setKeyword(query.getKeyword() == null ? null : query.getKeyword().trim());
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
-        query.setPageNo(Math.max(query.getPageNo(), 1));
-        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        normalizeQuery(query);
         return new PageResultDTO<>(
                 paymentLogMapper.findAll(query),
                 paymentLogMapper.count(query),
@@ -38,15 +32,45 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     }
 
     @Override
+    public PaymentLogOverviewDTO overview(PaymentLogQueryDTO query) {
+        normalizeQuery(query);
+        PaymentLogOverviewDTO overview = paymentLogMapper.findOverviewSummary(query);
+        if (overview == null) {
+            overview = new PaymentLogOverviewDTO();
+        }
+        if (overview.getTotalLogCount() == null) {
+            overview.setTotalLogCount(0L);
+        }
+        if (overview.getErrorLogCount() == null) {
+            overview.setErrorLogCount(0L);
+        }
+        if (overview.getWarnLogCount() == null) {
+            overview.setWarnLogCount(0L);
+        }
+        if (overview.getInfoLogCount() == null) {
+            overview.setInfoLogCount(0L);
+        }
+        if (overview.getDistinctStageCount() == null) {
+            overview.setDistinctStageCount(0);
+        }
+        if (overview.getDistinctSourceCount() == null) {
+            overview.setDistinctSourceCount(0);
+        }
+        if (overview.getCallbackErrorCount() == null) {
+            overview.setCallbackErrorCount(0);
+        }
+        if (overview.getEventWarnCount() == null) {
+            overview.setEventWarnCount(0);
+        }
+        if (overview.getCallbackKeywordCount() == null) {
+            overview.setCallbackKeywordCount(0);
+        }
+        return overview;
+    }
+
+    @Override
     public String exportCsv(PaymentLogQueryDTO query) {
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setSource(query.getSource() == null ? null : query.getSource().trim());
-        query.setKeyword(query.getKeyword() == null ? null : query.getKeyword().trim());
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
-        query.setPageNo(Math.max(query.getPageNo(), 1));
-        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        normalizeQuery(query);
 
         java.util.List<PaymentLogListItemDTO> items = paymentLogMapper.findAllForExport(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
@@ -67,5 +91,16 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     private String csvCell(String value) {
         String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
+    }
+
+    private void normalizeQuery(PaymentLogQueryDTO query) {
+        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
+        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
+        query.setSource(query.getSource() == null ? null : query.getSource().trim());
+        query.setKeyword(query.getKeyword() == null ? null : query.getKeyword().trim());
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
     }
 }

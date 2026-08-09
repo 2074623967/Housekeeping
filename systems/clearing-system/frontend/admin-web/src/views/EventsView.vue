@@ -12,6 +12,7 @@ const actionLoading = ref(false);
 const relatedLoading = ref(false);
 const detailLoading = ref(false);
 const relatedMessage = ref("");
+const replayMessage = ref("");
 const filters = ref({ eventType: "", bizNo: "" });
 const form = ref({
   paymentOrderId: "PAY202607200188",
@@ -89,6 +90,20 @@ async function consumeEvent() {
   }
 }
 
+async function replayFailedEvents() {
+  actionLoading.value = true;
+  replayMessage.value = "";
+  try {
+    const result = await eventApi.replayFailed();
+    replayMessage.value = `${result.message}（本次重放 ${result.attemptedCount} 条）`;
+    await loadRows();
+  } catch (error) {
+    replayMessage.value = error.message;
+  } finally {
+    actionLoading.value = false;
+  }
+}
+
 function useHousekeepingOrderCase() {
   form.value = {
     paymentOrderId: "PAY202607280688",
@@ -154,21 +169,26 @@ onMounted(loadRows);
           <button class="button secondary" :disabled="actionLoading" @click="useHousekeepingOrderCase">日常保洁示例</button>
           <button class="button secondary" :disabled="actionLoading" @click="useDeepCleanCase">深度保洁示例</button>
           <button class="button warn" :disabled="actionLoading" @click="consumeEvent">模拟支付成功事件</button>
+          <button class="button secondary" :disabled="actionLoading" @click="replayFailedEvents">重放失败派发</button>
         </div>
       </div>
       <div v-if="message" class="state-box">{{ message }}</div>
+      <div v-if="replayMessage" class="state-box">{{ replayMessage }}</div>
       <div v-else-if="loading" class="state-box">清分事件加载中...</div>
       <div v-else class="table-wrap">
         <table>
-          <thead><tr><th>事件号</th><th>类型</th><th>业务单号</th><th>摘要</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>事件号</th><th>类型</th><th>业务单号</th><th>摘要</th><th>状态</th><th>派发状态</th><th>重试</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             <tr v-for="row in rows" :key="row.eventNo">
               <td>{{ row.eventNo }}</td><td>{{ row.eventType }}</td><td>{{ row.bizNo }}</td><td>{{ row.summary }}</td>
-              <td><span class="badge" :class="row.statusType">{{ row.eventStatus }}</span></td><td>{{ row.createdAt }}</td>
+              <td><span class="badge" :class="row.statusType">{{ row.eventStatus }}</span></td>
+              <td>{{ row.publishStatus || "--" }}</td>
+              <td>{{ row.retryCount ?? 0 }} / {{ row.nextRetryAt || "--" }}</td>
+              <td>{{ row.createdAt }}</td>
               <td><button class="button secondary button-inline" :disabled="relatedLoading" @click="loadRelatedOrders(row)">查看清分结果</button></td>
             </tr>
             <tr v-if="rows.length === 0">
-              <td colspan="7" class="empty-cell">当前筛选条件下暂无清分事件。</td>
+              <td colspan="9" class="empty-cell">当前筛选条件下暂无清分事件。</td>
             </tr>
           </tbody>
         </table>
@@ -199,10 +219,22 @@ onMounted(loadRows);
             <strong>事件状态</strong>
             <span>{{ selectedEvent.eventStatus }}</span>
           </div>
+          <div class="summary-card">
+            <strong>派发状态</strong>
+            <span>{{ selectedEvent.publishStatus || "--" }}</span>
+          </div>
+          <div class="summary-card">
+            <strong>重试节奏</strong>
+            <span>{{ selectedEvent.retryCount ?? 0 }} / {{ selectedEvent.nextRetryAt || "--" }}</span>
+          </div>
         </div>
         <div class="state-box payload-box">
           <strong>事件载荷</strong>
           <span>{{ selectedEvent.payload }}</span>
+        </div>
+        <div v-if="selectedEvent.replayHint" class="state-box payload-box">
+          <strong>补偿建议</strong>
+          <span>{{ selectedEvent.replayHint }}</span>
         </div>
         <div class="table-wrap">
           <table>

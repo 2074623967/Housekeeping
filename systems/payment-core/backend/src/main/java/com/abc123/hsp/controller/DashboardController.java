@@ -17,6 +17,11 @@ public class DashboardController {
         this.dashboardService = dashboardService;
     }
 
+    /**
+     * 查询支付工作台摘要指标。
+     *
+     * @return 工作台摘要数据
+     */
     @GetMapping("/summary")
     public ApiResponse<DashboardSummaryDTO> summary() {
         return ApiResponse.success(dashboardService.getSummary());

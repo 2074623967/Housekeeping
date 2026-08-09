@@ -65,7 +65,14 @@ export const accountApi = {
     return request(`/api/accounting/accounts?${params.toString()}`);
   },
   open: (payload) => postJson("/api/accounting/accounts/open", payload),
-  getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`)
+  getDetail: (accountNo) => request(`/api/accounting/accounts/${accountNo}`),
+  downloadDetail: (accountNo) =>
+    fetch(`/api/accounting/accounts/${encodeURIComponent(accountNo)}/export`).then(async (response) => {
+      if (!response.ok) {
+        throw new Error("账户详情导出失败");
+      }
+      return response.blob();
+    })
 };
 
 export const balanceApi = {
@@ -85,6 +92,14 @@ export const ledgerApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/accounting/ledgers?${params.toString()}`);
+  },
+  buildExportUrl: ({ accountNo = "", bizNo = "", bizType = "" } = {}) => {
+    const params = new URLSearchParams({
+      accountNo,
+      bizNo,
+      bizType
+    });
+    return `/api/accounting/ledgers/export?${params.toString()}`;
   }
 };
 
@@ -128,5 +143,6 @@ export const eventApi = {
     return request(`/api/accounting/events?${params.toString()}`);
   },
   consumePaymentSuccess: (payload) => postJson("/api/accounting/events/payments/success", payload),
-  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload)
+  consumeClearingGenerated: (payload) => postJson("/api/accounting/events/clearing/generated", payload),
+  consumeSettlementCompensation: (payload) => postJson("/api/accounting/events/settlements/compensations", payload)
 };

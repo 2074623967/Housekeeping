@@ -9,6 +9,10 @@ import com.abc123.gatewayaccess.dto.GatewayChannelQueryDTO;
 import com.abc123.gatewayaccess.dto.GatewayPermissionDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
 import com.abc123.gatewayaccess.dto.GatewayReleaseRouteQueryDTO;
+import com.abc123.gatewayaccess.entity.GatewayAppEntity;
+import com.abc123.gatewayaccess.entity.GatewayCertificateEntity;
+import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
+import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -46,6 +50,31 @@ public interface GatewayAccessMapper {
      * 查询灰度发布路由。
      */
     List<GatewayReleaseRouteDTO> findReleaseRoutes(@Param("query") GatewayReleaseRouteQueryDTO query);
+
+    /**
+     * 查询单个接入应用。
+     */
+    GatewayAppEntity findApplicationByCode(@Param("appCode") String appCode);
+
+    /**
+     * 查询单个网关。
+     */
+    GatewayChannelEntity findGatewayByCode(@Param("gatewayCode") String gatewayCode);
+
+    /**
+     * 查询单个证书。
+     */
+    GatewayCertificateEntity findCertificateByCode(@Param("certificateCode") String certificateCode);
+
+    /**
+     * 查询单个权限。
+     */
+    GatewayPermissionEntity findPermissionByCode(@Param("permissionCode") String permissionCode);
+
+    /**
+     * 查询单个灰度路由。
+     */
+    GatewayReleaseRouteDTO findReleaseRouteByCode(@Param("routeCode") String routeCode);
 
     /**
      * 统计接入应用数。

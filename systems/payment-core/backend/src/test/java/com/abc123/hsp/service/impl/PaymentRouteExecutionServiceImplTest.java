@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.mockito.Mockito.verify;
 
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
+import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.mapper.PaymentRouteExecutionMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -49,5 +50,35 @@ class PaymentRouteExecutionServiceImplTest {
         Assertions.assertEquals(1, query.getPageSize());
         verify(paymentRouteExecutionMapper).findAll(query);
         verify(paymentRouteExecutionMapper).count(query);
+    }
+
+    @Test
+    void shouldNormalizeAndReturnRouteExecutionOverview() {
+        PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setOrderNo(" ORD-001 ");
+        query.setRouteRule(" RULE_HOME_WX ");
+        query.setChannelCode(" wx_h5 ");
+        query.setPaymentMethod(" 微信 ");
+        query.setTerminal(" H5 ");
+        query.setRouteResult(" 命中规则路由 ");
+        PaymentRouteExecutionOverviewDTO overview = new PaymentRouteExecutionOverviewDTO();
+        overview.setTotalRouteCount(8L);
+        overview.setWarnRouteCount(2L);
+        org.mockito.Mockito.when(paymentRouteExecutionMapper.findOverview(query)).thenReturn(overview);
+
+        PaymentRouteExecutionOverviewDTO result = new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper).overview(query);
+
+        Assertions.assertEquals("PAY-001", query.getPaymentOrderId());
+        Assertions.assertEquals("ORD-001", query.getOrderNo());
+        Assertions.assertEquals("RULE_HOME_WX", query.getRouteRule());
+        Assertions.assertEquals("wx_h5", query.getChannelCode());
+        Assertions.assertEquals("微信", query.getPaymentMethod());
+        Assertions.assertEquals("H5", query.getTerminal());
+        Assertions.assertEquals("命中规则路由", query.getRouteResult());
+        Assertions.assertEquals(8L, result.getTotalRouteCount());
+        Assertions.assertEquals(2L, result.getWarnRouteCount());
+        Assertions.assertEquals(0, result.getOfflineRouteCount());
+        verify(paymentRouteExecutionMapper).findOverview(query);
     }
 }

@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.BillListItemDTO;
+import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.BillMapper;
@@ -31,6 +32,40 @@ public class BillServiceImpl implements BillService {
     }
 
     @Override
+    public BillOverviewDTO overview(BillQueryDTO query) {
+        normalizeQuery(query);
+        BillOverviewDTO overview = billMapper.findOverview(query);
+        if (overview == null) {
+            overview = new BillOverviewDTO();
+        }
+        if (overview.getTotalBillCount() == null) {
+            overview.setTotalBillCount(0L);
+        }
+        if (overview.getPaidBillCount() == null) {
+            overview.setPaidBillCount(0L);
+        }
+        if (overview.getUnpaidBillCount() == null) {
+            overview.setUnpaidBillCount(0L);
+        }
+        if (overview.getPartialPaidBillCount() == null) {
+            overview.setPartialPaidBillCount(0L);
+        }
+        if (overview.getOverdueBillCount() == null) {
+            overview.setOverdueBillCount(0L);
+        }
+        if (overview.getTotalBillAmount() == null) {
+            overview.setTotalBillAmount("¥0.00");
+        }
+        if (overview.getTotalPaidAmount() == null) {
+            overview.setTotalPaidAmount("¥0.00");
+        }
+        if (overview.getTotalUnpaidAmount() == null) {
+            overview.setTotalUnpaidAmount("¥0.00");
+        }
+        return overview;
+    }
+
+    @Override
     public String exportCsv(BillQueryDTO query) {
         normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
@@ -54,6 +89,7 @@ public class BillServiceImpl implements BillService {
         query.setBillNo(query.getBillNo() == null ? null : query.getBillNo().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
         query.setCustomerName(query.getCustomerName() == null ? null : query.getCustomerName().trim());
+        query.setBillStatus(query.getBillStatus() == null ? "全部" : query.getBillStatus().trim());
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));

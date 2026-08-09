@@ -54,6 +54,42 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldExportPaymentDayEndBatchesCsv() {
+        PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
+        batch.setBatchNo("DEB001");
+        batch.setBizDate("2026-08-02");
+        batch.setRunMode("MANUAL");
+        batch.setBatchStatus("WARNING");
+        batch.setPaymentTotalCount(2);
+        batch.setPaymentSuccessCount(1);
+        batch.setPaymentSuccessAmount("¥268.00");
+        batch.setChannelSuccessCount(1);
+        batch.setChannelSuccessAmount("¥268.00");
+        batch.setInternalSuccessCount(1);
+        batch.setInternalSuccessAmount("¥268.00");
+        batch.setPaymentSuccessGapCount(0);
+        batch.setPaymentSuccessGapAmount("¥0.00");
+        batch.setRefundSuccessCount(0);
+        batch.setRefundSuccessAmount("¥0.00");
+        batch.setChannelAbnormalCount(0);
+        batch.setInternalAbnormalCount(0);
+        batch.setPendingRefundCount(1);
+        batch.setPendingRefundAmount("¥68.00");
+        batch.setSummaryComment("待退款收口");
+        batch.setTriggeredBy("finance-ops");
+        batch.setCreatedAt("2026-08-03 09:00:00");
+        batch.setCompletedAt("2026-08-03 09:01:00");
+        when(paymentDayEndMapper.findAllBatchesForExport()).thenReturn(Collections.singletonList(batch));
+
+        String csv = new PaymentDayEndServiceImpl(paymentDayEndMapper).exportBatchesCsv();
+
+        verify(paymentDayEndMapper).findAllBatchesForExport();
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("批次号,业务日期"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"DEB001\""));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("CONDITIONAL"));
+    }
+
+    @Test
     void shouldRunDayEndBatch() {
         String bizDate = "2026-07-19";
         when(paymentDayEndMapper.countPaymentsByDate(bizDate)).thenReturn(2);

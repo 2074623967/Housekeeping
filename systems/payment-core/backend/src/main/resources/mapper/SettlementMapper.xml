@@ -4,19 +4,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.SettlementMapper">
 
-    <select id="findWorkerSettlements" resultType="com.abc123.hsp.dto.WorkerSettlementListItemDTO">
-        SELECT settlement_order_id AS settlementOrderId,
-               worker_name AS workerName,
-               CONCAT(DATE_FORMAT(period_start, '%Y-%m-%d'), ' ~ ', DATE_FORMAT(period_end, '%Y-%m-%d')) AS period,
-               CONCAT('¥', FORMAT(amount_should_settle, 2)) AS amountShouldSettle,
-               CONCAT('¥', FORMAT(deduct_amount, 2)) AS deductAmount,
-               CONCAT('¥', FORMAT(amount_net_settle, 2)) AS amountNetSettle,
-               CONCAT('¥', FORMAT(deposit_impact_amount, 2)) AS depositImpactAmount,
-               status,
-               status_type AS statusType,
-               payout_status AS payoutStatus,
-               payout_status_type AS payoutStatusType
-        FROM t_worker_settlement_order
+    <sql id="workerSettlementWhere">
         <where>
             <if test="query.settlementOrderId != null and query.settlementOrderId != ''">
                 settlement_order_id LIKE CONCAT('%', #{query.settlementOrderId}, '%')
@@ -31,8 +19,38 @@
                 AND payout_status = #{query.payoutStatus}
             </if>
         </where>
+    </sql>
+
+    <select id="findWorkerSettlements" resultType="com.abc123.hsp.dto.WorkerSettlementListItemDTO">
+        SELECT settlement_order_id AS settlementOrderId,
+               worker_name AS workerName,
+               CONCAT(DATE_FORMAT(period_start, '%Y-%m-%d'), ' ~ ', DATE_FORMAT(period_end, '%Y-%m-%d')) AS period,
+               CONCAT('¥', FORMAT(amount_should_settle, 2)) AS amountShouldSettle,
+               CONCAT('¥', FORMAT(deduct_amount, 2)) AS deductAmount,
+               CONCAT('¥', FORMAT(amount_net_settle, 2)) AS amountNetSettle,
+               CONCAT('¥', FORMAT(deposit_impact_amount, 2)) AS depositImpactAmount,
+               status,
+               status_type AS statusType,
+               payout_status AS payoutStatus,
+               payout_status_type AS payoutStatusType
+        FROM t_worker_settlement_order
+        <include refid="workerSettlementWhere"/>
         ORDER BY period_end DESC, created_at DESC
         LIMIT #{query.limit} OFFSET #{query.offset}
+    </select>
+
+    <select id="findWorkerOverview" resultType="com.abc123.hsp.dto.WorkerSettlementOverviewDTO">
+        SELECT COUNT(1) AS totalSettlementCount,
+               SUM(CASE WHEN status = '待审核' THEN 1 ELSE 0 END) AS pendingAuditCount,
+               SUM(CASE WHEN payout_status = '待出款' THEN 1 ELSE 0 END) AS payoutPendingCount,
+               SUM(CASE WHEN payout_status = '出款中' THEN 1 ELSE 0 END) AS payingCount,
+               SUM(CASE WHEN payout_status = '出款成功' THEN 1 ELSE 0 END) AS payoutSuccessCount,
+               CONCAT('¥', FORMAT(COALESCE(SUM(amount_net_settle), 0), 2)) AS totalNetSettleAmount,
+               CONCAT('¥', FORMAT(COALESCE(SUM(deduct_amount), 0), 2)) AS totalDeductAmount,
+               CONCAT('¥', FORMAT(COALESCE(SUM(deposit_impact_amount), 0), 2)) AS totalDepositImpactAmount,
+               SUM(CASE WHEN amount_net_settle &lt; 0 THEN 1 ELSE 0 END) AS negativeNetSettleCount
+        FROM t_worker_settlement_order
+        <include refid="workerSettlementWhere"/>
     </select>
 
     <select id="findWorkerSettlementsForExport" resultType="com.abc123.hsp.dto.WorkerSettlementListItemDTO">
@@ -48,39 +66,13 @@
                payout_status AS payoutStatus,
                payout_status_type AS payoutStatusType
         FROM t_worker_settlement_order
-        <where>
-            <if test="query.settlementOrderId != null and query.settlementOrderId != ''">
-                settlement_order_id LIKE CONCAT('%', #{query.settlementOrderId}, '%')
-            </if>
-            <if test="query.workerKeyword != null and query.workerKeyword != ''">
-                AND worker_name LIKE CONCAT('%', #{query.workerKeyword}, '%')
-            </if>
-            <if test="query.settlementStatus != null and query.settlementStatus != '' and query.settlementStatus != '全部'">
-                AND status = #{query.settlementStatus}
-            </if>
-            <if test="query.payoutStatus != null and query.payoutStatus != '' and query.payoutStatus != '全部'">
-                AND payout_status = #{query.payoutStatus}
-            </if>
-        </where>
+        <include refid="workerSettlementWhere"/>
         ORDER BY period_end DESC, created_at DESC
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(1)
         FROM t_worker_settlement_order
-        <where>
-            <if test="query.settlementOrderId != null and query.settlementOrderId != ''">
-                settlement_order_id LIKE CONCAT('%', #{query.settlementOrderId}, '%')
-            </if>
-            <if test="query.workerKeyword != null and query.workerKeyword != ''">
-                AND worker_name LIKE CONCAT('%', #{query.workerKeyword}, '%')
-            </if>
-            <if test="query.settlementStatus != null and query.settlementStatus != '' and query.settlementStatus != '全部'">
-                AND status = #{query.settlementStatus}
-            </if>
-            <if test="query.payoutStatus != null and query.payoutStatus != '' and query.payoutStatus != '全部'">
-                AND payout_status = #{query.payoutStatus}
-            </if>
-        </where>
+        <include refid="workerSettlementWhere"/>
     </select>
 </mapper>

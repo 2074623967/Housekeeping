@@ -3,5 +3,5 @@
 </template>
 
 <script setup>
-import CashierView from "../../../app-web/src/views/CashierView.vue";
+import CashierView from "../../../shared/src/views/CashierView.vue";
 </script>

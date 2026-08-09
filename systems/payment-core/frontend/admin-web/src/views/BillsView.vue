@@ -10,6 +10,16 @@ const selectedItem = ref(null);
 const isLoading = ref(true);
 const errorMessage = ref("");
 const total = ref(0);
+const overview = ref({
+  totalBillCount: 0,
+  paidBillCount: 0,
+  unpaidBillCount: 0,
+  partialPaidBillCount: 0,
+  overdueBillCount: 0,
+  totalBillAmount: "¥0.00",
+  totalPaidAmount: "¥0.00",
+  totalUnpaidAmount: "¥0.00"
+});
 const pageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
@@ -22,10 +32,14 @@ const filters = ref({
 });
 
 const metrics = computed(() => ({
-  total: total.value,
-  paidTotal: items.value.filter((item) => item.billStatus === "已支付" || item.billStatus === "已结清").length,
-  unpaidAmountTotal: items.value.reduce((sum, item) => sum + Number(item.unpaidAmount || 0), 0).toFixed(2),
-  billAmountTotal: items.value.reduce((sum, item) => sum + Number(item.billAmount || 0), 0).toFixed(2)
+  total: overview.value.totalBillCount,
+  paidTotal: overview.value.paidBillCount,
+  unpaidTotal: overview.value.unpaidBillCount,
+  partialPaidTotal: overview.value.partialPaidBillCount,
+  overdueTotal: overview.value.overdueBillCount,
+  unpaidAmountTotal: overview.value.totalUnpaidAmount,
+  billAmountTotal: overview.value.totalBillAmount,
+  paidAmountTotal: overview.value.totalPaidAmount
 }));
 
 function resetFilters() {
@@ -50,7 +64,7 @@ async function loadBills() {
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await billApi.getList({
+    const query = {
       billNo: filters.value.billNo,
       orderNo: filters.value.orderNo,
       customerName: filters.value.customerName,
@@ -59,7 +73,15 @@ async function loadBills() {
       sortOrder: filters.value.sortOrder,
       pageNo: pageNo.value,
       pageSize
-    });
+    };
+    const [overviewResult, result] = await Promise.all([
+      billApi.getOverview(query),
+      billApi.getList(query)
+    ]);
+    overview.value = {
+      ...overview.value,
+      ...overviewResult
+    };
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
@@ -141,6 +163,14 @@ watch(
         <p class="card-value">{{ metrics.paidTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">待支付账单</p>
+        <p class="card-value">{{ metrics.unpaidTotal }}</p>
+      </article>
+      <article class="card">
+        <p class="card-title">部分支付账单</p>
+        <p class="card-value">{{ metrics.partialPaidTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">待支付金额合计</p>
         <p class="card-value">{{ metrics.unpaidAmountTotal }}</p>
       </article>
@@ -148,6 +178,30 @@ watch(
         <p class="card-title">账单应收合计</p>
         <p class="card-value">{{ metrics.billAmountTotal }}</p>
       </article>
+    </section>
+
+    <section class="panel overview-panel">
+      <div class="section-title">
+        <h3>账单风险总览</h3>
+        <span class="meta">用于识别逾期账单、部分支付和待收金额聚集风险</span>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card danger">
+          <p class="overview-title">逾期未结清账单</p>
+          <strong>{{ metrics.overdueTotal }}</strong>
+          <span>优先联查订单履约状态、支付单状态和催缴动作，避免应收长期挂账。</span>
+        </article>
+        <article class="overview-card.warn">
+          <p class="overview-title">已付金额合计</p>
+          <strong>{{ metrics.paidAmountTotal }}</strong>
+          <span>帮助运营快速判断当前筛选条件下的回款进度和账单收口体量。</span>
+        </article>
+        <article class="overview-card.info">
+          <p class="overview-title">待收金额合计</p>
+          <strong>{{ metrics.unpaidAmountTotal }}</strong>
+          <span>重点关注尾款催缴、部分支付补收和超期账单的持续增长风险。</span>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -265,6 +319,7 @@ watch(
               <div class="ops-row"><span>优先联查</span><span>订单中心 / 支付单管理 / 支付记录</span></div>
               <div class="ops-row"><span>重点核对</span><span>账单状态、待支付金额、到期时间</span></div>
               <div class="ops-row"><span>典型场景</span><span>账单部分支付、订单支付未收口、尾款催缴</span></div>
+              <div class="ops-row"><span>当前风险面</span><span>{{ metrics.overdueTotal }} 笔逾期，{{ metrics.partialPaidTotal }} 笔部分支付</span></div>
             </div>
             <div class="table-inline-actions">
               <button class="link-button" @click="openOrders(selectedItem)">查看订单</button>
@@ -285,6 +340,57 @@ watch(
 </template>
 
 <style scoped>
+.overview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe3f0;
+  background: #f8fafc;
+}
+
+.overview-card strong {
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.overview-card span {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overview-title {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.overview-card.danger {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.overview-card.warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.overview-card.info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) 360px;
@@ -347,5 +453,11 @@ watch(
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

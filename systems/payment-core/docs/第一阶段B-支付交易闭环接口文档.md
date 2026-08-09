@@ -27,20 +27,27 @@
 | `/api/bills` | `GET` | 查询交易账单中心 |
 | `/api/bills/export` | `GET` | 导出当前筛选条件下的交易账单 CSV |
 | `/api/cashier-sessions` | `GET` | 查询收银台会话管理列表 |
+| `/api/cashier-sessions/overview` | `GET` | 查询收银台会话总览指标 |
 | `/api/cashier-sessions/export` | `GET` | 导出当前筛选条件下的收银台会话 CSV |
 | `/api/payment-flows` | `GET` | 查询统一支付流水排障台 |
 | `/api/payment-flows/export` | `GET` | 导出统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
+| `/api/payment-routes/overview` | `GET` | 查询支付路由执行结果总览指标 |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
+| `/api/payment-requests/overview` | `GET` | 查询支付请求总览指标 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
+| `/api/payment-logs/overview` | `GET` | 查询支付处理日志总览指标 |
 | `/api/payment-logs/export` | `GET` | 导出支付处理日志 CSV |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
 | `/api/payment-events` | `GET` | 查询支付事件出站台账，支持 `FAILED_OR_DEAD_LETTER` 联合口径 |
+| `/api/payment-events/overview` | `GET` | 查询支付事件出站总览指标 |
 | `/api/payment-events/republish` | `POST` | 手动重发支付事件 |
 | `/api/payment-issues` | `GET` | 查询支付交易异常中心列表 |
 | `/api/payment-issues/responsibility-summary` | `GET` | 查询支付交易异常责任组统计 |
+| `/api/payment-issues/alerts` | `GET` | 查询支付异常告警通知明细 |
+| `/api/payment-issues/alerts/export` | `GET` | 导出支付异常告警通知明细 CSV |
 | `/api/refunds` | `GET` | 分页查询退款单 |
 | `/api/refunds/export` | `GET` | 导出退款单 CSV |
 | `/api/refunds/{refundOrderId}` | `GET` | 查询退款详情与操作日志 |
@@ -50,8 +57,10 @@
 | `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
 | `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
 | `/api/settlements/workers` | `GET` | 查询服务者结算单 |
+| `/api/settlements/workers/overview` | `GET` | 查询服务者结算总览指标 |
 | `/api/settlements/workers/export` | `GET` | 导出服务者结算单 CSV |
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
+| `/api/payment-config/export` | `GET` | 导出支付配置治理快照 CSV |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
@@ -61,8 +70,10 @@
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 | `/api/payment-day-end/overview` | `GET` | 查询支付日终处理总览与差异告警 |
 | `/api/payment-day-end/run` | `POST` | 手动触发支付日终处理 |
+| `/api/payment-day-end/export` | `GET` | 导出支付日终批次快照 CSV |
 | `/api/payment-task-center/overview` | `GET` | 查询支付任务中心总览 |
 | `/api/payment-task-center/task-runs` | `GET` | 查询支付任务执行日志 |
+| `/api/payment-task-center/task-runs/export` | `GET` | 导出支付任务执行日志 CSV |
 | `/api/payment-task-center/close-expired-payments` | `POST` | 手动执行超时关单 |
 | `/api/payment-task-center/republish-failed-events` | `POST` | 手动执行失败事件重发 |
 | `/api/payment-task-center/retry-failed-refunds` | `POST` | 手动执行失败退款重试 |
@@ -147,6 +158,8 @@
 
 接口：`GET /api/payment-routes`
 
+总览接口：`GET /api/payment-routes/overview`
+
 查询参数：
 
 | 参数 | 说明 |
@@ -203,7 +216,8 @@
 
 1. 当前按支付路由记录聚合支付单、订单、预付单和最近一次支付请求上下文。
 2. 前端可直接用本接口查看路由规则、命中渠道、路由结果以及请求/响应报文，无需再跳多页拼装。
-3. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
+3. 新增 `GET /api/payment-routes/overview`，复用同一组筛选条件返回路由记录总数、成功命中数、需关注命中数、命中渠道数、线下路由数、微信路由数、支付宝路由数和最近路由时间，便于运营先看风险面再下钻。
+4. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
 
 ## 5. 支付请求管理查询
 
@@ -231,13 +245,61 @@
 2. 前端可通过 `clientIp + terminal + channelCode` 组合快速反查同一批终端流量。
 3. 新增 `GET /api/payment-requests/export` 导出能力，沿用同一组筛选参数输出 CSV 快照，便于测试留档、问题复盘和跨团队对数。
 4. 当前接口已兼容 `请求已发起/请求成功/请求失败` 与底层 `处理中/成功/失败` 状态别名映射，避免页面口径与数据库状态不一致。
-5. 生产环境仍需叠加报文字段脱敏和权限分域控制。
+5. 当前已对 `clientIp / idempotencyKey / mobile / cardNo / customerName` 等敏感字段做基础脱敏，生产环境后续继续补权限分域控制和更细粒度脱敏策略。
+6. 新增 `GET /api/payment-requests/overview`，复用同一组筛选条件返回总量、成功/失败/处理中/等待回调分布、涉及渠道数、涉及终端数、重复支付单请求数、缺响应报文数和最近请求时间，方便运营先看全局再下钻列表。
 
 ## 6. 支付处理日志查询
 
 接口：`GET /api/payment-logs`
 
+总览接口：`GET /api/payment-logs/overview`
+
 导出接口：`GET /api/payment-logs/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `paymentOrderId` | 支付单号，模糊匹配 |
+| `orderNo` | 订单号，模糊匹配 |
+| `processStage` | 处理阶段，支持 `全部 / 支付提交 / 支付路由 / 渠道回调 / 业务事件` |
+| `logLevel` | 日志级别，支持 `全部 / INFO / WARN / ERROR` |
+| `source` | 日志来源，模糊匹配 |
+| `keyword` | 关键字，按日志消息模糊匹配 |
+| `sortField` | 排序字段，支持 `createdAt / logLevel / processStage` |
+| `sortOrder` | 排序方向，支持 `asc / desc` |
+| `pageNo` | 页码，从 `1` 开始，仅列表接口使用 |
+| `pageSize` | 每页条数，最大 `100`，仅列表接口使用 |
+
+业务说明：
+
+1. 当前统一聚合支付提交、支付路由、渠道回调、业务事件四类日志来源，复用统一 union SQL 口径，避免列表、导出、总览三套统计不一致。
+2. 新增 `GET /api/payment-logs/overview`，在列表筛选条件不变的前提下返回日志总数、错误/告警/信息分布、涉及阶段数、涉及来源数、渠道回调错误数、业务事件告警数、回调关键字命中数和最近日志时间。
+3. 前端可先使用总览接口定位风险面，再通过列表接口按支付单号、订单号、日志来源和关键字继续下钻。
+4. 导出接口复用同一套筛选条件与排序规则，输出 UTF-8 BOM CSV，便于测试留档、运营复盘和研发排障。
+
+## 7. 支付日终处理与任务中心导出补充
+
+1. 新增 `GET /api/payment-day-end/export`，直接导出全部支付日终批次快照，字段覆盖业务日期、运行方式、主链路成功事实、差异事实、退款收口事实、对账准入结论和触发人，供财务对账、测试留档和问题复盘使用。
+2. 新增 `GET /api/payment-task-center/task-runs/export`，复用任务日志列表当前筛选条件导出 CSV，字段覆盖任务编码、运行方式、任务状态、严重等级、升级状态、处理结果、建议动作和推荐路由。
+3. 两个导出接口均以 UTF-8 BOM 返回，文件可直接被 Excel 打开；导出文本列统一按 CSV 双引号规则转义，避免摘要、建议动作和备注中的逗号、引号破坏结构。
+
+## 8. 支付配置治理快照导出
+
+接口：`GET /api/payment-config/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `section` | 导出分区，支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，默认 `ALL` |
+
+业务说明：
+
+1. 该接口用于导出配置治理快照，而不是导出单一页面截图，供运营、财务、测试、发布评审和事故复盘直接留档。
+2. 导出列统一覆盖 `配置域 / 主键编码 / 次级编码 / 配置名称 / 状态 / 治理摘要 / 适用范围 / 风控或限制 / 运维建议 / 更新时间`。
+3. `ALL` 模式会把渠道、路由、协议、返回码、网关、控制策略、告警供应商和值班路由合并到一张 CSV 中，并通过 `配置域` 字段区分。
+4. 当前版本优先解决“治理快照留痕”问题，后续如要支持更复杂的筛选、异步归档和下载中心，可在此能力之上继续扩展。
 
 查询参数：
 
@@ -264,6 +326,8 @@
 ## 7. 支付事件出站查询与重发
 
 查询接口：`GET /api/payment-events`
+
+总览接口：`GET /api/payment-events/overview`
 
 重发接口：`POST /api/payment-events/republish`
 
@@ -293,6 +357,9 @@
 
 业务说明：
 
+1. 新增 `GET /api/payment-events/overview`，复用同一组筛选条件返回事件总数、发布成功/发布中/失败/死信分布、涉及下游系统数、到期待重试事件数、支付成功事件数和最近发布时间，便于运营和研发先看风险面再下钻列表。
+2. 列表、总览、导出三类接口当前共用统一筛选口径，避免前端页面统计、导出快照和后台查询出现不一致。
+3. `FAILED_OR_DEAD_LETTER` 作为联合筛选口径保留，用于快速圈定需要补偿和人工干预的出站事件。
 1. 重发接口会沿用当前查询条件返回最新分页结果，前端无需额外再发一次查询。
 2. 当前主要支撑支付成功、支付关闭、退款等出站事件的可见化与手动补偿入口。
 3. 后续若接入真实消息总线，需要继续补投递批次、订阅确认和死信处理字段。
@@ -617,21 +684,27 @@
 
 接口：`GET /api/bills`
 
+总览接口：`GET /api/bills/overview`
+
 当前补充能力：
 
 1. 已支持 `customerName` 筛选。
 2. 已支持按 `createdAt / dueAt / billAmount / unpaidAmount` 排序。
-3. `GET /api/bills/export` 复用账单号、订单号、客户名称、账单状态和排序条件导出全量匹配数据，不受列表分页影响。
-4. 导出文件名为 `bills.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
+3. `GET /api/bills/overview` 复用同一组筛选条件返回账单总数、已支付/待支付/部分支付/逾期账单数，以及应收金额、已付金额、待付金额合计。
+4. `GET /api/bills/export` 复用账单号、订单号、客户名称、账单状态和排序条件导出全量匹配数据，不受列表分页影响。
+5. 导出文件名为 `bills.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
 
 接口：`GET /api/cashier-sessions`
+
+总览接口：`GET /api/cashier-sessions/overview`
 
 当前补充能力：
 
 1. 已支持 `paymentOrderId`、`customerName` 筛选。
 2. 已支持按 `createdAt / expiresAt / amount` 排序。
-3. `GET /api/cashier-sessions/export` 复用会话号、支付单号、订单号、客户、终端、会话状态和排序条件导出全量匹配数据，不受列表分页影响。
-4. 导出文件名为 `cashier-sessions.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
+3. `GET /api/cashier-sessions/overview` 复用同一组筛选条件返回会话总数、已失效会话数、成功/已完成会话数、支付中会话数、待支付会话数、涉及终端数、15 分钟内即将失效会话数和会话金额合计。
+4. `GET /api/cashier-sessions/export` 复用会话号、支付单号、订单号、客户、终端、会话状态和排序条件导出全量匹配数据，不受列表分页影响。
+5. 导出文件名为 `cashier-sessions.csv`，采用 UTF-8 BOM 编码，并对 CSV 字段中的双引号进行转义。
 
 接口：`GET /api/refunds`
 
@@ -810,6 +883,31 @@ POST /api/refunds/retry
 3. 退款原因会落在退款单上，操作备注会进入退款操作日志，便于财务、运营、测试和研发统一复盘。
 4. 当前为本地模拟闭环，真实渠道退款请求、退款回调验签、退款渠道流水和差错补偿在后续渠道网关能力中扩展。
 
+## 11.4 服务者结算单查询与导出
+
+查询接口：`GET /api/settlements/workers`
+
+总览接口：`GET /api/settlements/workers/overview`
+
+导出接口：`GET /api/settlements/workers/export`
+
+查询参数：
+
+| 参数 | 说明 |
+| --- | --- |
+| `settlementOrderId` | 结算单号，模糊匹配 |
+| `workerKeyword` | 服务者名称关键字，模糊匹配 |
+| `settlementStatus` | 结算状态，支持 `全部 / 待审核 / 待出款 / 出款成功` |
+| `payoutStatus` | 出款状态，支持 `全部 / 待出款 / 出款中 / 出款成功` |
+| `pageNo` | 页码，从 `1` 开始，仅列表接口使用 |
+| `pageSize` | 每页条数，最大 `100`，仅列表接口使用 |
+
+业务说明：
+
+1. 新增 `GET /api/settlements/workers/overview`，在列表筛选条件不变的前提下返回结算单总数、待审核/待出款/出款中/出款成功分布、实结金额合计、扣减金额合计、保证金影响合计和净额为负结算单数。
+2. 列表、总览、导出三类接口当前共用统一筛选口径，避免页面总览、导出快照和后台查询口径不一致。
+3. 当前模块在 `payment-core` 中仍定位为支付侧快速核对入口，完整审批、出款、核销、失败重打等作业后续由 `settlement-system` 承接。
+
 ## 12. 支付配置中心接口
 
 ### 12.1 查询配置总览
@@ -882,6 +980,7 @@ POST /api/payment-config/control-policies/self-check
 
 1. `enabled=true` 时状态更新为 `ENABLED`。
 2. `enabled=false` 时状态更新为 `DISABLED`。
+3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 3. 协议配置当前已支持运营查看、启停、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑和电子签章服务商维护；后续继续补电子签章联调能力。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
 5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示；后续继续补返回码批量导入、渠道差异比对和真正自动归档动作。
@@ -1064,7 +1163,77 @@ POST /api/payment-config/control-policies/self-check
 ]
 ```
 
-### 13.4 批量处理支付交易异常
+### 13.4 查询支付异常告警通知明细
+
+接口：`GET /api/payment-issues/alerts`
+
+请求参数：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `alertNo` | `string` | 告警编号，模糊查询 |
+| `issueNo` | `string` | 异常编号，模糊查询 |
+| `paymentOrderId` | `string` | 支付单号，模糊查询 |
+| `alertChannel` | `string` | 告警通道，默认 `全部` |
+| `alertStatus` | `string` | 告警状态，默认 `全部` |
+| `ackStatus` | `string` | 回执状态，默认 `全部` |
+| `providerDeliveryStatus` | `string` | 供应商投递状态，默认 `全部` |
+| `pageNo` | `int` | 页码，默认 `1` |
+| `pageSize` | `int` | 每页条数，默认 `20`，最大 `100` |
+
+返回内容：
+
+1. 返回告警编号、异常编号、支付单号、异常类型、严重等级、责任组、通道、接收人、告警状态、回执状态和创建时间。
+2. 同时返回供应商编码、供应商名称、端点别名、模板编码、投递状态、投递说明、供应商回执号和原始回执快照。
+3. 用于支撑运营、研发和测试统一导出异常通知快照，做离线排障、交班和审计留痕。
+
+返回示例：
+
+```json
+{
+  "items": [
+    {
+      "alertNo": "PIA-202608070001",
+      "issueNo": "ISSUE-WAIT-PAY202608070001",
+      "paymentOrderId": "PAY202608070001",
+      "issueType": "待回调未收口",
+      "severity": "P1",
+      "responsibilityGroup": "支付后端值班组",
+      "alertChannel": "IM",
+      "receiver": "支付运营",
+      "alertStatus": "已派发",
+      "ackStatus": "待确认",
+      "providerCode": "im_provider",
+      "providerName": "企业IM",
+      "endpointAlias": "主Webhook",
+      "templateCode": "PAYMENT_ISSUE_NOTICE",
+      "providerDeliveryStatus": "ACCEPTED",
+      "providerDeliveryMessage": "accepted",
+      "providerReceiptNo": "receipt-001",
+      "providerReceiptSnapshot": "{\"status\":\"accepted\"}",
+      "triggeredBy": "任务中心",
+      "ackOperator": null,
+      "ackAt": null,
+      "createdAt": "2026-08-07 09:30:00"
+    }
+  ],
+  "total": 1,
+  "pageNo": 1,
+  "pageSize": 20
+}
+```
+
+### 13.5 导出支付异常告警通知明细
+
+接口：`GET /api/payment-issues/alerts/export`
+
+请求参数：
+
+1. 与 `GET /api/payment-issues/alerts` 完全一致，但不需要分页参数。
+2. 导出结果使用 UTF-8 CSV，文件名固定为 `payment-issue-alert-logs.csv`。
+3. 导出字段覆盖告警基础信息、供应商信息、投递状态、确认人、确认时间、内容快照和回执快照。
+
+### 13.6 批量处理支付交易异常
 
 接口：`POST /api/payment-issues/actions`
 
@@ -1097,7 +1266,7 @@ POST /api/payment-config/control-policies/self-check
 3. 当 `actionType=标记已处理` 时，后端会同步确认该异常下仍处于 `待确认` 的告警回执。
 4. 接口返回刷新后的异常中心列表，前端可直接更新页面。
 
-### 13.5 查询支付任务中心总览
+### 13.7 查询支付任务中心总览
 
 接口：`GET /api/payment-task-center/overview`
 
@@ -1112,7 +1281,7 @@ POST /api/payment-config/control-policies/self-check
 7. `overdueIssueCount`：超过 SLA 的支付交易异常数。
 8. `recentTaskRuns`：最近 10 条任务执行日志。
 
-### 13.6 查询支付任务执行日志
+### 13.8 查询支付任务执行日志
 
 接口：`GET /api/payment-task-center/task-runs`
 

@@ -4,6 +4,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import java.util.List;
 import java.util.Locale;
@@ -41,6 +42,10 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     @Override
     public AccountEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("PAYMENT_SUCCESS", request.getPaymentOrderId());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "PAYMENT_SUCCESS_EVENT", request.getPaymentOrderId())) {
             accountingMemoryStore.credit(
                     request.getAccountNo(),
@@ -58,6 +63,10 @@ public class AccountingEventServiceImpl implements AccountingEventService {
 
     @Override
     public AccountEventDTO consumeClearingGenerated(ClearingGeneratedEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("CLEARING_GENERATED", request.getClearingOrderNo());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
         if (!accountingMemoryStore.hasLedger(request.getAccountNo(), "CLEARING_GENERATED_EVENT", request.getClearingOrderNo())) {
             accountingMemoryStore.credit(
                     request.getAccountNo(),
@@ -71,5 +80,58 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 request.getClearingOrderNo(),
                 request.getSummary(),
                 "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}"));
+    }
+
+    @Override
+    public AccountEventDTO consumeSettlementCompensation(SettlementCompensationEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("SETTLEMENT_COMPENSATION", request.getSettlementOrderNo());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
+        String operatorName = request.getOperatorName() == null || request.getOperatorName().trim().isEmpty()
+                ? "结算补偿消费者"
+                : request.getOperatorName();
+        if (!accountingMemoryStore.hasLedger(
+                request.getAccountNo(),
+                "SETTLEMENT_COMPENSATION_EVENT",
+                request.getSettlementOrderNo())) {
+            if ("借方".equals(request.getCompensationDirection())) {
+                accountingMemoryStore.debit(
+                        request.getAccountNo(),
+                        "SETTLEMENT_COMPENSATION_EVENT",
+                        request.getSettlementOrderNo(),
+                        request.getAmount(),
+                        operatorName);
+            } else {
+                accountingMemoryStore.credit(
+                        request.getAccountNo(),
+                        "SETTLEMENT_COMPENSATION_EVENT",
+                        request.getSettlementOrderNo(),
+                        request.getAmount(),
+                        operatorName);
+            }
+        }
+        return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
+                "SETTLEMENT_COMPENSATION",
+                request.getSettlementOrderNo(),
+                request.getSummary() == null || request.getSummary().trim().isEmpty()
+                        ? "结算差异补偿入账"
+                        : request.getSummary(),
+                "{\"bizNo\":\"" + request.getBizNo()
+                        + "\",\"amount\":" + request.getAmount()
+                        + ",\"compensationDirection\":\"" + request.getCompensationDirection()
+                        + "\"}"));
+    }
+
+    /**
+     * 先按事件台账做幂等收口，兼容历史演练或旧版本留下“有事件、无流水”的数据形态。
+     */
+    private AccountEventDTO findExistingEvent(String eventType, String bizNo) {
+        if (bizNo == null || bizNo.trim().isEmpty()) {
+            return null;
+        }
+        com.abc123.accounting.entity.AccountEventEntity existingEvent =
+                accountingMemoryStore.findEvent(eventType, bizNo);
+        return existingEvent == null ? null : accountingMapper.toEventDTO(existingEvent);
     }
 }

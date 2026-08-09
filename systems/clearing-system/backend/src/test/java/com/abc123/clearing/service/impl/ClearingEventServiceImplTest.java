@@ -3,6 +3,7 @@ package com.abc123.clearing.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.clearing.dto.ClearingEventDTO;
+import com.abc123.clearing.dto.ClearingReplayResultDTO;
 import com.abc123.clearing.dto.ClearingOrderDTO;
 import com.abc123.clearing.dto.PageResultDTO;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
@@ -72,5 +73,13 @@ class ClearingEventServiceImplTest {
         assertEquals(1, orders.getTotal());
         assertEquals(1, events.getTotal());
         assertEquals(6, shares.getTotal());
+    }
+
+    @Test
+    void shouldReplayDueFailedEventsThroughExistingRetryService() {
+        ClearingReplayResultDTO result = clearingEventService.replayDueFailedEvents();
+
+        assertEquals(0, result.getAttemptedCount());
+        assertEquals("当前没有到达重试时间的失败派发事件", result.getMessage());
     }
 }

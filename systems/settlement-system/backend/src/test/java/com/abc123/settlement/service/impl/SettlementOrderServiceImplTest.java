@@ -1,7 +1,10 @@
 package com.abc123.settlement.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.settlement.common.BusinessException;
+import com.abc123.settlement.common.ErrorCode;
 import com.abc123.settlement.dto.AuditSettlementRequestDTO;
 import com.abc123.settlement.dto.PageResultDTO;
 import com.abc123.settlement.dto.PayoutBatchDTO;
@@ -49,5 +52,15 @@ class SettlementOrderServiceImplTest {
         assertEquals("待出款", payoutBatches.getItems().get(0).getPayoutStatus());
         assertEquals(1, payoutRecords.getTotal());
         assertEquals("待出款", payoutRecords.getItems().get(0).getPayoutStatus());
+    }
+
+    @Test
+    void shouldThrowBusinessExceptionWhenSettlementOrderMissing() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> settlementOrderService.fullDetail("SLT-MISSING"));
+
+        assertEquals(ErrorCode.SETTLEMENT_ORDER_NOT_FOUND, exception.getCode());
+        assertEquals("结算单不存在", exception.getMessage());
     }
 }

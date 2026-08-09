@@ -128,6 +128,36 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldExportGovernanceSnapshotCsv() {
+        PaymentChannelConfigDTO channel = new PaymentChannelConfigDTO();
+        channel.setChannelCode("wx_h5");
+        channel.setMerchantNo("MCH_HOME_APP");
+        channel.setChannelName("微信H5支付");
+        channel.setPaymentMethod("微信支付");
+        channel.setDailyLimit("¥500000.00");
+        channel.setSceneScope("家政服务/充值");
+        channel.setRiskControlTag("实名校验");
+        channel.setStatus("ENABLED");
+        channel.setUpdatedAt("2026-08-03 10:00:00");
+        when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(channel));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findAlertProviders()).thenReturn(Collections.emptyList());
+        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
+
+        String csv = new PaymentConfigServiceImpl(paymentConfigMapper).exportGovernanceSnapshotCsv("CHANNELS");
+
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("配置域,主键编码"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"支付渠道\""));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"wx_h5\""));
+        org.junit.jupiter.api.Assertions.assertFalse(csv.contains("\"路由规则\""));
+    }
+
+    @Test
     void shouldToggleChannelStatus() {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("wx_h5");

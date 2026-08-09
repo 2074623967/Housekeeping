@@ -79,6 +79,16 @@ function goToPage(nextPage) {
   loadTaskRuns();
 }
 
+function exportTaskRuns() {
+  const exportUrl = paymentTaskCenterApi.buildExportUrl({
+    taskCode: filters.value.taskCode,
+    runMode: filters.value.runMode,
+    taskStatus: filters.value.taskStatus,
+    severityLevel: filters.value.severityLevel
+  });
+  window.open(exportUrl, "_blank", "noopener");
+}
+
 async function runTask(taskCode, taskName, actionRunner) {
   activeTaskCode.value = taskCode;
   actionMessage.value = "";
@@ -427,6 +437,7 @@ onMounted(loadOverview);
             <div class="toolbar-actions">
               <button class="button primary" @click="applyFilters">查询</button>
               <button class="button secondary" @click="resetFilters">重置</button>
+              <button class="button secondary" @click="exportTaskRuns">导出 CSV</button>
             </div>
           </div>
           <div class="table-wrap">

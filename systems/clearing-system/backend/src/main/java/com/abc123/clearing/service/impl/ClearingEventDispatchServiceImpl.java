@@ -116,6 +116,9 @@ public class ClearingEventDispatchServiceImpl implements ClearingEventDispatchSe
         if (outboxEvent == null) {
             return false;
         }
+        if ("SUCCESS".equalsIgnoreCase(outboxEvent.getPublishStatus())) {
+            return true;
+        }
         List<ShareItemEntity> shares = clearingMemoryStore.sharesByClearingNo(clearingOrder.getClearingNo());
         ShareItemEntity workerShare = findShare(shares, "WORKER").orElse(null);
         BigDecimal workerAmount = workerShare != null ? workerShare.getShareAmount() : clearingOrder.getWorkerAmount();

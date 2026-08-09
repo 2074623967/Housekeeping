@@ -1,0 +1,26 @@
+{
+  "generatedAt": "2026-08-09T00:43:09.315Z",
+  "rootDir": "/Users/abc123/workspace/home-service-payment-system",
+  "evidenceDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808",
+  "inputs": {
+    "manifest": "docs/releases/evidence/draft-test-20260808/screenshot-manifest.csv",
+    "regression": "docs/releases/evidence/draft-test-20260808/records/final-regression-checklist.md",
+    "releaseDoc": "docs/releases/2026-08-05-支付系统发布说明草案.md"
+  },
+  "summary": {
+    "screenshotTotal": 50,
+    "screenshotDone": 50,
+    "screenshotPending": 0,
+    "regressionTodoCount": 0,
+    "releaseDocIsDraft": false,
+    "canPromoteTestToMaster": true,
+    "canCreateRelease": false,
+    "blockerCount": 0
+  },
+  "blockers": [],
+  "details": {
+    "pendingScreenshots": [],
+    "missingScreenshotFiles": [],
+    "doneWithoutBizNo": []
+  }
+}

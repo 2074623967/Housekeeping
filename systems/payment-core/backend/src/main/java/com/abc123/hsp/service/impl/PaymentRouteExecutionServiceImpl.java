@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
+import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.mapper.PaymentRouteExecutionMapper;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
@@ -21,6 +22,47 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
 
     @Override
     public PageResultDTO<PaymentRouteExecutionListItemDTO> list(PaymentRouteExecutionQueryDTO query) {
+        normalizeQuery(query);
+        return new PageResultDTO<>(
+                paymentRouteExecutionMapper.findAll(query),
+                paymentRouteExecutionMapper.count(query),
+                query.getPageNo(),
+                query.getPageSize()
+        );
+    }
+
+    @Override
+    public PaymentRouteExecutionOverviewDTO overview(PaymentRouteExecutionQueryDTO query) {
+        normalizeQuery(query);
+        PaymentRouteExecutionOverviewDTO overview = paymentRouteExecutionMapper.findOverview(query);
+        if (overview == null) {
+            overview = new PaymentRouteExecutionOverviewDTO();
+        }
+        if (overview.getTotalRouteCount() == null) {
+            overview.setTotalRouteCount(0L);
+        }
+        if (overview.getSuccessRouteCount() == null) {
+            overview.setSuccessRouteCount(0L);
+        }
+        if (overview.getWarnRouteCount() == null) {
+            overview.setWarnRouteCount(0L);
+        }
+        if (overview.getDistinctChannelCount() == null) {
+            overview.setDistinctChannelCount(0);
+        }
+        if (overview.getOfflineRouteCount() == null) {
+            overview.setOfflineRouteCount(0);
+        }
+        if (overview.getWechatRouteCount() == null) {
+            overview.setWechatRouteCount(0);
+        }
+        if (overview.getAlipayRouteCount() == null) {
+            overview.setAlipayRouteCount(0);
+        }
+        return overview;
+    }
+
+    private void normalizeQuery(PaymentRouteExecutionQueryDTO query) {
         query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
         query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
         query.setRouteRule(query.getRouteRule() == null ? null : query.getRouteRule().trim());
@@ -32,11 +74,5 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
-        return new PageResultDTO<>(
-                paymentRouteExecutionMapper.findAll(query),
-                paymentRouteExecutionMapper.count(query),
-                query.getPageNo(),
-                query.getPageSize()
-        );
     }
 }

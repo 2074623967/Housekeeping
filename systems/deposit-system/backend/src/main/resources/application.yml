@@ -1,0 +1,17 @@
+server:
+  port: ${DEPOSIT_SYSTEM_PORT:18160}
+spring:
+  application:
+    name: home-service-deposit-backend
+  datasource:
+    url: ${DEPOSIT_DATASOURCE_URL:jdbc:h2:mem:deposit;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1}
+    driver-class-name: ${DEPOSIT_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${DEPOSIT_DATASOURCE_USERNAME:sa}
+    password: ${DEPOSIT_DATASOURCE_PASSWORD:}
+  sql:
+    init:
+      mode: ${DEPOSIT_SQL_INIT_MODE:always}
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true

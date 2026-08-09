@@ -1,6 +1,7 @@
 package com.abc123.clearing.service.impl;
 
 import com.abc123.clearing.dto.ClearingEventDTO;
+import com.abc123.clearing.dto.ClearingReplayResultDTO;
 import com.abc123.clearing.dto.PageResultDTO;
 import com.abc123.clearing.dto.PaymentSuccessEventRequestDTO;
 import com.abc123.clearing.service.ClearingEventDispatchService;
@@ -19,14 +20,17 @@ public class ClearingEventServiceImpl implements ClearingEventService {
     private final ClearingMemoryStore clearingMemoryStore;
     private final ClearingMapper clearingMapper;
     private final ClearingEventDispatchService clearingEventDispatchService;
+    private final ClearingOutboxRetryService clearingOutboxRetryService;
 
     @Autowired
     public ClearingEventServiceImpl(ClearingMemoryStore clearingMemoryStore,
                                     ClearingMapper clearingMapper,
-                                    ClearingEventDispatchService clearingEventDispatchService) {
+                                    ClearingEventDispatchService clearingEventDispatchService,
+                                    ClearingOutboxRetryService clearingOutboxRetryService) {
         this.clearingMemoryStore = clearingMemoryStore;
         this.clearingMapper = clearingMapper;
         this.clearingEventDispatchService = clearingEventDispatchService;
+        this.clearingOutboxRetryService = clearingOutboxRetryService;
     }
 
     ClearingEventServiceImpl(ClearingMemoryStore clearingMemoryStore, ClearingMapper clearingMapper) {
@@ -35,7 +39,12 @@ public class ClearingEventServiceImpl implements ClearingEventService {
             public boolean publishClearingGenerated(String paymentOrderId) {
                 return false;
             }
-        });
+        }, new ClearingOutboxRetryService(clearingMemoryStore, new ClearingEventDispatchService() {
+            @Override
+            public boolean publishClearingGenerated(String paymentOrderId) {
+                return false;
+            }
+        }, 100));
     }
 
     @Override
@@ -53,6 +62,17 @@ public class ClearingEventServiceImpl implements ClearingEventService {
         ClearingEventDTO event = clearingMapper.toEventDTO(clearingMemoryStore.consumePaymentSuccess(request));
         clearingEventDispatchService.publishClearingGenerated(request.getPaymentOrderId());
         return event;
+    }
+
+    @Override
+    public ClearingReplayResultDTO replayDueFailedEvents() {
+        int attemptedCount = clearingOutboxRetryService.republishDueFailedEvents();
+        ClearingReplayResultDTO dto = new ClearingReplayResultDTO();
+        dto.setAttemptedCount(attemptedCount);
+        dto.setMessage(attemptedCount > 0
+                ? "已触发失败派发重放，请复核结算和账务下游是否完成收口"
+                : "当前没有到达重试时间的失败派发事件");
+        return dto;
     }
 
     private PageResultDTO<ClearingEventDTO> page(List<ClearingEventDTO> items, int pageNo, int pageSize) {

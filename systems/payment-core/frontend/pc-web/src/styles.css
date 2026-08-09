@@ -1,4 +1,5 @@
 @import "../../app-web/src/styles.css";
+@import "../../shared/src/styles/terminal.css";
 
 :root {
   background:

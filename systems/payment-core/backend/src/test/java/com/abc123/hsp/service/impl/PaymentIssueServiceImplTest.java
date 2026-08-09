@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -126,6 +127,41 @@ class PaymentIssueServiceImplTest {
         query.setPageSize(10);
 
         assertEquals(1, new PaymentIssueServiceImpl(paymentIssueMapper).listAlertLogs(query).getItems().size());
+    }
+
+    @Test
+    void shouldExportAlertLogsCsv() {
+        PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
+        row.setAlertNo("PIA-EXPORT-001");
+        row.setIssueNo("ISSUE-EXPORT-001");
+        row.setPaymentOrderId("PAY-EXPORT-001");
+        row.setIssueType("待回调未收口");
+        row.setSeverity("P1");
+        row.setResponsibilityGroup("支付后端值班组");
+        row.setAlertChannel("IM");
+        row.setReceiver("支付运营");
+        row.setAlertStatus("已派发");
+        row.setAckStatus("待确认");
+        row.setProviderCode("im_provider");
+        row.setProviderName("企业IM");
+        row.setEndpointAlias("主Webhook");
+        row.setTemplateCode("PAYMENT_ISSUE_NOTICE");
+        row.setProviderDeliveryStatus("ACCEPTED");
+        row.setProviderDeliveryMessage("accepted");
+        row.setProviderReceiptNo("receipt-001");
+        row.setAckOperator("支付运营");
+        row.setAckAt("2026-08-07 10:00:00");
+        row.setTriggeredBy("任务中心");
+        row.setCreatedAt("2026-08-07 09:30:00");
+        row.setAlertContent("支付异常告警内容");
+        row.setProviderReceiptSnapshot("{\"status\":\"accepted\"}");
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
+
+        String csv = new PaymentIssueServiceImpl(paymentIssueMapper).exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO());
+
+        assertTrue(csv.contains("PIA-EXPORT-001"));
+        assertTrue(csv.contains("支付异常告警内容"));
+        verify(paymentIssueMapper).findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class));
     }
 
     @Test

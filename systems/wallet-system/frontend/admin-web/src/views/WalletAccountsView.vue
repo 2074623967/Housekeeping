@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { walletApi } from "../api/client";
 
 const rows = ref([]);
+const balanceSnapshots = ref([]);
 const detail = ref(null);
 const loading = ref(false);
 const message = ref("");
@@ -37,6 +38,7 @@ async function load() {
   loading.value = true;
   message.value = "";
   rows.value = await walletApi.getAccounts();
+  balanceSnapshots.value = await walletApi.getBalanceSnapshots();
   detail.value = rows.value[0] ? await walletApi.getDetail(rows.value[0].accountNo) : null;
   if (!rechargeForm.value.accountNo && rows.value[0]) {
     rechargeForm.value.accountNo = rows.value[0].accountNo;
@@ -127,6 +129,26 @@ onMounted(load);
       <div v-if="loading">加载中...</div>
       <div v-else class="layout">
         <div class="table-wrap">
+          <div class="section-header">
+            <h3>余额快照台</h3>
+            <p>按钱包账户汇总可用、冻结、总余额和关注标签，方便财务与资金快速核查。</p>
+          </div>
+          <table style="margin-bottom:16px">
+            <thead>
+              <tr><th>账户号</th><th>用户</th><th>总余额</th><th>可用</th><th>冻结</th><th>冻结占比</th><th>关注标签</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="snapshot in balanceSnapshots" :key="`${snapshot.accountNo}-snapshot`">
+                <td>{{ snapshot.accountNo }}</td>
+                <td>{{ snapshot.ownerName }}</td>
+                <td>{{ snapshot.totalAmount }}</td>
+                <td>{{ snapshot.availableAmount }}</td>
+                <td>{{ snapshot.frozenAmount }}</td>
+                <td>{{ snapshot.frozenRate }}</td>
+                <td><span class="badge">{{ snapshot.focusTag }}</span></td>
+              </tr>
+            </tbody>
+          </table>
           <table>
             <thead>
               <tr><th>账户号</th><th>用户</th><th>类型</th><th>状态</th><th>可用</th><th>冻结</th></tr>

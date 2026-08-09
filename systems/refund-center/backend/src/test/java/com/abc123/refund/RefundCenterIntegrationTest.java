@@ -1,0 +1,99 @@
+package com.abc123.refund;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.abc123.refund.dto.PaymentSuccessProjectionDTO;
+import com.abc123.refund.dto.RefundActionRequestDTO;
+import com.abc123.refund.dto.RefundApplyRequestDTO;
+import com.abc123.refund.dto.RefundCallbackRequestDTO;
+import com.abc123.refund.dto.RefundListItemDTO;
+import com.abc123.refund.dto.RefundOutboxDispatchRequestDTO;
+import com.abc123.refund.dto.RefundOutboxItemDTO;
+import com.abc123.refund.dto.RefundOutboxQueryDTO;
+import com.abc123.refund.service.RefundService;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+/**
+ * 使用 H2 验证 DDL、MyBatis XML 和退款状态机的真实联动。
+ */
+@SpringBootTest
+class RefundCenterIntegrationTest {
+
+    @Autowired
+    private RefundService refundService;
+
+    @Test
+    void shouldCompleteRefundFlowWithDatabase() {
+        String paymentOrderId = "PAY-IT-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-1");
+        source.setCustomerName("集成测试客户");
+        source.setPaidAmount(new BigDecimal("120.00"));
+        source.setChannelCode("WECHAT");
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("30.00"));
+        apply.setRefundReason("服务取消");
+        RefundListItemDTO created = refundService.apply(apply);
+
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(created.getRefundOrderId());
+        assertEquals("APPROVED", refundService.approve(action).getStatus());
+        assertEquals("PROCESSING", refundService.submit(action).getStatus());
+
+        RefundCallbackRequestDTO callback = new RefundCallbackRequestDTO();
+        callback.setRefundOrderId(created.getRefundOrderId());
+        callback.setResult("SUCCESS");
+        callback.setChannelRefundId("CH-IT-1");
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+        assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
+        assertEquals("SUCCESS", refundService.callback(callback).getStatus());
+        assertEquals(4, refundService.detail(created.getRefundOrderId()).getOperationLogs().size());
+
+        RefundOutboxQueryDTO outboxQuery = new RefundOutboxQueryDTO();
+        outboxQuery.setAggregateId(created.getRefundOrderId());
+        RefundOutboxItemDTO outbox = refundService.listOutbox(outboxQuery).getItems().get(0);
+        assertEquals("PENDING", outbox.getStatus());
+
+        RefundOutboxDispatchRequestDTO dispatch = new RefundOutboxDispatchRequestDTO();
+        dispatch.setSimulateResult("SUCCESS");
+        assertEquals("SENT", refundService.dispatchOutbox(outbox.getEventId(), dispatch).getStatus());
+    }
+
+    @Test
+    void shouldExportRefundDetailSnapshot() {
+        String paymentOrderId = "PAY-IT-" + UUID.randomUUID();
+        PaymentSuccessProjectionDTO source = new PaymentSuccessProjectionDTO();
+        source.setPaymentOrderId(paymentOrderId);
+        source.setOrderNo("ORDER-IT-2");
+        source.setCustomerName("导出测试客户");
+        source.setPaidAmount(new BigDecimal("200.00"));
+        source.setChannelCode("ALIPAY");
+        refundService.projectPaymentSuccess(source);
+
+        RefundApplyRequestDTO apply = new RefundApplyRequestDTO();
+        apply.setPaymentOrderId(paymentOrderId);
+        apply.setRefundAmount(new BigDecimal("66.00"));
+        apply.setRefundReason("导出快照测试");
+        RefundListItemDTO created = refundService.apply(apply);
+
+        RefundActionRequestDTO action = new RefundActionRequestDTO();
+        action.setRefundOrderId(created.getRefundOrderId());
+        refundService.approve(action);
+        refundService.submit(action);
+
+        String csv = new String(refundService.exportDetailSnapshot(created.getRefundOrderId()), StandardCharsets.UTF_8);
+        assertEquals(true, csv.contains("退款单号,原支付单号,业务订单号"));
+        assertEquals(true, csv.contains(created.getRefundOrderId()));
+        assertEquals(true, csv.contains("操作日志"));
+        assertEquals(true, csv.contains("退款成功事件出站"));
+    }
+}

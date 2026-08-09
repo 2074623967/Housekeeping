@@ -1,0 +1,41 @@
+package com.abc123.accounting.controller;
+
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.nio.charset.StandardCharsets;
+import com.abc123.accounting.service.LedgerService;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+/**
+ * 账务流水控制器测试。
+ */
+@ExtendWith(MockitoExtension.class)
+class LedgerControllerTest {
+
+    @Mock
+    private LedgerService ledgerService;
+
+    @Test
+    void shouldListLedgers() {
+        LedgerController controller = new LedgerController(ledgerService);
+
+        controller.list("ACT10001", "PAY202608030001", "PAYMENT_SUCCESS", 1, 20);
+
+        verify(ledgerService).list("ACT10001", "PAY202608030001", "PAYMENT_SUCCESS", 1, 20);
+    }
+
+    @Test
+    void shouldExportLedgers() {
+        LedgerController controller = new LedgerController(ledgerService);
+        when(ledgerService.exportSnapshot("ACT10001", "PAY202608030001", "PAYMENT_SUCCESS"))
+                .thenReturn("流水号\n".getBytes(StandardCharsets.UTF_8));
+
+        controller.export("ACT10001", "PAY202608030001", "PAYMENT_SUCCESS");
+
+        verify(ledgerService).exportSnapshot("ACT10001", "PAY202608030001", "PAYMENT_SUCCESS");
+    }
+}

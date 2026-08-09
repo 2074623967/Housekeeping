@@ -126,6 +126,7 @@ public class AccountingMapper {
         dto.setStatusType("已消费".equals(entity.getEventStatus()) ? "success" : "info");
         dto.setSummary(entity.getSummary());
         dto.setPayload(entity.getPayload());
+        dto.setCompensationHint(resolveCompensationHint(entity));
         dto.setCreatedAt(entity.getCreatedAt());
         return dto;
     }
@@ -145,5 +146,18 @@ public class AccountingMapper {
             items.add(toLedgerDTO(entity));
         }
         return items;
+    }
+
+    private String resolveCompensationHint(AccountEventEntity entity) {
+        if ("SETTLEMENT_COMPENSATION".equals(entity.getEventType())) {
+            return "需核对结算差异单、补偿方向与账务流水是否一致";
+        }
+        if ("CLEARING_GENERATED".equals(entity.getEventType())) {
+            return "需核对清分结果、应收账户和账务入账金额是否一致";
+        }
+        if ("PAYMENT_SUCCESS".equals(entity.getEventType())) {
+            return "需核对支付回调、支付单与入账流水是否一致";
+        }
+        return "需结合原始业务单号继续排查";
     }
 }

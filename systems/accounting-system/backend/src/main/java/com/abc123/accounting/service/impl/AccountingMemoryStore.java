@@ -140,6 +140,18 @@ public class AccountingMemoryStore {
     }
 
     @Transactional
+    public AccountLedgerEntity debit(String accountNo, String bizType, String bizNo, BigDecimal amount, String operatorName) {
+        AccountBalanceEntity balance = findBalance(accountNo);
+        BigDecimal before = balance.getAvailableAmount();
+        BigDecimal after = before.subtract(amount);
+        accountingDataMapper.updateBalance(accountNo, after, balance.getFrozenAmount(), balance.getInTransitAmount(), now());
+        updateAccountChangeTime(accountNo);
+        AccountLedgerEntity entity = buildLedger(accountNo, bizType, bizNo, "借方", amount, before, after, operatorName);
+        accountingDataMapper.insertLedger(entity);
+        return entity;
+    }
+
+    @Transactional
     public AccountLedgerEntity freeze(String accountNo, String bizNo, String freezeReason, BigDecimal amount, String operatorName) {
         return freezeBalanceOnly(accountNo, bizNo, freezeReason, amount, operatorName);
     }
