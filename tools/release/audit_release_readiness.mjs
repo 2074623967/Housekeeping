@@ -193,10 +193,15 @@ function buildAudit(
     blockers.push("重评清单不完整");
   }
 
-  const releaseNoteChecklistReady = containsAll(releaseNoteChecklistContent, [
-    "当前状态：`待正式版说明生成`",
-    "必备内容"
-  ]);
+  const releaseNoteChecklistReady =
+    containsAll(releaseNoteChecklistContent, [
+      "当前状态：`待正式版说明生成`",
+      "必备内容"
+    ]) ||
+    containsAll(releaseNoteChecklistContent, [
+      "当前状态：`预填版已形成，待正式生效`",
+      "必备内容"
+    ]);
   if (!releaseNoteChecklistReady) {
     blockers.push("正式版发布说明检查表不完整");
   }
