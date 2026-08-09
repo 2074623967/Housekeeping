@@ -26,12 +26,11 @@
 | REG-07 | 跨系统链路诊断 | PASS | PASS | PASS | OPTIONAL | N/A | 已完成 | 当前 test 基线已具备代码与自动化闭环 |
 | REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | PASS | PASS | 已完成代码与页面证据 | 当前 test 基线死信任务页截图已生成，补偿业务批次仍需同批次复核 |
 | REG-09 | 结算审核与出款 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线出款页截图已生成，缺失败出款回滚证据 |
-| REG-10 | 日终处理与运营巡检 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 运行态已生成 REC-DEMO-1001，存在 1 条 OPEN 金额差异；需补日终重跑/差异结案后的收口证据 |
+| REG-10 | 日终处理与运营巡检 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 运行态已完成 REC-DEMO-1001 差异识别、人工结案和工作台回写 |
 
 ## 3. 阻断项
 
 1. `REG-01 ~ REG-06 / REG-09` 仍缺最新同批次补偿/回滚证据。
-3. `REG-10` 已补真实批次、数据库事实、事件台账和页面巡检证据，但仍存在 OPEN 金额差异，且日终重跑/差异结案后的收口证据未完成。
 
 ## 4. 放行结论
 

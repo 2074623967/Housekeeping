@@ -49,4 +49,4 @@ clearing-system,admin-web,events,清分事件页,publishStatus/retryCount/replay
 settlement-system,admin-web,orders,结算单页,结算单状态与清分承接事实,SLT20004,screenshots/settlement-system/admin-web/orders.png,CAPTURED,正式来源应用 App 结算单样例
 settlement-system,admin-web,payouts,出款批次页,出款记录与失败重试事实,PBT50001,screenshots/settlement-system/admin-web/payouts.png,CAPTURED,2026-08-03 同批次出款批次样例
 accounting-system,admin-web,events,账务事件页,PAYMENT_SUCCESS/CLEARING_GENERATED,EVT50005~EVT50010,screenshots/accounting-system/admin-web/events.png,CAPTURED,正式来源应用三笔样例自动消费区间
-reconciliation-system,admin-web,overview,对账工作台,REC-DEMO-1001 / OPEN金额差异,REC-DEMO-1001,screenshots/reconciliation-system/admin-web/overview.png,CAPTURED,2026-08-09 当前 test 运行态对账批次与未结差异
+reconciliation-system,admin-web,overview,对账工作台,REC-DEMO-1001 / 差异已结案,REC-DEMO-1001,screenshots/reconciliation-system/admin-web/overview.png,CAPTURED,2026-08-09 当前 test 运行态对账批次与结案后工作台

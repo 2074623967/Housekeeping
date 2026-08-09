@@ -4,28 +4,47 @@
 - 分支：`test`
 - 系统：`reconciliation-system`
 
-## 1. 运行态接口事实
+## 1. 运行态处置轨迹
 
-`GET /api/reconciliation/overview` 返回摘要：
+### 1.1 结案前
+
+`GET /api/reconciliation/differences?status=OPEN&pageNo=1&pageSize=20`
+
+- 返回 `DIFF-DEMO-1001`
+- 状态为 `OPEN`
+
+### 1.2 结案动作
+
+`POST /api/reconciliation/differences/DIFF-DEMO-1001/resolve`
+
+- 处置结论：`人工核实并完成调账`
+- 处置备注：`2026-08-09 test 基线日终差异结案演练`
+
+### 1.3 结案后
+
+`GET /api/reconciliation/overview`
 
 ```json
 {
   "batchCount": 1,
   "runningBatchCount": 0,
-  "openDifferenceCount": 1,
+  "openDifferenceCount": 0,
   "matchedCount": 2
 }
 ```
 
-`GET /api/reconciliation/batches/REC-DEMO-1001` 返回批次详情，包含渠道记录、平台支付事实和 `DIFF-DEMO-1001` 未结金额差异。
+`GET /api/reconciliation/batches/REC-DEMO-1001`
 
-## 2. 事件/运营处置口径
+- `openDifferenceCount = 0`
+- `resolvedDifferenceCount = 1`
+- `DIFF-DEMO-1001.status = RESOLVED`
+- `resolvedAt = 2026-08-09T11:29:16.766`
 
-本轮没有伪造“差异已解决”事件。当前运营状态明确为：
+## 2. 运营收口口径
 
-1. 批次事实生成完成。
-2. 金额差异仍为 `OPEN`。
-3. 运营动作应进入差异处理页，完成核实、调账或补单后再结案。
-4. 在差异未结案前，日终不允许标记为“可直接进入正式对账”。
+这条证据证明当前 test 基线已经具备：
 
-这条证据用于证明系统能够把日终结果和未结异常暴露给运营，而不是只记录一个成功批次状态。
+1. 日终差异可识别。
+2. 运营可通过标准接口完成结案。
+3. 结案后工作台与批次事实同步变化。
+4. 日终巡检不是只看“批次完成”，而是看“差异是否已经收口”。
