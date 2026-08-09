@@ -87,6 +87,11 @@ public class ReconciliationController {
         return ApiResponse.success(service.run(batchNo));
     }
 
+    @PostMapping("/batches/{batchNo}/readiness-check")
+    public ApiResponse<ReconciliationBatchListItemDTO> checkBatchReadiness(@PathVariable String batchNo) {
+        return ApiResponse.success(service.checkBatchReadiness(batchNo));
+    }
+
     @GetMapping("/differences")
     public ApiResponse<PageResultDTO<ReconciliationDifferenceDTO>> differences(
             @RequestParam(required = false) String batchNo,

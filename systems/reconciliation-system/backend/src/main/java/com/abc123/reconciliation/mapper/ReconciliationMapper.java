@@ -54,6 +54,15 @@ public interface ReconciliationMapper {
                           @Param("internalCount") int internalCount, @Param("matchedCount") int matchedCount,
                           @Param("differenceCount") int differenceCount);
 
+    int updateBatchReadiness(@Param("batchNo") String batchNo, @Param("readinessStatus") String readinessStatus,
+                             @Param("readinessSummary") String readinessSummary,
+                             @Param("readinessSuggestedAction") String readinessSuggestedAction,
+                             @Param("readinessBlockingOwner") String readinessBlockingOwner,
+                             @Param("readinessChainCount") int readinessChainCount,
+                             @Param("readinessCompletedChainCount") int readinessCompletedChainCount,
+                             @Param("readinessAbnormalChainCount") int readinessAbnormalChainCount,
+                             @Param("readinessPendingChainCount") int readinessPendingChainCount);
+
     List<ReconciliationDifferenceDTO> findDifferences(DifferenceQueryDTO query);
 
     long countDifferences(DifferenceQueryDTO query);

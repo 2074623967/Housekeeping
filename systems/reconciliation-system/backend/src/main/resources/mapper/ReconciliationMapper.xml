@@ -11,13 +11,19 @@
 
     <select id="findBatch" resultType="com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO">
         SELECT batch_no, business_date, channel_code, bill_source, status, channel_count,
-               internal_count, matched_count, difference_count
+               internal_count, matched_count, difference_count, readiness_status, readiness_summary,
+               readiness_suggested_action, readiness_blocking_owner, readiness_chain_count,
+               readiness_completed_chain_count, readiness_abnormal_chain_count,
+               readiness_pending_chain_count, readiness_checked_at
         FROM t_reconciliation_batch WHERE batch_no = #{batchNo}
     </select>
 
     <select id="findBatches" resultType="com.abc123.reconciliation.dto.ReconciliationBatchListItemDTO">
         SELECT batch_no, business_date, channel_code, bill_source, status, channel_count,
-               internal_count, matched_count, difference_count
+               internal_count, matched_count, difference_count, readiness_status, readiness_summary,
+               readiness_suggested_action, readiness_blocking_owner, readiness_chain_count,
+               readiness_completed_chain_count, readiness_abnormal_chain_count,
+               readiness_pending_chain_count, readiness_checked_at
         FROM t_reconciliation_batch ORDER BY business_date DESC, id DESC
     </select>
 
@@ -80,6 +86,21 @@
         UPDATE t_reconciliation_batch
         SET status = 'COMPLETED', channel_count = #{channelCount}, internal_count = #{internalCount},
             matched_count = #{matchedCount}, difference_count = #{differenceCount}, updated_at = CURRENT_TIMESTAMP
+        WHERE batch_no = #{batchNo}
+    </update>
+
+    <update id="updateBatchReadiness">
+        UPDATE t_reconciliation_batch
+        SET readiness_status = #{readinessStatus},
+            readiness_summary = #{readinessSummary},
+            readiness_suggested_action = #{readinessSuggestedAction},
+            readiness_blocking_owner = #{readinessBlockingOwner},
+            readiness_chain_count = #{readinessChainCount},
+            readiness_completed_chain_count = #{readinessCompletedChainCount},
+            readiness_abnormal_chain_count = #{readinessAbnormalChainCount},
+            readiness_pending_chain_count = #{readinessPendingChainCount},
+            readiness_checked_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
         WHERE batch_no = #{batchNo}
     </update>
 

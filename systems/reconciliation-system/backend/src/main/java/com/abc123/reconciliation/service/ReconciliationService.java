@@ -26,6 +26,8 @@ public interface ReconciliationService {
 
     ReconciliationBatchListItemDTO run(String batchNo);
 
+    ReconciliationBatchListItemDTO checkBatchReadiness(String batchNo);
+
     ReconciliationBatchDetailDTO detail(String batchNo);
 
     byte[] exportBatchDetail(String batchNo);

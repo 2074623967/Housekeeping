@@ -97,6 +97,16 @@ public class ReconciliationDaoImpl implements ReconciliationDao {
     }
 
     @Override
+    public int updateBatchReadiness(String batchNo, String readinessStatus, String readinessSummary,
+                                    String readinessSuggestedAction, String readinessBlockingOwner,
+                                    int readinessChainCount, int readinessCompletedChainCount,
+                                    int readinessAbnormalChainCount, int readinessPendingChainCount) {
+        return mapper.updateBatchReadiness(batchNo, readinessStatus, readinessSummary,
+                readinessSuggestedAction, readinessBlockingOwner, readinessChainCount,
+                readinessCompletedChainCount, readinessAbnormalChainCount, readinessPendingChainCount);
+    }
+
+    @Override
     public List<ReconciliationDifferenceDTO> findDifferences(DifferenceQueryDTO query) {
         return mapper.findDifferences(query);
     }

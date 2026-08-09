@@ -48,6 +48,11 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     private static final String RUNNING = "RUNNING";
     private static final String COMPLETED = "COMPLETED";
     private static final String SUCCESS = "SUCCESS";
+    private static final String READINESS_NOT_CHECKED = "NOT_CHECKED";
+    private static final String READINESS_BLOCKED = "BLOCKED";
+    private static final String READINESS_CONDITIONAL = "CONDITIONAL";
+    private static final String READINESS_READY = "READY";
+    private static final String CHAIN_ID_PREFIX = "CHAIN-";
     private static final String CHAIN_WAITING = "WAITING";
     private static final String CHAIN_IN_PROGRESS = "IN_PROGRESS";
     private static final String CHAIN_EXCEPTION = "EXCEPTION";
@@ -128,8 +133,28 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     @Override
     public ReconciliationBatchListItemDTO run(String batchNo) {
         requiredBatch(batchNo);
+        ReconciliationBatchListItemDTO readiness = checkBatchReadiness(batchNo);
+        if (!READINESS_READY.equals(readiness.getReadinessStatus())) {
+            throw new BusinessException("对账准入未通过：" + readiness.getReadinessSummary());
+        }
         markBatchStatus(batchNo, RUNNING);
         return transactionTemplate.execute(status -> executeRun(batchNo));
+    }
+
+    @Override
+    @Transactional
+    public ReconciliationBatchListItemDTO checkBatchReadiness(String batchNo) {
+        ReconciliationBatchListItemDTO batch = requiredBatch(batchNo);
+        List<InternalRecordEntity> internalRecords = dao.findInternalRecords(batch.getBatchNo());
+        BatchReadinessEvaluation evaluation = evaluateBatchReadiness(internalRecords);
+        if (dao.updateBatchReadiness(batch.getBatchNo(), evaluation.readinessStatus,
+                evaluation.readinessSummary, evaluation.readinessSuggestedAction,
+                evaluation.readinessBlockingOwner, evaluation.chainCount,
+                evaluation.completedChainCount, evaluation.abnormalChainCount,
+                evaluation.pendingChainCount) == 0) {
+            throw new BusinessException("对账批次不存在");
+        }
+        return requiredBatch(batch.getBatchNo());
     }
 
     @Override
@@ -145,6 +170,15 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         detail.setInternalCount(batch.getInternalCount());
         detail.setMatchedCount(batch.getMatchedCount());
         detail.setDifferenceCount(batch.getDifferenceCount());
+        detail.setReadinessStatus(batch.getReadinessStatus());
+        detail.setReadinessSummary(batch.getReadinessSummary());
+        detail.setReadinessSuggestedAction(batch.getReadinessSuggestedAction());
+        detail.setReadinessBlockingOwner(batch.getReadinessBlockingOwner());
+        detail.setReadinessChainCount(batch.getReadinessChainCount());
+        detail.setReadinessCompletedChainCount(batch.getReadinessCompletedChainCount());
+        detail.setReadinessAbnormalChainCount(batch.getReadinessAbnormalChainCount());
+        detail.setReadinessPendingChainCount(batch.getReadinessPendingChainCount());
+        detail.setReadinessCheckedAt(batch.getReadinessCheckedAt());
         detail.setOpenDifferenceCount((int) dao.countDifferencesByBatchAndStatus(batch.getBatchNo(), "OPEN"));
         detail.setResolvedDifferenceCount((int) dao.countDifferencesByBatchAndStatus(batch.getBatchNo(), "RESOLVED"));
         detail.setChannelRecords(dao.findChannelRecordDetails(batch.getBatchNo()));
@@ -158,12 +192,18 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         ReconciliationBatchDetailDTO detail = detail(batchNo);
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("批次号,业务日期,渠道编码,账单来源,批次状态,渠道记录数,平台记录数,已匹配数,差异数,未结案差异数,已结案差异数\n");
+        builder.append("批次号,业务日期,渠道编码,账单来源,批次状态,对账准入状态,对账准入结论,准入链路数,已完成链路数,异常链路数,待收口链路数,渠道记录数,平台记录数,已匹配数,差异数,未结案差异数,已结案差异数\n");
         builder.append(csv(detail.getBatchNo())).append(',')
                 .append(csv(detail.getBusinessDate() == null ? null : detail.getBusinessDate().toString())).append(',')
                 .append(csv(detail.getChannelCode())).append(',')
                 .append(csv(detail.getBillSource())).append(',')
                 .append(csv(detail.getStatus())).append(',')
+                .append(csv(detail.getReadinessStatus())).append(',')
+                .append(csv(detail.getReadinessSummary())).append(',')
+                .append(csv(String.valueOf(detail.getReadinessChainCount()))).append(',')
+                .append(csv(String.valueOf(detail.getReadinessCompletedChainCount()))).append(',')
+                .append(csv(String.valueOf(detail.getReadinessAbnormalChainCount()))).append(',')
+                .append(csv(String.valueOf(detail.getReadinessPendingChainCount()))).append(',')
                 .append(csv(String.valueOf(detail.getChannelCount()))).append(',')
                 .append(csv(String.valueOf(detail.getInternalCount()))).append(',')
                 .append(csv(String.valueOf(detail.getMatchedCount()))).append(',')
@@ -354,6 +394,88 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         return (int) EXPECTED_STAGES.stream().filter(completedStages::contains).count();
     }
 
+    /**
+     * 按批次内的平台支付单聚合统一业务链路，形成正式对账前的财务准入快照。
+     */
+    private BatchReadinessEvaluation evaluateBatchReadiness(List<InternalRecordEntity> internalRecords) {
+        if (internalRecords == null || internalRecords.isEmpty()) {
+            return new BatchReadinessEvaluation(
+                    READINESS_BLOCKED,
+                    "平台支付事实为空，禁止进入正式对账",
+                    "等待 payment-core 导入或上报支付成功事实",
+                    "payment-core",
+                    0,
+                    0,
+                    0,
+                    0);
+        }
+        Set<String> paymentOrderIds = internalRecords.stream()
+                .map(InternalRecordEntity::getPaymentOrderId)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .collect(Collectors.toSet());
+        if (paymentOrderIds.isEmpty()) {
+            return new BatchReadinessEvaluation(
+                    READINESS_BLOCKED,
+                    "平台支付事实缺少有效支付单号，禁止进入正式对账",
+                    "补齐平台支付单号后重新检查准入",
+                    "reconciliation-ops",
+                    0,
+                    0,
+                    0,
+                    0);
+        }
+        int completedChainCount = 0;
+        int abnormalChainCount = 0;
+        int pendingChainCount = 0;
+        String firstNextAction = null;
+        for (String paymentOrderId : paymentOrderIds) {
+            CrossSystemChainSnapshotDTO snapshot = crossSystemChain(CHAIN_ID_PREFIX + paymentOrderId);
+            if (CHAIN_COMPLETED.equals(snapshot.getChainStatus())) {
+                completedChainCount++;
+            } else if (CHAIN_EXCEPTION.equals(snapshot.getChainStatus())) {
+                abnormalChainCount++;
+            } else {
+                pendingChainCount++;
+                if (!StringUtils.hasText(firstNextAction)) {
+                    firstNextAction = snapshot.getNextAction();
+                }
+            }
+        }
+        int chainCount = paymentOrderIds.size();
+        if (abnormalChainCount > 0) {
+            return new BatchReadinessEvaluation(
+                    READINESS_BLOCKED,
+                    "存在异常跨系统业务链路，禁止进入正式对账",
+                    "先处理异常链路并完成补偿或人工复核",
+                    "reconciliation-ops",
+                    chainCount,
+                    completedChainCount,
+                    abnormalChainCount,
+                    pendingChainCount);
+        }
+        if (pendingChainCount > 0) {
+            return new BatchReadinessEvaluation(
+                    READINESS_CONDITIONAL,
+                    "部分跨系统业务链路尚未完整收口，暂不执行正式对账",
+                    StringUtils.hasText(firstNextAction) ? firstNextAction : "等待下游关键事实收口",
+                    "payment-clearing-settlement-accounting",
+                    chainCount,
+                    completedChainCount,
+                    abnormalChainCount,
+                    pendingChainCount);
+        }
+        return new BatchReadinessEvaluation(
+                READINESS_READY,
+                "批次内跨系统业务链路已完整收口，可进入正式对账",
+                "允许执行自动对账并继续核对渠道账单与平台支付事实",
+                null,
+                chainCount,
+                completedChainCount,
+                abnormalChainCount,
+                pendingChainCount);
+    }
+
     private String buildMissingStageAction(List<CrossSystemFactDTO> facts) {
         Set<String> completedStages = facts.stream()
                 .filter(item -> isSuccessfulStatus(item.getFactStatus()))
@@ -523,6 +645,39 @@ public class ReconciliationServiceImpl implements ReconciliationService {
             this.financialCloseable = financialCloseable;
             this.lastFactAt = lastFactAt;
             this.diagnosis = diagnosis;
+        }
+    }
+
+    /**
+     * 批次准入计算结果，和批次表字段一一对应，便于审计与页面直接展示。
+     */
+    private static final class BatchReadinessEvaluation {
+
+        private final String readinessStatus;
+        private final String readinessSummary;
+        private final String readinessSuggestedAction;
+        private final String readinessBlockingOwner;
+        private final int chainCount;
+        private final int completedChainCount;
+        private final int abnormalChainCount;
+        private final int pendingChainCount;
+
+        private BatchReadinessEvaluation(String readinessStatus,
+                                         String readinessSummary,
+                                         String readinessSuggestedAction,
+                                         String readinessBlockingOwner,
+                                         int chainCount,
+                                         int completedChainCount,
+                                         int abnormalChainCount,
+                                         int pendingChainCount) {
+            this.readinessStatus = readinessStatus;
+            this.readinessSummary = readinessSummary;
+            this.readinessSuggestedAction = readinessSuggestedAction;
+            this.readinessBlockingOwner = readinessBlockingOwner;
+            this.chainCount = chainCount;
+            this.completedChainCount = completedChainCount;
+            this.abnormalChainCount = abnormalChainCount;
+            this.pendingChainCount = pendingChainCount;
         }
     }
 }

@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { downloadBatchDetail, getBatchDetail, getBatches, getDifferences, getOverview, resolveDifference, runBatch } from "./api";
+import { checkBatchReadiness, downloadBatchDetail, getBatchDetail, getBatches, getDifferences, getOverview, resolveDifference, runBatch } from "./api";
 
 const view = ref("overview");
 const loading = ref(false);
@@ -17,6 +17,22 @@ const typeLabel = {
   AMOUNT_MISMATCH: "金额不一致",
   STATUS_MISMATCH: "状态不一致"
 };
+
+const readinessLabel = {
+  NOT_CHECKED: "未检查",
+  BLOCKED: "禁止进入对账",
+  CONDITIONAL: "有条件进入",
+  READY: "可进入对账"
+};
+
+function readinessClass(status) {
+  return {
+    READY: "readiness-ready",
+    CONDITIONAL: "readiness-conditional",
+    BLOCKED: "readiness-blocked",
+    NOT_CHECKED: "readiness-not-checked"
+  }[status] || "readiness-not-checked";
+}
 
 async function refresh() {
   loading.value = true;
@@ -41,6 +57,19 @@ async function executeBatch(batch) {
     await refresh();
     if (selectedBatch.value && selectedBatch.value.batchNo === batch.batchNo) {
       selectedBatch.value = await getBatchDetail(batch.batchNo);
+    }
+  } catch (error) {
+    message.value = error.message;
+  }
+}
+
+async function checkReadiness(batchNo) {
+  try {
+    const checked = await checkBatchReadiness(batchNo);
+    message.value = `${batchNo}：${checked.readinessSummary}`;
+    await refresh();
+    if (selectedBatch.value && selectedBatch.value.batchNo === batchNo) {
+      selectedBatch.value = await getBatchDetail(batchNo);
     }
   } catch (error) {
     message.value = error.message;
@@ -107,9 +136,9 @@ onMounted(refresh);
       <section v-if="view === 'overview'">
         <div class="hero panel"><div><p class="eyebrow teal">RECONCILIATION CONTROL TOWER</p><h2>先把事实核对清楚，再进入财务处理</h2><p>每个批次都记录渠道账单、平台事实、自动匹配结果和差异结案状态。</p></div><button class="primary" @click="view = 'differences'">处理未结差异</button></div>
         <div class="metrics"><article><span>对账批次</span><b>{{ overview.batchCount }}</b><small>累计批次</small></article><article class="blue"><span>已匹配记录</span><b>{{ overview.matchedCount }}</b><small>平台与渠道一致</small></article><article class="orange"><span>未结差异</span><b>{{ overview.openDifferenceCount }}</b><small>需要人工处置</small></article><article class="purple"><span>运行中批次</span><b>{{ overview.runningBatchCount }}</b><small>实时处理</small></article></div>
-        <section class="panel"><div class="section-title"><div><p class="eyebrow">LATEST BATCHES</p><h3>最近对账批次</h3></div><button class="link" @click="view = 'batches'">查看全部</button></div><table class="table"><thead><tr><th>批次号</th><th>业务日期</th><th>渠道</th><th>匹配 / 差异</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches.slice(0, 5)" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}</td><td>{{ batch.matchedCount }} / <em>{{ batch.differenceCount }}</em></td><td><span class="pill" :class="batch.status.toLowerCase()">{{ batch.status === "COMPLETED" ? "已完成" : batch.status }}</span></td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="executeBatch(batch)">重新跑批</button></td></tr></tbody></table></section>
+        <section class="panel"><div class="section-title"><div><p class="eyebrow">LATEST BATCHES</p><h3>最近对账批次</h3></div><button class="link" @click="view = 'batches'">查看全部</button></div><table class="table"><thead><tr><th>批次号</th><th>业务日期</th><th>渠道</th><th>匹配 / 差异</th><th>对账准入</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches.slice(0, 5)" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}</td><td>{{ batch.matchedCount }} / <em>{{ batch.differenceCount }}</em></td><td><span class="pill" :class="readinessClass(batch.readinessStatus)">{{ readinessLabel[batch.readinessStatus] || batch.readinessStatus }}</span><small>{{ batch.readinessCompletedChainCount }}/{{ batch.readinessChainCount }} 条链路</small></td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="checkReadiness(batch.batchNo)">检查准入</button><button class="link" @click="executeBatch(batch)">执行对账</button></td></tr></tbody></table></section>
       </section>
-      <section v-else-if="view === 'batches'" class="panel"><div class="section-title"><div><p class="eyebrow">RECONCILIATION BATCHES</p><h2>对账批次</h2></div></div><table class="table"><thead><tr><th>批次号</th><th>日期</th><th>渠道 / 来源</th><th>渠道记录</th><th>平台记录</th><th>匹配</th><th>差异</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}<small>{{ batch.billSource }}</small></td><td>{{ batch.channelCount }}</td><td>{{ batch.internalCount }}</td><td class="green">{{ batch.matchedCount }}</td><td class="red">{{ batch.differenceCount }}</td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="executeBatch(batch)">重新跑批</button></td></tr></tbody></table></section>
+      <section v-else-if="view === 'batches'" class="panel"><div class="section-title"><div><p class="eyebrow">RECONCILIATION BATCHES</p><h2>对账批次</h2></div></div><table class="table"><thead><tr><th>批次号</th><th>日期</th><th>渠道 / 来源</th><th>渠道记录</th><th>平台记录</th><th>匹配</th><th>差异</th><th>对账准入</th><th>操作</th></tr></thead><tbody><tr v-for="batch in batches" :key="batch.batchNo"><td class="strong">{{ batch.batchNo }}</td><td>{{ batch.businessDate }}</td><td>{{ batch.channelCode }}<small>{{ batch.billSource }}</small></td><td>{{ batch.channelCount }}</td><td>{{ batch.internalCount }}</td><td class="green">{{ batch.matchedCount }}</td><td class="red">{{ batch.differenceCount }}</td><td><span class="pill" :class="readinessClass(batch.readinessStatus)">{{ readinessLabel[batch.readinessStatus] || batch.readinessStatus }}</span><small>{{ batch.readinessSummary || "尚未检查" }}</small></td><td><button class="link" @click="openBatchDetail(batch.batchNo)">查看详情</button><button class="link" @click="checkReadiness(batch.batchNo)">检查准入</button><button class="link" @click="executeBatch(batch)">执行对账</button></td></tr></tbody></table></section>
       <section v-else-if="view === 'detail'" class="panel">
         <div v-if="!selectedBatch" class="empty">请选择一个对账批次查看详情</div>
         <template v-else>
@@ -128,6 +157,11 @@ onMounted(refresh);
             <article><span>未结差异</span><b>{{ selectedBatch.openDifferenceCount }}</b></article>
             <article><span>已结案差异</span><b>{{ selectedBatch.resolvedDifferenceCount }}</b></article>
           </div>
+          <section class="readiness-card" :class="readinessClass(selectedBatch.readinessStatus)">
+            <div><p class="eyebrow">FINANCIAL ENTRY GATE</p><h3>{{ readinessLabel[selectedBatch.readinessStatus] || selectedBatch.readinessStatus }}</h3><p>{{ selectedBatch.readinessSummary || "尚未执行批次级准入检查" }}</p></div>
+            <div class="readiness-facts"><span>链路总数 <b>{{ selectedBatch.readinessChainCount }}</b></span><span>已收口 <b>{{ selectedBatch.readinessCompletedChainCount }}</b></span><span>异常 <b>{{ selectedBatch.readinessAbnormalChainCount }}</b></span><span>待收口 <b>{{ selectedBatch.readinessPendingChainCount }}</b></span></div>
+            <div class="readiness-action"><strong>下一动作</strong><span>{{ selectedBatch.readinessSuggestedAction || "点击检查准入获取建议" }}</span><small v-if="selectedBatch.readinessBlockingOwner">责任方：{{ selectedBatch.readinessBlockingOwner }}</small><button class="primary compact" @click="checkReadiness(selectedBatch.batchNo)">重新检查准入</button></div>
+          </section>
           <section class="detail-section">
             <div class="section-title"><div><p class="eyebrow">CHANNEL FACTS</p><h3>渠道账单记录</h3></div><span class="count">{{ selectedBatch.channelRecords.length }} 条</span></div>
             <table class="table"><thead><tr><th>渠道流水</th><th>支付单号</th><th>金额</th><th>状态</th><th>交易时间</th></tr></thead><tbody><tr v-for="item in selectedBatch.channelRecords" :key="item.channelTradeNo"><td class="strong">{{ item.channelTradeNo }}</td><td>{{ item.paymentOrderId }}</td><td>¥{{ Number(item.amount || 0).toFixed(2) }}</td><td>{{ item.tradeStatus }}</td><td>{{ item.tradeTime?.replace("T", " ") }}</td></tr></tbody></table>

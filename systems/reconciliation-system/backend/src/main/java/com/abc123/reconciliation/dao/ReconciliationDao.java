@@ -46,6 +46,11 @@ public interface ReconciliationDao {
 
     int updateBatchResult(String batchNo, int channelCount, int internalCount, int matchedCount, int differenceCount);
 
+    int updateBatchReadiness(String batchNo, String readinessStatus, String readinessSummary,
+                             String readinessSuggestedAction, String readinessBlockingOwner,
+                             int readinessChainCount, int readinessCompletedChainCount,
+                             int readinessAbnormalChainCount, int readinessPendingChainCount);
+
     List<ReconciliationDifferenceDTO> findDifferences(DifferenceQueryDTO query);
 
     long countDifferences(DifferenceQueryDTO query);

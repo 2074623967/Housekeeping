@@ -25,6 +25,10 @@ export const getDifferences = (query = {}) => {
 };
 export const runBatch = (batchNo) =>
   request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/run`, { method: "POST" });
+export const checkBatchReadiness = (batchNo) =>
+  request(`/api/reconciliation/batches/${encodeURIComponent(batchNo)}/readiness-check`, {
+    method: "POST"
+  });
 export const resolveDifference = (differenceNo, payload) =>
   request(`/api/reconciliation/differences/${encodeURIComponent(differenceNo)}/resolve`, {
     method: "POST",

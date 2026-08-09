@@ -48,11 +48,13 @@ class ReconciliationIntegrationTest {
         internal.setPaymentOrderId("PAY-IT-1");
         internal.setAmount(new BigDecimal("99.00"));
         service.addInternalRecord(batch.getBatchNo(), internal);
+        recordCompleteChain("PAY-IT-1");
 
         ReconciliationBatchListItemDTO result = service.run(batch.getBatchNo());
         assertEquals(1, result.getDifferenceCount());
         assertEquals(0, result.getMatchedCount());
         assertEquals("COMPLETED", result.getStatus());
+        assertEquals("READY", result.getReadinessStatus());
     }
 
     @Test
@@ -72,6 +74,7 @@ class ReconciliationIntegrationTest {
         internal.setPaymentOrderId("PAY-IT-2");
         internal.setAmount(new BigDecimal("66.00"));
         service.addInternalRecord(batch.getBatchNo(), internal);
+        recordCompleteChain("PAY-IT-2");
 
         service.run(batch.getBatchNo());
 
@@ -107,6 +110,7 @@ class ReconciliationIntegrationTest {
         internal.setPaymentOrderId("PAY-IT-3");
         internal.setAmount(new BigDecimal("168.00"));
         service.addInternalRecord(batch.getBatchNo(), internal);
+        recordCompleteChain("PAY-IT-3");
 
         ChannelRecordRequestDTO channelOnly = new ChannelRecordRequestDTO();
         channelOnly.setChannelTradeNo("UP-IT-4");
@@ -143,6 +147,7 @@ class ReconciliationIntegrationTest {
         internal.setPaymentOrderId("PAY-IT-5");
         internal.setAmount(new BigDecimal("40.00"));
         service.addInternalRecord(batch.getBatchNo(), internal);
+        recordCompleteChain("PAY-IT-5");
 
         service.run(batch.getBatchNo());
 
@@ -229,6 +234,63 @@ class ReconciliationIntegrationTest {
         assertEquals(0, snapshot.getCompletedStageCount());
         assertEquals("等待 payment-core 上报 PAYMENT_SUCCESS", snapshot.getNextAction());
         assertEquals(false, snapshot.isFinancialCloseable());
+    }
+
+    @Test
+    void shouldBlockReconciliationWhenBatchChainIsNotReady() {
+        ReconciliationBatchCreateRequestDTO request = new ReconciliationBatchCreateRequestDTO();
+        request.setBusinessDate("2026-08-07");
+        request.setChannelCode("WECHAT");
+        ReconciliationBatchListItemDTO batch = service.createBatch(request);
+
+        InternalRecordRequestDTO internal = new InternalRecordRequestDTO();
+        internal.setPaymentOrderId("PAY-IT-NOT-READY");
+        internal.setAmount(new BigDecimal("20.00"));
+        service.addInternalRecord(batch.getBatchNo(), internal);
+
+        assertThrows(BusinessException.class, () -> service.run(batch.getBatchNo()));
+
+        ReconciliationBatchListItemDTO checked = service.checkBatchReadiness(batch.getBatchNo());
+        assertEquals("CONDITIONAL", checked.getReadinessStatus());
+        assertEquals(1, checked.getReadinessChainCount());
+        assertEquals(0, checked.getReadinessCompletedChainCount());
+        assertEquals(1, checked.getReadinessPendingChainCount());
+        assertEquals(false, "READY".equals(checked.getReadinessStatus()));
+    }
+
+    @Test
+    void shouldBlockReconciliationWhenBatchContainsAbnormalChain() {
+        ReconciliationBatchCreateRequestDTO request = new ReconciliationBatchCreateRequestDTO();
+        request.setBusinessDate("2026-08-07");
+        request.setChannelCode("ALIPAY");
+        ReconciliationBatchListItemDTO batch = service.createBatch(request);
+
+        InternalRecordRequestDTO internal = new InternalRecordRequestDTO();
+        internal.setPaymentOrderId("PAY-IT-ABNORMAL");
+        internal.setAmount(new BigDecimal("30.00"));
+        service.addInternalRecord(batch.getBatchNo(), internal);
+        recordFact("CHAIN-PAY-IT-ABNORMAL", "payment-core", "PAYMENT_SUCCESS",
+                "PAY-IT-ABNORMAL", "SUCCESS");
+        recordFact("CHAIN-PAY-IT-ABNORMAL", "clearing-system", "CLEARING_GENERATED",
+                "CLR-IT-ABNORMAL", "FAILED");
+
+        assertThrows(BusinessException.class, () -> service.run(batch.getBatchNo()));
+
+        ReconciliationBatchListItemDTO checked = service.checkBatchReadiness(batch.getBatchNo());
+        assertEquals("BLOCKED", checked.getReadinessStatus());
+        assertEquals(1, checked.getReadinessAbnormalChainCount());
+        assertEquals("reconciliation-ops", checked.getReadinessBlockingOwner());
+    }
+
+    private void recordCompleteChain(String paymentOrderId) {
+        String chainId = "CHAIN-" + paymentOrderId;
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", paymentOrderId, "SUCCESS");
+        recordFact(chainId, "clearing-system", "CLEARING_GENERATED",
+                "CLR-" + paymentOrderId, "SUCCESS");
+        recordFact(chainId, "settlement-system", "SETTLEMENT_CREATED",
+                "SET-" + paymentOrderId, "SUCCESS");
+        recordFact(chainId, "accounting-system", "ACCOUNTING_POSTED",
+                "ACC-" + paymentOrderId, "SUCCESS");
     }
 
     private void recordFact(String chainId, String systemCode, String factType,
