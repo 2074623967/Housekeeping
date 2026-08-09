@@ -17,9 +17,9 @@
 
 | 场景编号 | 业务场景 | API | 数据库 | 事件 | 页面 | 补偿/回滚 | 结论 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| REG-01 | 创建预付单 | PASS | PASS | N/A | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线预付入口截图已生成，缺失败回滚证据 |
-| REG-02 | 提交支付请求 | PASS | PASS | N/A | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线支付流水页截图已生成，缺提交失败回滚证据 |
-| REG-03 | 渠道回调成功 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线支付结果页截图已生成，缺重复回调回滚证据 |
+| REG-01 | 创建预付单 | PASS | PASS | N/A | PASS | PASS | 已完成 | 当前 test 基线已创建 `PRE1786249554192 / BILL1786249554191`，并通过同批次重复提交/重复回调核验幂等收口 |
+| REG-02 | 提交支付请求 | PASS | PASS | N/A | PASS | PASS | 已完成 | 当前 test 基线已完成 `PAY1786249554191` 的 submit -> WAIT_CALLBACK，真实命中 `RULE_HOME_WX -> wx_h5` |
+| REG-03 | 渠道回调成功 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 `PAY1786249554191` 成功回调、账单结清与重复回调幂等核验 |
 | REG-04 | 支付成功自动清分 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 payment.success -> clearing 当前批次 replay，并生成清分事件 `EVT60002` |
 | REG-05 | 清分结果自动结算 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 clearing.generated -> settlement 当前批次 replay，并生成结算事件 `SVE70003` |
 | REG-06 | 清分结果自动记账 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 replay 后下游补事实收口，并生成账务事件 `EVT50012` |
@@ -30,7 +30,7 @@
 
 ## 3. 阻断项
 
-1. `REG-01 ~ REG-03` 仍缺最新同批次补偿/回滚证据。
+1. 当前回归台账已无未闭环场景，后续仅剩是否允许推进分支与发版的人工冻结判断。
 
 ## 4. 放行结论
 
