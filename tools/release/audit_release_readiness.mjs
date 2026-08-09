@@ -112,24 +112,30 @@ function buildAudit(
     rollbackContent.includes("演练记录") &&
     (
       rollbackContent.includes("当前状态：`待演练 / 待补齐`") ||
-      rollbackContent.includes("当前状态：`方案已确认，待实际演练`")
+      rollbackContent.includes("当前状态：`方案已确认，待实际演练`") ||
+      rollbackContent.includes("当前状态：`已完成隔离演练`") ||
+      rollbackContent.includes("当前状态：`已完成实际演练`")
     );
   if (!rollbackReady) {
     blockers.push("回滚演练记录不完整");
   }
 
-  const onSiteReady = containsAll(onSiteContent, [
-    "当前状态：`模板`",
-    "发布后现场核验记录模板"
-  ]);
+  const onSiteReady =
+    containsAll(onSiteContent, [
+      "当前状态：`模板`",
+      "发布后现场核验记录模板"
+    ]) ||
+    onSiteContent.includes("当前状态：`已形成实际记录`");
   if (!onSiteReady) {
     blockers.push("发布后现场核验记录模板不完整");
   }
 
-  const stabilizationClosingReady = containsAll(stabilizationClosingContent, [
-    "当前状态：`模板`",
-    "是否允许继续推进 `release/v1.1.0`"
-  ]);
+  const stabilizationClosingReady =
+    containsAll(stabilizationClosingContent, [
+      "当前状态：`模板`",
+      "是否允许继续推进 `release/v1.1.0`"
+    ]) ||
+    stabilizationClosingContent.includes("当前状态：`已形成正式结论`");
   if (!stabilizationClosingReady) {
     blockers.push("master 稳定观察结束结论模板不完整");
   }
