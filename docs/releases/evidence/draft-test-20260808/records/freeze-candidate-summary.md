@@ -1,15 +1,15 @@
 # 冻结候选汇总
 
 - 版本标识：`draft-test-20260808`
-- 生成时间：`2026-08-08T01:46:35.207Z`
-- Git 提交号：`389e008`
+- 生成时间：`2026-08-09T00:43:09.380Z`
+- Git 提交号：`b90f8a0`
 - 发布日期口径：`2026-08-08`
 
 ## 1. 当前结论
 
-1. 当前是否允许推进 `test -> master`：`否`
+1. 当前是否允许推进 `test -> master`：`是`
 2. 当前是否允许创建 `release/*`：`否`
-3. 当前冻结候选阻断项数量：`3`
+3. 当前冻结候选阻断项数量：`0`
 
 ## 2. 发布范围摘要
 
@@ -29,31 +29,18 @@
 | 项目 | 当前结果 |
 | --- | --- |
 | 截图总数 | `50` |
-| 已归档截图数 | `0` |
-| 未归档截图数 | `50` |
-| 人工回归 TODO 数 | `19` |
-| 发布说明是否仍为草案 | `是` |
+| 已归档截图数 | `50` |
+| 未归档截图数 | `0` |
+| 人工回归 TODO 数 | `0` |
+| 发布说明是否仍为草案 | `否` |
 
 ## 5. 当前阻断
 
-1. 截图台账仍有 50 项未归档完成
-2. 人工回归归档中仍有 19 个 TODO 待回填
-3. 发布说明仍处于草案状态
+1. 当前无阻断项。
 
 ## 6. 最近应优先补的页面
 
-| 系统 | 终端 | 页面 | 样例编号 |
-| --- | --- | --- | --- |
-| payment-core | admin-web | dashboard |  |
-| payment-core | admin-web | orders |  |
-| payment-core | admin-web | payment-list |  |
-| payment-core | admin-web | payment-detail-wait-callback | PAY1785915556767 |
-| payment-core | admin-web | payment-detail-risk-review | PAY1785811244732 |
-| payment-core | admin-web | payment-detail-success | PAY1785918393972 |
-| payment-core | admin-web | payment-detail-closed | PAY1785729963046 |
-| payment-core | admin-web | payment-flows |  |
-| payment-core | admin-web | payment-events |  |
-| payment-core | admin-web | payment-issues |  |
+当前无待补截图页面。
 
 ## 7. 下一步建议
 

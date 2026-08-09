@@ -79,6 +79,31 @@ function isCompletedStatus(value) {
   return ["DONE", "ARCHIVED", "PASS", "PASSED", "OK", "CAPTURED"].includes(normalizeStatus(value));
 }
 
+function requiresSampleBizNo(row) {
+  const requiredState = String(row.required_state_or_action || "").trim().toUpperCase();
+  const pageKey = String(row.page_key || "").trim();
+  const system = String(row.system || "").trim();
+
+  if ([
+    "WAIT_CALLBACK",
+    "RISK_REVIEW",
+    "SUCCESS",
+    "CLOSED",
+    "PREPAY_CREATED",
+    "MANUAL_RESOLVED",
+    "REPLAYED"
+  ].includes(requiredState)) {
+    return true;
+  }
+
+  return [
+    "clearing-system/admin-web/events",
+    "settlement-system/admin-web/orders",
+    "settlement-system/admin-web/payouts",
+    "accounting-system/admin-web/events"
+  ].includes(`${system}/${row.terminal}/${pageKey}`);
+}
+
 function toRelative(rootDir, filePath) {
   return path.relative(rootDir, filePath) || path.basename(filePath);
 }
@@ -115,7 +140,7 @@ function buildManifestAudit(evidenceDir, manifestPath) {
       missingFileRows.push(row);
     }
 
-    if (!String(row.sample_biz_no_or_task_no || "").trim()) {
+    if (requiresSampleBizNo(row) && !String(row.sample_biz_no_or_task_no || "").trim()) {
       doneWithoutBizNoRows.push(row);
     }
   });

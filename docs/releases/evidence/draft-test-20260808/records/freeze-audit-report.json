@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-08T01:43:33.033Z",
+  "generatedAt": "2026-08-09T00:43:09.315Z",
   "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "evidenceDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/draft-test-20260808",
   "inputs": {
@@ -9,162 +9,17 @@
   },
   "summary": {
     "screenshotTotal": 50,
-    "screenshotDone": 0,
-    "screenshotPending": 50,
-    "regressionTodoCount": 19,
-    "releaseDocIsDraft": true,
-    "canPromoteTestToMaster": false,
+    "screenshotDone": 50,
+    "screenshotPending": 0,
+    "regressionTodoCount": 0,
+    "releaseDocIsDraft": false,
+    "canPromoteTestToMaster": true,
     "canCreateRelease": false,
-    "blockerCount": 3
+    "blockerCount": 0
   },
-  "blockers": [
-    "截图台账仍有 50 项未归档完成",
-    "人工回归归档中仍有 19 个 TODO 待回填",
-    "发布说明仍处于草案状态"
-  ],
+  "blockers": [],
   "details": {
-    "pendingScreenshots": [
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "dashboard",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "orders",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-list",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-detail-wait-callback",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "PAY1785915556767"
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-detail-risk-review",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "PAY1785811244732"
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-detail-success",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "PAY1785918393972"
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-detail-closed",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "PAY1785729963046"
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-flows",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-events",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "payment-issues",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "cashier-sessions",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "dead-letter-pending-review",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "dead-letter-ready-replay",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "dead-letter-manual-resolved",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "DLQa254a62bab904f0d9885"
-      },
-      {
-        "system": "payment-core",
-        "terminal": "admin-web",
-        "pageKey": "dead-letter-replayed",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "DLQb151ee3a445c42229730"
-      },
-      {
-        "system": "payment-core",
-        "terminal": "app-web",
-        "pageKey": "recharge-entry",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "app-web",
-        "pageKey": "withdraw-entry",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "app-web",
-        "pageKey": "transfer-entry",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "app-web",
-        "pageKey": "balance-pay-entry",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": ""
-      },
-      {
-        "system": "payment-core",
-        "terminal": "app-web",
-        "pageKey": "cashier-prepay-created",
-        "status": "TODO",
-        "sampleBizNoOrTaskNo": "PRE1785915100361"
-      }
-    ],
+    "pendingScreenshots": [],
     "missingScreenshotFiles": [],
     "doneWithoutBizNo": []
   }
