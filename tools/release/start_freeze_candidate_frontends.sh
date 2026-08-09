@@ -21,6 +21,11 @@ start_frontend() {
   local log_file="$LOG_DIR/${app_key}.log"
   local pid_file="$PID_DIR/${app_key}.pid"
 
+  if curl -fsS "http://127.0.0.1:$port" >/dev/null 2>&1; then
+    echo "[SKIP] $app_key 端口已可用, port=$port"
+    return
+  fi
+
   if [[ -f "$pid_file" ]]; then
     local existing_pid
     existing_pid="$(cat "$pid_file")"
@@ -35,16 +40,30 @@ start_frontend() {
   (
     cd "$workdir"
     if [[ -n "$target_var_name" ]]; then
-      nohup env "$target_var_name" npm run dev -- --host 127.0.0.1 --port "$port" >"$log_file" 2>&1 &
+      export "$target_var_name"
+      nohup npm run dev -- --host 127.0.0.1 --port "$port" >"$log_file" 2>&1 </dev/null &
     else
-      nohup npm run dev -- --host 127.0.0.1 --port "$port" >"$log_file" 2>&1 &
+      nohup npm run dev -- --host 127.0.0.1 --port "$port" >"$log_file" 2>&1 </dev/null &
     fi
     echo $! >"$pid_file"
   )
 
   local pid
   pid="$(cat "$pid_file")"
-  echo "[OK] $app_key pid=$pid log=$log_file"
+  for _ in {1..20}; do
+    if curl -fsS "http://127.0.0.1:$port" >/dev/null 2>&1; then
+      echo "[OK] $app_key pid=$pid port=$port log=$log_file"
+      return
+    fi
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+
+  echo "[FAIL] $app_key 未能监听端口 $port, pid=$pid log=$log_file" >&2
+  tail -20 "$log_file" >&2 || true
+  return 1
 }
 
 start_frontend \

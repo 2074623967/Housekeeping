@@ -1,0 +1,1024 @@
+{
+  "generatedAt": "2026-08-08T01:28:01.284Z",
+  "note": "优先补齐 baseUrls 和 sampleValues；若某页需要特殊跳转，也可直接覆盖单条 url。",
+  "baseUrls": {
+    "payment-core/admin-web": "http://127.0.0.1:5174",
+    "payment-core/app-web": "http://127.0.0.1:5175",
+    "payment-core/h5-web": "http://127.0.0.1:5176",
+    "payment-core/pc-web": "http://127.0.0.1:5177",
+    "clearing-system/admin-web": "http://127.0.0.1:5273",
+    "settlement-system/admin-web": "http://127.0.0.1:5274",
+    "accounting-system/admin-web": "http://127.0.0.1:5275"
+  },
+  "sampleValues": {
+    "paymentOrderIdWaitCallback": "PAY1785915556767",
+    "paymentOrderIdRiskReview": "PAY1785811244732",
+    "paymentOrderIdSuccess": "PAY1785918393972",
+    "paymentOrderIdClosed": "PAY1785729963046",
+    "prepayOrderNoPrepayCreated": "PRE1785915100361",
+    "prepayOrderNoWaitCallback": "PRE1785915556768",
+    "prepayOrderNoRiskReview": "PRE1785811244734"
+  },
+  "targets": [
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "dashboard",
+      "pageName": "工作台",
+      "requiredStateOrAction": "总览指标与待处理入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/dashboard",
+      "output": "screenshots/payment-core/admin-web/dashboard.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "orders",
+      "pageName": "订单中心",
+      "requiredStateOrAction": "发起支付/查看支付单/查看收银台",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/orders",
+      "output": "screenshots/payment-core/admin-web/orders.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-list",
+      "pageName": "支付单管理",
+      "requiredStateOrAction": "筛选列表与状态联查",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payments",
+      "output": "screenshots/payment-core/admin-web/payment-list.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-detail-wait-callback",
+      "pageName": "支付单详情",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payments/{{paymentOrderIdWaitCallback}}",
+      "output": "screenshots/payment-core/admin-web/payment-detail-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-detail-risk-review",
+      "pageName": "支付单详情",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payments/{{paymentOrderIdRiskReview}}",
+      "output": "screenshots/payment-core/admin-web/payment-detail-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-detail-success",
+      "pageName": "支付单详情",
+      "requiredStateOrAction": "SUCCESS",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payments/{{paymentOrderIdSuccess}}",
+      "output": "screenshots/payment-core/admin-web/payment-detail-success.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-detail-closed",
+      "pageName": "支付单详情",
+      "requiredStateOrAction": "CLOSED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payments/{{paymentOrderIdClosed}}",
+      "output": "screenshots/payment-core/admin-web/payment-detail-closed.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-flows",
+      "pageName": "支付流水查询",
+      "requiredStateOrAction": "支付提交/回调/事件/路由联查",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-flows",
+      "output": "screenshots/payment-core/admin-web/payment-flows.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-events",
+      "pageName": "支付事件列表",
+      "requiredStateOrAction": "PAYMENT_SUCCESS 出站与处理结果",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-events",
+      "output": "screenshots/payment-core/admin-web/payment-events.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "payment-issues",
+      "pageName": "支付交易异常中心",
+      "requiredStateOrAction": "异常聚合与 SLA",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-issues",
+      "output": "screenshots/payment-core/admin-web/payment-issues.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "cashier-sessions",
+      "pageName": "收银台会话",
+      "requiredStateOrAction": "会话状态与支付单关联",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/cashier-sessions",
+      "output": "screenshots/payment-core/admin-web/cashier-sessions.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "dead-letter-pending-review",
+      "pageName": "死信补偿任务",
+      "requiredStateOrAction": "PENDING_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-task-center",
+      "output": "screenshots/payment-core/admin-web/dead-letter-pending-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "dead-letter-ready-replay",
+      "pageName": "死信补偿任务",
+      "requiredStateOrAction": "READY_TO_REPLAY",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-task-center",
+      "output": "screenshots/payment-core/admin-web/dead-letter-ready-replay.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "dead-letter-manual-resolved",
+      "pageName": "死信补偿任务",
+      "requiredStateOrAction": "MANUAL_RESOLVED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-task-center",
+      "output": "screenshots/payment-core/admin-web/dead-letter-manual-resolved.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "admin-web",
+      "pageKey": "dead-letter-replayed",
+      "pageName": "死信补偿任务",
+      "requiredStateOrAction": "REPLAYED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/admin-web",
+      "pathTemplate": "/payment-task-center",
+      "output": "screenshots/payment-core/admin-web/dead-letter-replayed.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "recharge-entry",
+      "pageName": "充值业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/recharge",
+      "output": "screenshots/payment-core/app-web/recharge-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "withdraw-entry",
+      "pageName": "提现业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/withdraw",
+      "output": "screenshots/payment-core/app-web/withdraw-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "transfer-entry",
+      "pageName": "转账业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/transfer",
+      "output": "screenshots/payment-core/app-web/transfer-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "balance-pay-entry",
+      "pageName": "余额支付业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/balance-pay",
+      "output": "screenshots/payment-core/app-web/balance-pay-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "cashier-prepay-created",
+      "pageName": "收银台",
+      "requiredStateOrAction": "PREPAY_CREATED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoPrepayCreated}}",
+      "output": "screenshots/payment-core/app-web/cashier-prepay-created.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "cashier-wait-callback",
+      "pageName": "收银台",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoWaitCallback}}",
+      "output": "screenshots/payment-core/app-web/cashier-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "cashier-risk-review",
+      "pageName": "收银台",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoRiskReview}}",
+      "output": "screenshots/payment-core/app-web/cashier-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "result-success",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "SUCCESS",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdSuccess}}",
+      "output": "screenshots/payment-core/app-web/result-success.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "result-closed",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "CLOSED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdClosed}}",
+      "output": "screenshots/payment-core/app-web/result-closed.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "result-risk-review",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdRiskReview}}",
+      "output": "screenshots/payment-core/app-web/result-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "app-web",
+      "pageKey": "result-wait-callback",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/app-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdWaitCallback}}",
+      "output": "screenshots/payment-core/app-web/result-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "recharge-entry",
+      "pageName": "充值业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/recharge",
+      "output": "screenshots/payment-core/h5-web/recharge-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "withdraw-entry",
+      "pageName": "提现业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/withdraw",
+      "output": "screenshots/payment-core/h5-web/withdraw-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "transfer-entry",
+      "pageName": "转账业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/transfer",
+      "output": "screenshots/payment-core/h5-web/transfer-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "balance-pay-entry",
+      "pageName": "余额支付业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/balance-pay",
+      "output": "screenshots/payment-core/h5-web/balance-pay-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "cashier-wait-callback",
+      "pageName": "收银台",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoWaitCallback}}",
+      "output": "screenshots/payment-core/h5-web/cashier-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "cashier-risk-review",
+      "pageName": "收银台",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoRiskReview}}",
+      "output": "screenshots/payment-core/h5-web/cashier-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "result-success",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "SUCCESS",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdSuccess}}",
+      "output": "screenshots/payment-core/h5-web/result-success.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "result-closed",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "CLOSED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdClosed}}",
+      "output": "screenshots/payment-core/h5-web/result-closed.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "result-risk-review",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdRiskReview}}",
+      "output": "screenshots/payment-core/h5-web/result-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "h5-web",
+      "pageKey": "result-wait-callback",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/h5-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdWaitCallback}}",
+      "output": "screenshots/payment-core/h5-web/result-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "recharge-entry",
+      "pageName": "充值业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/recharge",
+      "output": "screenshots/payment-core/pc-web/recharge-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "withdraw-entry",
+      "pageName": "提现业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/withdraw",
+      "output": "screenshots/payment-core/pc-web/withdraw-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "transfer-entry",
+      "pageName": "转账业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/transfer",
+      "output": "screenshots/payment-core/pc-web/transfer-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "balance-pay-entry",
+      "pageName": "余额支付业务入口",
+      "requiredStateOrAction": "创建预付单入口",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/balance-pay",
+      "output": "screenshots/payment-core/pc-web/balance-pay-entry.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "cashier-wait-callback",
+      "pageName": "收银台",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoWaitCallback}}",
+      "output": "screenshots/payment-core/pc-web/cashier-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "cashier-risk-review",
+      "pageName": "收银台",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/cashier/{{prepayOrderNoRiskReview}}",
+      "output": "screenshots/payment-core/pc-web/cashier-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "result-success",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "SUCCESS",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdSuccess}}",
+      "output": "screenshots/payment-core/pc-web/result-success.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "result-closed",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "CLOSED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdClosed}}",
+      "output": "screenshots/payment-core/pc-web/result-closed.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "result-risk-review",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "RISK_REVIEW",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdRiskReview}}",
+      "output": "screenshots/payment-core/pc-web/result-risk-review.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "payment-core",
+      "terminal": "pc-web",
+      "pageKey": "result-wait-callback",
+      "pageName": "支付结果页",
+      "requiredStateOrAction": "WAIT_CALLBACK",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "payment-core/pc-web",
+      "pathTemplate": "/payment-result/{{paymentOrderIdWaitCallback}}",
+      "output": "screenshots/payment-core/pc-web/result-wait-callback.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1440,
+        "height": 1280
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "clearing-system",
+      "terminal": "admin-web",
+      "pageKey": "events",
+      "pageName": "清分事件页",
+      "requiredStateOrAction": "publishStatus/retryCount/replayHint",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "clearing-system/admin-web",
+      "pathTemplate": "/events",
+      "output": "screenshots/clearing-system/admin-web/events.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "settlement-system",
+      "terminal": "admin-web",
+      "pageKey": "orders",
+      "pageName": "结算单页",
+      "requiredStateOrAction": "结算单状态与清分承接事实",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "settlement-system/admin-web",
+      "pathTemplate": "/orders",
+      "output": "screenshots/settlement-system/admin-web/orders.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "settlement-system",
+      "terminal": "admin-web",
+      "pageKey": "payouts",
+      "pageName": "出款批次页",
+      "requiredStateOrAction": "出款记录与失败重试事实",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "settlement-system/admin-web",
+      "pathTemplate": "/payouts",
+      "output": "screenshots/settlement-system/admin-web/payouts.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    },
+    {
+      "system": "accounting-system",
+      "terminal": "admin-web",
+      "pageKey": "events",
+      "pageName": "账务事件页",
+      "requiredStateOrAction": "PAYMENT_SUCCESS/CLEARING_GENERATED",
+      "sampleBizNoOrTaskNo": "",
+      "baseUrlKey": "accounting-system/admin-web",
+      "pathTemplate": "/events",
+      "output": "screenshots/accounting-system/admin-web/events.png",
+      "url": "",
+      "waitForSelector": "",
+      "fullPage": true,
+      "viewport": {
+        "width": 1600,
+        "height": 1200
+      },
+      "archiveStatus": "TODO",
+      "notes": ""
+    }
+  ]
+}

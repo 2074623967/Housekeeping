@@ -1,0 +1,306 @@
+{
+  "generatedAt": "2026-08-09T03:06:55.896Z",
+  "planPath": "docs/releases/evidence/test-20260809-regression/capture-plan.json",
+  "results": [
+    {
+      "pageKey": "dashboard",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/dashboard.png",
+      "url": "http://127.0.0.1:5174/dashboard"
+    },
+    {
+      "pageKey": "orders",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/orders.png",
+      "url": "http://127.0.0.1:5174/orders"
+    },
+    {
+      "pageKey": "payment-list",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-list.png",
+      "url": "http://127.0.0.1:5174/payments"
+    },
+    {
+      "pageKey": "payment-detail-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-detail-wait-callback.png",
+      "url": "http://127.0.0.1:5174/payments/PAY1785915556767"
+    },
+    {
+      "pageKey": "payment-detail-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-detail-risk-review.png",
+      "url": "http://127.0.0.1:5174/payments/PAY1785811244732"
+    },
+    {
+      "pageKey": "payment-detail-success",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-detail-success.png",
+      "url": "http://127.0.0.1:5174/payments/PAY1785918393972"
+    },
+    {
+      "pageKey": "payment-detail-closed",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-detail-closed.png",
+      "url": "http://127.0.0.1:5174/payments/PAY1785729963046"
+    },
+    {
+      "pageKey": "payment-flows",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-flows.png",
+      "url": "http://127.0.0.1:5174/payment-flows"
+    },
+    {
+      "pageKey": "payment-events",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-events.png",
+      "url": "http://127.0.0.1:5174/payment-events"
+    },
+    {
+      "pageKey": "payment-issues",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/payment-issues.png",
+      "url": "http://127.0.0.1:5174/payment-issues"
+    },
+    {
+      "pageKey": "cashier-sessions",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/cashier-sessions.png",
+      "url": "http://127.0.0.1:5174/cashier-sessions"
+    },
+    {
+      "pageKey": "dead-letter-pending-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/dead-letter-pending-review.png",
+      "url": "http://127.0.0.1:5174/payment-task-center"
+    },
+    {
+      "pageKey": "dead-letter-ready-replay",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/dead-letter-ready-replay.png",
+      "url": "http://127.0.0.1:5174/payment-task-center"
+    },
+    {
+      "pageKey": "dead-letter-manual-resolved",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/dead-letter-manual-resolved.png",
+      "url": "http://127.0.0.1:5174/payment-task-center"
+    },
+    {
+      "pageKey": "dead-letter-replayed",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/admin-web/dead-letter-replayed.png",
+      "url": "http://127.0.0.1:5174/payment-task-center"
+    },
+    {
+      "pageKey": "recharge-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/recharge-entry.png",
+      "url": "http://127.0.0.1:5175/recharge"
+    },
+    {
+      "pageKey": "withdraw-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/withdraw-entry.png",
+      "url": "http://127.0.0.1:5175/withdraw"
+    },
+    {
+      "pageKey": "transfer-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/transfer-entry.png",
+      "url": "http://127.0.0.1:5175/transfer"
+    },
+    {
+      "pageKey": "balance-pay-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/balance-pay-entry.png",
+      "url": "http://127.0.0.1:5175/balance-pay"
+    },
+    {
+      "pageKey": "cashier-prepay-created",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/cashier-prepay-created.png",
+      "url": "http://127.0.0.1:5175/cashier/PRE1785915100361"
+    },
+    {
+      "pageKey": "cashier-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/cashier-wait-callback.png",
+      "url": "http://127.0.0.1:5175/cashier/PRE1785915556768"
+    },
+    {
+      "pageKey": "cashier-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/cashier-risk-review.png",
+      "url": "http://127.0.0.1:5175/cashier/PRE1785811244734"
+    },
+    {
+      "pageKey": "result-success",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/result-success.png",
+      "url": "http://127.0.0.1:5175/payment-result/PAY1785918393972"
+    },
+    {
+      "pageKey": "result-closed",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/result-closed.png",
+      "url": "http://127.0.0.1:5175/payment-result/PAY1785729963046"
+    },
+    {
+      "pageKey": "result-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/result-risk-review.png",
+      "url": "http://127.0.0.1:5175/payment-result/PAY1785811244732"
+    },
+    {
+      "pageKey": "result-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/app-web/result-wait-callback.png",
+      "url": "http://127.0.0.1:5175/payment-result/PAY1785915556767"
+    },
+    {
+      "pageKey": "recharge-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/recharge-entry.png",
+      "url": "http://127.0.0.1:5176/recharge"
+    },
+    {
+      "pageKey": "withdraw-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/withdraw-entry.png",
+      "url": "http://127.0.0.1:5176/withdraw"
+    },
+    {
+      "pageKey": "transfer-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/transfer-entry.png",
+      "url": "http://127.0.0.1:5176/transfer"
+    },
+    {
+      "pageKey": "balance-pay-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/balance-pay-entry.png",
+      "url": "http://127.0.0.1:5176/balance-pay"
+    },
+    {
+      "pageKey": "cashier-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/cashier-wait-callback.png",
+      "url": "http://127.0.0.1:5176/cashier/PRE1785915556768"
+    },
+    {
+      "pageKey": "cashier-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/cashier-risk-review.png",
+      "url": "http://127.0.0.1:5176/cashier/PRE1785811244734"
+    },
+    {
+      "pageKey": "result-success",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/result-success.png",
+      "url": "http://127.0.0.1:5176/payment-result/PAY1785918393972"
+    },
+    {
+      "pageKey": "result-closed",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/result-closed.png",
+      "url": "http://127.0.0.1:5176/payment-result/PAY1785729963046"
+    },
+    {
+      "pageKey": "result-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/result-risk-review.png",
+      "url": "http://127.0.0.1:5176/payment-result/PAY1785811244732"
+    },
+    {
+      "pageKey": "result-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/h5-web/result-wait-callback.png",
+      "url": "http://127.0.0.1:5176/payment-result/PAY1785915556767"
+    },
+    {
+      "pageKey": "recharge-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/recharge-entry.png",
+      "url": "http://127.0.0.1:5177/recharge"
+    },
+    {
+      "pageKey": "withdraw-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/withdraw-entry.png",
+      "url": "http://127.0.0.1:5177/withdraw"
+    },
+    {
+      "pageKey": "transfer-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/transfer-entry.png",
+      "url": "http://127.0.0.1:5177/transfer"
+    },
+    {
+      "pageKey": "balance-pay-entry",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/balance-pay-entry.png",
+      "url": "http://127.0.0.1:5177/balance-pay"
+    },
+    {
+      "pageKey": "cashier-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/cashier-wait-callback.png",
+      "url": "http://127.0.0.1:5177/cashier/PRE1785915556768"
+    },
+    {
+      "pageKey": "cashier-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/cashier-risk-review.png",
+      "url": "http://127.0.0.1:5177/cashier/PRE1785811244734"
+    },
+    {
+      "pageKey": "result-success",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/result-success.png",
+      "url": "http://127.0.0.1:5177/payment-result/PAY1785918393972"
+    },
+    {
+      "pageKey": "result-closed",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/result-closed.png",
+      "url": "http://127.0.0.1:5177/payment-result/PAY1785729963046"
+    },
+    {
+      "pageKey": "result-risk-review",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/result-risk-review.png",
+      "url": "http://127.0.0.1:5177/payment-result/PAY1785811244732"
+    },
+    {
+      "pageKey": "result-wait-callback",
+      "status": "CAPTURED",
+      "output": "screenshots/payment-core/pc-web/result-wait-callback.png",
+      "url": "http://127.0.0.1:5177/payment-result/PAY1785915556767"
+    },
+    {
+      "pageKey": "events",
+      "status": "CAPTURED",
+      "output": "screenshots/clearing-system/admin-web/events.png",
+      "url": "http://127.0.0.1:5273/events"
+    },
+    {
+      "pageKey": "orders",
+      "status": "CAPTURED",
+      "output": "screenshots/settlement-system/admin-web/orders.png",
+      "url": "http://127.0.0.1:5274/orders"
+    },
+    {
+      "pageKey": "payouts",
+      "status": "CAPTURED",
+      "output": "screenshots/settlement-system/admin-web/payouts.png",
+      "url": "http://127.0.0.1:5274/payouts"
+    },
+    {
+      "pageKey": "events",
+      "status": "CAPTURED",
+      "output": "screenshots/accounting-system/admin-web/events.png",
+      "url": "http://127.0.0.1:5275/events"
+    }
+  ]
+}

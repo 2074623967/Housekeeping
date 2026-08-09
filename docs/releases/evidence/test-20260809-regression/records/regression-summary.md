@@ -17,21 +17,20 @@
 
 | 场景编号 | 业务场景 | API | 数据库 | 事件 | 页面 | 补偿/回滚 | 结论 | 备注 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| REG-01 | 创建预付单 | PASS | PASS | N/A | HISTORICAL | TODO | 部分完成 | 历史 smoke 与历史页面截图已存在，缺当前同批次页面与失败回滚证据 |
-| REG-02 | 提交支付请求 | PASS | PASS | N/A | HISTORICAL | TODO | 部分完成 | 已有历史提交、路由命中与页面截图证据 |
-| REG-03 | 渠道回调成功 | PASS | PASS | PASS | HISTORICAL | TODO | 部分完成 | 已有历史回调收口、结果页与出站事件证据 |
-| REG-04 | 支付成功自动清分 | PASS | PASS | PASS | HISTORICAL | TODO | 部分完成 | 已有历史清分承接与后台页截图证据 |
-| REG-05 | 清分结果自动结算 | PASS | PASS | PASS | HISTORICAL | TODO | 部分完成 | 已有历史结算承接与后台页截图证据 |
-| REG-06 | 清分结果自动记账 | PASS | PASS | PASS | HISTORICAL | TODO | 部分完成 | 已有历史账务承接与后台页截图证据 |
+| REG-01 | 创建预付单 | PASS | PASS | N/A | PASS | TODO | 部分完成 | 当前 test 基线预付入口截图已生成，缺失败回滚证据 |
+| REG-02 | 提交支付请求 | PASS | PASS | N/A | PASS | TODO | 部分完成 | 当前 test 基线支付流水页截图已生成，缺提交失败回滚证据 |
+| REG-03 | 渠道回调成功 | PASS | PASS | PASS | PASS | TODO | 部分完成 | 当前 test 基线支付结果页截图已生成，缺重复回调回滚证据 |
+| REG-04 | 支付成功自动清分 | PASS | PASS | PASS | PASS | TODO | 部分完成 | 当前 test 基线清分事件页截图已生成，缺清分失败补偿证据 |
+| REG-05 | 清分结果自动结算 | PASS | PASS | PASS | PASS | TODO | 部分完成 | 当前 test 基线结算单页截图已生成，缺结算失败补偿证据 |
+| REG-06 | 清分结果自动记账 | PASS | PASS | PASS | PASS | TODO | 部分完成 | 当前 test 基线账务事件页截图已生成，缺账务失败补偿证据 |
 | REG-07 | 跨系统链路诊断 | PASS | PASS | PASS | OPTIONAL | N/A | 已完成 | 当前 test 基线已具备代码与自动化闭环 |
-| REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | HISTORICAL | PASS | 部分完成 | 历史补偿闭环与死信任务页面截图已存在，缺最新同批次任务页面快照 |
-| REG-09 | 结算审核与出款 | PASS | PASS | PASS | HISTORICAL | TODO | 部分完成 | 已有历史审核、出款、回单与后台页截图证据 |
+| REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | PASS | PASS | 已完成代码与页面证据 | 当前 test 基线死信任务页截图已生成，补偿业务批次仍需同批次复核 |
+| REG-09 | 结算审核与出款 | PASS | PASS | PASS | PASS | TODO | 部分完成 | 当前 test 基线出款页截图已生成，缺失败出款回滚证据 |
 | REG-10 | 日终处理与运营巡检 | PASS | TODO | TODO | TODO | TODO | 部分完成 | 当前仅有自动化测试覆盖证据 |
 
 ## 3. 阻断项
 
-1. `REG-01 ~ REG-06 / REG-08 / REG-09` 已有历史页面截图映射，但仍缺 `2026-08-09` 同批次冻结截图。
-2. `REG-01 ~ REG-06 / REG-09` 仍缺最新同批次补偿/回滚证据。
+1. `REG-01 ~ REG-06 / REG-09` 仍缺最新同批次补偿/回滚证据。
 3. `REG-10` 当前仅有自动化测试证据，缺真实业务批次、数据库事实和页面巡检证据。
 
 ## 4. 放行结论
