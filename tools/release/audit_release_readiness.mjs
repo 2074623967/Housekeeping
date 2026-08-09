@@ -36,7 +36,24 @@ function containsAll(content, patterns) {
   return patterns.every((pattern) => content.includes(pattern));
 }
 
-function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDocPath, approvalDocPath, rollbackDocPath, onSiteDocPath, stabilizationClosingDocPath, decisionDocPath) {
+function buildAudit(
+  rootDir,
+  candidateDocPath,
+  stabilizationDocPath,
+  checklistDocPath,
+  approvalDocPath,
+  rollbackDocPath,
+  onSiteDocPath,
+  stabilizationClosingDocPath,
+  decisionDocPath,
+  observationCheckpointDocPath,
+  liveVerificationDocPath,
+  deferralDocPath,
+  gateDayEndDocPath,
+  reevaluationChecklistDocPath,
+  releaseNoteChecklistDocPath,
+  prepStatusDocPath
+) {
   const candidateContent = readText(candidateDocPath);
   const stabilizationContent = readText(stabilizationDocPath);
   const checklistContent = readText(checklistDocPath);
@@ -45,6 +62,13 @@ function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDo
   const onSiteContent = readText(onSiteDocPath);
   const stabilizationClosingContent = readText(stabilizationClosingDocPath);
   const decisionContent = readText(decisionDocPath);
+  const observationCheckpointContent = readText(observationCheckpointDocPath);
+  const liveVerificationContent = readText(liveVerificationDocPath);
+  const deferralContent = readText(deferralDocPath);
+  const gateDayEndContent = readText(gateDayEndDocPath);
+  const reevaluationChecklistContent = readText(reevaluationChecklistDocPath);
+  const releaseNoteChecklistContent = readText(releaseNoteChecklistDocPath);
+  const prepStatusContent = readText(prepStatusDocPath);
 
   const blockers = [];
 
@@ -72,18 +96,24 @@ function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDo
     blockers.push("master 稳定观察检查清单不完整");
   }
 
-  const approvalReady = containsAll(approvalContent, [
-    "当前状态：`待审批`",
-    "审批前置条件"
-  ]);
+  // “预审完成”只表示材料结构齐全，不代表正式审批已经完成；
+  // release 是否可创建仍由真实签字、回滚演练和观察结束结论共同决定。
+  const approvalReady =
+    approvalContent.includes("审批前置条件") &&
+    (
+      approvalContent.includes("当前状态：`待审批`") ||
+      approvalContent.includes("当前状态：`预审完成，待正式签字`")
+    );
   if (!approvalReady) {
     blockers.push("发布审批清单不完整");
   }
 
-  const rollbackReady = containsAll(rollbackContent, [
-    "当前状态：`待演练 / 待补齐`",
-    "演练记录"
-  ]);
+  const rollbackReady =
+    rollbackContent.includes("演练记录") &&
+    (
+      rollbackContent.includes("当前状态：`待演练 / 待补齐`") ||
+      rollbackContent.includes("当前状态：`方案已确认，待实际演练`")
+    );
   if (!rollbackReady) {
     blockers.push("回滚演练记录不完整");
   }
@@ -105,11 +135,72 @@ function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDo
   }
 
   const decisionReady = containsAll(decisionContent, [
-    "当前状态：`待决策`",
-    "是否允许创建 `release/v1.1.0`"
+    "是否允许创建 `release/v1.1.0`",
+    "2026-08-09",
+    "否"
   ]);
   if (!decisionReady) {
-    blockers.push("切版决策记录模板不完整");
+    blockers.push("切版决策记录不完整");
+  }
+
+  const observationCheckpointReady = containsAll(observationCheckpointContent, [
+    "当前阶段：`观察进行中`",
+    "今天不切 release/v1.1.0"
+  ]);
+  if (!observationCheckpointReady) {
+    blockers.push("master 观察中间结论记录不完整");
+  }
+
+  const liveVerificationReady = containsAll(liveVerificationContent, [
+    "即时核验结果",
+    "`payment-core`",
+    "`clearing-system`",
+    "`settlement-system`",
+    "`accounting-system`"
+  ]);
+  if (!liveVerificationReady) {
+    blockers.push("master 主链路即时核验记录不完整");
+  }
+
+  const deferralReady = containsAll(deferralContent, [
+    "2026-08-09 暂不创建 release/v1.1.0",
+    "计划重评日期：`2026-08-10`"
+  ]);
+  if (!deferralReady) {
+    blockers.push("暂缓切版说明不完整");
+  }
+
+  const gateDayEndReady = containsAll(gateDayEndContent, [
+    "2026-08-09 不创建 release/v1.1.0",
+    "已确认通过项",
+    "当前仍未满足项"
+  ]);
+  if (!gateDayEndReady) {
+    blockers.push("release 门禁日结不完整");
+  }
+
+  const reevaluationReady = containsAll(reevaluationChecklistContent, [
+    "计划执行日期：`2026-08-10`",
+    "必查项"
+  ]);
+  if (!reevaluationReady) {
+    blockers.push("重评清单不完整");
+  }
+
+  const releaseNoteChecklistReady = containsAll(releaseNoteChecklistContent, [
+    "当前状态：`待正式版说明生成`",
+    "必备内容"
+  ]);
+  if (!releaseNoteChecklistReady) {
+    blockers.push("正式版发布说明检查表不完整");
+  }
+
+  const prepStatusReady = containsAll(prepStatusContent, [
+    "材料骨架已齐",
+    "当前仍缺的实际记录"
+  ]);
+  if (!prepStatusReady) {
+    blockers.push("发布前材料现状记录不完整");
   }
 
   if (!candidateContent.includes("还缺正式 release 级发布审批材料")) {
@@ -139,7 +230,14 @@ function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDo
       rollbackDoc: toRelative(rootDir, rollbackDocPath),
       onSiteDoc: toRelative(rootDir, onSiteDocPath),
       stabilizationClosingDoc: toRelative(rootDir, stabilizationClosingDocPath),
-      decisionDoc: toRelative(rootDir, decisionDocPath)
+      decisionDoc: toRelative(rootDir, decisionDocPath),
+      observationCheckpointDoc: toRelative(rootDir, observationCheckpointDocPath),
+      liveVerificationDoc: toRelative(rootDir, liveVerificationDocPath),
+      deferralDoc: toRelative(rootDir, deferralDocPath),
+      gateDayEndDoc: toRelative(rootDir, gateDayEndDocPath),
+      reevaluationChecklistDoc: toRelative(rootDir, reevaluationChecklistDocPath),
+      releaseNoteChecklistDoc: toRelative(rootDir, releaseNoteChecklistDocPath),
+      prepStatusDoc: toRelative(rootDir, prepStatusDocPath)
     },
     summary: {
       candidateDocReady: candidateReady,
@@ -150,6 +248,13 @@ function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDo
       onSiteReady,
       stabilizationClosingReady,
       decisionReady,
+      observationCheckpointReady,
+      liveVerificationReady,
+      deferralReady,
+      gateDayEndReady,
+      reevaluationReady,
+      releaseNoteChecklistReady,
+      prepStatusReady,
       blockerCount: blockers.length,
       canCreateRelease
     },
@@ -175,7 +280,14 @@ function renderMarkdown(audit) {
   lines.push(`| 回滚演练记录模板 | \`${audit.summary.rollbackReady ? "通过" : "未通过"}\` |`);
   lines.push(`| 发布后现场核验模板 | \`${audit.summary.onSiteReady ? "通过" : "未通过"}\` |`);
   lines.push(`| master 观察结束结论模板 | \`${audit.summary.stabilizationClosingReady ? "通过" : "未通过"}\` |`);
-  lines.push(`| 切版决策记录模板 | \`${audit.summary.decisionReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 切版决策记录 | \`${audit.summary.decisionReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| master 观察中间结论 | \`${audit.summary.observationCheckpointReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 主链路即时核验记录 | \`${audit.summary.liveVerificationReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 暂缓切版说明 | \`${audit.summary.deferralReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| release 门禁日结 | \`${audit.summary.gateDayEndReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 次日重评清单 | \`${audit.summary.reevaluationReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 正式版说明检查表 | \`${audit.summary.releaseNoteChecklistReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 发布前材料现状记录 | \`${audit.summary.prepStatusReady ? "通过" : "未通过"}\` |`);
   lines.push(`| 阻断项数量 | \`${audit.summary.blockerCount}\` |`);
   lines.push("");
   lines.push("## 阻断项");
@@ -198,6 +310,13 @@ function renderMarkdown(audit) {
   lines.push(`6. \`${audit.inputs.onSiteDoc}\``);
   lines.push(`7. \`${audit.inputs.stabilizationClosingDoc}\``);
   lines.push(`8. \`${audit.inputs.decisionDoc}\``);
+  lines.push(`9. \`${audit.inputs.observationCheckpointDoc}\``);
+  lines.push(`10. \`${audit.inputs.liveVerificationDoc}\``);
+  lines.push(`11. \`${audit.inputs.deferralDoc}\``);
+  lines.push(`12. \`${audit.inputs.gateDayEndDoc}\``);
+  lines.push(`13. \`${audit.inputs.reevaluationChecklistDoc}\``);
+  lines.push(`14. \`${audit.inputs.releaseNoteChecklistDoc}\``);
+  lines.push(`15. \`${audit.inputs.prepStatusDoc}\``);
   lines.push("");
   return `${lines.join("\n")}\n`;
 }
@@ -212,6 +331,13 @@ function main() {
   const onSiteDocPath = ensureArg("--onsite-doc");
   const stabilizationClosingDocPath = ensureArg("--stabilization-closing-doc");
   const decisionDocPath = ensureArg("--decision-doc");
+  const observationCheckpointDocPath = ensureArg("--observation-checkpoint-doc");
+  const liveVerificationDocPath = ensureArg("--live-verification-doc");
+  const deferralDocPath = ensureArg("--deferral-doc");
+  const gateDayEndDocPath = ensureArg("--gate-day-end-doc");
+  const reevaluationChecklistDocPath = ensureArg("--reevaluation-checklist-doc");
+  const releaseNoteChecklistDocPath = ensureArg("--release-note-checklist-doc");
+  const prepStatusDocPath = ensureArg("--prep-status-doc");
   const outputDir = getArgValue(
     "--output-dir",
     path.join(rootDir, "docs", "releases", "audit")
@@ -228,7 +354,14 @@ function main() {
     rollbackDocPath,
     onSiteDocPath,
     stabilizationClosingDocPath,
-    decisionDocPath
+    decisionDocPath,
+    observationCheckpointDocPath,
+    liveVerificationDocPath,
+    deferralDocPath,
+    gateDayEndDocPath,
+    reevaluationChecklistDocPath,
+    releaseNoteChecklistDocPath,
+    prepStatusDocPath
   );
   const jsonPath = path.join(outputDir, "release-readiness-audit.json");
   const mdPath = path.join(outputDir, "release-readiness-audit.md");
