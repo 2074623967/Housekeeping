@@ -20,8 +20,8 @@
 | REG-01 | 创建预付单 | PASS | PASS | N/A | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线预付入口截图已生成，缺失败回滚证据 |
 | REG-02 | 提交支付请求 | PASS | PASS | N/A | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线支付流水页截图已生成，缺提交失败回滚证据 |
 | REG-03 | 渠道回调成功 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线支付结果页截图已生成，缺重复回调回滚证据 |
-| REG-04 | 支付成功自动清分 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线清分事件页截图已生成，缺清分失败补偿证据 |
-| REG-05 | 清分结果自动结算 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线结算单页截图已生成，缺结算失败补偿证据 |
+| REG-04 | 支付成功自动清分 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 payment.success -> clearing 当前批次 replay，并生成清分事件 `EVT60002` |
+| REG-05 | 清分结果自动结算 | PASS | PASS | PASS | PASS | PASS | 已完成 | 当前 test 基线已完成 clearing.generated -> settlement 当前批次 replay，并生成结算事件 `SVE70003` |
 | REG-06 | 清分结果自动记账 | PASS | PASS | PASS | PASS | PENDING_EVIDENCE | 部分完成 | 当前 test 基线账务事件页截图已生成，缺账务失败补偿证据 |
 | REG-07 | 跨系统链路诊断 | PASS | PASS | PASS | OPTIONAL | N/A | 已完成 | 当前 test 基线已具备代码与自动化闭环 |
 | REG-08 | 失败派发重试 / DLQ | PASS | PASS | PASS | PASS | PASS | 已完成代码与页面证据 | 当前 test 基线死信任务页截图已生成，补偿业务批次仍需同批次复核 |
@@ -30,7 +30,7 @@
 
 ## 3. 阻断项
 
-1. `REG-01 ~ REG-06 / REG-09` 仍缺最新同批次补偿/回滚证据。
+1. `REG-01 ~ REG-03 / REG-06 / REG-09` 仍缺最新同批次补偿/回滚证据。
 
 ## 4. 放行结论
 
