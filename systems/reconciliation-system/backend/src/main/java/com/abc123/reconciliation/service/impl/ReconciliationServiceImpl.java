@@ -48,6 +48,20 @@ public class ReconciliationServiceImpl implements ReconciliationService {
     private static final String RUNNING = "RUNNING";
     private static final String COMPLETED = "COMPLETED";
     private static final String SUCCESS = "SUCCESS";
+    private static final String CHAIN_WAITING = "WAITING";
+    private static final String CHAIN_IN_PROGRESS = "IN_PROGRESS";
+    private static final String CHAIN_EXCEPTION = "EXCEPTION";
+    private static final String CHAIN_COMPLETED = "COMPLETED";
+    private static final String RESPONSIBILITY_UNASSIGNED = "UNASSIGNED";
+    private static final String RESPONSIBILITY_PENDING = "PENDING";
+    private static final String RESPONSIBILITY_MANUAL_REVIEW = "MANUAL_REVIEW";
+    private static final String RESPONSIBILITY_CLOSED = "CLOSED";
+    private static final String PAYMENT_STAGE = "payment-core|PAYMENT_SUCCESS";
+    private static final String CLEARING_STAGE = "clearing-system|CLEARING_GENERATED";
+    private static final String SETTLEMENT_STAGE = "settlement-system|SETTLEMENT_CREATED";
+    private static final String ACCOUNTING_STAGE = "accounting-system|ACCOUNTING_POSTED";
+    private static final List<String> EXPECTED_STAGES = java.util.Arrays.asList(
+            PAYMENT_STAGE, CLEARING_STAGE, SETTLEMENT_STAGE, ACCOUNTING_STAGE);
     private static final DateTimeFormatter BATCH_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     private final ReconciliationDao dao;
@@ -261,16 +275,107 @@ public class ReconciliationServiceImpl implements ReconciliationService {
         snapshot.setBusinessChainId(businessChainId.trim());
         snapshot.setFactCount(facts.size());
         snapshot.setFacts(facts);
-        boolean abnormal = facts.stream().anyMatch(item -> isAbnormalStatus(item.getFactStatus()));
-        snapshot.setHasAbnormalFact(abnormal);
-        if (facts.isEmpty()) {
-            snapshot.setDiagnosis("未接收到任何跨系统事实");
-        } else if (abnormal) {
-            snapshot.setDiagnosis("链路存在失败或异常事实，禁止直接进入财务收口");
-        } else {
-            snapshot.setDiagnosis("已接收跨系统事实，当前未发现失败状态");
-        }
+        ChainEvaluation evaluation = evaluateChain(facts);
+        snapshot.setHasAbnormalFact(evaluation.abnormalFactCount > 0);
+        snapshot.setChainStatus(evaluation.chainStatus);
+        snapshot.setResponsibilityStatus(evaluation.responsibilityStatus);
+        snapshot.setNextAction(evaluation.nextAction);
+        snapshot.setAbnormalFactCount(evaluation.abnormalFactCount);
+        snapshot.setCompletedStageCount(evaluation.completedStageCount);
+        snapshot.setExpectedStageCount(EXPECTED_STAGES.size());
+        snapshot.setFinancialCloseable(evaluation.financialCloseable);
+        snapshot.setLastFactAt(evaluation.lastFactAt);
+        snapshot.setDiagnosis(evaluation.diagnosis);
         return snapshot;
+    }
+
+    /**
+     * 根据事实快照计算统一链路状态，避免各系统分别解释“处理中/失败/已收口”。
+     */
+    private ChainEvaluation evaluateChain(List<CrossSystemFactDTO> facts) {
+        if (facts == null || facts.isEmpty()) {
+            return new ChainEvaluation(
+                    CHAIN_WAITING,
+                    RESPONSIBILITY_UNASSIGNED,
+                    "等待 payment-core 上报 PAYMENT_SUCCESS",
+                    0,
+                    0,
+                    false,
+                    null,
+                    "未接收到任何跨系统事实");
+        }
+        int abnormalFactCount = (int) facts.stream()
+                .filter(item -> isAbnormalStatus(item.getFactStatus()))
+                .count();
+        LocalDateTime lastFactAt = facts.stream()
+                .map(CrossSystemFactDTO::getOccurredAt)
+                .filter(java.util.Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        if (abnormalFactCount > 0) {
+            return new ChainEvaluation(
+                    CHAIN_EXCEPTION,
+                    RESPONSIBILITY_MANUAL_REVIEW,
+                    "创建或重试补偿任务，完成异常事实人工复核",
+                    abnormalFactCount,
+                    countCompletedStages(facts),
+                    false,
+                    lastFactAt,
+                    "链路存在失败或异常事实，禁止直接进入财务收口");
+        }
+        int completedStageCount = countCompletedStages(facts);
+        if (completedStageCount == EXPECTED_STAGES.size()) {
+            return new ChainEvaluation(
+                    CHAIN_COMPLETED,
+                    RESPONSIBILITY_CLOSED,
+                    "允许进入财务收口并归档链路事实",
+                    0,
+                    completedStageCount,
+                    true,
+                    lastFactAt,
+                    "支付、清分、结算、账务关键事实已完整收口");
+        }
+        return new ChainEvaluation(
+                CHAIN_IN_PROGRESS,
+                RESPONSIBILITY_PENDING,
+                buildMissingStageAction(facts),
+                0,
+                completedStageCount,
+                false,
+                lastFactAt,
+                "已接收部分跨系统事实，仍有关键阶段未收口");
+    }
+
+    private int countCompletedStages(List<CrossSystemFactDTO> facts) {
+        Set<String> completedStages = facts.stream()
+                .filter(item -> isSuccessfulStatus(item.getFactStatus()))
+                .map(item -> item.getSystemCode() + "|" + item.getFactType())
+                .collect(Collectors.toSet());
+        return (int) EXPECTED_STAGES.stream().filter(completedStages::contains).count();
+    }
+
+    private String buildMissingStageAction(List<CrossSystemFactDTO> facts) {
+        Set<String> completedStages = facts.stream()
+                .filter(item -> isSuccessfulStatus(item.getFactStatus()))
+                .map(item -> item.getSystemCode() + "|" + item.getFactType())
+                .collect(Collectors.toSet());
+        String nextStage = EXPECTED_STAGES.stream()
+                .filter(stage -> !completedStages.contains(stage))
+                .findFirst()
+                .orElse("unknown");
+        if (PAYMENT_STAGE.equals(nextStage)) {
+            return "等待 payment-core 上报 PAYMENT_SUCCESS";
+        }
+        if (CLEARING_STAGE.equals(nextStage)) {
+            return "等待 clearing-system 上报 CLEARING_GENERATED";
+        }
+        if (SETTLEMENT_STAGE.equals(nextStage)) {
+            return "等待 settlement-system 上报 SETTLEMENT_CREATED";
+        }
+        if (ACCOUNTING_STAGE.equals(nextStage)) {
+            return "等待 accounting-system 上报 ACCOUNTING_POSTED";
+        }
+        return "等待下一阶段跨系统事实";
     }
 
     private void validateCrossSystemFact(CrossSystemFactRequestDTO request) {
@@ -293,6 +398,21 @@ public class ReconciliationServiceImpl implements ReconciliationService {
                 || normalized.contains("ABNORMAL")
                 || status.contains("失败")
                 || status.contains("异常");
+    }
+
+    /**
+     * 只有明确成功态才能推动关键阶段完成，避免将处理中或未知状态误判为已收口。
+     */
+    private boolean isSuccessfulStatus(String status) {
+        if (!StringUtils.hasText(status)) {
+            return false;
+        }
+        String normalized = status.trim().toUpperCase();
+        return SUCCESS.equals(normalized)
+                || "COMPLETED".equals(normalized)
+                || "SUCCESSFUL".equals(normalized)
+                || "成功".equals(status.trim())
+                || "已完成".equals(status.trim());
     }
 
     @Transactional
@@ -371,5 +491,38 @@ public class ReconciliationServiceImpl implements ReconciliationService {
             return "\"" + escaped + "\"";
         }
         return escaped;
+    }
+
+    /**
+     * 链路状态计算结果，集中承载状态机输出，避免在 DTO 组装过程中散落条件分支。
+     */
+    private static final class ChainEvaluation {
+
+        private final String chainStatus;
+        private final String responsibilityStatus;
+        private final String nextAction;
+        private final int abnormalFactCount;
+        private final int completedStageCount;
+        private final boolean financialCloseable;
+        private final LocalDateTime lastFactAt;
+        private final String diagnosis;
+
+        private ChainEvaluation(String chainStatus,
+                                String responsibilityStatus,
+                                String nextAction,
+                                int abnormalFactCount,
+                                int completedStageCount,
+                                boolean financialCloseable,
+                                LocalDateTime lastFactAt,
+                                String diagnosis) {
+            this.chainStatus = chainStatus;
+            this.responsibilityStatus = responsibilityStatus;
+            this.nextAction = nextAction;
+            this.abnormalFactCount = abnormalFactCount;
+            this.completedStageCount = completedStageCount;
+            this.financialCloseable = financialCloseable;
+            this.lastFactAt = lastFactAt;
+            this.diagnosis = diagnosis;
+        }
     }
 }

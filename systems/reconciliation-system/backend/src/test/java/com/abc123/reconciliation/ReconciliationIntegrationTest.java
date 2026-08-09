@@ -165,7 +165,13 @@ class ReconciliationIntegrationTest {
         CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain(chainId);
         assertEquals(4, snapshot.getFactCount());
         assertEquals(false, snapshot.isHasAbnormalFact());
-        assertEquals("已接收跨系统事实，当前未发现失败状态", snapshot.getDiagnosis());
+        assertEquals("支付、清分、结算、账务关键事实已完整收口", snapshot.getDiagnosis());
+        assertEquals("COMPLETED", snapshot.getChainStatus());
+        assertEquals("CLOSED", snapshot.getResponsibilityStatus());
+        assertEquals("允许进入财务收口并归档链路事实", snapshot.getNextAction());
+        assertEquals(4, snapshot.getCompletedStageCount());
+        assertEquals(4, snapshot.getExpectedStageCount());
+        assertEquals(true, snapshot.isFinancialCloseable());
 
         recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-001", "SUCCESS");
         assertEquals(4, service.crossSystemChain(chainId).getFactCount());
@@ -181,6 +187,48 @@ class ReconciliationIntegrationTest {
         assertEquals(2, snapshot.getFactCount());
         assertEquals(true, snapshot.isHasAbnormalFact());
         assertEquals("链路存在失败或异常事实，禁止直接进入财务收口", snapshot.getDiagnosis());
+        assertEquals("EXCEPTION", snapshot.getChainStatus());
+        assertEquals("MANUAL_REVIEW", snapshot.getResponsibilityStatus());
+        assertEquals("创建或重试补偿任务，完成异常事实人工复核", snapshot.getNextAction());
+        assertEquals(false, snapshot.isFinancialCloseable());
+    }
+
+    @Test
+    void shouldExposeInProgressChainStateAndNextAction() {
+        String chainId = "CHAIN-IT-003";
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-003", "SUCCESS");
+
+        CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain(chainId);
+
+        assertEquals("IN_PROGRESS", snapshot.getChainStatus());
+        assertEquals("PENDING", snapshot.getResponsibilityStatus());
+        assertEquals("等待 clearing-system 上报 CLEARING_GENERATED", snapshot.getNextAction());
+        assertEquals(1, snapshot.getCompletedStageCount());
+        assertEquals(false, snapshot.isFinancialCloseable());
+    }
+
+    @Test
+    void shouldExposeWaitingStateWhenChainHasNoFact() {
+        CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain("CHAIN-IT-EMPTY");
+
+        assertEquals("WAITING", snapshot.getChainStatus());
+        assertEquals("UNASSIGNED", snapshot.getResponsibilityStatus());
+        assertEquals("等待 payment-core 上报 PAYMENT_SUCCESS", snapshot.getNextAction());
+        assertEquals(0, snapshot.getFactCount());
+        assertEquals(false, snapshot.isFinancialCloseable());
+    }
+
+    @Test
+    void shouldNotTreatPendingFactAsCompletedStage() {
+        String chainId = "CHAIN-IT-PENDING";
+        recordFact(chainId, "payment-core", "PAYMENT_SUCCESS", "PAY-CHAIN-PENDING", "PENDING");
+
+        CrossSystemChainSnapshotDTO snapshot = service.crossSystemChain(chainId);
+
+        assertEquals("IN_PROGRESS", snapshot.getChainStatus());
+        assertEquals(0, snapshot.getCompletedStageCount());
+        assertEquals("等待 payment-core 上报 PAYMENT_SUCCESS", snapshot.getNextAction());
+        assertEquals(false, snapshot.isFinancialCloseable());
     }
 
     private void recordFact(String chainId, String systemCode, String factType,

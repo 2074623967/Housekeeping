@@ -21,3 +21,15 @@
 8. 已知风险
 9. 回滚说明
 10. 发布后验证项
+# 版本交付包
+
+每个正式版本除根目录下的发布说明外，还必须包含一套专项变更文档：
+
+- `docs/releases/<version>/01-后端变更说明.md`
+- `docs/releases/<version>/02-前端变更说明.md`
+- `docs/releases/<version>/03-数据库与接口变更说明.md`
+- `docs/releases/<version>/04-运维操作手册.md`
+- `docs/releases/<version>/05-测试与验收报告.md`
+- `docs/releases/<version>/06-回滚与已知问题.md`
+
+详细要求见 [`版本变更包规范.md`](./版本变更包规范.md)，模板位于 [`templates/v1.1.0`](./templates/v1.1.0)。

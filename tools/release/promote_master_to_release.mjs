@@ -151,6 +151,29 @@ function main() {
       "releases",
       `${effectiveDate}-v1.1.0正式切版记录.md`
     );
+    const packageTemplateDir = path.join(
+      rootDir,
+      "docs",
+      "releases",
+      "templates",
+      "v1.1.0"
+    );
+    const packageDir = path.join(releaseWorktree, "docs", "releases", "v1.1.0");
+    if (!fs.existsSync(packageTemplateDir)) {
+      throw new Error(`未找到版本变更包模板目录: ${packageTemplateDir}`);
+    }
+    fs.mkdirSync(packageDir, { recursive: true });
+    for (const fileName of fs.readdirSync(packageTemplateDir)) {
+      const sourcePath = path.join(packageTemplateDir, fileName);
+      const targetPath = path.join(packageDir, fileName);
+      const packageContent = fs
+        .readFileSync(sourcePath, "utf8")
+        .replaceAll("release 分支自动生成后填写", `正式版，分支 \`${releaseBranch}\``)
+        .replaceAll("来源 SHA：`待填写`", `来源 SHA：\`${masterSha}\``)
+        .replaceAll("发布日期：`待填写`", `发布日期：\`${effectiveDate}\``)
+        .replaceAll("发布窗口：`待填写`", `发布窗口：\`${effectiveDate}\``);
+      fs.writeFileSync(targetPath, packageContent, "utf8");
+    }
     fs.writeFileSync(
       cutoverRecordPath,
       [
@@ -170,7 +193,12 @@ function main() {
       "utf8"
     );
 
-    git(releaseWorktree, ["add", "docs/releases/v1.1.0-发布说明.md", `docs/releases/${effectiveDate}-v1.1.0正式切版记录.md`]);
+    git(releaseWorktree, [
+      "add",
+      "docs/releases/v1.1.0-发布说明.md",
+      `docs/releases/${effectiveDate}-v1.1.0正式切版记录.md`,
+      "docs/releases/v1.1.0"
+    ]);
     git(releaseWorktree, ["commit", "-m", "release: cut v1.1.0 from master"]);
 
     console.log(
