@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-09T01:23:15.362Z",
-  "rootDir": "/private/tmp/home-service-payment-system-master",
+  "generatedAt": "2026-08-09T01:48:49.866Z",
+  "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "inputs": {
     "candidateDoc": "docs/releases/v1.1.0-发布说明-候选版.md",
     "stabilizationDoc": "docs/releases/2026-08-09-master稳定观察起始记录.md",
