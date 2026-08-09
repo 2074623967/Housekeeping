@@ -1,20 +1,23 @@
 {
-  "generatedAt": "2026-08-09T02:51:11.032Z",
+  "generatedAt": "2026-08-09T02:57:18.734Z",
   "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "packDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression",
   "summary": {
     "scenarioCount": 10,
-    "incompleteScenarioCount": 9,
+    "incompleteScenarioCount": 8,
     "missingSampleCount": 0,
     "missingEvidenceCount": 0,
-    "summaryTodoCount": 9,
+    "historicalPageCount": 8,
+    "historicalRollbackCount": 0,
+    "summaryTodoCount": 8,
     "canPromoteTestToMaster": false,
     "canCreateRelease": false,
-    "blockerCount": 2
+    "blockerCount": 3
   },
   "blockers": [
-    "仍有 9 个回归场景未完成所有检查点",
-    "回归汇总中仍有 9 个 TODO 待回填"
+    "仍有 8 个回归场景未完成所有检查点",
+    "仍有 8 个场景仅回填历史页面截图，缺当前同批次冻结截图",
+    "回归汇总中仍有 8 个 TODO 待回填"
   ],
   "details": {
     "incompleteScenarios": [
@@ -22,7 +25,6 @@
         "scenarioId": "REG-01",
         "scenarioName": "创建预付单",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
         ]
       },
@@ -30,7 +32,6 @@
         "scenarioId": "REG-02",
         "scenarioName": "提交支付请求",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
         ]
       },
@@ -38,7 +39,6 @@
         "scenarioId": "REG-03",
         "scenarioName": "渠道回调成功",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
         ]
       },
@@ -46,7 +46,6 @@
         "scenarioId": "REG-04",
         "scenarioName": "支付成功自动清分",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
         ]
       },
@@ -54,7 +53,6 @@
         "scenarioId": "REG-05",
         "scenarioName": "清分结果自动结算",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
         ]
       },
@@ -62,22 +60,13 @@
         "scenarioId": "REG-06",
         "scenarioName": "清分结果自动记账",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-08",
-        "scenarioName": "失败派发重试与DLQ",
-        "incompleteFields": [
-          "page_status"
         ]
       },
       {
         "scenarioId": "REG-09",
         "scenarioName": "结算审核与出款",
         "incompleteFields": [
-          "page_status",
           "rollback_or_compensation_status"
         ]
       },
@@ -93,6 +82,49 @@
       }
     ],
     "missingSampleScenarios": [],
-    "missingEvidenceFiles": []
+    "missingEvidenceFiles": [],
+    "historicalPageScenarios": [
+      {
+        "scenarioId": "REG-01",
+        "scenarioName": "创建预付单",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-02",
+        "scenarioName": "提交支付请求",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-03",
+        "scenarioName": "渠道回调成功",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-04",
+        "scenarioName": "支付成功自动清分",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-05",
+        "scenarioName": "清分结果自动结算",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-06",
+        "scenarioName": "清分结果自动记账",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-08",
+        "scenarioName": "失败派发重试与DLQ",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      },
+      {
+        "scenarioId": "REG-09",
+        "scenarioName": "结算审核与出款",
+        "evidenceFile": "screenshots/historical-page-mapping.md"
+      }
+    ],
+    "historicalRollbackScenarios": []
   }
 }

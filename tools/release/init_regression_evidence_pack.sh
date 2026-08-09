@@ -52,6 +52,10 @@ cat > "$README_FILE" <<EOF
 
 1. 所有证据必须来自当前 \`test\` 基线或明确记录的隔离环境。
 2. 每个场景至少要回填 API、数据库事实、事件台账三类证据；涉及页面的场景还要补截图。
+3. 状态允许使用 \`PASS / TODO / HISTORICAL / OPTIONAL / NOT_APPLICABLE\`：
+   - \`PASS\`：当前同批次证据已具备
+   - \`HISTORICAL\`：只有历史基线证据，不能作为当前放行依据
+   - \`TODO\`：仍未补证据
 3. 所有场景统一使用 \`REG-01 ~ REG-10\` 编号，不允许新增临时口径编号。
 4. 如果场景属于补偿、回放、回滚演练，必须在 \`events/\` 或 \`database/\` 中保留执行前后对比证据。
 5. 完成回归后，先运行 \`tools/release/audit_regression_pack.mjs\`，再决定是否更新发布结论。

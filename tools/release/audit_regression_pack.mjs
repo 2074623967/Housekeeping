@@ -76,7 +76,7 @@ function normalize(value) {
 }
 
 function isDone(value) {
-  return ["DONE", "PASS", "PASSED", "OK", "N/A", "NOT_APPLICABLE", "OPTIONAL"].includes(normalize(value));
+  return ["DONE", "PASS", "PASSED", "OK", "N/A", "NOT_APPLICABLE", "OPTIONAL", "HISTORICAL"].includes(normalize(value));
 }
 
 function fileExists(baseDir, relativePath) {
@@ -98,6 +98,8 @@ function auditScenarioRows(packDir, rows) {
   const incompleteRows = [];
   const missingSampleRows = [];
   const missingEvidenceRows = [];
+  const historicalPageRows = [];
+  const historicalRollbackRows = [];
 
   rows.forEach((row) => {
     const checkpoints = [
@@ -145,12 +147,29 @@ function auditScenarioRows(packDir, rows) {
         });
       }
     });
+
+    if (normalize(row.page_status) === "HISTORICAL") {
+      historicalPageRows.push({
+        scenarioId: row.scenario_id,
+        scenarioName: row.scenario_name,
+        evidenceFile: row.page_evidence_file
+      });
+    }
+
+    if (normalize(row.rollback_or_compensation_status) === "HISTORICAL") {
+      historicalRollbackRows.push({
+        scenarioId: row.scenario_id,
+        scenarioName: row.scenario_name
+      });
+    }
   });
 
   return {
     incompleteRows,
     missingSampleRows,
-    missingEvidenceRows
+    missingEvidenceRows,
+    historicalPageRows,
+    historicalRollbackRows
   };
 }
 
@@ -190,6 +209,12 @@ function main() {
   if (scenarioAudit.missingEvidenceRows.length > 0) {
     blockers.push(`仍有 ${scenarioAudit.missingEvidenceRows.length} 个回归证据文件缺失`);
   }
+  if (scenarioAudit.historicalPageRows.length > 0) {
+    blockers.push(`仍有 ${scenarioAudit.historicalPageRows.length} 个场景仅回填历史页面截图，缺当前同批次冻结截图`);
+  }
+  if (scenarioAudit.historicalRollbackRows.length > 0) {
+    blockers.push(`仍有 ${scenarioAudit.historicalRollbackRows.length} 个场景仅回填历史补偿/回滚证据，缺当前同批次闭环证据`);
+  }
   if (summaryAudit.todoCount > 0) {
     blockers.push(`回归汇总中仍有 ${summaryAudit.todoCount} 个 TODO 待回填`);
   }
@@ -203,6 +228,8 @@ function main() {
       incompleteScenarioCount: scenarioAudit.incompleteRows.length,
       missingSampleCount: scenarioAudit.missingSampleRows.length,
       missingEvidenceCount: scenarioAudit.missingEvidenceRows.length,
+      historicalPageCount: scenarioAudit.historicalPageRows.length,
+      historicalRollbackCount: scenarioAudit.historicalRollbackRows.length,
       summaryTodoCount: summaryAudit.todoCount,
       canPromoteTestToMaster: blockers.length === 0 && summaryAudit.canPromoteTestToMaster,
       canCreateRelease: blockers.length === 0 && summaryAudit.canCreateRelease,
@@ -212,7 +239,9 @@ function main() {
     details: {
       incompleteScenarios: scenarioAudit.incompleteRows,
       missingSampleScenarios: scenarioAudit.missingSampleRows,
-      missingEvidenceFiles: scenarioAudit.missingEvidenceRows
+      missingEvidenceFiles: scenarioAudit.missingEvidenceRows,
+      historicalPageScenarios: scenarioAudit.historicalPageRows,
+      historicalRollbackScenarios: scenarioAudit.historicalRollbackRows
     }
   };
 
