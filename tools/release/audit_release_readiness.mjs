@@ -1,0 +1,168 @@
+#!/usr/bin/env node
+
+import fs from "fs";
+import path from "path";
+
+const argv = process.argv.slice(2);
+
+function getArgValue(flag, fallback = "") {
+  const index = argv.indexOf(flag);
+  if (index === -1 || index === argv.length - 1) {
+    return fallback;
+  }
+  return argv[index + 1];
+}
+
+function ensureArg(flag) {
+  const value = getArgValue(flag);
+  if (!value) {
+    throw new Error(`缺少参数 ${flag}`);
+  }
+  return value;
+}
+
+function readText(filePath) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`文件不存在: ${filePath}`);
+  }
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function toRelative(rootDir, filePath) {
+  return path.relative(rootDir, filePath) || path.basename(filePath);
+}
+
+function containsAll(content, patterns) {
+  return patterns.every((pattern) => content.includes(pattern));
+}
+
+function buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDocPath) {
+  const candidateContent = readText(candidateDocPath);
+  const stabilizationContent = readText(stabilizationDocPath);
+  const checklistContent = readText(checklistDocPath);
+
+  const blockers = [];
+
+  const candidateReady = containsAll(candidateContent, [
+    "状态：候选版",
+    "当前结论：`暂不切 release/*`"
+  ]);
+  if (!candidateReady) {
+    blockers.push("release 候选版发布说明尚未达到当前模板要求");
+  }
+
+  const stabilizationReady = containsAll(stabilizationContent, [
+    "当前阶段：`冻结候选已从 test 合入 master，进入稳定观察`",
+    "当前结论 | `进入观察，暂不切 release/*`"
+  ]);
+  if (!stabilizationReady) {
+    blockers.push("master 稳定观察起始记录不完整");
+  }
+
+  const checklistReady = containsAll(checklistContent, [
+    "当前阶段：`release/*` 前稳定观察",
+    "当前结论：`观察中，暂不切版`"
+  ]);
+  if (!checklistReady) {
+    blockers.push("master 稳定观察检查清单不完整");
+  }
+
+  if (!candidateContent.includes("还缺正式 release 级发布审批材料")) {
+    blockers.push("release 候选版没有显式列出发布审批材料缺口");
+  }
+  if (!candidateContent.includes("还缺正式发布后现场核验记录")) {
+    blockers.push("release 候选版没有显式列出发布后现场核验缺口");
+  }
+
+  if (candidateContent.includes("暂不切 release/*")) {
+    blockers.push("当前候选版发布说明仍明确暂不切 release/*");
+  }
+  if (checklistContent.includes("待完成项")) {
+    blockers.push("release 候选准备清单仍存在待完成项");
+  }
+
+  const canCreateRelease = blockers.length === 0 && false;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    rootDir,
+    inputs: {
+      candidateDoc: toRelative(rootDir, candidateDocPath),
+      stabilizationDoc: toRelative(rootDir, stabilizationDocPath),
+      checklistDoc: toRelative(rootDir, checklistDocPath)
+    },
+    summary: {
+      candidateDocReady: candidateReady,
+      stabilizationReady,
+      checklistReady,
+      blockerCount: blockers.length,
+      canCreateRelease
+    },
+    blockers
+  };
+}
+
+function renderMarkdown(audit) {
+  const lines = [];
+  lines.push("# release 就绪自动审计报告");
+  lines.push("");
+  lines.push(`- 生成时间：\`${audit.generatedAt}\``);
+  lines.push(`- 是否允许创建 \`release/*\`：\`${audit.summary.canCreateRelease ? "是" : "否"}\``);
+  lines.push("");
+  lines.push("## 汇总");
+  lines.push("");
+  lines.push("| 项目 | 结果 |");
+  lines.push("| --- | --- |");
+  lines.push(`| 候选版发布说明 | \`${audit.summary.candidateDocReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| master 稳定观察起始记录 | \`${audit.summary.stabilizationReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| master 稳定观察检查清单 | \`${audit.summary.checklistReady ? "通过" : "未通过"}\` |`);
+  lines.push(`| 阻断项数量 | \`${audit.summary.blockerCount}\` |`);
+  lines.push("");
+  lines.push("## 阻断项");
+  lines.push("");
+  if (!audit.blockers.length) {
+    lines.push("1. 当前自动审计未发现阻断项。");
+  } else {
+    audit.blockers.forEach((blocker, index) => {
+      lines.push(`${index + 1}. ${blocker}`);
+    });
+  }
+  lines.push("");
+  lines.push("## 输入文件");
+  lines.push("");
+  lines.push(`1. \`${audit.inputs.candidateDoc}\``);
+  lines.push(`2. \`${audit.inputs.stabilizationDoc}\``);
+  lines.push(`3. \`${audit.inputs.checklistDoc}\``);
+  lines.push("");
+  return `${lines.join("\n")}\n`;
+}
+
+function main() {
+  const rootDir = ensureArg("--root-dir");
+  const candidateDocPath = ensureArg("--candidate-doc");
+  const stabilizationDocPath = ensureArg("--stabilization-doc");
+  const checklistDocPath = ensureArg("--checklist-doc");
+  const outputDir = getArgValue(
+    "--output-dir",
+    path.join(rootDir, "docs", "releases", "audit")
+  );
+
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const audit = buildAudit(rootDir, candidateDocPath, stabilizationDocPath, checklistDocPath);
+  const jsonPath = path.join(outputDir, "release-readiness-audit.json");
+  const mdPath = path.join(outputDir, "release-readiness-audit.md");
+
+  fs.writeFileSync(jsonPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+  fs.writeFileSync(mdPath, renderMarkdown(audit), "utf8");
+
+  console.log(`已生成 release 就绪审计 JSON: ${jsonPath}`);
+  console.log(`已生成 release 就绪审计 Markdown: ${mdPath}`);
+  console.log(`是否允许创建 release/*: ${audit.summary.canCreateRelease ? "是" : "否"}`);
+
+  if (audit.blockers.length) {
+    process.exitCode = 2;
+  }
+}
+
+main();
