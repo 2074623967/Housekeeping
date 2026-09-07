@@ -1,6 +1,6 @@
 # payment-core 统一门禁审计报告
 
-- 生成时间：`2026-09-07T14:32:22.036Z`
+- 生成时间：`2026-09-07T15:19:23.031Z`
 - 是否允许推进 `test -> master`：`是`
 - 是否允许创建 `release/*`：`否`
 - 阻断项数量：`1`
@@ -33,4 +33,3 @@
 1. `docs/releases/evidence/test-20260809-regression`
 2. `tools/release/audit_regression_pack.mjs`
 3. `tools/release/audit_release_readiness.mjs`
-

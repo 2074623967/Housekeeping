@@ -157,7 +157,6 @@ function renderMarkdown(audit) {
   lines.push(`1. \`${audit.inputs.regressionPack}\``);
   lines.push(`2. \`${audit.inputs.regressionScript}\``);
   lines.push(`3. \`${audit.inputs.releaseScript}\``);
-  lines.push("");
   return `${lines.join("\n")}\n`;
 }
 
