@@ -195,3 +195,71 @@
 1. `payment-core` 后台控制器层的订单、支付、账单、请求、日志、事件、监控、异常、日终、任务、配置和工作台入口已全部补齐独立门禁测试。
 2. 这一步提升的是支付核心域后台入口稳定性，不代表跨系统能力、真实渠道能力和发布冻结条件已全部满足。
 3. 当前仍只在 `test` 分支推进，不合并 `master`，不创建 `release/*`。
+
+## 9. 2026-08-07 最新复核：订单与异常告警快照导出
+
+### 9.1 本轮复核结果
+
+本轮对 `payment-core` 进行了最新一次后端全量回归复核，同时确认近期新增的订单快照导出与异常告警快照导出已经进入主线。
+
+### 9.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端全量测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -q -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml test` | 通过 | `220` 个用例通过，`0` failures，`0` errors，`0` skipped |
+
+### 9.3 当前判断
+
+1. `payment-core` 仍保持最新全量回归通过。
+2. 本轮新增的是导出留痕能力，不足以改变 `master` / `release` 冻结结论。
+3. 当前仍不建议从 `test` 直接进入 `master`，也不需要基于 `master` 产出 release 文档。
+
+## 10. 2026-08-11 release 门禁复核
+
+### 10.1 本轮复核结果
+
+本轮重跑了 `release` 就绪审计和 `test` 回归包审计，并结合现有发布材料再次判断是否达到 `test -> master` 与 `master -> release/*` 门槛。
+
+### 10.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| release 就绪审计 | `node tools/release/audit_release_readiness.mjs --root-dir /Users/abc123/workspace/home-service-payment-system ...` | 未通过 | 材料骨架已齐，但正式放行条件仍有 `5` 项缺口，当前仍不允许创建 `release/*` |
+| `test` 回归包审计 | `node tools/release/audit_regression_pack.mjs --root /Users/abc123/workspace/home-service-payment-system --pack /Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression --output /Users/abc123/workspace/home-service-payment-system/docs/releases/audit/test-20260809-regression-audit.json` | 通过 | `10` 个场景已全部完成，`0` incomplete、`0` missing sample、`0` missing evidence、`0` TODO |
+| 补丁格式检查 | `git diff --check` | 通过 | 当前文档与脚本改动无空白符和补丁格式问题 |
+
+### 10.3 当前判断
+
+1. `payment-core` 当前的回归证据包已经不再是阻断项，`test` 门禁问题已从“缺测试证据”收敛为“缺 release 治理事实”。
+2. 当前仍不能直接推进 `test -> master`，因为正式发布说明、正式签字审批、回滚演练实际记录、发布后现场核验记录和 `master` 观察结束结论仍未形成完整闭环。
+3. 因此本轮继续维持：不合并 `master`，不创建 `release/*`，优先补齐发布治理记录和跨系统最终观察结论。
+
+## 11. 2026-08-20 最新复核：告警签名回归通过，release 仍不放行
+
+### 11.1 本轮复核结果
+
+本轮对 `payment-core` 最新未提交增量中的异常告警通知签名改动进行了定向回归，同时重新执行 `release` 就绪审计，确认当前阻断项是否已经从“治理事实”回落为“局部代码质量”。
+
+### 11.2 验证命令与结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警通知器定向测试 | `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk1.8.0_202.jdk/Contents/Home/bin:$PATH /Users/abc123/apache-maven-3.9.16/bin/mvn -Dmaven.repo.local=/Users/abc123/apache-maven-3.9.16/repository -q -f /Users/abc123/workspace/home-service-payment-system/systems/payment-core/backend/pom.xml -Dtest=LocalEmailPaymentIssueAlertNotifierTest,LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest test` | 通过 | `17` 个用例全部通过，说明三类通知器对 `timestamp + nonce + payload` 签名口径已形成稳定门禁 |
+| release 就绪审计 | `node /Users/abc123/workspace/home-service-payment-system/tools/release/audit_release_readiness.mjs --root-dir /Users/abc123/workspace/home-service-payment-system ... --output /Users/abc123/workspace/home-service-payment-system/docs/releases/audit/release-readiness-audit.json` | 未通过 | 当前审计结论仍为“材料完整性：通过，正式放行条件：未通过，是否允许创建 `release/*`：否” |
+| 补丁格式检查 | `git diff --check` | 通过 | 当前变更集无补丁格式问题 |
+
+### 11.3 当前判断
+
+1. `payment-core` 当前没有出现新的后端门禁回退，局部代码质量不是阻断 `test -> master` 的主因。
+2. 截至 `2026-08-20`，当前仍不满足自动推进 `test -> master` 条件。
+3. 截至 `2026-08-20`，当前仍不满足自动创建 `release/*` 条件，也不应基于 `master` 生成新的正式版发布说明。
+
+## 12. 2026-09-07 门禁口径纠偏
+
+后续复核确认，本文件第 `9` 至 `11` 节保留的是对应日期的判断过程，其中将 release 治理缺口反向用于否决 `test -> master` 的口径不再有效。
+
+当前有效结论：
+
+1. 冻结基线的 `test -> master` 已于 `2026-08-02 05:42 +08:00` 完成，回归包 `10` 个场景已收口。
+2. `master -> release/*` 仍不放行，原因是五项真实治理事实未形成，而不是回归证据或告警通知器代码质量不足。
+3. 当前未提交增量应独立完成验证和提交，不能直接复用冻结基线的历史合并结论。
