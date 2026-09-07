@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T15:19:23.031Z",
+  "generatedAt": "2026-09-07T22:50:25.163Z",
   "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "inputs": {
     "regressionPack": "docs/releases/evidence/test-20260809-regression",
@@ -28,7 +28,7 @@
     "release 审计：现有观察结论仍停留在 2026-08-09 当日口径，尚未补齐观察结束记录，因此不能提前形成正式切版结论。"
   ],
   "regressionAudit": {
-    "generatedAt": "2026-09-07T15:19:22.998Z",
+    "generatedAt": "2026-09-07T22:50:25.123Z",
     "rootDir": "/Users/abc123/workspace/home-service-payment-system",
     "packDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression",
     "summary": {
@@ -59,7 +59,7 @@
     }
   },
   "releaseAudit": {
-    "generatedAt": "2026-09-07T15:19:23.028Z",
+    "generatedAt": "2026-09-07T22:50:25.158Z",
     "rootDir": "/Users/abc123/workspace/home-service-payment-system",
     "inputs": {
       "candidateDoc": "docs/releases/v1.1.0-发布说明-候选版.md",
@@ -96,20 +96,19 @@
       "prepStatusReady": true,
       "candidateFormalized": false,
       "approvalSigned": false,
-      "rollbackExecuted": false,
+      "rollbackExecuted": true,
       "onSiteRecorded": false,
       "stabilizationClosed": false,
       "materialsReady": true,
       "releaseConditionsMet": false,
       "materialBlockerCount": 0,
-      "releaseBlockerCount": 5,
+      "releaseBlockerCount": 4,
       "canCreateRelease": false
     },
     "materialBlockers": [],
     "releaseBlockers": [
       "当前发布说明仍是候选版，且明确暂不切 release/*",
       "正式签字审批结果尚未形成",
-      "回滚演练仍停留在方案/模板状态，缺少实际演练记录",
       "发布后现场核验仍只有模板，缺少实际记录",
       "master 稳定观察结束结论尚未形成"
     ],
