@@ -55,22 +55,32 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         if (StringUtils.hasText(authHeaderName) && StringUtils.hasText(authHeaderValue)) {
             headers.set(authHeaderName.trim(), authHeaderValue.trim());
         }
-        if (StringUtils.hasText(signatureHeaderName) && StringUtils.hasText(signatureSecret)) {
-            headers.set(signatureHeaderName.trim(), signPayload(payload, signatureSecret, signatureAlgorithm));
-        }
+        String timestamp = StringUtils.hasText(timestampHeaderName)
+                ? String.valueOf(System.currentTimeMillis())
+                : "";
+        String nonce = StringUtils.hasText(nonceHeaderName)
+                ? UUID.randomUUID().toString().replace("-", "")
+                : "";
         if (StringUtils.hasText(timestampHeaderName)) {
-            headers.set(timestampHeaderName.trim(), String.valueOf(System.currentTimeMillis()));
+            headers.set(timestampHeaderName.trim(), timestamp);
         }
         if (StringUtils.hasText(nonceHeaderName)) {
-            headers.set(nonceHeaderName.trim(), UUID.randomUUID().toString().replace("-", ""));
+            headers.set(nonceHeaderName.trim(), nonce);
+        }
+        if (StringUtils.hasText(signatureHeaderName) && StringUtils.hasText(signatureSecret)) {
+            headers.set(signatureHeaderName.trim(), signPayload(payload, signatureSecret, signatureAlgorithm, timestamp, nonce));
         }
         return new HttpEntity<Map<String, Object>>(payload, headers);
     }
 
-    private String signPayload(Map<String, Object> payload, String signatureSecret, String signatureAlgorithm) {
+    private String signPayload(Map<String, Object> payload,
+                               String signatureSecret,
+                               String signatureAlgorithm,
+                               String timestamp,
+                               String nonce) {
         try {
             SignatureAlgorithmConfig config = resolveSignatureAlgorithm(signatureAlgorithm);
-            byte[] payloadBytes = OBJECT_MAPPER.writeValueAsBytes(payload);
+            byte[] payloadBytes = buildSignaturePayload(payload, timestamp, nonce);
             if (config.isMacAlgorithm()) {
                 Mac mac = Mac.getInstance(config.getJcaName());
                 mac.init(new SecretKeySpec(signatureSecret.getBytes(StandardCharsets.UTF_8), config.getJcaName()));
@@ -83,6 +93,21 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         } catch (Exception exception) {
             throw new IllegalStateException("网关签名计算失败：" + exception.getMessage(), exception);
         }
+    }
+
+    private byte[] buildSignaturePayload(Map<String, Object> payload, String timestamp, String nonce) throws Exception {
+        byte[] payloadBytes = OBJECT_MAPPER.writeValueAsBytes(payload);
+        if (!StringUtils.hasText(timestamp) && !StringUtils.hasText(nonce)) {
+            return payloadBytes;
+        }
+        String canonicalPayload = new StringBuilder()
+                .append(StringUtils.hasText(timestamp) ? timestamp.trim() : "")
+                .append('\n')
+                .append(StringUtils.hasText(nonce) ? nonce.trim() : "")
+                .append('\n')
+                .append(new String(payloadBytes, StandardCharsets.UTF_8))
+                .toString();
+        return canonicalPayload.getBytes(StandardCharsets.UTF_8);
     }
 
     private SignatureAlgorithmConfig resolveSignatureAlgorithm(String signatureAlgorithm) {
