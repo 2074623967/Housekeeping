@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-09-07T15:19:23.031Z",
+  "rootDir": "/Users/abc123/workspace/home-service-payment-system",
+  "inputs": {
+    "regressionPack": "docs/releases/evidence/test-20260809-regression",
+    "regressionScript": "tools/release/audit_regression_pack.mjs",
+    "releaseScript": "tools/release/audit_release_readiness.mjs"
+  },
+  "summary": {
+    "regressionEvidenceReady": true,
+    "regressionPromotionDecisionRecorded": true,
+    "regressionReleaseDecisionRecorded": true,
+    "releaseMaterialsReady": true,
+    "releaseConditionsMet": false,
+    "blockerCount": 1,
+    "canPromoteTestToMaster": true,
+    "canCreateRelease": false
+  },
+  "blockers": [
+    "release 正式放行条件仍未闭环"
+  ],
+  "notes": [
+    "回归证据包已清零，`test -> master` 与 `release/*` 需按各自门禁结论分别判定。",
+    "回归汇总已明确 `test -> master` 达标，后续只需继续跟踪 `master -> release/*` 的治理事实。",
+    "回归汇总已显式记录当前不允许创建 `release/*`，需待正式切版治理条件满足后再改判。",
+    "回归审计：回归证据已清零，但回归汇总未给出“允许创建 `release/*` = 是”，是否切版仍需结合 release 治理审计判断。",
+    "release 审计：当前材料骨架已齐，但正式放行条件仍未闭环。",
+    "release 审计：现有观察结论仍停留在 2026-08-09 当日口径，尚未补齐观察结束记录，因此不能提前形成正式切版结论。"
+  ],
+  "regressionAudit": {
+    "generatedAt": "2026-09-07T15:19:22.998Z",
+    "rootDir": "/Users/abc123/workspace/home-service-payment-system",
+    "packDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression",
+    "summary": {
+      "scenarioCount": 10,
+      "incompleteScenarioCount": 0,
+      "missingSampleCount": 0,
+      "missingEvidenceCount": 0,
+      "historicalPageCount": 0,
+      "historicalRollbackCount": 0,
+      "summaryTodoCount": 0,
+      "evidenceReady": true,
+      "promotionDecisionRecorded": true,
+      "releaseDecisionRecorded": true,
+      "canPromoteTestToMaster": true,
+      "canCreateRelease": false,
+      "blockerCount": 0
+    },
+    "blockers": [],
+    "notes": [
+      "回归证据已清零，但回归汇总未给出“允许创建 `release/*` = 是”，是否切版仍需结合 release 治理审计判断。"
+    ],
+    "details": {
+      "incompleteScenarios": [],
+      "missingSampleScenarios": [],
+      "missingEvidenceFiles": [],
+      "historicalPageScenarios": [],
+      "historicalRollbackScenarios": []
+    }
+  },
+  "releaseAudit": {
+    "generatedAt": "2026-09-07T15:19:23.028Z",
+    "rootDir": "/Users/abc123/workspace/home-service-payment-system",
+    "inputs": {
+      "candidateDoc": "docs/releases/v1.1.0-发布说明-候选版.md",
+      "stabilizationDoc": "docs/releases/2026-08-09-master稳定观察起始记录.md",
+      "checklistDoc": "docs/releases/2026-08-09-master稳定观察检查清单.md",
+      "approvalDoc": "docs/releases/2026-08-09-v1.1.0发布审批清单.md",
+      "rollbackDoc": "docs/releases/2026-08-09-v1.1.0回滚演练记录.md",
+      "onSiteDoc": "docs/releases/2026-08-09-v1.1.0发布后现场核验记录模板.md",
+      "stabilizationClosingDoc": "docs/releases/2026-08-09-master稳定观察结束结论模板.md",
+      "decisionDoc": "docs/releases/2026-08-09-v1.1.0切版决策记录.md",
+      "observationCheckpointDoc": "docs/releases/2026-08-09-master稳定观察中间结论.md",
+      "liveVerificationDoc": "docs/releases/2026-08-09-master主链路即时核验记录.md",
+      "deferralDoc": "docs/releases/2026-08-09-v1.1.0暂缓切版说明.md",
+      "gateDayEndDoc": "docs/releases/2026-08-09-release门禁日结.md",
+      "reevaluationChecklistDoc": "docs/releases/2026-08-10-v1.1.0重评清单.md",
+      "releaseNoteChecklistDoc": "docs/releases/v1.1.0-正式版发布说明检查表.md",
+      "prepStatusDoc": "docs/releases/2026-08-09-v1.1.0发布前材料现状记录.md"
+    },
+    "summary": {
+      "candidateDocReady": true,
+      "stabilizationReady": true,
+      "checklistReady": true,
+      "approvalReady": true,
+      "rollbackReady": true,
+      "onSiteReady": true,
+      "stabilizationClosingReady": true,
+      "decisionReady": true,
+      "observationCheckpointReady": true,
+      "liveVerificationReady": true,
+      "deferralReady": true,
+      "gateDayEndReady": true,
+      "reevaluationReady": true,
+      "releaseNoteChecklistReady": true,
+      "prepStatusReady": true,
+      "candidateFormalized": false,
+      "approvalSigned": false,
+      "rollbackExecuted": false,
+      "onSiteRecorded": false,
+      "stabilizationClosed": false,
+      "materialsReady": true,
+      "releaseConditionsMet": false,
+      "materialBlockerCount": 0,
+      "releaseBlockerCount": 5,
+      "canCreateRelease": false
+    },
+    "materialBlockers": [],
+    "releaseBlockers": [
+      "当前发布说明仍是候选版，且明确暂不切 release/*",
+      "正式签字审批结果尚未形成",
+      "回滚演练仍停留在方案/模板状态，缺少实际演练记录",
+      "发布后现场核验仍只有模板，缺少实际记录",
+      "master 稳定观察结束结论尚未形成"
+    ],
+    "notes": [
+      "当前材料骨架已齐，但正式放行条件仍未闭环。",
+      "现有观察结论仍停留在 2026-08-09 当日口径，尚未补齐观察结束记录，因此不能提前形成正式切版结论。"
+    ]
+  }
+}

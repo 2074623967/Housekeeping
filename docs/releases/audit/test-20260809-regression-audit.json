@@ -1,130 +1,31 @@
 {
-  "generatedAt": "2026-08-09T02:57:18.734Z",
+  "generatedAt": "2026-09-07T14:32:11.845Z",
   "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "packDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression",
   "summary": {
     "scenarioCount": 10,
-    "incompleteScenarioCount": 8,
+    "incompleteScenarioCount": 0,
     "missingSampleCount": 0,
     "missingEvidenceCount": 0,
-    "historicalPageCount": 8,
+    "historicalPageCount": 0,
     "historicalRollbackCount": 0,
-    "summaryTodoCount": 8,
-    "canPromoteTestToMaster": false,
+    "summaryTodoCount": 0,
+    "evidenceReady": true,
+    "promotionDecisionRecorded": true,
+    "releaseDecisionRecorded": true,
+    "canPromoteTestToMaster": true,
     "canCreateRelease": false,
-    "blockerCount": 3
+    "blockerCount": 0
   },
-  "blockers": [
-    "仍有 8 个回归场景未完成所有检查点",
-    "仍有 8 个场景仅回填历史页面截图，缺当前同批次冻结截图",
-    "回归汇总中仍有 8 个 TODO 待回填"
+  "blockers": [],
+  "notes": [
+    "回归证据已清零，但回归汇总未给出“允许创建 `release/*` = 是”，是否切版仍需结合 release 治理审计判断。"
   ],
   "details": {
-    "incompleteScenarios": [
-      {
-        "scenarioId": "REG-01",
-        "scenarioName": "创建预付单",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-02",
-        "scenarioName": "提交支付请求",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-03",
-        "scenarioName": "渠道回调成功",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-04",
-        "scenarioName": "支付成功自动清分",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-05",
-        "scenarioName": "清分结果自动结算",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-06",
-        "scenarioName": "清分结果自动记账",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-09",
-        "scenarioName": "结算审核与出款",
-        "incompleteFields": [
-          "rollback_or_compensation_status"
-        ]
-      },
-      {
-        "scenarioId": "REG-10",
-        "scenarioName": "日终处理与运营巡检",
-        "incompleteFields": [
-          "db_status",
-          "event_status",
-          "page_status",
-          "rollback_or_compensation_status"
-        ]
-      }
-    ],
+    "incompleteScenarios": [],
     "missingSampleScenarios": [],
     "missingEvidenceFiles": [],
-    "historicalPageScenarios": [
-      {
-        "scenarioId": "REG-01",
-        "scenarioName": "创建预付单",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-02",
-        "scenarioName": "提交支付请求",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-03",
-        "scenarioName": "渠道回调成功",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-04",
-        "scenarioName": "支付成功自动清分",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-05",
-        "scenarioName": "清分结果自动结算",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-06",
-        "scenarioName": "清分结果自动记账",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-08",
-        "scenarioName": "失败派发重试与DLQ",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      },
-      {
-        "scenarioId": "REG-09",
-        "scenarioName": "结算审核与出款",
-        "evidenceFile": "screenshots/historical-page-mapping.md"
-      }
-    ],
+    "historicalPageScenarios": [],
     "historicalRollbackScenarios": []
   }
 }

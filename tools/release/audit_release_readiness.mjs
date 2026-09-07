@@ -13,6 +13,10 @@ function getArgValue(flag, fallback = "") {
   return argv[index + 1];
 }
 
+function hasFlag(flag) {
+  return argv.includes(flag);
+}
+
 function ensureArg(flag) {
   const value = getArgValue(flag);
   if (!value) {
@@ -34,6 +38,10 @@ function toRelative(rootDir, filePath) {
 
 function containsAll(content, patterns) {
   return patterns.every((pattern) => content.includes(pattern));
+}
+
+function containsAny(content, patterns) {
+  return patterns.some((pattern) => content.includes(pattern));
 }
 
 function buildAudit(
@@ -70,22 +78,27 @@ function buildAudit(
   const releaseNoteChecklistContent = readText(releaseNoteChecklistDocPath);
   const prepStatusContent = readText(prepStatusDocPath);
 
-  const blockers = [];
+  const materialBlockers = [];
+  const releaseBlockers = [];
+  const notes = [];
 
   const candidateReady = containsAll(candidateContent, [
     "状态：候选版",
     "当前结论：`暂不切 release/*`"
   ]);
   if (!candidateReady) {
-    blockers.push("release 候选版发布说明尚未达到当前模板要求");
+    materialBlockers.push("release 候选版发布说明尚未达到当前模板要求");
   }
+  const candidateFormalized =
+    !candidateContent.includes("状态：候选版") &&
+    !candidateContent.includes("当前结论：`暂不切 release/*`");
 
   const stabilizationReady = containsAll(stabilizationContent, [
     "当前阶段：`冻结候选已从 test 合入 master，进入稳定观察`",
     "当前结论 | `进入观察，暂不切 release/*`"
   ]);
   if (!stabilizationReady) {
-    blockers.push("master 稳定观察起始记录不完整");
+    materialBlockers.push("master 稳定观察起始记录不完整");
   }
 
   const checklistReady = containsAll(checklistContent, [
@@ -93,7 +106,7 @@ function buildAudit(
     "当前结论：`观察中，暂不切版`"
   ]);
   if (!checklistReady) {
-    blockers.push("master 稳定观察检查清单不完整");
+    materialBlockers.push("master 稳定观察检查清单不完整");
   }
 
   // “预审完成”只表示材料结构齐全，不代表正式审批已经完成；
@@ -105,8 +118,11 @@ function buildAudit(
       approvalContent.includes("当前状态：`预审完成，待正式签字`")
     );
   if (!approvalReady) {
-    blockers.push("发布审批清单不完整");
+    materialBlockers.push("发布审批清单不完整");
   }
+  const approvalSigned =
+    approvalContent.includes("当前状态：`正式签字完成`") ||
+    approvalContent.includes("当前状态：`审批完成`");
 
   const rollbackReady =
     rollbackContent.includes("演练记录") &&
@@ -117,8 +133,14 @@ function buildAudit(
       rollbackContent.includes("当前状态：`已完成实际演练`")
     );
   if (!rollbackReady) {
-    blockers.push("回滚演练记录不完整");
+    materialBlockers.push("回滚演练记录不完整");
   }
+  const rollbackExecuted = !containsAny(rollbackContent, [
+    "待实际演练",
+    "待正式演练",
+    "待形成实际记录",
+    "待确认"
+  ]);
 
   const onSiteReady =
     containsAll(onSiteContent, [
@@ -127,8 +149,12 @@ function buildAudit(
     ]) ||
     onSiteContent.includes("当前状态：`已形成实际记录`");
   if (!onSiteReady) {
-    blockers.push("发布后现场核验记录模板不完整");
+    materialBlockers.push("发布后现场核验记录模板不完整");
   }
+  const onSiteRecorded = !containsAny(onSiteContent, [
+    "当前状态：`模板`",
+    "待填写"
+  ]);
 
   const stabilizationClosingReady =
     containsAll(stabilizationClosingContent, [
@@ -137,8 +163,12 @@ function buildAudit(
     ]) ||
     stabilizationClosingContent.includes("当前状态：`已形成正式结论`");
   if (!stabilizationClosingReady) {
-    blockers.push("master 稳定观察结束结论模板不完整");
+    materialBlockers.push("master 稳定观察结束结论模板不完整");
   }
+  const stabilizationClosed = !containsAny(stabilizationClosingContent, [
+    "当前状态：`模板`",
+    "待填写"
+  ]);
 
   const decisionReady = containsAll(decisionContent, [
     "是否允许创建 `release/v1.1.0`",
@@ -146,7 +176,7 @@ function buildAudit(
     "否"
   ]);
   if (!decisionReady) {
-    blockers.push("切版决策记录不完整");
+    materialBlockers.push("切版决策记录不完整");
   }
 
   const observationCheckpointReady = containsAll(observationCheckpointContent, [
@@ -154,7 +184,7 @@ function buildAudit(
     "今天不切 release/v1.1.0"
   ]);
   if (!observationCheckpointReady) {
-    blockers.push("master 观察中间结论记录不完整");
+    materialBlockers.push("master 观察中间结论记录不完整");
   }
 
   const liveVerificationReady = containsAll(liveVerificationContent, [
@@ -165,7 +195,7 @@ function buildAudit(
     "`accounting-system`"
   ]);
   if (!liveVerificationReady) {
-    blockers.push("master 主链路即时核验记录不完整");
+    materialBlockers.push("master 主链路即时核验记录不完整");
   }
 
   const deferralReady = containsAll(deferralContent, [
@@ -173,7 +203,7 @@ function buildAudit(
     "计划重评日期：`2026-08-10`"
   ]);
   if (!deferralReady) {
-    blockers.push("暂缓切版说明不完整");
+    materialBlockers.push("暂缓切版说明不完整");
   }
 
   const gateDayEndReady = containsAll(gateDayEndContent, [
@@ -182,7 +212,7 @@ function buildAudit(
     "当前仍未满足项"
   ]);
   if (!gateDayEndReady) {
-    blockers.push("release 门禁日结不完整");
+    materialBlockers.push("release 门禁日结不完整");
   }
 
   const reevaluationReady = containsAll(reevaluationChecklistContent, [
@@ -190,7 +220,7 @@ function buildAudit(
     "必查项"
   ]);
   if (!reevaluationReady) {
-    blockers.push("重评清单不完整");
+    materialBlockers.push("重评清单不完整");
   }
 
   const releaseNoteChecklistReady =
@@ -203,7 +233,7 @@ function buildAudit(
       "必备内容"
     ]);
   if (!releaseNoteChecklistReady) {
-    blockers.push("正式版发布说明检查表不完整");
+    materialBlockers.push("正式版发布说明检查表不完整");
   }
 
   const prepStatusReady = containsAll(prepStatusContent, [
@@ -211,24 +241,45 @@ function buildAudit(
     "当前仍缺的实际记录"
   ]);
   if (!prepStatusReady) {
-    blockers.push("发布前材料现状记录不完整");
+    materialBlockers.push("发布前材料现状记录不完整");
   }
 
   if (!candidateContent.includes("还缺正式 release 级发布审批材料")) {
-    blockers.push("release 候选版没有显式列出发布审批材料缺口");
+    materialBlockers.push("release 候选版没有显式列出发布审批材料缺口");
   }
   if (!candidateContent.includes("还缺正式发布后现场核验记录")) {
-    blockers.push("release 候选版没有显式列出发布后现场核验缺口");
+    materialBlockers.push("release 候选版没有显式列出发布后现场核验缺口");
   }
 
-  if (candidateContent.includes("暂不切 release/*")) {
-    blockers.push("当前候选版发布说明仍明确暂不切 release/*");
+  if (!candidateFormalized) {
+    releaseBlockers.push("当前发布说明仍是候选版，且明确暂不切 release/*");
+  }
+  if (!approvalSigned) {
+    releaseBlockers.push("正式签字审批结果尚未形成");
+  }
+  if (!rollbackExecuted) {
+    releaseBlockers.push("回滚演练仍停留在方案/模板状态，缺少实际演练记录");
+  }
+  if (!onSiteRecorded) {
+    releaseBlockers.push("发布后现场核验仍只有模板，缺少实际记录");
+  }
+  if (!stabilizationClosed) {
+    releaseBlockers.push("master 稳定观察结束结论尚未形成");
   }
   if (checklistContent.includes("待完成项")) {
-    blockers.push("release 候选准备清单仍存在待完成项");
+    releaseBlockers.push("release 候选准备清单仍存在待完成项");
   }
 
-  const canCreateRelease = blockers.length === 0 && false;
+  if (!materialBlockers.length && releaseBlockers.length) {
+    notes.push("当前材料骨架已齐，但正式放行条件仍未闭环。");
+  }
+  if (observationCheckpointContent.includes("今天不切 release/v1.1.0")) {
+    notes.push("现有观察结论仍停留在 2026-08-09 当日口径，尚未补齐观察结束记录，因此不能提前形成正式切版结论。");
+  }
+
+  const materialsReady = materialBlockers.length === 0;
+  const releaseConditionsMet = releaseBlockers.length === 0;
+  const canCreateRelease = materialsReady && releaseConditionsMet;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -266,10 +317,20 @@ function buildAudit(
       reevaluationReady,
       releaseNoteChecklistReady,
       prepStatusReady,
-      blockerCount: blockers.length,
+      candidateFormalized,
+      approvalSigned,
+      rollbackExecuted,
+      onSiteRecorded,
+      stabilizationClosed,
+      materialsReady,
+      releaseConditionsMet,
+      materialBlockerCount: materialBlockers.length,
+      releaseBlockerCount: releaseBlockers.length,
       canCreateRelease
     },
-    blockers
+    materialBlockers,
+    releaseBlockers,
+    notes
   };
 }
 
@@ -278,6 +339,8 @@ function renderMarkdown(audit) {
   lines.push("# release 就绪自动审计报告");
   lines.push("");
   lines.push(`- 生成时间：\`${audit.generatedAt}\``);
+  lines.push(`- 材料完整性：\`${audit.summary.materialsReady ? "通过" : "未通过"}\``);
+  lines.push(`- 正式放行条件：\`${audit.summary.releaseConditionsMet ? "通过" : "未通过"}\``);
   lines.push(`- 是否允许创建 \`release/*\`：\`${audit.summary.canCreateRelease ? "是" : "否"}\``);
   lines.push("");
   lines.push("## 汇总");
@@ -299,15 +362,41 @@ function renderMarkdown(audit) {
   lines.push(`| 次日重评清单 | \`${audit.summary.reevaluationReady ? "通过" : "未通过"}\` |`);
   lines.push(`| 正式版说明检查表 | \`${audit.summary.releaseNoteChecklistReady ? "通过" : "未通过"}\` |`);
   lines.push(`| 发布前材料现状记录 | \`${audit.summary.prepStatusReady ? "通过" : "未通过"}\` |`);
-  lines.push(`| 阻断项数量 | \`${audit.summary.blockerCount}\` |`);
+  lines.push(`| 发布说明已升级正式版 | \`${audit.summary.candidateFormalized ? "是" : "否"}\` |`);
+  lines.push(`| 正式签字审批结果 | \`${audit.summary.approvalSigned ? "已形成" : "未形成"}\` |`);
+  lines.push(`| 回滚演练实际记录 | \`${audit.summary.rollbackExecuted ? "已形成" : "未形成"}\` |`);
+  lines.push(`| 发布后现场核验实际记录 | \`${audit.summary.onSiteRecorded ? "已形成" : "未形成"}\` |`);
+  lines.push(`| master 观察结束结论 | \`${audit.summary.stabilizationClosed ? "已形成" : "未形成"}\` |`);
+  lines.push(`| 材料缺口数量 | \`${audit.summary.materialBlockerCount}\` |`);
+  lines.push(`| 放行缺口数量 | \`${audit.summary.releaseBlockerCount}\` |`);
   lines.push("");
-  lines.push("## 阻断项");
+  lines.push("## 材料缺口");
   lines.push("");
-  if (!audit.blockers.length) {
-    lines.push("1. 当前自动审计未发现阻断项。");
+  if (!audit.materialBlockers.length) {
+    lines.push("1. 当前自动审计未发现材料结构缺口。");
   } else {
-    audit.blockers.forEach((blocker, index) => {
+    audit.materialBlockers.forEach((blocker, index) => {
       lines.push(`${index + 1}. ${blocker}`);
+    });
+  }
+  lines.push("");
+  lines.push("## 放行缺口");
+  lines.push("");
+  if (!audit.releaseBlockers.length) {
+    lines.push("1. 当前自动审计未发现正式放行缺口。");
+  } else {
+    audit.releaseBlockers.forEach((blocker, index) => {
+      lines.push(`${index + 1}. ${blocker}`);
+    });
+  }
+  lines.push("");
+  lines.push("## 审计备注");
+  lines.push("");
+  if (!audit.notes.length) {
+    lines.push("1. 当前无额外备注。");
+  } else {
+    audit.notes.forEach((note, index) => {
+      lines.push(`${index + 1}. ${note}`);
     });
   }
   lines.push("");
@@ -349,12 +438,11 @@ function main() {
   const reevaluationChecklistDocPath = ensureArg("--reevaluation-checklist-doc");
   const releaseNoteChecklistDocPath = ensureArg("--release-note-checklist-doc");
   const prepStatusDocPath = ensureArg("--prep-status-doc");
+  const stdoutJson = hasFlag("--stdout-json");
   const outputDir = getArgValue(
     "--output-dir",
     path.join(rootDir, "docs", "releases", "audit")
   );
-
-  fs.mkdirSync(outputDir, { recursive: true });
 
   const audit = buildAudit(
     rootDir,
@@ -374,17 +462,24 @@ function main() {
     releaseNoteChecklistDocPath,
     prepStatusDocPath
   );
-  const jsonPath = path.join(outputDir, "release-readiness-audit.json");
-  const mdPath = path.join(outputDir, "release-readiness-audit.md");
+  if (stdoutJson) {
+    process.stdout.write(`${JSON.stringify(audit, null, 2)}\n`);
+  } else {
+    fs.mkdirSync(outputDir, { recursive: true });
+    const jsonPath = path.join(outputDir, "release-readiness-audit.json");
+    const mdPath = path.join(outputDir, "release-readiness-audit.md");
 
-  fs.writeFileSync(jsonPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
-  fs.writeFileSync(mdPath, renderMarkdown(audit), "utf8");
+    fs.writeFileSync(jsonPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+    fs.writeFileSync(mdPath, renderMarkdown(audit), "utf8");
 
-  console.log(`已生成 release 就绪审计 JSON: ${jsonPath}`);
-  console.log(`已生成 release 就绪审计 Markdown: ${mdPath}`);
-  console.log(`是否允许创建 release/*: ${audit.summary.canCreateRelease ? "是" : "否"}`);
+    console.log(`已生成 release 就绪审计 JSON: ${jsonPath}`);
+    console.log(`已生成 release 就绪审计 Markdown: ${mdPath}`);
+    console.log(`材料完整性: ${audit.summary.materialsReady ? "通过" : "未通过"}`);
+    console.log(`正式放行条件: ${audit.summary.releaseConditionsMet ? "通过" : "未通过"}`);
+    console.log(`是否允许创建 release/*: ${audit.summary.canCreateRelease ? "是" : "否"}`);
+  }
 
-  if (audit.blockers.length) {
+  if (audit.materialBlockers.length || audit.releaseBlockers.length) {
     process.exitCode = 2;
   }
 }

@@ -87,7 +87,12 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("Bearer im-token", payloadCaptor.getValue().getHeaders().getFirst("Authorization"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Signature"));
         Assertions.assertEquals(
-                signPayload(payloadCaptor.getValue(), "im-secret", "HmacSHA1"),
+                signPayload(
+                        payloadCaptor.getValue(),
+                        payloadCaptor.getValue().getHeaders().getFirst("X-Timestamp"),
+                        payloadCaptor.getValue().getHeaders().getFirst("X-Nonce"),
+                        "im-secret",
+                        "HmacSHA1"),
                 payloadCaptor.getValue().getHeaders().getFirst("X-Signature")
         );
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Timestamp"));
@@ -290,11 +295,13 @@ class LocalImPaymentIssueAlertNotifierTest {
         return item;
     }
 
-    private String signPayload(HttpEntity entity, String secret, String algorithm) {
+    private String signPayload(HttpEntity entity, String timestamp, String nonce, String secret, String algorithm) {
         try {
             Mac mac = Mac.getInstance(algorithm);
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), algorithm));
-            return Base64.getEncoder().encodeToString(mac.doFinal(OBJECT_MAPPER.writeValueAsBytes(entity.getBody())));
+            String payloadJson = OBJECT_MAPPER.writeValueAsString(entity.getBody());
+            String canonicalPayload = timestamp + "\n" + nonce + "\n" + payloadJson;
+            return Base64.getEncoder().encodeToString(mac.doFinal(canonicalPayload.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception exception) {
             throw new IllegalStateException(exception);
         }

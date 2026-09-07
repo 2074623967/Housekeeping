@@ -102,6 +102,18 @@ function buildBaseUrlKey(row) {
   return `${row.system}/${row.terminal}`;
 }
 
+function buildDefaultBaseUrls() {
+  return {
+    "payment-core/admin-web": "http://127.0.0.1:5174",
+    "payment-core/app-web": "http://127.0.0.1:5175",
+    "payment-core/h5-web": "http://127.0.0.1:5176",
+    "payment-core/pc-web": "http://127.0.0.1:5177",
+    "clearing-system/admin-web": "http://127.0.0.1:5273",
+    "settlement-system/admin-web": "http://127.0.0.1:5274",
+    "accounting-system/admin-web": "http://127.0.0.1:5275"
+  };
+}
+
 function buildPathTemplate(row) {
   const key = `${row.system}/${row.terminal}/${row.page_key}`;
   const mapping = {
@@ -172,7 +184,7 @@ function buildSampleValues() {
 }
 
 function buildDefaultPlan(manifest) {
-  const baseUrls = {};
+  const baseUrls = buildDefaultBaseUrls();
   manifest.rows.forEach((row) => {
     baseUrls[buildBaseUrlKey(row)] = baseUrls[buildBaseUrlKey(row)] || "";
   });

@@ -1,10 +1,15 @@
 package com.abc123.hsp.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,6 +24,8 @@ import org.springframework.web.client.RestTemplate;
  * 邮件异常告警通知器测试。
  */
 class LocalEmailPaymentIssueAlertNotifierTest {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
     void shouldFallbackToLocalReceiptWhenWebhookNotConfigured() {
@@ -76,6 +83,13 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Signature"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Timestamp"));
         Assertions.assertTrue(payloadCaptor.getValue().getHeaders().containsKey("X-Email-Nonce"));
+        Assertions.assertEquals(
+                signWithTimestampAndNonce(
+                        payloadCaptor.getValue().getBody(),
+                        payloadCaptor.getValue().getHeaders().getFirst("X-Email-Timestamp"),
+                        payloadCaptor.getValue().getHeaders().getFirst("X-Email-Nonce"),
+                        "email-secret"),
+                payloadCaptor.getValue().getHeaders().getFirst("X-Email-Signature"));
     }
 
     @Test
@@ -196,5 +210,17 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         item.setAlertContent("支付异常 ISSUE-001 已超过 P1 SLA，请进入异常中心处理。");
         item.setRenderedAlertContent("主题：P1 待回调未收口\n支付单号：PAY-001\n请及时处理。");
         return item;
+    }
+
+    private String signWithTimestampAndNonce(Object body, String timestamp, String nonce, String secret) {
+        try {
+            String payloadJson = OBJECT_MAPPER.writeValueAsString(body);
+            String canonicalPayload = timestamp + "\n" + nonce + "\n" + payloadJson;
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return Base64.getEncoder().encodeToString(mac.doFinal(canonicalPayload.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

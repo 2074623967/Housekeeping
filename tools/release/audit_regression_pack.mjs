@@ -177,7 +177,9 @@ function auditSummary(summaryPath) {
   const content = readText(summaryPath);
   return {
     todoCount: countSummaryTodos(content),
+    hasPromotionDecision: /\|\s*是否允许推进 `test -> master`\s*\|\s*`?(是|否)`?\s*\|/.test(content),
     canPromoteTestToMaster: /\|\s*是否允许推进 `test -> master`\s*\|\s*`?是`?\s*\|/.test(content),
+    hasReleaseDecision: /\|\s*是否允许创建 `release\/\*`\s*\|\s*`?(是|否)`?\s*\|/.test(content),
     canCreateRelease: /\|\s*是否允许创建 `release\/\*`\s*\|\s*`?是`?\s*\|/.test(content)
   };
 }
@@ -219,6 +221,21 @@ function main() {
     blockers.push(`回归汇总中仍有 ${summaryAudit.todoCount} 个 TODO 待回填`);
   }
 
+  const evidenceReady = blockers.length === 0;
+  const notes = [];
+
+  if (evidenceReady && !summaryAudit.hasPromotionDecision) {
+    notes.push("回归证据已清零，但回归汇总尚未显式记录 `test -> master` 结论。");
+  } else if (evidenceReady && !summaryAudit.canPromoteTestToMaster) {
+    notes.push("回归证据已清零，但回归汇总未给出“允许推进 `test -> master` = 是”，当前仍不能仅凭证据完整度自动放行。");
+  }
+
+  if (evidenceReady && !summaryAudit.hasReleaseDecision) {
+    notes.push("回归证据已清零，但回归汇总尚未显式记录 `release/*` 结论。");
+  } else if (evidenceReady && !summaryAudit.canCreateRelease) {
+    notes.push("回归证据已清零，但回归汇总未给出“允许创建 `release/*` = 是”，是否切版仍需结合 release 治理审计判断。");
+  }
+
   const report = {
     generatedAt: new Date().toISOString(),
     rootDir,
@@ -231,11 +248,15 @@ function main() {
       historicalPageCount: scenarioAudit.historicalPageRows.length,
       historicalRollbackCount: scenarioAudit.historicalRollbackRows.length,
       summaryTodoCount: summaryAudit.todoCount,
-      canPromoteTestToMaster: blockers.length === 0 && summaryAudit.canPromoteTestToMaster,
-      canCreateRelease: blockers.length === 0 && summaryAudit.canCreateRelease,
+      evidenceReady,
+      promotionDecisionRecorded: summaryAudit.hasPromotionDecision,
+      releaseDecisionRecorded: summaryAudit.hasReleaseDecision,
+      canPromoteTestToMaster: evidenceReady && summaryAudit.canPromoteTestToMaster,
+      canCreateRelease: evidenceReady && summaryAudit.canCreateRelease,
       blockerCount: blockers.length
     },
     blockers,
+    notes,
     details: {
       incompleteScenarios: scenarioAudit.incompleteRows,
       missingSampleScenarios: scenarioAudit.missingSampleRows,
