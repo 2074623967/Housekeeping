@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-09T02:02:42.494Z",
+  "generatedAt": "2026-09-07T14:32:11.879Z",
   "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "inputs": {
     "candidateDoc": "docs/releases/v1.1.0-发布说明-候选版.md",
@@ -34,10 +34,27 @@
     "reevaluationReady": true,
     "releaseNoteChecklistReady": true,
     "prepStatusReady": true,
-    "blockerCount": 1,
+    "candidateFormalized": false,
+    "approvalSigned": false,
+    "rollbackExecuted": false,
+    "onSiteRecorded": false,
+    "stabilizationClosed": false,
+    "materialsReady": true,
+    "releaseConditionsMet": false,
+    "materialBlockerCount": 0,
+    "releaseBlockerCount": 5,
     "canCreateRelease": false
   },
-  "blockers": [
-    "当前候选版发布说明仍明确暂不切 release/*"
+  "materialBlockers": [],
+  "releaseBlockers": [
+    "当前发布说明仍是候选版，且明确暂不切 release/*",
+    "正式签字审批结果尚未形成",
+    "回滚演练仍停留在方案/模板状态，缺少实际演练记录",
+    "发布后现场核验仍只有模板，缺少实际记录",
+    "master 稳定观察结束结论尚未形成"
+  ],
+  "notes": [
+    "当前材料骨架已齐，但正式放行条件仍未闭环。",
+    "现有观察结论仍停留在 2026-08-09 当日口径，尚未补齐观察结束记录，因此不能提前形成正式切版结论。"
   ]
 }
