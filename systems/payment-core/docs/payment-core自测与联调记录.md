@@ -4708,3 +4708,33 @@
 2. 样例模拟只验证单条表达式与输入上下文，不执行完整优先级竞争、渠道健康、日限额或稳定加权决策，也不等同于真实支付链路联调。
 3. 规则版本、变更审计、冲突检测、审批发布和回滚仍未落地；真实网关探活与运行态命中证据仍属于外部联调缺口。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 147. 2026-09-08 路由规则版本留痕与回滚 V1.5 验证
+
+### 147.1 本轮补强
+
+1. 新增 `t_payment_route_rule_version` 不可变快照表，按规则独立维护递增版本号，记录完整规则配置、变更类型、回滚来源版本、变更原因和创建时间。
+2. 新增、编辑、启停和回滚均在原事务内追加 `CREATE / UPDATE / STATUS_CHANGE / ROLLBACK` 快照；存量无版本规则首次变更前自动补 `BASELINE`。
+3. 更新、启停和回滚先锁定当前规则行，再计算下一版本号，降低同一规则并发修改导致版本覆盖的风险。
+4. 新增历史版本查询与指定版本回滚接口；回滚重新校验表达式、渠道和优先级，恢复配置后生成新版本，不修改或删除历史快照。
+5. 管理端增加变更原因、版本历史表和二次确认回滚，配置中心标识升级为 V1.5；异步加载使用请求序号隔离陈旧响应，关闭版本区时不会以空规则编码重新加载；版本记录不包含虚构操作人或审批事实。
+6. 新增幂等迁移脚本，为既有运行库建版本表并补存量规则 V1 基线；同步数据库、接口、设计、测试、需求、差距和页面交互文档，新增 `PAY-TC-028`。
+
+### 147.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 路由版本定向测试 | `mvn -Dtest=PaymentConfigRouteRuleVersionMapperIntegrationTest,PaymentConfigServiceImplTest,PaymentConfigControllerTest test` | 通过 | `45` 个用例通过，覆盖创建/编辑版本、存量基线、状态变更、历史查询、回滚来源、非法历史快照拒绝、超长原因拒绝和控制器入口 |
+| Mapper SQL 集成测试 | `PaymentConfigRouteRuleVersionMapperIntegrationTest` | 通过 | H2 MySQL 兼容模式实际执行 `FOR UPDATE`、最大版本查询、快照插入、倒序历史查询和主配置恢复更新 |
+| 后端全量测试 | `mvn test` | 通过 | `327` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-route-version-v1 --emptyOutDir` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 浏览器静态检查 | `http://127.0.0.1:4176/payment-config` | 通过 | V1.5 标识、变更原因和既有规则表单正常渲染；后端 `18081` 未启动，版本列表及回滚 API 未做运行态联调，不记录为接口联调完成 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码、迁移与文档无空白符错误，Mapper XML 结构合法 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `test -> master = 是`、`release/* = 否`；退出码 `2` 为预期 release 阻断，四项真实治理事实仍未形成 |
+
+### 147.3 当前判断
+
+1. 路由规则已具备可追溯、可恢复且不覆盖历史的轻量版本治理，配置误改后不再只能依赖人工 SQL 反向修复。
+2. 当前并发控制范围为单规则行；跨规则优先级冲突检测、规则集合一致性校验、双人复核与灰度发布仍未落地。
+3. 版本快照和本地回滚测试不等于生产审批、真实渠道验证或发布演练；后端未启动，因此本轮没有形成运行态 API 与真实流量证据。
+4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。

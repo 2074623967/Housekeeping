@@ -289,6 +289,26 @@ t_order
 
 事务规则：限流服务在 `REQUIRES_NEW` 事务内记录拒绝事实，并对 `BusinessException` 配置不回滚，确保向调用方返回 `PAYMENT-1027` 时审计记录仍提交。既有运行库通过 `database/migrations/2026-09-08-add-payment-channel-query-rate-limit-log.sql` 增量建表。
 
+### 4.13 支付路由规则版本快照表 `t_payment_route_rule_version`
+
+作用：以只增不改的完整快照记录路由规则新增、编辑、启停与回滚，支持管理端查看变更轨迹并恢复指定历史配置。
+
+关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `rule_code` | 路由规则编码，与 `version_no` 组成唯一索引 |
+| `version_no` | 规则内单调递增版本号 |
+| `rule_name / match_scene / match_expression` | 规则名称、场景和表达式快照 |
+| `target_channel_code / fallback_channel_code` | 目标与兜底渠道快照 |
+| `status / status_type / priority` | 状态、样式与优先级快照 |
+| `change_type` | `CREATE / BASELINE / UPDATE / STATUS_CHANGE / ROLLBACK` |
+| `source_version_no` | 回滚时指向被恢复的历史版本，其余变更为空 |
+| `change_reason` | 变更原因，最长 `255` 个字符 |
+| `created_at` | 版本形成时间，使用数据库时钟写入 |
+
+事务规则：更新、启停和回滚先锁定 `t_payment_route_rule_config` 当前规则行，再在同一事务内更新主配置并追加版本快照；回滚不会覆盖历史记录。既有运行库通过 `database/migrations/2026-09-08-add-payment-route-rule-version.sql` 幂等建表并为尚无版本记录的存量规则补 V1 基线。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

@@ -13,6 +13,7 @@
 - `migrations/2026-07-31-add-payment-task-lease.sql`：给原始 `housekeeping_payment_core` 运行库补齐 `t_payment_task_lease` 的最小增量 DDL，用于让最新任务中心租约锁能力安全落库
 - `migrations/2026-08-09-add-ops-config-snapshot-version.sql`：给支付尝试和路由记录补齐运营配置快照版本字段，支持支付事实按配置版本追溯
 - `migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`：把历史递归升级 outbox 告警收口为 `已确认`，保留审计记录但移出待确认/待升级范围
+- `migrations/2026-09-08-add-payment-route-rule-version.sql`：幂等创建路由规则版本快照表，并为尚无版本记录的存量规则补录 V1 基线
 
 初始化方式：
 
@@ -24,10 +25,13 @@
 
 1. 若原始运行库早于 `2026-07-29` 任务中心租约锁版本，先执行 `migrations/2026-07-31-add-payment-task-lease.sql`
 2. 若原始运行库存在历史递归升级告警，再执行 `migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`
-3. 前者是幂等 `CREATE TABLE IF NOT EXISTS`，用于补单表；后者用于历史数据清理，二者都不替代全量 `schema.sql`
-4. 执行完成后，应至少验证：
+3. 若运行库尚未建立路由规则版本治理能力，执行 `migrations/2026-09-08-add-payment-route-rule-version.sql`；脚本可重复执行，只为尚无任何版本记录的存量规则补录 V1 `BASELINE`
+4. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
+   - `SHOW TABLES LIKE 't_payment_route_rule_version'`
+   - `SELECT COUNT(*) FROM t_payment_route_rule_config config WHERE NOT EXISTS (SELECT 1 FROM t_payment_route_rule_version version WHERE version.rule_code = config.rule_code)` 返回 `0`
+   - `SELECT rule_code, version_no, COUNT(*) FROM t_payment_route_rule_version GROUP BY rule_code, version_no HAVING COUNT(*) > 1` 返回空集
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 
 后续继续补强：

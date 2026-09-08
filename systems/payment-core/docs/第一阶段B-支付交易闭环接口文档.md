@@ -65,6 +65,8 @@
 | `/api/payment-config/route-rules` | `POST` | 新增支付路由规则 |
 | `/api/payment-config/route-rules/{ruleCode}` | `PUT` | 编辑支付路由规则 |
 | `/api/payment-config/route-rules/validate` | `POST` | 校验路由表达式并模拟样例命中 |
+| `/api/payment-config/route-rules/{ruleCode}/versions` | `GET` | 查询路由规则历史版本 |
+| `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 恢复指定历史版本并生成新版本 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
@@ -1020,7 +1022,8 @@ POST /api/payment-config/control-policies/self-check
   "targetChannelCode": "wx_h5",
   "fallbackChannelCode": "alipay_h5",
   "priority": 10,
-  "enabled": true
+  "enabled": true,
+  "changeReason": "增加 App 小额支付专用规则"
 }
 ```
 
@@ -1058,6 +1061,37 @@ POST /api/payment-config/control-policies/self-check
 ```
 
 说明：该接口只执行语法、字段和样例上下文求值，不写入规则，也不代表真实支付流量已经命中该规则。
+
+### 12.4 路由规则版本与回滚
+
+版本列表接口：`GET /api/payment-config/route-rules/{ruleCode}/versions`
+
+版本按 `versionNo` 倒序返回，包含完整规则快照、`changeType`、`sourceVersionNo`、`changeReason` 和 `createdAt`。变更类型支持：
+
+1. `CREATE`：通过配置接口新建规则。
+2. `BASELINE`：存量规则首次变更前自动补录的基线。
+3. `UPDATE`：编辑规则字段。
+4. `STATUS_CHANGE`：启用或停用规则。
+5. `ROLLBACK`：恢复某一历史版本后形成的新版本。
+
+回滚接口：`POST /api/payment-config/route-rules/{ruleCode}/rollback`
+
+请求示例：
+
+```json
+{
+  "versionNo": 2,
+  "changeReason": "恢复大促前稳定配置"
+}
+```
+
+回滚约束：
+
+1. 规则和目标版本必须存在，版本号必须大于 `0`。
+2. 回滚前重新校验历史快照中的表达式、目标渠道、兜底渠道和优先级，避免已失效依赖重新进入运行态。
+3. 更新、启停和回滚会锁定当前规则行，以同一规则内串行版本号避免并发覆盖。
+4. 回滚不会删除或改写历史版本，而是恢复配置后追加一条 `ROLLBACK` 快照，并用 `sourceVersionNo` 指向来源版本。
+5. `changeReason` 最长 `255` 个字符；版本记录没有审批人字段，不应被解释为正式审批或生产发布证据。
 
 ## 13. 支付监控分析接口
 
