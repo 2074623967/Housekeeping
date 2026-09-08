@@ -72,6 +72,10 @@
 | `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 提交路由规则启停候选，运行态不变 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
+| `/api/payment-config/protocols` | `POST` | 新增支付协议并生成首个不可变版本 |
+| `/api/payment-config/protocols/{protocolCode}` | `PUT` | 编辑支付协议并追加不可变版本 |
+| `/api/payment-config/protocols/{protocolCode}/versions` | `GET` | 查询支付协议历史版本 |
+| `/api/payment-config/protocols/{protocolCode}/rollback` | `POST` | 校验当前版本后回滚协议并追加新版本 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
 | `/api/payment-config/control-policies/toggle` | `POST` | 启停支付控制策略 |
@@ -975,6 +979,16 @@ POST /api/payment-config/route-rules/toggle
 POST /api/payment-config/protocols/toggle
 ```
 
+请求示例：
+
+```json
+{
+  "protocolCode": "PROTO_HOUSEKEEPING_SIGN_V1",
+  "enabled": false,
+  "changeReason": "停止旧模板继续签约"
+}
+```
+
 启停渠道返回码映射：
 
 ```http
@@ -1013,7 +1027,7 @@ POST /api/payment-config/control-policies/self-check
 1. `enabled=true` 时状态更新为 `ENABLED`。
 2. `enabled=false` 时状态更新为 `DISABLED`。
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
-3. 协议配置当前已支持运营查看、启停、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑和电子签章服务商维护；后续继续补电子签章联调能力。
+3. 协议配置当前已支持运营查看、启停、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护和不可变版本治理；新增、编辑、启停与回滚都要求变更原因并追加快照。当前仍是直接运行态变更，不等于 maker-checker、正式审批或法律签署，后续继续补可信身份审批与电子签章联调能力。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
 5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示；后续继续补返回码批量导入、渠道差异比对和真正自动归档动作。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
@@ -1184,6 +1198,27 @@ POST /api/payment-config/control-policies/self-check
 3. 部分灰度规则缺少 `paymentOrderId` 稳定键时按不命中跳过，避免随机漂移；100% 规则保持既有行为。
 4. 相同规则编码、盐值和支付单号的桶位稳定。调整比例只改变阈值，修改盐值会重排后续支付单桶位，必须作为完整候选快照复核并进入版本历史。
 5. 本能力是代码内路由执行语义，不自动完成生产发布审批、流量观测、渠道联调或回滚决策。
+
+### 12.8 支付协议版本与回滚
+
+查询历史：`GET /api/payment-config/protocols/{protocolCode}/versions`
+
+回滚协议：`POST /api/payment-config/protocols/{protocolCode}/rollback`
+
+```json
+{
+  "versionNo": 1,
+  "baseVersionNo": 3,
+  "changeReason": "恢复已完成条款核对的协议版本"
+}
+```
+
+处理约束：
+
+1. `t_payment_protocol_version` 按协议编码独立递增，保存模板、签约要素、适用范围、正文、状态、优先级、变更类型、原因与回滚来源版本的完整不可变快照。
+2. 新增记录 `CREATE`；编辑记录 `UPDATE`；启停记录 `STATUS_CHANGE`；回滚恢复目标完整快照并记录 `ROLLBACK + sourceVersionNo`。存量协议首次变更前自动补 `BASELINE`。
+3. 回滚必须提交页面所见的 `baseVersionNo`。服务端锁定当前协议并复验最新版本，基线漂移时返回“支付协议已产生新版本，请刷新后重试”，不覆盖并发新变更。
+4. 版本记录不修改历史，也不保存伪造的审批人或签署人。当前接口会直接更新运行态协议，版本留痕不能替代 maker-checker、可信身份、正式法务审批或电子签章事实。
 
 ## 13. 支付监控分析接口
 
