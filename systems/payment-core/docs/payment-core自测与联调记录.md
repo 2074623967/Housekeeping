@@ -4491,3 +4491,30 @@
 2. H2 MySQL 兼容模式验证不替代生产 MySQL 并发压测；默认 `60` 秒、单渠道 `100` 次的参数仍需结合真实渠道配额与实例规模校准。
 3. 当前告警仍是任务中心站内告警，不代表企业微信、短信或邮件已经真实送达；真实 `gateway-access` 运行态联调仍未完成。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 139. 2026-09-08 主动查单监控告警 outbox 验证
+
+### 139.1 本轮补强
+
+1. 新增 `PAYMENT_QUERY_MONITOR_ALERT`，按现有失败笔数、最小样本失败率和限流拒绝次数阈值生成两类 P1 `IN_APP_OUTBOX` 告警。
+2. 人工入口 `POST /api/payment-task-center/generate-query-monitor-alerts` 与自动调度共用任务租约；自动任务默认每 `300000ms` 扫描一次。
+3. 新增同类未确认告警冷却去重，默认 `60` 分钟，避免分钟级调度持续生成相同告警；任务日志记录阈值命中、实际生成和冷却抑制数量。
+4. 新告警复用现有 IM、SMS、EMAIL 派发、失败重试和供应商回执链路；本轮未配置或调用真实企业微信、短信、邮件供应商。
+5. `admin-web` 新增“主动查单监控告警”操作卡与 V1.17 任务矩阵，并修复宽表格撑开主页面导致的桌面横向溢出。
+
+### 139.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 任务中心定向测试 | `mvn -Dtest=PaymentTaskCenterServiceImplTest,PaymentTaskCenterControllerTest,PaymentCompensationSchedulerTest,PaymentTaskCenterMapperIntegrationTest test` | 通过 | `39` 个用例通过，覆盖阈值命中、P1 outbox 字段、60 分钟冷却抑制、人工租约、控制器入口、自动调度和 H2 MySQL 兼容 SQL |
+| 后端全量测试 | `mvn test` | 通过 | `297` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-query-monitor-alert-v1-full --emptyOutDir` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 浏览器静态检查 | `http://127.0.0.1:4176/payment-task-center` | 通过 | 新任务卡、按钮和 V1.17 矩阵正常渲染；桌面主页面横向溢出已收敛；后端 `18081` 未启动，API 显示 `500 [PAYMENT-CLIENT]`，不记录为接口联调完成 |
+| Mapper XML 与补丁检查 | `xmllint --noout PaymentTaskCenterMapper.xml && git diff --check` | 通过 | XML 结构合法，冷却查询已在 H2 MySQL 兼容模式执行 |
+
+### 139.3 当前判断
+
+1. 主动查单失败趋势与限流容量告警已从页面提示升级为可审计 outbox，并可进入现有多通道派发和回执链路。
+2. 当前完成的是 outbox 生成、冷却去重和可配置外发代码链路，不代表真实企业微信、短信或邮件已经送达。
+3. 生产 MySQL 并发压测、真实 `gateway-access` 运行态联调、通知供应商配置与实际送达回执仍未完成。
+4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。

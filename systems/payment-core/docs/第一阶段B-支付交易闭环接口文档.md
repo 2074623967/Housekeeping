@@ -1312,6 +1312,7 @@ POST /api/payment-config/control-policies/self-check
 3. 严重等级与升级状态不再按“是否失败”简单二分，而是按任务类型、失败笔数和处理规模综合判定：
    - `PAYMENT_EXPIRE_CLOSE`：失败 `>= 5` 或处理量 `>= 30` 判定 `P1 / 升级值班负责人`；失败 `1-4` 或处理量 `10-29` 判定 `P2 / 纳入当班跟进`
    - `PAYMENT_PENDING_QUERY`：查询失败 `>= 3` 判定 `P1 / 升级值班负责人`；存在查询失败或渠道仍处理中判定 `P2 / 纳入当班跟进`
+   - `PAYMENT_QUERY_MONITOR_ALERT`：失败笔数、失败率或限流拒绝达到配置阈值时判定 `P1 / 升级值班负责人`；任务生成告警 outbox，不修改支付交易状态
    - `PAYMENT_EVENT_RETRY`：失败 `>= 3` 或处理量 `>= 10` 判定 `P1 / 升级值班负责人`；失败 `1-2` 或存在成功重发则判定 `P2 / 纳入当班跟进`
    - `REFUND_FAIL_RETRY`：失败 `>= 2` 或处理量 `>= 8` 判定 `P1 / 升级值班负责人`；失败 `1` 笔或存在成功重试则判定 `P2 / 纳入当班跟进`
 4. 当前待回调主动查单、超时关单、失败事件重发、失败退款重试、异常 SLA 升级巡检都由该页统一留痕，并已接入后台自动补偿调度；待回调查单只有在真实网关和补偿开关同时启用时才自动运行。
@@ -1355,6 +1356,21 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_THRESHOLD_PERCENT` | `30` | 触发 P1 的窗口失败率阈值，限制为 `1%-100%` |
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_MINIMUM_SAMPLE_COUNT` | `10` | 应用失败率阈值前要求的最小查单样本数，最小为 `1` |
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_RATE_LIMIT_REJECTION_COUNT_THRESHOLD` | `10` | 触发 P1 的窗口限流拒绝次数阈值，最小为 `1` |
+| `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_COOLDOWN_MINUTES` | `60` | 同类未确认 outbox 告警的冷却去重窗口，最小为 `1` 分钟 |
+| `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_DELAY_MS` | `300000` | 自动生成查单监控告警的固定扫描间隔 |
+
+### 13.7.2 生成主动查单监控告警
+
+接口：`POST /api/payment-task-center/generate-query-monitor-alerts`
+
+处理规则：
+
+1. 任务编码为 `PAYMENT_QUERY_MONITOR_ALERT`，人工入口与自动调度共用该任务租约，避免两类入口并行生成同类告警。
+2. 查单失败笔数达到阈值，或样本数达到最低要求且失败率达到阈值时，生成 `主动查单失败趋势` P1 告警。
+3. 限流拒绝次数达到独立阈值时，生成 `主动查单限流拒绝` P1 告警；拒绝事实仍不计入渠道查询失败率。
+4. 告警写入 `t_payment_issue_alert_log`，来源通道为 `IN_APP_OUTBOX`，责任组为 `支付渠道运营组`，后续复用既有 IM、SMS、EMAIL 派发、重试和供应商回执链路。
+5. 同类未确认 outbox 在冷却窗口内已经存在时，本轮仅记录阈值命中和抑制数量，不重复生成；冷却时长可配置。
+6. 当前只确认 outbox 和可配置外发链路具备代码与自动化测试能力，不代表真实企业微信、短信或邮件已经送达。
 
 ### 13.7 手动执行异常 SLA 升级巡检
 
