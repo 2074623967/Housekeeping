@@ -4795,3 +4795,33 @@
 2. 当前申请人和复核人都是自声明字符串，异人校验仅能降低误操作，不能证明真实身份、权限或不可抵赖签字；本轮不形成正式审批事实。
 3. 启停和回滚尚未纳入复核，真实百分比灰度、稳定分桶、真实网关探活和运行态命中证据仍缺失。
 4. 本轮没有新增正式签字、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 150. 2026-09-09 路由规则稳定百分比灰度 V1.8 验证
+
+### 150.1 本轮补强
+
+1. 路由规则新增 `rolloutPercentage` 与 `rolloutSalt`，以 `CRC32(ruleCode:rolloutSalt:paymentOrderId) % 100` 形成支付单级稳定桶；存量规则按 `100% / stable-v1` 保持原行为。
+2. 场景与表达式命中后，仅在 `bucket < rolloutPercentage` 时进入当前规则；桶外继续后续规则，不使用当前规则 fallback。只有入桶后目标渠道不可用，才执行原故障兜底语义。
+3. 部分灰度缺支付单号时跳过，`0%` 摘流、`100%` 全量；盐值变化允许主动重排桶位，并明确作为高风险候选变更留痕。
+4. 灰度字段贯穿运行配置、复核候选、版本快照、回滚、Mapper、初始化数据、增量迁移、治理导出和管理端 V1.8；比例范围和空盐值在写入前拒绝，并补齐配置表单的响应式网格，避免窄视口字段拥挤。
+5. 冲突检测排除 `0%` 规则；部分灰度高优先级规则不再把相同场景的低优先级规则误判为完全遮蔽。不同盐值桶集合仍不做静态互斥证明。
+6. 同步接口、设计、数据库、测试、需求、差距和页面交互文档，新增 `PAY-TC-031`。代码内稳定分桶不等于生产灰度审批、真实渠道验证或稳定观察完成。
+
+### 150.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 灰度路由与配置定向测试 | `mvn -Dtest=PaymentChannelRoutingServiceImplTest,PaymentConfigServiceImplTest,PaymentConfigRouteRuleVersionMapperIntegrationTest test` | 通过 | `69` 个用例通过，覆盖稳定桶内外、桶外后续规则、可用 fallback 不误用、缺稳定键、0/100 边界、盐值重排、非法配置、复核/版本/回滚字段和部分遮蔽语义 |
+| 后端全量测试 | `mvn test` | 通过 | `349` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-route-rule-rollout-v18 --emptyOutDir` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 管理端本地服务 | `http://127.0.0.1:4182/payment-config` | 部分通过 | Vite 开发服务持续运行，宿主环境 HTTP 返回 `200`；约 `448px` 窄视口已检查 V1.8 灰度控件、说明和响应式单列表单，无重叠或截断。当前环境无可用 Chrome，桌面宽视口未执行；后端未启动，页面如实呈现配置接口 `500` 失败态 |
+| 运行态 API | `http://127.0.0.1:18081/api/payment-config` | 未执行 | 后端未启动，不记录配置、复核或真实支付路由 API 联调通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码、迁移和文档无空白符错误，Mapper XML 结构合法 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `test -> master = 是`、`release/* = 否`；候选说明正式化、正式签字、现场核验和稳定观察结束结论仍未形成 |
+
+### 150.3 当前判断
+
+1. 路由规则已具备真实执行的支付单级稳定百分比桶，且配置变化受既有 maker-checker、版本和回滚链路约束。
+2. 当前能力只决定代码内规则是否承接支付单，不包含生产流量编排、渠道探活、发布指标阈值、自动回滚或观察期闭环。
+3. 浏览器已完成窄视口静态视觉检查，但桌面宽视口未执行且后端未启动；本轮不形成运行态 API、真实支付流量或真实渠道联调证据。
+4. 本轮没有新增可信身份、正式签字、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。

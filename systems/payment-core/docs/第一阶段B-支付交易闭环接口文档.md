@@ -936,7 +936,7 @@ POST /api/refunds/retry
 返回内容：
 
 1. `channels`：支付渠道配置，包含渠道编码、渠道名称、支付方式、商户号、商户应用标识、回调通知地址、验签密钥配置情况、证书档案、回调验签时间窗、原路退款时效、风控标签、适用场景、状态、单日限额、优先级和默认路由权重 `routeWeight`。
-2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、状态、优先级。
+2. `routeRules`：支付路由规则，包含规则编码、规则名称、匹配场景、匹配表达式、目标渠道、兜底渠道、稳定灰度比例 `rolloutPercentage`、分桶盐值 `rolloutSalt`、状态、优先级。
 3. `protocols`：支付协议配置，包含协议编码、协议名称、协议类型、模板版本、签约模式、适用场景、适用渠道、商户确认要求、风控标签、状态。
 4. `returnCodeMappings`：渠道返回码映射，包含渠道编码、渠道返回码、标准错误码、标准错误文案、处理建议、是否可重试、是否需要人工介入、映射版本、归档状态和启停状态。
 5. `gateways`：支付网关接入配置，包含网关编码、网关名称、接入模式、适用渠道、环境范围、网关基础地址、报文协议、签名算法、证书别名、证书状态、发布阶段、灰度策略、回调白名单、适配器编排、超时时间、重试策略和状态。
@@ -1024,6 +1024,8 @@ POST /api/payment-config/control-policies/self-check
     "matchExpression": "terminal IN (H5, APP) AND amount<=500",
     "targetChannelCode": "wx_h5",
     "fallbackChannelCode": "alipay_h5",
+    "rolloutPercentage": 30,
+    "rolloutSalt": "home-app-v1",
     "priority": 10,
     "enabled": true,
     "changeReason": "增加 App 小额支付专用规则"
@@ -1034,11 +1036,12 @@ POST /api/payment-config/control-policies/self-check
 保存约束：
 
 1. 新增时 `ruleCode` 必填且不能与现有规则重复；编辑时按候选快照中的 `ruleCode` 绑定当前规则并保持编码不变。
-2. 名称、匹配场景、表达式和目标渠道必填，优先级必须大于等于 `0`。
+2. 名称、匹配场景、表达式、目标渠道和 `rolloutSalt` 必填，优先级必须大于等于 `0`；盐值最长 `64` 个字符。
 3. 目标渠道和非空兜底渠道必须存在于支付渠道配置中，且二者不能相同。
 4. 表达式必须通过 V1.3 语法与字段校验；非法规则在写库前拒绝，不进入支付提交链路。
 5. `requester` 和 `changeReason` 必填；同一规则已有 `PENDING_REVIEW` 时拒绝重复提交。
 6. 提交只写入复核申请，不更新 `t_payment_route_rule_config`，也不生成运行版本。
+7. `rolloutPercentage` 取 `0..100` 的整数；未传时按 `100` 兼容。`0` 表示规则保留但不承接流量，`100` 表示全量。
 
 校验与模拟接口：`POST /api/payment-config/route-rules/validate`
 
@@ -1072,7 +1075,7 @@ POST /api/payment-config/control-policies/self-check
 
 版本列表接口：`GET /api/payment-config/route-rules/{ruleCode}/versions`
 
-版本按 `versionNo` 倒序返回，包含完整规则快照、`changeType`、`sourceVersionNo`、`changeReason` 和 `createdAt`。变更类型支持：
+版本按 `versionNo` 倒序返回，包含表达式、渠道、`rolloutPercentage`、`rolloutSalt` 等完整规则快照，以及 `changeType`、`sourceVersionNo`、`changeReason` 和 `createdAt`。变更类型支持：
 
 1. `CREATE`：通过配置接口新建规则。
 2. `BASELINE`：存量规则首次变更前自动补录的基线。
@@ -1095,7 +1098,7 @@ POST /api/payment-config/control-policies/self-check
 回滚约束：
 
 1. 规则和目标版本必须存在，版本号必须大于 `0`。
-2. 回滚前重新校验历史快照中的表达式、目标渠道、兜底渠道和优先级，避免已失效依赖重新进入运行态。
+2. 回滚前重新校验历史快照中的表达式、目标渠道、兜底渠道、灰度比例、分桶盐值和优先级，避免已失效依赖重新进入运行态。
 3. 更新、启停和回滚会锁定当前规则行，以同一规则内串行版本号避免并发覆盖。
 4. 回滚不会删除或改写历史版本，而是恢复配置后追加一条 `ROLLBACK` 快照，并用 `sourceVersionNo` 指向来源版本。
 5. `changeReason` 最长 `255` 个字符；版本记录没有审批人字段，不应被解释为正式审批或生产发布证据。
@@ -1126,7 +1129,7 @@ POST /api/payment-config/control-policies/self-check
 
 检测口径：
 
-1. 独立检测接口只扫描当前状态为 `ENABLED` 的规则，不改变规则状态或写入版本快照；复核发布会把候选加入当前规则集合并复用阻断级检查。
+1. 独立检测接口只扫描当前状态为 `ENABLED` 且 `rolloutPercentage > 0` 的规则，不改变规则状态或写入版本快照；复核发布会把候选加入当前规则集合并复用阻断级检查。
 2. 表达式先做空白与关键字大小写规范化，仅对规范化后完全相同的表达式判断重复、路由分歧和优先级遮蔽。
 3. 匹配场景以 `/` 分隔并按 OR 关系求交集与包含关系；`mobile / mobile_web / H5` 归一为 `h5`，`web / pc_web / PC` 归一为 `pc`，`app_native / APP` 归一为 `app`。空场景按全部场景处理。
 4. `INVALID_EXPRESSION / ROUTE_DIVERGENCE` 为 `BLOCKER`；`DUPLICATE_RULE / OVERLAPPING_DUPLICATE / SHADOWED_RULE / PARTIAL_SHADOW` 为 `WARNING`。
@@ -1155,7 +1158,15 @@ POST /api/payment-config/control-policies/self-check
 1. `requester` 与 `reviewer` 都是 `SELF_DECLARED` 自声明文本，系统仅校验两者不相同；当前未接入可信登录身份、权限或电子签名，不得解释为正式签字审批。
 2. 复核只处理 `PENDING_REVIEW` 申请。通过前重新校验当前基线版本、候选表达式、渠道有效性，以及候选加入当前规则集合后是否存在涉及候选的 `BLOCKER`。
 3. 通过后才新增或更新运行态规则，并追加 `REVIEW_RELEASE` 版本；驳回只更新申请状态，不改变运行态。
-4. 当前仅新增、修改进入复核路径；启停和版本回滚仍为直接操作。真实百分比灰度与稳定路由桶尚未实现。
+4. 当前仅新增、修改进入复核路径；启停和版本回滚仍为直接操作。代码内稳定百分比桶已实现，但不代表生产灰度审批、真实渠道验证或发布后稳定观察已经完成。
+
+### 12.7 路由规则稳定百分比灰度
+
+1. 规则先匹配场景和表达式，再以 `CRC32(ruleCode + ":" + rolloutSalt + ":" + paymentOrderId) % 100` 计算稳定桶；仅当 `bucket < rolloutPercentage` 时进入当前规则。
+2. 未进入当前灰度桶时继续评估后续规则，不使用当前规则 fallback；只有进入桶后目标渠道不可用，才尝试当前规则的兜底渠道。
+3. 部分灰度规则缺少 `paymentOrderId` 稳定键时按不命中跳过，避免随机漂移；100% 规则保持既有行为。
+4. 相同规则编码、盐值和支付单号的桶位稳定。调整比例只改变阈值，修改盐值会重排后续支付单桶位，必须作为完整候选快照复核并进入版本历史。
+5. 本能力是代码内路由执行语义，不自动完成生产发布审批、流量观测、渠道联调或回滚决策。
 
 ## 13. 支付监控分析接口
 
