@@ -1,0 +1,32 @@
+USE housekeeping_payment_core;
+
+CREATE TABLE IF NOT EXISTS t_payment_route_rule_review (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
+    rule_code VARCHAR(64) NOT NULL COMMENT '路由规则编码',
+    pending_rule_code VARCHAR(64) NULL COMMENT '待复核规则唯一占位，完成后置空',
+    base_version_no INT NULL COMMENT '提交申请时的运行版本号，新建规则为空',
+    operation_type VARCHAR(32) NOT NULL COMMENT '操作类型：CREATE/UPDATE',
+    rule_name VARCHAR(128) NOT NULL COMMENT '候选规则名称',
+    match_scene VARCHAR(128) NOT NULL COMMENT '候选匹配场景',
+    match_expression VARCHAR(512) NOT NULL COMMENT '候选匹配表达式',
+    target_channel_code VARCHAR(64) NOT NULL COMMENT '候选目标渠道',
+    fallback_channel_code VARCHAR(64) NOT NULL COMMENT '候选兜底渠道',
+    status VARCHAR(32) NOT NULL COMMENT '候选规则状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '候选规则状态样式',
+    priority INT NOT NULL COMMENT '候选规则优先级',
+    requester VARCHAR(64) NOT NULL COMMENT '申请人自声明',
+    request_reason VARCHAR(255) NOT NULL COMMENT '申请原因',
+    review_status VARCHAR(32) NOT NULL COMMENT '复核状态',
+    review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
+    reviewer VARCHAR(64) NULL COMMENT '复核人自声明',
+    review_comment VARCHAR(255) NULL COMMENT '复核意见',
+    created_at DATETIME NOT NULL COMMENT '申请时间',
+    reviewed_at DATETIME NULL COMMENT '复核时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_route_rule_review_request (request_no),
+    UNIQUE KEY uk_route_rule_review_pending (pending_rule_code),
+    KEY idx_route_rule_review_status (review_status, created_at),
+    KEY idx_route_rule_review_rule (rule_code, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则复核申请表';

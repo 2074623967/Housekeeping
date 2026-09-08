@@ -12,10 +12,12 @@ import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
+import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -60,6 +62,21 @@ public interface PaymentConfigMapper {
      * 查询支付路由规则当前最大版本号。
      */
     Integer findLatestRouteRuleVersionNo(@Param("ruleCode") String ruleCode);
+
+    /**
+     * 查询路由规则复核申请。
+     */
+    List<PaymentRouteRuleReviewDTO> findRouteRuleReviews();
+
+    /**
+     * 加锁查询路由规则复核申请。
+     */
+    PaymentRouteRuleReviewEntity findRouteRuleReviewForUpdate(@Param("requestNo") String requestNo);
+
+    /**
+     * 统计规则待复核申请数。
+     */
+    int countPendingRouteRuleReviews(@Param("ruleCode") String ruleCode);
 
     /**
      * 查询支付协议配置。
@@ -159,6 +176,20 @@ public interface PaymentConfigMapper {
      * 新增支付路由规则不可变版本快照。
      */
     int insertRouteRuleVersion(PaymentRouteRuleVersionEntity entity);
+
+    /**
+     * 新增路由规则复核申请。
+     */
+    int insertRouteRuleReview(PaymentRouteRuleReviewEntity entity);
+
+    /**
+     * 完成路由规则复核申请。
+     */
+    int completeRouteRuleReview(@Param("requestNo") String requestNo,
+                                @Param("reviewStatus") String reviewStatus,
+                                @Param("reviewStatusType") String reviewStatusType,
+                                @Param("reviewer") String reviewer,
+                                @Param("reviewComment") String reviewComment);
 
     /**
      * 更新支付协议启停状态。

@@ -6,6 +6,9 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
@@ -57,6 +60,28 @@ public interface PaymentConfigService {
      * 检测当前启用路由规则的确定冲突、遮蔽和潜在优先级冲突。
      */
     List<PaymentRouteRuleConflictDTO> listRouteRuleConflicts();
+
+    /**
+     * 查询路由规则复核申请。
+     */
+    List<PaymentRouteRuleReviewDTO> listRouteRuleReviews();
+
+    /**
+     * 提交路由规则候选快照进入复核，不改变运行态规则。
+     */
+    List<PaymentRouteRuleReviewDTO> submitRouteRuleReview(PaymentRouteRuleReviewSubmitRequestDTO request);
+
+    /**
+     * 通过复核并发布候选快照。
+     */
+    List<PaymentRouteRuleReviewDTO> approveRouteRuleReview(
+            String requestNo, PaymentRouteRuleReviewActionRequestDTO request);
+
+    /**
+     * 驳回复核申请，不改变运行态规则。
+     */
+    List<PaymentRouteRuleReviewDTO> rejectRouteRuleReview(
+            String requestNo, PaymentRouteRuleReviewActionRequestDTO request);
 
     /**
      * 查询路由规则历史版本。

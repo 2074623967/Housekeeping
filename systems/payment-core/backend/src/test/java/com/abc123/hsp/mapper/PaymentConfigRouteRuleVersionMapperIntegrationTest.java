@@ -2,9 +2,12 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
+import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import java.io.InputStream;
 import java.sql.Statement;
@@ -15,6 +18,7 @@ import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.exceptions.PersistenceException;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -81,6 +85,71 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldPersistLockAndCompleteRouteRuleReview() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            PaymentRouteRuleReviewEntity review = new PaymentRouteRuleReviewEntity();
+            review.setRequestNo("RRV-001");
+            review.setRuleCode("RULE_HOME_APP");
+            review.setBaseVersionNo(Integer.valueOf(1));
+            review.setOperationType("UPDATE");
+            review.setRuleName("家政 App 小额路由");
+            review.setMatchScene("HOME_CLEAN/APP");
+            review.setMatchExpression("terminal=APP AND amount<=500");
+            review.setTargetChannelCode("wx_h5");
+            review.setFallbackChannelCode("alipay_h5");
+            review.setStatus("ENABLED");
+            review.setStatusType("success");
+            review.setPriority(Integer.valueOf(5));
+            review.setRequester("maker-a");
+            review.setRequestReason("收窄 App 小额规则");
+            review.setReviewStatus("PENDING_REVIEW");
+            review.setReviewStatusType("warn");
+
+            assertEquals(1, mapper.insertRouteRuleReview(review));
+            assertEquals(1, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
+            PaymentRouteRuleReviewEntity duplicatePending = buildReview("RRV-002");
+            assertThrows(PersistenceException.class, () -> mapper.insertRouteRuleReview(duplicatePending));
+            assertNotNull(mapper.findRouteRuleReviewForUpdate("RRV-001"));
+            assertEquals(1, mapper.completeRouteRuleReview(
+                    "RRV-001", "APPROVED", "success", "reviewer-b", "复核通过"));
+            assertEquals(0, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
+            assertEquals(1, mapper.insertRouteRuleReview(duplicatePending));
+            assertEquals(1, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
+            List<PaymentRouteRuleReviewDTO> reviews = mapper.findRouteRuleReviews();
+            assertEquals(2, reviews.size());
+            PaymentRouteRuleReviewDTO completed = reviews.stream()
+                    .filter(item -> "RRV-001".equals(item.getRequestNo()))
+                    .findFirst()
+                    .orElseThrow(AssertionError::new);
+            assertEquals("APPROVED", completed.getReviewStatus());
+            assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
+            session.commit();
+        }
+    }
+
+    private PaymentRouteRuleReviewEntity buildReview(String requestNo) {
+        PaymentRouteRuleReviewEntity review = new PaymentRouteRuleReviewEntity();
+        review.setRequestNo(requestNo);
+        review.setRuleCode("RULE_HOME_APP");
+        review.setBaseVersionNo(Integer.valueOf(1));
+        review.setOperationType("UPDATE");
+        review.setRuleName("家政 App 小额路由");
+        review.setMatchScene("HOME_CLEAN/APP");
+        review.setMatchExpression("terminal=APP AND amount<=500");
+        review.setTargetChannelCode("wx_h5");
+        review.setFallbackChannelCode("alipay_h5");
+        review.setStatus("ENABLED");
+        review.setStatusType("success");
+        review.setPriority(Integer.valueOf(5));
+        review.setRequester("maker-a");
+        review.setRequestReason("收窄 App 小额规则");
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        return review;
+    }
+
     private PaymentRouteRuleVersionEntity buildVersion(PaymentRouteRuleConfigEntity rule,
                                                        int versionNo,
                                                        String changeType) {
@@ -107,6 +176,7 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     + PaymentConfigRouteRuleVersionMapperIntegrationTest.class.getName()
                     + ".dateFormat\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_version");
+            statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_config");
             statement.execute("CREATE TABLE t_payment_route_rule_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64) UNIQUE, "
@@ -120,6 +190,16 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     + "status VARCHAR(32), status_type VARCHAR(32), priority INT, change_type VARCHAR(32), "
                     + "source_version_no INT, change_reason VARCHAR(255), created_at DATETIME, "
                     + "UNIQUE(rule_code, version_no))");
+            statement.execute("CREATE TABLE t_payment_route_rule_review ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, "
+                    + "rule_code VARCHAR(64), pending_rule_code VARCHAR(64) UNIQUE, "
+                    + "base_version_no INT, operation_type VARCHAR(32), "
+                    + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
+                    + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
+                    + "status VARCHAR(32), status_type VARCHAR(32), priority INT, requester VARCHAR(64), "
+                    + "request_reason VARCHAR(255), review_status VARCHAR(32), review_status_type VARCHAR(32), "
+                    + "reviewer VARCHAR(64), review_comment VARCHAR(255), created_at DATETIME, "
+                    + "reviewed_at DATETIME, updated_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_payment_route_rule_config "
                     + "(rule_code, rule_name, match_scene, match_expression, target_channel_code, "
                     + "fallback_channel_code, status, status_type, priority, updated_at) VALUES "

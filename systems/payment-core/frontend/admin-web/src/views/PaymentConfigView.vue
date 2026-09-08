@@ -23,6 +23,11 @@ let routeRuleVersionRequestId = 0;
 const routeRuleConflicts = ref([]);
 const isConflictLoading = ref(false);
 const hasCheckedRouteRuleConflicts = ref(false);
+const routeRuleReviews = ref([]);
+const isReviewLoading = ref(false);
+const reviewErrorMessage = ref("");
+const reviewer = ref("");
+const reviewComment = ref("");
 const editingProtocolCode = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
@@ -75,6 +80,7 @@ function createRouteRuleForm() {
     priority: 99,
     enabled: true,
     changeReason: "",
+    requester: "",
     samplePaymentMethod: "微信支付",
     sampleRequestedChannelCode: "",
     samplePayScene: "HOME_CLEAN",
@@ -223,6 +229,16 @@ async function validateRouteRuleForm() {
 async function submitRouteRuleForm() {
   activeConfigCode.value = editingRouteRuleCode.value || routeRuleForm.value.ruleCode;
   actionMessage.value = "";
+  if (!routeRuleForm.value.requester) {
+    actionMessage.value = "提交复核失败：申请人声明不能为空。";
+    activeConfigCode.value = "";
+    return;
+  }
+  if (!routeRuleForm.value.changeReason) {
+    actionMessage.value = "提交复核失败：申请原因不能为空。";
+    activeConfigCode.value = "";
+    return;
+  }
   try {
     const savedRuleCode = editingRouteRuleCode.value || routeRuleForm.value.ruleCode;
     const payload = {
@@ -238,17 +254,72 @@ async function submitRouteRuleForm() {
       enabled: routeRuleForm.value.enabled,
       changeReason: routeRuleForm.value.changeReason
     };
-    const overview = editingRouteRuleCode.value
-      ? await paymentConfigApi.updateRouteRule(editingRouteRuleCode.value, payload)
-      : await paymentConfigApi.createRouteRule(payload);
-    applyOverview(overview);
-    const successMessage = editingRouteRuleCode.value
-      ? `路由规则 ${savedRuleCode} 已更新。`
-      : `路由规则 ${savedRuleCode} 已新增。`;
+    routeRuleReviews.value = await paymentConfigApi.submitRouteRuleReview({
+      requester: routeRuleForm.value.requester,
+      candidate: payload
+    });
     startCreateRouteRule();
-    actionMessage.value = successMessage;
+    actionMessage.value = `路由规则 ${savedRuleCode} 已提交复核，运行态尚未改变。`;
   } catch (error) {
-    actionMessage.value = `路由规则保存失败：${error.message}`;
+    actionMessage.value = `路由规则提交复核失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadRouteRuleReviews() {
+  isReviewLoading.value = true;
+  reviewErrorMessage.value = "";
+  try {
+    routeRuleReviews.value = await paymentConfigApi.getRouteRuleReviews();
+  } catch (error) {
+    reviewErrorMessage.value = error.message;
+  } finally {
+    isReviewLoading.value = false;
+  }
+}
+
+function formatRouteRuleOperation(operationType) {
+  return operationType === "CREATE" ? "新增" : "修改";
+}
+
+async function handleRouteRuleReview(review, approved) {
+  if (!reviewer.value) {
+    actionMessage.value = "复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!reviewComment.value) {
+    actionMessage.value = `复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const actionLabel = approved ? "通过并发布" : "驳回";
+  const confirmed = window.confirm(
+    approved
+      ? `确认通过申请 ${review.requestNo} 并将候选规则写入运行态？`
+      : `确认驳回申请 ${review.requestNo}？运行态不会改变。`
+  );
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: reviewer.value,
+      reviewComment: reviewComment.value
+    };
+    routeRuleReviews.value = approved
+      ? await paymentConfigApi.approveRouteRuleReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectRouteRuleReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    reviewComment.value = "";
+    actionMessage.value = approved
+      ? `复核申请 ${review.requestNo} 已通过，候选规则已写入运行态。`
+      : `复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `${actionLabel}失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -523,7 +594,10 @@ async function submitRosterForm() {
   }
 }
 
-onMounted(loadOverview);
+onMounted(() => {
+  loadOverview();
+  loadRouteRuleReviews();
+});
 
 function exportGovernanceSnapshot(section = "ALL") {
   const exportUrl = paymentConfigApi.buildExportUrl(section);
@@ -540,7 +614,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.6</span>
+        <span class="badge info">配置中心 V1.7</span>
       </div>
     </div>
 
@@ -697,7 +771,7 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="section-title">
               <div>
                 <h3>{{ editingRouteRuleCode ? "编辑路由规则" : "新增路由规则" }}</h3>
-                <p class="meta">保存前可使用样例上下文校验语法和命中结果</p>
+                <p class="meta">提交后仅生成候选申请，异人复核通过后才修改运行态</p>
               </div>
             </div>
             <div class="filter-grid">
@@ -743,8 +817,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </select>
               </label>
               <label class="wide-field">
-                变更原因
-                <input v-model.trim="routeRuleForm.changeReason" maxlength="255" placeholder="说明新增或调整原因（可选）" />
+                申请原因
+                <input v-model.trim="routeRuleForm.changeReason" maxlength="255" placeholder="必填：说明新增或调整原因" />
+              </label>
+              <label>
+                申请人声明
+                <input v-model.trim="routeRuleForm.requester" maxlength="64" placeholder="必填：maker-a" />
               </label>
               <label class="wide-field">
                 匹配表达式
@@ -784,7 +862,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                 校验并模拟
               </button>
               <button class="button primary" :disabled="Boolean(activeConfigCode)" @click="submitRouteRuleForm">
-                {{ editingRouteRuleCode ? "保存修改" : "新增规则" }}
+                提交复核
               </button>
               <button class="button secondary" @click="startCreateRouteRule">重置表单</button>
             </div>
@@ -883,6 +961,99 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <td>{{ conflict.conflictingPriority ?? "-" }}</td>
                     <td>{{ conflict.overlappingScene }}</td>
                     <td class="flow-summary-cell">{{ conflict.message }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px;">
+            <div class="section-title">
+              <div>
+                <h3>路由规则复核申请</h3>
+                <p class="meta">申请人和复核人均为自声明身份，不代表可信登录身份或正式签字审批；通过后才修改运行态</p>
+              </div>
+              <button class="button secondary" :disabled="isReviewLoading" @click="loadRouteRuleReviews">
+                {{ isReviewLoading ? "刷新中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="notice-banner">
+              当前仅新增和修改进入复核路径；启停、版本回滚仍为直接操作。REVIEW_RELEASE 仅表示代码内版本类型，不代表生产正式放行。
+            </div>
+            <div class="filter-grid" style="margin-bottom: 16px;">
+              <label>
+                复核人声明
+                <input v-model.trim="reviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+              </label>
+              <label class="wide-field">
+                复核意见 / 驳回原因
+                <input v-model.trim="reviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
+              </label>
+            </div>
+            <div v-if="reviewErrorMessage" class="error-banner">复核申请加载失败：{{ reviewErrorMessage }}</div>
+            <div v-if="isReviewLoading" class="state-box">复核申请加载中...</div>
+            <div v-else-if="!routeRuleReviews.length" class="state-box">当前暂无路由规则复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>规则 / 操作</th>
+                    <th>基线版本</th>
+                    <th>候选配置</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in routeRuleReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>
+                      {{ review.ruleCode }} / {{ review.ruleName }}
+                      <div class="muted-text">{{ formatRouteRuleOperation(review.operationType) }}</div>
+                    </td>
+                    <td>{{ review.baseVersionNo ? `V${review.baseVersionNo}` : "新规则" }}</td>
+                    <td class="flow-summary-cell">
+                      {{ review.matchExpression }}
+                      <div class="muted-text">
+                        {{ review.targetChannelCode }} / 兜底 {{ review.fallbackChannelCode || "无" }} / 优先级 {{ review.priority }} / {{ review.status }}
+                      </div>
+                    </td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleRouteRuleReview(review, true)"
+                        >
+                          通过并发布
+                        </button>
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleRouteRuleReview(review, false)"
+                        >
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
                   </tr>
                 </tbody>
               </table>

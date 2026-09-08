@@ -123,6 +123,67 @@
         WHERE rule_code = #{ruleCode}
     </select>
 
+    <select id="findRouteRuleReviews" resultType="com.abc123.hsp.dto.PaymentRouteRuleReviewDTO">
+        SELECT request_no AS requestNo,
+               rule_code AS ruleCode,
+               base_version_no AS baseVersionNo,
+               operation_type AS operationType,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_route_rule_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findRouteRuleReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentRouteRuleReviewEntity">
+        SELECT request_no AS requestNo,
+               rule_code AS ruleCode,
+               base_version_no AS baseVersionNo,
+               operation_type AS operationType,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_route_rule_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="countPendingRouteRuleReviews" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_route_rule_review
+        WHERE rule_code = #{ruleCode}
+          AND review_status = 'PENDING_REVIEW'
+    </select>
+
     <select id="findProtocols" resultType="com.abc123.hsp.dto.PaymentProtocolConfigDTO">
         SELECT protocol_code AS protocolCode,
                protocol_name AS protocolName,
@@ -481,6 +542,63 @@
             NOW()
         )
     </insert>
+
+    <insert id="insertRouteRuleReview" parameterType="com.abc123.hsp.entity.PaymentRouteRuleReviewEntity">
+        INSERT INTO t_payment_route_rule_review (
+            request_no,
+            rule_code,
+            pending_rule_code,
+            base_version_no,
+            operation_type,
+            rule_name,
+            match_scene,
+            match_expression,
+            target_channel_code,
+            fallback_channel_code,
+            status,
+            status_type,
+            priority,
+            requester,
+            request_reason,
+            review_status,
+            review_status_type,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{requestNo},
+            #{ruleCode},
+            #{ruleCode},
+            #{baseVersionNo},
+            #{operationType},
+            #{ruleName},
+            #{matchScene},
+            #{matchExpression},
+            #{targetChannelCode},
+            #{fallbackChannelCode},
+            #{status},
+            #{statusType},
+            #{priority},
+            #{requester},
+            #{requestReason},
+            #{reviewStatus},
+            #{reviewStatusType},
+            NOW(),
+            NOW()
+        )
+    </insert>
+
+    <update id="completeRouteRuleReview">
+        UPDATE t_payment_route_rule_review
+        SET review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            pending_rule_code = NULL,
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
+    </update>
 
     <update id="updateProtocolStatus">
         UPDATE t_payment_protocol_config

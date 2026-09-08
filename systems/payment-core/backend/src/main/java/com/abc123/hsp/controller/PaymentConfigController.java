@@ -6,8 +6,10 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
-import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
@@ -77,25 +79,6 @@ public class PaymentConfigController {
     }
 
     /**
-     * 新增支付路由规则。
-     */
-    @PostMapping("/route-rules")
-    public ApiResponse<PaymentConfigOverviewDTO> createRouteRule(
-            @RequestBody PaymentRouteRuleUpsertRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.createRouteRule(request));
-    }
-
-    /**
-     * 编辑支付路由规则。
-     */
-    @PutMapping("/route-rules/{ruleCode}")
-    public ApiResponse<PaymentConfigOverviewDTO> updateRouteRule(
-            @PathVariable("ruleCode") String ruleCode,
-            @RequestBody PaymentRouteRuleUpsertRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.updateRouteRule(ruleCode, request));
-    }
-
-    /**
      * 校验支付路由表达式并模拟样例命中。
      */
     @PostMapping("/route-rules/validate")
@@ -110,6 +93,43 @@ public class PaymentConfigController {
     @GetMapping("/route-rules/conflicts")
     public ApiResponse<List<PaymentRouteRuleConflictDTO>> listRouteRuleConflicts() {
         return ApiResponse.success(paymentConfigService.listRouteRuleConflicts());
+    }
+
+    /**
+     * 查询支付路由规则复核申请。
+     */
+    @GetMapping("/route-rules/reviews")
+    public ApiResponse<List<PaymentRouteRuleReviewDTO>> listRouteRuleReviews() {
+        return ApiResponse.success(paymentConfigService.listRouteRuleReviews());
+    }
+
+    /**
+     * 提交支付路由规则候选快照进入复核。
+     */
+    @PostMapping("/route-rules/reviews")
+    public ApiResponse<List<PaymentRouteRuleReviewDTO>> submitRouteRuleReview(
+            @RequestBody PaymentRouteRuleReviewSubmitRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitRouteRuleReview(request));
+    }
+
+    /**
+     * 通过复核并发布候选快照。
+     */
+    @PostMapping("/route-rules/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentRouteRuleReviewDTO>> approveRouteRuleReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentRouteRuleReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveRouteRuleReview(requestNo, request));
+    }
+
+    /**
+     * 驳回复核申请。
+     */
+    @PostMapping("/route-rules/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentRouteRuleReviewDTO>> rejectRouteRuleReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentRouteRuleReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectRouteRuleReview(requestNo, request));
     }
 
     /**

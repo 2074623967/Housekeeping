@@ -889,10 +889,18 @@ export const paymentConfigApi = {
   buildExportUrl: (section = "ALL") => `/api/payment-config/export?section=${encodeURIComponent(section)}`,
   toggleChannel: (configCode, enabled) => postJson("/api/payment-config/channels/toggle", { configCode, enabled }),
   toggleRouteRule: (configCode, enabled) => postJson("/api/payment-config/route-rules/toggle", { configCode, enabled }),
-  createRouteRule: (payload) => postJson("/api/payment-config/route-rules", payload),
-  updateRouteRule: (ruleCode, payload) => request(`/api/payment-config/route-rules/${ruleCode}`, buildJsonRequestOptions("PUT", payload)),
   validateRouteRule: (payload) => postJson("/api/payment-config/route-rules/validate", payload),
   getRouteRuleConflicts: () => request("/api/payment-config/route-rules/conflicts"),
+  getRouteRuleReviews: () => request("/api/payment-config/route-rules/reviews"),
+  submitRouteRuleReview: (payload) => postJson("/api/payment-config/route-rules/reviews", payload),
+  approveRouteRuleReview: (requestNo, payload) => postJson(
+    `/api/payment-config/route-rules/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectRouteRuleReview: (requestNo, payload) => postJson(
+    `/api/payment-config/route-rules/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   getRouteRuleVersions: (ruleCode) => request(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/versions`),
   rollbackRouteRule: (ruleCode, payload) => postJson(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/rollback`, payload),
   createProtocol: (payload) => postJson("/api/payment-config/protocols", payload),
