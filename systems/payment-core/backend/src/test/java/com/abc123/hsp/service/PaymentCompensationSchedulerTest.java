@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,6 +16,27 @@ class PaymentCompensationSchedulerTest {
 
     @Mock
     private PaymentTaskCenterService paymentTaskCenterService;
+
+    @Test
+    void shouldQueryPendingPaymentsWhenCompensationEnabled() {
+        new PaymentCompensationScheduler(paymentTaskCenterService, true).queryPendingPayments();
+
+        verify(paymentTaskCenterService).runAutoPendingPaymentQueries();
+    }
+
+    @Test
+    void shouldSkipPendingPaymentQueryWhenCompensationDisabled() {
+        new PaymentCompensationScheduler(paymentTaskCenterService, false).queryPendingPayments();
+
+        verify(paymentTaskCenterService, never()).runAutoPendingPaymentQueries();
+    }
+
+    @Test
+    void shouldRequireGatewayAndCompensationSwitchesForPendingQueries() {
+        new PaymentCompensationScheduler(paymentTaskCenterService, true, false).queryPendingPayments();
+
+        verify(paymentTaskCenterService, never()).runAutoPendingPaymentQueries();
+    }
 
     @Test
     void shouldDelegateToAutoRepublishFailedEvents() {

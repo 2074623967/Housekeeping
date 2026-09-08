@@ -6,6 +6,8 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
+import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
@@ -18,11 +20,13 @@ import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
+import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +41,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
     private static final String TASK_STATUS_WARN = "WARNING";
     private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
+    private static final String TASK_CODE_PENDING_QUERY = "PAYMENT_PENDING_QUERY";
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
@@ -52,6 +57,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
     private final PaymentEventDispatchService paymentEventDispatchService;
+    private final PaymentService paymentService;
+    private final int pendingQueryMinAgeSeconds;
+    private final int pendingQueryRetryIntervalSeconds;
+    private final int pendingQueryBatchSize;
 
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -60,7 +69,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         RefundMapper refundMapper,
                                         PaymentConfigService paymentConfigService,
                                         PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
-                                        PaymentEventDispatchService paymentEventDispatchService) {
+                                        PaymentEventDispatchService paymentEventDispatchService,
+                                        PaymentService paymentService,
+                                        @Value("${payment.channel-query.compensation.min-age-seconds:30}")
+                                                int pendingQueryMinAgeSeconds,
+                                        @Value("${payment.channel-query.compensation.retry-interval-seconds:60}")
+                                                int pendingQueryRetryIntervalSeconds,
+                                        @Value("${payment.channel-query.compensation.batch-size:100}")
+                                                int pendingQueryBatchSize) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
@@ -68,6 +84,30 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.paymentConfigService = paymentConfigService;
         this.paymentIssueAlertDeliveryService = paymentIssueAlertDeliveryService;
         this.paymentEventDispatchService = paymentEventDispatchService;
+        this.paymentService = paymentService;
+        this.pendingQueryMinAgeSeconds = Math.max(pendingQueryMinAgeSeconds, 0);
+        this.pendingQueryRetryIntervalSeconds = Math.max(pendingQueryRetryIntervalSeconds, 1);
+        this.pendingQueryBatchSize = Math.max(pendingQueryBatchSize, 1);
+    }
+
+    PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                 PaymentExpiryTaskService paymentExpiryTaskService,
+                                 PaymentEventMapper paymentEventMapper,
+                                 RefundMapper refundMapper,
+                                 PaymentConfigService paymentConfigService,
+                                 PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
+                                 PaymentEventDispatchService paymentEventDispatchService) {
+        this(paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService,
+                paymentEventDispatchService,
+                null,
+                30,
+                60,
+                100);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -157,6 +197,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     @Override
                     public PaymentTaskActionResultDTO run() {
                         return runCloseExpiredPaymentsByMode(RUN_MODE_AUTO, "payment-expiry-scheduler", "自动调度");
+                    }
+                }
+        );
+    }
+
+    @Override
+    public PaymentTaskActionResultDTO runPendingPaymentQueries() {
+        return runPendingPaymentQueriesByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    public PaymentTaskActionResultDTO runAutoPendingPaymentQueries() {
+        return runAutoTaskWithLease(
+                TASK_CODE_PENDING_QUERY,
+                "待回调支付主动查单",
+                "payment-query-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runPendingPaymentQueriesByMode(RUN_MODE_AUTO, "payment-query-scheduler");
                     }
                 }
         );
@@ -431,6 +491,54 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         );
     }
 
+    private PaymentTaskActionResultDTO runPendingPaymentQueriesByMode(String runMode, String triggeredBy) {
+        if (paymentService == null) {
+            throw new IllegalStateException("payment service is required for pending payment queries");
+        }
+        List<String> paymentOrderIds = paymentTaskCenterMapper.findPendingPaymentOrderIdsForQuery(
+                pendingQueryMinAgeSeconds,
+                pendingQueryRetryIntervalSeconds,
+                pendingQueryBatchSize);
+        int successCount = 0;
+        int warningCount = 0;
+        int failCount = 0;
+        List<String> failedPaymentOrderIds = new ArrayList<>();
+        for (String paymentOrderId : paymentOrderIds) {
+            PaymentQueryRequestDTO request = new PaymentQueryRequestDTO();
+            request.setPaymentOrderId(paymentOrderId);
+            try {
+                PaymentDetailDTO result = paymentService.query(request);
+                if (result != null && "SUCCESS".equalsIgnoreCase(result.getStatus())) {
+                    successCount++;
+                } else {
+                    warningCount++;
+                }
+            } catch (RuntimeException exception) {
+                failCount++;
+                if (failedPaymentOrderIds.size() < 3) {
+                    failedPaymentOrderIds.add(paymentOrderId);
+                }
+            }
+        }
+        String failedPaymentHint = failedPaymentOrderIds.isEmpty()
+                ? ""
+                : "，失败支付单：" + String.join("/", failedPaymentOrderIds);
+        return buildAndRecordResult(
+                TASK_CODE_PENDING_QUERY,
+                "待回调支付主动查单",
+                runMode,
+                triggeredBy,
+                paymentOrderIds.size(),
+                successCount,
+                warningCount,
+                failCount,
+                paymentOrderIds.isEmpty()
+                        ? "当前没有达到补查条件的待回调支付单。"
+                        : String.format("已补查 %d 笔待回调支付单，成功收口 %d 笔，仍待回调 %d 笔，查询失败 %d 笔%s。",
+                        paymentOrderIds.size(), successCount, warningCount, failCount, failedPaymentHint)
+        );
+    }
+
     private PaymentTaskActionResultDTO runRetryFailedRefundsByMode(String runMode, String triggeredBy) {
         List<String> failedRefundOrderIds = refundMapper.findFailedRefundOrderIds();
         int successCount = 0;
@@ -688,6 +796,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             }
             return processedCount > 0 ? "已完成超时收口，继续观察新进入队列的支付单" : "暂无超时支付待处理";
         }
+        if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先核对 gateway-access 可用性、渠道凭证和查单返回码，再补跑主动查单任务";
+            }
+            if (warningCount > 0) {
+                return "仍有渠道处理中支付单，继续等待回调并按重试间隔补查，过期后进入关单任务";
+            }
+            return processedCount > 0 ? "已完成待回调支付收口，继续观察渠道回调与下游事件" : "暂无待回调支付需要补查";
+        }
         if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
             if (failCount > 0) {
                 return "优先核对出站事件主题、下游订阅状态与重发表，必要时升级账务/清分值班";
@@ -724,6 +841,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private String resolveRecommendedRoute(String taskCode) {
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return "/payment-task-center";
+        }
+        if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
+            return "/payments";
         }
         if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
             return "/payment-events";
@@ -789,6 +909,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return failCount >= 5 || processedCount >= 30;
         }
+        if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
+            return failCount >= 3;
+        }
         return failCount >= 1;
     }
 
@@ -816,6 +939,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return processedCount >= 10;
+        }
+        if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
+            return warningCount > 0 || failCount > 0;
         }
         if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
             return false;

@@ -37,6 +37,16 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runAutoCloseExpiredPayments();
 
     /**
+     * 手动补查等待回调的支付单。
+     */
+    PaymentTaskActionResultDTO runPendingPaymentQueries();
+
+    /**
+     * 自动补查等待回调的支付单。
+     */
+    PaymentTaskActionResultDTO runAutoPendingPaymentQueries();
+
+    /**
      * 手动执行失败事件重发。
      */
     PaymentTaskActionResultDTO runRepublishFailedEvents();

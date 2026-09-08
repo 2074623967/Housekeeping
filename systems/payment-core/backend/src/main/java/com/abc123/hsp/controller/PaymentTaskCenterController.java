@@ -89,6 +89,14 @@ public class PaymentTaskCenterController {
     }
 
     /**
+     * 手动执行待回调支付单主动查单补偿。
+     */
+    @PostMapping("/query-pending-payments")
+    public ApiResponse<PaymentTaskActionResultDTO> runPendingPaymentQueries() {
+        return ApiResponse.success(paymentTaskCenterService.runPendingPaymentQueries());
+    }
+
+    /**
      * 手动执行失败事件重发。
      */
     @PostMapping("/republish-failed-events")

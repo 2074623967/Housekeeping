@@ -112,7 +112,7 @@ onMounted(loadOverview);
       <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
+        <p>统一查看待回调查单、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -171,7 +171,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.9 已按任务类型、失败笔数和处理规模统一严重等级，并将异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.11 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单、异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -190,6 +190,12 @@ onMounted(loadOverview);
                   <td>失败 ≥ 5 或单次处理量 ≥ 30</td>
                   <td>失败 1-4 或单次处理量 10-29</td>
                   <td>无失败且处理量 &lt; 10</td>
+                </tr>
+                <tr>
+                  <td>待回调主动查单</td>
+                  <td>查询失败 ≥ 3</td>
+                  <td>存在查询失败或渠道仍处理中</td>
+                  <td>全部成功收口或无待补查支付单</td>
                 </tr>
                 <tr>
                   <td>失败事件重发</td>
@@ -237,7 +243,7 @@ onMounted(loadOverview);
             <div class="section-title">
               <div>
               <h3>核心自动化任务</h3>
-              <p class="meta">本页触发的是正式版 V1.9 的统一操作；超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均已纳入自动调度与人工补偿双通道</p>
+              <p class="meta">本页触发统一任务操作；待回调主动查单、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均已纳入自动调度与人工补偿双通道</p>
             </div>
             </div>
 
@@ -250,6 +256,18 @@ onMounted(loadOverview);
                 @click="runTask('PAYMENT_EXPIRE_CLOSE', '支付超时关单', paymentTaskCenterApi.runCloseExpiredPayments)"
               >
                 {{ activeTaskCode === "PAYMENT_EXPIRE_CLOSE" ? "执行中..." : "执行超时关单" }}
+              </button>
+            </div>
+
+            <div class="sub-panel">
+              <h3>待回调主动查单</h3>
+              <p>批量补查达到等待阈值且尚未过期的支付单；渠道确认成功时自动收口，处理中或失败结果进入任务日志继续跟进。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'PAYMENT_PENDING_QUERY'"
+                @click="runTask('PAYMENT_PENDING_QUERY', '待回调主动查单', paymentTaskCenterApi.runPendingPaymentQueries)"
+              >
+                {{ activeTaskCode === "PAYMENT_PENDING_QUERY" ? "执行中..." : "执行主动查单" }}
               </button>
             </div>
 
@@ -379,17 +397,17 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
-                  <td>V1.9</td>
+                  <td>V1.11</td>
                   <td>已具备 outbox、本地 IM/SMS/EMAIL 派发骨架与状态回写，后续补真实通知网关</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
-                  <td>V1.9</td>
+                  <td>V1.11</td>
                   <td>已支持供应商受理状态回查与送达状态回写，后续补真实供应商回执接口</td>
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.9</td>
+                  <td>V1.11</td>
                   <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>

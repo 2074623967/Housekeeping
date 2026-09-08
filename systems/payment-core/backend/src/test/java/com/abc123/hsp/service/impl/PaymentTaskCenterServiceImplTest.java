@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
@@ -18,6 +19,8 @@ import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.PaymentService;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Assertions;
@@ -45,6 +48,60 @@ class PaymentTaskCenterServiceImplTest {
     private PaymentConfigService paymentConfigService;
     @Mock
     private PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
+    @Mock
+    private PaymentEventDispatchService paymentEventDispatchService;
+    @Mock
+    private PaymentService paymentService;
+
+    @Test
+    void shouldQueryPendingPaymentsAndIsolateSinglePaymentFailure() {
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForQuery(30, 60, 100))
+                .thenReturn(Arrays.asList("PAY-QUERY-1", "PAY-QUERY-2", "PAY-QUERY-3"));
+        when(paymentService.query(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    com.abc123.hsp.dto.PaymentQueryRequestDTO request = invocation.getArgument(0);
+                    if ("PAY-QUERY-3".equals(request.getPaymentOrderId())) {
+                        throw new IllegalStateException("gateway unavailable");
+                    }
+                    PaymentDetailDTO detail = new PaymentDetailDTO();
+                    detail.setStatus("PAY-QUERY-1".equals(request.getPaymentOrderId())
+                            ? "SUCCESS"
+                            : "WAIT_CALLBACK");
+                    return detail;
+                });
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runPendingPaymentQueries();
+
+        Assertions.assertEquals(3, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_PENDING_QUERY".equals(entity.getTaskCode())
+                        && "P2".equals(entity.getSeverityLevel())
+                        && "/payments".equals(entity.getRecommendedRoute())
+                        && entity.getSummaryComment().contains("查询失败 1 笔")
+                        && entity.getSummaryComment().contains("PAY-QUERY-3")
+        ));
+    }
+
+    @Test
+    void shouldUseLeaseForAutomaticPendingPaymentQueries() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                "PAYMENT_PENDING_QUERY", "payment-query-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForQuery(30, 60, 100))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        buildQueryTaskCenterService().runAutoPendingPaymentQueries();
+
+        verify(paymentTaskCenterMapper).initTaskLease("PAYMENT_PENDING_QUERY");
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                "PAYMENT_PENDING_QUERY", "payment-query-scheduler");
+    }
 
     @Test
     void shouldRunCloseExpiredPayments() {
@@ -559,5 +616,20 @@ class PaymentTaskCenterServiceImplTest {
             builder.append(value);
         }
         return builder.toString();
+    }
+
+    private PaymentTaskCenterServiceImpl buildQueryTaskCenterService() {
+        return new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventMapper,
+                refundMapper,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService,
+                paymentEventDispatchService,
+                paymentService,
+                30,
+                60,
+                100);
     }
 }

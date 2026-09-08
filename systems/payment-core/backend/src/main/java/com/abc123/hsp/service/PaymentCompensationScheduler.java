@@ -1,5 +1,7 @@
 package com.abc123.hsp.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,9 +15,35 @@ import org.springframework.stereotype.Component;
 public class PaymentCompensationScheduler {
 
     private final PaymentTaskCenterService paymentTaskCenterService;
+    private final boolean pendingPaymentQueryEnabled;
 
     public PaymentCompensationScheduler(PaymentTaskCenterService paymentTaskCenterService) {
+        this(paymentTaskCenterService, false);
+    }
+
+    @Autowired
+    public PaymentCompensationScheduler(
+            PaymentTaskCenterService paymentTaskCenterService,
+            @Value("${payment.channel-query.compensation.enabled:false}") boolean pendingPaymentQueryEnabled,
+            @Value("${payment.channel-query.gateway-access.enabled:false}") boolean gatewayQueryEnabled) {
+        this(paymentTaskCenterService, pendingPaymentQueryEnabled && gatewayQueryEnabled);
+    }
+
+    PaymentCompensationScheduler(
+            PaymentTaskCenterService paymentTaskCenterService,
+            boolean pendingPaymentQueryEnabled) {
         this.paymentTaskCenterService = paymentTaskCenterService;
+        this.pendingPaymentQueryEnabled = pendingPaymentQueryEnabled;
+    }
+
+    /**
+     * 定期主动查询等待回调的支付单，补偿渠道回调丢失场景。
+     */
+    @Scheduled(fixedDelayString = "${payment.channel-query.compensation.fixed-delay-ms:60000}")
+    public void queryPendingPayments() {
+        if (pendingPaymentQueryEnabled) {
+            paymentTaskCenterService.runAutoPendingPaymentQueries();
+        }
     }
 
     /**

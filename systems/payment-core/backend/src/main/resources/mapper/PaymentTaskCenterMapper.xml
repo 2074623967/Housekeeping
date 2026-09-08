@@ -351,6 +351,25 @@
         </where>
     </select>
 
+    <select id="findPendingPaymentOrderIdsForQuery" resultType="string">
+        SELECT p.payment_order_id
+        FROM t_payment_order p
+                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        WHERE p.status = 'WAIT_CALLBACK'
+          AND pr.expires_at &gt; NOW()
+          AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_notify_log n
+            WHERE n.payment_order_id = p.payment_order_id
+              AND n.notify_status = '已查单'
+              AND TIMESTAMPDIFF(SECOND, n.created_at, NOW()) &lt; #{retryIntervalSeconds}
+          )
+        GROUP BY p.payment_order_id, p.created_at
+        ORDER BY p.created_at
+        LIMIT #{batchSize}
+    </select>
+
     <insert id="insertTaskRunLog" parameterType="com.abc123.hsp.entity.PaymentTaskRunLogEntity">
         INSERT INTO t_payment_task_run_log (
             task_log_no,

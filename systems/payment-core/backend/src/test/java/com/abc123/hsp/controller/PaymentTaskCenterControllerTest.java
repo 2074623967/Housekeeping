@@ -72,6 +72,7 @@ class PaymentTaskCenterControllerTest {
         resultDTO.setTaskCode("PAYMENT_EXPIRE_CLOSE");
         resultDTO.setProcessedCount(4);
         when(paymentTaskCenterService.runCloseExpiredPayments()).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runPendingPaymentQueries()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runRepublishFailedEvents()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runRetryFailedRefunds()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runEscalateOverdueIssues()).thenReturn(resultDTO);
@@ -80,6 +81,7 @@ class PaymentTaskCenterControllerTest {
         when(paymentTaskCenterService.runControlPolicySelfChecks()).thenReturn(resultDTO);
 
         assertEquals(4, controller.runCloseExpiredPayments().getData().getProcessedCount());
+        assertEquals(4, controller.runPendingPaymentQueries().getData().getProcessedCount());
         assertEquals(4, controller.runRepublishFailedEvents().getData().getProcessedCount());
         assertEquals(4, controller.runRetryFailedRefunds().getData().getProcessedCount());
         assertEquals(4, controller.runEscalateOverdueIssues().getData().getProcessedCount());
@@ -88,6 +90,7 @@ class PaymentTaskCenterControllerTest {
         assertEquals(4, controller.runControlPolicySelfChecks().getData().getProcessedCount());
 
         verify(paymentTaskCenterService).runCloseExpiredPayments();
+        verify(paymentTaskCenterService).runPendingPaymentQueries();
         verify(paymentTaskCenterService).runRepublishFailedEvents();
         verify(paymentTaskCenterService).runRetryFailedRefunds();
         verify(paymentTaskCenterService).runEscalateOverdueIssues();

@@ -67,6 +67,13 @@ payment:
       query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://127.0.0.1:18150/api/gateway/payment-orders/query}
       supported-channels: ${HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
       timeout-ms: ${HSP_PAYMENT_CHANNEL_QUERY_TIMEOUT_MS:2000}
+    compensation:
+      # 仅在真实 gateway-access 查单可用时开启，避免本地模拟结果产生无意义轮询日志。
+      enabled: ${HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED:false}
+      fixed-delay-ms: ${HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_DELAY_MS:60000}
+      min-age-seconds: ${HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_MIN_AGE_SECONDS:30}
+      retry-interval-seconds: ${HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_INTERVAL_SECONDS:60}
+      batch-size: ${HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_BATCH_SIZE:100}
   amqp:
     payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
     payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}

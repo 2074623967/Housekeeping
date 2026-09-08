@@ -193,6 +193,7 @@ export const paymentTaskCenterApi = {
     return `/api/payment-task-center/task-runs/export?${params.toString()}`;
   },
   runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
+  runPendingPaymentQueries: () => postJson("/api/payment-task-center/query-pending-payments", {}),
   runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
   runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {}),
   runEscalateOverdueIssues: () => postJson("/api/payment-task-center/escalate-overdue-issues", {}),
