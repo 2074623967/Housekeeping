@@ -4738,3 +4738,31 @@
 2. 当前并发控制范围为单规则行；跨规则优先级冲突检测、规则集合一致性校验、双人复核与灰度发布仍未落地。
 3. 版本快照和本地回滚测试不等于生产审批、真实渠道验证或发布演练；后端未启动，因此本轮没有形成运行态 API 与真实流量证据。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 148. 2026-09-08 路由规则冲突检测 V1.6 验证
+
+### 148.1 本轮补强
+
+1. 新增 `GET /api/payment-config/route-rules/conflicts`，只扫描当前启用规则并返回无效表达式、确定路由分歧、重复、遮蔽和同优先级待复核项，不修改规则或运行态路由。
+2. 精确同表达式检测复用求值器规范化能力；匹配场景按 `/` 分隔的 OR 集合求交与判断包含关系，并统一 `mobile/mobile_web/H5`、`web/pc_web/PC`、`app_native/APP` 场景别名。
+3. 同表达式不同优先级按场景包含关系区分 `SHADOWED_RULE` 与 `PARTIAL_SHADOW`，避免把仍可在其他场景生效的规则误报为永不生效。
+4. 同场景同优先级但表达式不同只返回 `PRIORITY_COLLISION / REVIEW`，不伪装成表达式已被证明冲突；当前静态检测不覆盖任意不同布尔表达式的完整 SAT 或可满足性证明。
+5. 管理端增加“检测冲突”按钮及加载、空、失败和结构化结果状态，配置中心标识升级为 V1.6；同步接口、设计、测试、需求、差距和页面交互文档，新增 `PAY-TC-029`。
+
+### 148.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 路由冲突定向测试 | `mvn -Dtest=PaymentRouteExpressionEvaluatorTest,PaymentConfigServiceImplTest,PaymentConfigControllerTest test` | 通过 | `52` 个用例通过，覆盖表达式规范化、七类检测结果、场景别名与包含关系、停用规则排除和控制器入口 |
+| 后端全量测试 | `mvn test` | 通过 | `331` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-route-conflict-v1 --emptyOutDir` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 浏览器静态检查 | `http://127.0.0.1:4178/payment-config` | 通过 | V1.6 标识、“检测冲突”入口和 API 失败提示正常渲染；`462px` 窄视口页面宽度未溢出且控件无交叠；后端 `18081` 未启动，冲突接口未做运行态联调 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码和文档无空白符错误，Mapper XML 结构合法 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `test -> master = 是`、`release/* = 否`；退出码 `2` 为预期 release 阻断，候选说明正式化、正式签字、现场核验和稳定观察结束结论仍未形成 |
+
+### 148.3 当前判断
+
+1. 路由规则已具备不改变运行态的结构化冲突排查入口，能够识别确定性配置风险，并把无法静态证明的同优先级表达式关系明确留给人工复核。
+2. 当前检测只覆盖启用规则、精确同表达式和场景集合关系，不等同于规则集合的完整语义证明，也不会自动阻断保存或发布。
+3. 后端未启动，本轮没有形成运行态 API、真实支付流量或真实网关探活证据；静态页面验证不计为接口联调完成。
+4. 本轮没有新增双人复核、正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。

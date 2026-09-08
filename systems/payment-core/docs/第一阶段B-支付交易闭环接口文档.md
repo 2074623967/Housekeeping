@@ -65,6 +65,7 @@
 | `/api/payment-config/route-rules` | `POST` | 新增支付路由规则 |
 | `/api/payment-config/route-rules/{ruleCode}` | `PUT` | 编辑支付路由规则 |
 | `/api/payment-config/route-rules/validate` | `POST` | 校验路由表达式并模拟样例命中 |
+| `/api/payment-config/route-rules/conflicts` | `GET` | 检测当前启用路由规则的冲突、重复、遮蔽和待复核项 |
 | `/api/payment-config/route-rules/{ruleCode}/versions` | `GET` | 查询路由规则历史版本 |
 | `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 恢复指定历史版本并生成新版本 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
@@ -1092,6 +1093,39 @@ POST /api/payment-config/control-policies/self-check
 3. 更新、启停和回滚会锁定当前规则行，以同一规则内串行版本号避免并发覆盖。
 4. 回滚不会删除或改写历史版本，而是恢复配置后追加一条 `ROLLBACK` 快照，并用 `sourceVersionNo` 指向来源版本。
 5. `changeReason` 最长 `255` 个字符；版本记录没有审批人字段，不应被解释为正式审批或生产发布证据。
+
+### 12.5 路由规则冲突检测
+
+接口：`GET /api/payment-config/route-rules/conflicts`
+
+返回示例：
+
+```json
+[
+  {
+    "conflictType": "ROUTE_DIVERGENCE",
+    "severity": "BLOCKER",
+    "severityType": "danger",
+    "ruleCode": "RULE_HOME_H5_A",
+    "ruleName": "家政 H5 路由 A",
+    "conflictingRuleCode": "RULE_HOME_H5_B",
+    "conflictingRuleName": "家政 H5 路由 B",
+    "priority": 10,
+    "conflictingPriority": 10,
+    "overlappingScene": "h5",
+    "message": "同场景、同优先级和同表达式指向不同渠道，运行结果依赖数据库记录顺序"
+  }
+]
+```
+
+检测口径：
+
+1. 只扫描当前状态为 `ENABLED` 的规则，不改变规则状态、不写入版本快照，也不自动阻断保存或发布。
+2. 表达式先做空白与关键字大小写规范化，仅对规范化后完全相同的表达式判断重复、路由分歧和优先级遮蔽。
+3. 匹配场景以 `/` 分隔并按 OR 关系求交集与包含关系；`mobile / mobile_web / H5` 归一为 `h5`，`web / pc_web / PC` 归一为 `pc`，`app_native / APP` 归一为 `app`。空场景按全部场景处理。
+4. `INVALID_EXPRESSION / ROUTE_DIVERGENCE` 为 `BLOCKER`；`DUPLICATE_RULE / OVERLAPPING_DUPLICATE / SHADOWED_RULE / PARTIAL_SHADOW` 为 `WARNING`。
+5. 场景有交集且优先级相同、但表达式不同的规则返回 `PRIORITY_COLLISION / REVIEW`，只表示需要人工确认表达式是否互斥，不等同于已证明冲突。
+6. 当前实现是结构化静态检测，不覆盖任意不同布尔表达式之间的完整语义重叠或可满足性证明；检测结果也不代表双人复核、灰度审批或真实渠道验证已经完成。
 
 ## 13. 支付监控分析接口
 
