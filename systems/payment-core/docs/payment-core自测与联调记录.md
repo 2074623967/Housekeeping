@@ -4885,3 +4885,33 @@
 2. 当前回滚通过行锁和基线版本校验降低并发误覆盖风险，但新增、编辑、启停与回滚仍直接改变运行态，尚未接入 maker-checker 或可信权限。
 3. 电子签章服务商仍只是配置字段，没有签署主体、签章请求、回执、证据文件、生效时间或法务审批事实；本轮不形成协议正式签署结论。
 4. 后端未启动且锁屏阻断页面视觉检查，本轮不形成运行态 API 或完整视觉验收证据；`master -> release/*` 仍不放行。
+
+## 153. 2026-09-09 支付协议 maker-checker V1.11 验证
+
+### 153.1 本轮补强
+
+1. 新增 `t_payment_protocol_review`，保存协议完整候选、操作类型、基线版本、回滚来源版本、申请人与复核记录；`pending_protocol_code` 唯一占位保证同一协议最多一条待复核申请，申请完成后释放占位。
+2. 新增、编辑、启停和回滚统一提交 `CREATE / UPDATE / STATUS_CHANGE / ROLLBACK` 候选；删除协议直接新增、编辑 HTTP 入口，提交和驳回均不修改 `t_payment_protocol_config`。
+3. 新建候选基线为空；存量候选提交时锁定协议并保存最新 `baseVersionNo`；回滚候选保存 `sourceVersionNo`。批准时重新锁定申请与协议并复验基线，陈旧申请不覆盖新版本。
+4. 申请人与复核人必须不同；批准后才发布运行态并追加 `REVIEW_RELEASE / REVIEW_STATUS_CHANGE / REVIEW_ROLLBACK` 版本。两者身份可信度固定为 `SELF_DECLARED`，不形成可信审批、正式签字或法律签署事实。
+5. 管理端升级为 V1.11，补齐协议申请人、独立复核人和意见、复核申请列表及批准/驳回操作；提交后保持运行态不变，批准后刷新运行态及已打开版本历史。
+6. 同步数据库迁移说明、接口、设计、测试、需求、差距和页面交互文档，新增 `PAY-TC-034`。
+
+### 153.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付协议复核定向测试 | `mvn -Dtest=PaymentConfigServiceImplTest,PaymentProtocolConfigServiceImplTest,PaymentConfigControllerTest,PaymentConfigProtocolVersionMapperIntegrationTest test` | 通过 | `74` 个用例通过，覆盖提交不改运行态、新协议批准发布、启停/回滚候选、异人批准、同人拒绝、驳回、陈旧基线、存量基线、重复待办，以及 Mapper 行锁、完成和占位释放 |
+| 后端全量测试 | `mvn test` | 通过 | `364` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 管理端视觉检查 | `http://127.0.0.1:4182/payment-config` | 未执行 | Mac 持续锁屏，无法完成 V1.11 的窄视口与桌面视口检查，不复用旧版本视觉结论 |
+| 运行态 API | `http://127.0.0.1:18081/api/payment-config` | 未执行 | 后端未启动，不记录协议复核接口的运行态联调通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码、迁移和文档无空白符错误，Mapper XML 结构合法 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `test -> master = 是`、`release/* = 否`；退出码 `2` 为预期 release 阻断，候选说明正式化、正式签字、现场核验和稳定观察结束四项事实仍未形成 |
+
+### 153.3 当前判断
+
+1. 支付协议四类运行态变更已统一受候选复核约束，管理端和控制器不存在已知的协议新增、编辑、启停或回滚直接发布入口。
+2. 提交与驳回不改运行态；异人批准且基线有效时才发布并追加不可变版本。同协议唯一待办和完成后释放占位已由 Mapper 集成测试覆盖。
+3. 当前申请人与复核人仍是自声明字符串，异人约束不能证明真实身份、权限、法务审批或不可抵赖签字；电子签章服务商仍只是配置字段。
+4. 后端未启动且锁屏阻断页面视觉检查，本轮不形成运行态 API、法律签署或完整视觉验收证据；`master -> release/*` 仍不放行。

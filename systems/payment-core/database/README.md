@@ -17,6 +17,7 @@
 - `migrations/2026-09-09-add-payment-route-rule-rollout.sql`：为运行规则、版本和复核候选补齐稳定百分比灰度字段，存量数据默认保持 `100% / stable-v1`
 - `migrations/2026-09-09-add-route-rule-review-source-version.sql`：为路由规则回滚候选记录目标历史版本号，须在复核表创建后执行
 - `migrations/2026-09-09-add-payment-protocol-version.sql`：幂等创建支付协议不可变版本表，并为尚无版本记录的存量协议补录 V1 基线
+- `migrations/2026-09-09-add-payment-protocol-review.sql`：幂等创建支付协议复核申请表，以唯一待办占位约束同一协议最多一条待复核申请
 
 初始化方式：
 
@@ -30,9 +31,10 @@
 2. 若原始运行库存在历史递归升级告警，再执行 `migrations/2026-07-31-ack-legacy-recursive-issue-alerts.sql`
 3. 若运行库尚未建立路由规则版本治理能力，执行 `migrations/2026-09-08-add-payment-route-rule-version.sql`；脚本可重复执行，只为尚无任何版本记录的存量规则补录 V1 `BASELINE`
 4. 执行 `migrations/2026-09-09-add-payment-protocol-version.sql`；脚本可重复执行，只为尚无任何版本记录的存量协议补录 V1 `BASELINE`
-5. 在路由规则版本和复核表均已建立后，执行 `migrations/2026-09-09-add-payment-route-rule-rollout.sql`；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
-6. 执行 `migrations/2026-09-09-add-route-rule-review-source-version.sql`，为回滚候选补齐来源版本；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
-7. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+5. 协议版本表建立后执行 `migrations/2026-09-09-add-payment-protocol-review.sql`；脚本可重复执行，建立协议候选复核与唯一待办占位
+6. 在路由规则版本和复核表均已建立后，执行 `migrations/2026-09-09-add-payment-route-rule-rollout.sql`；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
+7. 执行 `migrations/2026-09-09-add-route-rule-review-source-version.sql`，为回滚候选补齐来源版本；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
+8. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -41,8 +43,10 @@
    - 三张路由规则表的 `rollout_percentage / rollout_salt` 均非空，存量规则为 `100 / stable-v1`
    - `t_payment_route_rule_review.source_version_no` 已存在，非回滚申请可为空
    - `SHOW TABLES LIKE 't_payment_protocol_version'`
+   - `SHOW TABLES LIKE 't_payment_protocol_review'`
    - `SELECT COUNT(*) FROM t_payment_protocol_config config WHERE NOT EXISTS (SELECT 1 FROM t_payment_protocol_version version WHERE version.protocol_code = config.protocol_code)` 返回 `0`
    - `SELECT protocol_code, version_no, COUNT(*) FROM t_payment_protocol_version GROUP BY protocol_code, version_no HAVING COUNT(*) > 1` 返回空集
+   - `SELECT protocol_code, COUNT(*) FROM t_payment_protocol_review WHERE review_status = 'PENDING_REVIEW' GROUP BY protocol_code HAVING COUNT(*) > 1` 返回空集
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 
 后续继续补强：

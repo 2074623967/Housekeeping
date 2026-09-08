@@ -71,11 +71,13 @@
 | `/api/payment-config/route-rules/{ruleCode}/versions` | `GET` | 查询路由规则历史版本 |
 | `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 提交路由规则启停候选，运行态不变 |
-| `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
-| `/api/payment-config/protocols` | `POST` | 新增支付协议并生成首个不可变版本 |
-| `/api/payment-config/protocols/{protocolCode}` | `PUT` | 编辑支付协议并追加不可变版本 |
+| `/api/payment-config/protocols/toggle` | `POST` | 提交支付协议启停候选，运行态不变 |
+| `/api/payment-config/protocols/reviews` | `GET` | 查询支付协议复核申请 |
+| `/api/payment-config/protocols/reviews` | `POST` | 提交新增或编辑候选快照，运行态不变 |
+| `/api/payment-config/protocols/reviews/{requestNo}/approve` | `POST` | 异人复核通过并发布候选快照 |
+| `/api/payment-config/protocols/reviews/{requestNo}/reject` | `POST` | 异人驳回候选快照，运行态不变 |
 | `/api/payment-config/protocols/{protocolCode}/versions` | `GET` | 查询支付协议历史版本 |
-| `/api/payment-config/protocols/{protocolCode}/rollback` | `POST` | 校验当前版本后回滚协议并追加新版本 |
+| `/api/payment-config/protocols/{protocolCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
 | `/api/payment-config/control-policies/toggle` | `POST` | 启停支付控制策略 |
@@ -985,9 +987,12 @@ POST /api/payment-config/protocols/toggle
 {
   "protocolCode": "PROTO_HOUSEKEEPING_SIGN_V1",
   "enabled": false,
+  "requester": "maker-a",
   "changeReason": "停止旧模板继续签约"
 }
 ```
+
+该接口只创建 `STATUS_CHANGE` 待复核候选，不直接更新运行态。协议不存在、状态未变化、申请人或原因为空，以及同协议已有待复核申请时均拒绝。
 
 启停渠道返回码映射：
 
@@ -1027,7 +1032,7 @@ POST /api/payment-config/control-policies/self-check
 1. `enabled=true` 时状态更新为 `ENABLED`。
 2. `enabled=false` 时状态更新为 `DISABLED`。
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
-3. 协议配置当前已支持运营查看、启停、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护和不可变版本治理；新增、编辑、启停与回滚都要求变更原因并追加快照。当前仍是直接运行态变更，不等于 maker-checker、正式审批或法律签署，后续继续补可信身份审批与电子签章联调能力。
+3. 协议配置当前已支持运营查看、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护、不可变版本和自声明 maker-checker；新增、编辑、启停与回滚都先提交完整候选，批准前运行态不变。该能力不等于可信审批、正式法律签署或电子签章联调。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
 5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示；后续继续补返回码批量导入、渠道差异比对和真正自动归档动作。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
@@ -1199,26 +1204,70 @@ POST /api/payment-config/control-policies/self-check
 4. 相同规则编码、盐值和支付单号的桶位稳定。调整比例只改变阈值，修改盐值会重排后续支付单桶位，必须作为完整候选快照复核并进入版本历史。
 5. 本能力是代码内路由执行语义，不自动完成生产发布审批、流量观测、渠道联调或回滚决策。
 
-### 12.8 支付协议版本与回滚
+### 12.8 支付协议版本与 maker-checker 复核
+
+新增和编辑候选：`POST /api/payment-config/protocols/reviews`
+
+```json
+{
+  "requester": "maker-a",
+  "candidate": {
+    "protocolCode": "PROTO_HOUSEKEEPING_SIGN_V2",
+    "protocolName": "家政服务签约协议",
+    "protocolType": "SERVICE_SIGN",
+    "protocolTypeName": "服务签约协议",
+    "templateCode": "TPL_HOME_SIGN",
+    "templateName": "家政签约模板",
+    "templateVersion": "2.0",
+    "signMode": "ONLINE",
+    "signElementSpec": "姓名、手机号、订单号",
+    "eSignatureProvider": "DEMO_ESIGN",
+    "sceneScope": "HOME_CLEAN",
+    "channelScope": "ALL",
+    "merchantAckRequired": "YES",
+    "riskControlTag": "STANDARD",
+    "protocolBody": "协议正文候选",
+    "priority": 10,
+    "enabled": true,
+    "changeReason": "更新签约条款"
+  }
+}
+```
+
+查询申请：`GET /api/payment-config/protocols/reviews`
+
+通过申请：`POST /api/payment-config/protocols/reviews/{requestNo}/approve`
+
+驳回申请：`POST /api/payment-config/protocols/reviews/{requestNo}/reject`
+
+```json
+{
+  "reviewer": "reviewer-b",
+  "reviewComment": "配置复核通过"
+}
+```
 
 查询历史：`GET /api/payment-config/protocols/{protocolCode}/versions`
 
-回滚协议：`POST /api/payment-config/protocols/{protocolCode}/rollback`
+启停候选：`POST /api/payment-config/protocols/toggle`
+
+回滚候选：`POST /api/payment-config/protocols/{protocolCode}/rollback`
 
 ```json
 {
   "versionNo": 1,
-  "baseVersionNo": 3,
+  "requester": "maker-a",
   "changeReason": "恢复已完成条款核对的协议版本"
 }
 ```
 
 处理约束：
 
-1. `t_payment_protocol_version` 按协议编码独立递增，保存模板、签约要素、适用范围、正文、状态、优先级、变更类型、原因与回滚来源版本的完整不可变快照。
-2. 新增记录 `CREATE`；编辑记录 `UPDATE`；启停记录 `STATUS_CHANGE`；回滚恢复目标完整快照并记录 `ROLLBACK + sourceVersionNo`。存量协议首次变更前自动补 `BASELINE`。
-3. 回滚必须提交页面所见的 `baseVersionNo`。服务端锁定当前协议并复验最新版本，基线漂移时返回“支付协议已产生新版本，请刷新后重试”，不覆盖并发新变更。
-4. 版本记录不修改历史，也不保存伪造的审批人或签署人。当前接口会直接更新运行态协议，版本留痕不能替代 maker-checker、可信身份、正式法务审批或电子签章事实。
+1. `CREATE / UPDATE / STATUS_CHANGE / ROLLBACK` 都将完整候选写入 `t_payment_protocol_review`；提交与驳回不修改运行态，也不生成运行版本。同一协议同时最多一条 `PENDING_REVIEW` 申请。
+2. 新建候选的 `baseVersionNo` 为空；存量协议提交时锁定当前协议、按需补录 `BASELINE`，并保存最新版本号。回滚候选额外保存 `sourceVersionNo`，目标历史版本必须存在。
+3. 复核人必须与申请人不同。批准时重新锁定申请和协议并复验最新版本；存量基线漂移或新建编码已被占用时拒绝发布。申请完成后释放唯一待办占位。
+4. 批准后才新增或更新 `t_payment_protocol_config`，并按操作追加 `REVIEW_RELEASE / REVIEW_STATUS_CHANGE / REVIEW_ROLLBACK` 不可变版本；历史版本只增不改。
+5. `requester` 与 `reviewer` 的身份可信度固定为 `SELF_DECLARED`。该异人约束不能证明可信身份、法务批准、正式签字、协议生效或真实电子签章回执。
 
 ## 13. 支付监控分析接口
 
