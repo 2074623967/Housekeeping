@@ -62,6 +62,9 @@
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
 | `/api/payment-config/export` | `GET` | 导出支付配置治理快照 CSV |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
+| `/api/payment-config/route-rules` | `POST` | 新增支付路由规则 |
+| `/api/payment-config/route-rules/{ruleCode}` | `PUT` | 编辑支付路由规则 |
+| `/api/payment-config/route-rules/validate` | `POST` | 校验路由表达式并模拟样例命中 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
@@ -998,7 +1001,63 @@ POST /api/payment-config/control-policies/self-check
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。
-9. 当前 V1 已支持运营启停和配置展示，后续需要将真实路由算法从硬编码升级为按配置规则匹配。
+9. 路由规则已支持新增、编辑、保存前表达式校验和样例命中模拟；规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
+
+### 12.3 路由规则维护与校验
+
+新增接口：`POST /api/payment-config/route-rules`
+
+编辑接口：`PUT /api/payment-config/route-rules/{ruleCode}`
+
+请求示例：
+
+```json
+{
+  "ruleCode": "RULE_HOME_APP",
+  "ruleName": "家政 App 小额路由",
+  "matchScene": "HOME_CLEAN/APP",
+  "matchExpression": "terminal IN (H5, APP) AND amount<=500",
+  "targetChannelCode": "wx_h5",
+  "fallbackChannelCode": "alipay_h5",
+  "priority": 10,
+  "enabled": true
+}
+```
+
+保存约束：
+
+1. 新增时 `ruleCode` 必填且不能与现有规则重复；编辑时以路径中的 `ruleCode` 定位规则并保持编码不变。
+2. 名称、匹配场景、表达式和目标渠道必填，优先级必须大于等于 `0`。
+3. 目标渠道和非空兜底渠道必须存在于支付渠道配置中，且二者不能相同。
+4. 表达式必须通过 V1.3 语法与字段校验；非法规则在写库前拒绝，不进入支付提交链路。
+
+校验与模拟接口：`POST /api/payment-config/route-rules/validate`
+
+请求示例：
+
+```json
+{
+  "matchExpression": "terminal IN (H5, APP) AND amount<=500",
+  "paymentMethod": "微信支付",
+  "requestedChannelCode": "wx_h5",
+  "payScene": "HOME_CLEAN",
+  "terminal": "APP",
+  "amount": 168.00,
+  "customerName": "个人客户"
+}
+```
+
+返回示例：
+
+```json
+{
+  "valid": true,
+  "matched": true,
+  "message": "表达式合法，样例上下文命中"
+}
+```
+
+说明：该接口只执行语法、字段和样例上下文求值，不写入规则，也不代表真实支付流量已经命中该规则。
 
 ## 13. 支付监控分析接口
 
