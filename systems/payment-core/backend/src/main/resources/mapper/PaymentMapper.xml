@@ -104,6 +104,14 @@
                p.payment_method AS paymentMethod,
                p.channel_code AS channel,
                p.channel_transaction_no AS channelTransactionNo,
+               p.last_channel_return_code AS channelReturnCode,
+               p.last_standardized_code AS standardizedCode,
+               p.last_standardized_message AS standardizedMessage,
+               p.last_handling_suggestion AS handlingSuggestion,
+               p.last_retryable AS retryable,
+               p.last_manual_intervention_required AS manualInterventionRequired,
+               p.last_mapping_version AS returnCodeMappingVersion,
+               p.last_mapping_matched AS returnCodeMappingMatched,
                pa.terminal AS latestTerminal,
                pa.client_ip AS latestClientIp,
                pa.idempotency_key AS latestIdempotencyKey,
@@ -293,6 +301,19 @@
             channel_transaction_no = #{channelTransactionNo},
             status = 'WAIT_CALLBACK',
             status_type = 'warn'
+        WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <update id="updatePaymentReturnCodeSnapshot">
+        UPDATE t_payment_order
+        SET last_channel_return_code = #{channelReturnCode},
+            last_standardized_code = #{standardizedCode},
+            last_standardized_message = #{standardizedMessage},
+            last_handling_suggestion = #{handlingSuggestion},
+            last_retryable = #{retryable},
+            last_manual_intervention_required = #{manualInterventionRequired},
+            last_mapping_version = #{mappingVersion},
+            last_mapping_matched = #{mappingMatched}
         WHERE payment_order_id = #{paymentOrderId}
     </update>
 

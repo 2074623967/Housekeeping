@@ -22,13 +22,14 @@ public class LocalPaymentChannelSubmitAdapter implements PaymentChannelSubmitAda
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
         result.setChannelTransactionNo("CHN-" + System.currentTimeMillis());
+        result.setChannelReturnCode("ACCEPTED");
         result.setAttemptStatus("处理中");
         result.setAttemptStatusType("info");
         result.setResponsePayload(ChannelPayloadSupport.buildSuccessPayload(
                 request.getResolvedChannelCode(),
                 result.getChannelTransactionNo(),
                 "local-fallback-gateway",
-                "ACCEPTED"));
+                result.getChannelReturnCode()));
         return result;
     }
 }

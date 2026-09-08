@@ -628,6 +628,13 @@ class PaymentServiceImplTest {
         submitResult.setChannelTransactionNo("CHANNEL-300");
         submitResult.setAttemptStatus("处理中");
         submitResult.setAttemptStatusType("info");
+        submitResult.setChannelReturnCode("BANK_TRANSFER_PENDING");
+        submitResult.setStandardizedCode("PAYMENT-CHANNEL-UNMAPPED");
+        submitResult.setStandardizedMessage("未配置渠道返回码映射");
+        submitResult.setHandlingSuggestion("保留渠道原始事实并转人工判断");
+        submitResult.setRetryable("未知");
+        submitResult.setManualInterventionRequired("是");
+        submitResult.setReturnCodeMappingMatched(Boolean.FALSE);
         submitResult.setResponsePayload("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}");
         when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
 
@@ -651,6 +658,10 @@ class PaymentServiceImplTest {
                 .submit(request);
 
         verify(paymentMapper, times(1)).updatePaymentMethodAndChannel("PAY-300", "银行转账", "offline_bank", "CHANNEL-300");
+        verify(paymentMapper).updatePaymentReturnCodeSnapshot(
+                "PAY-300", "BANK_TRANSFER_PENDING", "PAYMENT-CHANNEL-UNMAPPED",
+                "未配置渠道返回码映射", "保留渠道原始事实并转人工判断",
+                "未知", "是", null, Boolean.FALSE);
         verify(paymentMapper, times(1)).insertSubmitConcurrencyToken(
                 org.mockito.ArgumentMatchers.eq("PRE-300"),
                 org.mockito.ArgumentMatchers.eq("PAY-300"),
@@ -1079,7 +1090,11 @@ class PaymentServiceImplTest {
                 return result;
             }
         };
-        PaymentChannelQueryService queryService = new PaymentChannelQueryServiceImpl(Arrays.asList(adapter));
+        PaymentChannelQueryService queryService = new PaymentChannelQueryServiceImpl(
+                Arrays.asList(adapter),
+                new PaymentChannelReturnCodeStandardizer(
+                        org.mockito.Mockito.mock(com.abc123.hsp.mapper.PaymentConfigMapper.class),
+                        new com.fasterxml.jackson.databind.ObjectMapper()));
 
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-1001");
@@ -1146,13 +1161,22 @@ class PaymentServiceImplTest {
         when(paymentMapper.findRouteLogs("PAY-QUERY-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-QUERY-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-QUERY-002")).thenReturn(Collections.emptyList());
-        when(paymentChannelQueryService.query(detail))
-                .thenReturn(queryResult("USERPAYING", "WX-QUERY-002", "GATEWAY_ACCESS_HTTP"));
+        PaymentChannelQueryResultDTO standardizedResult =
+                queryResult("USERPAYING", "WX-QUERY-002", "GATEWAY_ACCESS_HTTP");
+        standardizedResult.setChannelReturnCode("USERPAYING");
+        standardizedResult.setStandardizedCode("PAYMENT-CHANNEL-1001");
+        standardizedResult.setStandardizedMessage("用户支付中");
+        standardizedResult.setHandlingSuggestion("等待回调或主动查单");
+        standardizedResult.setRetryable("是");
+        standardizedResult.setManualInterventionRequired("否");
+        standardizedResult.setMappingVersion("v2026.07.1");
+        standardizedResult.setReturnCodeMappingMatched(Boolean.TRUE);
+        when(paymentChannelQueryService.query(detail)).thenReturn(standardizedResult);
 
         com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
         request.setPaymentOrderId("PAY-QUERY-002");
 
-        new PaymentServiceImpl(
+        PaymentDetailDTO result = new PaymentServiceImpl(
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
@@ -1161,6 +1185,13 @@ class PaymentServiceImplTest {
                 paymentEventDispatchService)
                 .query(request);
 
+        org.junit.jupiter.api.Assertions.assertEquals("USERPAYING", result.getChannelReturnCode());
+        org.junit.jupiter.api.Assertions.assertEquals("PAYMENT-CHANNEL-1001", result.getStandardizedCode());
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.TRUE, result.getReturnCodeMappingMatched());
+        verify(paymentMapper).updatePaymentReturnCodeSnapshot(
+                "PAY-QUERY-002", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中",
+                "等待回调或主动查单", "是", "否", "v2026.07.1", Boolean.TRUE);
+
         verify(paymentMapper, never()).markPaymentSuccessByQuery(anyString(), anyString());
         verify(paymentMapper, never()).updateBillAfterPayment(
                 anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
@@ -1168,7 +1199,13 @@ class PaymentServiceImplTest {
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-002"), eq("wx_h5"), eq("USERPAYING"),
                 eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\"}"),
-                eq("{\"code\":\"SUCCESS\"}"), eq("已查单"), eq("info"));
+                eq("{\"code\":\"SUCCESS\",\"channelReturnCode\":\"USERPAYING\","
+                        + "\"standardizedCode\":\"PAYMENT-CHANNEL-1001\","
+                        + "\"standardizedMessage\":\"用户支付中\","
+                        + "\"handlingSuggestion\":\"等待回调或主动查单\","
+                        + "\"retryable\":\"是\",\"manualInterventionRequired\":\"否\","
+                        + "\"mappingVersion\":\"v2026.07.1\",\"returnCodeMappingMatched\":true}"),
+                eq("已查单"), eq("info"));
     }
 
     @Test

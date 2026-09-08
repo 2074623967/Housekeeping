@@ -24,13 +24,14 @@ public class OfflineBankPaymentChannelSubmitAdapter implements PaymentChannelSub
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
         result.setChannelTransactionNo("BANK-" + System.currentTimeMillis());
+        result.setChannelReturnCode("BANK_TRANSFER_PENDING");
         result.setAttemptStatus("待人工确认");
         result.setAttemptStatusType("warn");
         result.setResponsePayload(ChannelPayloadSupport.buildSuccessPayload(
                 CHANNEL_CODE,
                 result.getChannelTransactionNo(),
                 "offline-bank-gateway",
-                "BANK_TRANSFER_PENDING"));
+                result.getChannelReturnCode()));
         return result;
     }
 }

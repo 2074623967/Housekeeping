@@ -267,8 +267,22 @@ onMounted(loadDetail);
           <div><strong>渠道交易号：</strong>{{ detail.channelTransactionNo || "-" }}</div>
           <div><strong>配置快照版本：</strong>{{ detail.opsConfigSnapshotVersion || "—" }}</div>
           <div><strong>查单来源：</strong>{{ detail.querySource || "-" }}</div>
+          <div><strong>渠道返回码：</strong>{{ detail.channelReturnCode || "-" }}</div>
+          <div><strong>标准错误码：</strong>{{ detail.standardizedCode || "-" }}</div>
+          <div><strong>映射版本：</strong>{{ detail.returnCodeMappingVersion || "-" }}</div>
+          <div><strong>映射命中：</strong>{{ detail.returnCodeMappingMatched == null ? "-" : (detail.returnCodeMappingMatched ? "是" : "否") }}</div>
+          <div><strong>是否可重试：</strong>{{ detail.retryable || "-" }}</div>
+          <div><strong>需要人工介入：</strong>{{ detail.manualInterventionRequired || "-" }}</div>
           <div><strong>创建时间：</strong>{{ detail.createdAt }}</div>
         </div>
+
+        <section v-if="detail.standardizedMessage || detail.handlingSuggestion" class="panel mini">
+          <h4>渠道返回码标准化</h4>
+          <div class="detail-grid detail-grid-wide">
+            <div><strong>标准文案：</strong>{{ detail.standardizedMessage || "-" }}</div>
+            <div><strong>处理建议：</strong>{{ detail.handlingSuggestion || "-" }}</div>
+          </div>
+        </section>
 
         <section class="panel mini">
           <h4>最近支付尝试</h4>

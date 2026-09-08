@@ -103,6 +103,13 @@ public interface PaymentConfigMapper {
     List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappings();
 
     /**
+     * 查询启用且未归档的渠道返回码映射。
+     */
+    PaymentChannelReturnCodeConfigDTO findActiveReturnCodeMapping(
+            @Param("channelCode") String channelCode,
+            @Param("channelReturnCode") String channelReturnCode);
+
+    /**
      * 查询支付网关接入配置。
      */
     List<PaymentGatewayConfigDTO> findGateways();

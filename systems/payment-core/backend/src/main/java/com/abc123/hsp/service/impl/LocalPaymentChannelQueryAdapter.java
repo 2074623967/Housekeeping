@@ -22,6 +22,7 @@ public class LocalPaymentChannelQueryAdapter implements PaymentChannelQueryAdapt
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
         PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
         result.setTradeStatus(paymentDetail.getStatus());
+        result.setChannelReturnCode(paymentDetail.getStatus());
         result.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
         result.setQuerySource("LOCAL_SIMULATION_FALLBACK");
         return result;

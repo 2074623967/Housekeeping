@@ -45,6 +45,22 @@ public class PaymentDetailDTO {
     private String latestResponsePayload;
     /** 最近一次查单结果来源。 */
     private String querySource;
+    /** 最近一次查单的渠道原始返回码。 */
+    private String channelReturnCode;
+    /** 最近一次查单命中的平台标准错误码。 */
+    private String standardizedCode;
+    /** 最近一次查单命中的平台标准错误文案。 */
+    private String standardizedMessage;
+    /** 最近一次查单的运营处理建议。 */
+    private String handlingSuggestion;
+    /** 最近一次查单结果是否可重试。 */
+    private String retryable;
+    /** 最近一次查单结果是否需要人工介入。 */
+    private String manualInterventionRequired;
+    /** 最近一次查单命中的映射版本。 */
+    private String returnCodeMappingVersion;
+    /** 最近一次查单是否命中启用且未归档的映射。 */
+    private Boolean returnCodeMappingMatched;
     /** 当前支付单状态。 */
     private String status;
     /** 当前支付单状态对应的前端展示样式。 */

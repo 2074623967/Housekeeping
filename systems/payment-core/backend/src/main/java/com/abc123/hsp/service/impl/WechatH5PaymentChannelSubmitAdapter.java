@@ -24,13 +24,14 @@ public class WechatH5PaymentChannelSubmitAdapter implements PaymentChannelSubmit
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
         result.setChannelTransactionNo("WX-" + System.currentTimeMillis());
+        result.setChannelReturnCode("USERPAYING");
         result.setAttemptStatus("处理中");
         result.setAttemptStatusType("info");
         result.setResponsePayload(ChannelPayloadSupport.buildSuccessPayload(
                 CHANNEL_CODE,
                 result.getChannelTransactionNo(),
                 "wechat-gateway",
-                "USERPAYING"));
+                result.getChannelReturnCode()));
         return result;
     }
 }

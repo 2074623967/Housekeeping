@@ -24,6 +24,8 @@ public class OfflineBankPaymentChannelQueryAdapter implements PaymentChannelQuer
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
         PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
         result.setTradeStatus(paymentDetail.getStatus());
+        result.setChannelReturnCode("SUCCESS".equalsIgnoreCase(paymentDetail.getStatus())
+                ? "SUCCESS" : "BANK_TRANSFER_PENDING");
         result.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
         result.setQuerySource("OFFLINE_BANK_SIMULATION");
         return result;

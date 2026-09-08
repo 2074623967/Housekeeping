@@ -24,6 +24,8 @@ public class AlipayH5PaymentChannelQueryAdapter implements PaymentChannelQueryAd
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
         PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
         result.setTradeStatus(paymentDetail.getStatus());
+        result.setChannelReturnCode("SUCCESS".equalsIgnoreCase(paymentDetail.getStatus())
+                ? "ACQ.TRADE_HAS_SUCCESS" : "WAIT_BUYER_PAY");
         result.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
         result.setQuerySource("ALIPAY_SIMULATION");
         return result;

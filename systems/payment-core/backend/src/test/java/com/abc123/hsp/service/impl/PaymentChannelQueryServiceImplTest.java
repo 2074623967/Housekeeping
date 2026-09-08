@@ -4,9 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 /**
  * 渠道查单适配器选择测试。
@@ -24,6 +27,8 @@ class PaymentChannelQueryServiceImplTest {
 
         assertEquals("WECHAT_SIMULATION", result.getQuerySource());
         assertEquals("WX-001", result.getChannelTransactionNo());
+        assertEquals("USERPAYING", result.getChannelReturnCode());
+        assertEquals("PAYMENT-CHANNEL-UNMAPPED", result.getStandardizedCode());
     }
 
     @Test
@@ -53,12 +58,13 @@ class PaymentChannelQueryServiceImplTest {
     }
 
     private PaymentChannelQueryServiceImpl buildService() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         return new PaymentChannelQueryServiceImpl(Arrays.asList(
                 ordered(new WechatH5PaymentChannelQueryAdapter()),
                 ordered(new AlipayH5PaymentChannelQueryAdapter()),
                 ordered(new OfflineBankPaymentChannelQueryAdapter()),
                 ordered(new LocalPaymentChannelQueryAdapter())
-        ));
+        ), new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()));
     }
 
     private PaymentChannelQueryAdapter ordered(PaymentChannelQueryAdapter adapter) {

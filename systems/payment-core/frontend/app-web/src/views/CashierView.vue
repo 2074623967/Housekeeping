@@ -640,6 +640,10 @@ watch(selectedPaymentMethod, () => {
           </div>
           <div class="ops-row"><span>查单来源</span><span>{{ latestQueriedDetail?.querySource || "-" }}</span></div>
           <div class="ops-row"><span>渠道流水号</span><span class="mono-text">{{ latestQueriedDetail?.channelTransactionNo || "-" }}</span></div>
+          <div class="ops-row"><span>渠道返回码</span><span class="mono-text">{{ latestQueriedDetail?.channelReturnCode || "-" }}</span></div>
+          <div class="ops-row"><span>标准错误码</span><span class="mono-text">{{ latestQueriedDetail?.standardizedCode || "-" }}</span></div>
+          <div class="ops-row"><span>映射版本</span><span>{{ latestQueriedDetail?.returnCodeMappingVersion || "-" }}</span></div>
+          <div class="ops-row"><span>处理建议</span><span>{{ latestQueriedDetail?.handlingSuggestion || "-" }}</span></div>
           <div class="ops-row"><span>最近尝试状态</span><span>{{ latestQueriedDetail?.latestAttemptStatus || "-" }}</span></div>
           <p class="ops-description">
             扫码后若前端仍停留在支付中，可先在当前收银台执行主动查单；若已成功或已关闭，会自动跳转结果页继续收口。

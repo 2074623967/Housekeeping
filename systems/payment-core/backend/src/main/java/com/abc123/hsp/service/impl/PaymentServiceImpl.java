@@ -419,6 +419,16 @@ public class PaymentServiceImpl implements PaymentService {
                     request.getPaymentMethod(),
                     resolvedChannelCode,
                     submitResult.getChannelTransactionNo());
+            paymentMapper.updatePaymentReturnCodeSnapshot(
+                    paymentOrderId,
+                    submitResult.getChannelReturnCode(),
+                    submitResult.getStandardizedCode(),
+                    submitResult.getStandardizedMessage(),
+                    submitResult.getHandlingSuggestion(),
+                    submitResult.getRetryable(),
+                    submitResult.getManualInterventionRequired(),
+                    submitResult.getMappingVersion(),
+                    submitResult.getReturnCodeMappingMatched());
             String routeNo = "RTR" + System.currentTimeMillis();
             paymentMapper.insertRouteRecord(
                     routeNo,
@@ -613,6 +623,17 @@ public class PaymentServiceImpl implements PaymentService {
             recordChannelQueryFailure(detail, exception);
             throw exception;
         }
+        applyReturnCodeStandardization(detail, queryResult);
+        paymentMapper.updatePaymentReturnCodeSnapshot(
+                detail.getPaymentOrderId(),
+                queryResult.getChannelReturnCode(),
+                queryResult.getStandardizedCode(),
+                queryResult.getStandardizedMessage(),
+                queryResult.getHandlingSuggestion(),
+                queryResult.getRetryable(),
+                queryResult.getManualInterventionRequired(),
+                queryResult.getMappingVersion(),
+                queryResult.getReturnCodeMappingMatched());
         String channelTransactionNo = StringUtils.hasText(queryResult.getChannelTransactionNo())
                 ? queryResult.getChannelTransactionNo().trim()
                 : detail.getChannelTransactionNo();
@@ -637,6 +658,7 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
             }
             latestDetail.setQuerySource(queryResult.getQuerySource());
+            applyReturnCodeStandardization(latestDetail, queryResult);
             return enrichDetail(latestDetail);
         }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
@@ -658,6 +680,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         latestDetail.setQuerySource(queryResult.getQuerySource());
+        applyReturnCodeStandardization(latestDetail, queryResult);
         return enrichDetail(latestDetail);
     }
 
@@ -670,9 +693,40 @@ public class PaymentServiceImpl implements PaymentService {
                 detail.getChannel(),
                 queryResult.getTradeStatus(),
                 "{\"querySource\":\"" + escapeJson(queryResult.getQuerySource()) + "\"}",
-                "{\"code\":\"SUCCESS\"}",
+                buildChannelQueryResponsePayload(queryResult),
                 "已查单",
                 "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info");
+    }
+
+    private String buildChannelQueryResponsePayload(PaymentChannelQueryResultDTO queryResult) {
+        if (!StringUtils.hasText(queryResult.getChannelReturnCode())) {
+            return "{\"code\":\"SUCCESS\"}";
+        }
+        return new StringJoiner(",", "{", "}")
+                .add("\"code\":\"SUCCESS\"")
+                .add("\"channelReturnCode\":\"" + escapeJson(queryResult.getChannelReturnCode()) + "\"")
+                .add("\"standardizedCode\":\"" + escapeJson(queryResult.getStandardizedCode()) + "\"")
+                .add("\"standardizedMessage\":\"" + escapeJson(queryResult.getStandardizedMessage()) + "\"")
+                .add("\"handlingSuggestion\":\"" + escapeJson(queryResult.getHandlingSuggestion()) + "\"")
+                .add("\"retryable\":\"" + escapeJson(queryResult.getRetryable()) + "\"")
+                .add("\"manualInterventionRequired\":\""
+                        + escapeJson(queryResult.getManualInterventionRequired()) + "\"")
+                .add("\"mappingVersion\":\"" + escapeJson(queryResult.getMappingVersion()) + "\"")
+                .add("\"returnCodeMappingMatched\":"
+                        + Boolean.TRUE.equals(queryResult.getReturnCodeMappingMatched()))
+                .toString();
+    }
+
+    private void applyReturnCodeStandardization(
+            PaymentDetailDTO detail, PaymentChannelQueryResultDTO queryResult) {
+        detail.setChannelReturnCode(queryResult.getChannelReturnCode());
+        detail.setStandardizedCode(queryResult.getStandardizedCode());
+        detail.setStandardizedMessage(queryResult.getStandardizedMessage());
+        detail.setHandlingSuggestion(queryResult.getHandlingSuggestion());
+        detail.setRetryable(queryResult.getRetryable());
+        detail.setManualInterventionRequired(queryResult.getManualInterventionRequired());
+        detail.setReturnCodeMappingVersion(queryResult.getMappingVersion());
+        detail.setReturnCodeMappingMatched(queryResult.getReturnCodeMappingMatched());
     }
 
     private void recordChannelQueryFailure(PaymentDetailDTO detail, BusinessException exception) {

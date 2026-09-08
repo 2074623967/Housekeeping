@@ -16,16 +16,20 @@ import org.springframework.stereotype.Service;
 public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitService {
 
     private final List<PaymentChannelSubmitAdapter> adapters;
+    private final PaymentChannelReturnCodeStandardizer returnCodeStandardizer;
 
-    public PaymentChannelSubmitServiceImpl(List<PaymentChannelSubmitAdapter> adapters) {
+    public PaymentChannelSubmitServiceImpl(List<PaymentChannelSubmitAdapter> adapters,
+                                           PaymentChannelReturnCodeStandardizer returnCodeStandardizer) {
         this.adapters = adapters;
+        this.returnCodeStandardizer = returnCodeStandardizer;
     }
 
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         for (PaymentChannelSubmitAdapter adapter : adapters) {
             if (adapter.supports(request.getResolvedChannelCode())) {
-                return adapter.submit(request);
+                return returnCodeStandardizer.standardizeSubmit(
+                        request.getResolvedChannelCode(), adapter.submit(request));
             }
         }
         throw new BusinessException(

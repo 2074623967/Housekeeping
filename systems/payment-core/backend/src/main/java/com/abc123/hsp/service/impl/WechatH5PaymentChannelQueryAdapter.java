@@ -24,8 +24,13 @@ public class WechatH5PaymentChannelQueryAdapter implements PaymentChannelQueryAd
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
         PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
         result.setTradeStatus(paymentDetail.getStatus());
+        result.setChannelReturnCode(resolveReturnCode(paymentDetail.getStatus()));
         result.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
         result.setQuerySource("WECHAT_SIMULATION");
         return result;
+    }
+
+    private String resolveReturnCode(String tradeStatus) {
+        return "SUCCESS".equalsIgnoreCase(tradeStatus) ? "SUCCESS" : "USERPAYING";
     }
 }

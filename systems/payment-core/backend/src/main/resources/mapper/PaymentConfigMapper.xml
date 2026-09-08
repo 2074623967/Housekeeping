@@ -450,6 +450,29 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findActiveReturnCodeMapping"
+            resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
+        SELECT channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               standardized_code AS standardizedCode,
+               standardized_message AS standardizedMessage,
+               handling_suggestion AS handlingSuggestion,
+               retryable,
+               manual_intervention_required AS manualInterventionRequired,
+               mapping_version AS mappingVersion,
+               archive_status AS archiveStatus,
+               archive_status_type AS archiveStatusType,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_channel_return_code_map
+        WHERE channel_code = #{channelCode}
+          AND channel_return_code = #{channelReturnCode}
+          AND status = 'ENABLED'
+          AND archive_status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
     <select id="findGateways" resultType="com.abc123.hsp.dto.PaymentGatewayConfigDTO">
         SELECT gateway_code AS gatewayCode,
                gateway_name AS gatewayName,

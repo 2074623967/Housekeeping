@@ -16,9 +16,12 @@ import org.springframework.stereotype.Service;
 public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryService {
 
     private final List<PaymentChannelQueryAdapter> adapters;
+    private final PaymentChannelReturnCodeStandardizer returnCodeStandardizer;
 
-    public PaymentChannelQueryServiceImpl(List<PaymentChannelQueryAdapter> adapters) {
+    public PaymentChannelQueryServiceImpl(List<PaymentChannelQueryAdapter> adapters,
+                                          PaymentChannelReturnCodeStandardizer returnCodeStandardizer) {
         this.adapters = adapters;
+        this.returnCodeStandardizer = returnCodeStandardizer;
     }
 
     @Override
@@ -27,7 +30,7 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
             if (adapter.supports(paymentDetail.getChannel())) {
                 PaymentChannelQueryResultDTO result = adapter.query(paymentDetail);
                 if (result != null) {
-                    return result;
+                    return returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result);
                 }
                 throw new BusinessException(
                         ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE,

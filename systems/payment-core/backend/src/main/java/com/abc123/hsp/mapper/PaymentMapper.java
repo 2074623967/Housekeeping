@@ -170,6 +170,20 @@ public interface PaymentMapper {
             @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
+     * 保存最近一次渠道返回码标准化快照，供详情与排障稳定读取。
+     */
+    void updatePaymentReturnCodeSnapshot(
+            @Param("paymentOrderId") String paymentOrderId,
+            @Param("channelReturnCode") String channelReturnCode,
+            @Param("standardizedCode") String standardizedCode,
+            @Param("standardizedMessage") String standardizedMessage,
+            @Param("handlingSuggestion") String handlingSuggestion,
+            @Param("retryable") String retryable,
+            @Param("manualInterventionRequired") String manualInterventionRequired,
+            @Param("mappingVersion") String mappingVersion,
+            @Param("mappingMatched") Boolean mappingMatched);
+
+    /**
      * 按支付单回写支付尝试状态，便于前后端查看当前尝试收口结果。
      */
     void updatePaymentAttemptStatusByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId,

@@ -384,6 +384,30 @@ function resolveBizType() {
             <strong>{{ paymentDetail?.querySource || "-" }}</strong>
           </div>
           <div class="summary-item">
+            <span>渠道返回码</span>
+            <strong>{{ paymentDetail?.channelReturnCode || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>标准错误码</span>
+            <strong>{{ paymentDetail?.standardizedCode || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>映射版本</span>
+            <strong>{{ paymentDetail?.returnCodeMappingVersion || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>是否可重试</span>
+            <strong>{{ paymentDetail?.retryable || "-" }}</strong>
+          </div>
+          <div class="summary-item">
+            <span>需要人工介入</span>
+            <strong>{{ paymentDetail?.manualInterventionRequired || "-" }}</strong>
+          </div>
+          <div v-if="paymentDetail?.handlingSuggestion" class="summary-item">
+            <span>渠道处理建议</span>
+            <strong>{{ paymentDetail.handlingSuggestion }}</strong>
+          </div>
+          <div class="summary-item">
             <span>最近尝试状态</span>
             <strong>{{ paymentDetail?.latestAttemptStatus || "-" }}</strong>
           </div>
