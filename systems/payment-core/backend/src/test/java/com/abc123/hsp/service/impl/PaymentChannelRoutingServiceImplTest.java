@@ -1,8 +1,12 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PaymentChannelQueryHealthDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -111,6 +115,84 @@ class PaymentChannelRoutingServiceImplTest {
 
         assertEquals("alipay_h5", decision.getChannelCode());
         assertEquals("PAYMENT_METHOD_DEFAULT", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldUseRuleFallbackWhenTargetFailureRateOpensHealthCircuit() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
+                buildRule("RULE_HOME_WX", "家政 H5 微信优先", "HOME_CLEAN/H5",
+                        "paymentMethod=微信支付", "wx_h5", "alipay_h5")
+        ));
+        when(paymentMapper.findRecentChannelQueryHealth(24)).thenReturn(Arrays.asList(
+                buildHealth("wx_h5", 5, 1),
+                buildHealth("wx_jsapi", 5, 3)
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = buildHealthEnabledService().resolve(
+                buildContext("微信支付", "", "HOME_CLEAN", "APP_H5", "张女士", new BigDecimal("168.00")));
+
+        assertEquals("alipay_h5", decision.getChannelCode());
+        assertEquals("RULE_HOME_WX_HEALTH_FALLBACK", decision.getRouteRule());
+        org.junit.jupiter.api.Assertions.assertTrue(decision.getRouteResult().contains("短窗健康熔断"));
+    }
+
+    @Test
+    void shouldSkipDefaultChannelWhenFailureCountOpensHealthCircuitWithSmallSample() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.findRecentChannelQueryHealth(24)).thenReturn(Collections.singletonList(
+                buildHealth("wx_h5", 5, 5)
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = buildHealthEnabledService().resolve(
+                buildContext("微信支付", "", "HOME_CLEAN", "APP_H5", "张女士", new BigDecimal("168.00")));
+
+        assertEquals("alipay_h5", decision.getChannelCode());
+        assertEquals("PAYMENT_METHOD_DEFAULT", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldRejectExplicitRequestedChannelWhenHealthCircuitIsOpen() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("wx_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.findRecentChannelQueryHealth(24)).thenReturn(Collections.singletonList(
+                buildHealth("wx_h5", 10, 4)
+        ));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> buildHealthEnabledService().resolve(
+                buildContext("微信支付", "WX_H5", "HOME_CLEAN", "APP_H5", "张女士", new BigDecimal("168.00"))));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, exception.getCode());
+    }
+
+    private PaymentChannelRoutingServiceImpl buildHealthEnabledService() {
+        return new PaymentChannelRoutingServiceImpl(
+                paymentConfigMapper,
+                paymentMapper,
+                true,
+                24,
+                5,
+                30,
+                10);
+    }
+
+    private PaymentChannelQueryHealthDTO buildHealth(String channelCode, int queryCount, int failureCount) {
+        PaymentChannelQueryHealthDTO health = new PaymentChannelQueryHealthDTO();
+        health.setChannelCode(channelCode);
+        health.setQueryCount(queryCount);
+        health.setFailureCount(failureCount);
+        return health;
     }
 
     private PaymentRouteContextDTO buildContext(

@@ -24,4 +24,14 @@ public class PaymentRouteExecutionOverviewDTO {
     private Integer alipayRouteCount;
     /** 最近一次路由时间。 */
     private String latestRouteAt;
+    /** 是否启用基于主动查单事实的路由健康熔断。 */
+    private Boolean routeHealthEnabled;
+    /** 渠道健康统计回看小时数。 */
+    private Integer routeHealthLookbackHours;
+    /** 渠道健康熔断失败笔数阈值。 */
+    private Integer routeHealthFailureCountThreshold;
+    /** 渠道健康熔断失败率阈值。 */
+    private Integer routeHealthFailureRateThresholdPercent;
+    /** 应用失败率阈值前要求的最小样本数。 */
+    private Integer routeHealthMinimumSampleCount;
 }

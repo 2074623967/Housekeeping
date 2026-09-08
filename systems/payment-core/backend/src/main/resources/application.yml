@@ -87,6 +87,8 @@ payment:
       failure-count-threshold: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_COUNT_THRESHOLD:5}
       failure-rate-threshold-percent: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_THRESHOLD_PERCENT:30}
       failure-rate-minimum-sample-count: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_MINIMUM_SAMPLE_COUNT:10}
+      # 默认关闭；生产启用前需按真实渠道容量校准阈值并确认 fallback 可用。
+      route-health-enabled: ${HSP_PAYMENT_CHANNEL_ROUTE_HEALTH_ENABLED:false}
       rate-limit-rejection-count-threshold: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_RATE_LIMIT_REJECTION_COUNT_THRESHOLD:10}
       alert-cooldown-minutes: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_COOLDOWN_MINUTES:60}
       alert-fixed-delay-ms: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_DELAY_MS:300000}

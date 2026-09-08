@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.ExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentChannelQueryHealthDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
@@ -311,4 +312,10 @@ public interface PaymentMapper {
      * 查询指定渠道当天已受理的交易金额，用于支付控制限额校验。
      */
     BigDecimal sumTodayAcceptedAmountByChannel(@Param("channelCode") String channelCode);
+
+    /**
+     * 按渠道聚合最近窗口内的主动查单成功与失败事实，供路由健康熔断使用。
+     */
+    List<PaymentChannelQueryHealthDTO> findRecentChannelQueryHealth(
+            @Param("lookbackHours") int lookbackHours);
 }

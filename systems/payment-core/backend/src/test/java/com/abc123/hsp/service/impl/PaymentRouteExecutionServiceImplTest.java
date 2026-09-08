@@ -79,6 +79,11 @@ class PaymentRouteExecutionServiceImplTest {
         Assertions.assertEquals(8L, result.getTotalRouteCount());
         Assertions.assertEquals(2L, result.getWarnRouteCount());
         Assertions.assertEquals(0, result.getOfflineRouteCount());
+        Assertions.assertEquals(Boolean.FALSE, result.getRouteHealthEnabled());
+        Assertions.assertEquals(24, result.getRouteHealthLookbackHours());
+        Assertions.assertEquals(5, result.getRouteHealthFailureCountThreshold());
+        Assertions.assertEquals(30, result.getRouteHealthFailureRateThresholdPercent());
+        Assertions.assertEquals(10, result.getRouteHealthMinimumSampleCount());
         verify(paymentRouteExecutionMapper).findOverview(query);
     }
 }

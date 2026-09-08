@@ -18,7 +18,12 @@ const overview = ref({
   offlineRouteCount: 0,
   wechatRouteCount: 0,
   alipayRouteCount: 0,
-  latestRouteAt: ""
+  latestRouteAt: "",
+  routeHealthEnabled: false,
+  routeHealthLookbackHours: 24,
+  routeHealthFailureCountThreshold: 5,
+  routeHealthFailureRateThresholdPercent: 30,
+  routeHealthMinimumSampleCount: 10
 });
 const pageNo = ref(1);
 const pageSize = 20;
@@ -45,6 +50,14 @@ const metrics = computed(() => ({
   alipayRouteCount: overview.value.alipayRouteCount,
   latestRouteAt: overview.value.latestRouteAt || "-"
 }));
+
+const routeHealthPolicyText = computed(() => {
+  if (!overview.value.routeHealthEnabled) {
+    return "路由健康熔断未开启";
+  }
+  return `近 ${overview.value.routeHealthLookbackHours} 小时，失败 ≥ ${overview.value.routeHealthFailureCountThreshold}，`
+    + `或样本 ≥ ${overview.value.routeHealthMinimumSampleCount} 且失败率 ≥ ${overview.value.routeHealthFailureRateThresholdPercent}%`;
+});
 
 function resetFilters() {
   filters.value = {
@@ -192,18 +205,18 @@ onMounted(loadPaymentRoutes);
     <section class="panel overview-panel">
       <div class="section-title">
         <h3>路由风险总览</h3>
-        <span class="meta">最近路由时间：{{ metrics.latestRouteAt }}</span>
+        <span class="meta">路由健康治理 V1.1 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
       </div>
       <div class="overview-grid">
         <article class="overview-card danger">
           <p class="overview-title">需关注命中结果</p>
           <strong>{{ metrics.warnTotal }}</strong>
-          <span>优先核查兜底渠道和线下路由，确认规则误命中或渠道健康度异常是否已影响支付成功率。</span>
+          <span>优先核查健康熔断兜底和线下路由，并结合近期主动查单失败事实确认渠道是否恢复。</span>
         </article>
         <article class="overview-card warn">
           <p class="overview-title">线下转人工兜底</p>
           <strong>{{ metrics.offlineRouteCount }}</strong>
-          <span>该指标偏高时，通常需要联查渠道可用性、路由规则优先级和实时限额配置是否合理。</span>
+          <span>该指标偏高时，需联查渠道短窗健康、路由规则优先级和实时限额配置是否合理。</span>
         </article>
         <article class="overview-card info">
           <p class="overview-title">主流方式分布</p>

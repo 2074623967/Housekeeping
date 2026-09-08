@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PaymentChannelQueryHealthDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -10,8 +11,13 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -23,11 +29,38 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
 
     private final PaymentConfigMapper paymentConfigMapper;
     private final PaymentMapper paymentMapper;
+    private final boolean routeHealthEnabled;
+    private final int queryHealthLookbackHours;
+    private final int queryHealthFailureCountThreshold;
+    private final int queryHealthFailureRateThresholdPercent;
+    private final int queryHealthMinimumSampleCount;
 
+    @Autowired
     public PaymentChannelRoutingServiceImpl(PaymentConfigMapper paymentConfigMapper,
-                                            PaymentMapper paymentMapper) {
+                                            PaymentMapper paymentMapper,
+                                            @Value("${payment.channel-query.monitor.route-health-enabled:false}")
+                                                    boolean routeHealthEnabled,
+                                            @Value("${payment.channel-query.monitor.lookback-hours:24}")
+                                                    int queryHealthLookbackHours,
+                                            @Value("${payment.channel-query.monitor.failure-count-threshold:5}")
+                                                    int queryHealthFailureCountThreshold,
+                                            @Value("${payment.channel-query.monitor.failure-rate-threshold-percent:30}")
+                                                    int queryHealthFailureRateThresholdPercent,
+                                            @Value("${payment.channel-query.monitor.failure-rate-minimum-sample-count:10}")
+                                                    int queryHealthMinimumSampleCount) {
         this.paymentConfigMapper = paymentConfigMapper;
         this.paymentMapper = paymentMapper;
+        this.routeHealthEnabled = routeHealthEnabled;
+        this.queryHealthLookbackHours = Math.max(queryHealthLookbackHours, 1);
+        this.queryHealthFailureCountThreshold = Math.max(queryHealthFailureCountThreshold, 1);
+        this.queryHealthFailureRateThresholdPercent = Math.min(
+                Math.max(queryHealthFailureRateThresholdPercent, 1), 100);
+        this.queryHealthMinimumSampleCount = Math.max(queryHealthMinimumSampleCount, 1);
+    }
+
+    PaymentChannelRoutingServiceImpl(PaymentConfigMapper paymentConfigMapper,
+                                     PaymentMapper paymentMapper) {
+        this(paymentConfigMapper, paymentMapper, false, 24, 5, 30, 10);
     }
 
     @Override
@@ -39,16 +72,17 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         if (enabledChannels.isEmpty()) {
             throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, "no enabled payment channel found");
         }
+        Map<String, PaymentChannelQueryHealthDTO> channelHealth = loadChannelHealth();
         List<PaymentRouteRuleRuntimeDTO> enabledRules = paymentConfigMapper.findEnabledRouteRulesForRouting();
-        PaymentRouteDecisionDTO decision = resolveByRules(routeContext, enabledChannels, enabledRules);
+        PaymentRouteDecisionDTO decision = resolveByRules(routeContext, enabledChannels, enabledRules, channelHealth);
         if (decision != null) {
             return decision;
         }
-        decision = resolveByRequestedChannel(routeContext, enabledChannels);
+        decision = resolveByRequestedChannel(routeContext, enabledChannels, channelHealth);
         if (decision != null) {
             return decision;
         }
-        decision = resolveByPaymentMethod(routeContext, enabledChannels);
+        decision = resolveByPaymentMethod(routeContext, enabledChannels, channelHealth);
         if (decision != null) {
             return decision;
         }
@@ -57,21 +91,25 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
 
     private PaymentRouteDecisionDTO resolveByRules(PaymentRouteContextDTO routeContext,
                                                    List<PaymentChannelRoutingConfigDTO> enabledChannels,
-                                                   List<PaymentRouteRuleRuntimeDTO> enabledRules) {
+                                                   List<PaymentRouteRuleRuntimeDTO> enabledRules,
+                                                   Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
         for (PaymentRouteRuleRuntimeDTO rule : enabledRules) {
             if (!matchesScene(routeContext, rule.getMatchScene()) || !matchesExpression(routeContext, rule.getMatchExpression())) {
                 continue;
             }
             PaymentChannelRoutingConfigDTO targetChannel = findEnabledChannel(enabledChannels, rule.getTargetChannelCode());
-            if (isRouteAvailable(routeContext, targetChannel)) {
+            if (isRouteAvailable(routeContext, targetChannel, channelHealth)) {
                 return buildDecision(targetChannel.getChannelCode(), rule.getRuleCode(), rule.getRuleName() + " -> " + targetChannel.getChannelCode());
             }
             PaymentChannelRoutingConfigDTO fallbackChannel = findEnabledChannel(enabledChannels, rule.getFallbackChannelCode());
-            if (isRouteAvailable(routeContext, fallbackChannel)) {
+            if (isRouteAvailable(routeContext, fallbackChannel, channelHealth)) {
+                boolean targetHealthBlocked = targetChannel != null && !isChannelHealthy(targetChannel, channelHealth);
                 return buildDecision(
                         fallbackChannel.getChannelCode(),
-                        rule.getRuleCode() + "_FALLBACK",
-                        rule.getRuleName() + " target disabled, fallback -> " + fallbackChannel.getChannelCode()
+                        rule.getRuleCode() + (targetHealthBlocked ? "_HEALTH_FALLBACK" : "_FALLBACK"),
+                        targetHealthBlocked
+                                ? rule.getRuleName() + " 目标渠道短窗健康熔断，兜底 -> " + fallbackChannel.getChannelCode()
+                                : rule.getRuleName() + " 目标渠道不可用，兜底 -> " + fallbackChannel.getChannelCode()
                 );
             }
         }
@@ -79,7 +117,8 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
     }
 
     private PaymentRouteDecisionDTO resolveByRequestedChannel(PaymentRouteContextDTO routeContext,
-                                                              List<PaymentChannelRoutingConfigDTO> enabledChannels) {
+                                                              List<PaymentChannelRoutingConfigDTO> enabledChannels,
+                                                              Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
         String normalizedRequestedChannel = normalizeChannelCode(routeContext.getRequestedChannelCode());
         if (!StringUtils.hasText(normalizedRequestedChannel)) {
             return null;
@@ -90,6 +129,11 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         }
         if (!matchesChannelScene(routeContext, requestedChannel)) {
             throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_SCENE_MISMATCH, "requested channel does not match pay scene");
+        }
+        if (!isChannelHealthy(requestedChannel, channelHealth)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE,
+                    "requested channel is temporarily unavailable due to query health circuit breaker");
         }
         if (!matchesChannelDailyLimit(routeContext, requestedChannel)) {
             throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_DAILY_LIMIT_EXCEEDED, "requested channel exceeds daily limit");
@@ -102,11 +146,12 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
     }
 
     private PaymentRouteDecisionDTO resolveByPaymentMethod(PaymentRouteContextDTO routeContext,
-                                                           List<PaymentChannelRoutingConfigDTO> enabledChannels) {
+                                                           List<PaymentChannelRoutingConfigDTO> enabledChannels,
+                                                           Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
         String normalizedMethod = normalizeText(routeContext.getPaymentMethod());
         for (PaymentChannelRoutingConfigDTO channel : enabledChannels) {
             if (normalizeText(channel.getPaymentMethod()).equals(normalizedMethod)
-                    && isRouteAvailable(routeContext, channel)) {
+                    && isRouteAvailable(routeContext, channel, channelHealth)) {
                 return buildDecision(
                         channel.getChannelCode(),
                         "PAYMENT_METHOD_DEFAULT",
@@ -117,10 +162,56 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         return null;
     }
 
-    private boolean isRouteAvailable(PaymentRouteContextDTO routeContext, PaymentChannelRoutingConfigDTO channel) {
+    private boolean isRouteAvailable(PaymentRouteContextDTO routeContext,
+                                     PaymentChannelRoutingConfigDTO channel,
+                                     Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
         return channel != null
                 && matchesChannelScene(routeContext, channel)
+                && isChannelHealthy(channel, channelHealth)
                 && matchesChannelDailyLimit(routeContext, channel);
+    }
+
+    private Map<String, PaymentChannelQueryHealthDTO> loadChannelHealth() {
+        if (!routeHealthEnabled) {
+            return Collections.emptyMap();
+        }
+        Map<String, PaymentChannelQueryHealthDTO> channelHealth = new HashMap<>();
+        for (PaymentChannelQueryHealthDTO metric : paymentMapper.findRecentChannelQueryHealth(queryHealthLookbackHours)) {
+            String channelCode = normalizeChannelCode(metric.getChannelCode());
+            PaymentChannelQueryHealthDTO aggregatedMetric = channelHealth.get(channelCode);
+            if (aggregatedMetric == null) {
+                aggregatedMetric = new PaymentChannelQueryHealthDTO();
+                aggregatedMetric.setChannelCode(channelCode);
+                aggregatedMetric.setQueryCount(0);
+                aggregatedMetric.setFailureCount(0);
+                channelHealth.put(channelCode, aggregatedMetric);
+            }
+            aggregatedMetric.setQueryCount(
+                    valueOrZero(aggregatedMetric.getQueryCount()) + valueOrZero(metric.getQueryCount()));
+            aggregatedMetric.setFailureCount(
+                    valueOrZero(aggregatedMetric.getFailureCount()) + valueOrZero(metric.getFailureCount()));
+        }
+        return channelHealth;
+    }
+
+    private boolean isChannelHealthy(PaymentChannelRoutingConfigDTO channel,
+                                     Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
+        if (!routeHealthEnabled || channel == null) {
+            return true;
+        }
+        PaymentChannelQueryHealthDTO metric = channelHealth.get(normalizeChannelCode(channel.getChannelCode()));
+        if (metric == null) {
+            return true;
+        }
+        int queryCount = valueOrZero(metric.getQueryCount());
+        int failureCount = valueOrZero(metric.getFailureCount());
+        return failureCount < queryHealthFailureCountThreshold
+                && (queryCount < queryHealthMinimumSampleCount
+                || failureCount * 100L < queryCount * (long) queryHealthFailureRateThresholdPercent);
+    }
+
+    private int valueOrZero(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private boolean matchesChannelScene(PaymentRouteContextDTO routeContext, PaymentChannelRoutingConfigDTO channel) {
