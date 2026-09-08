@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
+import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -68,6 +69,32 @@ class PaymentTaskCenterServiceImplTest {
                 "PAYMENT_QUERY_BACKLOG".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
                         && alert.getAlertMessage().contains("35 笔当前已到自动查询时间")));
+    }
+
+    @Test
+    void shouldExposeQueryFailureTrendAndRaiseRateThresholdAlert() {
+        PaymentQueryTrendPointDTO trend = new PaymentQueryTrendPointDTO();
+        trend.setTimeBucket("2026-09-08 09:00");
+        trend.setQueryCount(3);
+        trend.setFailureCount(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countRecentPaymentQueries(24)).thenReturn(12);
+        when(paymentTaskCenterMapper.countRecentPaymentQueryFailures(24)).thenReturn(4);
+        when(paymentTaskCenterMapper.findRecentPaymentQueryTrends(24))
+                .thenReturn(Collections.singletonList(trend));
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(24, overview.getQueryMonitorWindowHours());
+        Assertions.assertEquals(12, overview.getRecentQueryCount());
+        Assertions.assertEquals(4, overview.getRecentQueryFailureCount());
+        Assertions.assertEquals("33.33%", overview.getRecentQueryFailureRate());
+        Assertions.assertEquals("33.33%", overview.getQueryTrends().get(0).getFailureRate());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_QUERY_FAILURE_TREND".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("近 24 小时查单 12 次")));
     }
 
     @Test
@@ -652,6 +679,10 @@ class PaymentTaskCenterServiceImplTest {
                 2,
                 900,
                 20,
-                100);
+                100,
+                24,
+                5,
+                30,
+                10);
     }
 }

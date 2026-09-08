@@ -7,6 +7,14 @@ const overview = ref({
   pendingCallbackCount: 0,
   pendingQueryBacklogCount: 0,
   duePendingQueryCount: 0,
+  queryMonitorWindowHours: 24,
+  recentQueryCount: 0,
+  recentQueryFailureCount: 0,
+  recentQueryFailureRate: "0.00%",
+  queryFailureCountThreshold: 5,
+  queryFailureRateThresholdPercent: 30,
+  queryFailureRateMinimumSampleCount: 10,
+  queryTrends: [],
   failedEventCount: 0,
   failedRefundCount: 0,
   warningDayEndBatchCount: 0,
@@ -156,6 +164,15 @@ onMounted(loadOverview);
             <div class="detail-value">{{ overview.duePendingQueryCount }}</div>
           </div>
           <div class="detail-card">
+            <div class="detail-label">近 {{ overview.queryMonitorWindowHours }} 小时查单</div>
+            <div class="detail-value">{{ overview.recentQueryCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">窗口内查单失败</div>
+            <div class="detail-value">{{ overview.recentQueryFailureCount }}</div>
+            <div class="meta">失败率 {{ overview.recentQueryFailureRate }}</div>
+          </div>
+          <div class="detail-card">
             <div class="detail-label">失败事件</div>
             <div class="detail-value">{{ overview.failedEventCount }}</div>
           </div>
@@ -180,8 +197,42 @@ onMounted(loadOverview);
         <div class="detail-panel">
           <div class="section-title">
             <div>
+              <h3>主动查单小时趋势</h3>
+              <p class="meta">
+                最近 {{ overview.queryMonitorWindowHours }} 小时；P1 阈值为失败不少于 {{ overview.queryFailureCountThreshold }} 次，或样本不少于 {{ overview.queryFailureRateMinimumSampleCount }} 次且失败率达到 {{ overview.queryFailureRateThresholdPercent }}%
+              </p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>小时</th>
+                  <th>查单次数</th>
+                  <th>失败次数</th>
+                  <th>失败率</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in overview.queryTrends" :key="item.timeBucket">
+                  <td>{{ item.timeBucket }}</td>
+                  <td>{{ item.queryCount }}</td>
+                  <td>{{ item.failureCount }}</td>
+                  <td>{{ item.failureRate }}</td>
+                </tr>
+                <tr v-if="!overview.queryTrends?.length">
+                  <td colspan="4" class="state-box">当前统计窗口内暂无主动查单记录</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.13 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单、异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.15 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -384,6 +435,11 @@ onMounted(loadOverview);
                   <td>主动查单积压</td>
                   <td>{{ overview.pendingQueryBacklogCount }}</td>
                   <td>已达到首次等待阈值，其中 {{ overview.duePendingQueryCount }} 笔当前已到自动查询时间</td>
+                </tr>
+                <tr>
+                  <td>主动查单失败趋势</td>
+                  <td>{{ overview.recentQueryFailureCount }}</td>
+                  <td>近 {{ overview.queryMonitorWindowHours }} 小时共查单 {{ overview.recentQueryCount }} 次，失败率 {{ overview.recentQueryFailureRate }}</td>
                 </tr>
                 <tr>
                   <td>失败事件</td>

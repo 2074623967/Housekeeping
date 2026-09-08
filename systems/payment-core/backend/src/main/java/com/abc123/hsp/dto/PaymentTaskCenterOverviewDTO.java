@@ -17,6 +17,22 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer pendingQueryBacklogCount;
     /** 当前已达到自动退避时间的支付单数。 */
     private Integer duePendingQueryCount;
+    /** 查单趋势统计窗口小时数。 */
+    private Integer queryMonitorWindowHours;
+    /** 统计窗口内查单总次数。 */
+    private Integer recentQueryCount;
+    /** 统计窗口内查单失败次数。 */
+    private Integer recentQueryFailureCount;
+    /** 统计窗口内查单失败率。 */
+    private String recentQueryFailureRate;
+    /** 查单失败笔数告警阈值。 */
+    private Integer queryFailureCountThreshold;
+    /** 查单失败率告警阈值。 */
+    private Integer queryFailureRateThresholdPercent;
+    /** 失败率告警最小样本数。 */
+    private Integer queryFailureRateMinimumSampleCount;
+    /** 最近查单小时趋势。 */
+    private List<PaymentQueryTrendPointDTO> queryTrends;
     /** 失败事件数。 */
     private Integer failedEventCount;
     /** 失败退款数。 */

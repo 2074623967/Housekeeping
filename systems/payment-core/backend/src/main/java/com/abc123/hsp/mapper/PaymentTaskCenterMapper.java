@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
@@ -72,6 +73,22 @@ public interface PaymentTaskCenterMapper {
             @Param("retryIntervalSeconds") int retryIntervalSeconds,
             @Param("retryBackoffFactor") int retryBackoffFactor,
             @Param("maxRetryIntervalSeconds") int maxRetryIntervalSeconds);
+
+    /**
+     * 统计最近窗口内的渠道查单次数。
+     */
+    int countRecentPaymentQueries(@Param("lookbackHours") int lookbackHours);
+
+    /**
+     * 统计最近窗口内的渠道查单失败次数。
+     */
+    int countRecentPaymentQueryFailures(@Param("lookbackHours") int lookbackHours);
+
+    /**
+     * 查询最近窗口内的渠道查单小时趋势。
+     */
+    List<PaymentQueryTrendPointDTO> findRecentPaymentQueryTrends(
+            @Param("lookbackHours") int lookbackHours);
 
     /**
      * 统计已经超过 SLA 的支付交易异常数量。

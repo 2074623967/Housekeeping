@@ -82,6 +82,11 @@ payment:
       enabled: ${HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_ENABLED:false}
       window-seconds: ${HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_WINDOW_SECONDS:60}
       max-queries-per-channel: ${HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL:100}
+    monitor:
+      lookback-hours: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_LOOKBACK_HOURS:24}
+      failure-count-threshold: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_COUNT_THRESHOLD:5}
+      failure-rate-threshold-percent: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_THRESHOLD_PERCENT:30}
+      failure-rate-minimum-sample-count: ${HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_MINIMUM_SAMPLE_COUNT:10}
   amqp:
     payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
     payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}

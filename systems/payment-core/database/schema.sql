@@ -326,7 +326,8 @@ CREATE TABLE t_payment_notify_log (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_notify_no (notify_no),
-    KEY idx_notify_payment_created (payment_order_id, created_at)
+    KEY idx_notify_payment_created (payment_order_id, created_at),
+    KEY idx_notify_status_created (notify_status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调日志表';
 
 CREATE TABLE t_payment_route_record (

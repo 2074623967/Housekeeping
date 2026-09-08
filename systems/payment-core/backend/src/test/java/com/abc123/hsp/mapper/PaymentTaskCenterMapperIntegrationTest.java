@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -88,6 +89,20 @@ class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldSummarizeRecentPaymentQueryTrendWithinLookbackWindow() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(15, mapper.countRecentPaymentQueries(24));
+            assertEquals(1, mapper.countRecentPaymentQueryFailures(24));
+            List<PaymentQueryTrendPointDTO> trends = mapper.findRecentPaymentQueryTrends(24);
+
+            assertEquals(15, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
+            assertEquals(1, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getFailureCount).sum());
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -117,6 +132,7 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertQueryHistory(connection, "PAY-BACKOFF-DUE", now, 300, 130);
             insertQueryHistory(connection, "PAY-MAX-WAIT", now, 2100, 1800, 1500, 1200, 800);
             insertQueryHistory(connection, "PAY-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
+            insertQueryHistory(connection, "PAY-OUTSIDE-MONITOR-WINDOW", now, 90000);
             statement.executeUpdate("UPDATE t_payment_notify_log SET notify_status = '查单失败' "
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");

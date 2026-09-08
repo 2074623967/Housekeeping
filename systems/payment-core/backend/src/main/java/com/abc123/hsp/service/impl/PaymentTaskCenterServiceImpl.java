@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
+import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
@@ -24,6 +25,7 @@ import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -64,6 +66,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final int pendingQueryMaxRetryIntervalSeconds;
     private final int pendingQueryPerChannelBatchSize;
     private final int pendingQueryBatchSize;
+    private final int queryMonitorLookbackHours;
+    private final int queryFailureCountThreshold;
+    private final int queryFailureRateThresholdPercent;
+    private final int queryFailureRateMinimumSampleCount;
 
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -85,7 +91,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         @Value("${payment.channel-query.compensation.per-channel-batch-size:20}")
                                                 int pendingQueryPerChannelBatchSize,
                                         @Value("${payment.channel-query.compensation.batch-size:100}")
-                                                int pendingQueryBatchSize) {
+                                                int pendingQueryBatchSize,
+                                        @Value("${payment.channel-query.monitor.lookback-hours:24}")
+                                                int queryMonitorLookbackHours,
+                                        @Value("${payment.channel-query.monitor.failure-count-threshold:5}")
+                                                int queryFailureCountThreshold,
+                                        @Value("${payment.channel-query.monitor.failure-rate-threshold-percent:30}")
+                                                int queryFailureRateThresholdPercent,
+                                        @Value("${payment.channel-query.monitor.failure-rate-minimum-sample-count:10}")
+                                                int queryFailureRateMinimumSampleCount) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
@@ -102,6 +116,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 this.pendingQueryRetryIntervalSeconds);
         this.pendingQueryPerChannelBatchSize = Math.max(pendingQueryPerChannelBatchSize, 1);
         this.pendingQueryBatchSize = Math.max(pendingQueryBatchSize, 1);
+        this.queryMonitorLookbackHours = Math.min(Math.max(queryMonitorLookbackHours, 1), 168);
+        this.queryFailureCountThreshold = Math.max(queryFailureCountThreshold, 1);
+        this.queryFailureRateThresholdPercent = Math.min(
+                Math.max(queryFailureRateThresholdPercent, 1), 100);
+        this.queryFailureRateMinimumSampleCount = Math.max(queryFailureRateMinimumSampleCount, 1);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -124,7 +143,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 2,
                 900,
                 20,
-                100);
+                100,
+                24,
+                5,
+                30,
+                10);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -162,6 +185,24 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 pendingQueryRetryIntervalSeconds,
                 pendingQueryRetryBackoffFactor,
                 pendingQueryMaxRetryIntervalSeconds));
+        int recentQueryCount = paymentTaskCenterMapper.countRecentPaymentQueries(queryMonitorLookbackHours);
+        int recentQueryFailureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(
+                queryMonitorLookbackHours);
+        List<PaymentQueryTrendPointDTO> queryTrends = paymentTaskCenterMapper.findRecentPaymentQueryTrends(
+                queryMonitorLookbackHours);
+        for (PaymentQueryTrendPointDTO trend : queryTrends) {
+            trend.setFailureRate(formatPercentage(
+                    valueOrZero(trend.getFailureCount()),
+                    valueOrZero(trend.getQueryCount())));
+        }
+        overview.setQueryMonitorWindowHours(queryMonitorLookbackHours);
+        overview.setRecentQueryCount(recentQueryCount);
+        overview.setRecentQueryFailureCount(recentQueryFailureCount);
+        overview.setRecentQueryFailureRate(formatPercentage(recentQueryFailureCount, recentQueryCount));
+        overview.setQueryFailureCountThreshold(queryFailureCountThreshold);
+        overview.setQueryFailureRateThresholdPercent(queryFailureRateThresholdPercent);
+        overview.setQueryFailureRateMinimumSampleCount(queryFailureRateMinimumSampleCount);
+        overview.setQueryTrends(queryTrends);
         overview.setFocusAlerts(buildFocusAlerts(overview));
         overview.setRecentTaskRuns(enrichTaskRuns(paymentTaskCenterMapper.findRecentTaskRuns()));
         return overview;
@@ -710,6 +751,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int pendingCallbackCount = valueOrZero(overview.getPendingCallbackCount());
         int pendingQueryBacklogCount = valueOrZero(overview.getPendingQueryBacklogCount());
         int duePendingQueryCount = valueOrZero(overview.getDuePendingQueryCount());
+        int recentQueryCount = valueOrZero(overview.getRecentQueryCount());
+        int recentQueryFailureCount = valueOrZero(overview.getRecentQueryFailureCount());
+        double recentQueryFailureRate = percentage(recentQueryFailureCount, recentQueryCount);
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
         alerts.add(buildAlert(
                 "PAYMENT_EXPIRY",
@@ -744,6 +788,22 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 pendingQueryBacklogCount > pendingQueryBatchSize
                         ? "danger"
                         : pendingQueryBacklogCount > 0 ? "warn" : "success"
+        ));
+        boolean queryFailureThresholdExceeded = recentQueryFailureCount >= queryFailureCountThreshold
+                || (recentQueryCount >= queryFailureRateMinimumSampleCount
+                && recentQueryFailureRate >= queryFailureRateThresholdPercent);
+        alerts.add(buildAlert(
+                "PAYMENT_QUERY_FAILURE_TREND",
+                "主动查单失败趋势",
+                recentQueryFailureCount,
+                String.format("近 %d 小时查单 %d 次，失败 %d 次（%s）",
+                        queryMonitorLookbackHours,
+                        recentQueryCount,
+                        recentQueryFailureCount,
+                        formatPercentage(recentQueryFailureCount, recentQueryCount)),
+                "/payment-task-center",
+                queryFailureThresholdExceeded ? "P1" : recentQueryFailureCount > 0 ? "P2" : "P3",
+                queryFailureThresholdExceeded ? "danger" : recentQueryFailureCount > 0 ? "warn" : "success"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_EVENT",
@@ -794,6 +854,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         alert.setSuggestedAction("进入任务中心或异常中心进行处理");
         alert.setActionRoute(actionRoute);
         return alert;
+    }
+
+    private String formatPercentage(int numerator, int denominator) {
+        return String.format(Locale.ROOT, "%.2f%%", percentage(numerator, denominator));
+    }
+
+    private double percentage(int numerator, int denominator) {
+        return denominator <= 0 ? 0D : numerator * 100D / denominator;
     }
 
     private String resolveSeverityLevel(String taskCode, int warningCount, int failCount, int processedCount) {
