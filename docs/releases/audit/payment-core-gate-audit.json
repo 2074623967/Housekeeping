@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T22:50:25.163Z",
+  "generatedAt": "2026-09-08T00:17:02.595Z",
   "rootDir": "/Users/abc123/workspace/home-service-payment-system",
   "inputs": {
     "regressionPack": "docs/releases/evidence/test-20260809-regression",
@@ -28,7 +28,7 @@
     "release 审计：现有观察结论仍停留在 2026-08-09 当日口径，尚未补齐观察结束记录，因此不能提前形成正式切版结论。"
   ],
   "regressionAudit": {
-    "generatedAt": "2026-09-07T22:50:25.123Z",
+    "generatedAt": "2026-09-08T00:17:02.558Z",
     "rootDir": "/Users/abc123/workspace/home-service-payment-system",
     "packDir": "/Users/abc123/workspace/home-service-payment-system/docs/releases/evidence/test-20260809-regression",
     "summary": {
@@ -59,7 +59,7 @@
     }
   },
   "releaseAudit": {
-    "generatedAt": "2026-09-07T22:50:25.158Z",
+    "generatedAt": "2026-09-08T00:17:02.591Z",
     "rootDir": "/Users/abc123/workspace/home-service-payment-system",
     "inputs": {
       "candidateDoc": "docs/releases/v1.1.0-发布说明-候选版.md",
