@@ -18,6 +18,7 @@
 - `migrations/2026-09-09-add-route-rule-review-source-version.sql`：为路由规则回滚候选记录目标历史版本号，须在复核表创建后执行
 - `migrations/2026-09-09-add-payment-protocol-version.sql`：幂等创建支付协议不可变版本表，并为尚无版本记录的存量协议补录 V1 基线
 - `migrations/2026-09-09-add-payment-protocol-review.sql`：幂等创建支付协议复核申请表，以唯一待办占位约束同一协议最多一条待复核申请
+- `migrations/2026-09-09-add-payment-return-code-snapshot.sql`：为支付单补齐最近一次渠道返回码标准化快照字段，使提交或查单后的详情可稳定追溯；脚本非幂等，只执行一次
 
 初始化方式：
 
@@ -34,7 +35,8 @@
 5. 协议版本表建立后执行 `migrations/2026-09-09-add-payment-protocol-review.sql`；脚本可重复执行，建立协议候选复核与唯一待办占位
 6. 在路由规则版本和复核表均已建立后，执行 `migrations/2026-09-09-add-payment-route-rule-rollout.sql`；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
 7. 执行 `migrations/2026-09-09-add-route-rule-review-source-version.sql`，为回滚候选补齐来源版本；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
-8. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+8. 执行 `migrations/2026-09-09-add-payment-return-code-snapshot.sql`，为支付单补齐返回码快照；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次，历史支付单字段保持 `NULL`
+9. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -47,6 +49,8 @@
    - `SELECT COUNT(*) FROM t_payment_protocol_config config WHERE NOT EXISTS (SELECT 1 FROM t_payment_protocol_version version WHERE version.protocol_code = config.protocol_code)` 返回 `0`
    - `SELECT protocol_code, version_no, COUNT(*) FROM t_payment_protocol_version GROUP BY protocol_code, version_no HAVING COUNT(*) > 1` 返回空集
    - `SELECT protocol_code, COUNT(*) FROM t_payment_protocol_review WHERE review_status = 'PENDING_REVIEW' GROUP BY protocol_code HAVING COUNT(*) > 1` 返回空集
+   - `SHOW COLUMNS FROM t_payment_order LIKE 'last_channel_return_code'` 与 `SHOW COLUMNS FROM t_payment_order LIKE 'last_mapping_matched'` 均返回一行
+   - 迁移前存量支付单的 `last_channel_return_code / last_standardized_code / last_mapping_matched` 均可为 `NULL`，不得批量伪造历史映射结果
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 
 后续继续补强：

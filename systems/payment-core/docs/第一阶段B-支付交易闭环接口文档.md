@@ -661,6 +661,8 @@
 
 1. `channelTransactionNo` 会返回本次查单得到的渠道流水号。
 2. `querySource` 会返回查单结果来源，例如 `WECHAT_SIMULATION`、`ALIPAY_SIMULATION`、`OFFLINE_BANK_SIMULATION`、`LOCAL_SIMULATION_FALLBACK`。
+3. 渠道返回原始码后，支付提交或主动查单会把最近一次标准化结果持久化到支付单；本次查单响应以及后续 `GET /api/payments/{paymentOrderId}` 详情均稳定返回 `channelReturnCode / standardizedCode / standardizedMessage / handlingSuggestion / retryable / manualInterventionRequired / returnCodeMappingVersion / returnCodeMappingMatched`。
+4. 只有 `ENABLED + ACTIVE` 映射参与匹配。未知、停用或已归档码保留原始事实，标准码降级为 `PAYMENT-CHANNEL-UNMAPPED`，重试口径为“未知”并提示人工判断；内部已确认 `SUCCESS` 的查单使用平台成功语义，不误报人工介入。
 
 ## 8. 关闭支付单
 
@@ -1034,7 +1036,7 @@ POST /api/payment-config/control-policies/self-check
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 3. 协议配置当前已支持运营查看、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护、不可变版本和自声明 maker-checker；新增、编辑、启停与回滚都先提交完整候选，批准前运行态不变。该能力不等于可信审批、正式法律签署或电子签章联调。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
-5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示；后续继续补返回码批量导入、渠道差异比对和真正自动归档动作。
+5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本、归档状态展示，并已进入渠道提交响应留痕与主动查单详情 V1.2；后续继续补批量导入、渠道差异比对和真正自动归档动作。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。
@@ -1721,12 +1723,14 @@ POST /api/payment-config/control-policies/self-check
 处理规则：
 
 1. `payment.channel-query.gateway-access.enabled=false` 时继续使用微信、支付宝、线下银行和本地兜底模拟适配器，不改变本地开发行为。
-2. 启用 `gateway-access` 后，支付核心向配置的 `query-url` 发送 `paymentOrderId / orderNo / channelCode / channelTransactionNo`，并读取统一响应中的 `data.tradeStatus / data.channelTransactionNo / data.querySource`。
+2. 启用 `gateway-access` 后，支付核心向配置的 `query-url` 发送 `paymentOrderId / orderNo / channelCode / channelTransactionNo`，并读取统一响应中的 `data.tradeStatus / data.channelTransactionNo / data.querySource / data.channelReturnCode`。
 3. 每次有效渠道查询都会写入查询事实日志；`WAIT_CALLBACK / USERPAYING / FAIL / UNKNOWN` 等非成功状态只刷新返回快照，不修改支付、订单或账单状态。
 4. 渠道明确返回 `SUCCESS` 且存在渠道流水号时，通过条件更新原子抢占成功收口权；抢占成功后同步更新支付尝试、预付单、订单、账单，生成 `PAYMENT_SUCCESS` 事件，派发下游并释放提交并发令牌。
 5. 已为 `SUCCESS / CLOSED` 的支付单不会被主动查单重新打开；并发或重复查单未抢到收口权时不会重复记账、生成事件或派发下游。
 6. 外部网关调用失败、返回空数据或成功结果缺少渠道流水号时返回 `PAYMENT-1026`，不会以本地状态伪装成真实渠道结果。
 7. `gateway-access` 与共享限流开关同时启用时，所有直接、人工补跑和自动补偿查单在调用网关前统一占用渠道时间窗配额；配额耗尽返回 `PAYMENT-1027`，不调用外部渠道，也不计入单笔自动退避失败历史。
+8. 渠道提交与主动查单结果按 `channelCode + channelReturnCode` 查询启用且未归档映射，标准码、文案、处理建议、重试和人工介入口径进入支付尝试响应报文或查单通知日志，并刷新 `t_payment_order` 最近返回码快照，供后续详情稳定读取；映射读取失败采用未匹配降级，避免渠道已受理后因配置查询异常诱发重复下单。
+9. 返回码标准化只提供统一运营语义和审计事实，不改变 `tradeStatus`，也不根据 `retryable` 自动重试。未知码不得推断成成功；只有渠道交易状态明确为 `SUCCESS` 时才按既有幂等流程收口。
 
 配置项：
 

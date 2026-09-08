@@ -4915,3 +4915,34 @@
 2. 提交与驳回不改运行态；异人批准且基线有效时才发布并追加不可变版本。同协议唯一待办和完成后释放占位已由 Mapper 集成测试覆盖。
 3. 当前申请人与复核人仍是自声明字符串，异人约束不能证明真实身份、权限、法务审批或不可抵赖签字；电子签章服务商仍只是配置字段。
 4. 后端未启动且锁屏阻断页面视觉检查，本轮不形成运行态 API、法律签署或完整视觉验收证据；`master -> release/*` 仍不放行。
+
+## 154. 2026-09-09 渠道返回码业务链路标准化 V1.2 验证
+
+### 154.1 本轮补强
+
+1. 四类支付提交适配器和四类主动查单适配器保留渠道原始返回码；提交与查单服务统一按 `channelCode + channelReturnCode` 查询 `ENABLED + ACTIVE` 映射，补充平台标准码、文案、处理建议、重试、人工介入、映射版本和命中状态。
+2. 未知、停用、归档或配置读取异常统一保留原始码并降级为 `PAYMENT-CHANNEL-UNMAPPED`，不改变支付交易状态，也不自动重试；明确 `SUCCESS` 但未配置成功码时使用平台成功语义且不误报人工介入。
+3. 提交标准化结果进入支付尝试响应报文，主动查单结果进入通知日志；两条链路都刷新 `t_payment_order` 最近返回码快照，后续支付单详情可稳定读取。
+4. 新增非幂等迁移 `2026-09-09-add-payment-return-code-snapshot.sql`，历史支付单字段保持可空；新增 Mapper 集成测试证明快照写入、提交事务和新会话详情读回。
+5. 管理端支付详情、App 收银台和结果页展示返回码标准化字段；管理端窄视口工具栏支持两列换行，修复按钮文字逐字竖排问题。
+6. 同步接口、设计、测试、需求、差距、数据库和前端交互文档，新增 `PAY-TC-035`。真实渠道码表、批量导入、差异预检和自动归档仍未实现。
+
+### 154.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 返回码标准化定向测试 | `mvn -Dtest=PaymentChannelReturnCodeStandardizerTest,PaymentChannelSubmitServiceImplTest,PaymentChannelQueryServiceImplTest,PaymentConfigReturnCodeMapperIntegrationTest,PaymentReturnCodeSnapshotMapperIntegrationTest,PaymentServiceImplTest test` | 通过 | `47` 个用例全部通过，覆盖启用/停用/归档/未知映射、读取异常降级、成功码兜底、提交/查单接入、快照写入和跨会话详情读回 |
+| 后端全量测试 | `mvn test` | 通过 | `370` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| `app-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`32` 个模块完成转换 |
+| 前端视觉检查 | `http://127.0.0.1:4183`、`http://127.0.0.1:4184` | 通过 | 已检查管理端窄视口按钮两列换行与文字完整，以及 App 结果页错误态布局；发现的按钮逐字竖排问题修正后复验通过，无明显交叠或截断 |
+| 运行态 API | `http://127.0.0.1:18081` | 未执行 | 后端未启动，不记录返回码快照、支付提交、主动查单或真实渠道数据联调通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentMapper.xml PaymentConfigMapper.xml` | 通过 | 代码、迁移与文档无空白符错误，两份 Mapper XML 结构合法 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `test -> master = 是`、`release/* = 否`；退出码 `2` 为预期 release 阻断，候选说明正式化、正式签字、现场核验和稳定观察结束四项事实仍未形成 |
+
+### 154.3 当前判断
+
+1. 渠道返回码映射已从配置台账进入支付提交与主动查单生产代码路径，标准化结果具备响应、日志和支付单最近快照三层追溯能力。
+2. 标准化层不参与支付状态机判定，未知码不推断成功且配置读取异常不反向失败已发生的渠道调用，避免因运营配置问题诱发重复下单。
+3. 当前验证覆盖单元、Mapper SQL、全量回归、生产构建和有限前端视觉检查；后端 `18081` 未启动，因此没有形成运行态 API、真实渠道返回码或端到端数据展示证据。
+4. 本轮没有新增候选说明正式化、正式签字、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
