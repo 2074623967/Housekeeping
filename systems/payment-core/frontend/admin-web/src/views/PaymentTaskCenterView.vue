@@ -5,6 +5,8 @@ import { paymentTaskCenterApi } from "../api/client";
 const overview = ref({
   expiredPaymentCount: 0,
   pendingCallbackCount: 0,
+  pendingQueryBacklogCount: 0,
+  duePendingQueryCount: 0,
   failedEventCount: 0,
   failedRefundCount: 0,
   warningDayEndBatchCount: 0,
@@ -146,6 +148,14 @@ onMounted(loadOverview);
             <div class="detail-value">{{ overview.pendingCallbackCount }}</div>
           </div>
           <div class="detail-card">
+            <div class="detail-label">达到补查阈值</div>
+            <div class="detail-value">{{ overview.pendingQueryBacklogCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">当前到期可查</div>
+            <div class="detail-value">{{ overview.duePendingQueryCount }}</div>
+          </div>
+          <div class="detail-card">
             <div class="detail-label">失败事件</div>
             <div class="detail-value">{{ overview.failedEventCount }}</div>
           </div>
@@ -171,7 +181,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.12 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单、异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.13 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单、异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -371,6 +381,11 @@ onMounted(loadOverview);
                   <td>需要关注回调、查单或补单收敛</td>
                 </tr>
                 <tr>
+                  <td>主动查单积压</td>
+                  <td>{{ overview.pendingQueryBacklogCount }}</td>
+                  <td>已达到首次等待阈值，其中 {{ overview.duePendingQueryCount }} 笔当前已到自动查询时间</td>
+                </tr>
+                <tr>
                   <td>失败事件</td>
                   <td>{{ overview.failedEventCount }}</td>
                   <td>影响账务、清分、结算跨系统同步</td>
@@ -397,17 +412,17 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
-                  <td>V1.12</td>
+                  <td>V1.13</td>
                   <td>已具备 outbox、本地 IM/SMS/EMAIL 派发骨架与状态回写，后续补真实通知网关</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
-                  <td>V1.12</td>
+                  <td>V1.13</td>
                   <td>已支持供应商受理状态回查与送达状态回写，后续补真实供应商回执接口</td>
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.12</td>
+                  <td>V1.13</td>
                   <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>

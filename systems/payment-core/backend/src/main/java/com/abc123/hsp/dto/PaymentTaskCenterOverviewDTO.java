@@ -13,6 +13,10 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer expiredPaymentCount;
     /** 待收口支付中单数。 */
     private Integer pendingCallbackCount;
+    /** 已达到主动补查阈值的支付单数。 */
+    private Integer pendingQueryBacklogCount;
+    /** 当前已达到自动退避时间的支付单数。 */
+    private Integer duePendingQueryCount;
     /** 失败事件数。 */
     private Integer failedEventCount;
     /** 失败退款数。 */

@@ -45,6 +45,7 @@ public interface PaymentTaskCenterMapper {
      * 查询达到等待阈值、尚未过期且仍待回调的支付单，供人工立即补查。
      */
     List<String> findPendingPaymentOrderIdsForManualQuery(@Param("minAgeSeconds") int minAgeSeconds,
+                                                          @Param("perChannelBatchSize") int perChannelBatchSize,
                                                           @Param("batchSize") int batchSize);
 
     /**
@@ -55,7 +56,22 @@ public interface PaymentTaskCenterMapper {
             @Param("retryIntervalSeconds") int retryIntervalSeconds,
             @Param("retryBackoffFactor") int retryBackoffFactor,
             @Param("maxRetryIntervalSeconds") int maxRetryIntervalSeconds,
+            @Param("perChannelBatchSize") int perChannelBatchSize,
             @Param("batchSize") int batchSize);
+
+    /**
+     * 统计达到首次等待阈值的待回调支付单积压。
+     */
+    int countPendingPaymentQueryBacklog(@Param("minAgeSeconds") int minAgeSeconds);
+
+    /**
+     * 统计当前已达到自动查单退避时间的支付单。
+     */
+    int countDuePendingPaymentQueries(
+            @Param("minAgeSeconds") int minAgeSeconds,
+            @Param("retryIntervalSeconds") int retryIntervalSeconds,
+            @Param("retryBackoffFactor") int retryBackoffFactor,
+            @Param("maxRetryIntervalSeconds") int maxRetryIntervalSeconds);
 
     /**
      * 统计已经超过 SLA 的支付交易异常数量。

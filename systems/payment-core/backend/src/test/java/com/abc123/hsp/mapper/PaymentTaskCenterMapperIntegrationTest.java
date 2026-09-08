@@ -60,11 +60,17 @@ class PaymentTaskCenterMapperIntegrationTest {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
 
             List<String> automaticCandidates = mapper.findDuePendingPaymentOrderIdsForQuery(
-                    30, 60, 2, 900, 100);
-            List<String> manualCandidates = mapper.findPendingPaymentOrderIdsForManualQuery(30, 100);
+                    30, 60, 2, 900, 20, 100);
+            List<String> channelLimitedAutomaticCandidates = mapper.findDuePendingPaymentOrderIdsForQuery(
+                    30, 60, 2, 900, 1, 100);
+            List<String> manualCandidates = mapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100);
+            List<String> channelLimitedManualCandidates = mapper.findPendingPaymentOrderIdsForManualQuery(
+                    30, 2, 100);
 
             assertEquals(Arrays.asList("PAY-NO-HISTORY", "PAY-BACKOFF-DUE", "PAY-MAX-DUE"),
                     automaticCandidates);
+            assertEquals(Arrays.asList("PAY-NO-HISTORY", "PAY-MAX-DUE"),
+                    channelLimitedAutomaticCandidates);
             assertEquals(Arrays.asList(
                     "PAY-NO-HISTORY",
                     "PAY-BASE-WAIT",
@@ -72,6 +78,13 @@ class PaymentTaskCenterMapperIntegrationTest {
                     "PAY-BACKOFF-DUE",
                     "PAY-MAX-WAIT",
                     "PAY-MAX-DUE"), manualCandidates);
+            assertEquals(Arrays.asList(
+                    "PAY-NO-HISTORY",
+                    "PAY-BASE-WAIT",
+                    "PAY-MAX-WAIT",
+                    "PAY-MAX-DUE"), channelLimitedManualCandidates);
+            assertEquals(6, mapper.countPendingPaymentQueryBacklog(30));
+            assertEquals(3, mapper.countDuePendingPaymentQueries(30, 60, 2, 900));
         }
     }
 
@@ -83,7 +96,8 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("CREATE TABLE t_payment_order ("
-                    + "payment_order_id VARCHAR(64) PRIMARY KEY, status VARCHAR(32), created_at DATETIME)");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "channel_code VARCHAR(64), status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "payment_order_id VARCHAR(64), expires_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_notify_log ("
@@ -91,12 +105,12 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "notify_status VARCHAR(32), created_at DATETIME)");
 
             LocalDateTime now = LocalDateTime.now();
-            insertPayment(connection, "PAY-NO-HISTORY", now.minusMinutes(10));
-            insertPayment(connection, "PAY-BASE-WAIT", now.minusMinutes(9));
-            insertPayment(connection, "PAY-BACKOFF-WAIT", now.minusMinutes(8));
-            insertPayment(connection, "PAY-BACKOFF-DUE", now.minusMinutes(7));
-            insertPayment(connection, "PAY-MAX-WAIT", now.minusMinutes(6));
-            insertPayment(connection, "PAY-MAX-DUE", now.minusMinutes(5));
+            insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
+            insertPayment(connection, "PAY-BASE-WAIT", "wx_h5", now.minusMinutes(9));
+            insertPayment(connection, "PAY-BACKOFF-WAIT", "wx_h5", now.minusMinutes(8));
+            insertPayment(connection, "PAY-BACKOFF-DUE", "wx_h5", now.minusMinutes(7));
+            insertPayment(connection, "PAY-MAX-WAIT", "alipay_h5", now.minusMinutes(6));
+            insertPayment(connection, "PAY-MAX-DUE", "alipay_h5", now.minusMinutes(5));
 
             insertQueryHistory(connection, "PAY-BASE-WAIT", now, 30);
             insertQueryHistory(connection, "PAY-BACKOFF-WAIT", now, 300, 90);
@@ -110,15 +124,21 @@ class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
-    private void insertPayment(Connection connection, String paymentOrderId, LocalDateTime createdAt)
+    private void insertPayment(
+            Connection connection,
+            String paymentOrderId,
+            String channelCode,
+            LocalDateTime createdAt)
             throws Exception {
         try (PreparedStatement paymentStatement = connection.prepareStatement(
-                "INSERT INTO t_payment_order(payment_order_id, status, created_at) VALUES (?, ?, ?)");
+                "INSERT INTO t_payment_order(payment_order_id, channel_code, status, created_at) "
+                        + "VALUES (?, ?, ?, ?)");
              PreparedStatement prepayStatement = connection.prepareStatement(
                      "INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES (?, ?)")) {
             paymentStatement.setString(1, paymentOrderId);
-            paymentStatement.setString(2, "WAIT_CALLBACK");
-            paymentStatement.setTimestamp(3, Timestamp.valueOf(createdAt));
+            paymentStatement.setString(2, channelCode);
+            paymentStatement.setString(3, "WAIT_CALLBACK");
+            paymentStatement.setTimestamp(4, Timestamp.valueOf(createdAt));
             paymentStatement.executeUpdate();
 
             prepayStatement.setString(1, paymentOrderId);

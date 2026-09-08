@@ -62,6 +62,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final int pendingQueryRetryIntervalSeconds;
     private final int pendingQueryRetryBackoffFactor;
     private final int pendingQueryMaxRetryIntervalSeconds;
+    private final int pendingQueryPerChannelBatchSize;
     private final int pendingQueryBatchSize;
 
     @Autowired
@@ -81,6 +82,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                 int pendingQueryRetryBackoffFactor,
                                         @Value("${payment.channel-query.compensation.max-retry-interval-seconds:900}")
                                                 int pendingQueryMaxRetryIntervalSeconds,
+                                        @Value("${payment.channel-query.compensation.per-channel-batch-size:20}")
+                                                int pendingQueryPerChannelBatchSize,
                                         @Value("${payment.channel-query.compensation.batch-size:100}")
                                                 int pendingQueryBatchSize) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
@@ -97,6 +100,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.pendingQueryMaxRetryIntervalSeconds = Math.max(
                 pendingQueryMaxRetryIntervalSeconds,
                 this.pendingQueryRetryIntervalSeconds);
+        this.pendingQueryPerChannelBatchSize = Math.max(pendingQueryPerChannelBatchSize, 1);
         this.pendingQueryBatchSize = Math.max(pendingQueryBatchSize, 1);
     }
 
@@ -119,6 +123,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 60,
                 2,
                 900,
+                20,
                 100);
     }
 
@@ -150,6 +155,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     public PaymentTaskCenterOverviewDTO overview() {
         PaymentTaskCenterOverviewDTO overview = paymentTaskCenterMapper.findOverviewSummary();
+        overview.setPendingQueryBacklogCount(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(
+                pendingQueryMinAgeSeconds));
+        overview.setDuePendingQueryCount(paymentTaskCenterMapper.countDuePendingPaymentQueries(
+                pendingQueryMinAgeSeconds,
+                pendingQueryRetryIntervalSeconds,
+                pendingQueryRetryBackoffFactor,
+                pendingQueryMaxRetryIntervalSeconds));
         overview.setFocusAlerts(buildFocusAlerts(overview));
         overview.setRecentTaskRuns(enrichTaskRuns(paymentTaskCenterMapper.findRecentTaskRuns()));
         return overview;
@@ -510,12 +522,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         List<String> paymentOrderIds = RUN_MODE_MANUAL.equals(runMode)
                 ? paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(
                         pendingQueryMinAgeSeconds,
+                        pendingQueryPerChannelBatchSize,
                         pendingQueryBatchSize)
                 : paymentTaskCenterMapper.findDuePendingPaymentOrderIdsForQuery(
                         pendingQueryMinAgeSeconds,
                         pendingQueryRetryIntervalSeconds,
                         pendingQueryRetryBackoffFactor,
                         pendingQueryMaxRetryIntervalSeconds,
+                        pendingQueryPerChannelBatchSize,
                         pendingQueryBatchSize);
         int successCount = 0;
         int warningCount = 0;
@@ -694,6 +708,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         List<PaymentAlertItemDTO> alerts = new ArrayList<>();
         int expiredPaymentCount = valueOrZero(overview.getExpiredPaymentCount());
         int pendingCallbackCount = valueOrZero(overview.getPendingCallbackCount());
+        int pendingQueryBacklogCount = valueOrZero(overview.getPendingQueryBacklogCount());
+        int duePendingQueryCount = valueOrZero(overview.getDuePendingQueryCount());
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
         alerts.add(buildAlert(
                 "PAYMENT_EXPIRY",
@@ -712,6 +728,22 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "/payment-issues?issueType=待回调未收口",
                 pendingCallbackCount > 10 ? "P1" : "P2",
                 pendingCallbackCount > 10 ? "danger" : "warn"
+        ));
+        alerts.add(buildAlert(
+                "PAYMENT_QUERY_BACKLOG",
+                "主动查单积压",
+                pendingQueryBacklogCount,
+                pendingQueryBacklogCount > 0
+                        ? String.format("%d 笔已达到补查阈值，其中 %d 笔当前已到自动查询时间",
+                        pendingQueryBacklogCount, duePendingQueryCount)
+                        : "暂无达到补查阈值的支付单",
+                "/payment-task-center",
+                pendingQueryBacklogCount > pendingQueryBatchSize
+                        ? "P1"
+                        : pendingQueryBacklogCount > 0 ? "P2" : "P3",
+                pendingQueryBacklogCount > pendingQueryBatchSize
+                        ? "danger"
+                        : pendingQueryBacklogCount > 0 ? "warn" : "success"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_EVENT",

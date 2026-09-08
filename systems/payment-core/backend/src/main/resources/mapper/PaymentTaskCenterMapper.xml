@@ -352,19 +352,75 @@
     </select>
 
     <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">
-        SELECT p.payment_order_id
+        SELECT candidates.payment_order_id
+        FROM (
+            SELECT p.payment_order_id,
+                   p.created_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.channel_code
+                       ORDER BY p.created_at, p.id
+                   ) AS channel_rank
+            FROM t_payment_order p
+                     INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+            WHERE p.status = 'WAIT_CALLBACK'
+              AND pr.expires_at &gt; NOW()
+              AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+        ) candidates
+        WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
+        ORDER BY candidates.created_at, candidates.payment_order_id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="findDuePendingPaymentOrderIdsForQuery" resultType="string">
+        SELECT candidates.payment_order_id
+        FROM (
+            SELECT p.payment_order_id,
+                   p.created_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY p.channel_code
+                       ORDER BY p.created_at, p.id
+                   ) AS channel_rank
+            FROM t_payment_order p
+                     INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                     LEFT JOIN (
+                        SELECT payment_order_id,
+                               COUNT(1) AS query_count,
+                               MAX(created_at) AS latest_query_at
+                        FROM t_payment_notify_log
+                        WHERE notify_status IN ('已查单', '查单失败')
+                        GROUP BY payment_order_id
+                     ) query_history ON query_history.payment_order_id = p.payment_order_id
+            WHERE p.status = 'WAIT_CALLBACK'
+              AND pr.expires_at &gt; NOW()
+              AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+              AND (
+                query_history.latest_query_at IS NULL
+                OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
+                    LEAST(
+                        #{maxRetryIntervalSeconds},
+                        #{retryIntervalSeconds} * POWER(
+                            #{retryBackoffFactor},
+                            LEAST(GREATEST(query_history.query_count - 1, 0), 20)
+                        )
+                    )
+              )
+        ) candidates
+        WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
+        ORDER BY candidates.created_at, candidates.payment_order_id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="countPendingPaymentQueryBacklog" resultType="int">
+        SELECT COUNT(1)
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
         WHERE p.status = 'WAIT_CALLBACK'
           AND pr.expires_at &gt; NOW()
           AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
-        GROUP BY p.payment_order_id, p.created_at
-        ORDER BY p.created_at
-        LIMIT #{batchSize}
     </select>
 
-    <select id="findDuePendingPaymentOrderIdsForQuery" resultType="string">
-        SELECT p.payment_order_id
+    <select id="countDuePendingPaymentQueries" resultType="int">
+        SELECT COUNT(1)
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
                  LEFT JOIN (
@@ -389,9 +445,6 @@
                     )
                 )
           )
-        GROUP BY p.payment_order_id, p.created_at
-        ORDER BY p.created_at
-        LIMIT #{batchSize}
     </select>
 
     <insert id="insertTaskRunLog" parameterType="com.abc123.hsp.entity.PaymentTaskRunLogEntity">
