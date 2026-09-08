@@ -143,6 +143,7 @@ t_order
 4. `t_payment_notify_log`
    - `notify_no` 唯一索引
    - `payment_order_id, created_at` 组合索引
+   - `notify_status, created_at` 组合索引，支持查单事实窗口统计与失败趋势聚合
 5. `t_payment_route_record`
    - `route_no` 唯一索引
    - `payment_order_id, created_at` 组合索引
