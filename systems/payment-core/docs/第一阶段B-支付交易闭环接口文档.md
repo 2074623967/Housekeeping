@@ -1281,6 +1281,8 @@ POST /api/payment-config/control-policies/self-check
 6. `focusAlerts`：重点任务告警，包含告警标题、告警等级、影响数量和建议跳转路由。
 7. `overdueIssueCount`：超过 SLA 的支付交易异常数。
 8. `recentTaskRuns`：最近 10 条任务执行日志。
+9. `pendingQueryBacklogCount`：已达到首次主动补查等待阈值且预付单仍有效的支付单数。
+10. `duePendingQueryCount`：当前已达到指数退避时间、可由自动任务查询的支付单数。
 
 ### 13.8 查询支付任务执行日志
 
@@ -1320,6 +1322,7 @@ POST /api/payment-config/control-policies/self-check
 4. 单笔失败与其他支付单隔离，任务摘要最多记录三个失败支付单号；自动任务使用 `PAYMENT_PENDING_QUERY` 租约避免多实例重复执行。
 5. 自动调度要求 `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED=true` 且 `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED=true`，任一关闭均不执行自动查单。
 6. 自动任务将渠道业务结果和网关查询失败都计入历史次数，并按 `基础间隔 × 退避系数^(历史次数-1)` 计算单笔支付单的下一次查询间隔，达到最大间隔后封顶。
+7. 人工与自动候选均先按渠道内创建时间排序并限制每渠道单批配额，再应用全局批次上限，避免单一大渠道挤占整轮查询资源。
 
 补偿配置：
 
@@ -1331,6 +1334,7 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_INTERVAL_SECONDS` | `60` | 自动查单的基础重试间隔 |
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_BACKOFF_FACTOR` | `2` | 自动查单的指数退避系数，最小为 `1` |
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_MAX_RETRY_INTERVAL_SECONDS` | `900` | 单笔支付单自动查单的最大退避间隔，不能小于基础间隔 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_PER_CHANNEL_BATCH_SIZE` | `20` | 单轮任务对单一渠道最多查询的支付单数量 |
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_BATCH_SIZE` | `100` | 单批最大支付单数量 |
 
 ### 13.7 手动执行异常 SLA 升级巡检
