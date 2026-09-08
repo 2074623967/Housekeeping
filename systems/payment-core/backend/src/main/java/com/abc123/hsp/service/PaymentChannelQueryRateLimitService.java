@@ -6,7 +6,7 @@ package com.abc123.hsp.service;
 public interface PaymentChannelQueryRateLimitService {
 
     /**
-     * 为指定渠道占用一个查单时间窗配额，超过上限时抛出业务异常。
+     * 为指定支付单的渠道查单占用一个时间窗配额，超过上限时记录拒绝事实并抛出业务异常。
      */
-    void acquire(String channelCode);
+    void acquire(String channelCode, String paymentOrderId);
 }

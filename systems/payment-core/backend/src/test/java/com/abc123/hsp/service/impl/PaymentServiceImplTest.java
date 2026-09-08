@@ -85,7 +85,7 @@ class PaymentServiceImplTest {
         org.mockito.Mockito.doThrow(new BusinessException(
                 ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
                 "rate limited"))
-                .when(paymentChannelQueryRateLimitService).acquire("wx_h5");
+                .when(paymentChannelQueryRateLimitService).acquire("wx_h5", "PAY-QUERY-LIMIT");
         com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
         request.setPaymentOrderId("PAY-QUERY-LIMIT");
 
@@ -104,7 +104,7 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
                 exception.getCode());
-        verify(paymentChannelQueryRateLimitService).acquire("wx_h5");
+        verify(paymentChannelQueryRateLimitService).acquire("wx_h5", "PAY-QUERY-LIMIT");
         verify(paymentChannelQueryService, never()).query(detail);
     }
 

@@ -35,4 +35,22 @@
             OR used_count &lt; #{maxQueries}
           )
     </update>
+
+    <insert id="insertRejection">
+        INSERT INTO t_payment_channel_query_rate_limit_log (
+            rejection_no,
+            channel_code,
+            payment_order_id,
+            window_seconds,
+            max_queries,
+            rejected_at
+        ) VALUES (
+            #{rejectionNo},
+            #{channelCode},
+            #{paymentOrderId},
+            #{windowSeconds},
+            #{maxQueries},
+            NOW()
+        )
+    </insert>
 </mapper>

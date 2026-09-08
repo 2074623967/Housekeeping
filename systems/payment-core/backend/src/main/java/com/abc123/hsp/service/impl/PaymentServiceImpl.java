@@ -98,7 +98,7 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentEventDispatchService,
                 paymentRiskControlService,
                 paymentOpsConfigService,
-                channelCode -> {
+                (channelCode, paymentOrderId) -> {
                     // 单元测试兼容构造器默认不启用共享查单限流。
                 });
     }
@@ -605,7 +605,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        paymentChannelQueryRateLimitService.acquire(detail.getChannel());
+        paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
         PaymentChannelQueryResultDTO queryResult;
         try {
             queryResult = paymentChannelQueryService.query(detail);

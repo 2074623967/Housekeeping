@@ -17,4 +17,11 @@ public interface PaymentChannelQueryRateLimitMapper {
             @Param("channelCode") String channelCode,
             @Param("windowSeconds") int windowSeconds,
             @Param("maxQueries") int maxQueries);
+
+    /** 记录渠道查单限流拒绝事实。 */
+    int insertRejection(@Param("rejectionNo") String rejectionNo,
+                        @Param("channelCode") String channelCode,
+                        @Param("paymentOrderId") String paymentOrderId,
+                        @Param("windowSeconds") int windowSeconds,
+                        @Param("maxQueries") int maxQueries);
 }

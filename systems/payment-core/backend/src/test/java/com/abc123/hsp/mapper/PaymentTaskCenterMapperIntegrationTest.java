@@ -96,6 +96,7 @@ class PaymentTaskCenterMapperIntegrationTest {
 
             assertEquals(15, mapper.countRecentPaymentQueries(24));
             assertEquals(1, mapper.countRecentPaymentQueryFailures(24));
+            assertEquals(3, mapper.countRecentPaymentQueryRateLimitRejections(24));
             List<PaymentQueryTrendPointDTO> trends = mapper.findRecentPaymentQueryTrends(24);
 
             assertEquals(15, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
@@ -107,6 +108,7 @@ class PaymentTaskCenterMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             Connection connection = session.getConnection();
+            statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
@@ -118,6 +120,10 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_notify_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "notify_status VARCHAR(32), created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_channel_query_rate_limit_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
+                    + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
+                    + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
 
             LocalDateTime now = LocalDateTime.now();
             insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
@@ -133,6 +139,7 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertQueryHistory(connection, "PAY-MAX-WAIT", now, 2100, 1800, 1500, 1200, 800);
             insertQueryHistory(connection, "PAY-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
             insertQueryHistory(connection, "PAY-OUTSIDE-MONITOR-WINDOW", now, 90000);
+            insertRateLimitRejections(connection, now, 30, 3600, 7200, 90000);
             statement.executeUpdate("UPDATE t_payment_notify_log SET notify_status = '查单失败' "
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");
@@ -174,6 +181,27 @@ class PaymentTaskCenterMapperIntegrationTest {
                 statement.setString(1, paymentOrderId);
                 statement.setString(2, "已查单");
                 statement.setTimestamp(3, Timestamp.valueOf(now.minusSeconds(seconds)));
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private void insertRateLimitRejections(
+            Connection connection,
+            LocalDateTime now,
+            int... secondsAgo) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO t_payment_channel_query_rate_limit_log("
+                        + "rejection_no, channel_code, payment_order_id, window_seconds, max_queries, rejected_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?)")) {
+            for (int index = 0; index < secondsAgo.length; index++) {
+                statement.setString(1, "QRL-" + index);
+                statement.setString(2, "wx_h5");
+                statement.setString(3, "PAY-LIMITED-" + index);
+                statement.setInt(4, 60);
+                statement.setInt(5, 100);
+                statement.setTimestamp(6, Timestamp.valueOf(now.minusSeconds(secondsAgo[index])));
                 statement.addBatch();
             }
             statement.executeBatch();

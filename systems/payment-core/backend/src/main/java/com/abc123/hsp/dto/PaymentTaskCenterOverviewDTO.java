@@ -31,6 +31,10 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer queryFailureRateThresholdPercent;
     /** 失败率告警最小样本数。 */
     private Integer queryFailureRateMinimumSampleCount;
+    /** 统计窗口内渠道查单限流拒绝次数。 */
+    private Integer recentQueryRateLimitRejectionCount;
+    /** 渠道查单限流拒绝告警阈值。 */
+    private Integer queryRateLimitRejectionCountThreshold;
     /** 最近查单小时趋势。 */
     private List<PaymentQueryTrendPointDTO> queryTrends;
     /** 失败事件数。 */

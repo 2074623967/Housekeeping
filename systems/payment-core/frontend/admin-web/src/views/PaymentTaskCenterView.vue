@@ -14,6 +14,8 @@ const overview = ref({
   queryFailureCountThreshold: 5,
   queryFailureRateThresholdPercent: 30,
   queryFailureRateMinimumSampleCount: 10,
+  recentQueryRateLimitRejectionCount: 0,
+  queryRateLimitRejectionCountThreshold: 10,
   queryTrends: [],
   failedEventCount: 0,
   failedRefundCount: 0,
@@ -173,6 +175,11 @@ onMounted(loadOverview);
             <div class="meta">失败率 {{ overview.recentQueryFailureRate }}</div>
           </div>
           <div class="detail-card">
+            <div class="detail-label">窗口内限流拒绝</div>
+            <div class="detail-value">{{ overview.recentQueryRateLimitRejectionCount }}</div>
+            <div class="meta">独立于渠道失败率统计</div>
+          </div>
+          <div class="detail-card">
             <div class="detail-label">失败事件</div>
             <div class="detail-value">{{ overview.failedEventCount }}</div>
           </div>
@@ -200,6 +207,9 @@ onMounted(loadOverview);
               <h3>主动查单小时趋势</h3>
               <p class="meta">
                 最近 {{ overview.queryMonitorWindowHours }} 小时；P1 阈值为失败不少于 {{ overview.queryFailureCountThreshold }} 次，或样本不少于 {{ overview.queryFailureRateMinimumSampleCount }} 次且失败率达到 {{ overview.queryFailureRateThresholdPercent }}%
+              </p>
+              <p class="meta">
+                共享渠道配额耗尽会单独记录限流拒绝，累计不少于 {{ overview.queryRateLimitRejectionCountThreshold }} 次时升级为 P1，不计入渠道失败率
               </p>
             </div>
           </div>
@@ -232,7 +242,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.15 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.16 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、限流拒绝、异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -442,6 +452,11 @@ onMounted(loadOverview);
                   <td>近 {{ overview.queryMonitorWindowHours }} 小时共查单 {{ overview.recentQueryCount }} 次，失败率 {{ overview.recentQueryFailureRate }}</td>
                 </tr>
                 <tr>
+                  <td>主动查单限流拒绝</td>
+                  <td>{{ overview.recentQueryRateLimitRejectionCount }}</td>
+                  <td>近 {{ overview.queryMonitorWindowHours }} 小时共享渠道配额耗尽次数；不计入渠道失败率</td>
+                </tr>
+                <tr>
                   <td>失败事件</td>
                   <td>{{ overview.failedEventCount }}</td>
                   <td>影响账务、清分、结算跨系统同步</td>
@@ -478,8 +493,8 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.13</td>
-                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发与回执回查纳入统一任务矩阵</td>
+                  <td>V1.16</td>
+                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将查单失败、限流拒绝、异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>
             </table>

@@ -50,9 +50,14 @@ class PaymentChannelQueryRateLimitMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_bucket");
+            statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("CREATE TABLE t_payment_channel_query_rate_bucket ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64) UNIQUE, "
                     + "window_started_at DATETIME, used_count INT, updated_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_channel_query_rate_limit_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64) UNIQUE, "
+                    + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
+                    + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
             session.commit();
         }
     }
@@ -66,11 +71,14 @@ class PaymentChannelQueryRateLimitMapperIntegrationTest {
             assertEquals(1, mapper.acquire("wx_h5", 60, 2));
             assertEquals(1, mapper.acquire("wx_h5", 60, 2));
             assertEquals(0, mapper.acquire("wx_h5", 60, 2));
+            assertEquals(1, mapper.insertRejection(
+                    "QRL-001", "wx_h5", "PAY-LIMITED", 60, 2));
 
             expireWindow(session.getConnection(), "wx_h5");
 
             assertEquals(1, mapper.acquire("wx_h5", 60, 2));
             assertEquals(1, findUsedCount(session.getConnection(), "wx_h5"));
+            assertEquals(1, findRejectionCount(session.getConnection(), "PAY-LIMITED"));
             session.commit();
         }
     }
@@ -89,6 +97,17 @@ class PaymentChannelQueryRateLimitMapperIntegrationTest {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT used_count FROM t_payment_channel_query_rate_bucket WHERE channel_code = ?")) {
             statement.setString(1, channelCode);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            }
+        }
+    }
+
+    private int findRejectionCount(Connection connection, String paymentOrderId) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COUNT(1) FROM t_payment_channel_query_rate_limit_log WHERE payment_order_id = ?")) {
+            statement.setString(1, paymentOrderId);
             try (ResultSet resultSet = statement.executeQuery()) {
                 resultSet.next();
                 return resultSet.getInt(1);

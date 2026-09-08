@@ -5,6 +5,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.mapper.PaymentChannelQueryRateLimitMapper;
 import com.abc123.hsp.service.PaymentChannelQueryRateLimitService;
 import java.util.Locale;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -45,8 +46,10 @@ public class PaymentChannelQueryRateLimitServiceImpl implements PaymentChannelQu
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void acquire(String channelCode) {
+    @Transactional(
+            propagation = Propagation.REQUIRES_NEW,
+            noRollbackFor = BusinessException.class)
+    public void acquire(String channelCode, String paymentOrderId) {
         if (!enabled) {
             return;
         }
@@ -58,6 +61,12 @@ public class PaymentChannelQueryRateLimitServiceImpl implements PaymentChannelQu
         String normalizedChannelCode = channelCode.trim().toLowerCase(Locale.ROOT);
         mapper.initBucket(normalizedChannelCode);
         if (mapper.acquire(normalizedChannelCode, windowSeconds, maxQueries) == 0) {
+            mapper.insertRejection(
+                    "QRL" + UUID.randomUUID().toString().replace("-", ""),
+                    normalizedChannelCode,
+                    paymentOrderId,
+                    windowSeconds,
+                    maxQueries);
             throw new BusinessException(
                     ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
                     String.format("channel query rate limit exceeded: %d requests per %d seconds",

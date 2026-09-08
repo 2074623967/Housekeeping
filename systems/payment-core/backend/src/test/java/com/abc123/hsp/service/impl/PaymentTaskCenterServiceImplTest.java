@@ -98,6 +98,22 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExposeRateLimitRejectionsAndRaiseIndependentThresholdAlert() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(24)).thenReturn(10);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(10, overview.getRecentQueryRateLimitRejectionCount());
+        Assertions.assertEquals(10, overview.getQueryRateLimitRejectionCountThreshold());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_QUERY_RATE_LIMIT_REJECTION".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("共有 10 次查单")));
+    }
+
+    @Test
     void shouldQueryPendingPaymentsAndIsolateSinglePaymentFailure() {
         when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100))
                 .thenReturn(Arrays.asList("PAY-QUERY-1", "PAY-QUERY-2", "PAY-QUERY-3"));
@@ -683,6 +699,7 @@ class PaymentTaskCenterServiceImplTest {
                 24,
                 5,
                 30,
+                10,
                 10);
     }
 }

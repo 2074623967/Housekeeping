@@ -461,6 +461,12 @@
           AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
     </select>
 
+    <select id="countRecentPaymentQueryRateLimitRejections" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_channel_query_rate_limit_log
+        WHERE rejected_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+    </select>
+
     <select id="findRecentPaymentQueryTrends"
             resultType="com.abc123.hsp.dto.PaymentQueryTrendPointDTO">
         SELECT query_bucket.time_bucket AS timeBucket,
