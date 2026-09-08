@@ -445,9 +445,31 @@
                archive_status_type AS archiveStatusType,
                status,
                status_type AS statusType,
+               priority,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_channel_return_code_map
         ORDER BY priority ASC, id ASC
+    </select>
+
+    <select id="findReturnCodeMappingsForUpdate"
+            resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
+        SELECT channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               standardized_code AS standardizedCode,
+               standardized_message AS standardizedMessage,
+               handling_suggestion AS handlingSuggestion,
+               retryable,
+               manual_intervention_required AS manualInterventionRequired,
+               mapping_version AS mappingVersion,
+               archive_status AS archiveStatus,
+               archive_status_type AS archiveStatusType,
+               status,
+               status_type AS statusType,
+               priority,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_channel_return_code_map
+        ORDER BY channel_code ASC, channel_return_code ASC
+        FOR UPDATE
     </select>
 
     <select id="findActiveReturnCodeMapping"
@@ -464,6 +486,7 @@
                archive_status_type AS archiveStatusType,
                status,
                status_type AS statusType,
+               priority,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_channel_return_code_map
         WHERE channel_code = #{channelCode}
@@ -1087,6 +1110,46 @@
         WHERE channel_code = #{channelCode}
           AND channel_return_code = #{channelReturnCode}
     </update>
+
+    <insert id="upsertReturnCodeMapping">
+        INSERT INTO t_payment_channel_return_code_map (
+            channel_code, channel_return_code, standardized_code, standardized_message,
+            handling_suggestion, retryable, manual_intervention_required, mapping_version,
+            archive_status, archive_status_type, status, status_type, priority, updated_at
+        ) VALUES (
+            #{channelCode}, #{channelReturnCode}, #{standardizedCode}, #{standardizedMessage},
+            #{handlingSuggestion}, #{retryable}, #{manualInterventionRequired}, #{mappingVersion},
+            'ACTIVE', 'success', #{status}, #{statusType}, #{priority}, NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            standardized_code = CASE WHEN archive_status = 'ACTIVE'
+                THEN VALUES(standardized_code) ELSE standardized_code END,
+            standardized_message = CASE WHEN archive_status = 'ACTIVE'
+                THEN VALUES(standardized_message) ELSE standardized_message END,
+            handling_suggestion = CASE WHEN archive_status = 'ACTIVE'
+                THEN VALUES(handling_suggestion) ELSE handling_suggestion END,
+            retryable = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(retryable) ELSE retryable END,
+            manual_intervention_required = CASE WHEN archive_status = 'ACTIVE'
+                THEN VALUES(manual_intervention_required) ELSE manual_intervention_required END,
+            mapping_version = CASE WHEN archive_status = 'ACTIVE'
+                THEN VALUES(mapping_version) ELSE mapping_version END,
+            status = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(status) ELSE status END,
+            status_type = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(status_type) ELSE status_type END,
+            priority = CASE WHEN archive_status = 'ACTIVE' THEN VALUES(priority) ELSE priority END,
+            updated_at = CASE WHEN archive_status = 'ACTIVE' THEN NOW() ELSE updated_at END
+    </insert>
+
+    <insert id="insertReturnCodeImportBatch">
+        INSERT INTO t_payment_return_code_import_batch (
+            batch_no, operator_name, change_reason, source_sha256, baseline_fingerprint,
+            result_fingerprint, total_count, create_count, update_count, unchanged_count,
+            applied_count, batch_status, batch_status_type, created_at
+        ) VALUES (
+            #{batchNo}, #{operator}, #{changeReason}, #{sourceSha256}, #{baselineFingerprint},
+            #{resultFingerprint}, #{totalCount}, #{createCount}, #{updateCount}, #{unchangedCount},
+            #{appliedCount}, #{batchStatus}, #{batchStatusType}, NOW()
+        )
+    </insert>
 
     <update id="updateGatewayStatus">
         UPDATE t_payment_gateway_config

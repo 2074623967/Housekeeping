@@ -43,6 +43,13 @@ const protocolActionReason = ref("");
 const protocolReviewer = ref("");
 const protocolReviewComment = ref("");
 const editingRosterCode = ref("");
+const returnCodeImportFileName = ref("");
+const returnCodeImportCsv = ref("");
+const returnCodeImportOperator = ref("");
+const returnCodeImportReason = ref("");
+const returnCodeImportPreview = ref(null);
+const isReturnCodeImportPreviewing = ref(false);
+const isReturnCodeImportApplying = ref(false);
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
 const rosterForm = ref(createRosterForm());
@@ -496,6 +503,109 @@ async function toggleReturnCodeMapping(mapping) {
     "返回码映射",
     paymentConfigApi.toggleReturnCodeMapping
   );
+}
+
+async function handleReturnCodeImportFile(event) {
+  const [file] = event.target.files || [];
+  returnCodeImportPreview.value = null;
+  returnCodeImportCsv.value = "";
+  returnCodeImportFileName.value = "";
+  if (!file) {
+    return;
+  }
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    actionMessage.value = "返回码导入失败：请选择 CSV 文件。";
+    event.target.value = "";
+    return;
+  }
+  if (file.size > 512 * 1024) {
+    actionMessage.value = "返回码导入失败：CSV 文件不能超过 512 KB。";
+    event.target.value = "";
+    return;
+  }
+  try {
+    returnCodeImportCsv.value = await file.text();
+    returnCodeImportFileName.value = file.name;
+    actionMessage.value = `已读取 ${file.name}，请执行差异预检。`;
+  } catch (error) {
+    actionMessage.value = `返回码文件读取失败：${error.message}`;
+    event.target.value = "";
+  }
+}
+
+function downloadReturnCodeImportTemplate() {
+  const csv = "\uFEFFchannelCode,channelReturnCode,standardizedCode,standardizedMessage,handlingSuggestion,retryable,manualInterventionRequired,mappingVersion,status,priority\n"
+    + "wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,用户支付中,等待回调或主动查单,是,否,v2026.09.1,ENABLED,1\n";
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "payment-return-code-import-template.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function previewReturnCodeImport() {
+  if (!returnCodeImportCsv.value) {
+    actionMessage.value = "返回码预检失败：请先选择 CSV 文件。";
+    return;
+  }
+  isReturnCodeImportPreviewing.value = true;
+  returnCodeImportPreview.value = null;
+  actionMessage.value = "";
+  try {
+    returnCodeImportPreview.value = await paymentConfigApi.previewReturnCodeImport({
+      csvContent: returnCodeImportCsv.value
+    });
+    actionMessage.value = returnCodeImportPreview.value.valid
+      ? "返回码差异预检通过，可确认应用。"
+      : `返回码差异预检未通过：${returnCodeImportPreview.value.invalidCount} 行需要修正。`;
+  } catch (error) {
+    actionMessage.value = `返回码差异预检失败：${error.message}`;
+  } finally {
+    isReturnCodeImportPreviewing.value = false;
+  }
+}
+
+async function applyReturnCodeImport() {
+  if (!returnCodeImportPreview.value?.valid) {
+    actionMessage.value = "返回码导入失败：请先完成并通过差异预检。";
+    return;
+  }
+  if (!returnCodeImportOperator.value || !returnCodeImportReason.value) {
+    actionMessage.value = "返回码导入失败：操作人自声明和导入原因均不能为空。";
+    return;
+  }
+  const changedCount = returnCodeImportPreview.value.createCount + returnCodeImportPreview.value.updateCount;
+  if (!window.confirm(`确认应用 ${changedCount} 条返回码配置变化？归档记录和文件缺失项不会被修改。`)) {
+    return;
+  }
+  isReturnCodeImportApplying.value = true;
+  actionMessage.value = "";
+  try {
+    const result = await paymentConfigApi.applyReturnCodeImport({
+      csvContent: returnCodeImportCsv.value,
+      baselineFingerprint: returnCodeImportPreview.value.baselineFingerprint,
+      operator: returnCodeImportOperator.value,
+      changeReason: returnCodeImportReason.value
+    });
+    returnCodeImportPreview.value = result;
+    await loadOverview();
+    actionMessage.value = `返回码导入已应用 ${result.appliedCount} 条，审计批次 ${result.batchNo}。`;
+  } catch (error) {
+    returnCodeImportPreview.value = null;
+    actionMessage.value = `返回码导入失败：${error.message}`;
+  } finally {
+    isReturnCodeImportApplying.value = false;
+  }
+}
+
+function formatReturnCodeImportAction(action) {
+  return {
+    CREATE: "新增",
+    UPDATE: "更新",
+    UNCHANGED: "不变",
+    INVALID: "无效"
+  }[action] || action;
 }
 
 async function toggleGateway(gateway) {
@@ -1721,7 +1831,80 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>渠道返回码映射</h3>
               <p class="meta">统一微信、支付宝、银行通道的错误码口径，沉淀标准化错误文案与处理建议</p>
             </div>
-            <button class="button secondary" @click="exportGovernanceSnapshot('RETURN_CODES')">导出返回码</button>
+            <div class="table-inline-actions">
+              <button class="button secondary" @click="downloadReturnCodeImportTemplate">下载导入模板</button>
+              <button class="button secondary" @click="exportGovernanceSnapshot('RETURN_CODES')">导出返回码</button>
+            </div>
+          </div>
+
+          <div class="return-code-import-panel">
+            <div class="filter-grid">
+              <label>
+                CSV 文件
+                <input type="file" accept=".csv,text/csv" @change="handleReturnCodeImportFile" />
+                <span v-if="returnCodeImportFileName" class="meta">{{ returnCodeImportFileName }}</span>
+              </label>
+              <label>
+                操作人自声明
+                <input v-model.trim="returnCodeImportOperator" maxlength="128" placeholder="请输入操作人" />
+              </label>
+              <label class="wide-field">
+                导入原因
+                <input v-model.trim="returnCodeImportReason" maxlength="256" placeholder="请输入本次导入原因" />
+              </label>
+            </div>
+            <div class="table-inline-actions">
+              <button
+                class="button secondary"
+                :disabled="!returnCodeImportCsv || isReturnCodeImportPreviewing || isReturnCodeImportApplying"
+                @click="previewReturnCodeImport"
+              >
+                {{ isReturnCodeImportPreviewing ? "预检中" : "差异预检" }}
+              </button>
+              <button
+                class="button"
+                :disabled="!returnCodeImportPreview?.valid || isReturnCodeImportApplying || isReturnCodeImportPreviewing"
+                @click="applyReturnCodeImport"
+              >
+                {{ isReturnCodeImportApplying ? "应用中" : "确认应用" }}
+              </button>
+            </div>
+            <template v-if="returnCodeImportPreview">
+              <div class="import-summary" aria-live="polite">
+                <span>总计 {{ returnCodeImportPreview.totalCount }}</span>
+                <span>新增 {{ returnCodeImportPreview.createCount }}</span>
+                <span>更新 {{ returnCodeImportPreview.updateCount }}</span>
+                <span>不变 {{ returnCodeImportPreview.unchangedCount }}</span>
+                <span :class="{ 'import-invalid': returnCodeImportPreview.invalidCount > 0 }">
+                  无效 {{ returnCodeImportPreview.invalidCount }}
+                </span>
+                <span v-if="returnCodeImportPreview.batchNo">批次 {{ returnCodeImportPreview.batchNo }}</span>
+              </div>
+              <div class="table-wrap import-preview-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>行号</th>
+                      <th>动作</th>
+                      <th>渠道 / 返回码</th>
+                      <th>标准码</th>
+                      <th>映射版本</th>
+                      <th>差异或问题</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="item in returnCodeImportPreview.items" :key="`${item.rowNumber}-${item.candidate.channelCode}-${item.candidate.channelReturnCode}`">
+                      <td>{{ item.rowNumber }}</td>
+                      <td><span :class="['badge', item.valid ? (item.action === 'UNCHANGED' ? 'info' : 'success') : 'danger']">{{ formatReturnCodeImportAction(item.action) }}</span></td>
+                      <td>{{ item.candidate.channelCode }} / {{ item.candidate.channelReturnCode }}</td>
+                      <td>{{ item.candidate.standardizedCode }}</td>
+                      <td>{{ item.candidate.mappingVersion }}</td>
+                      <td class="flow-summary-cell">{{ item.message }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
           </div>
 
           <div class="table-wrap">

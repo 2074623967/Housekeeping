@@ -20,6 +20,8 @@ import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import java.util.List;
 
 /**
@@ -153,6 +155,16 @@ public interface PaymentConfigService {
      * 启停渠道返回码映射配置。
      */
     PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 预检渠道返回码 CSV，不修改运行态配置。
+     */
+    PaymentReturnCodeImportResultDTO previewReturnCodeImport(PaymentReturnCodeImportRequestDTO request);
+
+    /**
+     * 复验预检基线并原子应用渠道返回码 CSV。
+     */
+    PaymentReturnCodeImportResultDTO applyReturnCodeImport(PaymentReturnCodeImportRequestDTO request);
 
     /**
      * 启停支付网关接入配置。

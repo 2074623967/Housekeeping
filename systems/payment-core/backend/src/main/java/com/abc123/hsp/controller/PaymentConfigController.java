@@ -19,6 +19,8 @@ import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -248,6 +250,24 @@ public class PaymentConfigController {
     @PostMapping("/return-codes/toggle")
     public ApiResponse<PaymentConfigOverviewDTO> toggleReturnCodeMapping(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleReturnCodeMapping(request));
+    }
+
+    /**
+     * 预检渠道返回码 CSV，不修改运行态配置。
+     */
+    @PostMapping("/return-codes/import/preview")
+    public ApiResponse<PaymentReturnCodeImportResultDTO> previewReturnCodeImport(
+            @RequestBody PaymentReturnCodeImportRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.previewReturnCodeImport(request));
+    }
+
+    /**
+     * 复验预检基线并原子应用渠道返回码 CSV。
+     */
+    @PostMapping("/return-codes/import/apply")
+    public ApiResponse<PaymentReturnCodeImportResultDTO> applyReturnCodeImport(
+            @RequestBody PaymentReturnCodeImportRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.applyReturnCodeImport(request));
     }
 
     /**

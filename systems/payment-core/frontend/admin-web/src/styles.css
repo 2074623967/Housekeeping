@@ -656,6 +656,30 @@ th {
   border-top: 1px solid #e2e8f0;
 }
 
+.return-code-import-panel {
+  margin-bottom: 18px;
+  padding: 14px 0 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 14px 0 10px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.import-invalid {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.import-preview-table {
+  max-height: 320px;
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

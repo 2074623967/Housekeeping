@@ -32,6 +32,8 @@ public class PaymentChannelReturnCodeConfigDTO {
     private String status;
     /** 映射状态样式。 */
     private String statusType;
+    /** 展示与匹配优先级。 */
+    private Integer priority;
     /** 更新时间。 */
     private String updatedAt;
 }

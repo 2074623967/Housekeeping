@@ -103,6 +103,11 @@ public interface PaymentConfigMapper {
     List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappings();
 
     /**
+     * 加锁查询渠道返回码映射，供批量导入基线复验。
+     */
+    List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappingsForUpdate();
+
+    /**
      * 查询启用且未归档的渠道返回码映射。
      */
     PaymentChannelReturnCodeConfigDTO findActiveReturnCodeMapping(
@@ -277,6 +282,29 @@ public interface PaymentConfigMapper {
                                       @Param("channelReturnCode") String channelReturnCode,
                                       @Param("status") String status,
                                       @Param("statusType") String statusType);
+
+    /**
+     * 新增或更新启用中的渠道返回码映射；归档记录由服务层阻断。
+     */
+    int upsertReturnCodeMapping(PaymentChannelReturnCodeConfigDTO mapping);
+
+    /**
+     * 保存返回码批量导入审计批次。
+     */
+    int insertReturnCodeImportBatch(
+            @Param("batchNo") String batchNo,
+            @Param("operator") String operator,
+            @Param("changeReason") String changeReason,
+            @Param("sourceSha256") String sourceSha256,
+            @Param("baselineFingerprint") String baselineFingerprint,
+            @Param("resultFingerprint") String resultFingerprint,
+            @Param("totalCount") Integer totalCount,
+            @Param("createCount") Integer createCount,
+            @Param("updateCount") Integer updateCount,
+            @Param("unchangedCount") Integer unchangedCount,
+            @Param("appliedCount") Integer appliedCount,
+            @Param("batchStatus") String batchStatus,
+            @Param("batchStatusType") String batchStatusType);
 
     /**
      * 更新支付网关启停状态。

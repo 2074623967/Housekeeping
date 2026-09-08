@@ -32,6 +32,9 @@ import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportItemDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
@@ -41,14 +44,27 @@ import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.UUID;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +78,19 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private static final String STATUS_ENABLED = "ENABLED";
     private static final String STATUS_DISABLED = "DISABLED";
+    private static final int RETURN_CODE_IMPORT_MAX_BYTES = 512 * 1024;
+    private static final int RETURN_CODE_IMPORT_MAX_ROWS = 500;
+    private static final List<String> RETURN_CODE_IMPORT_HEADERS = Collections.unmodifiableList(Arrays.asList(
+            "channelCode",
+            "channelReturnCode",
+            "standardizedCode",
+            "standardizedMessage",
+            "handlingSuggestion",
+            "retryable",
+            "manualInterventionRequired",
+            "mappingVersion",
+            "status",
+            "priority"));
 
     private final PaymentConfigMapper paymentConfigMapper;
 
@@ -586,6 +615,67 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("渠道返回码映射配置不存在");
         }
         return overview();
+    }
+
+    @Override
+    public PaymentReturnCodeImportResultDTO previewReturnCodeImport(PaymentReturnCodeImportRequestDTO request) {
+        return buildReturnCodeImportResult(
+                request,
+                paymentConfigMapper.findReturnCodeMappings(),
+                resolveReturnCodeImportChannels());
+    }
+
+    @Override
+    @Transactional
+    public PaymentReturnCodeImportResultDTO applyReturnCodeImport(PaymentReturnCodeImportRequestDTO request) {
+        String operator = requireImportText(request == null ? null : request.getOperator(),
+                "操作人自声明不能为空", 128);
+        String changeReason = requireImportText(request.getChangeReason(), "导入原因不能为空", 256);
+        String expectedBaseline = requireImportText(
+                request.getBaselineFingerprint(), "请先执行预检并携带基线指纹", 64);
+        List<PaymentChannelReturnCodeConfigDTO> currentMappings =
+                paymentConfigMapper.findReturnCodeMappingsForUpdate();
+        PaymentReturnCodeImportResultDTO result = buildReturnCodeImportResult(
+                request, currentMappings, resolveReturnCodeImportChannels());
+        if (!expectedBaseline.equals(result.getBaselineFingerprint())) {
+            throw new IllegalArgumentException("返回码配置已变化，请重新预检后再应用");
+        }
+        if (!Boolean.TRUE.equals(result.getValid())) {
+            throw new IllegalArgumentException("CSV 存在无效行，未应用任何返回码映射");
+        }
+        int appliedCount = 0;
+        try {
+            for (PaymentReturnCodeImportItemDTO item : result.getItems()) {
+                if ("CREATE".equals(item.getAction()) || "UPDATE".equals(item.getAction())) {
+                    paymentConfigMapper.upsertReturnCodeMapping(item.getCandidate());
+                    appliedCount++;
+                }
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("返回码配置发生并发冲突，请重新预检后再应用", exception);
+        }
+        List<PaymentChannelReturnCodeConfigDTO> resultingMappings = paymentConfigMapper.findReturnCodeMappings();
+        String resultFingerprint = fingerprintReturnCodeMappings(resultingMappings);
+        String batchNo = "RCI" + UUID.randomUUID().toString().replace("-", "");
+        result.setApplied(Boolean.TRUE);
+        result.setAppliedCount(Integer.valueOf(appliedCount));
+        result.setBatchNo(batchNo);
+        result.setResultFingerprint(resultFingerprint);
+        paymentConfigMapper.insertReturnCodeImportBatch(
+                batchNo,
+                operator,
+                changeReason,
+                sha256(normalizeCsvContent(request.getCsvContent())),
+                result.getBaselineFingerprint(),
+                resultFingerprint,
+                result.getTotalCount(),
+                result.getCreateCount(),
+                result.getUpdateCount(),
+                result.getUnchangedCount(),
+                result.getAppliedCount(),
+                appliedCount == 0 ? "NO_CHANGE" : "APPLIED",
+                appliedCount == 0 ? "info" : "success");
+        return result;
     }
 
     @Override
@@ -1969,6 +2059,271 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         throw new IllegalArgumentException("协议类型未在字典中定义");
+    }
+
+    private PaymentReturnCodeImportResultDTO buildReturnCodeImportResult(
+            PaymentReturnCodeImportRequestDTO request,
+            List<PaymentChannelReturnCodeConfigDTO> currentMappings,
+            Set<String> availableChannels) {
+        String csvContent = normalizeCsvContent(request == null ? null : request.getCsvContent());
+        List<PaymentChannelReturnCodeConfigDTO> safeCurrentMappings = currentMappings == null
+                ? Collections.emptyList() : currentMappings;
+        Map<String, PaymentChannelReturnCodeConfigDTO> currentByKey = new LinkedHashMap<>();
+        for (PaymentChannelReturnCodeConfigDTO mapping : safeCurrentMappings) {
+            currentByKey.put(returnCodeMappingKey(mapping.getChannelCode(), mapping.getChannelReturnCode()), mapping);
+        }
+        List<PaymentReturnCodeImportItemDTO> items = new ArrayList<>();
+        Set<String> importedKeys = new HashSet<>();
+        try (CSVParser parser = CSVFormat.DEFAULT.builder()
+                .setHeader()
+                .setSkipHeaderRecord(true)
+                .setIgnoreEmptyLines(true)
+                .setTrim(true)
+                .build()
+                .parse(new StringReader(csvContent))) {
+            if (!RETURN_CODE_IMPORT_HEADERS.equals(parser.getHeaderNames())) {
+                throw new IllegalArgumentException("CSV 表头必须严格为 "
+                        + String.join(",", RETURN_CODE_IMPORT_HEADERS));
+            }
+            List<CSVRecord> records = parser.getRecords();
+            if (records.isEmpty()) {
+                throw new IllegalArgumentException("CSV 至少需要一行返回码映射");
+            }
+            if (records.size() > RETURN_CODE_IMPORT_MAX_ROWS) {
+                throw new IllegalArgumentException("CSV 单次最多导入 " + RETURN_CODE_IMPORT_MAX_ROWS + " 行");
+            }
+            for (CSVRecord record : records) {
+                items.add(buildReturnCodeImportItem(
+                        record, currentByKey, importedKeys, availableChannels));
+            }
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("CSV 解析失败，请检查引号、换行和 UTF-8 编码", exception);
+        }
+        PaymentReturnCodeImportResultDTO result = new PaymentReturnCodeImportResultDTO();
+        result.setBaselineFingerprint(fingerprintReturnCodeMappings(safeCurrentMappings));
+        result.setValid(Boolean.valueOf(items.stream().allMatch(item -> Boolean.TRUE.equals(item.getValid()))));
+        result.setApplied(Boolean.FALSE);
+        result.setTotalCount(Integer.valueOf(items.size()));
+        result.setCreateCount(Integer.valueOf(countImportAction(items, "CREATE")));
+        result.setUpdateCount(Integer.valueOf(countImportAction(items, "UPDATE")));
+        result.setUnchangedCount(Integer.valueOf(countImportAction(items, "UNCHANGED")));
+        result.setInvalidCount(Integer.valueOf(countImportAction(items, "INVALID")));
+        result.setAppliedCount(Integer.valueOf(0));
+        result.setItems(items);
+        return result;
+    }
+
+    private PaymentReturnCodeImportItemDTO buildReturnCodeImportItem(
+            CSVRecord record,
+            Map<String, PaymentChannelReturnCodeConfigDTO> currentByKey,
+            Set<String> importedKeys,
+            Set<String> availableChannels) {
+        List<String> errors = new ArrayList<>();
+        PaymentChannelReturnCodeConfigDTO candidate = new PaymentChannelReturnCodeConfigDTO();
+        candidate.setChannelCode(normalizeImportValue(record.get("channelCode")).toLowerCase(Locale.ROOT));
+        candidate.setChannelReturnCode(normalizeImportValue(record.get("channelReturnCode")));
+        candidate.setStandardizedCode(normalizeImportValue(record.get("standardizedCode")));
+        candidate.setStandardizedMessage(normalizeImportValue(record.get("standardizedMessage")));
+        candidate.setHandlingSuggestion(normalizeImportValue(record.get("handlingSuggestion")));
+        candidate.setRetryable(normalizeImportValue(record.get("retryable")));
+        candidate.setManualInterventionRequired(normalizeImportValue(record.get("manualInterventionRequired")));
+        candidate.setMappingVersion(normalizeImportValue(record.get("mappingVersion")));
+        candidate.setStatus(normalizeImportValue(record.get("status")).toUpperCase(Locale.ROOT));
+        candidate.setStatusType(STATUS_ENABLED.equals(candidate.getStatus()) ? "success" : "danger");
+        candidate.setArchiveStatus("ACTIVE");
+        candidate.setArchiveStatusType("success");
+        validateImportText(candidate.getChannelCode(), "channelCode", 64, errors);
+        validateImportText(candidate.getChannelReturnCode(), "channelReturnCode", 64, errors);
+        validateImportText(candidate.getStandardizedCode(), "standardizedCode", 64, errors);
+        validateImportText(candidate.getStandardizedMessage(), "standardizedMessage", 256, errors);
+        validateImportText(candidate.getHandlingSuggestion(), "handlingSuggestion", 256, errors);
+        validateImportText(candidate.getMappingVersion(), "mappingVersion", 32, errors);
+        if (StringUtils.hasText(candidate.getChannelCode())
+                && !candidate.getChannelCode().matches("[a-z0-9][a-z0-9_-]*")) {
+            errors.add("channelCode 仅支持小写字母、数字、下划线和连字符");
+        } else if (StringUtils.hasText(candidate.getChannelCode())
+                && !availableChannels.contains(candidate.getChannelCode())) {
+            errors.add("channelCode 对应的支付渠道不存在");
+        }
+        if (StringUtils.hasText(candidate.getStandardizedCode())
+                && !candidate.getStandardizedCode().matches("[A-Z0-9][A-Z0-9._-]*")) {
+            errors.add("standardizedCode 仅支持大写字母、数字、点、下划线和连字符");
+        }
+        if (!Arrays.asList("是", "否", "未知").contains(candidate.getRetryable())) {
+            errors.add("retryable 仅支持 是/否/未知");
+        }
+        if (!Arrays.asList("是", "否").contains(candidate.getManualInterventionRequired())) {
+            errors.add("manualInterventionRequired 仅支持 是/否");
+        }
+        if (!STATUS_ENABLED.equals(candidate.getStatus()) && !STATUS_DISABLED.equals(candidate.getStatus())) {
+            errors.add("status 仅支持 ENABLED/DISABLED");
+        }
+        try {
+            candidate.setPriority(Integer.valueOf(normalizeImportValue(record.get("priority"))));
+            if (candidate.getPriority().intValue() < 0) {
+                errors.add("priority 不能小于 0");
+            }
+        } catch (NumberFormatException exception) {
+            errors.add("priority 必须为整数");
+        }
+        String key = returnCodeMappingKey(candidate.getChannelCode(), candidate.getChannelReturnCode());
+        if (!importedKeys.add(key)) {
+            errors.add("CSV 内渠道编码与返回码重复");
+        }
+        PaymentChannelReturnCodeConfigDTO current = currentByKey.get(key);
+        if (current != null && "ARCHIVED".equals(current.getArchiveStatus())) {
+            errors.add("已归档映射禁止通过批量导入修改");
+        }
+        PaymentReturnCodeImportItemDTO item = new PaymentReturnCodeImportItemDTO();
+        item.setRowNumber(Long.valueOf(record.getRecordNumber() + 1));
+        item.setCandidate(candidate);
+        if (!errors.isEmpty()) {
+            item.setAction("INVALID");
+            item.setValid(Boolean.FALSE);
+            item.setMessage(String.join("；", errors));
+            item.setChangedFields(Collections.emptyList());
+            return item;
+        }
+        if (current == null) {
+            item.setAction("CREATE");
+            item.setValid(Boolean.TRUE);
+            item.setMessage("新增映射");
+            item.setChangedFields(Collections.emptyList());
+            return item;
+        }
+        List<String> changedFields = findReturnCodeChangedFields(current, candidate);
+        if (!changedFields.isEmpty()
+                && Objects.equals(current.getMappingVersion(), candidate.getMappingVersion())) {
+            item.setAction("INVALID");
+            item.setValid(Boolean.FALSE);
+            item.setMessage("更新映射字段时必须同时变更 mappingVersion");
+            item.setChangedFields(changedFields);
+            return item;
+        }
+        item.setAction(changedFields.isEmpty() ? "UNCHANGED" : "UPDATE");
+        item.setValid(Boolean.TRUE);
+        item.setMessage(changedFields.isEmpty() ? "与当前配置一致" : "更新 " + String.join("、", changedFields));
+        item.setChangedFields(changedFields);
+        return item;
+    }
+
+    private List<String> findReturnCodeChangedFields(
+            PaymentChannelReturnCodeConfigDTO current,
+            PaymentChannelReturnCodeConfigDTO candidate) {
+        List<String> fields = new ArrayList<>();
+        addChangedField(fields, "standardizedCode", current.getStandardizedCode(), candidate.getStandardizedCode());
+        addChangedField(fields, "standardizedMessage", current.getStandardizedMessage(), candidate.getStandardizedMessage());
+        addChangedField(fields, "handlingSuggestion", current.getHandlingSuggestion(), candidate.getHandlingSuggestion());
+        addChangedField(fields, "retryable", current.getRetryable(), candidate.getRetryable());
+        addChangedField(fields, "manualInterventionRequired",
+                current.getManualInterventionRequired(), candidate.getManualInterventionRequired());
+        addChangedField(fields, "mappingVersion", current.getMappingVersion(), candidate.getMappingVersion());
+        addChangedField(fields, "status", current.getStatus(), candidate.getStatus());
+        addChangedField(fields, "priority", current.getPriority(), candidate.getPriority());
+        return fields;
+    }
+
+    private void addChangedField(List<String> fields, String fieldName, Object current, Object candidate) {
+        if (!Objects.equals(current, candidate)) {
+            fields.add(fieldName);
+        }
+    }
+
+    private int countImportAction(List<PaymentReturnCodeImportItemDTO> items, String action) {
+        return (int) items.stream().filter(item -> action.equals(item.getAction())).count();
+    }
+
+    private String normalizeCsvContent(String csvContent) {
+        if (!StringUtils.hasText(csvContent)) {
+            throw new IllegalArgumentException("CSV 内容不能为空");
+        }
+        String normalized = csvContent.charAt(0) == '\uFEFF' ? csvContent.substring(1) : csvContent;
+        if (normalized.getBytes(StandardCharsets.UTF_8).length > RETURN_CODE_IMPORT_MAX_BYTES) {
+            throw new IllegalArgumentException("CSV 大小不能超过 512 KB");
+        }
+        return normalized;
+    }
+
+    private Set<String> resolveReturnCodeImportChannels() {
+        List<PaymentChannelConfigDTO> channels = paymentConfigMapper.findChannels();
+        Set<String> channelCodes = new HashSet<>();
+        if (channels != null) {
+            for (PaymentChannelConfigDTO channel : channels) {
+                if (channel != null && StringUtils.hasText(channel.getChannelCode())) {
+                    channelCodes.add(channel.getChannelCode().trim().toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return channelCodes;
+    }
+
+    private String normalizeImportValue(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private void validateImportText(String value, String fieldName, int maxLength, List<String> errors) {
+        if (!StringUtils.hasText(value)) {
+            errors.add(fieldName + " 不能为空");
+        } else if (value.length() > maxLength) {
+            errors.add(fieldName + " 长度不能超过 " + maxLength);
+        }
+    }
+
+    private String requireImportText(String value, String message, int maxLength) {
+        String normalized = requireText(value, message);
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(message.replace("不能为空", "长度不能超过 " + maxLength));
+        }
+        return normalized;
+    }
+
+    private String returnCodeMappingKey(String channelCode, String channelReturnCode) {
+        return normalizeImportValue(channelCode).toLowerCase(Locale.ROOT)
+                + "\u0000" + normalizeImportValue(channelReturnCode).toUpperCase(Locale.ROOT);
+    }
+
+    private String fingerprintReturnCodeMappings(List<PaymentChannelReturnCodeConfigDTO> mappings) {
+        List<PaymentChannelReturnCodeConfigDTO> sortedMappings = new ArrayList<>(
+                mappings == null ? Collections.emptyList() : mappings);
+        sortedMappings.sort(Comparator
+                .comparing((PaymentChannelReturnCodeConfigDTO mapping) ->
+                        normalizeImportValue(mapping.getChannelCode()).toLowerCase(Locale.ROOT))
+                .thenComparing(mapping -> normalizeImportValue(mapping.getChannelReturnCode())
+                        .toUpperCase(Locale.ROOT)));
+        StringBuilder canonical = new StringBuilder();
+        for (PaymentChannelReturnCodeConfigDTO mapping : sortedMappings) {
+            appendFingerprintValue(canonical, mapping.getChannelCode());
+            appendFingerprintValue(canonical, mapping.getChannelReturnCode());
+            appendFingerprintValue(canonical, mapping.getStandardizedCode());
+            appendFingerprintValue(canonical, mapping.getStandardizedMessage());
+            appendFingerprintValue(canonical, mapping.getHandlingSuggestion());
+            appendFingerprintValue(canonical, mapping.getRetryable());
+            appendFingerprintValue(canonical, mapping.getManualInterventionRequired());
+            appendFingerprintValue(canonical, mapping.getMappingVersion());
+            appendFingerprintValue(canonical, mapping.getArchiveStatus());
+            appendFingerprintValue(canonical, mapping.getStatus());
+            appendFingerprintValue(canonical, mapping.getPriority());
+        }
+        return sha256(canonical.toString());
+    }
+
+    private void appendFingerprintValue(StringBuilder builder, Object value) {
+        String text = value == null ? "" : String.valueOf(value);
+        builder.append(text.length()).append(':').append(text).append('|');
+    }
+
+    private String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte current : digest) {
+                hex.append(String.format(Locale.ROOT, "%02x", current & 0xff));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("JDK 缺少 SHA-256 支持", exception);
+        }
     }
 
     private String resolveStatus(Boolean enabled) {

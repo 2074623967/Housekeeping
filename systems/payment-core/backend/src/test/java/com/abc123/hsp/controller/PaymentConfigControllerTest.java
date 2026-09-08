@@ -24,6 +24,8 @@ import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import java.util.Collections;
 import com.abc123.hsp.service.PaymentConfigService;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,25 @@ class PaymentConfigControllerTest {
 
         assertEquals(0, controller.overview().getData().getChannels().size());
         verify(paymentConfigService).overview();
+    }
+
+    @Test
+    void shouldPreviewAndApplyReturnCodeImport() {
+        PaymentReturnCodeImportResultDTO preview = new PaymentReturnCodeImportResultDTO();
+        preview.setValid(Boolean.TRUE);
+        PaymentReturnCodeImportResultDTO applied = new PaymentReturnCodeImportResultDTO();
+        applied.setApplied(Boolean.TRUE);
+        when(paymentConfigService.previewReturnCodeImport(any(PaymentReturnCodeImportRequestDTO.class)))
+                .thenReturn(preview);
+        when(paymentConfigService.applyReturnCodeImport(any(PaymentReturnCodeImportRequestDTO.class)))
+                .thenReturn(applied);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentReturnCodeImportRequestDTO request = new PaymentReturnCodeImportRequestDTO();
+
+        assertTrue(controller.previewReturnCodeImport(request).getData().getValid());
+        assertTrue(controller.applyReturnCodeImport(request).getData().getApplied());
+        verify(paymentConfigService).previewReturnCodeImport(request);
+        verify(paymentConfigService).applyReturnCodeImport(request);
     }
 
     @Test
