@@ -116,6 +116,17 @@ class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldCountOnlyActionableIssueAlertDeliveryBacklogs() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(2, mapper.countPendingIssueAlertDispatches());
+            assertEquals(1, mapper.countFailedIssueAlertDispatches());
+            assertEquals(1, mapper.countPendingIssueAlertReceipts());
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -140,6 +151,7 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_alert_no VARCHAR(64), "
                     + "issue_type VARCHAR(64), alert_channel VARCHAR(32), ack_status VARCHAR(32), "
+                    + "alert_status VARCHAR(32), provider_delivery_status VARCHAR(32), "
                     + "created_at DATETIME)");
 
             LocalDateTime now = LocalDateTime.now();
@@ -158,11 +170,17 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertQueryHistory(connection, "PAY-OUTSIDE-MONITOR-WINDOW", now, 90000);
             insertRateLimitRejections(connection, now, 30, 3600, 7200, 90000);
             statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
-                    + "source_alert_no, issue_type, alert_channel, ack_status, created_at) VALUES "
-                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', NOW()),"
-                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '已确认', NOW()),"
-                    + "('SOURCE-1', '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', NOW()),"
-                    + "(NULL, '主动查单限流拒绝', 'IM', '待确认', NOW())");
+                    + "source_alert_no, issue_type, alert_channel, ack_status, alert_status, "
+                    + "provider_delivery_status, created_at) VALUES "
+                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', '已生成', NULL, NOW()),"
+                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '已确认', '已生成', NULL, NOW()),"
+                    + "('SOURCE-1', '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', '派发成功', "
+                    + "'ACCEPTED', NOW()),"
+                    + "(NULL, '主动查单限流拒绝', 'IM', '待确认', '已生成', NULL, NOW()),"
+                    + "(NULL, '异常告警派发', 'IN_APP_OUTBOX', '待确认', '部分失败', NULL, NOW()),"
+                    + "(NULL, '异常告警派发', 'IN_APP_OUTBOX', '已确认', '派发失败', NULL, NOW()),"
+                    + "('SOURCE-2', '异常告警派发', 'SMS', '待确认', '派发成功', 'DELIVERED', NOW()),"
+                    + "('SOURCE-3', '异常告警派发', 'EMAIL', '已确认', '派发成功', 'ACCEPTED', NOW())");
             statement.executeUpdate("UPDATE t_payment_notify_log SET notify_status = '查单失败' "
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");

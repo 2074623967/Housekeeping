@@ -35,6 +35,12 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer recentQueryRateLimitRejectionCount;
     /** 渠道查单限流拒绝告警阈值。 */
     private Integer queryRateLimitRejectionCountThreshold;
+    /** 当前待派发的来源 outbox 告警数。 */
+    private Integer pendingIssueAlertDispatchCount;
+    /** 当前仍处于部分失败或派发失败的来源 outbox 告警数。 */
+    private Integer failedIssueAlertDispatchCount;
+    /** 供应商已受理、等待回执回查的外发告警数。 */
+    private Integer pendingIssueAlertReceiptCount;
     /** 最近查单小时趋势。 */
     private List<PaymentQueryTrendPointDTO> queryTrends;
     /** 失败事件数。 */

@@ -114,6 +114,29 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExposeIssueAlertDeliveryBacklogsAndRaiseIndependentAlerts() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countPendingIssueAlertDispatches()).thenReturn(3);
+        when(paymentTaskCenterMapper.countFailedIssueAlertDispatches()).thenReturn(1);
+        when(paymentTaskCenterMapper.countPendingIssueAlertReceipts()).thenReturn(2);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(3, overview.getPendingIssueAlertDispatchCount());
+        Assertions.assertEquals(1, overview.getFailedIssueAlertDispatchCount());
+        Assertions.assertEquals(2, overview.getPendingIssueAlertReceiptCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("其中 1 条仍存在派发异常")));
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
+                        && "P2".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("2 条供应商已受理告警")));
+    }
+
+    @Test
     void shouldQueryPendingPaymentsAndIsolateSinglePaymentFailure() {
         when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100))
                 .thenReturn(Arrays.asList("PAY-QUERY-1", "PAY-QUERY-2", "PAY-QUERY-3"));

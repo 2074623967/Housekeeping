@@ -16,6 +16,9 @@ const overview = ref({
   queryFailureRateMinimumSampleCount: 10,
   recentQueryRateLimitRejectionCount: 0,
   queryRateLimitRejectionCountThreshold: 10,
+  pendingIssueAlertDispatchCount: 0,
+  failedIssueAlertDispatchCount: 0,
+  pendingIssueAlertReceiptCount: 0,
   queryTrends: [],
   failedEventCount: 0,
   failedRefundCount: 0,
@@ -195,6 +198,16 @@ onMounted(loadOverview);
             <div class="detail-label">SLA 超时异常</div>
             <div class="detail-value">{{ overview.overdueIssueCount }}</div>
           </div>
+          <div class="detail-card">
+            <div class="detail-label">异常告警待派发</div>
+            <div class="detail-value">{{ overview.pendingIssueAlertDispatchCount }}</div>
+            <div class="meta">其中派发异常 {{ overview.failedIssueAlertDispatchCount }} 条</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">异常告警待回查</div>
+            <div class="detail-value">{{ overview.pendingIssueAlertReceiptCount }}</div>
+            <div class="meta">供应商已受理，等待送达回执</div>
+          </div>
         </div>
 
         <div class="risk-banner">
@@ -242,7 +255,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.18 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、监控告警 outbox、可配置自动派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.19 已按任务类型、失败笔数和处理规模统一严重等级，并将监控告警 outbox、可配置自动派发、派发积压与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -440,15 +453,16 @@ onMounted(loadOverview);
                 <p class="meta">按资深测试与运维视角，优先看会导致状态不一致的项</p>
               </div>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>关注项</th>
-                  <th>数量</th>
-                  <th>说明</th>
-                </tr>
-              </thead>
-              <tbody>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>关注项</th>
+                    <th>数量</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody>
                 <tr>
                   <td>超时支付待关闭</td>
                   <td>{{ overview.expiredPaymentCount }}</td>
@@ -501,8 +515,8 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
-                  <td>V1.18</td>
-                  <td>已具备 outbox、IM/SMS/EMAIL 派发与状态回写，可显式开启自动调度；默认关闭，后续补真实通知网关</td>
+                  <td>V1.19</td>
+                  <td>已具备 outbox、IM/SMS/EMAIL 派发、状态回写与积压指标，可显式开启自动调度；默认关闭，后续补真实通知网关</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
@@ -511,11 +525,12 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.18</td>
+                  <td>V1.19</td>
                   <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将查单监控告警 outbox、异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </section>
         </div>
 

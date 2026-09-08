@@ -96,6 +96,21 @@ public interface PaymentTaskCenterMapper {
                                                     @Param("cooldownMinutes") int cooldownMinutes);
 
     /**
+     * 统计当前需要派发的来源 outbox 告警。
+     */
+    int countPendingIssueAlertDispatches();
+
+    /**
+     * 统计当前仍存在派发异常的来源 outbox 告警。
+     */
+    int countFailedIssueAlertDispatches();
+
+    /**
+     * 统计供应商已受理、等待回执回查的外发告警。
+     */
+    int countPendingIssueAlertReceipts();
+
+    /**
      * 查询最近窗口内的渠道查单小时趋势。
      */
     List<PaymentQueryTrendPointDTO> findRecentPaymentQueryTrends(

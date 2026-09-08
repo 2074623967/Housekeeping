@@ -219,6 +219,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setQueryFailureRateMinimumSampleCount(queryFailureRateMinimumSampleCount);
         overview.setRecentQueryRateLimitRejectionCount(recentQueryRateLimitRejectionCount);
         overview.setQueryRateLimitRejectionCountThreshold(queryRateLimitRejectionCountThreshold);
+        overview.setPendingIssueAlertDispatchCount(paymentTaskCenterMapper.countPendingIssueAlertDispatches());
+        overview.setFailedIssueAlertDispatchCount(paymentTaskCenterMapper.countFailedIssueAlertDispatches());
+        overview.setPendingIssueAlertReceiptCount(paymentTaskCenterMapper.countPendingIssueAlertReceipts());
         overview.setQueryTrends(queryTrends);
         overview.setFocusAlerts(buildFocusAlerts(overview));
         overview.setRecentTaskRuns(enrichTaskRuns(paymentTaskCenterMapper.findRecentTaskRuns()));
@@ -902,6 +905,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 overview.getRecentQueryRateLimitRejectionCount());
         double recentQueryFailureRate = percentage(recentQueryFailureCount, recentQueryCount);
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
+        int pendingIssueAlertDispatchCount = valueOrZero(overview.getPendingIssueAlertDispatchCount());
+        int failedIssueAlertDispatchCount = valueOrZero(overview.getFailedIssueAlertDispatchCount());
+        int pendingIssueAlertReceiptCount = valueOrZero(overview.getPendingIssueAlertReceiptCount());
         alerts.add(buildAlert(
                 "PAYMENT_EXPIRY",
                 "超时支付待关闭",
@@ -975,6 +981,33 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "/payment-task-center",
                 failedEventCount > 5 ? "P1" : "P2",
                 failedEventCount > 5 ? "danger" : "warn"
+        ));
+        alerts.add(buildAlert(
+                "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG",
+                "异常告警待派发",
+                pendingIssueAlertDispatchCount,
+                pendingIssueAlertDispatchCount > 0
+                        ? String.format("当前有 %d 条来源 outbox 等待派发，其中 %d 条仍存在派发异常",
+                        pendingIssueAlertDispatchCount, failedIssueAlertDispatchCount)
+                        : "暂无待派发异常告警",
+                "/payment-issue-alerts",
+                failedIssueAlertDispatchCount > 0 || pendingIssueAlertDispatchCount >= 10
+                        ? "P1"
+                        : pendingIssueAlertDispatchCount > 0 ? "P2" : "P3",
+                failedIssueAlertDispatchCount > 0 || pendingIssueAlertDispatchCount >= 10
+                        ? "danger"
+                        : pendingIssueAlertDispatchCount > 0 ? "warn" : "success"
+        ));
+        alerts.add(buildAlert(
+                "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG",
+                "异常告警待回查",
+                pendingIssueAlertReceiptCount,
+                pendingIssueAlertReceiptCount > 0
+                        ? String.format("当前有 %d 条供应商已受理告警等待送达回执", pendingIssueAlertReceiptCount)
+                        : "暂无待回查告警回执",
+                "/payment-issue-alerts",
+                pendingIssueAlertReceiptCount >= 10 ? "P1" : pendingIssueAlertReceiptCount > 0 ? "P2" : "P3",
+                pendingIssueAlertReceiptCount >= 10 ? "danger" : pendingIssueAlertReceiptCount > 0 ? "warn" : "success"
         ));
         int overdueIssueCount = valueOrZero(overview.getOverdueIssueCount());
         int controlPolicyWarningCount = valueOrZero(overview.getControlPolicyWarningCount());
