@@ -14,8 +14,10 @@ import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
@@ -30,6 +32,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
@@ -1226,79 +1229,31 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldCreateProtocol() {
-        PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
-        when(paymentConfigMapper.findProtocolByCode("PROTO_TEST_V1")).thenReturn(null);
-        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
-        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1")).thenReturn(null);
-        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
-
-        new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request);
-
-        ArgumentCaptor<PaymentProtocolConfigEntity> entityCaptor = ArgumentCaptor.forClass(PaymentProtocolConfigEntity.class);
-        verify(paymentConfigMapper).insertProtocol(entityCaptor.capture());
-        org.junit.jupiter.api.Assertions.assertEquals("支付签约协议", entityCaptor.getValue().getProtocolTypeName());
-        org.junit.jupiter.api.Assertions.assertTrue(entityCaptor.getValue().getProtocolBody().contains("平台按订单金额发起收款"));
-        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(1).equals(version.getVersionNo())
-                        && "CREATE".equals(version.getChangeType())
-                        && "新增测试协议".equals(version.getChangeReason())));
-    }
-
-    @Test
-    void shouldUpdateProtocol() {
-        PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
-        PaymentProtocolConfigEntity entity = buildProtocolEntity();
-        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(entity);
-        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
-        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
-                .thenReturn(Integer.valueOf(1), Integer.valueOf(1));
-        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
-
-        new PaymentConfigServiceImpl(paymentConfigMapper).updateProtocol("PROTO_TEST_V1", request);
-
-        verify(paymentConfigMapper).updateProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
-        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(2).equals(version.getVersionNo())
-                        && "UPDATE".equals(version.getChangeType())));
-    }
-
-    @Test
-    void shouldVersionProtocolStatusChange() {
+    void shouldSubmitProtocolStatusReviewWithoutChangingRuntime() {
         PaymentProtocolConfigEntity current = buildProtocolEntity();
-        PaymentProtocolStatusRequestDTO request = new PaymentProtocolStatusRequestDTO();
+        PaymentProtocolStatusReviewRequestDTO request = new PaymentProtocolStatusReviewRequestDTO();
         request.setProtocolCode("PROTO_TEST_V1");
         request.setEnabled(Boolean.FALSE);
+        request.setRequester("protocol-maker");
         request.setChangeReason("停止旧版签约入口");
         when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
         when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
                 .thenReturn(Integer.valueOf(2), Integer.valueOf(2));
-        when(paymentConfigMapper.updateProtocolStatus("PROTO_TEST_V1", "DISABLED", "danger")).thenReturn(1);
-        mockOverviewDependencies();
 
-        new PaymentConfigServiceImpl(paymentConfigMapper).toggleProtocol(request);
+        new PaymentConfigServiceImpl(paymentConfigMapper).submitProtocolStatusReview(request);
 
-        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(3).equals(version.getVersionNo())
-                        && "STATUS_CHANGE".equals(version.getChangeType())
-                        && "DISABLED".equals(version.getStatus())
-                        && "停止旧版签约入口".equals(version.getChangeReason())));
+        verify(paymentConfigMapper).insertProtocolReview(org.mockito.ArgumentMatchers.argThat(
+                review -> Integer.valueOf(2).equals(review.getBaseVersionNo())
+                        && "STATUS_CHANGE".equals(review.getOperationType())
+                        && "DISABLED".equals(review.getStatus())
+                        && "protocol-maker".equals(review.getRequester())
+                        && "停止旧版签约入口".equals(review.getRequestReason())));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
     }
 
     @Test
-    void shouldListAndRollbackProtocolVersion() {
+    void shouldListAndSubmitProtocolRollbackReview() {
         PaymentProtocolConfigEntity current = buildProtocolEntity();
         PaymentProtocolVersionEntity target = buildProtocolVersionEntity(1, "v0.9.0");
         PaymentProtocolVersionDTO history = new PaymentProtocolVersionDTO();
@@ -1310,65 +1265,188 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
                 .thenReturn(Integer.valueOf(2), Integer.valueOf(2), Integer.valueOf(2));
         when(paymentConfigMapper.findProtocolVersion("PROTO_TEST_V1", Integer.valueOf(1))).thenReturn(target);
-        mockOverviewDependencies();
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
 
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2),
                 service.listProtocolVersions("PROTO_TEST_V1").get(0).getVersionNo());
         PaymentProtocolRollbackRequestDTO request = new PaymentProtocolRollbackRequestDTO();
         request.setVersionNo(Integer.valueOf(1));
-        request.setBaseVersionNo(Integer.valueOf(2));
+        request.setRequester("protocol-maker");
         request.setChangeReason("恢复已核对的协议正文");
-        service.rollbackProtocol("PROTO_TEST_V1", request);
+        service.submitProtocolRollbackReview("PROTO_TEST_V1", request);
 
-        verify(paymentConfigMapper).updateProtocol(org.mockito.ArgumentMatchers.argThat(
-                protocol -> "v0.9.0".equals(protocol.getTemplateVersion())));
-        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(3).equals(version.getVersionNo())
-                        && "ROLLBACK".equals(version.getChangeType())
-                        && Integer.valueOf(1).equals(version.getSourceVersionNo())
-                        && "恢复已核对的协议正文".equals(version.getChangeReason())));
-    }
-
-    @Test
-    void shouldRejectStaleProtocolRollback() {
-        PaymentProtocolConfigEntity current = buildProtocolEntity();
-        PaymentProtocolRollbackRequestDTO request = new PaymentProtocolRollbackRequestDTO();
-        request.setVersionNo(Integer.valueOf(1));
-        request.setBaseVersionNo(Integer.valueOf(2));
-        request.setChangeReason("恢复历史协议");
-        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
-        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
-                .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
-
-        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
-                        .rollbackProtocol("PROTO_TEST_V1", request));
-
-        org.junit.jupiter.api.Assertions.assertEquals("支付协议已产生新版本，请刷新后重试", exception.getMessage());
+        verify(paymentConfigMapper).insertProtocolReview(org.mockito.ArgumentMatchers.argThat(
+                review -> Integer.valueOf(2).equals(review.getBaseVersionNo())
+                        && "ROLLBACK".equals(review.getOperationType())
+                        && Integer.valueOf(1).equals(review.getSourceVersionNo())
+                        && "v0.9.0".equals(review.getTemplateVersion())
+                        && "恢复已核对的协议正文".equals(review.getRequestReason())));
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .updateProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
     }
 
     @Test
-    void shouldCreateProtocolBaselineBeforeFirstLegacyUpdate() {
+    void shouldRejectStaleProtocolReviewApproval() {
+        PaymentProtocolConfigEntity current = buildProtocolEntity();
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("同意发布");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
+        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1")).thenReturn(Integer.valueOf(3));
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveProtocolReview("PRV-001", request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("协议已产生新版本，请重新提交复核申请", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+    }
+
+    @Test
+    void shouldApproveProtocolReviewAndPublishVersion() {
+        PaymentProtocolConfigEntity current = buildProtocolEntity();
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("已核对协议条款");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
+        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
+                .thenReturn(Integer.valueOf(2), Integer.valueOf(2));
+        when(paymentConfigMapper.completeProtocolReview(
+                "PRV-001", "APPROVED", "success", "protocol-checker", "已核对协议条款"))
+                .thenReturn(1);
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveProtocolReview("PRV-001", request);
+
+        verify(paymentConfigMapper).updateProtocol(org.mockito.ArgumentMatchers.argThat(
+                protocol -> "v1.1.0".equals(protocol.getTemplateVersion())));
+        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
+                version -> Integer.valueOf(3).equals(version.getVersionNo())
+                        && "REVIEW_RELEASE".equals(version.getChangeType())
+                        && "更新协议模板".equals(version.getChangeReason())));
+        verify(paymentConfigMapper).completeProtocolReview(
+                "PRV-001", "APPROVED", "success", "protocol-checker", "已核对协议条款");
+    }
+
+    @Test
+    void shouldSubmitNewProtocolReviewWithoutPublishing() {
+        PaymentProtocolReviewSubmitRequestDTO request = new PaymentProtocolReviewSubmitRequestDTO();
+        request.setRequester("protocol-maker");
+        request.setCandidate(buildProtocolRequest());
+        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).submitProtocolReview(request);
+
+        verify(paymentConfigMapper).insertProtocolReview(org.mockito.ArgumentMatchers.argThat(
+                review -> review.getBaseVersionNo() == null
+                        && "CREATE".equals(review.getOperationType())
+                        && "protocol-maker".equals(review.getRequester())
+                        && "新增测试协议".equals(review.getRequestReason())));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+    }
+
+    @Test
+    void shouldApproveNewProtocolReview() {
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        review.setOperationType("CREATE");
+        review.setBaseVersionNo(null);
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("同意新增");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1")).thenReturn(null);
+        when(paymentConfigMapper.completeProtocolReview(
+                "PRV-001", "APPROVED", "success", "protocol-checker", "同意新增")).thenReturn(1);
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveProtocolReview("PRV-001", request);
+
+        verify(paymentConfigMapper).insertProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
+                version -> Integer.valueOf(1).equals(version.getVersionNo())
+                        && "REVIEW_RELEASE".equals(version.getChangeType())));
+    }
+
+    @Test
+    void shouldRejectProtocolReviewWithoutPublishing() {
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("条款需要修订");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.completeProtocolReview(
+                "PRV-001", "REJECTED", "danger", "protocol-checker", "条款需要修订")).thenReturn(1);
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).rejectProtocolReview("PRV-001", request);
+
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateProtocol(org.mockito.ArgumentMatchers.any(PaymentProtocolConfigEntity.class));
+        verify(paymentConfigMapper).completeProtocolReview(
+                "PRV-001", "REJECTED", "danger", "protocol-checker", "条款需要修订");
+    }
+
+    @Test
+    void shouldApproveProtocolRollbackReviewWithSourceVersion() {
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        review.setOperationType("ROLLBACK");
+        review.setSourceVersionNo(Integer.valueOf(1));
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-checker");
+        request.setReviewComment("同意恢复历史条款");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(buildProtocolEntity());
+        when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
+                .thenReturn(Integer.valueOf(2), Integer.valueOf(2));
+        when(paymentConfigMapper.completeProtocolReview(
+                "PRV-001", "APPROVED", "success", "protocol-checker", "同意恢复历史条款"))
+                .thenReturn(1);
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveProtocolReview("PRV-001", request);
+
+        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
+                version -> Integer.valueOf(3).equals(version.getVersionNo())
+                        && "REVIEW_ROLLBACK".equals(version.getChangeType())
+                        && Integer.valueOf(1).equals(version.getSourceVersionNo())));
+    }
+
+    @Test
+    void shouldRejectSameProtocolReviewer() {
+        PaymentProtocolReviewEntity review = buildPendingProtocolReview();
+        PaymentProtocolReviewActionRequestDTO request = new PaymentProtocolReviewActionRequestDTO();
+        request.setReviewer("protocol-maker");
+        request.setReviewComment("自审");
+        when(paymentConfigMapper.findProtocolReviewForUpdate("PRV-001")).thenReturn(review);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveProtocolReview("PRV-001", request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("申请人与复核人声明不能相同", exception.getMessage());
+    }
+
+    @Test
+    void shouldCreateProtocolBaselineBeforeFirstReview() {
         PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
         PaymentProtocolConfigEntity current = buildProtocolEntity();
-        mockOverviewDependencies();
         when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
         when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
         when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
                 .thenReturn(null, null, Integer.valueOf(1));
 
-        new PaymentConfigServiceImpl(paymentConfigMapper).updateProtocol("PROTO_TEST_V1", request);
+        submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request);
 
         verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
                 version -> Integer.valueOf(1).equals(version.getVersionNo())
                         && "BASELINE".equals(version.getChangeType())));
-        verify(paymentConfigMapper).insertProtocolVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(2).equals(version.getVersionNo())
-                        && "UPDATE".equals(version.getChangeType())));
+        verify(paymentConfigMapper).insertProtocolReview(org.mockito.ArgumentMatchers.argThat(
+                review -> Integer.valueOf(1).equals(review.getBaseVersionNo())
+                        && "UPDATE".equals(review.getOperationType())));
     }
 
     @Test
@@ -1379,7 +1457,7 @@ class PaymentConfigServiceImplTest {
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request));
+                () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request));
 
         org.junit.jupiter.api.Assertions.assertEquals("协议变更原因不能为空", exception.getMessage());
         verify(paymentConfigMapper, org.mockito.Mockito.never())
@@ -1391,7 +1469,7 @@ class PaymentConfigServiceImplTest {
         PaymentProtocolConfigEntity current = buildProtocolEntity();
         PaymentProtocolRollbackRequestDTO request = new PaymentProtocolRollbackRequestDTO();
         request.setVersionNo(Integer.valueOf(99));
-        request.setBaseVersionNo(Integer.valueOf(2));
+        request.setRequester("protocol-maker");
         request.setChangeReason("恢复历史协议");
         when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(current);
         when(paymentConfigMapper.findLatestProtocolVersionNo("PROTO_TEST_V1"))
@@ -1401,7 +1479,7 @@ class PaymentConfigServiceImplTest {
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper)
-                        .rollbackProtocol("PROTO_TEST_V1", request));
+                        .submitProtocolRollbackReview("PROTO_TEST_V1", request));
 
         org.junit.jupiter.api.Assertions.assertEquals("支付协议历史版本不存在", exception.getMessage());
         verify(paymentConfigMapper, org.mockito.Mockito.never())
@@ -1409,15 +1487,17 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldRejectDuplicateProtocolCode() {
+    void shouldRejectDuplicatePendingProtocolReview() {
         PaymentProtocolUpsertRequestDTO request = buildProtocolRequest();
+        when(paymentConfigMapper.findProtocolByCodeForUpdate("PROTO_TEST_V1")).thenReturn(buildProtocolEntity());
         when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Arrays.asList(buildProtocolTypeOption()));
-        when(paymentConfigMapper.findProtocolByCode("PROTO_TEST_V1")).thenReturn(new PaymentProtocolConfigEntity());
+        when(paymentConfigMapper.countPendingProtocolReviews("PROTO_TEST_V1")).thenReturn(1);
 
-        org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+                () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request)
         );
+        org.junit.jupiter.api.Assertions.assertEquals("该支付协议已有待复核申请", exception.getMessage());
     }
 
     @Test
@@ -1427,7 +1507,7 @@ class PaymentConfigServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+                () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request)
         );
     }
 
@@ -1438,7 +1518,7 @@ class PaymentConfigServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+                () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request)
         );
     }
 
@@ -1450,8 +1530,16 @@ class PaymentConfigServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createProtocol(request)
+                () -> submitProtocolRequest(new PaymentConfigServiceImpl(paymentConfigMapper), request)
         );
+    }
+
+    private void submitProtocolRequest(PaymentConfigServiceImpl service,
+                                       PaymentProtocolUpsertRequestDTO candidate) {
+        PaymentProtocolReviewSubmitRequestDTO request = new PaymentProtocolReviewSubmitRequestDTO();
+        request.setRequester("protocol-maker");
+        request.setCandidate(candidate);
+        service.submitProtocolReview(request);
     }
 
     private PaymentProtocolUpsertRequestDTO buildProtocolRequest() {
@@ -1499,6 +1587,37 @@ class PaymentConfigServiceImplTest {
         entity.setStatus("ENABLED");
         entity.setStatusType("success");
         return entity;
+    }
+
+    private PaymentProtocolReviewEntity buildPendingProtocolReview() {
+        PaymentProtocolConfigEntity current = buildProtocolEntity();
+        PaymentProtocolReviewEntity review = new PaymentProtocolReviewEntity();
+        review.setRequestNo("PRV-001");
+        review.setProtocolCode(current.getProtocolCode());
+        review.setBaseVersionNo(Integer.valueOf(2));
+        review.setOperationType("UPDATE");
+        review.setProtocolName(current.getProtocolName());
+        review.setProtocolType(current.getProtocolType());
+        review.setProtocolTypeName(current.getProtocolTypeName());
+        review.setTemplateCode(current.getTemplateCode());
+        review.setTemplateName(current.getTemplateName());
+        review.setTemplateVersion("v1.1.0");
+        review.setSignMode(current.getSignMode());
+        review.setSignElementSpec(current.getSignElementSpec());
+        review.setESignatureProvider(current.getESignatureProvider());
+        review.setSceneScope(current.getSceneScope());
+        review.setChannelScope(current.getChannelScope());
+        review.setMerchantAckRequired(current.getMerchantAckRequired());
+        review.setRiskControlTag(current.getRiskControlTag());
+        review.setProtocolBody(current.getProtocolBody());
+        review.setStatus(current.getStatus());
+        review.setStatusType(current.getStatusType());
+        review.setPriority(current.getPriority());
+        review.setRequester("protocol-maker");
+        review.setRequestReason("更新协议模板");
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        return review;
     }
 
     private PaymentProtocolVersionEntity buildProtocolVersionEntity(int versionNo, String templateVersion) {

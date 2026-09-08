@@ -4,9 +4,11 @@ import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
@@ -157,28 +159,49 @@ public class PaymentConfigController {
     }
 
     /**
-     * 启停支付协议配置。
+     * 提交支付协议启停候选进入复核。
      */
     @PostMapping("/protocols/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleProtocol(@RequestBody PaymentProtocolStatusRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.toggleProtocol(request));
+    public ApiResponse<List<PaymentProtocolReviewDTO>> submitProtocolStatusReview(
+            @RequestBody PaymentProtocolStatusReviewRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitProtocolStatusReview(request));
     }
 
     /**
-     * 新增支付协议配置。
+     * 提交支付协议候选快照进入复核。
      */
-    @PostMapping("/protocols")
-    public ApiResponse<PaymentConfigOverviewDTO> createProtocol(@RequestBody PaymentProtocolUpsertRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.createProtocol(request));
+    @PostMapping("/protocols/reviews")
+    public ApiResponse<List<PaymentProtocolReviewDTO>> submitProtocolReview(
+            @RequestBody PaymentProtocolReviewSubmitRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitProtocolReview(request));
     }
 
     /**
-     * 编辑支付协议配置。
+     * 查询支付协议复核申请。
      */
-    @PutMapping("/protocols/{protocolCode}")
-    public ApiResponse<PaymentConfigOverviewDTO> updateProtocol(@PathVariable("protocolCode") String protocolCode,
-                                                                @RequestBody PaymentProtocolUpsertRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.updateProtocol(protocolCode, request));
+    @GetMapping("/protocols/reviews")
+    public ApiResponse<List<PaymentProtocolReviewDTO>> listProtocolReviews() {
+        return ApiResponse.success(paymentConfigService.listProtocolReviews());
+    }
+
+    /**
+     * 通过复核并发布支付协议候选快照。
+     */
+    @PostMapping("/protocols/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentProtocolReviewDTO>> approveProtocolReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentProtocolReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveProtocolReview(requestNo, request));
+    }
+
+    /**
+     * 驳回支付协议复核申请。
+     */
+    @PostMapping("/protocols/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentProtocolReviewDTO>> rejectProtocolReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentProtocolReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectProtocolReview(requestNo, request));
     }
 
     /**
@@ -191,13 +214,13 @@ public class PaymentConfigController {
     }
 
     /**
-     * 回滚到指定支付协议历史版本并追加新版本。
+     * 提交支付协议历史版本回滚候选进入复核。
      */
     @PostMapping("/protocols/{protocolCode}/rollback")
-    public ApiResponse<PaymentConfigOverviewDTO> rollbackProtocol(
+    public ApiResponse<List<PaymentProtocolReviewDTO>> submitProtocolRollbackReview(
             @PathVariable("protocolCode") String protocolCode,
             @RequestBody PaymentProtocolRollbackRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.rollbackProtocol(protocolCode, request));
+        return ApiResponse.success(paymentConfigService.submitProtocolRollbackReview(protocolCode, request));
     }
 
     /**

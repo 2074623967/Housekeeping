@@ -4,9 +4,11 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
@@ -100,19 +102,31 @@ public interface PaymentConfigService {
             String ruleCode, PaymentRouteRuleRollbackRequestDTO request);
 
     /**
-     * 启停支付协议配置。
+     * 提交支付协议启停候选进入复核，不直接改变运行态。
      */
-    PaymentConfigOverviewDTO toggleProtocol(PaymentProtocolStatusRequestDTO request);
+    List<PaymentProtocolReviewDTO> submitProtocolStatusReview(PaymentProtocolStatusReviewRequestDTO request);
 
     /**
-     * 新增支付协议配置。
+     * 查询支付协议复核申请。
      */
-    PaymentConfigOverviewDTO createProtocol(PaymentProtocolUpsertRequestDTO request);
+    List<PaymentProtocolReviewDTO> listProtocolReviews();
 
     /**
-     * 编辑支付协议配置。
+     * 提交支付协议候选快照进入复核，不改变运行态协议。
      */
-    PaymentConfigOverviewDTO updateProtocol(String protocolCode, PaymentProtocolUpsertRequestDTO request);
+    List<PaymentProtocolReviewDTO> submitProtocolReview(PaymentProtocolReviewSubmitRequestDTO request);
+
+    /**
+     * 通过复核并发布支付协议候选快照。
+     */
+    List<PaymentProtocolReviewDTO> approveProtocolReview(
+            String requestNo, PaymentProtocolReviewActionRequestDTO request);
+
+    /**
+     * 驳回支付协议复核申请，不改变运行态协议。
+     */
+    List<PaymentProtocolReviewDTO> rejectProtocolReview(
+            String requestNo, PaymentProtocolReviewActionRequestDTO request);
 
     /**
      * 查询支付协议不可变版本历史。
@@ -120,9 +134,9 @@ public interface PaymentConfigService {
     List<PaymentProtocolVersionDTO> listProtocolVersions(String protocolCode);
 
     /**
-     * 回滚到指定支付协议历史版本并追加新版本。
+     * 提交指定支付协议历史版本的回滚候选进入复核，不直接改变运行态。
      */
-    PaymentConfigOverviewDTO rollbackProtocol(
+    List<PaymentProtocolReviewDTO> submitProtocolRollbackReview(
             String protocolCode, PaymentProtocolRollbackRequestDTO request);
 
     /**

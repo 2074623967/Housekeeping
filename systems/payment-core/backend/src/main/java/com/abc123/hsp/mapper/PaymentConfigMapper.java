@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
@@ -17,6 +18,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
@@ -187,13 +189,6 @@ public interface PaymentConfigMapper {
                                 @Param("reviewComment") String reviewComment);
 
     /**
-     * 更新支付协议启停状态。
-     */
-    int updateProtocolStatus(@Param("protocolCode") String protocolCode,
-                             @Param("status") String status,
-                             @Param("statusType") String statusType);
-
-    /**
      * 新增支付协议配置。
      */
     int insertProtocol(PaymentProtocolConfigEntity entity);
@@ -225,9 +220,38 @@ public interface PaymentConfigMapper {
     Integer findLatestProtocolVersionNo(@Param("protocolCode") String protocolCode);
 
     /**
+     * 查询支付协议复核申请。
+     */
+    List<PaymentProtocolReviewDTO> findProtocolReviews();
+
+    /**
+     * 加锁查询支付协议复核申请。
+     */
+    PaymentProtocolReviewEntity findProtocolReviewForUpdate(@Param("requestNo") String requestNo);
+
+    /**
+     * 统计协议待复核申请数。
+     */
+    int countPendingProtocolReviews(@Param("protocolCode") String protocolCode);
+
+    /**
      * 新增支付协议不可变版本快照。
      */
     int insertProtocolVersion(PaymentProtocolVersionEntity entity);
+
+    /**
+     * 新增支付协议复核申请。
+     */
+    int insertProtocolReview(PaymentProtocolReviewEntity entity);
+
+    /**
+     * 完成支付协议复核申请。
+     */
+    int completeProtocolReview(@Param("requestNo") String requestNo,
+                               @Param("reviewStatus") String reviewStatus,
+                               @Param("reviewStatusType") String reviewStatusType,
+                               @Param("reviewer") String reviewer,
+                               @Param("reviewComment") String reviewComment);
 
     /**
      * 新增异常告警值班路由配置。

@@ -35,7 +35,13 @@ const protocolVersionCode = ref("");
 const protocolVersions = ref([]);
 const isProtocolVersionLoading = ref(false);
 let protocolVersionRequestId = 0;
+const protocolReviews = ref([]);
+const isProtocolReviewLoading = ref(false);
+const protocolReviewErrorMessage = ref("");
+const protocolActionRequester = ref("");
 const protocolActionReason = ref("");
+const protocolReviewer = ref("");
+const protocolReviewComment = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
@@ -73,7 +79,8 @@ function createProtocolForm() {
     protocolBody: "",
     priority: 99,
     enabled: true,
-    changeReason: ""
+    changeReason: "",
+    requester: ""
   };
 }
 
@@ -455,29 +462,27 @@ async function rollbackRouteRuleVersion(version) {
 }
 
 async function toggleProtocol(protocol) {
-  if (!protocolActionReason.value) {
-    actionMessage.value = "支付协议启停失败：请先填写协议启停 / 回滚原因。";
+  if (!protocolActionRequester.value || !protocolActionReason.value) {
+    actionMessage.value = "提交协议启停复核失败：请先填写申请人声明和申请原因。";
     return;
   }
   const enabled = protocol.status !== "ENABLED";
-  if (!window.confirm(`确认${enabled ? "启用" : "停用"}支付协议 ${protocol.protocolCode}？本次变更将生成新版本。`)) {
+  if (!window.confirm(`确认提交支付协议 ${protocol.protocolCode} 的${enabled ? "启用" : "停用"}复核申请？运行态暂不改变。`)) {
     return;
   }
   activeConfigCode.value = protocol.protocolCode;
   actionMessage.value = "";
   try {
-    applyOverview(await paymentConfigApi.toggleProtocol({
+    protocolReviews.value = await paymentConfigApi.toggleProtocol({
       protocolCode: protocol.protocolCode,
       enabled,
+      requester: protocolActionRequester.value,
       changeReason: protocolActionReason.value
-    }));
+    });
     protocolActionReason.value = "";
-    if (protocolVersionCode.value === protocol.protocolCode) {
-      await loadProtocolVersions(protocol.protocolCode);
-    }
-    actionMessage.value = `支付协议 ${protocol.protocolCode} 已${enabled ? "启用" : "停用"}并生成新版本。`;
+    actionMessage.value = `支付协议 ${protocol.protocolCode} 的${enabled ? "启用" : "停用"}申请已提交，运行态尚未改变。`;
   } catch (error) {
-    actionMessage.value = `支付协议操作失败：${error.message}`;
+    actionMessage.value = `支付协议启停申请失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -585,33 +590,38 @@ function startEditProtocol(protocol) {
     protocolBody: protocol.protocolBody,
     priority: protocol.priority,
     enabled: protocol.status === "ENABLED",
-    changeReason: ""
+    changeReason: "",
+    requester: ""
   };
   actionMessage.value = `正在编辑协议 ${protocol.protocolCode}`;
 }
 
 async function submitProtocolForm() {
+  if (!protocolForm.value.requester) {
+    actionMessage.value = "支付协议提交复核失败：请填写申请人声明。";
+    return;
+  }
   if (!protocolForm.value.changeReason) {
-    actionMessage.value = "支付协议保存失败：请填写变更原因。";
+    actionMessage.value = "支付协议提交复核失败：请填写申请原因。";
     return;
   }
   activeConfigCode.value = editingProtocolCode.value || protocolForm.value.protocolCode;
   actionMessage.value = "";
   try {
-    const payload = {
+    const candidate = {
       ...protocolForm.value,
       priority: Number(protocolForm.value.priority || 99)
     };
-    const overview = editingProtocolCode.value
-      ? await paymentConfigApi.updateProtocol(editingProtocolCode.value, payload)
-      : await paymentConfigApi.createProtocol(payload);
-    applyOverview(overview);
-    actionMessage.value = editingProtocolCode.value
-      ? `支付协议 ${editingProtocolCode.value} 已更新。`
-      : `支付协议 ${protocolForm.value.protocolCode} 已新增。`;
+    delete candidate.requester;
+    protocolReviews.value = await paymentConfigApi.submitProtocolReview({
+      requester: protocolForm.value.requester,
+      candidate
+    });
+    const submittedProtocolCode = editingProtocolCode.value || protocolForm.value.protocolCode;
     startCreateProtocol();
+    actionMessage.value = `支付协议 ${submittedProtocolCode} 已提交复核，运行态尚未改变。`;
   } catch (error) {
-    actionMessage.value = `支付协议保存失败：${error.message}`;
+    actionMessage.value = `支付协议提交复核失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -648,31 +658,91 @@ function closeProtocolVersions() {
 
 async function rollbackProtocolVersion(version) {
   const protocolCode = protocolVersionCode.value;
-  const currentVersion = protocolVersions.value[0]?.versionNo;
-  if (!protocolActionReason.value) {
-    actionMessage.value = "支付协议回滚失败：请先填写协议启停 / 回滚原因。";
+  if (!protocolActionRequester.value || !protocolActionReason.value) {
+    actionMessage.value = "提交协议回滚复核失败：请先填写申请人声明和申请原因。";
     return;
   }
-  if (!currentVersion) {
-    actionMessage.value = "支付协议回滚失败：无法确认当前协议版本，请刷新历史后重试。";
-    return;
-  }
-  if (!window.confirm(`确认将支付协议 ${protocolCode} 回滚到 V${version.versionNo}？回滚会生成新版本。`)) {
+  if (!window.confirm(`确认提交支付协议 ${protocolCode} 回滚到 V${version.versionNo} 的复核申请？运行态暂不改变。`)) {
     return;
   }
   activeConfigCode.value = `${protocolCode}:rollback`;
   actionMessage.value = "";
   try {
-    applyOverview(await paymentConfigApi.rollbackProtocol(protocolCode, {
+    protocolReviews.value = await paymentConfigApi.rollbackProtocol(protocolCode, {
       versionNo: version.versionNo,
-      baseVersionNo: currentVersion,
+      requester: protocolActionRequester.value,
       changeReason: protocolActionReason.value
-    }));
+    });
     protocolActionReason.value = "";
-    await loadProtocolVersions(protocolCode);
-    actionMessage.value = `支付协议 ${protocolCode} 已回滚到 V${version.versionNo}，并生成新的运行版本。`;
+    actionMessage.value = `支付协议 ${protocolCode} 回滚到 V${version.versionNo} 的申请已提交，运行态尚未改变。`;
   } catch (error) {
-    actionMessage.value = `支付协议回滚失败：${error.message}`;
+    actionMessage.value = `支付协议回滚申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadProtocolReviews() {
+  isProtocolReviewLoading.value = true;
+  protocolReviewErrorMessage.value = "";
+  try {
+    protocolReviews.value = await paymentConfigApi.getProtocolReviews();
+  } catch (error) {
+    protocolReviewErrorMessage.value = error.message;
+  } finally {
+    isProtocolReviewLoading.value = false;
+  }
+}
+
+function formatProtocolOperation(operationType) {
+  const labels = {
+    CREATE: "新增",
+    UPDATE: "修改",
+    STATUS_CHANGE: "启停",
+    ROLLBACK: "回滚"
+  };
+  return labels[operationType] || operationType;
+}
+
+async function handleProtocolReview(review, approved) {
+  if (!protocolReviewer.value) {
+    actionMessage.value = "协议复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!protocolReviewComment.value) {
+    actionMessage.value = `协议复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(
+    approved
+      ? `确认通过申请 ${review.requestNo} 并将候选协议写入运行态？`
+      : `确认驳回申请 ${review.requestNo}？运行态不会改变。`
+  );
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `protocol-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: protocolReviewer.value,
+      reviewComment: protocolReviewComment.value
+    };
+    protocolReviews.value = approved
+      ? await paymentConfigApi.approveProtocolReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectProtocolReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+      if (protocolVersionCode.value) {
+        await loadProtocolVersions(protocolVersionCode.value);
+      }
+    }
+    protocolReviewComment.value = "";
+    actionMessage.value = approved
+      ? `协议复核申请 ${review.requestNo} 已通过，候选协议已写入运行态。`
+      : `协议复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `协议复核处理失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -738,6 +808,7 @@ async function submitRosterForm() {
 onMounted(() => {
   loadOverview();
   loadRouteRuleReviews();
+  loadProtocolReviews();
 });
 
 function exportGovernanceSnapshot(section = "ALL") {
@@ -755,7 +826,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.10</span>
+        <span class="badge info">配置中心 V1.11</span>
       </div>
     </div>
 
@@ -1288,7 +1359,7 @@ function exportGovernanceSnapshot(section = "ALL") {
           <div class="section-title">
             <div>
               <h3>支付协议管理</h3>
-              <p class="meta">维护签约协议、预授权协议和代扣协议模板，控制场景适用范围与启停状态</p>
+              <p class="meta">维护协议候选与不可变版本，异人复核通过后才更新运行态</p>
             </div>
             <div class="toolbar-actions">
               <button class="button secondary" @click="exportGovernanceSnapshot('PROTOCOLS')">导出协议</button>
@@ -1300,7 +1371,7 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="section-title">
               <div>
                 <h3>{{ editingProtocolCode ? "编辑支付协议" : "新增支付协议" }}</h3>
-                <p class="meta">按协议模板、渠道范围、商户确认和风控标签维护支付协议标准配置</p>
+                <p class="meta">按模板、渠道范围、商户确认和风控标签提交完整协议候选</p>
               </div>
             </div>
 
@@ -1385,8 +1456,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </select>
               </label>
               <label class="wide-field">
-                变更原因
-                <input v-model.trim="protocolForm.changeReason" maxlength="255" placeholder="新增或编辑协议时必填" />
+                申请原因
+                <input v-model.trim="protocolForm.changeReason" maxlength="255" placeholder="新增或编辑协议复核时必填" />
+              </label>
+              <label>
+                申请人声明
+                <input v-model.trim="protocolForm.requester" maxlength="64" placeholder="当前为自声明身份" />
               </label>
             </div>
 
@@ -1396,16 +1471,28 @@ function exportGovernanceSnapshot(section = "ALL") {
                 :disabled="activeConfigCode === (editingProtocolCode || protocolForm.protocolCode)"
                 @click="submitProtocolForm"
               >
-                {{ editingProtocolCode ? "保存修改" : "新增协议" }}
+                {{ editingProtocolCode ? "提交修改复核" : "提交新增复核" }}
               </button>
               <button class="button secondary" @click="startCreateProtocol">重置表单</button>
             </div>
           </div>
 
           <div class="filter-grid" style="margin-bottom: 16px;">
+            <label>
+              启停 / 回滚申请人
+              <input v-model.trim="protocolActionRequester" maxlength="64" placeholder="当前为自声明身份" />
+            </label>
             <label class="wide-field">
-              协议启停 / 回滚原因
-              <input v-model.trim="protocolActionReason" maxlength="255" placeholder="启停或回滚协议前必填" />
+              启停 / 回滚申请原因
+              <input v-model.trim="protocolActionReason" maxlength="255" placeholder="提交启停或回滚复核前必填" />
+            </label>
+            <label>
+              复核人声明
+              <input v-model.trim="protocolReviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+            </label>
+            <label class="wide-field">
+              复核意见 / 驳回原因
+              <input v-model.trim="protocolReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
             </label>
           </div>
 
@@ -1482,11 +1569,104 @@ function exportGovernanceSnapshot(section = "ALL") {
             </table>
           </div>
 
+          <div style="margin-top: 20px;">
+            <div class="section-title">
+              <div>
+                <h3>支付协议复核申请</h3>
+                <p class="meta">申请人与复核人均为自声明身份，不代表可信登录、法务审批或正式签字</p>
+              </div>
+              <button class="button secondary" :disabled="isProtocolReviewLoading" @click="loadProtocolReviews">
+                {{ isProtocolReviewLoading ? "刷新中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="notice-banner">
+              新增、修改、启停和回滚均先生成完整候选，异人复核通过后才更新运行态并追加版本。
+            </div>
+            <div v-if="protocolReviewErrorMessage" class="error-banner">
+              协议复核申请加载失败：{{ protocolReviewErrorMessage }}
+            </div>
+            <div v-if="isProtocolReviewLoading" class="state-box">协议复核申请加载中...</div>
+            <div v-else-if="!protocolReviews.length" class="state-box">当前暂无支付协议复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>协议 / 操作</th>
+                    <th>基线版本</th>
+                    <th>候选模板</th>
+                    <th>候选范围与状态</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in protocolReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>
+                      {{ review.protocolCode }} / {{ review.protocolName }}
+                      <div class="muted-text">{{ formatProtocolOperation(review.operationType) }}</div>
+                    </td>
+                    <td>
+                      {{ review.baseVersionNo ? `V${review.baseVersionNo}` : "新协议" }}
+                      <div v-if="review.sourceVersionNo" class="muted-text">
+                        回滚目标 V{{ review.sourceVersionNo }}
+                      </div>
+                    </td>
+                    <td>
+                      {{ review.templateCode }} / {{ review.templateVersion }}
+                      <div class="muted-text">{{ review.signMode }} / {{ review.eSignatureProvider }}</div>
+                    </td>
+                    <td class="flow-summary-cell">
+                      {{ review.sceneScope }} / {{ review.channelScope }}
+                      <div class="muted-text">{{ review.status }} / 优先级 {{ review.priority }}</div>
+                    </td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleProtocolReview(review, true)"
+                        >
+                          通过并发布
+                        </button>
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleProtocolReview(review, false)"
+                        >
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div v-if="protocolVersionCode" class="panel" style="margin-top: 16px;">
             <div class="section-title">
               <div>
                 <h3>{{ protocolVersionCode }} 版本历史</h3>
-                <p class="meta">历史快照不可修改；回滚会复验当前版本并追加新的运行版本，不代表正式审批或法律签署</p>
+                <p class="meta">历史快照不可修改；回滚先生成候选，异人复核通过后才恢复配置并追加新版本</p>
               </div>
               <button class="button secondary" @click="closeProtocolVersions">关闭</button>
             </div>

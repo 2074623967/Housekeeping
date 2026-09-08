@@ -160,6 +160,47 @@ CREATE TABLE t_payment_protocol_version (
     KEY idx_protocol_version_created (protocol_code, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付协议不可变版本快照表';
 
+CREATE TABLE t_payment_protocol_review (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
+    protocol_code VARCHAR(64) NOT NULL COMMENT '支付协议编码',
+    pending_protocol_code VARCHAR(64) DEFAULT NULL COMMENT '待复核协议唯一占位，完成后置空',
+    base_version_no INT NULL COMMENT '提交申请时的运行版本号，新建协议为空',
+    source_version_no INT NULL COMMENT '回滚目标历史版本号，非回滚申请为空',
+    operation_type VARCHAR(32) NOT NULL COMMENT '操作类型：CREATE/UPDATE/STATUS_CHANGE/ROLLBACK',
+    protocol_name VARCHAR(128) NOT NULL COMMENT '候选协议名称',
+    protocol_type VARCHAR(64) NOT NULL COMMENT '候选协议类型',
+    protocol_type_name VARCHAR(64) NOT NULL COMMENT '候选协议类型名称',
+    template_code VARCHAR(64) NOT NULL COMMENT '候选模板编码',
+    template_name VARCHAR(128) NOT NULL COMMENT '候选模板名称',
+    template_version VARCHAR(32) NOT NULL COMMENT '候选模板版本',
+    sign_mode VARCHAR(64) NOT NULL COMMENT '候选签约模式',
+    sign_element_spec VARCHAR(255) NOT NULL COMMENT '候选签约要素',
+    e_signature_provider VARCHAR(64) NOT NULL COMMENT '候选电子签章服务商',
+    scene_scope VARCHAR(128) NOT NULL COMMENT '候选适用场景',
+    channel_scope VARCHAR(128) NOT NULL COMMENT '候选适用渠道范围',
+    merchant_ack_required VARCHAR(32) NOT NULL COMMENT '候选商户确认要求',
+    risk_control_tag VARCHAR(128) NOT NULL COMMENT '候选风控标签',
+    protocol_body TEXT NOT NULL COMMENT '候选协议正文',
+    status VARCHAR(32) NOT NULL COMMENT '候选协议状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '候选协议状态样式',
+    priority INT NOT NULL COMMENT '候选协议优先级',
+    requester VARCHAR(64) NOT NULL COMMENT '申请人自声明',
+    request_reason VARCHAR(255) NOT NULL COMMENT '申请原因',
+    review_status VARCHAR(32) NOT NULL COMMENT '复核状态',
+    review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
+    reviewer VARCHAR(64) DEFAULT NULL COMMENT '复核人自声明',
+    review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见',
+    created_at DATETIME NOT NULL COMMENT '申请时间',
+    reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_protocol_review_request (request_no),
+    UNIQUE KEY uk_protocol_review_pending (pending_protocol_code),
+    KEY idx_protocol_review_status (review_status, created_at),
+    KEY idx_protocol_review_protocol (protocol_code, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付协议复核申请表';
+
 CREATE TABLE t_payment_channel_return_code_map (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',

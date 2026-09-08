@@ -9,9 +9,11 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
+import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
-import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
@@ -62,46 +64,45 @@ class PaymentConfigControllerTest {
     }
 
     @Test
-    void shouldCreateProtocol() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.createProtocol(any(PaymentProtocolUpsertRequestDTO.class))).thenReturn(overview);
-        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
-
-        PaymentProtocolUpsertRequestDTO request = new PaymentProtocolUpsertRequestDTO();
-        request.setProtocolCode("PROTO_HOME_SIGN");
-
-        assertEquals(overview, controller.createProtocol(request).getData());
-        verify(paymentConfigService).createProtocol(request);
-    }
-
-    @Test
-    void shouldUpdateProtocol() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.updateProtocol(any(String.class), any(PaymentProtocolUpsertRequestDTO.class))).thenReturn(overview);
-        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
-
-        PaymentProtocolUpsertRequestDTO request = new PaymentProtocolUpsertRequestDTO();
-        request.setProtocolName("家政代扣协议");
-
-        assertEquals(overview, controller.updateProtocol("PROTO_HOME_SIGN", request).getData());
-        verify(paymentConfigService).updateProtocol("PROTO_HOME_SIGN", request);
-    }
-
-    @Test
-    void shouldListAndRollbackProtocolVersion() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
+    void shouldReviewAndRollbackProtocolVersion() {
+        when(paymentConfigService.listProtocolReviews())
+                .thenReturn(Collections.singletonList(new PaymentProtocolReviewDTO()));
+        when(paymentConfigService.submitProtocolReview(any(PaymentProtocolReviewSubmitRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentProtocolReviewDTO()));
+        when(paymentConfigService.approveProtocolReview(
+                any(String.class), any(PaymentProtocolReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentProtocolReviewDTO()));
+        when(paymentConfigService.rejectProtocolReview(
+                any(String.class), any(PaymentProtocolReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentProtocolReviewDTO()));
+        when(paymentConfigService.submitProtocolStatusReview(any(PaymentProtocolStatusReviewRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentProtocolReviewDTO()));
         when(paymentConfigService.listProtocolVersions("PROTO_HOME_SIGN"))
                 .thenReturn(Collections.singletonList(new PaymentProtocolVersionDTO()));
-        when(paymentConfigService.rollbackProtocol(
-                any(String.class), any(PaymentProtocolRollbackRequestDTO.class))).thenReturn(overview);
+        when(paymentConfigService.submitProtocolRollbackReview(
+                any(String.class), any(PaymentProtocolRollbackRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentProtocolReviewDTO()));
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentProtocolReviewSubmitRequestDTO submitRequest = new PaymentProtocolReviewSubmitRequestDTO();
+        PaymentProtocolReviewActionRequestDTO actionRequest = new PaymentProtocolReviewActionRequestDTO();
+        PaymentProtocolStatusReviewRequestDTO statusRequest = new PaymentProtocolStatusReviewRequestDTO();
         PaymentProtocolRollbackRequestDTO request = new PaymentProtocolRollbackRequestDTO();
         request.setVersionNo(Integer.valueOf(1));
 
+        assertEquals(1, controller.listProtocolReviews().getData().size());
+        assertEquals(1, controller.submitProtocolReview(submitRequest).getData().size());
+        assertEquals(1, controller.approveProtocolReview("PRV-001", actionRequest).getData().size());
+        assertEquals(1, controller.rejectProtocolReview("PRV-001", actionRequest).getData().size());
+        assertEquals(1, controller.submitProtocolStatusReview(statusRequest).getData().size());
         assertEquals(1, controller.listProtocolVersions("PROTO_HOME_SIGN").getData().size());
-        assertEquals(overview, controller.rollbackProtocol("PROTO_HOME_SIGN", request).getData());
+        assertEquals(1, controller.submitProtocolRollbackReview("PROTO_HOME_SIGN", request).getData().size());
+        verify(paymentConfigService).listProtocolReviews();
+        verify(paymentConfigService).submitProtocolReview(submitRequest);
+        verify(paymentConfigService).approveProtocolReview("PRV-001", actionRequest);
+        verify(paymentConfigService).rejectProtocolReview("PRV-001", actionRequest);
+        verify(paymentConfigService).submitProtocolStatusReview(statusRequest);
         verify(paymentConfigService).listProtocolVersions("PROTO_HOME_SIGN");
-        verify(paymentConfigService).rollbackProtocol("PROTO_HOME_SIGN", request);
+        verify(paymentConfigService).submitProtocolRollbackReview("PROTO_HOME_SIGN", request);
     }
 
     @Test
@@ -189,7 +190,6 @@ class PaymentConfigControllerTest {
     void shouldToggleGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
         when(paymentConfigService.toggleChannel(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
-        when(paymentConfigService.toggleProtocol(any(PaymentProtocolStatusRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleReturnCodeMapping(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleGateway(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleControlPolicy(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
@@ -200,19 +200,13 @@ class PaymentConfigControllerTest {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
-        PaymentProtocolStatusRequestDTO protocolRequest = new PaymentProtocolStatusRequestDTO();
-        protocolRequest.setProtocolCode("PROTO_HOME_SIGN");
-        protocolRequest.setEnabled(Boolean.TRUE);
-
         assertEquals(overview, controller.toggleChannel(request).getData());
-        assertEquals(overview, controller.toggleProtocol(protocolRequest).getData());
         assertEquals(overview, controller.toggleReturnCodeMapping(request).getData());
         assertEquals(overview, controller.toggleGateway(request).getData());
         assertEquals(overview, controller.toggleControlPolicy(request).getData());
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
         verify(paymentConfigService).toggleChannel(request);
-        verify(paymentConfigService).toggleProtocol(protocolRequest);
         verify(paymentConfigService).toggleReturnCodeMapping(request);
         verify(paymentConfigService).toggleGateway(request);
         verify(paymentConfigService).toggleControlPolicy(request);

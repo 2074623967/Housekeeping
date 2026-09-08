@@ -903,8 +903,16 @@ export const paymentConfigApi = {
   ),
   getRouteRuleVersions: (ruleCode) => request(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/versions`),
   submitRouteRuleRollbackReview: (ruleCode, payload) => postJson(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/rollback`, payload),
-  createProtocol: (payload) => postJson("/api/payment-config/protocols", payload),
-  updateProtocol: (protocolCode, payload) => request(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}`, buildJsonRequestOptions("PUT", payload)),
+  getProtocolReviews: () => request("/api/payment-config/protocols/reviews"),
+  submitProtocolReview: (payload) => postJson("/api/payment-config/protocols/reviews", payload),
+  approveProtocolReview: (requestNo, payload) => postJson(
+    `/api/payment-config/protocols/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectProtocolReview: (requestNo, payload) => postJson(
+    `/api/payment-config/protocols/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   toggleProtocol: (payload) => postJson("/api/payment-config/protocols/toggle", payload),
   getProtocolVersions: (protocolCode) => request(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/versions`),
   rollbackProtocol: (protocolCode, payload) => postJson(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/rollback`, payload),
