@@ -1289,6 +1289,11 @@ POST /api/payment-config/control-policies/self-check
 14. `queryTrends`：按小时聚合的查单总数、失败数和失败率。
 15. `recentQueryRateLimitRejectionCount`：窗口内共享渠道配额耗尽导致的查单拒绝次数，不计入渠道失败率。
 16. `queryRateLimitRejectionCountThreshold`：限流拒绝次数 P1 告警阈值。
+17. `pendingIssueAlertDispatchCount`：待确认且状态为已生成、部分失败或派发失败的来源 `IN_APP_OUTBOX` 告警数。
+18. `failedIssueAlertDispatchCount`：上述待派发告警中仍处于部分失败或派发失败的数量。
+19. `pendingIssueAlertReceiptCount`：供应商已受理、待确认且等待送达回执回查的外发告警数。
+
+异常告警派发可观测性说明：待派发数量达到 `10` 条，或其中存在派发异常时升级为 P1；存在少量待派发但无派发异常时为 P2。待回查数量达到 `10` 条时升级为 P1，存在少量待回查时为 P2。以上均为任务中心积压口径，不代表真实通知已经送达。
 
 ### 13.8 查询支付任务执行日志
 

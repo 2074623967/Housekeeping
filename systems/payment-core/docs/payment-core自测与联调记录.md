@@ -4544,3 +4544,29 @@
 2. 自动派发默认关闭，本轮没有启用真实 webhook，也没有产生企业微信、短信或邮件实际送达证据。
 3. 真实通知供应商配置、接收人核验、运行态派发和实际送达回执仍属于外部联调缺口。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 141. 2026-09-08 异常告警派发与回执积压可观测性验证
+
+### 141.1 本轮补强
+
+1. 任务中心总览新增来源 outbox 待派发数、其中派发异常数，以及供应商已受理待回查数，补齐自动派发开启后的积压观测入口。
+2. 待派发统计仅包含待确认的 `IN_APP_OUTBOX` 来源记录，状态限定为已生成、部分失败或派发失败；待回查仅包含具备来源告警号、供应商状态为 `ACCEPTED` 且待确认的外发记录。
+3. 新增 `PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG` 与 `PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG`：派发异常或待派发达到 `10` 条时升级 P1，少量积压为 P2，无积压为 P3。
+4. `admin-web` 增加“异常告警待派发”“异常告警待回查”指标卡并升级为 V1.19；运维关注宽表改为局部滚动，移除页面级 `1280px` 硬下限，当前应用窗口不再出现横向溢出。
+
+### 141.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| Mapper、服务与派发定向测试 | `mvn -Dtest=PaymentTaskCenterMapperIntegrationTest,PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `53` 个用例通过，覆盖已生成、部分失败、已确认、ACCEPTED、DELIVERED 的统计边界，以及派发 P1、回查 P2 告警 |
+| 后端全量测试 | `mvn test` | 通过 | `301` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-alert-observability-v1 --emptyOutDir` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 浏览器静态检查 | `http://127.0.0.1:4176/payment-task-center` | 通过 | V1.19、两张积压指标卡和局部宽表滚动正常渲染，当前应用窗口无页面级横向溢出；后端 `18081` 未启动，API 显示 `500 [PAYMENT-CLIENT]`，不记录为接口联调完成 |
+| Mapper XML 与补丁检查 | `xmllint --noout PaymentTaskCenterMapper.xml && git diff --check` | 通过 | XML 结构合法，文档和代码无空白符错误 |
+
+### 141.3 当前判断
+
+1. 任务中心已能区分“来源 outbox 等待派发”“派发已出现异常”和“供应商已受理等待回执”，自动派发开启后不再只能依赖明细台人工发现积压。
+2. 当前统计来自数据库派发状态，不等同于真实企业微信、短信或邮件已经送达；本轮没有新增真实通知供应商回执证据。
+3. 生产 MySQL 容量压测、真实通知供应商配置、接收人核验和运行态派发仍属于后续外部联调缺口。
+4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
