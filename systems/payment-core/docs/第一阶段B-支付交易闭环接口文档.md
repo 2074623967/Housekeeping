@@ -78,7 +78,10 @@
 | `/api/payment-config/protocols/reviews/{requestNo}/reject` | `POST` | 异人驳回候选快照，运行态不变 |
 | `/api/payment-config/protocols/{protocolCode}/versions` | `GET` | 查询支付协议历史版本 |
 | `/api/payment-config/protocols/{protocolCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
-| `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
+| `/api/payment-config/return-codes/toggle` | `POST` | 提交渠道返回码单条启停候选，运行态不变 |
+| `/api/payment-config/return-codes/reviews` | `GET` | 查询渠道返回码单条状态变更复核申请 |
+| `/api/payment-config/return-codes/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用单条状态候选 |
+| `/api/payment-config/return-codes/reviews/{requestNo}/reject` | `POST` | 异人驳回单条状态候选，运行态不变 |
 | `/api/payment-config/return-codes/import/preview` | `POST` | 解析并预检返回码 CSV，返回逐行差异，不修改运行态 |
 | `/api/payment-config/return-codes/import/reviews` | `GET` | 查询返回码 CSV 导入复核申请 |
 | `/api/payment-config/return-codes/import/reviews` | `POST` | 锁定并复验预检基线，提交导入候选，运行态不变 |
@@ -1005,7 +1008,26 @@ POST /api/payment-config/protocols/toggle
 
 ```http
 POST /api/payment-config/return-codes/toggle
+GET  /api/payment-config/return-codes/reviews
+POST /api/payment-config/return-codes/reviews/{requestNo}/approve
+POST /api/payment-config/return-codes/reviews/{requestNo}/reject
 ```
+
+提交请求示例：
+
+```json
+{
+  "channelCode": "wx_h5",
+  "channelReturnCode": "USERPAYING",
+  "enabled": false,
+  "requester": "maker-a",
+  "changeReason": "暂停该返回码自动承接"
+}
+```
+
+渠道编码按小写、渠道返回码按大写规范化。同一映射同时最多一条 `PENDING_REVIEW`；映射不存在、已归档、目标状态未变化或已有待办时拒绝。提交保存完整映射基线指纹，不修改运行态。
+
+批准或驳回请求使用 `reviewer / reviewComment`。批准先锁复核申请，再锁运行映射并复验候选状态与完整基线；CSV 导入或其他映射字段变化会使旧候选失效。只有异人声明批准才更新状态，状态写入与复核完成同事务提交；驳回不改运行态，完成后释放该映射待办占位。列表返回申请、候选状态、基线、复核记录、时间和固定的 `identityTrustLevel=SELF_DECLARED`。
 
 返回码 CSV 差异预检与复核：
 
@@ -1048,7 +1070,7 @@ wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,用户支付中,等待回调或主动查�
 
 批准阶段先锁复核申请、再锁运行态映射，重新验证候选 SHA-256、基线、渠道和所有行；同人复核、重复处理、摘要不一致、基线漂移或候选失效时拒绝。批准时映射写入、导入审计批次和复核完成同事务提交；驳回只完成复核，二者都会释放唯一待办占位。列表返回 `requestNo / sourceSha256 / baselineFingerprint / totalCount / createCount / updateCount / unchangedCount / requester / requestReason / reviewStatus / reviewer / reviewComment / appliedBatchNo / createdAt / reviewedAt / identityTrustLevel`。
 
-单次最多 `500` 行、`512 KB`；未出现在文件中的映射保持不变，不自动归档。`requester / reviewer` 均是自声明，`identityTrustLevel` 固定为 `SELF_DECLARED`，不代表可信身份、正式审批或不可抵赖签字。V1.4 仅关闭 CSV 导入的直接应用入口，单条 `/return-codes/toggle` 仍直接修改运行态。
+单次最多 `500` 行、`512 KB`；未出现在文件中的映射保持不变，不自动归档。CSV 导入由 V1.4 复核链路治理，单条启停由 V1.5 复核链路治理。两者的 `requester / reviewer` 均是自声明，`identityTrustLevel` 固定为 `SELF_DECLARED`，不代表可信身份、正式审批或不可抵赖签字。
 
 启停支付网关：
 
@@ -1083,8 +1105,8 @@ POST /api/payment-config/control-policies/self-check
 2. `enabled=false` 时状态更新为 `DISABLED`。
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 3. 协议配置当前已支持运营查看、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护、不可变版本和自声明 maker-checker；新增、编辑、启停与回滚都先提交完整候选，批准前运行态不变。该能力不等于可信审批、正式法律签署或电子签章联调。
-4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
-5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备差异预检、唯一待办、自声明异人复核、批准阶段摘要与基线复验、原子应用和审计批次 V1.4。单条启停仍为直接路径，后续继续补可信身份权限、单条变更复核、真实渠道码表校验和受控自动归档。
+4. 返回码映射启停候选使用 `channelCode / channelReturnCode / enabled / requester / changeReason`，不再使用通用 `configCode / subCode` 直接写入请求。
+5. 返回码映射当前已支持运营查看、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备 V1.4 复核与审计，单条启停具备 V1.5 独立唯一待办、完整基线指纹和自声明异人复核。后续继续补可信身份权限、真实渠道码表校验和受控自动归档。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。

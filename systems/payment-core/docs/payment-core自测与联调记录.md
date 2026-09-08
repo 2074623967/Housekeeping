@@ -5007,3 +5007,34 @@
 2. 唯一待办、固定锁顺序和数据库唯一键共同约束本服务内并发提交与处理；该结论来自服务和 Mapper 测试，不代表已执行生产数据库迁移或跨系统配置发布。
 3. 单条 `/return-codes/toggle` 仍直接修改运行态，因此不能宣称全部返回码变更已具备 maker-checker。申请人与复核人也仍是自声明字符串，不能证明真实身份、权限或正式审批。
 4. 后端未启动且锁屏阻断浏览器视觉检查，本轮不形成运行态 API、真实渠道联调或完整页面验收证据；`master -> release/*` 仍不放行。
+
+## 157. 2026-09-09 渠道返回码单条启停 maker-checker V1.5 验证
+
+### 157.1 本轮补强
+
+1. 保留 `/api/payment-config/return-codes/toggle` URL，但将语义从直接启停改为提交状态候选；新增单条状态复核列表、批准和驳回接口，提交与驳回不修改运行态。
+2. 新增 `t_payment_return_code_review`、两份全量 schema 和幂等迁移；以规范化映射键 SHA-256 作为可空唯一待办占位，同一映射同时最多一条待复核申请，完成后释放占位。
+3. 渠道规范化为小写、返回码规范化为大写；不存在、已归档、状态未变化、已有待办或唯一键竞态均拒绝。候选保存完整映射基线指纹，使 CSV 导入或其他字段变化可在批准前阻断陈旧候选。
+4. 批准先锁复核申请、再锁映射并复验候选状态与完整基线；仅异人声明通过才写状态，映射更新与复核完成处于同一事务。驳回、同人复核和重复处理均不修改运行态。
+5. 管理端升级为 V1.13，单条按钮改为“申请启用/申请停用”，新增申请人、原因、复核人、意见和独立复核面板；批准后刷新运行态，提交与驳回只刷新复核列表。
+6. 同步数据库、接口、设计、测试、需求、差距和页面交互文档，新增 `PAY-TC-038`。人员身份固定为 `SELF_DECLARED`，只能证明输入了不同声明，不能证明可信身份、授权、正式审批或不可抵赖签字。
+
+### 157.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 返回码状态复核扩大定向测试 | `mvn -Dtest=PaymentReturnCodeMappingConfigServiceImplTest,PaymentReturnCodeImportServiceTest,PaymentConfigControllerTest,PaymentConfigReturnCodeMapperIntegrationTest,PaymentConfigServiceImplTest test` | 通过 | Surefire XML 实际汇总 `98` 个用例全部通过，覆盖提交不改运行态、唯一待办、归档阻断、同人拒绝、异人批准、驳回、重复处理、完整基线漂移、Mapper 占位释放及 CSV 导入回归 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 实际汇总 `395` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 管理端静态可达性 | `http://127.0.0.1:4187/payment-config` | 通过 | 本轮重新启动 Vite 后请求返回 `200`；只证明页面入口可访问，不等于交互或视觉验收 |
+| 管理端视觉检查 | `payment-config` 页面 | 未执行 | Mac 处于锁屏状态，未执行 V1.13 桌面与窄视口浏览器复验，不复用旧版本视觉结论 |
+| 运行态 API | `http://127.0.0.1:18081/api/payment-config/return-codes/*` | 未执行 | 后端 `18081` 未监听，不记录候选提交、批准、驳回或真实渠道码表运行态联调通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码、迁移和文档无空白符错误，Mapper XML 结构合法 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `test -> master = 是`、`release/* = 否`；退出码 `2` 为预期 release 阻断，候选说明正式化、正式签字、现场核验和稳定观察结束四项事实仍未形成 |
+
+### 157.3 当前判断
+
+1. 返回码 CSV 导入继续由 V1.4 复核链路治理，单条启停由 V1.5 独立复核链路治理；管理端、控制器和服务层不存在已知的返回码单条直接启停路径。
+2. 单条候选以完整映射指纹保护批准基线，CSV 导入或其他字段变更会使旧候选失效；该结论来自单元和 Mapper 集成测试，不代表已执行生产数据库迁移或并发压测。
+3. 当前申请人和复核人仍是自声明字符串，异人约束不能证明真实身份、权限、正式审批或不可抵赖签字。
+4. 后端未启动且锁屏阻断浏览器视觉检查，本轮不形成运行态 API、真实渠道联调或完整页面验收证据；`master -> release/*` 仍不放行。
