@@ -61,6 +61,68 @@
         LIMIT 1
     </select>
 
+    <select id="findRouteRuleByCodeForUpdate" resultType="com.abc123.hsp.entity.PaymentRouteRuleConfigEntity">
+        SELECT rule_code AS ruleCode,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority
+        FROM t_payment_route_rule_config
+        WHERE rule_code = #{ruleCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findRouteRuleVersions" resultType="com.abc123.hsp.dto.PaymentRouteRuleVersionDTO">
+        SELECT rule_code AS ruleCode,
+               version_no AS versionNo,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_route_rule_version
+        WHERE rule_code = #{ruleCode}
+        ORDER BY version_no DESC
+    </select>
+
+    <select id="findRouteRuleVersion" resultType="com.abc123.hsp.entity.PaymentRouteRuleVersionEntity">
+        SELECT rule_code AS ruleCode,
+               version_no AS versionNo,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason
+        FROM t_payment_route_rule_version
+        WHERE rule_code = #{ruleCode}
+          AND version_no = #{versionNo}
+        LIMIT 1
+    </select>
+
+    <select id="findLatestRouteRuleVersionNo" resultType="java.lang.Integer">
+        SELECT COALESCE(MAX(version_no), 0)
+        FROM t_payment_route_rule_version
+        WHERE rule_code = #{ruleCode}
+    </select>
+
     <select id="findProtocols" resultType="com.abc123.hsp.dto.PaymentProtocolConfigDTO">
         SELECT protocol_code AS protocolCode,
                protocol_name AS protocolName,
@@ -385,6 +447,40 @@
             updated_at = NOW()
         WHERE rule_code = #{ruleCode}
     </update>
+
+    <insert id="insertRouteRuleVersion" parameterType="com.abc123.hsp.entity.PaymentRouteRuleVersionEntity">
+        INSERT INTO t_payment_route_rule_version (
+            rule_code,
+            version_no,
+            rule_name,
+            match_scene,
+            match_expression,
+            target_channel_code,
+            fallback_channel_code,
+            status,
+            status_type,
+            priority,
+            change_type,
+            source_version_no,
+            change_reason,
+            created_at
+        ) VALUES (
+            #{ruleCode},
+            #{versionNo},
+            #{ruleName},
+            #{matchScene},
+            #{matchExpression},
+            #{targetChannelCode},
+            #{fallbackChannelCode},
+            #{status},
+            #{statusType},
+            #{priority},
+            #{changeType},
+            #{sourceVersionNo},
+            #{changeReason},
+            NOW()
+        )
+    </insert>
 
     <update id="updateProtocolStatus">
         UPDATE t_payment_protocol_config

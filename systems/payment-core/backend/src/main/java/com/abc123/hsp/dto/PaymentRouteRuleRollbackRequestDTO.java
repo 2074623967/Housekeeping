@@ -1,0 +1,15 @@
+package com.abc123.hsp.dto;
+
+import lombok.Data;
+
+/**
+ * 支付路由规则版本回滚请求。
+ */
+@Data
+public class PaymentRouteRuleRollbackRequestDTO {
+
+    /** 要恢复的历史版本号。 */
+    private Integer versionNo;
+    /** 本次回滚原因。 */
+    private String changeReason;
+}

@@ -11,8 +11,11 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import java.util.Collections;
 import com.abc123.hsp.service.PaymentConfigService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,18 +90,28 @@ class PaymentConfigControllerTest {
                 .thenReturn(overview);
         when(paymentConfigService.validateRouteRule(any(PaymentRouteRuleValidationRequestDTO.class)))
                 .thenReturn(validation);
+        when(paymentConfigService.listRouteRuleVersions("RULE_HOME_APP"))
+                .thenReturn(Collections.singletonList(new PaymentRouteRuleVersionDTO()));
+        when(paymentConfigService.rollbackRouteRule(any(String.class), any(PaymentRouteRuleRollbackRequestDTO.class)))
+                .thenReturn(overview);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
         PaymentRouteRuleUpsertRequestDTO upsertRequest = new PaymentRouteRuleUpsertRequestDTO();
         upsertRequest.setRuleCode("RULE_HOME_APP");
         PaymentRouteRuleValidationRequestDTO validationRequest = new PaymentRouteRuleValidationRequestDTO();
         validationRequest.setMatchExpression("terminal=APP");
+        PaymentRouteRuleRollbackRequestDTO rollbackRequest = new PaymentRouteRuleRollbackRequestDTO();
+        rollbackRequest.setVersionNo(Integer.valueOf(1));
 
         assertEquals(overview, controller.createRouteRule(upsertRequest).getData());
         assertEquals(overview, controller.updateRouteRule("RULE_HOME_APP", upsertRequest).getData());
         assertTrue(controller.validateRouteRule(validationRequest).getData().getValid());
+        assertEquals(1, controller.listRouteRuleVersions("RULE_HOME_APP").getData().size());
+        assertEquals(overview, controller.rollbackRouteRule("RULE_HOME_APP", rollbackRequest).getData());
         verify(paymentConfigService).createRouteRule(upsertRequest);
         verify(paymentConfigService).updateRouteRule("RULE_HOME_APP", upsertRequest);
         verify(paymentConfigService).validateRouteRule(validationRequest);
+        verify(paymentConfigService).listRouteRuleVersions("RULE_HOME_APP");
+        verify(paymentConfigService).rollbackRouteRule("RULE_HOME_APP", rollbackRequest);
     }
 
     @Test

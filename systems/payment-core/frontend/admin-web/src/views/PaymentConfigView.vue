@@ -16,6 +16,10 @@ const errorMessage = ref("");
 const actionMessage = ref("");
 const activeConfigCode = ref("");
 const editingRouteRuleCode = ref("");
+const versionRuleCode = ref("");
+const routeRuleVersions = ref([]);
+const isVersionLoading = ref(false);
+let routeRuleVersionRequestId = 0;
 const editingProtocolCode = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
@@ -67,6 +71,7 @@ function createRouteRuleForm() {
     fallbackChannelCode: "",
     priority: 99,
     enabled: true,
+    changeReason: "",
     samplePaymentMethod: "微信支付",
     sampleRequestedChannelCode: "",
     samplePayScene: "HOME_CLEAN",
@@ -183,7 +188,8 @@ function startEditRouteRule(rule) {
     targetChannelCode: rule.targetChannelCode,
     fallbackChannelCode: rule.fallbackChannelCode,
     priority: rule.priority,
-    enabled: rule.status === "ENABLED"
+    enabled: rule.status === "ENABLED",
+    changeReason: ""
   };
   actionMessage.value = `正在编辑路由规则 ${rule.ruleCode}`;
 }
@@ -224,7 +230,8 @@ async function submitRouteRuleForm() {
       priority: routeRuleForm.value.priority === "" || routeRuleForm.value.priority == null
         ? 99
         : Number(routeRuleForm.value.priority),
-      enabled: routeRuleForm.value.enabled
+      enabled: routeRuleForm.value.enabled,
+      changeReason: routeRuleForm.value.changeReason
     };
     const overview = editingRouteRuleCode.value
       ? await paymentConfigApi.updateRouteRule(editingRouteRuleCode.value, payload)
@@ -237,6 +244,62 @@ async function submitRouteRuleForm() {
     actionMessage.value = successMessage;
   } catch (error) {
     actionMessage.value = `路由规则保存失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadRouteRuleVersions(ruleCode) {
+  const requestId = ++routeRuleVersionRequestId;
+  versionRuleCode.value = ruleCode;
+  routeRuleVersions.value = [];
+  isVersionLoading.value = true;
+  actionMessage.value = "";
+  try {
+    const versions = await paymentConfigApi.getRouteRuleVersions(ruleCode);
+    if (requestId === routeRuleVersionRequestId && versionRuleCode.value === ruleCode) {
+      routeRuleVersions.value = versions;
+    }
+  } catch (error) {
+    if (requestId === routeRuleVersionRequestId && versionRuleCode.value === ruleCode) {
+      actionMessage.value = `规则版本加载失败：${error.message}`;
+    }
+  } finally {
+    if (requestId === routeRuleVersionRequestId) {
+      isVersionLoading.value = false;
+    }
+  }
+}
+
+function closeRouteRuleVersions() {
+  routeRuleVersionRequestId += 1;
+  versionRuleCode.value = "";
+  routeRuleVersions.value = [];
+  isVersionLoading.value = false;
+}
+
+async function rollbackRouteRuleVersion(version) {
+  const ruleCode = versionRuleCode.value;
+  const confirmed = window.confirm(
+    `确认将路由规则 ${ruleCode} 恢复为版本 V${version.versionNo}？回滚会生成一个新版本。`
+  );
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `${ruleCode}:rollback`;
+  actionMessage.value = "";
+  try {
+    const overview = await paymentConfigApi.rollbackRouteRule(ruleCode, {
+      versionNo: version.versionNo,
+      changeReason: `管理端回滚至 V${version.versionNo}`
+    });
+    applyOverview(overview);
+    if (versionRuleCode.value === ruleCode) {
+      await loadRouteRuleVersions(ruleCode);
+    }
+    actionMessage.value = `路由规则 ${ruleCode} 已恢复为 V${version.versionNo}，并生成新版本。`;
+  } catch (error) {
+    actionMessage.value = `路由规则回滚失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -454,7 +517,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1</span>
+        <span class="badge info">配置中心 V1.5</span>
       </div>
     </div>
 
@@ -654,6 +717,10 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </select>
               </label>
               <label class="wide-field">
+                变更原因
+                <input v-model.trim="routeRuleForm.changeReason" maxlength="255" placeholder="说明新增或调整原因（可选）" />
+              </label>
+              <label class="wide-field">
                 匹配表达式
                 <textarea
                   v-model.trim="routeRuleForm.matchExpression"
@@ -734,6 +801,13 @@ function exportGovernanceSnapshot(section = "ALL") {
                     </button>
                     <button
                       class="link-button"
+                      :disabled="Boolean(activeConfigCode)"
+                      @click="loadRouteRuleVersions(rule.ruleCode)"
+                    >
+                      版本
+                    </button>
+                    <button
+                      class="link-button"
                       :disabled="activeConfigCode === rule.ruleCode"
                       @click="toggleRouteRule(rule)"
                     >
@@ -743,6 +817,60 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div v-if="versionRuleCode" style="margin-top: 20px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ versionRuleCode }} 版本历史</h3>
+                <p class="meta">历史快照不可修改；回滚会恢复配置并生成新的版本记录</p>
+              </div>
+              <button class="button secondary" @click="closeRouteRuleVersions">关闭</button>
+            </div>
+            <div v-if="isVersionLoading" class="state-box">规则版本加载中...</div>
+            <div v-else-if="!routeRuleVersions.length" class="state-box">当前暂无版本记录</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>版本</th>
+                    <th>变更类型</th>
+                    <th>来源版本</th>
+                    <th>变更原因</th>
+                    <th>匹配表达式</th>
+                    <th>目标渠道</th>
+                    <th>兜底渠道</th>
+                    <th>优先级</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="version in routeRuleVersions" :key="version.versionNo">
+                    <td>V{{ version.versionNo }}</td>
+                    <td>{{ version.changeType }}</td>
+                    <td>{{ version.sourceVersionNo ? `V${version.sourceVersionNo}` : "-" }}</td>
+                    <td class="flow-summary-cell">{{ version.changeReason }}</td>
+                    <td class="flow-summary-cell">{{ version.matchExpression }}</td>
+                    <td>{{ version.targetChannelCode }}</td>
+                    <td>{{ version.fallbackChannelCode || "-" }}</td>
+                    <td>{{ version.priority }}</td>
+                    <td><span :class="['badge', version.statusType]">{{ version.status }}</span></td>
+                    <td>{{ version.createdAt }}</td>
+                    <td>
+                      <button
+                        class="link-button"
+                        :disabled="Boolean(activeConfigCode)"
+                        @click="rollbackRouteRuleVersion(version)"
+                      >
+                        回滚到此版本
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

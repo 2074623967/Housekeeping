@@ -24,4 +24,6 @@ public class PaymentRouteRuleUpsertRequestDTO {
     private Integer priority;
     /** 是否启用。 */
     private Boolean enabled;
+    /** 本次变更原因。 */
+    private String changeReason;
 }

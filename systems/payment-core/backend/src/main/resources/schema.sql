@@ -24,6 +24,7 @@ DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_gateway_config;
 DROP TABLE IF EXISTS t_payment_control_policy;
 DROP TABLE IF EXISTS t_payment_protocol_config;
+DROP TABLE IF EXISTS t_payment_route_rule_version;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
 DROP TABLE IF EXISTS t_order;
@@ -95,6 +96,27 @@ CREATE TABLE t_payment_route_rule_config (
     UNIQUE KEY uk_rule_code (rule_code),
     KEY idx_route_scene_status (match_scene, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则配置表';
+
+CREATE TABLE t_payment_route_rule_version (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    rule_code VARCHAR(64) NOT NULL COMMENT '路由规则编码',
+    version_no INT NOT NULL COMMENT '规则版本号',
+    rule_name VARCHAR(128) NOT NULL COMMENT '路由规则名称快照',
+    match_scene VARCHAR(128) NOT NULL COMMENT '匹配业务场景快照',
+    match_expression VARCHAR(512) NOT NULL COMMENT '匹配表达式快照',
+    target_channel_code VARCHAR(64) NOT NULL COMMENT '目标渠道编码快照',
+    fallback_channel_code VARCHAR(64) NOT NULL COMMENT '兜底渠道编码快照',
+    status VARCHAR(32) NOT NULL COMMENT '规则状态快照',
+    status_type VARCHAR(32) NOT NULL COMMENT '规则状态样式类型快照',
+    priority INT NOT NULL COMMENT '规则优先级快照',
+    change_type VARCHAR(32) NOT NULL COMMENT '变更类型',
+    source_version_no INT NULL COMMENT '回滚来源版本号',
+    change_reason VARCHAR(255) NOT NULL COMMENT '变更原因',
+    created_at DATETIME NOT NULL COMMENT '版本创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_route_rule_version (rule_code, version_no),
+    KEY idx_route_rule_version_created (rule_code, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则版本快照表';
 
 CREATE TABLE t_payment_protocol_config (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
