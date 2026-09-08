@@ -219,7 +219,6 @@ class PaymentChannelRoutingServiceImplTest {
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(
                 Arrays.asList(drainedChannel, activeChannel));
         when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
-        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_drained")).thenReturn(BigDecimal.ZERO);
         when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_active")).thenReturn(BigDecimal.ZERO);
 
         PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
@@ -228,6 +227,45 @@ class PaymentChannelRoutingServiceImplTest {
 
         assertEquals("wx_active", decision.getChannelCode());
         assertEquals("PAYMENT_METHOD_DEFAULT", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldRouteByNestedExpressionWithSetAndNegation() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("wx_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
+                buildRule("RULE_COMPLEX", "家政多终端个人客户规则", "HOME_CLEAN",
+                        "(terminal IN (H5, APP) AND NOT customerType=enterprise)"
+                                + " AND (amount<500 OR payScene=HOUSE_REPAIR)",
+                        "wx_h5", "")
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("wx_h5", decision.getChannelCode());
+        assertEquals("RULE_COMPLEX", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldSkipMalformedExpressionAndContinueWithNextRule() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("wx_h5", "微信支付")
+        ));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Arrays.asList(
+                buildRule("RULE_INVALID", "错误配置规则", "HOME_CLEAN", "amount>not-a-number", "wx_h5", ""),
+                buildRule("RULE_VALID", "有效后续规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "")
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("微信支付", "", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("RULE_VALID", decision.getRouteRule());
     }
 
     private PaymentChannelRoutingServiceImpl buildHealthEnabledService() {

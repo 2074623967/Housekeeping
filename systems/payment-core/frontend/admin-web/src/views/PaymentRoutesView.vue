@@ -205,7 +205,7 @@ onMounted(loadPaymentRoutes);
     <section class="panel overview-panel">
       <div class="section-title">
         <h3>路由风险总览</h3>
-        <span class="meta">路由健康与权重治理 V1.2 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
+        <span class="meta">路由健康、权重与表达式治理 V1.3 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
       </div>
       <div class="overview-grid">
         <article class="overview-card danger">

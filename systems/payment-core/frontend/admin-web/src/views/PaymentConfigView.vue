@@ -499,7 +499,7 @@ function exportGovernanceSnapshot(section = "ALL") {
           <div class="section-title">
             <div>
               <h3>支付路由规则</h3>
-              <p class="meta">按业务场景、金额、客户类型等规则决定目标渠道和兜底渠道</p>
+              <p class="meta">支持括号、AND / OR / NOT、IN、比较运算；非法表达式不命中并继续后续规则</p>
             </div>
             <button class="button secondary" @click="exportGovernanceSnapshot('ROUTE_RULES')">导出路由</button>
           </div>
