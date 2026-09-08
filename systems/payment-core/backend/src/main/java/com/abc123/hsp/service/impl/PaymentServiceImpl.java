@@ -28,6 +28,7 @@ import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import com.abc123.hsp.service.PaymentChannelQueryRateLimitService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentOpsConfigService;
@@ -55,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentRiskControlService paymentRiskControlService;
     private final PaymentOpsConfigService paymentOpsConfigService;
+    private final PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
 
     @Autowired
     public PaymentServiceImpl(
@@ -65,7 +67,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentChannelSubmitService paymentChannelSubmitService,
             PaymentEventDispatchService paymentEventDispatchService,
             PaymentRiskControlService paymentRiskControlService,
-            PaymentOpsConfigService paymentOpsConfigService) {
+            PaymentOpsConfigService paymentOpsConfigService,
+            PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
@@ -74,6 +77,30 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentEventDispatchService = paymentEventDispatchService;
         this.paymentRiskControlService = paymentRiskControlService;
         this.paymentOpsConfigService = paymentOpsConfigService;
+        this.paymentChannelQueryRateLimitService = paymentChannelQueryRateLimitService;
+    }
+
+    PaymentServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentCallbackSignatureService paymentCallbackSignatureService,
+            PaymentChannelRoutingService paymentChannelRoutingService,
+            PaymentChannelQueryService paymentChannelQueryService,
+            PaymentChannelSubmitService paymentChannelSubmitService,
+            PaymentEventDispatchService paymentEventDispatchService,
+            PaymentRiskControlService paymentRiskControlService,
+            PaymentOpsConfigService paymentOpsConfigService) {
+        this(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService,
+                channelCode -> {
+                    // 单元测试兼容构造器默认不启用共享查单限流。
+                });
     }
 
     PaymentServiceImpl(
@@ -578,6 +605,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
+        paymentChannelQueryRateLimitService.acquire(detail.getChannel());
         PaymentChannelQueryResultDTO queryResult;
         try {
             queryResult = paymentChannelQueryService.query(detail);

@@ -37,4 +37,5 @@ public final class ErrorCode {
     public static final String PAYMENT_RISK_SERVICE_UNAVAILABLE = "PAYMENT-1024";
     public static final String PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID = "PAYMENT-1025";
     public static final String PAYMENT_CHANNEL_QUERY_FAILED = "PAYMENT-1026";
+    public static final String PAYMENT_CHANNEL_QUERY_RATE_LIMITED = "PAYMENT-1027";
 }

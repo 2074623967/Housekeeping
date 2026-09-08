@@ -31,6 +31,7 @@ import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
+import com.abc123.hsp.service.PaymentChannelQueryRateLimitService;
 import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
@@ -73,6 +74,39 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentOpsConfigService paymentOpsConfigService;
+
+    @Mock
+    private PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
+
+    @Test
+    void shouldApplySharedRateLimitBeforeCallingPaymentChannel() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-LIMIT", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-LIMIT")).thenReturn(detail);
+        org.mockito.Mockito.doThrow(new BusinessException(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
+                "rate limited"))
+                .when(paymentChannelQueryRateLimitService).acquire("wx_h5");
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-LIMIT");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService,
+                paymentChannelQueryRateLimitService)
+                .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_RATE_LIMITED,
+                exception.getCode());
+        verify(paymentChannelQueryRateLimitService).acquire("wx_h5");
+        verify(paymentChannelQueryService, never()).query(detail);
+    }
 
     @Test
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {

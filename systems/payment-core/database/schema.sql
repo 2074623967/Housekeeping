@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_refund_operation_log;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
 DROP TABLE IF EXISTS t_payment_task_lease;
+DROP TABLE IF EXISTS t_payment_channel_query_rate_bucket;
 DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster;
 DROP TABLE IF EXISTS t_payment_alert_provider_config;
@@ -556,6 +557,17 @@ CREATE TABLE t_payment_task_lease (
     UNIQUE KEY uk_task_code (task_code),
     KEY idx_lock_expires_at (lock_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付任务分布式租约锁表';
+
+CREATE TABLE t_payment_channel_query_rate_bucket (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
+    window_started_at DATETIME NOT NULL COMMENT '当前时间窗开始时间',
+    used_count INT NOT NULL DEFAULT 0 COMMENT '当前时间窗已占用查单次数',
+    updated_at DATETIME NOT NULL COMMENT '最近更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_channel_query_rate_bucket (channel_code),
+    KEY idx_channel_query_rate_window (window_started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道查单共享限流桶';
 
 CREATE TABLE t_payment_dead_letter_task (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
