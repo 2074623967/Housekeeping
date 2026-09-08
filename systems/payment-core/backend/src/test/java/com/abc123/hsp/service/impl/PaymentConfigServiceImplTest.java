@@ -73,6 +73,9 @@ class PaymentConfigServiceImplTest {
         verify(paymentConfigMapper).insertRouteRule(createCaptor.capture());
         org.junit.jupiter.api.Assertions.assertEquals("RULE_HOME_APP", createCaptor.getValue().getRuleCode());
         org.junit.jupiter.api.Assertions.assertEquals("ENABLED", createCaptor.getValue().getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(30),
+                createCaptor.getValue().getRolloutPercentage());
+        org.junit.jupiter.api.Assertions.assertEquals("home-app-v1", createCaptor.getValue().getRolloutSalt());
 
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP"))
                 .thenReturn(createCaptor.getValue());
@@ -90,6 +93,27 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2),
                 versionCaptor.getAllValues().get(1).getVersionNo());
         org.junit.jupiter.api.Assertions.assertEquals("UPDATE", versionCaptor.getAllValues().get(1).getChangeType());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(30),
+                versionCaptor.getAllValues().get(1).getRolloutPercentage());
+        org.junit.jupiter.api.Assertions.assertEquals("home-app-v1",
+                versionCaptor.getAllValues().get(1).getRolloutSalt());
+    }
+
+    @Test
+    void shouldRejectInvalidRouteRuleRolloutConfiguration() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        request.setRolloutPercentage(Integer.valueOf(101));
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.createRouteRule(request));
+
+        request.setRolloutPercentage(Integer.valueOf(30));
+        request.setRolloutSalt(" ");
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.createRouteRule(request));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
     }
 
     @Test
@@ -194,8 +218,11 @@ class PaymentConfigServiceImplTest {
                 "RULE_INVALID", "ENTERPRISE", "amount>not-a-number", "offline_bank", 3, "ENABLED");
         PaymentRouteRuleConfigDTO disabled = buildConflictRule(
                 "RULE_DISABLED", "HOME_CLEAN/H5", "terminal=H5", "alipay_h5", 1, "DISABLED");
+        PaymentRouteRuleConfigDTO zeroRollout = buildConflictRule(
+                "RULE_ZERO", "HOME_CLEAN/H5", "terminal=H5", "alipay_h5", 1, "ENABLED");
+        zeroRollout.setRolloutPercentage(Integer.valueOf(0));
         when(paymentConfigMapper.findRouteRules())
-                .thenReturn(Arrays.asList(first, divergent, shadowed, potential, invalid, disabled));
+                .thenReturn(Arrays.asList(first, divergent, shadowed, potential, invalid, disabled, zeroRollout));
 
         List<PaymentRouteRuleConflictDTO> conflicts =
                 new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleConflicts();
@@ -216,7 +243,9 @@ class PaymentConfigServiceImplTest {
                         && "RULE_INVALID".equals(item.getRuleCode())));
         org.junit.jupiter.api.Assertions.assertFalse(conflicts.stream().anyMatch(
                 item -> "RULE_DISABLED".equals(item.getRuleCode())
-                        || "RULE_DISABLED".equals(item.getConflictingRuleCode())));
+                        || "RULE_DISABLED".equals(item.getConflictingRuleCode())
+                        || "RULE_ZERO".equals(item.getRuleCode())
+                        || "RULE_ZERO".equals(item.getConflictingRuleCode())));
     }
 
     @Test
@@ -254,6 +283,23 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldTreatPartialRolloutAsPartialShadowForSameScope() {
+        PaymentRouteRuleConfigDTO gray = buildConflictRule(
+                "RULE_GRAY", "HOME_CLEAN/H5", "terminal=H5", "wx_h5", 1, "ENABLED");
+        gray.setRolloutPercentage(Integer.valueOf(30));
+        PaymentRouteRuleConfigDTO later = buildConflictRule(
+                "RULE_LATER", "HOME_CLEAN/H5", "terminal=H5", "alipay_h5", 2, "ENABLED");
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(gray, later));
+
+        List<PaymentRouteRuleConflictDTO> conflicts =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleConflicts();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, conflicts.size());
+        org.junit.jupiter.api.Assertions.assertEquals("PARTIAL_SHADOW", conflicts.get(0).getConflictType());
+        org.junit.jupiter.api.Assertions.assertEquals("RULE_LATER", conflicts.get(0).getRuleCode());
+    }
+
+    @Test
     void shouldSubmitRouteRuleReviewWithoutChangingRuntimeRule() {
         PaymentRouteRuleReviewSubmitRequestDTO request = new PaymentRouteRuleReviewSubmitRequestDTO();
         request.setCandidate(buildRouteRuleRequest());
@@ -277,6 +323,8 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("UPDATE", captor.getValue().getOperationType());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(3), captor.getValue().getBaseVersionNo());
         org.junit.jupiter.api.Assertions.assertEquals("PENDING_REVIEW", captor.getValue().getReviewStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(30), captor.getValue().getRolloutPercentage());
+        org.junit.jupiter.api.Assertions.assertEquals("home-app-v1", captor.getValue().getRolloutSalt());
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
     }
@@ -305,7 +353,9 @@ class PaymentConfigServiceImplTest {
         new PaymentConfigServiceImpl(paymentConfigMapper).approveRouteRuleReview(review.getRequestNo(), action);
 
         verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
-                entity -> review.getRuleCode().equals(entity.getRuleCode())));
+                entity -> review.getRuleCode().equals(entity.getRuleCode())
+                        && Integer.valueOf(30).equals(entity.getRolloutPercentage())
+                        && "home-app-v1".equals(entity.getRolloutSalt())));
         verify(paymentConfigMapper).insertRouteRuleVersion(org.mockito.ArgumentMatchers.argThat(
                 version -> "REVIEW_RELEASE".equals(version.getChangeType())
                         && Integer.valueOf(4).equals(version.getVersionNo())));
@@ -521,11 +571,15 @@ class PaymentConfigServiceImplTest {
         service.rollbackRouteRule("RULE_HOME_APP", request);
 
         verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
-                entity -> "terminal=H5".equals(entity.getMatchExpression())));
+                entity -> "terminal=H5".equals(entity.getMatchExpression())
+                        && Integer.valueOf(30).equals(entity.getRolloutPercentage())
+                        && "home-app-v1".equals(entity.getRolloutSalt())));
         verify(paymentConfigMapper).insertRouteRuleVersion(org.mockito.ArgumentMatchers.argThat(
                 version -> Integer.valueOf(4).equals(version.getVersionNo())
                         && "ROLLBACK".equals(version.getChangeType())
                         && Integer.valueOf(1).equals(version.getSourceVersionNo())
+                        && Integer.valueOf(30).equals(version.getRolloutPercentage())
+                        && "home-app-v1".equals(version.getRolloutSalt())
                         && "恢复 H5 专用规则".equals(version.getChangeReason())));
     }
 
@@ -1157,6 +1211,8 @@ class PaymentConfigServiceImplTest {
         request.setMatchExpression("terminal IN (H5, APP) AND amount<=500");
         request.setTargetChannelCode("wx_h5");
         request.setFallbackChannelCode("alipay_h5");
+        request.setRolloutPercentage(Integer.valueOf(30));
+        request.setRolloutSalt("home-app-v1");
         request.setPriority(10);
         request.setEnabled(Boolean.TRUE);
         return request;
@@ -1170,6 +1226,8 @@ class PaymentConfigServiceImplTest {
         entity.setMatchExpression("terminal IN (H5, APP) AND amount<=500");
         entity.setTargetChannelCode("wx_h5");
         entity.setFallbackChannelCode("alipay_h5");
+        entity.setRolloutPercentage(Integer.valueOf(30));
+        entity.setRolloutSalt("home-app-v1");
         entity.setPriority(Integer.valueOf(10));
         entity.setStatus("ENABLED");
         entity.setStatusType("success");
@@ -1189,6 +1247,8 @@ class PaymentConfigServiceImplTest {
         rule.setMatchExpression(matchExpression);
         rule.setTargetChannelCode(targetChannelCode);
         rule.setFallbackChannelCode("");
+        rule.setRolloutPercentage(Integer.valueOf(100));
+        rule.setRolloutSalt("conflict-v1");
         rule.setPriority(Integer.valueOf(priority));
         rule.setStatus(status);
         return rule;
@@ -1205,6 +1265,8 @@ class PaymentConfigServiceImplTest {
         review.setMatchExpression("terminal IN (H5, APP) AND amount<=500");
         review.setTargetChannelCode("wx_h5");
         review.setFallbackChannelCode("alipay_h5");
+        review.setRolloutPercentage(Integer.valueOf(30));
+        review.setRolloutSalt("home-app-v1");
         review.setStatus("ENABLED");
         review.setStatusType("success");
         review.setPriority(Integer.valueOf(10));
@@ -1225,6 +1287,8 @@ class PaymentConfigServiceImplTest {
         version.setMatchExpression(expression);
         version.setTargetChannelCode(rule.getTargetChannelCode());
         version.setFallbackChannelCode(rule.getFallbackChannelCode());
+        version.setRolloutPercentage(rule.getRolloutPercentage());
+        version.setRolloutSalt(rule.getRolloutSalt());
         version.setPriority(rule.getPriority());
         version.setStatus(rule.getStatus());
         version.setStatusType(rule.getStatusType());

@@ -17,6 +17,8 @@ public class PaymentRouteRuleReviewEntity {
     private String matchExpression;
     private String targetChannelCode;
     private String fallbackChannelCode;
+    private Integer rolloutPercentage;
+    private String rolloutSalt;
     private String status;
     private String statusType;
     private Integer priority;

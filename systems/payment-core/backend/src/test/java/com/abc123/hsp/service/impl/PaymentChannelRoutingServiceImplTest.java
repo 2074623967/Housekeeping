@@ -268,6 +268,160 @@ class PaymentChannelRoutingServiceImplTest {
         assertEquals("RULE_VALID", decision.getRouteRule());
     }
 
+    @Test
+    void shouldKeepRuleRolloutDecisionStableForSamePaymentOrder() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        PaymentRouteRuleRuntimeDTO grayRule = buildRule(
+                "RULE_GRAY", "微信灰度规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "");
+        grayRule.setRolloutPercentage(50);
+        grayRule.setRolloutSalt("gray-v1");
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(grayRule));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+        PaymentChannelRoutingServiceImpl service = new PaymentChannelRoutingServiceImpl(
+                paymentConfigMapper, paymentMapper);
+
+        PaymentRouteDecisionDTO first = service.resolve(
+                buildContext("PAY-001", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+        PaymentRouteDecisionDTO repeated = service.resolve(
+                buildContext("PAY-001", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("RULE_GRAY", first.getRouteRule());
+        assertEquals(first.getChannelCode(), repeated.getChannelCode());
+    }
+
+    @Test
+    void shouldCoverInsideAndOutsideRuleRolloutBuckets() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        PaymentRouteRuleRuntimeDTO grayRule = buildRule(
+                "RULE_GRAY", "微信灰度规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "");
+        grayRule.setRolloutPercentage(50);
+        grayRule.setRolloutSalt("gray-v1");
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(grayRule));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+        PaymentChannelRoutingServiceImpl service = new PaymentChannelRoutingServiceImpl(
+                paymentConfigMapper, paymentMapper);
+
+        PaymentRouteDecisionDTO inside = service.resolve(
+                buildContext("PAY-001", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+        PaymentRouteDecisionDTO outside = service.resolve(
+                buildContext("PAY-002", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+        PaymentRouteDecisionDTO repeatedOutside = service.resolve(
+                buildContext("PAY-002", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("RULE_GRAY", inside.getRouteRule());
+        assertEquals("PAYMENT_METHOD_WEIGHTED", outside.getRouteRule());
+        assertEquals(outside.getChannelCode(), repeatedOutside.getChannelCode());
+    }
+
+    @Test
+    void shouldContinueWithNextRuleWhenOutsideCurrentRolloutBucket() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付"),
+                buildChannel("offline_bank", "银行转账")
+        ));
+        PaymentRouteRuleRuntimeDTO grayRule = buildRule(
+                "RULE_GRAY", "微信灰度规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "offline_bank");
+        grayRule.setRolloutPercentage(50);
+        grayRule.setRolloutSalt("gray-v1");
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Arrays.asList(
+                grayRule,
+                buildRule("RULE_NEXT", "后续全量规则", "HOME_CLEAN", "amount<=5000", "alipay_h5", "")
+        ));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("PAY-002", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("alipay_h5", decision.getChannelCode());
+        assertEquals("RULE_NEXT", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldSkipPartialRolloutRuleWhenRoutingKeyMissing() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Collections.singletonList(
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        PaymentRouteRuleRuntimeDTO grayRule = buildRule(
+                "RULE_GRAY", "微信灰度规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "alipay_h5");
+        grayRule.setRolloutPercentage(50);
+        grayRule.setRolloutSalt("gray-v1");
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(grayRule));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("PAYMENT_METHOD_DEFAULT", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldRespectZeroAndFullRuleRolloutBoundaries() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        PaymentRouteRuleRuntimeDTO zeroRule = buildRule(
+                "RULE_ZERO", "零流量规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "");
+        zeroRule.setRolloutPercentage(0);
+        zeroRule.setRolloutSalt("zero-v1");
+        PaymentRouteRuleRuntimeDTO fullRule = buildRule(
+                "RULE_FULL", "全量规则", "HOME_CLEAN", "amount<=5000", "alipay_h5", "");
+        fullRule.setRolloutPercentage(100);
+        fullRule.setRolloutSalt("full-v1");
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Arrays.asList(zeroRule, fullRule));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("PAY-001", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("alipay_h5", decision.getChannelCode());
+        assertEquals("RULE_FULL", decision.getRouteRule());
+    }
+
+    @Test
+    void shouldAllowRolloutSaltToReassignPaymentOrderBucket() {
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
+                buildChannel("wx_h5", "微信支付"),
+                buildChannel("alipay_h5", "微信支付")
+        ));
+        PaymentRouteRuleRuntimeDTO grayRule = buildRule(
+                "RULE_GRAY", "微信灰度规则", "HOME_CLEAN", "amount<=5000", "wx_h5", "");
+        grayRule.setRolloutPercentage(50);
+        grayRule.setRolloutSalt("gray-v1");
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(grayRule));
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+        PaymentChannelRoutingServiceImpl service = new PaymentChannelRoutingServiceImpl(
+                paymentConfigMapper, paymentMapper);
+
+        PaymentRouteDecisionDTO beforeSaltChange = service.resolve(
+                buildContext("PAY-002", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+        grayRule.setRolloutSalt("gray-v2");
+        PaymentRouteDecisionDTO afterSaltChange = service.resolve(
+                buildContext("PAY-002", "微信支付", "", "HOME_CLEAN", "APP", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("PAYMENT_METHOD_WEIGHTED", beforeSaltChange.getRouteRule());
+        assertEquals("RULE_GRAY", afterSaltChange.getRouteRule());
+    }
+
     private PaymentChannelRoutingServiceImpl buildHealthEnabledService() {
         return new PaymentChannelRoutingServiceImpl(
                 paymentConfigMapper,

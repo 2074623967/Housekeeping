@@ -100,6 +100,9 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             if (!matchesScene(routeContext, rule.getMatchScene()) || !matchesExpression(routeContext, rule.getMatchExpression())) {
                 continue;
             }
+            if (!matchesRollout(routeContext, rule)) {
+                continue;
+            }
             PaymentChannelRoutingConfigDTO targetChannel = findEnabledChannel(enabledChannels, rule.getTargetChannelCode());
             if (isRouteAvailable(routeContext, targetChannel, channelHealth)) {
                 return buildDecision(targetChannel.getChannelCode(), rule.getRuleCode(), rule.getRuleName() + " -> " + targetChannel.getChannelCode());
@@ -117,6 +120,24 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
             }
         }
         return null;
+    }
+
+    private boolean matchesRollout(PaymentRouteContextDTO routeContext, PaymentRouteRuleRuntimeDTO rule) {
+        int rolloutPercentage = rule.getRolloutPercentage() == null ? 100 : rule.getRolloutPercentage();
+        if (rolloutPercentage <= 0) {
+            return false;
+        }
+        if (rolloutPercentage >= 100) {
+            return true;
+        }
+        if (!StringUtils.hasText(routeContext.getRoutingKey())) {
+            return false;
+        }
+        String bucketKey = rule.getRuleCode() + ":" + rule.getRolloutSalt() + ":"
+                + routeContext.getRoutingKey().trim();
+        CRC32 crc32 = new CRC32();
+        crc32.update(bucketKey.getBytes(StandardCharsets.UTF_8));
+        return crc32.getValue() % 100L < rolloutPercentage;
     }
 
     private PaymentRouteDecisionDTO resolveByRequestedChannel(PaymentRouteContextDTO routeContext,

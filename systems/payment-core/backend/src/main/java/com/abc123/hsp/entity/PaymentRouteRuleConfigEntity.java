@@ -20,6 +20,10 @@ public class PaymentRouteRuleConfigEntity {
     private String targetChannelCode;
     /** 兜底渠道编码。 */
     private String fallbackChannelCode;
+    /** 规则承接流量百分比。 */
+    private Integer rolloutPercentage;
+    /** 稳定分桶盐值。 */
+    private String rolloutSalt;
     /** 状态。 */
     private String status;
     /** 状态样式类型。 */

@@ -77,6 +77,8 @@ function createRouteRuleForm() {
     matchExpression: "",
     targetChannelCode: "",
     fallbackChannelCode: "",
+    rolloutPercentage: 100,
+    rolloutSalt: "stable-v1",
     priority: 99,
     enabled: true,
     changeReason: "",
@@ -198,6 +200,8 @@ function startEditRouteRule(rule) {
     matchExpression: rule.matchExpression,
     targetChannelCode: rule.targetChannelCode,
     fallbackChannelCode: rule.fallbackChannelCode,
+    rolloutPercentage: rule.rolloutPercentage ?? 100,
+    rolloutSalt: rule.rolloutSalt || "stable-v1",
     priority: rule.priority,
     enabled: rule.status === "ENABLED",
     changeReason: ""
@@ -239,6 +243,17 @@ async function submitRouteRuleForm() {
     activeConfigCode.value = "";
     return;
   }
+  const rolloutPercentage = Number(routeRuleForm.value.rolloutPercentage);
+  if (!Number.isInteger(rolloutPercentage) || rolloutPercentage < 0 || rolloutPercentage > 100) {
+    actionMessage.value = "提交复核失败：灰度比例必须是 0 到 100 之间的整数。";
+    activeConfigCode.value = "";
+    return;
+  }
+  if (!routeRuleForm.value.rolloutSalt) {
+    actionMessage.value = "提交复核失败：稳定分桶盐值不能为空。";
+    activeConfigCode.value = "";
+    return;
+  }
   try {
     const savedRuleCode = editingRouteRuleCode.value || routeRuleForm.value.ruleCode;
     const payload = {
@@ -248,6 +263,8 @@ async function submitRouteRuleForm() {
       matchExpression: routeRuleForm.value.matchExpression,
       targetChannelCode: routeRuleForm.value.targetChannelCode,
       fallbackChannelCode: routeRuleForm.value.fallbackChannelCode,
+      rolloutPercentage,
+      rolloutSalt: routeRuleForm.value.rolloutSalt,
       priority: routeRuleForm.value.priority === "" || routeRuleForm.value.priority == null
         ? 99
         : Number(routeRuleForm.value.priority),
@@ -614,7 +631,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.7</span>
+        <span class="badge info">配置中心 V1.8</span>
       </div>
     </div>
 
@@ -806,6 +823,14 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </select>
               </label>
               <label>
+                灰度比例（%）
+                <input v-model.number="routeRuleForm.rolloutPercentage" type="number" min="0" max="100" step="1" />
+              </label>
+              <label>
+                稳定分桶盐值
+                <input v-model.trim="routeRuleForm.rolloutSalt" maxlength="64" placeholder="stable-v1" />
+              </label>
+              <label>
                 优先级
                 <input v-model.number="routeRuleForm.priority" type="number" min="0" />
               </label>
@@ -857,6 +882,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <input v-model.trim="routeRuleForm.sampleCustomerName" />
               </label>
             </div>
+            <div class="notice-banner" style="margin-top: 16px;">
+              命中场景与表达式后，支付单号按规则编码、盐值稳定分桶；桶外继续后续规则，不使用当前规则兜底渠道。盐值变更会重排桶位，0% 摘流，100% 全量。
+            </div>
             <div style="display: flex; gap: 12px; margin-top: 16px;">
               <button class="button secondary" :disabled="Boolean(activeConfigCode)" @click="validateRouteRuleForm">
                 校验并模拟
@@ -878,6 +906,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <th>匹配表达式</th>
                   <th>目标渠道</th>
                   <th>兜底渠道</th>
+                  <th>灰度桶</th>
                   <th>优先级</th>
                   <th>状态</th>
                   <th>更新时间</th>
@@ -892,6 +921,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <td class="flow-summary-cell">{{ rule.matchExpression }}</td>
                   <td>{{ rule.targetChannelCode }}</td>
                   <td>{{ rule.fallbackChannelCode }}</td>
+                  <td>{{ rule.rolloutPercentage ?? 100 }}% / {{ rule.rolloutSalt }}</td>
                   <td>{{ rule.priority }}</td>
                   <td><span :class="['badge', rule.statusType]">{{ rule.status }}</span></td>
                   <td>{{ rule.updatedAt }}</td>
@@ -1019,7 +1049,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <td class="flow-summary-cell">
                       {{ review.matchExpression }}
                       <div class="muted-text">
-                        {{ review.targetChannelCode }} / 兜底 {{ review.fallbackChannelCode || "无" }} / 优先级 {{ review.priority }} / {{ review.status }}
+                        {{ review.targetChannelCode }} / 兜底 {{ review.fallbackChannelCode || "无" }} / 灰度 {{ review.rolloutPercentage ?? 100 }}% / 盐 {{ review.rolloutSalt }} / 优先级 {{ review.priority }} / {{ review.status }}
                       </div>
                     </td>
                     <td>
@@ -1081,6 +1111,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <th>匹配表达式</th>
                     <th>目标渠道</th>
                     <th>兜底渠道</th>
+                    <th>灰度桶</th>
                     <th>优先级</th>
                     <th>状态</th>
                     <th>创建时间</th>
@@ -1096,6 +1127,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <td class="flow-summary-cell">{{ version.matchExpression }}</td>
                     <td>{{ version.targetChannelCode }}</td>
                     <td>{{ version.fallbackChannelCode || "-" }}</td>
+                    <td>{{ version.rolloutPercentage ?? 100 }}% / {{ version.rolloutSalt }}</td>
                     <td>{{ version.priority }}</td>
                     <td><span :class="['badge', version.statusType]">{{ version.status }}</span></td>
                     <td>{{ version.createdAt }}</td>

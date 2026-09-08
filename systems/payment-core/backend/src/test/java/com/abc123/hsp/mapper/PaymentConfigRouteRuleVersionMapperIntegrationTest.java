@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
@@ -62,7 +63,13 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
             PaymentRouteRuleConfigEntity current = mapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP");
             assertNotNull(current);
+            assertEquals(Integer.valueOf(30), current.getRolloutPercentage());
+            assertEquals("home-app-v1", current.getRolloutSalt());
             assertEquals(Integer.valueOf(1), mapper.findLatestRouteRuleVersionNo("RULE_HOME_APP"));
+            List<PaymentRouteRuleRuntimeDTO> runtimeRules = mapper.findEnabledRouteRulesForRouting();
+            assertEquals(1, runtimeRules.size());
+            assertEquals(Integer.valueOf(30), runtimeRules.get(0).getRolloutPercentage());
+            assertEquals("home-app-v1", runtimeRules.get(0).getRolloutSalt());
 
             PaymentRouteRuleVersionEntity version = buildVersion(current, 2, "UPDATE");
             version.setMatchExpression("terminal=APP AND amount<=500");
@@ -71,6 +78,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
 
             PaymentRouteRuleVersionEntity stored = mapper.findRouteRuleVersion("RULE_HOME_APP", 2);
             assertEquals("terminal=APP AND amount<=500", stored.getMatchExpression());
+            assertEquals(Integer.valueOf(30), stored.getRolloutPercentage());
+            assertEquals("home-app-v1", stored.getRolloutSalt());
             List<PaymentRouteRuleVersionDTO> versions = mapper.findRouteRuleVersions("RULE_HOME_APP");
             assertEquals(2, versions.size());
             assertEquals(Integer.valueOf(2), versions.get(0).getVersionNo());
@@ -99,6 +108,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             review.setMatchExpression("terminal=APP AND amount<=500");
             review.setTargetChannelCode("wx_h5");
             review.setFallbackChannelCode("alipay_h5");
+            review.setRolloutPercentage(Integer.valueOf(30));
+            review.setRolloutSalt("home-app-v2");
             review.setStatus("ENABLED");
             review.setStatusType("success");
             review.setPriority(Integer.valueOf(5));
@@ -111,7 +122,10 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             assertEquals(1, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
             PaymentRouteRuleReviewEntity duplicatePending = buildReview("RRV-002");
             assertThrows(PersistenceException.class, () -> mapper.insertRouteRuleReview(duplicatePending));
-            assertNotNull(mapper.findRouteRuleReviewForUpdate("RRV-001"));
+            PaymentRouteRuleReviewEntity storedReview = mapper.findRouteRuleReviewForUpdate("RRV-001");
+            assertNotNull(storedReview);
+            assertEquals(Integer.valueOf(30), storedReview.getRolloutPercentage());
+            assertEquals("home-app-v2", storedReview.getRolloutSalt());
             assertEquals(1, mapper.completeRouteRuleReview(
                     "RRV-001", "APPROVED", "success", "reviewer-b", "复核通过"));
             assertEquals(0, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
@@ -125,6 +139,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     .orElseThrow(AssertionError::new);
             assertEquals("APPROVED", completed.getReviewStatus());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
+            assertEquals(Integer.valueOf(30), completed.getRolloutPercentage());
+            assertEquals("home-app-v2", completed.getRolloutSalt());
             session.commit();
         }
     }
@@ -140,6 +156,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
         review.setMatchExpression("terminal=APP AND amount<=500");
         review.setTargetChannelCode("wx_h5");
         review.setFallbackChannelCode("alipay_h5");
+        review.setRolloutPercentage(Integer.valueOf(30));
+        review.setRolloutSalt("home-app-v2");
         review.setStatus("ENABLED");
         review.setStatusType("success");
         review.setPriority(Integer.valueOf(5));
@@ -161,6 +179,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
         version.setMatchExpression(rule.getMatchExpression());
         version.setTargetChannelCode(rule.getTargetChannelCode());
         version.setFallbackChannelCode(rule.getFallbackChannelCode());
+        version.setRolloutPercentage(rule.getRolloutPercentage());
+        version.setRolloutSalt(rule.getRolloutSalt());
         version.setStatus(rule.getStatus());
         version.setStatusType(rule.getStatusType());
         version.setPriority(rule.getPriority());
@@ -182,11 +202,13 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64) UNIQUE, "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
+                    + "rollout_percentage INT, rollout_salt VARCHAR(64), "
                     + "status VARCHAR(32), status_type VARCHAR(32), priority INT, updated_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_route_rule_version ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64), version_no INT, "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
+                    + "rollout_percentage INT, rollout_salt VARCHAR(64), "
                     + "status VARCHAR(32), status_type VARCHAR(32), priority INT, change_type VARCHAR(32), "
                     + "source_version_no INT, change_reason VARCHAR(255), created_at DATETIME, "
                     + "UNIQUE(rule_code, version_no))");
@@ -196,21 +218,22 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     + "base_version_no INT, operation_type VARCHAR(32), "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
+                    + "rollout_percentage INT, rollout_salt VARCHAR(64), "
                     + "status VARCHAR(32), status_type VARCHAR(32), priority INT, requester VARCHAR(64), "
                     + "request_reason VARCHAR(255), review_status VARCHAR(32), review_status_type VARCHAR(32), "
                     + "reviewer VARCHAR(64), review_comment VARCHAR(255), created_at DATETIME, "
                     + "reviewed_at DATETIME, updated_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_payment_route_rule_config "
                     + "(rule_code, rule_name, match_scene, match_expression, target_channel_code, "
-                    + "fallback_channel_code, status, status_type, priority, updated_at) VALUES "
+                    + "fallback_channel_code, rollout_percentage, rollout_salt, status, status_type, priority, updated_at) VALUES "
                     + "('RULE_HOME_APP', '家政 App 小额路由', 'HOME_CLEAN/APP', 'terminal IN (H5, APP)', "
-                    + "'wx_h5', 'alipay_h5', 'ENABLED', 'success', 10, NOW())");
+                    + "'wx_h5', 'alipay_h5', 30, 'home-app-v1', 'ENABLED', 'success', 10, NOW())");
             statement.executeUpdate("INSERT INTO t_payment_route_rule_version "
                     + "(rule_code, version_no, rule_name, match_scene, match_expression, target_channel_code, "
-                    + "fallback_channel_code, status, status_type, priority, change_type, source_version_no, "
+                    + "fallback_channel_code, rollout_percentage, rollout_salt, status, status_type, priority, change_type, source_version_no, "
                     + "change_reason, created_at) VALUES "
                     + "('RULE_HOME_APP', 1, '家政 App 小额路由', 'HOME_CLEAN/APP', "
-                    + "'terminal IN (H5, APP)', 'wx_h5', 'alipay_h5', 'ENABLED', 'success', 10, "
+                    + "'terminal IN (H5, APP)', 'wx_h5', 'alipay_h5', 30, 'home-app-v1', 'ENABLED', 'success', 10, "
                     + "'BASELINE', NULL, '初始化规则基线', NOW())");
             session.commit();
         }

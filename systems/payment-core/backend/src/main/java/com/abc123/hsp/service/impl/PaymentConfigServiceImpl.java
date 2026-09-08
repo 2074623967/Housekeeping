@@ -197,7 +197,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     private List<PaymentRouteRuleConflictDTO> detectRouteRuleConflicts(List<PaymentRouteRuleConfigDTO> rules) {
         List<PaymentRouteRuleConfigDTO> enabledRules = new ArrayList<PaymentRouteRuleConfigDTO>();
         for (PaymentRouteRuleConfigDTO rule : rules) {
-            if (STATUS_ENABLED.equals(rule.getStatus())) {
+            if (STATUS_ENABLED.equals(rule.getStatus()) && rolloutPercentageOf(rule) > 0) {
                 enabledRules.add(rule);
             }
         }
@@ -345,6 +345,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         rollbackRequest.setMatchExpression(target.getMatchExpression());
         rollbackRequest.setTargetChannelCode(target.getTargetChannelCode());
         rollbackRequest.setFallbackChannelCode(target.getFallbackChannelCode());
+        rollbackRequest.setRolloutPercentage(target.getRolloutPercentage());
+        rollbackRequest.setRolloutSalt(target.getRolloutSalt());
         rollbackRequest.setPriority(target.getPriority());
         rollbackRequest.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(target.getStatus())));
         PaymentRouteRuleConfigEntity restored = buildRouteRuleEntity(rollbackRequest, normalizedRuleCode);
@@ -746,7 +748,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     routeRule.getStatus(),
                     safeJoin(" / ",
                             "匹配表达式=" + defaultText(routeRule.getMatchExpression()),
-                            "优先级=" + valueOf(routeRule.getPriority())),
+                            "优先级=" + valueOf(routeRule.getPriority()),
+                            "灰度=" + rolloutPercentageOf(routeRule) + "%",
+                            "分桶盐=" + defaultText(routeRule.getRolloutSalt())),
                     safeJoin(" / ",
                             "业务场景=" + defaultText(routeRule.getMatchScene()),
                             "兜底渠道=" + defaultText(routeRule.getFallbackChannelCode())),
@@ -1059,6 +1063,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("目标渠道与兜底渠道不能相同");
         }
         entity.setFallbackChannelCode(fallbackChannelCode);
+        Integer rolloutPercentage = request.getRolloutPercentage() == null
+                ? Integer.valueOf(100) : request.getRolloutPercentage();
+        if (rolloutPercentage.intValue() < 0 || rolloutPercentage.intValue() > 100) {
+            throw new IllegalArgumentException("路由规则灰度比例必须在0到100之间");
+        }
+        entity.setRolloutPercentage(rolloutPercentage);
+        String rolloutSalt = requireText(request.getRolloutSalt(), "路由规则分桶盐不能为空");
+        if (rolloutSalt.length() > 64) {
+            throw new IllegalArgumentException("路由规则分桶盐不能超过64个字符");
+        }
+        entity.setRolloutSalt(rolloutSalt);
         entity.setPriority(resolveRoutePriority(request.getPriority()));
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
@@ -1086,6 +1101,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         version.setMatchExpression(rule.getMatchExpression());
         version.setTargetChannelCode(rule.getTargetChannelCode());
         version.setFallbackChannelCode(rule.getFallbackChannelCode());
+        version.setRolloutPercentage(rule.getRolloutPercentage());
+        version.setRolloutSalt(rule.getRolloutSalt());
         version.setStatus(rule.getStatus());
         version.setStatusType(rule.getStatusType());
         version.setPriority(rule.getPriority());
@@ -1118,6 +1135,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setMatchExpression(candidate.getMatchExpression());
         review.setTargetChannelCode(candidate.getTargetChannelCode());
         review.setFallbackChannelCode(candidate.getFallbackChannelCode());
+        review.setRolloutPercentage(candidate.getRolloutPercentage());
+        review.setRolloutSalt(candidate.getRolloutSalt());
         review.setStatus(candidate.getStatus());
         review.setStatusType(candidate.getStatusType());
         review.setPriority(candidate.getPriority());
@@ -1170,6 +1189,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         request.setMatchExpression(review.getMatchExpression());
         request.setTargetChannelCode(review.getTargetChannelCode());
         request.setFallbackChannelCode(review.getFallbackChannelCode());
+        request.setRolloutPercentage(review.getRolloutPercentage());
+        request.setRolloutSalt(review.getRolloutSalt());
         request.setPriority(review.getPriority());
         request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getStatus())));
         request.setChangeReason(review.getRequestReason());
@@ -1201,6 +1222,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         dto.setMatchExpression(entity.getMatchExpression());
         dto.setTargetChannelCode(entity.getTargetChannelCode());
         dto.setFallbackChannelCode(entity.getFallbackChannelCode());
+        dto.setRolloutPercentage(entity.getRolloutPercentage());
+        dto.setRolloutSalt(entity.getRolloutSalt());
         dto.setStatus(entity.getStatus());
         dto.setStatusType(entity.getStatusType());
         dto.setPriority(entity.getPriority());
@@ -1209,6 +1232,10 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private boolean sameInteger(Integer left, Integer right) {
         return left == null ? right == null : left.equals(right);
+    }
+
+    private int rolloutPercentageOf(PaymentRouteRuleConfigDTO rule) {
+        return rule.getRolloutPercentage() == null ? 100 : rule.getRolloutPercentage().intValue();
     }
 
     private String requireReviewIdentity(String identity, String message) {
@@ -1258,7 +1285,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (sameExpression) {
             PaymentRouteRuleConfigDTO shadowing = leftPriority < rightPriority ? left : right;
             PaymentRouteRuleConfigDTO shadowed = leftPriority < rightPriority ? right : left;
-            boolean fullyShadowed = sceneSubsumes(shadowing.getMatchScene(), shadowed.getMatchScene());
+            boolean fullyShadowed = rolloutPercentageOf(shadowing) >= 100
+                    && sceneSubsumes(shadowing.getMatchScene(), shadowed.getMatchScene());
             return buildRouteRuleConflict(
                     shadowed, shadowing, overlappingScene,
                     fullyShadowed ? "SHADOWED_RULE" : "PARTIAL_SHADOW",

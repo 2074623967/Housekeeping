@@ -9,10 +9,10 @@ INSERT INTO t_payment_channel_config (channel_code, channel_name, payment_method
 ('alipay_h5', '支付宝 H5 支付', '支付宝', 'MCH_ALI_20001', 'ali-app-h5-002', 'alipay-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/alipay_h5', 'ali-cert-profile-v2026.06', 600, 365, '大额风控+商户黑名单联动', 'H5/APP/PC', 'ENABLED', 'success', 500000.00, 2, 100, '2026-07-20 22:40:00'),
 ('offline_bank', '线下银行转账', '银行转账', 'BANK_OFFLINE_30001', 'bank-offline-batch-003', 'offline-bank-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/offline_bank', 'bank-batch-profile-v2026.05', 1800, 1095, '对公白名单+人工复核', '企业客户/大额订单', 'ENABLED', 'success', 2000000.00, 3, 100, '2026-07-20 22:40:00');
 
-INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, match_expression, target_channel_code, fallback_channel_code, status, status_type, priority, updated_at) VALUES
-('RULE_HOME_WX', '家政 H5 微信优先', 'HOME_CLEAN/H5', 'paymentMethod=微信支付 AND amount<=5000', 'wx_h5', 'alipay_h5', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
-('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
-('RULE_ENTERPRISE_BANK', '企业大额订单走线下银行', 'ENTERPRISE/PC', 'amount>5000 OR customerType=ENTERPRISE', 'offline_bank', 'alipay_h5', 'ENABLED', 'success', 3, '2026-07-20 22:40:00');
+INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, match_expression, target_channel_code, fallback_channel_code, rollout_percentage, rollout_salt, status, status_type, priority, updated_at) VALUES
+('RULE_HOME_WX', '家政 H5 微信优先', 'HOME_CLEAN/H5', 'paymentMethod=微信支付 AND amount<=5000', 'wx_h5', 'alipay_h5', 100, 'stable-v1', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
+('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 100, 'stable-v1', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
+('RULE_ENTERPRISE_BANK', '企业大额订单走线下银行', 'ENTERPRISE/PC', 'amount>5000 OR customerType=ENTERPRISE', 'offline_bank', 'alipay_h5', 100, 'stable-v1', 'ENABLED', 'success', 3, '2026-07-20 22:40:00');
 
 INSERT INTO t_payment_protocol_config (protocol_code, protocol_name, protocol_type, protocol_type_name, template_code, template_name, template_version, sign_mode, sign_element_spec, e_signature_provider, scene_scope, channel_scope, merchant_ack_required, risk_control_tag, protocol_body, status, status_type, priority, updated_at) VALUES
 ('PROTO_HOUSEKEEPING_SIGN_V1', '家政服务标准收单协议', 'PAYMENT_SIGN', '支付签约协议', 'TPL_HK_SIGN_STD', '家政标准收单模板', 'v1.0.0', '线上签约+实名校验', '姓名/身份证/手机号/服务地址/授权扣款确认', 'E-SIGN-CLOUD', '保洁/月嫂/到家服务', 'wx_h5,alipay_h5', '需要', '实名+重复签约校验', '1. 用户授权平台按订单金额发起收款。\\n2. 用户需确保签约身份信息真实有效。\\n3. 平台应在扣款成功后同步提供账单与服务记录。', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),

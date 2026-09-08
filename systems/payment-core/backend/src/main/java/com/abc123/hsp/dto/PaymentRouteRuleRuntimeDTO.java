@@ -20,6 +20,10 @@ public class PaymentRouteRuleRuntimeDTO {
     private String targetChannelCode;
     /** 兜底渠道。 */
     private String fallbackChannelCode;
+    /** 规则承接流量百分比，0 表示摘流，100 表示全量。 */
+    private Integer rolloutPercentage;
+    /** 稳定分桶盐值，变更后会重排支付单桶位。 */
+    private String rolloutSalt;
     /** 优先级。 */
     private Integer priority;
 }

@@ -20,6 +20,10 @@ public class PaymentRouteRuleUpsertRequestDTO {
     private String targetChannelCode;
     /** 兜底渠道编码，可为空。 */
     private String fallbackChannelCode;
+    /** 规则承接流量百分比，取值 0 到 100。 */
+    private Integer rolloutPercentage;
+    /** 稳定分桶盐值，变更后会重排支付单桶位。 */
+    private String rolloutSalt;
     /** 规则优先级。 */
     private Integer priority;
     /** 是否启用。 */

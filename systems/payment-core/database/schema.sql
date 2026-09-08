@@ -93,6 +93,8 @@ CREATE TABLE t_payment_route_rule_config (
     match_expression VARCHAR(512) NOT NULL COMMENT '匹配表达式',
     target_channel_code VARCHAR(64) NOT NULL COMMENT '目标渠道编码',
     fallback_channel_code VARCHAR(64) NOT NULL COMMENT '兜底渠道编码',
+    rollout_percentage INT NOT NULL DEFAULT 100 COMMENT '稳定分桶承接比例，0到100',
+    rollout_salt VARCHAR(64) NOT NULL COMMENT '稳定分桶盐值，变更会重排桶位',
     status VARCHAR(32) NOT NULL COMMENT '规则状态',
     status_type VARCHAR(32) NOT NULL COMMENT '规则状态样式类型',
     priority INT NOT NULL DEFAULT 0 COMMENT '规则优先级，数字越小优先级越高',
