@@ -4462,6 +4462,32 @@
 ### 137.3 当前判断
 
 1. 主动查单已从“当前积压快照”扩展为“历史查询事实趋势 + 可配置阈值告警”，运营可以区分偶发失败和持续异常。
-2. `PAYMENT-1027` 限流拒绝仍发生在查询事实写入前，本轮没有把它伪装成渠道失败；限流拒绝量需要后续独立指标或审计事实。
+2. `PAYMENT-1027` 限流拒绝仍发生在查询事实写入前，本轮没有把它伪装成渠道失败；独立审计与指标能力见第 138 节。
 3. 当前 P1/P2/P3 仍是任务中心站内告警，不代表企业微信、短信或邮件已经真实送达；生产 MySQL 压测和真实渠道运行态联调仍未完成。
+4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 138. 2026-09-08 主动查单限流拒绝独立审计与告警验证
+
+### 138.1 本轮补强
+
+1. 新增 `t_payment_channel_query_rate_limit_log`，按拒绝流水号记录渠道、支付单号、窗口秒数、渠道配额和数据库拒绝时间，并提供既有运行库增量迁移。
+2. `PaymentChannelQueryRateLimitService` 在共享配额耗尽时先写拒绝事实，再返回 `PAYMENT-1027`；独立事务对业务异常不回滚，避免拒绝结果返回后审计记录丢失。
+3. 任务中心总览新增监控窗口内限流拒绝次数与独立 P1 阈值，生成 `PAYMENT_QUERY_RATE_LIMIT_REJECTION` 告警，不把拒绝次数并入渠道查询失败率。
+4. `admin-web` 新增窗口内限流拒绝指标卡、阈值说明和运维关注行，任务中心口径升级为 V1.16。
+
+### 138.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 限流、支付查询与任务中心定向测试 | `mvn -Dtest=PaymentChannelQueryRateLimitMapperIntegrationTest,PaymentTaskCenterMapperIntegrationTest,PaymentChannelQueryRateLimitServiceImplTest,PaymentServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentTaskCenterControllerTest test` | 通过 | `69` 个用例通过；覆盖拒绝事实写入、支付单号透传、外部渠道调用前拦截、24 小时窗口统计和独立 P1 阈值 |
+| 后端全量测试 | `mvn test` | 通过 | `294` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 浏览器静态检查 | `http://127.0.0.1:4176/payment-task-center` | 通过 | 限流拒绝卡片、独立阈值说明、V1.16 标识和运维关注行正常渲染；后端 `18081` 未启动，API 显示 `500 [PAYMENT-CLIENT]`，不记录为接口联调完成 |
+| Mapper XML 与补丁检查 | `xmllint --noout PaymentChannelQueryRateLimitMapper.xml PaymentTaskCenterMapper.xml && git diff --check` | 通过 | 两份 Mapper XML 结构合法，H2 MySQL 兼容模式可执行 |
+
+### 138.3 当前判断
+
+1. `PAYMENT-1027` 已具备独立审计事实、窗口指标和站内阈值告警，限流容量问题与真实渠道质量问题可以分开观察。
+2. H2 MySQL 兼容模式验证不替代生产 MySQL 并发压测；默认 `60` 秒、单渠道 `100` 次的参数仍需结合真实渠道配额与实例规模校准。
+3. 当前告警仍是任务中心站内告警，不代表企业微信、短信或邮件已经真实送达；真实 `gateway-access` 运行态联调仍未完成。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。

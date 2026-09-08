@@ -33,6 +33,7 @@
 9. `t_payment_issue_action_log`
 10. `t_payment_issue_alert_log`
 11. `t_payment_channel_query_rate_bucket`
+12. `t_payment_channel_query_rate_limit_log`
 
 ## 3. 对象关系
 
@@ -270,6 +271,23 @@ t_order
 | `updated_at` | 最近一次成功占用或窗口重置时间 |
 
 并发规则：初始化使用幂等插入，配额占用使用带窗口过期和上限条件的单条 `UPDATE`；更新行数为 `0` 表示当前窗口配额已耗尽。既有运行库通过 `database/migrations/2026-09-08-add-payment-channel-query-rate-bucket.sql` 增量建表。
+
+### 4.12 支付渠道查单限流拒绝日志 `t_payment_channel_query_rate_limit_log`
+
+作用：独立沉淀共享渠道配额耗尽事实，支持任务中心窗口统计与渠道排查，不污染 `t_payment_notify_log` 的真实渠道查询失败率。
+
+关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `rejection_no` | 限流拒绝流水号，唯一索引保证审计事实可定位 |
+| `channel_code` | 归一化后的渠道编码 |
+| `payment_order_id` | 被拒绝查单的支付单号 |
+| `window_seconds` | 拒绝发生时使用的限流窗口秒数 |
+| `max_queries` | 拒绝发生时使用的渠道窗口配额 |
+| `rejected_at` | 拒绝时间，使用数据库时钟写入 |
+
+事务规则：限流服务在 `REQUIRES_NEW` 事务内记录拒绝事实，并对 `BusinessException` 配置不回滚，确保向调用方返回 `PAYMENT-1027` 时审计记录仍提交。既有运行库通过 `database/migrations/2026-09-08-add-payment-channel-query-rate-limit-log.sql` 增量建表。
 
 ## 5. 状态建议
 

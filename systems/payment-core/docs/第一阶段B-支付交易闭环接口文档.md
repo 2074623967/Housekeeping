@@ -1283,6 +1283,12 @@ POST /api/payment-config/control-policies/self-check
 8. `recentTaskRuns`：最近 10 条任务执行日志。
 9. `pendingQueryBacklogCount`：已达到首次主动补查等待阈值且预付单仍有效的支付单数。
 10. `duePendingQueryCount`：当前已达到指数退避时间、可由自动任务查询的支付单数。
+11. `queryMonitorWindowHours`：查单监控回看窗口小时数。
+12. `recentQueryCount`、`recentQueryFailureCount`、`recentQueryFailureRate`：窗口内查单总数、失败数和失败率。
+13. `queryFailureCountThreshold`、`queryFailureRateThresholdPercent`、`queryFailureRateMinimumSampleCount`：查单失败 P1 告警阈值口径。
+14. `queryTrends`：按小时聚合的查单总数、失败数和失败率。
+15. `recentQueryRateLimitRejectionCount`：窗口内共享渠道配额耗尽导致的查单拒绝次数，不计入渠道失败率。
+16. `queryRateLimitRejectionCountThreshold`：限流拒绝次数 P1 告警阈值。
 
 ### 13.8 查询支付任务执行日志
 
@@ -1325,7 +1331,7 @@ POST /api/payment-config/control-policies/self-check
 7. 人工与自动候选均先按渠道内创建时间排序并限制每渠道单批配额，再应用全局批次上限，避免单一大渠道挤占整轮查询资源。
 8. 任务中心总览按配置窗口聚合 `已查单 / 查单失败` 查询事实，返回窗口查单总数、失败数、失败率和逐小时趋势。
 9. “主动查单失败趋势”在失败笔数达到阈值，或样本量达到最低要求且失败率达到阈值时判定 `P1`；存在失败但未达阈值判定 `P2`，无失败判定 `P3`。
-10. `PAYMENT-1027` 限流拒绝发生在渠道调用和查询事实写入之前，不混入渠道失败率；如需观察限流拒绝量，应使用独立审计指标。
+10. `PAYMENT-1027` 限流拒绝发生在渠道调用和查询事实写入之前，不混入渠道失败率；每次拒绝单独写入 `t_payment_channel_query_rate_limit_log`，任务中心按监控窗口展示拒绝次数并按独立阈值生成告警。
 
 补偿配置：
 
@@ -1348,6 +1354,7 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_COUNT_THRESHOLD` | `5` | 触发 P1 的窗口失败笔数阈值，最小为 `1` |
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_THRESHOLD_PERCENT` | `30` | 触发 P1 的窗口失败率阈值，限制为 `1%-100%` |
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_FAILURE_RATE_MINIMUM_SAMPLE_COUNT` | `10` | 应用失败率阈值前要求的最小查单样本数，最小为 `1` |
+| `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_RATE_LIMIT_REJECTION_COUNT_THRESHOLD` | `10` | 触发 P1 的窗口限流拒绝次数阈值，最小为 `1` |
 
 ### 13.7 手动执行异常 SLA 升级巡检
 
