@@ -22,14 +22,17 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
     }
 
     @Override
-    public PaymentDetailDTO query(PaymentDetailDTO paymentDetail) {
+    public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
         for (PaymentChannelQueryAdapter adapter : adapters) {
             if (adapter.supports(paymentDetail.getChannel())) {
                 PaymentChannelQueryResultDTO result = adapter.query(paymentDetail);
-                // 当前查单结果只补充查询来源，不直接越过回调流程修改支付状态。
-                paymentDetail.setChannelTransactionNo(result.getChannelTransactionNo());
-                paymentDetail.setQuerySource(result.getQuerySource());
-                return paymentDetail;
+                if (result != null) {
+                    return result;
+                }
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE,
+                        "payment channel query returned empty result"
+                );
             }
         }
         throw new BusinessException(

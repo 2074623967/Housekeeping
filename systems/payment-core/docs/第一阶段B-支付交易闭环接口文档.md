@@ -1340,6 +1340,36 @@ POST /api/payment-config/control-policies/self-check
 5. 差异告警的 `actionRoute` 直接指向异常中心、事件出站页或退款页，便于次日快速排查。
 6. 后续如果接入渠道对账文件和账务分录核对，可继续在该接口上扩展更细粒度差异事实。
 
+### 13.9 主动查单与成功收口
+
+接口：`POST /api/payments/query`
+
+请求示例：
+
+```json
+{
+  "paymentOrderId": "PAY202609080001"
+}
+```
+
+处理规则：
+
+1. `payment.channel-query.gateway-access.enabled=false` 时继续使用微信、支付宝、线下银行和本地兜底模拟适配器，不改变本地开发行为。
+2. 启用 `gateway-access` 后，支付核心向配置的 `query-url` 发送 `paymentOrderId / orderNo / channelCode / channelTransactionNo`，并读取统一响应中的 `data.tradeStatus / data.channelTransactionNo / data.querySource`。
+3. 每次有效渠道查询都会写入查询事实日志；`WAIT_CALLBACK / USERPAYING / FAIL / UNKNOWN` 等非成功状态只刷新返回快照，不修改支付、订单或账单状态。
+4. 渠道明确返回 `SUCCESS` 且存在渠道流水号时，通过条件更新原子抢占成功收口权；抢占成功后同步更新支付尝试、预付单、订单、账单，生成 `PAYMENT_SUCCESS` 事件，派发下游并释放提交并发令牌。
+5. 已为 `SUCCESS / CLOSED` 的支付单不会被主动查单重新打开；并发或重复查单未抢到收口权时不会重复记账、生成事件或派发下游。
+6. 外部网关调用失败、返回空数据或成功结果缺少渠道流水号时返回 `PAYMENT-1026`，不会以本地状态伪装成真实渠道结果。
+
+配置项：
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED` | `false` | 是否启用 gateway-access HTTP 查单 |
+| `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL` | `http://127.0.0.1:18150/api/gateway/payment-orders/query` | 统一查单地址 |
+| `HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS` | `wx_h5,alipay_h5,offline_bank` | 允许交给外部网关查询的渠道编码 |
+| `HSP_PAYMENT_CHANNEL_QUERY_TIMEOUT_MS` | `2000` | 连接与读取超时毫秒数 |
+
 ## 14. 错误与边界说明
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
@@ -1362,6 +1392,7 @@ POST /api/payment-config/control-policies/self-check
 | `PAYMENT-1009` | 回调渠道缺失 |
 | `PAYMENT-1010` | 当前没有启用的支付渠道 |
 | `PAYMENT-1011` | 支付来源订单金额信息缺失 |
+| `PAYMENT-1026` | 外部渠道查单失败、结果不完整或无法安全收口 |
 
 联调说明：
 

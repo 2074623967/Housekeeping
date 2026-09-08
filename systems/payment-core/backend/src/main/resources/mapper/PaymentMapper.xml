@@ -262,6 +262,15 @@
         WHERE payment_order_id = #{paymentOrderId}
     </update>
 
+    <update id="markPaymentSuccessByQuery">
+        UPDATE t_payment_order
+        SET status = 'SUCCESS',
+            status_type = 'success',
+            channel_transaction_no = #{channelTransactionNo}
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status NOT IN ('SUCCESS', 'CLOSED')
+    </update>
+
     <update id="updatePrepayToPaying">
         UPDATE t_prepay_order
         SET cashier_status = '支付中',

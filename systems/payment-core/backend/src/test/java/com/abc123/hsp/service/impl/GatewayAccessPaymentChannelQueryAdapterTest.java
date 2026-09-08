@@ -1,0 +1,85 @@
+package com.abc123.hsp.service.impl;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
+import com.abc123.hsp.dto.PaymentDetailDTO;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.web.client.RestTemplate;
+
+class GatewayAccessPaymentChannelQueryAdapterTest {
+
+    @Test
+    void shouldOnlySupportConfiguredChannelsWhenEnabled() {
+        GatewayAccessPaymentChannelQueryAdapter adapter = new GatewayAccessPaymentChannelQueryAdapter(
+                true, "http://gateway/query", "wx_h5, alipay_h5", Mockito.mock(RestTemplate.class));
+
+        assertTrue(adapter.supports("WX_H5"));
+        assertFalse(adapter.supports("offline_bank"));
+        assertFalse(new GatewayAccessPaymentChannelQueryAdapter(
+                false, "http://gateway/query", "wx_h5", Mockito.mock(RestTemplate.class))
+                .supports("wx_h5"));
+    }
+
+    @Test
+    void shouldReturnGatewayTradeFact() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse response =
+                new GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse();
+        PaymentChannelQueryResultDTO data = new PaymentChannelQueryResultDTO();
+        data.setTradeStatus("SUCCESS");
+        data.setChannelTransactionNo("WX-1001");
+        response.setData(data);
+        when(restTemplate.postForObject(
+                eq("http://gateway/query"),
+                any(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryRequest.class),
+                eq(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse.class)))
+                .thenReturn(response);
+
+        PaymentChannelQueryResultDTO result = new GatewayAccessPaymentChannelQueryAdapter(
+                true, "http://gateway/query", "wx_h5", restTemplate)
+                .query(paymentDetail());
+
+        assertEquals("SUCCESS", result.getTradeStatus());
+        assertEquals("WX-1001", result.getChannelTransactionNo());
+        assertEquals("GATEWAY_ACCESS_HTTP", result.getQuerySource());
+    }
+
+    @Test
+    void shouldRejectGatewayResponseWithoutTradeStatus() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse response =
+                new GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse();
+        response.setData(new PaymentChannelQueryResultDTO());
+        when(restTemplate.postForObject(
+                eq("http://gateway/query"),
+                any(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryRequest.class),
+                eq(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse.class)))
+                .thenReturn(response);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new GatewayAccessPaymentChannelQueryAdapter(
+                        true, "http://gateway/query", "wx_h5", restTemplate)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    private PaymentDetailDTO paymentDetail() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-1001");
+        detail.setOrderNo("ORD-1001");
+        detail.setChannel("wx_h5");
+        return detail;
+    }
+}

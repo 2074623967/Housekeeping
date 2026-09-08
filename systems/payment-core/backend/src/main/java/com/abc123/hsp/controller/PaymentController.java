@@ -131,7 +131,7 @@ public class PaymentController {
     }
 
     /**
-     * 主动查单，当前版本以查询本地支付详情为主。
+     * 主动查单，并在渠道明确返回成功时幂等收口支付状态。
      */
     @PostMapping("/query")
     public ApiResponse<PaymentDetailDTO> query(@RequestBody PaymentQueryRequestDTO request) {

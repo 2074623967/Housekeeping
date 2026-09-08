@@ -1051,10 +1051,171 @@ class PaymentServiceImplTest {
         detail.setPaymentOrderId("PAY-1001");
         detail.setChannel("wx_h5");
 
-        PaymentDetailDTO result = queryService.query(detail);
+        PaymentChannelQueryResultDTO result = queryService.query(detail);
 
         org.junit.jupiter.api.Assertions.assertEquals("CHANNEL-1001", result.getChannelTransactionNo());
         org.junit.jupiter.api.Assertions.assertEquals("LOCAL_SIMULATION", result.getQuerySource());
+    }
+
+    @Test
+    void shouldSettlePaymentWhenActiveQueryConfirmsSuccess() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-001", "WAIT_CALLBACK");
+        PaymentDetailDTO settledDetail = queryDetail("PAY-QUERY-001", "SUCCESS");
+        when(paymentMapper.findDetail("PAY-QUERY-001")).thenReturn(detail, settledDetail);
+        when(paymentMapper.markPaymentSuccessByQuery("PAY-QUERY-001", "WX-QUERY-001"))
+                .thenReturn(1);
+        when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
+                .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findRouteLogs("PAY-QUERY-001")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-QUERY-001")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-QUERY-001")).thenReturn(Collections.emptyList());
+        when(paymentChannelQueryService.query(detail))
+                .thenReturn(queryResult("SUCCESS", "WX-QUERY-001", "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-001");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request);
+
+        verify(paymentMapper).updatePaymentAttemptStatusByPaymentOrderId(
+                "PAY-QUERY-001", "成功", "success");
+        verify(paymentMapper).updatePrepayStatusByPaymentOrderId(
+                "PAY-QUERY-001", "支付成功", "success");
+        verify(paymentMapper).updateOrderAfterPayment(
+                "ORD-QUERY-001", new BigDecimal("168.00"), "待履约", "info");
+        verify(paymentMapper).updateBillAfterPayment(
+                "ORD-QUERY-001", new BigDecimal("168.00"), "已结清", "success");
+        verify(paymentMapper).insertEvent(
+                anyString(),
+                eq("PAYMENT_SUCCESS"),
+                eq("PAY-QUERY-001"),
+                eq("ORD-QUERY-001"),
+                eq("{\"channel\":\"wx_h5\",\"source\":\"ACTIVE_QUERY\"}"));
+        verify(paymentEventDispatchService).publishPaymentSuccess(anyString(), eq("PAY-QUERY-001"));
+        verify(paymentMapper).releaseSubmitConcurrencyToken(
+                "PAY-QUERY-001", "ACTIVE_QUERY_SUCCESS");
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("GATEWAY_ACCESS_HTTP", result.getQuerySource());
+    }
+
+    @Test
+    void shouldOnlyRecordQueryWhenChannelStatusIsNotSuccess() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-002", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-002")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-QUERY-002")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-QUERY-002")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-QUERY-002")).thenReturn(Collections.emptyList());
+        when(paymentChannelQueryService.query(detail))
+                .thenReturn(queryResult("USERPAYING", "WX-QUERY-002", "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-002");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request);
+
+        verify(paymentMapper, never()).markPaymentSuccessByQuery(anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-002"), eq("wx_h5"), eq("USERPAYING"),
+                eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\"}"),
+                eq("{\"code\":\"SUCCESS\"}"), eq("已查单"), eq("info"));
+    }
+
+    @Test
+    void shouldNotReopenClosedPaymentWhenQueryReportsSuccess() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-003", "CLOSED");
+        when(paymentMapper.findDetail("PAY-QUERY-003")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-QUERY-003")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-QUERY-003")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-QUERY-003")).thenReturn(Collections.emptyList());
+        when(paymentChannelQueryService.query(detail))
+                .thenReturn(queryResult("SUCCESS", "WX-QUERY-003", "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-003");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request);
+
+        verify(paymentMapper, never()).markPaymentSuccessByQuery(anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+    }
+
+    @Test
+    void shouldNotRepeatSettlementWhenAnotherQueryAlreadyWon() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-004", "WAIT_CALLBACK");
+        PaymentDetailDTO settledDetail = queryDetail("PAY-QUERY-004", "SUCCESS");
+        when(paymentMapper.findDetail("PAY-QUERY-004")).thenReturn(detail, settledDetail);
+        when(paymentMapper.markPaymentSuccessByQuery("PAY-QUERY-004", "WX-QUERY-004"))
+                .thenReturn(0);
+        when(paymentMapper.findRouteLogs("PAY-QUERY-004")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-QUERY-004")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-QUERY-004")).thenReturn(Collections.emptyList());
+        when(paymentChannelQueryService.query(detail))
+                .thenReturn(queryResult("SUCCESS", "WX-QUERY-004", "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-004");
+
+        new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request);
+
+        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+    }
+
+    private PaymentDetailDTO queryDetail(String paymentOrderId, String status) {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId(paymentOrderId);
+        detail.setOrderNo("ORD-QUERY-001");
+        detail.setChannel("wx_h5");
+        detail.setAmount("¥168.00");
+        detail.setStatus(status);
+        return detail;
+    }
+
+    private PaymentChannelQueryResultDTO queryResult(
+            String tradeStatus,
+            String channelTransactionNo,
+            String querySource) {
+        PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
+        result.setTradeStatus(tradeStatus);
+        result.setChannelTransactionNo(channelTransactionNo);
+        result.setQuerySource(querySource);
+        return result;
     }
 
     @Test

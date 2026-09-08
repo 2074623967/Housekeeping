@@ -5,6 +5,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.CashierPageDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
+import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentCloseRequestDTO;
@@ -570,13 +571,97 @@ public class PaymentServiceImpl implements PaymentService {
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
+    @Transactional
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        return enrichDetail(paymentChannelQueryService.query(detail));
+        PaymentChannelQueryResultDTO queryResult = paymentChannelQueryService.query(detail);
+        String channelTransactionNo = StringUtils.hasText(queryResult.getChannelTransactionNo())
+                ? queryResult.getChannelTransactionNo().trim()
+                : detail.getChannelTransactionNo();
+        detail.setChannelTransactionNo(channelTransactionNo);
+        detail.setQuerySource(queryResult.getQuerySource());
+        recordChannelQuery(detail, queryResult);
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
+                || "CLOSED".equalsIgnoreCase(detail.getStatus())
+                || !"SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())) {
+            return enrichDetail(detail);
+        }
+        if (!StringUtils.hasText(channelTransactionNo)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                    "channel transaction number is required to settle a successful query");
+        }
+        int settledRows = paymentMapper.markPaymentSuccessByQuery(
+                detail.getPaymentOrderId(), channelTransactionNo);
+        if (settledRows == 0) {
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
+            if (latestDetail == null) {
+                throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+            }
+            latestDetail.setQuerySource(queryResult.getQuerySource());
+            return enrichDetail(latestDetail);
+        }
+        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
+                detail.getPaymentOrderId(), "成功", "success");
+        paymentMapper.updatePrepayStatusByPaymentOrderId(
+                detail.getPaymentOrderId(), "支付成功", "success");
+        settleOrderAndBill(detail);
+        String eventNo = "EVT" + System.currentTimeMillis();
+        paymentMapper.insertEvent(
+                eventNo,
+                "PAYMENT_SUCCESS",
+                detail.getPaymentOrderId(),
+                detail.getOrderNo(),
+                "{\"channel\":\"" + detail.getChannel() + "\",\"source\":\"ACTIVE_QUERY\"}");
+        paymentEventDispatchService.publishPaymentSuccess(eventNo, detail.getPaymentOrderId());
+        paymentMapper.releaseSubmitConcurrencyToken(detail.getPaymentOrderId(), "ACTIVE_QUERY_SUCCESS");
+        PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
+        if (latestDetail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+        }
+        latestDetail.setQuerySource(queryResult.getQuerySource());
+        return enrichDetail(latestDetail);
+    }
+
+    private void recordChannelQuery(
+            PaymentDetailDTO detail,
+            PaymentChannelQueryResultDTO queryResult) {
+        paymentMapper.insertNotifyLog(
+                "QRY" + System.currentTimeMillis(),
+                detail.getPaymentOrderId(),
+                detail.getChannel(),
+                queryResult.getTradeStatus(),
+                "{\"querySource\":\"" + escapeJson(queryResult.getQuerySource()) + "\"}",
+                "{\"code\":\"SUCCESS\"}",
+                "已查单",
+                "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info");
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
+    }
+
+    private void settleOrderAndBill(PaymentDetailDTO detail) {
+        BigDecimal latestOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
+        BigDecimal settledAmount = latestOrderAmount == null
+                ? parseAmount(detail.getAmount())
+                : latestOrderAmount;
+        if (latestOrderAmount != null) {
+            paymentMapper.updateOrderAfterPayment(
+                    detail.getOrderNo(), latestOrderAmount, "待履约", "info");
+        }
+        paymentMapper.updateBillAfterPayment(
+                detail.getOrderNo(), settledAmount, "已结清", "success");
     }
 
     @Transactional

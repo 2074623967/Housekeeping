@@ -60,6 +60,13 @@ payment:
     enabled: ${HSP_PAYMENT_OPS_CONFIG_ENABLED:false}
     snapshot-url: ${HSP_PAYMENT_OPS_CONFIG_SNAPSHOT_URL:http://127.0.0.1:18170/api/ops-config/effective-snapshot}
     timeout-ms: ${HSP_PAYMENT_OPS_CONFIG_TIMEOUT_MS:2000}
+  channel-query:
+    gateway-access:
+      # 生产环境启用后由 gateway-access 返回渠道交易事实；关闭时保留现有本地模拟适配器。
+      enabled: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED:false}
+      query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://127.0.0.1:18150/api/gateway/payment-orders/query}
+      supported-channels: ${HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
+      timeout-ms: ${HSP_PAYMENT_CHANNEL_QUERY_TIMEOUT_MS:2000}
   amqp:
     payment-success-exchange: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_EXCHANGE:payment.trade}
     payment-success-routing-key: ${HSP_PAYMENT_AMQP_PAYMENT_SUCCESS_ROUTING_KEY:payment.success.v1}

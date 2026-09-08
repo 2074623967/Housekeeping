@@ -1,5 +1,6 @@
 package com.abc123.hsp.service;
 
+import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 
 /**
@@ -10,8 +11,7 @@ public interface PaymentChannelQueryService {
     /**
      * 查询指定支付单的渠道状态。
      *
-     * <p>当前默认适配器只返回本地模拟状态，真实渠道适配器由 gateway-access
-     * 接入后注册到该服务。</p>
+     * <p>启用 gateway-access 联动时优先返回外部渠道事实，未启用时保留本地模拟结果。</p>
      */
-    PaymentDetailDTO query(PaymentDetailDTO paymentDetail);
+    PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail);
 }

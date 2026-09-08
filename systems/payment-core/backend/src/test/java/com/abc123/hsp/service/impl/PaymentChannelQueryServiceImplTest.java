@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import java.util.Arrays;
@@ -19,7 +20,7 @@ class PaymentChannelQueryServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setChannelTransactionNo("WX-001");
 
-        PaymentDetailDTO result = buildService().query(detail);
+        PaymentChannelQueryResultDTO result = buildService().query(detail);
 
         assertEquals("WECHAT_SIMULATION", result.getQuerySource());
         assertEquals("WX-001", result.getChannelTransactionNo());
@@ -32,7 +33,7 @@ class PaymentChannelQueryServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setChannelTransactionNo("ALI-001");
 
-        PaymentDetailDTO result = buildService().query(detail);
+        PaymentChannelQueryResultDTO result = buildService().query(detail);
 
         assertEquals("ALIPAY_SIMULATION", result.getQuerySource());
         assertEquals("ALI-001", result.getChannelTransactionNo());
@@ -45,7 +46,7 @@ class PaymentChannelQueryServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setChannelTransactionNo("UNK-001");
 
-        PaymentDetailDTO result = buildService().query(detail);
+        PaymentChannelQueryResultDTO result = buildService().query(detail);
 
         assertEquals("LOCAL_SIMULATION_FALLBACK", result.getQuerySource());
         assertEquals("UNK-001", result.getChannelTransactionNo());

@@ -143,6 +143,12 @@ public interface PaymentMapper {
             @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
+     * 主动查单确认成功后原子抢占状态收口权，避免并发查单重复记账和重复发事件。
+     */
+    int markPaymentSuccessByQuery(@Param("paymentOrderId") String paymentOrderId,
+                                  @Param("channelTransactionNo") String channelTransactionNo);
+
+    /**
      * 更新预付单为支付中状态。
      */
     int updatePrepayToPaying(@Param("prepayOrderNo") String prepayOrderNo);
