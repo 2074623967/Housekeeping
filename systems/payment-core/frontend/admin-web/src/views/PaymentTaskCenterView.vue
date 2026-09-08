@@ -18,7 +18,13 @@ const overview = ref({
   queryRateLimitRejectionCountThreshold: 10,
   pendingIssueAlertDispatchCount: 0,
   failedIssueAlertDispatchCount: 0,
+  oldestPendingIssueAlertDispatchMinutes: 0,
+  issueAlertDispatchCountThreshold: 10,
+  issueAlertDispatchTimeoutMinutes: 15,
   pendingIssueAlertReceiptCount: 0,
+  oldestPendingIssueAlertReceiptMinutes: 0,
+  issueAlertReceiptCountThreshold: 10,
+  issueAlertReceiptTimeoutMinutes: 30,
   queryTrends: [],
   failedEventCount: 0,
   failedRefundCount: 0,
@@ -201,12 +207,14 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">异常告警待派发</div>
             <div class="detail-value">{{ overview.pendingIssueAlertDispatchCount }}</div>
-            <div class="meta">其中派发异常 {{ overview.failedIssueAlertDispatchCount }} 条</div>
+            <div class="meta">异常 {{ overview.failedIssueAlertDispatchCount }} 条，最老等待 {{ overview.oldestPendingIssueAlertDispatchMinutes }} 分钟</div>
+            <div class="meta">P1：数量 ≥ {{ overview.issueAlertDispatchCountThreshold }} 或等待 ≥ {{ overview.issueAlertDispatchTimeoutMinutes }} 分钟</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">异常告警待回查</div>
             <div class="detail-value">{{ overview.pendingIssueAlertReceiptCount }}</div>
-            <div class="meta">供应商已受理，等待送达回执</div>
+            <div class="meta">最老等待 {{ overview.oldestPendingIssueAlertReceiptMinutes }} 分钟</div>
+            <div class="meta">P1：数量 ≥ {{ overview.issueAlertReceiptCountThreshold }} 或等待 ≥ {{ overview.issueAlertReceiptTimeoutMinutes }} 分钟</div>
           </div>
         </div>
 
@@ -255,7 +263,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.19 已按任务类型、失败笔数和处理规模统一严重等级，并将监控告警 outbox、可配置自动派发、派发积压与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.20 已按任务类型、失败笔数、处理规模和积压时长统一严重等级，并将监控告警 outbox、可配置自动派发、派发积压与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -313,14 +321,14 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发</td>
-                  <td>派发失败且存在高优先级异常待外部触达</td>
-                  <td>存在告警已生成但待派发或部分通道失败</td>
+                  <td>存在派发异常，或数量/最老等待达到配置阈值</td>
+                  <td>存在待派发告警但未达到 P1 阈值</td>
                   <td>无待派发异常告警</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
-                  <td>不适用，回写失败优先纳入人工跟进</td>
-                  <td>回查失败且存在高优先级异常未确认送达</td>
+                  <td>数量或最老等待达到配置阈值</td>
+                  <td>存在待回查告警但未达到 P1 阈值</td>
                   <td>无待回查告警回执或已全部确认送达</td>
                 </tr>
               </tbody>
@@ -515,8 +523,8 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
-                  <td>V1.19</td>
-                  <td>已具备 outbox、IM/SMS/EMAIL 派发、状态回写与积压指标，可显式开启自动调度；默认关闭，后续补真实通知网关</td>
+                  <td>V1.20</td>
+                  <td>已具备 outbox、IM/SMS/EMAIL 派发、状态回写及数量/时长积压指标，可显式开启自动调度；默认关闭，后续补真实通知网关</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
@@ -525,8 +533,8 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.19</td>
-                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将查单监控告警 outbox、异常告警派发与回执回查纳入统一任务矩阵</td>
+                  <td>V1.20</td>
+                  <td>已按任务类型、失败量、处理规模和告警积压时长区分 P1 / P2 / P3，并将查单监控告警 outbox、异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
                 </tbody>
               </table>

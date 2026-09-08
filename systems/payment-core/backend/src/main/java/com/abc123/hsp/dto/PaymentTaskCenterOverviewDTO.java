@@ -39,8 +39,20 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer pendingIssueAlertDispatchCount;
     /** 当前仍处于部分失败或派发失败的来源 outbox 告警数。 */
     private Integer failedIssueAlertDispatchCount;
+    /** 最老待派发来源 outbox 告警的等待分钟数。 */
+    private Integer oldestPendingIssueAlertDispatchMinutes;
+    /** 待派发数量 P1 告警阈值。 */
+    private Integer issueAlertDispatchCountThreshold;
+    /** 待派发时长 P1 告警阈值。 */
+    private Integer issueAlertDispatchTimeoutMinutes;
     /** 供应商已受理、等待回执回查的外发告警数。 */
     private Integer pendingIssueAlertReceiptCount;
+    /** 最老待回查外发告警的等待分钟数。 */
+    private Integer oldestPendingIssueAlertReceiptMinutes;
+    /** 待回查数量 P1 告警阈值。 */
+    private Integer issueAlertReceiptCountThreshold;
+    /** 待回查时长 P1 告警阈值。 */
+    private Integer issueAlertReceiptTimeoutMinutes;
     /** 最近查单小时趋势。 */
     private List<PaymentQueryTrendPointDTO> queryTrends;
     /** 失败事件数。 */

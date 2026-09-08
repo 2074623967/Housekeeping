@@ -101,6 +101,11 @@ payment:
       # 默认关闭；确认通知供应商配置与接收人范围后再启用自动外发。
       enabled: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED:false}
       fixed-delay-ms: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_DELAY_MS:60000}
+    monitor:
+      dispatch-count-threshold: ${HSP_PAYMENT_ISSUE_ALERT_DISPATCH_COUNT_THRESHOLD:10}
+      dispatch-timeout-minutes: ${HSP_PAYMENT_ISSUE_ALERT_DISPATCH_TIMEOUT_MINUTES:15}
+      receipt-count-threshold: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_COUNT_THRESHOLD:10}
+      receipt-timeout-minutes: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_TIMEOUT_MINUTES:30}
     im:
       # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_IM_WEBHOOK_URL:}

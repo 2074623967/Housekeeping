@@ -495,8 +495,25 @@
           AND alert_status IN ('部分失败', '派发失败')
     </select>
 
+    <select id="findOldestPendingIssueAlertDispatchMinutes" resultType="int">
+        SELECT COALESCE(MAX(TIMESTAMPDIFF(MINUTE, created_at, NOW())), 0)
+        FROM t_payment_issue_alert_log
+        WHERE source_alert_no IS NULL
+          AND alert_channel = 'IN_APP_OUTBOX'
+          AND ack_status = '待确认'
+          AND alert_status IN ('已生成', '部分失败', '派发失败')
+    </select>
+
     <select id="countPendingIssueAlertReceipts" resultType="int">
         SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE source_alert_no IS NOT NULL
+          AND provider_delivery_status = 'ACCEPTED'
+          AND ack_status = '待确认'
+    </select>
+
+    <select id="findOldestPendingIssueAlertReceiptMinutes" resultType="int">
+        SELECT COALESCE(MAX(TIMESTAMPDIFF(MINUTE, created_at, NOW())), 0)
         FROM t_payment_issue_alert_log
         WHERE source_alert_no IS NOT NULL
           AND provider_delivery_status = 'ACCEPTED'

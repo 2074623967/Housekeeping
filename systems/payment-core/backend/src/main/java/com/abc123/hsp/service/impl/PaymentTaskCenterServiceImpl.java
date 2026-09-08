@@ -75,6 +75,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final int queryFailureRateMinimumSampleCount;
     private final int queryRateLimitRejectionCountThreshold;
     private final int queryMonitorAlertCooldownMinutes;
+    private final int issueAlertDispatchCountThreshold;
+    private final int issueAlertDispatchTimeoutMinutes;
+    private final int issueAlertReceiptCountThreshold;
+    private final int issueAlertReceiptTimeoutMinutes;
 
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -108,7 +112,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         @Value("${payment.channel-query.monitor.rate-limit-rejection-count-threshold:10}")
                                                 int queryRateLimitRejectionCountThreshold,
                                         @Value("${payment.channel-query.monitor.alert-cooldown-minutes:60}")
-                                                int queryMonitorAlertCooldownMinutes) {
+                                                int queryMonitorAlertCooldownMinutes,
+                                        @Value("${payment.issue-alert.monitor.dispatch-count-threshold:10}")
+                                                int issueAlertDispatchCountThreshold,
+                                        @Value("${payment.issue-alert.monitor.dispatch-timeout-minutes:15}")
+                                                int issueAlertDispatchTimeoutMinutes,
+                                        @Value("${payment.issue-alert.monitor.receipt-count-threshold:10}")
+                                                int issueAlertReceiptCountThreshold,
+                                        @Value("${payment.issue-alert.monitor.receipt-timeout-minutes:30}")
+                                                int issueAlertReceiptTimeoutMinutes) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
@@ -132,6 +144,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.queryFailureRateMinimumSampleCount = Math.max(queryFailureRateMinimumSampleCount, 1);
         this.queryRateLimitRejectionCountThreshold = Math.max(queryRateLimitRejectionCountThreshold, 1);
         this.queryMonitorAlertCooldownMinutes = Math.max(queryMonitorAlertCooldownMinutes, 1);
+        this.issueAlertDispatchCountThreshold = Math.max(issueAlertDispatchCountThreshold, 1);
+        this.issueAlertDispatchTimeoutMinutes = Math.max(issueAlertDispatchTimeoutMinutes, 1);
+        this.issueAlertReceiptCountThreshold = Math.max(issueAlertReceiptCountThreshold, 1);
+        this.issueAlertReceiptTimeoutMinutes = Math.max(issueAlertReceiptTimeoutMinutes, 1);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -160,7 +176,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 30,
                 10,
                 10,
-                60);
+                60,
+                10,
+                15,
+                10,
+                30);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -221,7 +241,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setQueryRateLimitRejectionCountThreshold(queryRateLimitRejectionCountThreshold);
         overview.setPendingIssueAlertDispatchCount(paymentTaskCenterMapper.countPendingIssueAlertDispatches());
         overview.setFailedIssueAlertDispatchCount(paymentTaskCenterMapper.countFailedIssueAlertDispatches());
+        overview.setOldestPendingIssueAlertDispatchMinutes(
+                paymentTaskCenterMapper.findOldestPendingIssueAlertDispatchMinutes());
+        overview.setIssueAlertDispatchCountThreshold(issueAlertDispatchCountThreshold);
+        overview.setIssueAlertDispatchTimeoutMinutes(issueAlertDispatchTimeoutMinutes);
         overview.setPendingIssueAlertReceiptCount(paymentTaskCenterMapper.countPendingIssueAlertReceipts());
+        overview.setOldestPendingIssueAlertReceiptMinutes(
+                paymentTaskCenterMapper.findOldestPendingIssueAlertReceiptMinutes());
+        overview.setIssueAlertReceiptCountThreshold(issueAlertReceiptCountThreshold);
+        overview.setIssueAlertReceiptTimeoutMinutes(issueAlertReceiptTimeoutMinutes);
         overview.setQueryTrends(queryTrends);
         overview.setFocusAlerts(buildFocusAlerts(overview));
         overview.setRecentTaskRuns(enrichTaskRuns(paymentTaskCenterMapper.findRecentTaskRuns()));
@@ -907,7 +935,18 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
         int pendingIssueAlertDispatchCount = valueOrZero(overview.getPendingIssueAlertDispatchCount());
         int failedIssueAlertDispatchCount = valueOrZero(overview.getFailedIssueAlertDispatchCount());
+        int oldestPendingIssueAlertDispatchMinutes =
+                valueOrZero(overview.getOldestPendingIssueAlertDispatchMinutes());
         int pendingIssueAlertReceiptCount = valueOrZero(overview.getPendingIssueAlertReceiptCount());
+        int oldestPendingIssueAlertReceiptMinutes =
+                valueOrZero(overview.getOldestPendingIssueAlertReceiptMinutes());
+        boolean issueAlertDispatchThresholdExceeded = failedIssueAlertDispatchCount > 0
+                || pendingIssueAlertDispatchCount >= issueAlertDispatchCountThreshold
+                || (pendingIssueAlertDispatchCount > 0
+                && oldestPendingIssueAlertDispatchMinutes >= issueAlertDispatchTimeoutMinutes);
+        boolean issueAlertReceiptThresholdExceeded = pendingIssueAlertReceiptCount >= issueAlertReceiptCountThreshold
+                || (pendingIssueAlertReceiptCount > 0
+                && oldestPendingIssueAlertReceiptMinutes >= issueAlertReceiptTimeoutMinutes);
         alerts.add(buildAlert(
                 "PAYMENT_EXPIRY",
                 "超时支付待关闭",
@@ -987,27 +1026,27 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "异常告警待派发",
                 pendingIssueAlertDispatchCount,
                 pendingIssueAlertDispatchCount > 0
-                        ? String.format("当前有 %d 条来源 outbox 等待派发，其中 %d 条仍存在派发异常",
-                        pendingIssueAlertDispatchCount, failedIssueAlertDispatchCount)
+                        ? String.format("当前有 %d 条来源 outbox 等待派发，其中 %d 条仍存在派发异常，最老已等待 %d 分钟",
+                        pendingIssueAlertDispatchCount,
+                        failedIssueAlertDispatchCount,
+                        oldestPendingIssueAlertDispatchMinutes)
                         : "暂无待派发异常告警",
                 "/payment-issue-alerts",
-                failedIssueAlertDispatchCount > 0 || pendingIssueAlertDispatchCount >= 10
-                        ? "P1"
-                        : pendingIssueAlertDispatchCount > 0 ? "P2" : "P3",
-                failedIssueAlertDispatchCount > 0 || pendingIssueAlertDispatchCount >= 10
-                        ? "danger"
-                        : pendingIssueAlertDispatchCount > 0 ? "warn" : "success"
+                issueAlertDispatchThresholdExceeded ? "P1" : pendingIssueAlertDispatchCount > 0 ? "P2" : "P3",
+                issueAlertDispatchThresholdExceeded ? "danger" : pendingIssueAlertDispatchCount > 0 ? "warn" : "success"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG",
                 "异常告警待回查",
                 pendingIssueAlertReceiptCount,
                 pendingIssueAlertReceiptCount > 0
-                        ? String.format("当前有 %d 条供应商已受理告警等待送达回执", pendingIssueAlertReceiptCount)
+                        ? String.format("当前有 %d 条供应商已受理告警等待送达回执，最老已等待 %d 分钟",
+                        pendingIssueAlertReceiptCount,
+                        oldestPendingIssueAlertReceiptMinutes)
                         : "暂无待回查告警回执",
                 "/payment-issue-alerts",
-                pendingIssueAlertReceiptCount >= 10 ? "P1" : pendingIssueAlertReceiptCount > 0 ? "P2" : "P3",
-                pendingIssueAlertReceiptCount >= 10 ? "danger" : pendingIssueAlertReceiptCount > 0 ? "warn" : "success"
+                issueAlertReceiptThresholdExceeded ? "P1" : pendingIssueAlertReceiptCount > 0 ? "P2" : "P3",
+                issueAlertReceiptThresholdExceeded ? "danger" : pendingIssueAlertReceiptCount > 0 ? "warn" : "success"
         ));
         int overdueIssueCount = valueOrZero(overview.getOverdueIssueCount());
         int controlPolicyWarningCount = valueOrZero(overview.getControlPolicyWarningCount());

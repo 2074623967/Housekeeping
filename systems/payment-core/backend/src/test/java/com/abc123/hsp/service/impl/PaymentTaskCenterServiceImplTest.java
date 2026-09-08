@@ -118,14 +118,22 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countPendingIssueAlertDispatches()).thenReturn(3);
         when(paymentTaskCenterMapper.countFailedIssueAlertDispatches()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOldestPendingIssueAlertDispatchMinutes()).thenReturn(8);
         when(paymentTaskCenterMapper.countPendingIssueAlertReceipts()).thenReturn(2);
+        when(paymentTaskCenterMapper.findOldestPendingIssueAlertReceiptMinutes()).thenReturn(20);
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
         PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
 
         Assertions.assertEquals(3, overview.getPendingIssueAlertDispatchCount());
         Assertions.assertEquals(1, overview.getFailedIssueAlertDispatchCount());
+        Assertions.assertEquals(8, overview.getOldestPendingIssueAlertDispatchMinutes());
+        Assertions.assertEquals(10, overview.getIssueAlertDispatchCountThreshold());
+        Assertions.assertEquals(15, overview.getIssueAlertDispatchTimeoutMinutes());
         Assertions.assertEquals(2, overview.getPendingIssueAlertReceiptCount());
+        Assertions.assertEquals(20, overview.getOldestPendingIssueAlertReceiptMinutes());
+        Assertions.assertEquals(10, overview.getIssueAlertReceiptCountThreshold());
+        Assertions.assertEquals(30, overview.getIssueAlertReceiptTimeoutMinutes());
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
@@ -134,6 +142,27 @@ class PaymentTaskCenterServiceImplTest {
                 "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
                         && "P2".equals(alert.getAlertLevel())
                         && alert.getAlertMessage().contains("2 条供应商已受理告警")));
+    }
+
+    @Test
+    void shouldRaiseP1WhenSingleIssueAlertBacklogExceedsAgeThreshold() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countPendingIssueAlertDispatches()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOldestPendingIssueAlertDispatchMinutes()).thenReturn(15);
+        when(paymentTaskCenterMapper.countPendingIssueAlertReceipts()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOldestPendingIssueAlertReceiptMinutes()).thenReturn(30);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("最老已等待 15 分钟")));
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("最老已等待 30 分钟")));
     }
 
     @Test
@@ -764,6 +793,10 @@ class PaymentTaskCenterServiceImplTest {
                 30,
                 10,
                 10,
-                60);
+                60,
+                10,
+                15,
+                10,
+                30);
     }
 }

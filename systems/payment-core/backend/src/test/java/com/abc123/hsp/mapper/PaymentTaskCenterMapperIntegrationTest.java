@@ -123,7 +123,9 @@ class PaymentTaskCenterMapperIntegrationTest {
 
             assertEquals(2, mapper.countPendingIssueAlertDispatches());
             assertEquals(1, mapper.countFailedIssueAlertDispatches());
+            assertEquals(45, mapper.findOldestPendingIssueAlertDispatchMinutes());
             assertEquals(1, mapper.countPendingIssueAlertReceipts());
+            assertEquals(65, mapper.findOldestPendingIssueAlertReceiptMinutes());
         }
     }
 
@@ -172,15 +174,21 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
                     + "source_alert_no, issue_type, alert_channel, ack_status, alert_status, "
                     + "provider_delivery_status, created_at) VALUES "
-                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', '已生成', NULL, NOW()),"
-                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '已确认', '已生成', NULL, NOW()),"
+                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', '已生成', NULL, "
+                    + "TIMESTAMPADD(MINUTE, -45, NOW())),"
+                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '已确认', '已生成', NULL, "
+                    + "TIMESTAMPADD(MINUTE, -120, NOW())),"
                     + "('SOURCE-1', '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', '派发成功', "
-                    + "'ACCEPTED', NOW()),"
+                    + "'ACCEPTED', TIMESTAMPADD(MINUTE, -65, NOW())),"
                     + "(NULL, '主动查单限流拒绝', 'IM', '待确认', '已生成', NULL, NOW()),"
-                    + "(NULL, '异常告警派发', 'IN_APP_OUTBOX', '待确认', '部分失败', NULL, NOW()),"
-                    + "(NULL, '异常告警派发', 'IN_APP_OUTBOX', '已确认', '派发失败', NULL, NOW()),"
-                    + "('SOURCE-2', '异常告警派发', 'SMS', '待确认', '派发成功', 'DELIVERED', NOW()),"
-                    + "('SOURCE-3', '异常告警派发', 'EMAIL', '已确认', '派发成功', 'ACCEPTED', NOW())");
+                    + "(NULL, '异常告警派发', 'IN_APP_OUTBOX', '待确认', '部分失败', NULL, "
+                    + "TIMESTAMPADD(MINUTE, -10, NOW())),"
+                    + "(NULL, '异常告警派发', 'IN_APP_OUTBOX', '已确认', '派发失败', NULL, "
+                    + "TIMESTAMPADD(MINUTE, -180, NOW())),"
+                    + "('SOURCE-2', '异常告警派发', 'SMS', '待确认', '派发成功', 'DELIVERED', "
+                    + "TIMESTAMPADD(MINUTE, -200, NOW())),"
+                    + "('SOURCE-3', '异常告警派发', 'EMAIL', '已确认', '派发成功', 'ACCEPTED', "
+                    + "TIMESTAMPADD(MINUTE, -300, NOW()))");
             statement.executeUpdate("UPDATE t_payment_notify_log SET notify_status = '查单失败' "
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");
