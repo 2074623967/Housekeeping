@@ -14,6 +14,8 @@ import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
@@ -26,6 +28,7 @@ import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -170,6 +173,79 @@ class PaymentConfigServiceImplTest {
                 .validateRouteRule(request);
         org.junit.jupiter.api.Assertions.assertFalse(invalidResult.getValid());
         org.junit.jupiter.api.Assertions.assertFalse(invalidResult.getMatched());
+    }
+
+    @Test
+    void shouldDetectRouteDivergenceShadowingPotentialCollisionAndInvalidExpression() {
+        PaymentRouteRuleConfigDTO first = buildConflictRule(
+                "RULE_FIRST", "HOME_CLEAN/H5", "terminal = H5", "wx_h5", 1, "ENABLED");
+        PaymentRouteRuleConfigDTO divergent = buildConflictRule(
+                "RULE_DIVERGENT", "HOME_CLEAN/APP", "TERMINAL=H5", "alipay_h5", 1, "ENABLED");
+        PaymentRouteRuleConfigDTO shadowed = buildConflictRule(
+                "RULE_SHADOWED", "HOME_CLEAN/H5", "terminal=H5", "offline_bank", 2, "ENABLED");
+        PaymentRouteRuleConfigDTO potential = buildConflictRule(
+                "RULE_POTENTIAL", "HOME_CLEAN/PC", "amount<=500", "wx_h5", 1, "ENABLED");
+        PaymentRouteRuleConfigDTO invalid = buildConflictRule(
+                "RULE_INVALID", "ENTERPRISE", "amount>not-a-number", "offline_bank", 3, "ENABLED");
+        PaymentRouteRuleConfigDTO disabled = buildConflictRule(
+                "RULE_DISABLED", "HOME_CLEAN/H5", "terminal=H5", "alipay_h5", 1, "DISABLED");
+        when(paymentConfigMapper.findRouteRules())
+                .thenReturn(Arrays.asList(first, divergent, shadowed, potential, invalid, disabled));
+
+        List<PaymentRouteRuleConflictDTO> conflicts =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleConflicts();
+
+        org.junit.jupiter.api.Assertions.assertTrue(conflicts.stream().anyMatch(
+                item -> "ROUTE_DIVERGENCE".equals(item.getConflictType())
+                        && "BLOCKER".equals(item.getSeverity())));
+        org.junit.jupiter.api.Assertions.assertTrue(conflicts.stream().anyMatch(
+                item -> "SHADOWED_RULE".equals(item.getConflictType())
+                        && "RULE_SHADOWED".equals(item.getRuleCode())));
+        org.junit.jupiter.api.Assertions.assertTrue(conflicts.stream().anyMatch(
+                item -> "PARTIAL_SHADOW".equals(item.getConflictType())
+                        && "RULE_SHADOWED".equals(item.getRuleCode())));
+        org.junit.jupiter.api.Assertions.assertTrue(conflicts.stream().anyMatch(
+                item -> "PRIORITY_COLLISION".equals(item.getConflictType())));
+        org.junit.jupiter.api.Assertions.assertTrue(conflicts.stream().anyMatch(
+                item -> "INVALID_EXPRESSION".equals(item.getConflictType())
+                        && "RULE_INVALID".equals(item.getRuleCode())));
+        org.junit.jupiter.api.Assertions.assertFalse(conflicts.stream().anyMatch(
+                item -> "RULE_DISABLED".equals(item.getRuleCode())
+                        || "RULE_DISABLED".equals(item.getConflictingRuleCode())));
+    }
+
+    @Test
+    void shouldDetectDuplicateRuleAndIgnoreDisjointScenes() {
+        PaymentRouteRuleConfigDTO first = buildConflictRule(
+                "RULE_FIRST", "HOME_CLEAN/H5", "terminal IN (H5, APP)", "wx_h5", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO duplicate = buildConflictRule(
+                "RULE_DUPLICATE", "HOME_CLEAN/mobile", " TERMINAL in(H5,APP) ", "wx_h5", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO disjoint = buildConflictRule(
+                "RULE_DISJOINT", "ENTERPRISE/PC", "terminal IN (H5, APP)", "wx_h5", 10, "ENABLED");
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(first, duplicate, disjoint));
+
+        List<PaymentRouteRuleConflictDTO> conflicts =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleConflicts();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, conflicts.size());
+        org.junit.jupiter.api.Assertions.assertEquals("DUPLICATE_RULE", conflicts.get(0).getConflictType());
+        org.junit.jupiter.api.Assertions.assertEquals("h5 / home_clean", conflicts.get(0).getOverlappingScene());
+    }
+
+    @Test
+    void shouldDetectOverlappingDuplicateWithoutTreatingScopesAsEqual() {
+        PaymentRouteRuleConfigDTO first = buildConflictRule(
+                "RULE_FIRST", "HOME_CLEAN/H5", "terminal=H5", "wx_h5", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO overlapping = buildConflictRule(
+                "RULE_OVERLAPPING", "H5/PC", "TERMINAL = H5", "wx_h5", 10, "ENABLED");
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(first, overlapping));
+
+        List<PaymentRouteRuleConflictDTO> conflicts =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleConflicts();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, conflicts.size());
+        org.junit.jupiter.api.Assertions.assertEquals("OVERLAPPING_DUPLICATE", conflicts.get(0).getConflictType());
+        org.junit.jupiter.api.Assertions.assertEquals("h5", conflicts.get(0).getOverlappingScene());
     }
 
     @Test
@@ -854,6 +930,24 @@ class PaymentConfigServiceImplTest {
         entity.setStatus("ENABLED");
         entity.setStatusType("success");
         return entity;
+    }
+
+    private PaymentRouteRuleConfigDTO buildConflictRule(String ruleCode,
+                                                        String matchScene,
+                                                        String matchExpression,
+                                                        String targetChannelCode,
+                                                        int priority,
+                                                        String status) {
+        PaymentRouteRuleConfigDTO rule = new PaymentRouteRuleConfigDTO();
+        rule.setRuleCode(ruleCode);
+        rule.setRuleName(ruleCode + " 名称");
+        rule.setMatchScene(matchScene);
+        rule.setMatchExpression(matchExpression);
+        rule.setTargetChannelCode(targetChannelCode);
+        rule.setFallbackChannelCode("");
+        rule.setPriority(Integer.valueOf(priority));
+        rule.setStatus(status);
+        return rule;
     }
 
     private PaymentRouteRuleVersionEntity buildRouteRuleVersionEntity(int versionNo, String expression) {

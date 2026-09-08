@@ -20,6 +20,9 @@ const versionRuleCode = ref("");
 const routeRuleVersions = ref([]);
 const isVersionLoading = ref(false);
 let routeRuleVersionRequestId = 0;
+const routeRuleConflicts = ref([]);
+const isConflictLoading = ref(false);
+const hasCheckedRouteRuleConflicts = ref(false);
 const editingProtocolCode = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
@@ -151,6 +154,8 @@ function applyOverview(overview) {
   controlPolicies.value = overview.controlPolicies || [];
   alertProviders.value = overview.alertProviders || [];
   issueDutyRosters.value = overview.issueDutyRosters || [];
+  routeRuleConflicts.value = [];
+  hasCheckedRouteRuleConflicts.value = false;
 }
 
 async function toggleChannel(channel) {
@@ -268,6 +273,24 @@ async function loadRouteRuleVersions(ruleCode) {
     if (requestId === routeRuleVersionRequestId) {
       isVersionLoading.value = false;
     }
+  }
+}
+
+async function detectRouteRuleConflicts() {
+  isConflictLoading.value = true;
+  hasCheckedRouteRuleConflicts.value = false;
+  actionMessage.value = "";
+  try {
+    routeRuleConflicts.value = await paymentConfigApi.getRouteRuleConflicts();
+    hasCheckedRouteRuleConflicts.value = true;
+    actionMessage.value = routeRuleConflicts.value.length
+      ? `规则冲突检测完成：发现 ${routeRuleConflicts.value.length} 项待处理结果。`
+      : "规则冲突检测完成：当前启用规则未发现已覆盖类型的冲突。";
+  } catch (error) {
+    routeRuleConflicts.value = [];
+    actionMessage.value = `规则冲突检测失败：${error.message}`;
+  } finally {
+    isConflictLoading.value = false;
   }
 }
 
@@ -517,7 +540,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.5</span>
+        <span class="badge info">配置中心 V1.6</span>
       </div>
     </div>
 
@@ -663,6 +686,9 @@ function exportGovernanceSnapshot(section = "ALL") {
             </div>
             <div class="toolbar-actions">
               <button class="button secondary" @click="exportGovernanceSnapshot('ROUTE_RULES')">导出路由</button>
+              <button class="button secondary" :disabled="isConflictLoading" @click="detectRouteRuleConflicts">
+                {{ isConflictLoading ? "检测中..." : "检测冲突" }}
+              </button>
               <button class="button secondary" @click="startCreateRouteRule">新建规则</button>
             </div>
           </div>
@@ -817,6 +843,50 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div v-if="isConflictLoading || hasCheckedRouteRuleConflicts" style="margin-top: 20px;">
+            <div class="section-title">
+              <div>
+                <h3>规则冲突检测</h3>
+                <p class="meta">确定冲突与遮蔽可直接定位；同优先级潜在冲突仍需人工确认表达式是否互斥</p>
+              </div>
+              <span v-if="hasCheckedRouteRuleConflicts" :class="['badge', routeRuleConflicts.length ? 'warn' : 'success']">
+                {{ routeRuleConflicts.length ? `${routeRuleConflicts.length} 项待处理` : "未发现冲突" }}
+              </span>
+            </div>
+            <div v-if="isConflictLoading" class="state-box">正在检测启用规则...</div>
+            <div v-else-if="!routeRuleConflicts.length" class="state-box">
+              当前启用规则未发现无效表达式、确定冲突、重复、遮蔽或同优先级潜在冲突
+            </div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>级别</th>
+                    <th>类型</th>
+                    <th>当前规则</th>
+                    <th>优先级</th>
+                    <th>对照规则</th>
+                    <th>对照优先级</th>
+                    <th>交集场景</th>
+                    <th>检测结论</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(conflict, index) in routeRuleConflicts" :key="`${conflict.conflictType}:${conflict.ruleCode}:${conflict.conflictingRuleCode || index}`">
+                    <td><span :class="['badge', conflict.severityType]">{{ conflict.severity }}</span></td>
+                    <td>{{ conflict.conflictType }}</td>
+                    <td>{{ conflict.ruleCode }} / {{ conflict.ruleName }}</td>
+                    <td>{{ conflict.priority }}</td>
+                    <td>{{ conflict.conflictingRuleCode ? `${conflict.conflictingRuleCode} / ${conflict.conflictingRuleName}` : "-" }}</td>
+                    <td>{{ conflict.conflictingPriority ?? "-" }}</td>
+                    <td>{{ conflict.overlappingScene }}</td>
+                    <td class="flow-summary-cell">{{ conflict.message }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div v-if="versionRuleCode" style="margin-top: 20px;">

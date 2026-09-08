@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
@@ -90,6 +91,8 @@ class PaymentConfigControllerTest {
                 .thenReturn(overview);
         when(paymentConfigService.validateRouteRule(any(PaymentRouteRuleValidationRequestDTO.class)))
                 .thenReturn(validation);
+        when(paymentConfigService.listRouteRuleConflicts())
+                .thenReturn(Collections.singletonList(new PaymentRouteRuleConflictDTO()));
         when(paymentConfigService.listRouteRuleVersions("RULE_HOME_APP"))
                 .thenReturn(Collections.singletonList(new PaymentRouteRuleVersionDTO()));
         when(paymentConfigService.rollbackRouteRule(any(String.class), any(PaymentRouteRuleRollbackRequestDTO.class)))
@@ -105,11 +108,13 @@ class PaymentConfigControllerTest {
         assertEquals(overview, controller.createRouteRule(upsertRequest).getData());
         assertEquals(overview, controller.updateRouteRule("RULE_HOME_APP", upsertRequest).getData());
         assertTrue(controller.validateRouteRule(validationRequest).getData().getValid());
+        assertEquals(1, controller.listRouteRuleConflicts().getData().size());
         assertEquals(1, controller.listRouteRuleVersions("RULE_HOME_APP").getData().size());
         assertEquals(overview, controller.rollbackRouteRule("RULE_HOME_APP", rollbackRequest).getData());
         verify(paymentConfigService).createRouteRule(upsertRequest);
         verify(paymentConfigService).updateRouteRule("RULE_HOME_APP", upsertRequest);
         verify(paymentConfigService).validateRouteRule(validationRequest);
+        verify(paymentConfigService).listRouteRuleConflicts();
         verify(paymentConfigService).listRouteRuleVersions("RULE_HOME_APP");
         verify(paymentConfigService).rollbackRouteRule("RULE_HOME_APP", rollbackRequest);
     }

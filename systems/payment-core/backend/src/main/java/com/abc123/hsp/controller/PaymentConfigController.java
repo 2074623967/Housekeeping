@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
@@ -101,6 +102,14 @@ public class PaymentConfigController {
     public ApiResponse<PaymentRouteRuleValidationDTO> validateRouteRule(
             @RequestBody PaymentRouteRuleValidationRequestDTO request) {
         return ApiResponse.success(paymentConfigService.validateRouteRule(request));
+    }
+
+    /**
+     * 检测当前启用支付路由规则之间的冲突。
+     */
+    @GetMapping("/route-rules/conflicts")
+    public ApiResponse<List<PaymentRouteRuleConflictDTO>> listRouteRuleConflicts() {
+        return ApiResponse.success(paymentConfigService.listRouteRuleConflicts());
     }
 
     /**

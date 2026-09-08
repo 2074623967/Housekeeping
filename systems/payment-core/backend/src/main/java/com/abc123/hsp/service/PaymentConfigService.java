@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
@@ -51,6 +52,11 @@ public interface PaymentConfigService {
      * 校验路由表达式并使用样例上下文模拟命中。
      */
     PaymentRouteRuleValidationDTO validateRouteRule(PaymentRouteRuleValidationRequestDTO request);
+
+    /**
+     * 检测当前启用路由规则的确定冲突、遮蔽和潜在优先级冲突。
+     */
+    List<PaymentRouteRuleConflictDTO> listRouteRuleConflicts();
 
     /**
      * 查询路由规则历史版本。

@@ -43,6 +43,24 @@ final class PaymentRouteExpressionEvaluator {
         }
     }
 
+    static String canonicalize(String expression) {
+        if (!StringUtils.hasText(expression)) {
+            return "";
+        }
+        List<Token> tokens = tokenize(expression);
+        StringBuilder canonical = new StringBuilder();
+        for (Token token : tokens) {
+            if (token.type == TokenType.EOF) {
+                break;
+            }
+            canonical.append(token.type.name())
+                    .append(':')
+                    .append(normalize(token.value))
+                    .append('|');
+        }
+        return canonical.toString();
+    }
+
     private static List<Token> tokenize(String expression) {
         List<Token> tokens = new ArrayList<>();
         int index = 0;

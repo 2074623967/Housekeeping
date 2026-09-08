@@ -1,5 +1,6 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -50,6 +51,16 @@ class PaymentRouteExpressionEvaluatorTest {
         assertFalse(PaymentRouteExpressionEvaluator.matches(context, "terminal IN ()"));
         assertFalse(PaymentRouteExpressionEvaluator.isValid("amount>not-a-number"));
         assertTrue(PaymentRouteExpressionEvaluator.isValid("terminal IN (H5, APP) AND amount<=500"));
+    }
+
+    @Test
+    void shouldCanonicalizeEquivalentFormattingWithoutChangingQuotedWhitespace() {
+        assertEquals(
+                PaymentRouteExpressionEvaluator.canonicalize("terminal IN (H5, APP) AND amount <= 500"),
+                PaymentRouteExpressionEvaluator.canonicalize(" TERMINAL in(H5,APP) and AMOUNT<=500 ")
+        );
+        assertFalse(PaymentRouteExpressionEvaluator.canonicalize("paymentMethod='微信 支付'")
+                .equals(PaymentRouteExpressionEvaluator.canonicalize("paymentMethod='微信支付'")));
     }
 
     private PaymentRouteContextDTO buildContext(String paymentMethod,

@@ -15,6 +15,7 @@ import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
@@ -27,6 +28,7 @@ import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -179,6 +181,39 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         result.setMatched(Boolean.valueOf(matched));
         result.setMessage(matched ? "表达式合法，样例上下文命中" : "表达式合法，样例上下文未命中");
         return result;
+    }
+
+    @Override
+    public List<PaymentRouteRuleConflictDTO> listRouteRuleConflicts() {
+        List<PaymentRouteRuleConfigDTO> enabledRules = new ArrayList<PaymentRouteRuleConfigDTO>();
+        for (PaymentRouteRuleConfigDTO rule : paymentConfigMapper.findRouteRules()) {
+            if (STATUS_ENABLED.equals(rule.getStatus())) {
+                enabledRules.add(rule);
+            }
+        }
+        List<PaymentRouteRuleConflictDTO> conflicts = new ArrayList<PaymentRouteRuleConflictDTO>();
+        for (PaymentRouteRuleConfigDTO rule : enabledRules) {
+            if (!PaymentRouteExpressionEvaluator.isValid(rule.getMatchExpression())) {
+                conflicts.add(buildInvalidExpressionConflict(rule));
+            }
+        }
+        for (int leftIndex = 0; leftIndex < enabledRules.size(); leftIndex++) {
+            PaymentRouteRuleConfigDTO left = enabledRules.get(leftIndex);
+            if (!PaymentRouteExpressionEvaluator.isValid(left.getMatchExpression())) {
+                continue;
+            }
+            for (int rightIndex = leftIndex + 1; rightIndex < enabledRules.size(); rightIndex++) {
+                PaymentRouteRuleConfigDTO right = enabledRules.get(rightIndex);
+                if (!PaymentRouteExpressionEvaluator.isValid(right.getMatchExpression())) {
+                    continue;
+                }
+                PaymentRouteRuleConflictDTO conflict = detectRouteRuleConflict(left, right);
+                if (conflict != null) {
+                    conflicts.add(conflict);
+                }
+            }
+        }
+        return conflicts;
     }
 
     @Override
@@ -973,6 +1008,145 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("路由规则变更原因不能超过255个字符");
         }
         return resolvedReason;
+    }
+
+    private PaymentRouteRuleConflictDTO detectRouteRuleConflict(PaymentRouteRuleConfigDTO left,
+                                                                 PaymentRouteRuleConfigDTO right) {
+        String overlappingScene = resolveOverlappingScene(left.getMatchScene(), right.getMatchScene());
+        if (overlappingScene == null) {
+            return null;
+        }
+        boolean sameExpression = PaymentRouteExpressionEvaluator.canonicalize(left.getMatchExpression())
+                .equals(PaymentRouteExpressionEvaluator.canonicalize(right.getMatchExpression()));
+        int leftPriority = priorityOf(left);
+        int rightPriority = priorityOf(right);
+        if (sameExpression && leftPriority == rightPriority) {
+            if (hasSameRouteDestination(left, right)) {
+                boolean sameSceneScope = sceneSubsumes(left.getMatchScene(), right.getMatchScene())
+                        && sceneSubsumes(right.getMatchScene(), left.getMatchScene());
+                return buildRouteRuleConflict(
+                        left, right, overlappingScene,
+                        sameSceneScope ? "DUPLICATE_RULE" : "OVERLAPPING_DUPLICATE",
+                        "WARNING", "warn",
+                        sameSceneScope
+                                ? "场景、优先级、表达式和目标渠道完全相同，重复规则会增加维护成本"
+                                : "交集场景内的优先级、表达式和目标渠道相同，存在重复匹配"
+                );
+            }
+            return buildRouteRuleConflict(
+                    left, right, overlappingScene, "ROUTE_DIVERGENCE", "BLOCKER", "danger",
+                    "同场景、同优先级和同表达式指向不同渠道，运行结果依赖数据库记录顺序"
+            );
+        }
+        if (sameExpression) {
+            PaymentRouteRuleConfigDTO shadowing = leftPriority < rightPriority ? left : right;
+            PaymentRouteRuleConfigDTO shadowed = leftPriority < rightPriority ? right : left;
+            boolean fullyShadowed = sceneSubsumes(shadowing.getMatchScene(), shadowed.getMatchScene());
+            return buildRouteRuleConflict(
+                    shadowed, shadowing, overlappingScene,
+                    fullyShadowed ? "SHADOWED_RULE" : "PARTIAL_SHADOW",
+                    "WARNING", "warn",
+                    fullyShadowed
+                            ? "全部适用场景和表达式均被更高优先级规则覆盖，当前规则不会进入实际路由"
+                            : "交集场景和表达式会先命中更高优先级规则，当前规则仅能在其他场景生效"
+            );
+        }
+        if (leftPriority == rightPriority) {
+            return buildRouteRuleConflict(
+                    left, right, overlappingScene, "PRIORITY_COLLISION", "REVIEW", "info",
+                    "场景存在交集且优先级相同；表达式是否互斥需人工复核"
+            );
+        }
+        return null;
+    }
+
+    private PaymentRouteRuleConflictDTO buildInvalidExpressionConflict(PaymentRouteRuleConfigDTO rule) {
+        return buildRouteRuleConflict(
+                rule, null, rule.getMatchScene(), "INVALID_EXPRESSION", "BLOCKER", "danger",
+                "启用规则的表达式无法解析，运行时会按不命中跳过"
+        );
+    }
+
+    private PaymentRouteRuleConflictDTO buildRouteRuleConflict(PaymentRouteRuleConfigDTO rule,
+                                                                PaymentRouteRuleConfigDTO conflictingRule,
+                                                                String overlappingScene,
+                                                                String conflictType,
+                                                                String severity,
+                                                                String severityType,
+                                                                String message) {
+        PaymentRouteRuleConflictDTO conflict = new PaymentRouteRuleConflictDTO();
+        conflict.setConflictType(conflictType);
+        conflict.setSeverity(severity);
+        conflict.setSeverityType(severityType);
+        conflict.setRuleCode(rule.getRuleCode());
+        conflict.setRuleName(rule.getRuleName());
+        conflict.setPriority(rule.getPriority());
+        if (conflictingRule != null) {
+            conflict.setConflictingRuleCode(conflictingRule.getRuleCode());
+            conflict.setConflictingRuleName(conflictingRule.getRuleName());
+            conflict.setConflictingPriority(conflictingRule.getPriority());
+        }
+        conflict.setOverlappingScene(overlappingScene);
+        conflict.setMessage(message);
+        return conflict;
+    }
+
+    private String resolveOverlappingScene(String leftScene, String rightScene) {
+        Set<String> leftTokens = normalizeSceneTokens(leftScene);
+        Set<String> rightTokens = normalizeSceneTokens(rightScene);
+        if (leftTokens.isEmpty()) {
+            return StringUtils.hasText(rightScene) ? rightScene.trim() : "全部场景";
+        }
+        if (rightTokens.isEmpty()) {
+            return leftScene.trim();
+        }
+        Set<String> overlap = new java.util.TreeSet<String>(leftTokens);
+        overlap.retainAll(rightTokens);
+        if (overlap.isEmpty()) {
+            return null;
+        }
+        return String.join(" / ", overlap);
+    }
+
+    private boolean sceneSubsumes(String broaderScene, String narrowerScene) {
+        Set<String> broaderTokens = normalizeSceneTokens(broaderScene);
+        Set<String> narrowerTokens = normalizeSceneTokens(narrowerScene);
+        return broaderTokens.isEmpty()
+                || (!narrowerTokens.isEmpty() && broaderTokens.containsAll(narrowerTokens));
+    }
+
+    private Set<String> normalizeSceneTokens(String scene) {
+        Set<String> tokens = new java.util.TreeSet<String>();
+        if (!StringUtils.hasText(scene)) {
+            return tokens;
+        }
+        for (String token : scene.split("/")) {
+            String normalized = token.trim().toLowerCase(Locale.ROOT);
+            if ("mobile_web".equals(normalized) || "mobile".equals(normalized) || "h5".equals(normalized)) {
+                normalized = "h5";
+            } else if ("pc_web".equals(normalized) || "pc".equals(normalized) || "web".equals(normalized)) {
+                normalized = "pc";
+            } else if ("app_native".equals(normalized) || "app".equals(normalized)) {
+                normalized = "app";
+            }
+            if (StringUtils.hasText(normalized)) {
+                tokens.add(normalized);
+            }
+        }
+        return tokens;
+    }
+
+    private boolean hasSameRouteDestination(PaymentRouteRuleConfigDTO left, PaymentRouteRuleConfigDTO right) {
+        return normalizeCode(left.getTargetChannelCode()).equals(normalizeCode(right.getTargetChannelCode()))
+                && normalizeCode(left.getFallbackChannelCode()).equals(normalizeCode(right.getFallbackChannelCode()));
+    }
+
+    private String normalizeCode(String code) {
+        return code == null ? "" : code.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private int priorityOf(PaymentRouteRuleConfigDTO rule) {
+        return rule.getPriority() == null ? 99 : rule.getPriority().intValue();
     }
 
     private PaymentIssueDutyRosterEntity buildIssueDutyRosterEntity(PaymentIssueDutyRosterUpsertRequestDTO request,

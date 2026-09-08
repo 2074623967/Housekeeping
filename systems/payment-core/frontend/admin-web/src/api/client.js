@@ -892,6 +892,7 @@ export const paymentConfigApi = {
   createRouteRule: (payload) => postJson("/api/payment-config/route-rules", payload),
   updateRouteRule: (ruleCode, payload) => request(`/api/payment-config/route-rules/${ruleCode}`, buildJsonRequestOptions("PUT", payload)),
   validateRouteRule: (payload) => postJson("/api/payment-config/route-rules/validate", payload),
+  getRouteRuleConflicts: () => request("/api/payment-config/route-rules/conflicts"),
   getRouteRuleVersions: (ruleCode) => request(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/versions`),
   rollbackRouteRule: (ruleCode, payload) => postJson(`/api/payment-config/route-rules/${encodeURIComponent(ruleCode)}/rollback`, payload),
   createProtocol: (payload) => postJson("/api/payment-config/protocols", payload),
