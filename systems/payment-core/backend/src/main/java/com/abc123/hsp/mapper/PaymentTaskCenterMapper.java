@@ -42,11 +42,20 @@ public interface PaymentTaskCenterMapper {
     long countTaskRunLogs(PaymentTaskRunLogQueryDTO query);
 
     /**
-     * 查询达到等待阈值、尚未过期且仍待回调的支付单。
+     * 查询达到等待阈值、尚未过期且仍待回调的支付单，供人工立即补查。
      */
-    List<String> findPendingPaymentOrderIdsForQuery(@Param("minAgeSeconds") int minAgeSeconds,
-                                                    @Param("retryIntervalSeconds") int retryIntervalSeconds,
-                                                    @Param("batchSize") int batchSize);
+    List<String> findPendingPaymentOrderIdsForManualQuery(@Param("minAgeSeconds") int minAgeSeconds,
+                                                          @Param("batchSize") int batchSize);
+
+    /**
+     * 查询达到自动重试退避窗口的待回调支付单。
+     */
+    List<String> findDuePendingPaymentOrderIdsForQuery(
+            @Param("minAgeSeconds") int minAgeSeconds,
+            @Param("retryIntervalSeconds") int retryIntervalSeconds,
+            @Param("retryBackoffFactor") int retryBackoffFactor,
+            @Param("maxRetryIntervalSeconds") int maxRetryIntervalSeconds,
+            @Param("batchSize") int batchSize);
 
     /**
      * 统计已经超过 SLA 的支付交易异常数量。

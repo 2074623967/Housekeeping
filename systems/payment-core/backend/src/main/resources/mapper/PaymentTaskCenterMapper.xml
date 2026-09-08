@@ -351,19 +351,43 @@
         </where>
     </select>
 
-    <select id="findPendingPaymentOrderIdsForQuery" resultType="string">
+    <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">
         SELECT p.payment_order_id
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
         WHERE p.status = 'WAIT_CALLBACK'
           AND pr.expires_at &gt; NOW()
           AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
-          AND NOT EXISTS (
-            SELECT 1
-            FROM t_payment_notify_log n
-            WHERE n.payment_order_id = p.payment_order_id
-              AND n.notify_status = '已查单'
-              AND TIMESTAMPDIFF(SECOND, n.created_at, NOW()) &lt; #{retryIntervalSeconds}
+        GROUP BY p.payment_order_id, p.created_at
+        ORDER BY p.created_at
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="findDuePendingPaymentOrderIdsForQuery" resultType="string">
+        SELECT p.payment_order_id
+        FROM t_payment_order p
+                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                 LEFT JOIN (
+                    SELECT payment_order_id,
+                           COUNT(1) AS query_count,
+                           MAX(created_at) AS latest_query_at
+                    FROM t_payment_notify_log
+                    WHERE notify_status IN ('已查单', '查单失败')
+                    GROUP BY payment_order_id
+                 ) query_history ON query_history.payment_order_id = p.payment_order_id
+        WHERE p.status = 'WAIT_CALLBACK'
+          AND pr.expires_at &gt; NOW()
+          AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+          AND (
+            query_history.latest_query_at IS NULL
+            OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
+                LEAST(
+                    #{maxRetryIntervalSeconds},
+                    #{retryIntervalSeconds} * POWER(
+                        #{retryBackoffFactor},
+                        LEAST(GREATEST(query_history.query_count - 1, 0), 20)
+                    )
+                )
           )
         GROUP BY p.payment_order_id, p.created_at
         ORDER BY p.created_at

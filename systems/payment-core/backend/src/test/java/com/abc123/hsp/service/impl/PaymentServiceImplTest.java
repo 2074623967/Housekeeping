@@ -1138,6 +1138,33 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRecordFailedChannelQueryForAutomaticBackoff() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-FAIL", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-FAIL")).thenReturn(detail);
+        when(paymentChannelQueryService.query(detail)).thenThrow(new BusinessException(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                "gateway unavailable"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-FAIL");
+
+        assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request));
+
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-FAIL"), eq("wx_h5"), eq("QUERY_FAILED"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"gateway unavailable\"}"),
+                eq("查单失败"), eq("danger"));
+    }
+
+    @Test
     void shouldNotReopenClosedPaymentWhenQueryReportsSuccess() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-003", "CLOSED");
         when(paymentMapper.findDetail("PAY-QUERY-003")).thenReturn(detail);

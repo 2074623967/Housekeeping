@@ -171,7 +171,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.11 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单、异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.12 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单、异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -261,7 +261,7 @@ onMounted(loadOverview);
 
             <div class="sub-panel">
               <h3>待回调主动查单</h3>
-              <p>批量补查达到等待阈值且尚未过期的支付单；渠道确认成功时自动收口，处理中或失败结果进入任务日志继续跟进。</p>
+              <p>立即批量补查达到等待阈值且尚未过期的支付单，不受自动退避窗口限制；渠道确认成功时自动收口，处理中或失败结果进入任务日志继续跟进。</p>
               <button
                 class="button primary"
                 :disabled="activeTaskCode === 'PAYMENT_PENDING_QUERY'"
@@ -397,17 +397,17 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
-                  <td>V1.11</td>
+                  <td>V1.12</td>
                   <td>已具备 outbox、本地 IM/SMS/EMAIL 派发骨架与状态回写，后续补真实通知网关</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
-                  <td>V1.11</td>
+                  <td>V1.12</td>
                   <td>已支持供应商受理状态回查与送达状态回写，后续补真实供应商回执接口</td>
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.11</td>
+                  <td>V1.12</td>
                   <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>

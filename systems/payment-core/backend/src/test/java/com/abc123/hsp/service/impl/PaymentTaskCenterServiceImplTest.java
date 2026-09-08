@@ -55,7 +55,7 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldQueryPendingPaymentsAndIsolateSinglePaymentFailure() {
-        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForQuery(30, 60, 100))
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 100))
                 .thenReturn(Arrays.asList("PAY-QUERY-1", "PAY-QUERY-2", "PAY-QUERY-3"));
         when(paymentService.query(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> {
@@ -78,6 +78,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(1, result.getWarningCount());
         Assertions.assertEquals(1, result.getFailCount());
+        verify(paymentTaskCenterMapper).findPendingPaymentOrderIdsForManualQuery(30, 100);
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PAYMENT_PENDING_QUERY".equals(entity.getTaskCode())
                         && "P2".equals(entity.getSeverityLevel())
@@ -91,7 +92,7 @@ class PaymentTaskCenterServiceImplTest {
     void shouldUseLeaseForAutomaticPendingPaymentQueries() {
         when(paymentTaskCenterMapper.acquireTaskLease(
                 "PAYMENT_PENDING_QUERY", "payment-query-scheduler", 120)).thenReturn(1);
-        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForQuery(30, 60, 100))
+        when(paymentTaskCenterMapper.findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 100))
                 .thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -99,6 +100,7 @@ class PaymentTaskCenterServiceImplTest {
         buildQueryTaskCenterService().runAutoPendingPaymentQueries();
 
         verify(paymentTaskCenterMapper).initTaskLease("PAYMENT_PENDING_QUERY");
+        verify(paymentTaskCenterMapper).findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 100);
         verify(paymentTaskCenterMapper).releaseTaskLease(
                 "PAYMENT_PENDING_QUERY", "payment-query-scheduler");
     }
@@ -630,6 +632,8 @@ class PaymentTaskCenterServiceImplTest {
                 paymentService,
                 30,
                 60,
+                2,
+                900,
                 100);
     }
 }

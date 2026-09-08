@@ -60,6 +60,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentService paymentService;
     private final int pendingQueryMinAgeSeconds;
     private final int pendingQueryRetryIntervalSeconds;
+    private final int pendingQueryRetryBackoffFactor;
+    private final int pendingQueryMaxRetryIntervalSeconds;
     private final int pendingQueryBatchSize;
 
     @Autowired
@@ -75,6 +77,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                 int pendingQueryMinAgeSeconds,
                                         @Value("${payment.channel-query.compensation.retry-interval-seconds:60}")
                                                 int pendingQueryRetryIntervalSeconds,
+                                        @Value("${payment.channel-query.compensation.retry-backoff-factor:2}")
+                                                int pendingQueryRetryBackoffFactor,
+                                        @Value("${payment.channel-query.compensation.max-retry-interval-seconds:900}")
+                                                int pendingQueryMaxRetryIntervalSeconds,
                                         @Value("${payment.channel-query.compensation.batch-size:100}")
                                                 int pendingQueryBatchSize) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
@@ -87,6 +93,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.paymentService = paymentService;
         this.pendingQueryMinAgeSeconds = Math.max(pendingQueryMinAgeSeconds, 0);
         this.pendingQueryRetryIntervalSeconds = Math.max(pendingQueryRetryIntervalSeconds, 1);
+        this.pendingQueryRetryBackoffFactor = Math.max(pendingQueryRetryBackoffFactor, 1);
+        this.pendingQueryMaxRetryIntervalSeconds = Math.max(
+                pendingQueryMaxRetryIntervalSeconds,
+                this.pendingQueryRetryIntervalSeconds);
         this.pendingQueryBatchSize = Math.max(pendingQueryBatchSize, 1);
     }
 
@@ -107,6 +117,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 null,
                 30,
                 60,
+                2,
+                900,
                 100);
     }
 
@@ -495,10 +507,16 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (paymentService == null) {
             throw new IllegalStateException("payment service is required for pending payment queries");
         }
-        List<String> paymentOrderIds = paymentTaskCenterMapper.findPendingPaymentOrderIdsForQuery(
-                pendingQueryMinAgeSeconds,
-                pendingQueryRetryIntervalSeconds,
-                pendingQueryBatchSize);
+        List<String> paymentOrderIds = RUN_MODE_MANUAL.equals(runMode)
+                ? paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(
+                        pendingQueryMinAgeSeconds,
+                        pendingQueryBatchSize)
+                : paymentTaskCenterMapper.findDuePendingPaymentOrderIdsForQuery(
+                        pendingQueryMinAgeSeconds,
+                        pendingQueryRetryIntervalSeconds,
+                        pendingQueryRetryBackoffFactor,
+                        pendingQueryMaxRetryIntervalSeconds,
+                        pendingQueryBatchSize);
         int successCount = 0;
         int warningCount = 0;
         int failCount = 0;

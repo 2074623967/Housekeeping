@@ -571,14 +571,20 @@ public class PaymentServiceImpl implements PaymentService {
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BusinessException.class)
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        PaymentChannelQueryResultDTO queryResult = paymentChannelQueryService.query(detail);
+        PaymentChannelQueryResultDTO queryResult;
+        try {
+            queryResult = paymentChannelQueryService.query(detail);
+        } catch (BusinessException exception) {
+            recordChannelQueryFailure(detail, exception);
+            throw exception;
+        }
         String channelTransactionNo = StringUtils.hasText(queryResult.getChannelTransactionNo())
                 ? queryResult.getChannelTransactionNo().trim()
                 : detail.getChannelTransactionNo();
@@ -639,6 +645,19 @@ public class PaymentServiceImpl implements PaymentService {
                 "{\"code\":\"SUCCESS\"}",
                 "已查单",
                 "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info");
+    }
+
+    private void recordChannelQueryFailure(PaymentDetailDTO detail, BusinessException exception) {
+        paymentMapper.insertNotifyLog(
+                "QRY" + System.currentTimeMillis(),
+                detail.getPaymentOrderId(),
+                detail.getChannel(),
+                "QUERY_FAILED",
+                "{\"querySource\":\"CHANNEL_QUERY\"}",
+                "{\"code\":\"" + escapeJson(exception.getCode())
+                        + "\",\"message\":\"" + escapeJson(exception.getMessage()) + "\"}",
+                "查单失败",
+                "danger");
     }
 
     private String escapeJson(String value) {
