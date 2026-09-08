@@ -75,6 +75,7 @@
 | `/api/payment-task-center/task-runs` | `GET` | 查询支付任务执行日志 |
 | `/api/payment-task-center/task-runs/export` | `GET` | 导出支付任务执行日志 CSV |
 | `/api/payment-task-center/close-expired-payments` | `POST` | 手动执行超时关单 |
+| `/api/payment-task-center/query-pending-payments` | `POST` | 手动执行待回调支付主动查单补偿 |
 | `/api/payment-task-center/republish-failed-events` | `POST` | 手动执行失败事件重发 |
 | `/api/payment-task-center/retry-failed-refunds` | `POST` | 手动执行失败退款重试 |
 | `/api/payment-task-center/escalate-overdue-issues` | `POST` | 手动执行异常 SLA 升级巡检 |
@@ -1302,9 +1303,32 @@ POST /api/payment-config/control-policies/self-check
 2. 每条日志返回严重等级、升级状态、建议动作和推荐路由，便于产品、研发、测试共用同一运维口径。
 3. 严重等级与升级状态不再按“是否失败”简单二分，而是按任务类型、失败笔数和处理规模综合判定：
    - `PAYMENT_EXPIRE_CLOSE`：失败 `>= 5` 或处理量 `>= 30` 判定 `P1 / 升级值班负责人`；失败 `1-4` 或处理量 `10-29` 判定 `P2 / 纳入当班跟进`
+   - `PAYMENT_PENDING_QUERY`：查询失败 `>= 3` 判定 `P1 / 升级值班负责人`；存在查询失败或渠道仍处理中判定 `P2 / 纳入当班跟进`
    - `PAYMENT_EVENT_RETRY`：失败 `>= 3` 或处理量 `>= 10` 判定 `P1 / 升级值班负责人`；失败 `1-2` 或存在成功重发则判定 `P2 / 纳入当班跟进`
    - `REFUND_FAIL_RETRY`：失败 `>= 2` 或处理量 `>= 8` 判定 `P1 / 升级值班负责人`；失败 `1` 笔或存在成功重试则判定 `P2 / 纳入当班跟进`
-4. 当前超时关单、失败事件重发、失败退款重试、异常 SLA 升级巡检都由该页统一留痕，且失败事件、失败退款和异常 SLA 升级巡检已接入后台自动补偿调度，后续可继续扩展更多支付运维任务。
+4. 当前待回调主动查单、超时关单、失败事件重发、失败退款重试、异常 SLA 升级巡检都由该页统一留痕，并已接入后台自动补偿调度；待回调查单只有在真实网关和补偿开关同时启用时才自动运行。
+
+### 13.7.1 手动执行待回调支付主动查单
+
+接口：`POST /api/payment-task-center/query-pending-payments`
+
+处理规则：
+
+1. 仅选择 `WAIT_CALLBACK`、预付单尚未过期、达到最小等待时长，且最近一次查单已超过重试间隔的支付单。
+2. 单次处理数量受批次上限约束，按支付单创建时间从早到晚执行。
+3. 每笔复用 `POST /api/payments/query` 的幂等收口逻辑；渠道成功会收口支付主链路，渠道处理中计入告警，网关异常计入失败。
+4. 单笔失败与其他支付单隔离，任务摘要最多记录三个失败支付单号；自动任务使用 `PAYMENT_PENDING_QUERY` 租约避免多实例重复执行。
+5. 自动调度要求 `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED=true` 且 `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED=true`，任一关闭均不执行自动查单。
+
+补偿配置：
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED` | `false` | 自动查单补偿开关 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_DELAY_MS` | `60000` | 自动任务固定间隔 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_MIN_AGE_SECONDS` | `30` | 支付进入待回调后的首次补查等待时间 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_INTERVAL_SECONDS` | `60` | 同一支付单两次查单的最小间隔 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_BATCH_SIZE` | `100` | 单批最大支付单数量 |
 
 ### 13.7 手动执行异常 SLA 升级巡检
 
