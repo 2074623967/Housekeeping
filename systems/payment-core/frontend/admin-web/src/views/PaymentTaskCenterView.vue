@@ -242,7 +242,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.17 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、限流拒绝、监控告警 outbox、异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.18 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、监控告警 outbox、可配置自动派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -501,8 +501,8 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
-                  <td>V1.13</td>
-                  <td>已具备 outbox、本地 IM/SMS/EMAIL 派发骨架与状态回写，后续补真实通知网关</td>
+                  <td>V1.18</td>
+                  <td>已具备 outbox、IM/SMS/EMAIL 派发与状态回写，可显式开启自动调度；默认关闭，后续补真实通知网关</td>
                 </tr>
                 <tr>
                   <td>异常告警回执回查</td>
@@ -511,7 +511,7 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.17</td>
+                  <td>V1.18</td>
                   <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将查单监控告警 outbox、异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>

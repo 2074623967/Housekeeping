@@ -97,6 +97,10 @@ payment:
     dead-letter-task-enabled: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_ENABLED:false}
     dead-letter-task-queue: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_QUEUE:payment.compensation.dlq-intake}
   issue-alert:
+    auto-dispatch:
+      # 默认关闭；确认通知供应商配置与接收人范围后再启用自动外发。
+      enabled: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED:false}
+      fixed-delay-ms: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_DELAY_MS:60000}
     im:
       # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_IM_WEBHOOK_URL:}

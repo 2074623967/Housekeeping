@@ -16,24 +16,34 @@ public class PaymentCompensationScheduler {
 
     private final PaymentTaskCenterService paymentTaskCenterService;
     private final boolean pendingPaymentQueryEnabled;
+    private final boolean issueAlertAutoDispatchEnabled;
 
     public PaymentCompensationScheduler(PaymentTaskCenterService paymentTaskCenterService) {
-        this(paymentTaskCenterService, false);
+        this(paymentTaskCenterService, false, false, false);
+    }
+
+    PaymentCompensationScheduler(
+            PaymentTaskCenterService paymentTaskCenterService,
+            boolean pendingPaymentQueryEnabled,
+            boolean gatewayQueryEnabled) {
+        this(paymentTaskCenterService, pendingPaymentQueryEnabled, gatewayQueryEnabled, false);
     }
 
     @Autowired
     public PaymentCompensationScheduler(
             PaymentTaskCenterService paymentTaskCenterService,
             @Value("${payment.channel-query.compensation.enabled:false}") boolean pendingPaymentQueryEnabled,
-            @Value("${payment.channel-query.gateway-access.enabled:false}") boolean gatewayQueryEnabled) {
-        this(paymentTaskCenterService, pendingPaymentQueryEnabled && gatewayQueryEnabled);
+            @Value("${payment.channel-query.gateway-access.enabled:false}") boolean gatewayQueryEnabled,
+            @Value("${payment.issue-alert.auto-dispatch.enabled:false}") boolean issueAlertAutoDispatchEnabled) {
+        this.paymentTaskCenterService = paymentTaskCenterService;
+        this.pendingPaymentQueryEnabled = pendingPaymentQueryEnabled && gatewayQueryEnabled;
+        this.issueAlertAutoDispatchEnabled = issueAlertAutoDispatchEnabled;
     }
 
     PaymentCompensationScheduler(
             PaymentTaskCenterService paymentTaskCenterService,
             boolean pendingPaymentQueryEnabled) {
-        this.paymentTaskCenterService = paymentTaskCenterService;
-        this.pendingPaymentQueryEnabled = pendingPaymentQueryEnabled;
+        this(paymentTaskCenterService, pendingPaymentQueryEnabled, true, false);
     }
 
     /**
@@ -52,6 +62,16 @@ public class PaymentCompensationScheduler {
     @Scheduled(fixedDelayString = "${payment.channel-query.monitor.alert-fixed-delay-ms:300000}")
     public void generateQueryMonitorAlerts() {
         paymentTaskCenterService.runAutoGenerateQueryMonitorAlerts();
+    }
+
+    /**
+     * 定期派发待处理 outbox 告警；默认关闭，配置真实或联调通知通道后再显式启用。
+     */
+    @Scheduled(fixedDelayString = "${payment.issue-alert.auto-dispatch.fixed-delay-ms:60000}")
+    public void dispatchIssueAlerts() {
+        if (issueAlertAutoDispatchEnabled) {
+            paymentTaskCenterService.runAutoDispatchIssueAlerts();
+        }
     }
 
     /**

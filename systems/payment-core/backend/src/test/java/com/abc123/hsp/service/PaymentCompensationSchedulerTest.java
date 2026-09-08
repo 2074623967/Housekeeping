@@ -53,6 +53,22 @@ class PaymentCompensationSchedulerTest {
     }
 
     @Test
+    void shouldDispatchIssueAlertsWhenAutoDispatchEnabled() {
+        new PaymentCompensationScheduler(paymentTaskCenterService, false, false, true)
+                .dispatchIssueAlerts();
+
+        verify(paymentTaskCenterService).runAutoDispatchIssueAlerts();
+    }
+
+    @Test
+    void shouldSkipIssueAlertDispatchWhenAutoDispatchDisabled() {
+        new PaymentCompensationScheduler(paymentTaskCenterService, false, false, false)
+                .dispatchIssueAlerts();
+
+        verify(paymentTaskCenterService, never()).runAutoDispatchIssueAlerts();
+    }
+
+    @Test
     void shouldDelegateToAutoRetryFailedRefunds() {
         new PaymentCompensationScheduler(paymentTaskCenterService).retryFailedRefunds();
 
