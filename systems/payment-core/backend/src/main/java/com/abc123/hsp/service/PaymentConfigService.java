@@ -5,6 +5,9 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
@@ -99,7 +102,7 @@ public interface PaymentConfigService {
     /**
      * 启停支付协议配置。
      */
-    PaymentConfigOverviewDTO toggleProtocol(PaymentConfigToggleRequestDTO request);
+    PaymentConfigOverviewDTO toggleProtocol(PaymentProtocolStatusRequestDTO request);
 
     /**
      * 新增支付协议配置。
@@ -110,6 +113,17 @@ public interface PaymentConfigService {
      * 编辑支付协议配置。
      */
     PaymentConfigOverviewDTO updateProtocol(String protocolCode, PaymentProtocolUpsertRequestDTO request);
+
+    /**
+     * 查询支付协议不可变版本历史。
+     */
+    List<PaymentProtocolVersionDTO> listProtocolVersions(String protocolCode);
+
+    /**
+     * 回滚到指定支付协议历史版本并追加新版本。
+     */
+    PaymentConfigOverviewDTO rollbackProtocol(
+            String protocolCode, PaymentProtocolRollbackRequestDTO request);
 
     /**
      * 新增异常告警值班路由配置。

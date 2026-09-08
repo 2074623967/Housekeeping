@@ -42,4 +42,6 @@ public class PaymentProtocolUpsertRequestDTO {
     private Integer priority;
     /** 是否启用。 */
     private Boolean enabled;
+    /** 变更原因。 */
+    private String changeReason;
 }

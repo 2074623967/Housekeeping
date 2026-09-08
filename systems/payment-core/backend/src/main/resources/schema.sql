@@ -183,6 +183,36 @@ CREATE TABLE t_payment_protocol_config (
     KEY idx_protocol_type_status (protocol_type, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付协议配置表';
 
+CREATE TABLE t_payment_protocol_version (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    protocol_code VARCHAR(64) NOT NULL COMMENT '支付协议编码',
+    version_no INT NOT NULL COMMENT '协议版本号',
+    protocol_name VARCHAR(128) NOT NULL COMMENT '支付协议名称快照',
+    protocol_type VARCHAR(64) NOT NULL COMMENT '协议类型快照',
+    protocol_type_name VARCHAR(64) NOT NULL COMMENT '协议类型名称快照',
+    template_code VARCHAR(64) NOT NULL COMMENT '协议模板编码快照',
+    template_name VARCHAR(128) NOT NULL COMMENT '协议模板名称快照',
+    template_version VARCHAR(32) NOT NULL COMMENT '模板版本快照',
+    sign_mode VARCHAR(64) NOT NULL COMMENT '签约模式快照',
+    sign_element_spec VARCHAR(255) NOT NULL COMMENT '签约要素快照',
+    e_signature_provider VARCHAR(64) NOT NULL COMMENT '电子签章服务商快照',
+    scene_scope VARCHAR(128) NOT NULL COMMENT '适用场景快照',
+    channel_scope VARCHAR(128) NOT NULL COMMENT '适用渠道范围快照',
+    merchant_ack_required VARCHAR(32) NOT NULL COMMENT '商户确认要求快照',
+    risk_control_tag VARCHAR(128) NOT NULL COMMENT '风控标签快照',
+    protocol_body TEXT NOT NULL COMMENT '协议正文快照',
+    status VARCHAR(32) NOT NULL COMMENT '协议状态快照',
+    status_type VARCHAR(32) NOT NULL COMMENT '协议状态样式快照',
+    priority INT NOT NULL COMMENT '协议优先级快照',
+    change_type VARCHAR(32) NOT NULL COMMENT '变更类型',
+    source_version_no INT NULL COMMENT '回滚来源版本号',
+    change_reason VARCHAR(255) NOT NULL COMMENT '变更原因',
+    created_at DATETIME NOT NULL COMMENT '版本创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_protocol_version (protocol_code, version_no),
+    KEY idx_protocol_version_created (protocol_code, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付协议不可变版本快照表';
+
 CREATE TABLE t_payment_channel_return_code_map (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',

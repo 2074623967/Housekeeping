@@ -5,6 +5,9 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
@@ -157,7 +160,7 @@ public class PaymentConfigController {
      * 启停支付协议配置。
      */
     @PostMapping("/protocols/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleProtocol(@RequestBody PaymentConfigToggleRequestDTO request) {
+    public ApiResponse<PaymentConfigOverviewDTO> toggleProtocol(@RequestBody PaymentProtocolStatusRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleProtocol(request));
     }
 
@@ -176,6 +179,25 @@ public class PaymentConfigController {
     public ApiResponse<PaymentConfigOverviewDTO> updateProtocol(@PathVariable("protocolCode") String protocolCode,
                                                                 @RequestBody PaymentProtocolUpsertRequestDTO request) {
         return ApiResponse.success(paymentConfigService.updateProtocol(protocolCode, request));
+    }
+
+    /**
+     * 查询支付协议不可变版本历史。
+     */
+    @GetMapping("/protocols/{protocolCode}/versions")
+    public ApiResponse<List<PaymentProtocolVersionDTO>> listProtocolVersions(
+            @PathVariable("protocolCode") String protocolCode) {
+        return ApiResponse.success(paymentConfigService.listProtocolVersions(protocolCode));
+    }
+
+    /**
+     * 回滚到指定支付协议历史版本并追加新版本。
+     */
+    @PostMapping("/protocols/{protocolCode}/rollback")
+    public ApiResponse<PaymentConfigOverviewDTO> rollbackProtocol(
+            @PathVariable("protocolCode") String protocolCode,
+            @RequestBody PaymentProtocolRollbackRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rollbackProtocol(protocolCode, request));
     }
 
     /**

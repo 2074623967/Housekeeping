@@ -10,12 +10,14 @@ import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
+import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
@@ -200,6 +202,32 @@ public interface PaymentConfigMapper {
      * 更新支付协议配置。
      */
     int updateProtocol(PaymentProtocolConfigEntity entity);
+
+    /**
+     * 按协议编码加锁查询支付协议。
+     */
+    PaymentProtocolConfigEntity findProtocolByCodeForUpdate(@Param("protocolCode") String protocolCode);
+
+    /**
+     * 查询支付协议历史版本。
+     */
+    List<PaymentProtocolVersionDTO> findProtocolVersions(@Param("protocolCode") String protocolCode);
+
+    /**
+     * 查询支付协议指定历史版本。
+     */
+    PaymentProtocolVersionEntity findProtocolVersion(@Param("protocolCode") String protocolCode,
+                                                      @Param("versionNo") Integer versionNo);
+
+    /**
+     * 查询支付协议当前最大版本号。
+     */
+    Integer findLatestProtocolVersionNo(@Param("protocolCode") String protocolCode);
+
+    /**
+     * 新增支付协议不可变版本快照。
+     */
+    int insertProtocolVersion(PaymentProtocolVersionEntity entity);
 
     /**
      * 新增异常告警值班路由配置。

@@ -31,6 +31,11 @@ const routeRuleActionReason = ref("");
 const reviewer = ref("");
 const reviewComment = ref("");
 const editingProtocolCode = ref("");
+const protocolVersionCode = ref("");
+const protocolVersions = ref([]);
+const isProtocolVersionLoading = ref(false);
+let protocolVersionRequestId = 0;
+const protocolActionReason = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
@@ -67,7 +72,8 @@ function createProtocolForm() {
     riskControlTag: "",
     protocolBody: "",
     priority: 99,
-    enabled: true
+    enabled: true,
+    changeReason: ""
   };
 }
 
@@ -449,12 +455,32 @@ async function rollbackRouteRuleVersion(version) {
 }
 
 async function toggleProtocol(protocol) {
-  await toggleConfig(
-    protocol.protocolCode,
-    protocol.status !== "ENABLED",
-    "支付协议",
-    paymentConfigApi.toggleProtocol
-  );
+  if (!protocolActionReason.value) {
+    actionMessage.value = "支付协议启停失败：请先填写协议启停 / 回滚原因。";
+    return;
+  }
+  const enabled = protocol.status !== "ENABLED";
+  if (!window.confirm(`确认${enabled ? "启用" : "停用"}支付协议 ${protocol.protocolCode}？本次变更将生成新版本。`)) {
+    return;
+  }
+  activeConfigCode.value = protocol.protocolCode;
+  actionMessage.value = "";
+  try {
+    applyOverview(await paymentConfigApi.toggleProtocol({
+      protocolCode: protocol.protocolCode,
+      enabled,
+      changeReason: protocolActionReason.value
+    }));
+    protocolActionReason.value = "";
+    if (protocolVersionCode.value === protocol.protocolCode) {
+      await loadProtocolVersions(protocol.protocolCode);
+    }
+    actionMessage.value = `支付协议 ${protocol.protocolCode} 已${enabled ? "启用" : "停用"}并生成新版本。`;
+  } catch (error) {
+    actionMessage.value = `支付协议操作失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function toggleReturnCodeMapping(mapping) {
@@ -558,12 +584,17 @@ function startEditProtocol(protocol) {
     riskControlTag: protocol.riskControlTag,
     protocolBody: protocol.protocolBody,
     priority: protocol.priority,
-    enabled: protocol.status === "ENABLED"
+    enabled: protocol.status === "ENABLED",
+    changeReason: ""
   };
   actionMessage.value = `正在编辑协议 ${protocol.protocolCode}`;
 }
 
 async function submitProtocolForm() {
+  if (!protocolForm.value.changeReason) {
+    actionMessage.value = "支付协议保存失败：请填写变更原因。";
+    return;
+  }
   activeConfigCode.value = editingProtocolCode.value || protocolForm.value.protocolCode;
   actionMessage.value = "";
   try {
@@ -581,6 +612,67 @@ async function submitProtocolForm() {
     startCreateProtocol();
   } catch (error) {
     actionMessage.value = `支付协议保存失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadProtocolVersions(protocolCode) {
+  const requestId = ++protocolVersionRequestId;
+  protocolVersionCode.value = protocolCode;
+  protocolVersions.value = [];
+  isProtocolVersionLoading.value = true;
+  actionMessage.value = "";
+  try {
+    const versions = await paymentConfigApi.getProtocolVersions(protocolCode);
+    if (requestId === protocolVersionRequestId && protocolVersionCode.value === protocolCode) {
+      protocolVersions.value = versions;
+    }
+  } catch (error) {
+    if (requestId === protocolVersionRequestId && protocolVersionCode.value === protocolCode) {
+      actionMessage.value = `协议版本加载失败：${error.message}`;
+    }
+  } finally {
+    if (requestId === protocolVersionRequestId) {
+      isProtocolVersionLoading.value = false;
+    }
+  }
+}
+
+function closeProtocolVersions() {
+  protocolVersionRequestId += 1;
+  protocolVersionCode.value = "";
+  protocolVersions.value = [];
+  isProtocolVersionLoading.value = false;
+}
+
+async function rollbackProtocolVersion(version) {
+  const protocolCode = protocolVersionCode.value;
+  const currentVersion = protocolVersions.value[0]?.versionNo;
+  if (!protocolActionReason.value) {
+    actionMessage.value = "支付协议回滚失败：请先填写协议启停 / 回滚原因。";
+    return;
+  }
+  if (!currentVersion) {
+    actionMessage.value = "支付协议回滚失败：无法确认当前协议版本，请刷新历史后重试。";
+    return;
+  }
+  if (!window.confirm(`确认将支付协议 ${protocolCode} 回滚到 V${version.versionNo}？回滚会生成新版本。`)) {
+    return;
+  }
+  activeConfigCode.value = `${protocolCode}:rollback`;
+  actionMessage.value = "";
+  try {
+    applyOverview(await paymentConfigApi.rollbackProtocol(protocolCode, {
+      versionNo: version.versionNo,
+      baseVersionNo: currentVersion,
+      changeReason: protocolActionReason.value
+    }));
+    protocolActionReason.value = "";
+    await loadProtocolVersions(protocolCode);
+    actionMessage.value = `支付协议 ${protocolCode} 已回滚到 V${version.versionNo}，并生成新的运行版本。`;
+  } catch (error) {
+    actionMessage.value = `支付协议回滚失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -663,7 +755,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.9</span>
+        <span class="badge info">配置中心 V1.10</span>
       </div>
     </div>
 
@@ -1292,6 +1384,10 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <option :value="false">停用</option>
                 </select>
               </label>
+              <label class="wide-field">
+                变更原因
+                <input v-model.trim="protocolForm.changeReason" maxlength="255" placeholder="新增或编辑协议时必填" />
+              </label>
             </div>
 
             <div style="display: flex; gap: 12px; margin-top: 16px;">
@@ -1304,6 +1400,13 @@ function exportGovernanceSnapshot(section = "ALL") {
               </button>
               <button class="button secondary" @click="startCreateProtocol">重置表单</button>
             </div>
+          </div>
+
+          <div class="filter-grid" style="margin-bottom: 16px;">
+            <label class="wide-field">
+              协议启停 / 回滚原因
+              <input v-model.trim="protocolActionReason" maxlength="255" placeholder="启停或回滚协议前必填" />
+            </label>
           </div>
 
           <div class="table-wrap">
@@ -1366,10 +1469,69 @@ function exportGovernanceSnapshot(section = "ALL") {
                     >
                       {{ protocol.status === "ENABLED" ? "停用" : "启用" }}
                     </button>
+                    <button
+                      class="link-button"
+                      :disabled="Boolean(activeConfigCode)"
+                      @click="loadProtocolVersions(protocol.protocolCode)"
+                    >
+                      版本
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div v-if="protocolVersionCode" class="panel" style="margin-top: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ protocolVersionCode }} 版本历史</h3>
+                <p class="meta">历史快照不可修改；回滚会复验当前版本并追加新的运行版本，不代表正式审批或法律签署</p>
+              </div>
+              <button class="button secondary" @click="closeProtocolVersions">关闭</button>
+            </div>
+            <div v-if="isProtocolVersionLoading" class="state-box">协议版本加载中...</div>
+            <div v-else-if="!protocolVersions.length" class="state-box">当前暂无协议版本记录</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>版本</th>
+                    <th>变更类型</th>
+                    <th>来源版本</th>
+                    <th>模板</th>
+                    <th>适用范围</th>
+                    <th>协议正文</th>
+                    <th>状态</th>
+                    <th>变更原因</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="version in protocolVersions" :key="version.versionNo">
+                    <td>V{{ version.versionNo }}</td>
+                    <td>{{ version.changeType }}</td>
+                    <td>{{ version.sourceVersionNo ? `V${version.sourceVersionNo}` : "-" }}</td>
+                    <td>{{ version.templateCode }} / {{ version.templateVersion }}</td>
+                    <td class="flow-summary-cell">{{ version.sceneScope }} / {{ version.channelScope }}</td>
+                    <td class="flow-summary-cell">{{ version.protocolBody }}</td>
+                    <td><span :class="['badge', version.statusType]">{{ version.status }}</span></td>
+                    <td class="flow-summary-cell">{{ version.changeReason }}</td>
+                    <td>{{ version.createdAt }}</td>
+                    <td>
+                      <button
+                        class="link-button"
+                        :disabled="Boolean(activeConfigCode) || version.versionNo === protocolVersions[0]?.versionNo"
+                        @click="rollbackProtocolVersion(version)"
+                      >
+                        回滚到此版本
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

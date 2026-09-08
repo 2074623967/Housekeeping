@@ -12,8 +12,11 @@ import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
+import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
@@ -28,6 +31,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
@@ -383,16 +387,33 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleProtocol(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
+    public PaymentConfigOverviewDTO toggleProtocol(PaymentProtocolStatusRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("支付协议启停状态不能为空");
+        }
+        String protocolCode = requireText(request.getProtocolCode(), "协议编码不能为空");
+        String changeReason = requireProtocolChangeReason(request.getChangeReason());
+        PaymentProtocolConfigEntity current = paymentConfigMapper.findProtocolByCodeForUpdate(protocolCode);
+        if (current == null) {
+            throw new IllegalArgumentException("支付协议配置不存在");
+        }
+        String status = resolveStatus(request.getEnabled());
+        if (status.equals(current.getStatus())) {
+            throw new IllegalArgumentException(STATUS_ENABLED.equals(status)
+                    ? "支付协议已启用" : "支付协议已停用");
+        }
+        ensureProtocolBaseline(current);
         int affectedRows = paymentConfigMapper.updateProtocolStatus(
-                configCode,
-                resolveStatus(request.getEnabled()),
+                protocolCode,
+                status,
                 resolveStatusType(request.getEnabled())
         );
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付协议配置不存在");
         }
+        current.setStatus(status);
+        current.setStatusType(resolveStatusType(request.getEnabled()));
+        recordProtocolVersion(current, "STATUS_CHANGE", null, changeReason);
         return overview();
     }
 
@@ -400,10 +421,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public PaymentConfigOverviewDTO createProtocol(PaymentProtocolUpsertRequestDTO request) {
         PaymentProtocolConfigEntity entity = buildProtocolEntity(request, null);
+        String changeReason = requireProtocolChangeReason(request.getChangeReason());
         if (paymentConfigMapper.findProtocolByCode(entity.getProtocolCode()) != null) {
             throw new IllegalArgumentException("支付协议编码已存在");
         }
         paymentConfigMapper.insertProtocol(entity);
+        recordProtocolVersion(entity, "CREATE", null, changeReason);
         return overview();
     }
 
@@ -411,11 +434,56 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public PaymentConfigOverviewDTO updateProtocol(String protocolCode, PaymentProtocolUpsertRequestDTO request) {
         String normalizedProtocolCode = requireText(protocolCode, "协议编码不能为空");
-        if (paymentConfigMapper.findProtocolByCode(normalizedProtocolCode) == null) {
+        PaymentProtocolConfigEntity current = paymentConfigMapper.findProtocolByCodeForUpdate(normalizedProtocolCode);
+        if (current == null) {
             throw new IllegalArgumentException("支付协议配置不存在");
         }
         PaymentProtocolConfigEntity entity = buildProtocolEntity(request, normalizedProtocolCode);
+        String changeReason = requireProtocolChangeReason(request.getChangeReason());
+        ensureProtocolBaseline(current);
         paymentConfigMapper.updateProtocol(entity);
+        recordProtocolVersion(entity, "UPDATE", null, changeReason);
+        return overview();
+    }
+
+    @Override
+    public List<PaymentProtocolVersionDTO> listProtocolVersions(String protocolCode) {
+        String normalizedProtocolCode = requireText(protocolCode, "协议编码不能为空");
+        if (paymentConfigMapper.findProtocolByCode(normalizedProtocolCode) == null) {
+            throw new IllegalArgumentException("支付协议配置不存在");
+        }
+        return paymentConfigMapper.findProtocolVersions(normalizedProtocolCode);
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO rollbackProtocol(
+            String protocolCode, PaymentProtocolRollbackRequestDTO request) {
+        String normalizedProtocolCode = requireText(protocolCode, "协议编码不能为空");
+        if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
+            throw new IllegalArgumentException("回滚版本号必须大于0");
+        }
+        if (request.getBaseVersionNo() == null || request.getBaseVersionNo().intValue() <= 0) {
+            throw new IllegalArgumentException("当前协议版本号必须大于0");
+        }
+        String changeReason = requireProtocolChangeReason(request.getChangeReason());
+        PaymentProtocolConfigEntity current = paymentConfigMapper.findProtocolByCodeForUpdate(normalizedProtocolCode);
+        if (current == null) {
+            throw new IllegalArgumentException("支付协议配置不存在");
+        }
+        ensureProtocolBaseline(current);
+        Integer latestVersionNo = paymentConfigMapper.findLatestProtocolVersionNo(normalizedProtocolCode);
+        if (!sameInteger(request.getBaseVersionNo(), latestVersionNo)) {
+            throw new IllegalArgumentException("支付协议已产生新版本，请刷新后重试");
+        }
+        PaymentProtocolVersionEntity target = paymentConfigMapper.findProtocolVersion(
+                normalizedProtocolCode, request.getVersionNo());
+        if (target == null) {
+            throw new IllegalArgumentException("支付协议历史版本不存在");
+        }
+        PaymentProtocolConfigEntity restored = copyProtocolEntity(target);
+        paymentConfigMapper.updateProtocol(restored);
+        recordProtocolVersion(restored, "ROLLBACK", request.getVersionNo(), changeReason);
         return overview();
     }
 
@@ -1050,6 +1118,76 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
         return entity;
+    }
+
+    private void ensureProtocolBaseline(PaymentProtocolConfigEntity current) {
+        Integer latestVersionNo = paymentConfigMapper.findLatestProtocolVersionNo(current.getProtocolCode());
+        if (latestVersionNo == null || latestVersionNo.intValue() == 0) {
+            recordProtocolVersion(current, "BASELINE", null, "存量协议变更前基线");
+        }
+    }
+
+    private void recordProtocolVersion(PaymentProtocolConfigEntity protocol,
+                                       String changeType,
+                                       Integer sourceVersionNo,
+                                       String changeReason) {
+        Integer latestVersionNo = paymentConfigMapper.findLatestProtocolVersionNo(protocol.getProtocolCode());
+        int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo.intValue() + 1;
+        PaymentProtocolVersionEntity version = new PaymentProtocolVersionEntity();
+        version.setProtocolCode(protocol.getProtocolCode());
+        version.setVersionNo(Integer.valueOf(nextVersionNo));
+        version.setProtocolName(protocol.getProtocolName());
+        version.setProtocolType(protocol.getProtocolType());
+        version.setProtocolTypeName(protocol.getProtocolTypeName());
+        version.setTemplateCode(protocol.getTemplateCode());
+        version.setTemplateName(protocol.getTemplateName());
+        version.setTemplateVersion(protocol.getTemplateVersion());
+        version.setSignMode(protocol.getSignMode());
+        version.setSignElementSpec(protocol.getSignElementSpec());
+        version.setESignatureProvider(protocol.getESignatureProvider());
+        version.setSceneScope(protocol.getSceneScope());
+        version.setChannelScope(protocol.getChannelScope());
+        version.setMerchantAckRequired(protocol.getMerchantAckRequired());
+        version.setRiskControlTag(protocol.getRiskControlTag());
+        version.setProtocolBody(protocol.getProtocolBody());
+        version.setStatus(protocol.getStatus());
+        version.setStatusType(protocol.getStatusType());
+        version.setPriority(protocol.getPriority());
+        version.setChangeType(changeType);
+        version.setSourceVersionNo(sourceVersionNo);
+        version.setChangeReason(changeReason);
+        paymentConfigMapper.insertProtocolVersion(version);
+    }
+
+    private PaymentProtocolConfigEntity copyProtocolEntity(PaymentProtocolVersionEntity version) {
+        PaymentProtocolConfigEntity protocol = new PaymentProtocolConfigEntity();
+        protocol.setProtocolCode(version.getProtocolCode());
+        protocol.setProtocolName(version.getProtocolName());
+        protocol.setProtocolType(version.getProtocolType());
+        protocol.setProtocolTypeName(version.getProtocolTypeName());
+        protocol.setTemplateCode(version.getTemplateCode());
+        protocol.setTemplateName(version.getTemplateName());
+        protocol.setTemplateVersion(version.getTemplateVersion());
+        protocol.setSignMode(version.getSignMode());
+        protocol.setSignElementSpec(version.getSignElementSpec());
+        protocol.setESignatureProvider(version.getESignatureProvider());
+        protocol.setSceneScope(version.getSceneScope());
+        protocol.setChannelScope(version.getChannelScope());
+        protocol.setMerchantAckRequired(version.getMerchantAckRequired());
+        protocol.setRiskControlTag(version.getRiskControlTag());
+        protocol.setProtocolBody(version.getProtocolBody());
+        protocol.setStatus(version.getStatus());
+        protocol.setStatusType(version.getStatusType());
+        protocol.setPriority(version.getPriority());
+        return protocol;
+    }
+
+    private String requireProtocolChangeReason(String changeReason) {
+        String reason = requireText(changeReason, "协议变更原因不能为空");
+        if (reason.length() > 255) {
+            throw new IllegalArgumentException("协议变更原因不能超过255个字符");
+        }
+        return reason;
     }
 
     private PaymentRouteRuleConfigEntity buildRouteRuleEntity(PaymentRouteRuleUpsertRequestDTO request,

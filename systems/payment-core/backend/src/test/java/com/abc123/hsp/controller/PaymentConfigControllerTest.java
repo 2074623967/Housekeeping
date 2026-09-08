@@ -10,6 +10,9 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolStatusRequestDTO;
+import com.abc123.hsp.dto.PaymentProtocolVersionDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConflictDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
@@ -82,6 +85,23 @@ class PaymentConfigControllerTest {
 
         assertEquals(overview, controller.updateProtocol("PROTO_HOME_SIGN", request).getData());
         verify(paymentConfigService).updateProtocol("PROTO_HOME_SIGN", request);
+    }
+
+    @Test
+    void shouldListAndRollbackProtocolVersion() {
+        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
+        when(paymentConfigService.listProtocolVersions("PROTO_HOME_SIGN"))
+                .thenReturn(Collections.singletonList(new PaymentProtocolVersionDTO()));
+        when(paymentConfigService.rollbackProtocol(
+                any(String.class), any(PaymentProtocolRollbackRequestDTO.class))).thenReturn(overview);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentProtocolRollbackRequestDTO request = new PaymentProtocolRollbackRequestDTO();
+        request.setVersionNo(Integer.valueOf(1));
+
+        assertEquals(1, controller.listProtocolVersions("PROTO_HOME_SIGN").getData().size());
+        assertEquals(overview, controller.rollbackProtocol("PROTO_HOME_SIGN", request).getData());
+        verify(paymentConfigService).listProtocolVersions("PROTO_HOME_SIGN");
+        verify(paymentConfigService).rollbackProtocol("PROTO_HOME_SIGN", request);
     }
 
     @Test
@@ -169,7 +189,7 @@ class PaymentConfigControllerTest {
     void shouldToggleGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
         when(paymentConfigService.toggleChannel(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
-        when(paymentConfigService.toggleProtocol(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
+        when(paymentConfigService.toggleProtocol(any(PaymentProtocolStatusRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleReturnCodeMapping(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleGateway(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleControlPolicy(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
@@ -180,16 +200,19 @@ class PaymentConfigControllerTest {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
+        PaymentProtocolStatusRequestDTO protocolRequest = new PaymentProtocolStatusRequestDTO();
+        protocolRequest.setProtocolCode("PROTO_HOME_SIGN");
+        protocolRequest.setEnabled(Boolean.TRUE);
 
         assertEquals(overview, controller.toggleChannel(request).getData());
-        assertEquals(overview, controller.toggleProtocol(request).getData());
+        assertEquals(overview, controller.toggleProtocol(protocolRequest).getData());
         assertEquals(overview, controller.toggleReturnCodeMapping(request).getData());
         assertEquals(overview, controller.toggleGateway(request).getData());
         assertEquals(overview, controller.toggleControlPolicy(request).getData());
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
         verify(paymentConfigService).toggleChannel(request);
-        verify(paymentConfigService).toggleProtocol(request);
+        verify(paymentConfigService).toggleProtocol(protocolRequest);
         verify(paymentConfigService).toggleReturnCodeMapping(request);
         verify(paymentConfigService).toggleGateway(request);
         verify(paymentConfigService).toggleControlPolicy(request);

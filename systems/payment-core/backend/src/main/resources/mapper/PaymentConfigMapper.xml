@@ -262,6 +262,95 @@
         LIMIT 1
     </select>
 
+    <select id="findProtocolByCodeForUpdate" resultType="com.abc123.hsp.entity.PaymentProtocolConfigEntity">
+        SELECT protocol_code AS protocolCode,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
+               template_code AS templateCode,
+               template_name AS templateName,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               sign_element_spec AS signElementSpec,
+               e_signature_provider AS eSignatureProvider,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
+               status,
+               status_type AS statusType,
+               priority
+        FROM t_payment_protocol_config
+        WHERE protocol_code = #{protocolCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findProtocolVersions" resultType="com.abc123.hsp.dto.PaymentProtocolVersionDTO">
+        SELECT protocol_code AS protocolCode,
+               version_no AS versionNo,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
+               template_code AS templateCode,
+               template_name AS templateName,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               sign_element_spec AS signElementSpec,
+               e_signature_provider AS eSignatureProvider,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
+               status,
+               status_type AS statusType,
+               priority,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_protocol_version
+        WHERE protocol_code = #{protocolCode}
+        ORDER BY version_no DESC
+    </select>
+
+    <select id="findProtocolVersion" resultType="com.abc123.hsp.entity.PaymentProtocolVersionEntity">
+        SELECT protocol_code AS protocolCode,
+               version_no AS versionNo,
+               protocol_name AS protocolName,
+               protocol_type AS protocolType,
+               protocol_type_name AS protocolTypeName,
+               template_code AS templateCode,
+               template_name AS templateName,
+               template_version AS templateVersion,
+               sign_mode AS signMode,
+               sign_element_spec AS signElementSpec,
+               e_signature_provider AS eSignatureProvider,
+               scene_scope AS sceneScope,
+               channel_scope AS channelScope,
+               merchant_ack_required AS merchantAckRequired,
+               risk_control_tag AS riskControlTag,
+               protocol_body AS protocolBody,
+               status,
+               status_type AS statusType,
+               priority,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason
+        FROM t_payment_protocol_version
+        WHERE protocol_code = #{protocolCode}
+          AND version_no = #{versionNo}
+        LIMIT 1
+    </select>
+
+    <select id="findLatestProtocolVersionNo" resultType="int">
+        SELECT MAX(version_no)
+        FROM t_payment_protocol_version
+        WHERE protocol_code = #{protocolCode}
+    </select>
+
     <select id="findReturnCodeMappings" resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
         SELECT channel_code AS channelCode,
                channel_return_code AS channelReturnCode,
@@ -700,6 +789,58 @@
             updated_at = NOW()
         WHERE protocol_code = #{protocolCode}
     </update>
+
+    <insert id="insertProtocolVersion" parameterType="com.abc123.hsp.entity.PaymentProtocolVersionEntity">
+        INSERT INTO t_payment_protocol_version (
+            protocol_code,
+            version_no,
+            protocol_name,
+            protocol_type,
+            protocol_type_name,
+            template_code,
+            template_name,
+            template_version,
+            sign_mode,
+            sign_element_spec,
+            e_signature_provider,
+            scene_scope,
+            channel_scope,
+            merchant_ack_required,
+            risk_control_tag,
+            protocol_body,
+            status,
+            status_type,
+            priority,
+            change_type,
+            source_version_no,
+            change_reason,
+            created_at
+        ) VALUES (
+            #{protocolCode},
+            #{versionNo},
+            #{protocolName},
+            #{protocolType},
+            #{protocolTypeName},
+            #{templateCode},
+            #{templateName},
+            #{templateVersion},
+            #{signMode},
+            #{signElementSpec},
+            #{eSignatureProvider},
+            #{sceneScope},
+            #{channelScope},
+            #{merchantAckRequired},
+            #{riskControlTag},
+            #{protocolBody},
+            #{status},
+            #{statusType},
+            #{priority},
+            #{changeType},
+            #{sourceVersionNo},
+            #{changeReason},
+            NOW()
+        )
+    </insert>
 
     <insert id="insertIssueDutyRoster" parameterType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
         INSERT INTO t_payment_issue_duty_roster (
