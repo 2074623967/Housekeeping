@@ -217,8 +217,12 @@
 
 1. 当前按支付路由记录聚合支付单、订单、预付单和最近一次支付请求上下文。
 2. 前端可直接用本接口查看路由规则、命中渠道、路由结果以及请求/响应报文，无需再跳多页拼装。
-3. 新增 `GET /api/payment-routes/overview`，复用同一组筛选条件返回路由记录总数、成功命中数、需关注命中数、命中渠道数、线下路由数、微信路由数、支付宝路由数和最近路由时间，便于运营先看风险面再下钻。
-4. 当前仍是 V1 版本，后续可继续补权重、熔断、命中解释和渠道健康度信息。
+3. `GET /api/payment-routes/overview` 复用同一组筛选条件返回路由记录总数、成功命中数、需关注命中数、命中渠道数、线下路由数、微信路由数、支付宝路由数和最近路由时间，便于运营先看风险面再下钻。
+4. 总览同时返回 `routeHealthEnabled`、`routeHealthLookbackHours`、`routeHealthFailureCountThreshold`、`routeHealthFailureRateThresholdPercent`、`routeHealthMinimumSampleCount`，管理端据此展示当前实际生效的路由健康熔断口径。
+5. 开启路由健康熔断后，服务按渠道聚合窗口内 `已查单 / 查单失败` 事实；失败笔数达到阈值，或样本数达到最低要求且失败率达到阈值时，将该渠道判定为短窗不健康。
+6. 规则目标渠道不健康时，命中可用 fallback 并以 `_HEALTH_FALLBACK` 规则后缀和“短窗健康熔断”结果说明留痕；显式指定不健康渠道时返回 `PAYMENT-1010`，不会静默改用其他支付方式；支付方式默认路由会跳过不健康候选。
+7. 配置 `HSP_PAYMENT_CHANNEL_ROUTE_HEALTH_ENABLED` 默认值为 `false`；统计窗口及失败阈值复用 `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_*` 配置。启用前需确认 fallback 覆盖并按真实渠道容量校准阈值。
+8. 当前 V1.1 健康信号来自可审计的主动查单事实，不等同于网关主动探活；后续仍需补权重、更复杂规则表达式和真实渠道探活联动。
 
 ## 5. 支付请求管理查询
 
