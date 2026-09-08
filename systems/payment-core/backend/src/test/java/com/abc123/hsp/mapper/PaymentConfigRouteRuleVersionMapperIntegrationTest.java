@@ -102,6 +102,7 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             review.setRequestNo("RRV-001");
             review.setRuleCode("RULE_HOME_APP");
             review.setBaseVersionNo(Integer.valueOf(1));
+            review.setSourceVersionNo(Integer.valueOf(1));
             review.setOperationType("UPDATE");
             review.setRuleName("家政 App 小额路由");
             review.setMatchScene("HOME_CLEAN/APP");
@@ -124,6 +125,7 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             assertThrows(PersistenceException.class, () -> mapper.insertRouteRuleReview(duplicatePending));
             PaymentRouteRuleReviewEntity storedReview = mapper.findRouteRuleReviewForUpdate("RRV-001");
             assertNotNull(storedReview);
+            assertEquals(Integer.valueOf(1), storedReview.getSourceVersionNo());
             assertEquals(Integer.valueOf(30), storedReview.getRolloutPercentage());
             assertEquals("home-app-v2", storedReview.getRolloutSalt());
             assertEquals(1, mapper.completeRouteRuleReview(
@@ -139,6 +141,7 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     .orElseThrow(AssertionError::new);
             assertEquals("APPROVED", completed.getReviewStatus());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
+            assertEquals(Integer.valueOf(1), completed.getSourceVersionNo());
             assertEquals(Integer.valueOf(30), completed.getRolloutPercentage());
             assertEquals("home-app-v2", completed.getRolloutSalt());
             session.commit();
@@ -215,7 +218,7 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_route_rule_review ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, "
                     + "rule_code VARCHAR(64), pending_rule_code VARCHAR(64) UNIQUE, "
-                    + "base_version_no INT, operation_type VARCHAR(32), "
+                    + "base_version_no INT, source_version_no INT, operation_type VARCHAR(32), "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
                     + "rollout_percentage INT, rollout_salt VARCHAR(64), "

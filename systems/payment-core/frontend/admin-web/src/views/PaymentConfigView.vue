@@ -26,6 +26,8 @@ const hasCheckedRouteRuleConflicts = ref(false);
 const routeRuleReviews = ref([]);
 const isReviewLoading = ref(false);
 const reviewErrorMessage = ref("");
+const routeRuleActionRequester = ref("");
+const routeRuleActionReason = ref("");
 const reviewer = ref("");
 const reviewComment = ref("");
 const editingProtocolCode = ref("");
@@ -176,12 +178,31 @@ async function toggleChannel(channel) {
 }
 
 async function toggleRouteRule(rule) {
-  await toggleConfig(
-    rule.ruleCode,
-    rule.status !== "ENABLED",
-    "路由规则",
-    paymentConfigApi.toggleRouteRule
-  );
+  if (!routeRuleActionRequester.value || !routeRuleActionReason.value) {
+    actionMessage.value = "提交启停复核失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = rule.status !== "ENABLED";
+  const actionLabel = enabled ? "启用" : "停用";
+  if (!window.confirm(`确认提交路由规则 ${rule.ruleCode} 的${actionLabel}复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = rule.ruleCode;
+  actionMessage.value = "";
+  try {
+    routeRuleReviews.value = await paymentConfigApi.submitRouteRuleStatusReview({
+      ruleCode: rule.ruleCode,
+      enabled,
+      requester: routeRuleActionRequester.value,
+      changeReason: routeRuleActionReason.value
+    });
+    routeRuleActionReason.value = "";
+    actionMessage.value = `路由规则 ${rule.ruleCode} 的${actionLabel}申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `路由规则${actionLabel}申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 function startCreateRouteRule() {
@@ -297,7 +318,13 @@ async function loadRouteRuleReviews() {
 }
 
 function formatRouteRuleOperation(operationType) {
-  return operationType === "CREATE" ? "新增" : "修改";
+  const labels = {
+    CREATE: "新增",
+    UPDATE: "修改",
+    STATUS_CHANGE: "启停",
+    ROLLBACK: "回滚"
+  };
+  return labels[operationType] || operationType;
 }
 
 async function handleRouteRuleReview(review, approved) {
@@ -330,6 +357,9 @@ async function handleRouteRuleReview(review, approved) {
       : await paymentConfigApi.rejectRouteRuleReview(review.requestNo, payload);
     if (approved) {
       await loadOverview();
+      if (versionRuleCode.value) {
+        await loadRouteRuleVersions(versionRuleCode.value);
+      }
     }
     reviewComment.value = "";
     actionMessage.value = approved
@@ -391,8 +421,12 @@ function closeRouteRuleVersions() {
 
 async function rollbackRouteRuleVersion(version) {
   const ruleCode = versionRuleCode.value;
+  if (!routeRuleActionRequester.value || !routeRuleActionReason.value) {
+    actionMessage.value = "提交回滚复核失败：请先填写申请人声明和申请原因。";
+    return;
+  }
   const confirmed = window.confirm(
-    `确认将路由规则 ${ruleCode} 恢复为版本 V${version.versionNo}？回滚会生成一个新版本。`
+    `确认提交路由规则 ${ruleCode} 回滚到 V${version.versionNo} 的复核申请？运行态暂不改变。`
   );
   if (!confirmed) {
     return;
@@ -400,15 +434,13 @@ async function rollbackRouteRuleVersion(version) {
   activeConfigCode.value = `${ruleCode}:rollback`;
   actionMessage.value = "";
   try {
-    const overview = await paymentConfigApi.rollbackRouteRule(ruleCode, {
+    routeRuleReviews.value = await paymentConfigApi.submitRouteRuleRollbackReview(ruleCode, {
       versionNo: version.versionNo,
-      changeReason: `管理端回滚至 V${version.versionNo}`
+      requester: routeRuleActionRequester.value,
+      changeReason: routeRuleActionReason.value
     });
-    applyOverview(overview);
-    if (versionRuleCode.value === ruleCode) {
-      await loadRouteRuleVersions(ruleCode);
-    }
-    actionMessage.value = `路由规则 ${ruleCode} 已恢复为 V${version.versionNo}，并生成新版本。`;
+    routeRuleActionReason.value = "";
+    actionMessage.value = `路由规则 ${ruleCode} 回滚到 V${version.versionNo} 的申请已提交，运行态尚未改变。`;
   } catch (error) {
     actionMessage.value = `路由规则回滚失败：${error.message}`;
   } finally {
@@ -631,7 +663,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.8</span>
+        <span class="badge info">配置中心 V1.9</span>
       </div>
     </div>
 
@@ -945,7 +977,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                       :disabled="activeConfigCode === rule.ruleCode"
                       @click="toggleRouteRule(rule)"
                     >
-                      {{ rule.status === "ENABLED" ? "停用" : "启用" }}
+                      {{ rule.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
                   </td>
                 </tr>
@@ -1008,9 +1040,17 @@ function exportGovernanceSnapshot(section = "ALL") {
               </button>
             </div>
             <div class="notice-banner">
-              当前仅新增和修改进入复核路径；启停、版本回滚仍为直接操作。REVIEW_RELEASE 仅表示代码内版本类型，不代表生产正式放行。
+              新增、修改、启停和版本回滚均先生成候选申请，异人复核通过后才修改运行态。代码内复核通过不代表生产正式放行。
             </div>
             <div class="filter-grid" style="margin-bottom: 16px;">
+              <label>
+                操作申请人声明
+                <input v-model.trim="routeRuleActionRequester" maxlength="64" placeholder="启停或回滚前必填" />
+              </label>
+              <label class="wide-field">
+                操作申请原因
+                <input v-model.trim="routeRuleActionReason" maxlength="255" placeholder="启停或回滚前必填" />
+              </label>
               <label>
                 复核人声明
                 <input v-model.trim="reviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
@@ -1045,7 +1085,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                       {{ review.ruleCode }} / {{ review.ruleName }}
                       <div class="muted-text">{{ formatRouteRuleOperation(review.operationType) }}</div>
                     </td>
-                    <td>{{ review.baseVersionNo ? `V${review.baseVersionNo}` : "新规则" }}</td>
+                    <td>
+                      {{ review.baseVersionNo ? `V${review.baseVersionNo}` : "新规则" }}
+                      <div v-if="review.sourceVersionNo" class="muted-text">
+                        回滚目标 V{{ review.sourceVersionNo }}
+                      </div>
+                    </td>
                     <td class="flow-summary-cell">
                       {{ review.matchExpression }}
                       <div class="muted-text">
@@ -1094,7 +1139,7 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="section-title">
               <div>
                 <h3>{{ versionRuleCode }} 版本历史</h3>
-                <p class="meta">历史快照不可修改；回滚会恢复配置并生成新的版本记录</p>
+                <p class="meta">历史快照不可修改；回滚先提交候选，复核通过后恢复配置并生成新版本</p>
               </div>
               <button class="button secondary" @click="closeRouteRuleVersions">关闭</button>
             </div>
@@ -1137,7 +1182,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                         :disabled="Boolean(activeConfigCode)"
                         @click="rollbackRouteRuleVersion(version)"
                       >
-                        回滚到此版本
+                        申请回滚到此版本
                       </button>
                     </td>
                   </tr>

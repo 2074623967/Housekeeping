@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
@@ -37,9 +38,10 @@ public interface PaymentConfigService {
     PaymentConfigOverviewDTO toggleChannel(PaymentConfigToggleRequestDTO request);
 
     /**
-     * 启停路由规则。
+     * 提交路由规则启停候选进入复核，不直接改变运行态。
      */
-    PaymentConfigOverviewDTO toggleRouteRule(PaymentConfigToggleRequestDTO request);
+    List<PaymentRouteRuleReviewDTO> submitRouteRuleStatusReview(
+            PaymentRouteRuleStatusReviewRequestDTO request);
 
     /**
      * 新增支付路由规则。
@@ -89,9 +91,10 @@ public interface PaymentConfigService {
     List<PaymentRouteRuleVersionDTO> listRouteRuleVersions(String ruleCode);
 
     /**
-     * 将路由规则恢复为指定历史版本，并生成新的回滚版本。
+     * 提交指定历史版本的回滚候选进入复核，不直接改变运行态。
      */
-    PaymentConfigOverviewDTO rollbackRouteRule(String ruleCode, PaymentRouteRuleRollbackRequestDTO request);
+    List<PaymentRouteRuleReviewDTO> submitRouteRuleRollbackReview(
+            String ruleCode, PaymentRouteRuleRollbackRequestDTO request);
 
     /**
      * 启停支付协议配置。

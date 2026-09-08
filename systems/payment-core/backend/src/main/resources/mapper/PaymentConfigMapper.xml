@@ -137,6 +137,7 @@
         SELECT request_no AS requestNo,
                rule_code AS ruleCode,
                base_version_no AS baseVersionNo,
+               source_version_no AS sourceVersionNo,
                operation_type AS operationType,
                rule_name AS ruleName,
                match_scene AS matchScene,
@@ -168,6 +169,7 @@
         SELECT request_no AS requestNo,
                rule_code AS ruleCode,
                base_version_no AS baseVersionNo,
+               source_version_no AS sourceVersionNo,
                operation_type AS operationType,
                rule_name AS ruleName,
                match_scene AS matchScene,
@@ -477,14 +479,6 @@
         WHERE channel_code = #{channelCode}
     </update>
 
-    <update id="updateRouteRuleStatus">
-        UPDATE t_payment_route_rule_config
-        SET status = #{status},
-            status_type = #{statusType},
-            updated_at = NOW()
-        WHERE rule_code = #{ruleCode}
-    </update>
-
     <insert id="insertRouteRule" parameterType="com.abc123.hsp.entity.PaymentRouteRuleConfigEntity">
         INSERT INTO t_payment_route_rule_config (
             rule_code,
@@ -575,6 +569,7 @@
             rule_code,
             pending_rule_code,
             base_version_no,
+            source_version_no,
             operation_type,
             rule_name,
             match_scene,
@@ -597,6 +592,7 @@
             #{ruleCode},
             #{ruleCode},
             #{baseVersionNo},
+            #{sourceVersionNo},
             #{operationType},
             #{ruleName},
             #{matchScene},

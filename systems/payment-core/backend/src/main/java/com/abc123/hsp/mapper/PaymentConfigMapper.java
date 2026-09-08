@@ -156,13 +156,6 @@ public interface PaymentConfigMapper {
                             @Param("statusType") String statusType);
 
     /**
-     * 更新路由规则启停状态。
-     */
-    int updateRouteRuleStatus(@Param("ruleCode") String ruleCode,
-                              @Param("status") String status,
-                              @Param("statusType") String statusType);
-
-    /**
      * 新增支付路由规则。
      */
     int insertRouteRule(PaymentRouteRuleConfigEntity entity);

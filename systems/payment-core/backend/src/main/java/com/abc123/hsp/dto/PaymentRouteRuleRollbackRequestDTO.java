@@ -12,4 +12,6 @@ public class PaymentRouteRuleRollbackRequestDTO {
     private Integer versionNo;
     /** 本次回滚原因。 */
     private String changeReason;
+    /** 申请人声明；当前未接入可信身份源。 */
+    private String requester;
 }

@@ -21,6 +21,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
@@ -63,7 +64,6 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP")).thenReturn(null);
         when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP"))
                 .thenReturn(null, Integer.valueOf(1), Integer.valueOf(1));
-        mockOverviewDependencies();
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
 
         service.createRouteRule(request);
@@ -444,6 +444,8 @@ class PaymentConfigServiceImplTest {
         request.setCandidate(buildRouteRuleRequest());
         request.getCandidate().setChangeReason("并发提交检查");
         request.setRequester("maker-a");
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP"))
+                .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
@@ -543,7 +545,7 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldListAndRollbackRouteRuleVersion() {
+    void shouldListAndSubmitRouteRuleRollbackReviewWithoutRuntimeMutation() {
         PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
         PaymentRouteRuleVersionEntity target = buildRouteRuleVersionEntity(1, "terminal=H5");
         PaymentRouteRuleVersionDTO history = new PaymentRouteRuleVersionDTO();
@@ -560,7 +562,6 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
-        mockOverviewDependencies();
         PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
 
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1),
@@ -568,19 +569,22 @@ class PaymentConfigServiceImplTest {
         PaymentRouteRuleRollbackRequestDTO request = new PaymentRouteRuleRollbackRequestDTO();
         request.setVersionNo(Integer.valueOf(1));
         request.setChangeReason("恢复 H5 专用规则");
-        service.rollbackRouteRule("RULE_HOME_APP", request);
+        request.setRequester("maker-a");
+        when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
+        when(paymentConfigMapper.findRouteRuleReviews())
+                .thenReturn(Collections.<PaymentRouteRuleReviewDTO>emptyList());
+        service.submitRouteRuleRollbackReview("RULE_HOME_APP", request);
 
-        verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
-                entity -> "terminal=H5".equals(entity.getMatchExpression())
-                        && Integer.valueOf(30).equals(entity.getRolloutPercentage())
-                        && "home-app-v1".equals(entity.getRolloutSalt())));
-        verify(paymentConfigMapper).insertRouteRuleVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(4).equals(version.getVersionNo())
-                        && "ROLLBACK".equals(version.getChangeType())
-                        && Integer.valueOf(1).equals(version.getSourceVersionNo())
-                        && Integer.valueOf(30).equals(version.getRolloutPercentage())
-                        && "home-app-v1".equals(version.getRolloutSalt())
-                        && "恢复 H5 专用规则".equals(version.getChangeReason())));
+        verify(paymentConfigMapper).insertRouteRuleReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "ROLLBACK".equals(review.getOperationType())
+                        && Integer.valueOf(3).equals(review.getBaseVersionNo())
+                        && Integer.valueOf(1).equals(review.getSourceVersionNo())
+                        && "terminal=H5".equals(review.getMatchExpression())
+                        && "恢复 H5 专用规则".equals(review.getRequestReason())));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleVersion(org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
     }
 
     @Test
@@ -619,11 +623,13 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP")).thenReturn(Integer.valueOf(2));
         PaymentRouteRuleRollbackRequestDTO request = new PaymentRouteRuleRollbackRequestDTO();
         request.setVersionNo(Integer.valueOf(99));
+        request.setRequester("maker-a");
+        request.setChangeReason("恢复历史版本");
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper)
-                        .rollbackRouteRule("RULE_HOME_APP", request));
+                        .submitRouteRuleRollbackReview("RULE_HOME_APP", request));
 
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
@@ -641,11 +647,13 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findRouteRuleVersion("RULE_HOME_APP", Integer.valueOf(1))).thenReturn(target);
         PaymentRouteRuleRollbackRequestDTO request = new PaymentRouteRuleRollbackRequestDTO();
         request.setVersionNo(Integer.valueOf(1));
+        request.setRequester("maker-a");
+        request.setChangeReason("恢复历史版本");
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper)
-                        .rollbackRouteRule("RULE_HOME_APP", request));
+                        .submitRouteRuleRollbackReview("RULE_HOME_APP", request));
 
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
@@ -654,23 +662,140 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldVersionRouteRuleStatusChange() {
+    void shouldSubmitRouteRuleStatusReviewWithoutRuntimeMutation() {
         PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP")).thenReturn(current);
         when(paymentConfigMapper.findLatestRouteRuleVersionNo("RULE_HOME_APP"))
                 .thenReturn(Integer.valueOf(2), Integer.valueOf(2));
-        when(paymentConfigMapper.updateRouteRuleStatus("RULE_HOME_APP", "DISABLED", "danger")).thenReturn(1);
-        mockOverviewDependencies();
-        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("RULE_HOME_APP");
+        when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
+        when(paymentConfigMapper.findRouteRuleReviews())
+                .thenReturn(Collections.<PaymentRouteRuleReviewDTO>emptyList());
+        PaymentRouteRuleStatusReviewRequestDTO request = new PaymentRouteRuleStatusReviewRequestDTO();
+        request.setRuleCode("RULE_HOME_APP");
         request.setEnabled(false);
+        request.setRequester("maker-a");
+        request.setChangeReason("停用异常路由");
 
-        new PaymentConfigServiceImpl(paymentConfigMapper).toggleRouteRule(request);
+        new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleStatusReview(request);
 
+        verify(paymentConfigMapper).insertRouteRuleReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "STATUS_CHANGE".equals(review.getOperationType())
+                        && Integer.valueOf(2).equals(review.getBaseVersionNo())
+                        && review.getSourceVersionNo() == null
+                        && "DISABLED".equals(review.getStatus())
+                        && "停用异常路由".equals(review.getRequestReason())));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleVersion(org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
+    }
+
+    @Test
+    void shouldPublishStatusChangeOnlyAfterReviewApproval() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        review.setOperationType("STATUS_CHANGE");
+        review.setStatus("DISABLED");
+        review.setStatusType("danger");
+        review.setRequestReason("停用异常路由");
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("确认停用");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
+                .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+        when(paymentConfigMapper.completeRouteRuleReview(
+                review.getRequestNo(), "APPROVED", "success", "reviewer-b", "确认停用"))
+                .thenReturn(1);
+        when(paymentConfigMapper.findRouteRuleReviews())
+                .thenReturn(Collections.<PaymentRouteRuleReviewDTO>emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveRouteRuleReview(review.getRequestNo(), action);
+
+        verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
+                entity -> "DISABLED".equals(entity.getStatus()) && "danger".equals(entity.getStatusType())));
         verify(paymentConfigMapper).insertRouteRuleVersion(org.mockito.ArgumentMatchers.argThat(
-                version -> Integer.valueOf(3).equals(version.getVersionNo())
-                        && "STATUS_CHANGE".equals(version.getChangeType())
-                        && "DISABLED".equals(version.getStatus())));
+                version -> "REVIEW_STATUS_CHANGE".equals(version.getChangeType())
+                        && Integer.valueOf(4).equals(version.getVersionNo())
+                        && "停用异常路由".equals(version.getChangeReason())));
+    }
+
+    @Test
+    void shouldPublishRollbackSourceVersionOnlyAfterReviewApproval() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        review.setOperationType("ROLLBACK");
+        review.setSourceVersionNo(Integer.valueOf(1));
+        review.setMatchExpression("terminal=H5");
+        review.setRequestReason("恢复 H5 专用规则");
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("确认回滚");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
+                .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+        when(paymentConfigMapper.completeRouteRuleReview(
+                review.getRequestNo(), "APPROVED", "success", "reviewer-b", "确认回滚"))
+                .thenReturn(1);
+        when(paymentConfigMapper.findRouteRuleReviews())
+                .thenReturn(Collections.<PaymentRouteRuleReviewDTO>emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveRouteRuleReview(review.getRequestNo(), action);
+
+        verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
+                entity -> "terminal=H5".equals(entity.getMatchExpression())));
+        verify(paymentConfigMapper).insertRouteRuleVersion(org.mockito.ArgumentMatchers.argThat(
+                version -> "REVIEW_ROLLBACK".equals(version.getChangeType())
+                        && Integer.valueOf(1).equals(version.getSourceVersionNo())
+                        && Integer.valueOf(4).equals(version.getVersionNo())
+                        && "恢复 H5 专用规则".equals(version.getChangeReason())));
+    }
+
+    @Test
+    void shouldRejectRollbackReviewWithoutSourceVersion() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        review.setOperationType("ROLLBACK");
+        review.setSourceVersionNo(null);
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("确认回滚");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleVersion(org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
+    }
+
+    @Test
+    void shouldRejectNoopRouteRuleStatusReview() {
+        PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
+        PaymentRouteRuleStatusReviewRequestDTO request = new PaymentRouteRuleStatusReviewRequestDTO();
+        request.setRuleCode("RULE_HOME_APP");
+        request.setEnabled(Boolean.TRUE);
+        request.setRequester("maker-a");
+        request.setChangeReason("重复启用");
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate("RULE_HOME_APP")).thenReturn(current);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleStatusReview(request));
+
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleReview(org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class));
     }
 
     @Test
@@ -936,12 +1061,14 @@ class PaymentConfigServiceImplTest {
 
     @Test
     void shouldRejectMissingRouteRule() {
-        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("RULE_NONE");
+        PaymentRouteRuleStatusReviewRequestDTO request = new PaymentRouteRuleStatusReviewRequestDTO();
+        request.setRuleCode("RULE_NONE");
         request.setEnabled(true);
+        request.setRequester("maker-a");
+        request.setChangeReason("启用规则");
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new PaymentConfigServiceImpl(paymentConfigMapper).toggleRouteRule(request)
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleStatusReview(request)
         );
     }
 

@@ -21,6 +21,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteContextDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
@@ -109,28 +110,30 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleRouteRule(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
-        PaymentRouteRuleConfigEntity current = paymentConfigMapper.findRouteRuleByCodeForUpdate(configCode);
+    public List<PaymentRouteRuleReviewDTO> submitRouteRuleStatusReview(
+            PaymentRouteRuleStatusReviewRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("路由规则启停状态不能为空");
+        }
+        String ruleCode = requireText(request.getRuleCode(), "路由规则编码不能为空");
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        PaymentRouteRuleConfigEntity current = paymentConfigMapper.findRouteRuleByCodeForUpdate(ruleCode);
         if (current == null) {
             throw new IllegalArgumentException("支付路由规则不存在");
         }
-        ensureRouteRuleBaseline(current);
-        String status = resolveStatus(request.getEnabled());
-        String statusType = resolveStatusType(request.getEnabled());
-        int affectedRows = paymentConfigMapper.updateRouteRuleStatus(
-                configCode,
-                status,
-                statusType
-        );
-        if (affectedRows == 0) {
-            throw new IllegalArgumentException("支付路由规则不存在");
+        String candidateStatus = resolveStatus(request.getEnabled());
+        if (candidateStatus.equals(current.getStatus())) {
+            throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
+                    ? "支付路由规则已启用" : "支付路由规则已停用");
         }
-        current.setStatus(status);
-        current.setStatusType(statusType);
-        recordRouteRuleVersion(current, "STATUS_CHANGE", null,
-                STATUS_ENABLED.equals(status) ? "启用路由规则" : "停用路由规则");
-        return overview();
+        ensureRouteRuleBaseline(current);
+        PaymentRouteRuleConfigEntity candidate = request.getEnabled().booleanValue()
+                ? buildRouteRuleEntity(toUpsertRequest(current), ruleCode)
+                : copyRouteRuleEntity(current);
+        candidate.setStatus(candidateStatus);
+        candidate.setStatusType(resolveStatusType(request.getEnabled()));
+        return submitExistingRouteRuleReview(candidate, requester, reason, "STATUS_CHANGE", null);
     }
 
     @Override
@@ -254,7 +257,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             operationType = "UPDATE";
         }
         PaymentRouteRuleReviewEntity review = buildRouteRuleReview(
-                candidateEntity, requester, reason, operationType, baseVersionNo);
+                candidateEntity, requester, reason, operationType, baseVersionNo, null);
         try {
             paymentConfigMapper.insertRouteRuleReview(review);
         } catch (DuplicateKeyException exception) {
@@ -271,9 +274,23 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewer = requireDistinctReviewer(review, request);
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "复核意见不能为空");
-        PaymentRouteRuleConfigEntity candidate = buildRouteRuleEntity(toUpsertRequest(review), review.getRuleCode());
+        boolean createOperation = "CREATE".equals(review.getOperationType());
+        if (!createOperation
+                && !"UPDATE".equals(review.getOperationType())
+                && !"STATUS_CHANGE".equals(review.getOperationType())
+                && !"ROLLBACK".equals(review.getOperationType())) {
+            throw new IllegalArgumentException("路由规则复核操作类型不支持");
+        }
+        if ("ROLLBACK".equals(review.getOperationType())
+                && (review.getSourceVersionNo() == null || review.getSourceVersionNo().intValue() <= 0)) {
+            throw new IllegalArgumentException("路由规则回滚候选缺少目标历史版本");
+        }
+        PaymentRouteRuleConfigEntity candidate = "STATUS_CHANGE".equals(review.getOperationType())
+                && STATUS_DISABLED.equals(review.getStatus())
+                ? copyRouteRuleEntity(review)
+                : buildRouteRuleEntity(toUpsertRequest(review), review.getRuleCode());
         PaymentRouteRuleConfigEntity current = paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode());
-        if ("CREATE".equals(review.getOperationType())) {
+        if (createOperation) {
             if (current != null) {
                 throw new IllegalArgumentException("规则已存在，复核申请基线已失效");
             }
@@ -292,7 +309,15 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } else {
             paymentConfigMapper.updateRouteRule(candidate);
         }
-        recordRouteRuleVersion(candidate, "REVIEW_RELEASE", null, review.getRequestReason());
+        String versionChangeType = "REVIEW_RELEASE";
+        Integer sourceVersionNo = null;
+        if ("STATUS_CHANGE".equals(review.getOperationType())) {
+            versionChangeType = "REVIEW_STATUS_CHANGE";
+        } else if ("ROLLBACK".equals(review.getOperationType())) {
+            versionChangeType = "REVIEW_ROLLBACK";
+            sourceVersionNo = review.getSourceVersionNo();
+        }
+        recordRouteRuleVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeRouteRuleReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
         return paymentConfigMapper.findRouteRuleReviews();
     }
@@ -320,12 +345,14 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO rollbackRouteRule(String ruleCode,
-                                                      PaymentRouteRuleRollbackRequestDTO request) {
+    public List<PaymentRouteRuleReviewDTO> submitRouteRuleRollbackReview(
+            String ruleCode, PaymentRouteRuleRollbackRequestDTO request) {
         String normalizedRuleCode = requireText(ruleCode, "路由规则编码不能为空");
         if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
             throw new IllegalArgumentException("回滚版本号必须大于0");
         }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
         PaymentRouteRuleConfigEntity current = paymentConfigMapper.findRouteRuleByCodeForUpdate(normalizedRuleCode);
         if (current == null) {
             throw new IllegalArgumentException("支付路由规则不存在");
@@ -349,16 +376,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         rollbackRequest.setRolloutSalt(target.getRolloutSalt());
         rollbackRequest.setPriority(target.getPriority());
         rollbackRequest.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(target.getStatus())));
-        PaymentRouteRuleConfigEntity restored = buildRouteRuleEntity(rollbackRequest, normalizedRuleCode);
-        String changeReason = resolveChangeReason(request.getChangeReason(), "回滚路由规则");
-        paymentConfigMapper.updateRouteRule(restored);
-        recordRouteRuleVersion(
-                restored,
-                "ROLLBACK",
-                request.getVersionNo(),
-                changeReason
-        );
-        return overview();
+        PaymentRouteRuleConfigEntity candidate = buildRouteRuleEntity(rollbackRequest, normalizedRuleCode);
+        return submitExistingRouteRuleReview(
+                candidate, requester, reason, "ROLLBACK", request.getVersionNo());
     }
 
     @Override
@@ -1124,11 +1144,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                                                String requester,
                                                                String reason,
                                                                String operationType,
-                                                               Integer baseVersionNo) {
+                                                               Integer baseVersionNo,
+                                                               Integer sourceVersionNo) {
         PaymentRouteRuleReviewEntity review = new PaymentRouteRuleReviewEntity();
         review.setRequestNo("RRV" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT));
         review.setRuleCode(candidate.getRuleCode());
         review.setBaseVersionNo(baseVersionNo);
+        review.setSourceVersionNo(sourceVersionNo);
         review.setOperationType(operationType);
         review.setRuleName(candidate.getRuleName());
         review.setMatchScene(candidate.getMatchScene());
@@ -1145,6 +1167,27 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         return review;
+    }
+
+    private List<PaymentRouteRuleReviewDTO> submitExistingRouteRuleReview(
+            PaymentRouteRuleConfigEntity candidate,
+            String requester,
+            String reason,
+            String operationType,
+            Integer sourceVersionNo) {
+        String ruleCode = candidate.getRuleCode();
+        if (paymentConfigMapper.countPendingRouteRuleReviews(ruleCode) > 0) {
+            throw new IllegalArgumentException("该路由规则已有待复核申请");
+        }
+        Integer baseVersionNo = paymentConfigMapper.findLatestRouteRuleVersionNo(ruleCode);
+        PaymentRouteRuleReviewEntity review = buildRouteRuleReview(
+                candidate, requester, reason, operationType, baseVersionNo, sourceVersionNo);
+        try {
+            paymentConfigMapper.insertRouteRuleReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该路由规则已有待复核申请", exception);
+        }
+        return paymentConfigMapper.findRouteRuleReviews();
     }
 
     private PaymentRouteRuleReviewEntity requirePendingRouteRuleReview(String requestNo) {
@@ -1195,6 +1238,53 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getStatus())));
         request.setChangeReason(review.getRequestReason());
         return request;
+    }
+
+    private PaymentRouteRuleUpsertRequestDTO toUpsertRequest(PaymentRouteRuleConfigEntity rule) {
+        PaymentRouteRuleUpsertRequestDTO request = new PaymentRouteRuleUpsertRequestDTO();
+        request.setRuleCode(rule.getRuleCode());
+        request.setRuleName(rule.getRuleName());
+        request.setMatchScene(rule.getMatchScene());
+        request.setMatchExpression(rule.getMatchExpression());
+        request.setTargetChannelCode(rule.getTargetChannelCode());
+        request.setFallbackChannelCode(rule.getFallbackChannelCode());
+        request.setRolloutPercentage(rule.getRolloutPercentage());
+        request.setRolloutSalt(rule.getRolloutSalt());
+        request.setPriority(rule.getPriority());
+        request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(rule.getStatus())));
+        return request;
+    }
+
+    private PaymentRouteRuleConfigEntity copyRouteRuleEntity(PaymentRouteRuleConfigEntity rule) {
+        PaymentRouteRuleConfigEntity copy = new PaymentRouteRuleConfigEntity();
+        copy.setRuleCode(rule.getRuleCode());
+        copy.setRuleName(rule.getRuleName());
+        copy.setMatchScene(rule.getMatchScene());
+        copy.setMatchExpression(rule.getMatchExpression());
+        copy.setTargetChannelCode(rule.getTargetChannelCode());
+        copy.setFallbackChannelCode(rule.getFallbackChannelCode());
+        copy.setRolloutPercentage(rule.getRolloutPercentage());
+        copy.setRolloutSalt(rule.getRolloutSalt());
+        copy.setStatus(rule.getStatus());
+        copy.setStatusType(rule.getStatusType());
+        copy.setPriority(rule.getPriority());
+        return copy;
+    }
+
+    private PaymentRouteRuleConfigEntity copyRouteRuleEntity(PaymentRouteRuleReviewEntity review) {
+        PaymentRouteRuleConfigEntity copy = new PaymentRouteRuleConfigEntity();
+        copy.setRuleCode(review.getRuleCode());
+        copy.setRuleName(review.getRuleName());
+        copy.setMatchScene(review.getMatchScene());
+        copy.setMatchExpression(review.getMatchExpression());
+        copy.setTargetChannelCode(review.getTargetChannelCode());
+        copy.setFallbackChannelCode(review.getFallbackChannelCode());
+        copy.setRolloutPercentage(review.getRolloutPercentage());
+        copy.setRolloutSalt(review.getRolloutSalt());
+        copy.setStatus(review.getStatus());
+        copy.setStatusType(review.getStatusType());
+        copy.setPriority(review.getPriority());
+        return copy;
     }
 
     private void ensureCandidateHasNoBlocker(PaymentRouteRuleConfigEntity candidate) {

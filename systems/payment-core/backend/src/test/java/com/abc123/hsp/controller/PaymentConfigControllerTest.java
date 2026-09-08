@@ -15,6 +15,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
@@ -85,7 +86,6 @@ class PaymentConfigControllerTest {
 
     @Test
     void shouldValidateAndReviewRouteRule() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
         PaymentRouteRuleValidationDTO validation = new PaymentRouteRuleValidationDTO();
         validation.setValid(Boolean.TRUE);
         when(paymentConfigService.validateRouteRule(any(PaymentRouteRuleValidationRequestDTO.class)))
@@ -104,13 +104,18 @@ class PaymentConfigControllerTest {
                 .thenReturn(Collections.singletonList(new PaymentRouteRuleReviewDTO()));
         when(paymentConfigService.listRouteRuleVersions("RULE_HOME_APP"))
                 .thenReturn(Collections.singletonList(new PaymentRouteRuleVersionDTO()));
-        when(paymentConfigService.rollbackRouteRule(any(String.class), any(PaymentRouteRuleRollbackRequestDTO.class)))
-                .thenReturn(overview);
+        when(paymentConfigService.submitRouteRuleRollbackReview(
+                any(String.class), any(PaymentRouteRuleRollbackRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentRouteRuleReviewDTO()));
+        when(paymentConfigService.submitRouteRuleStatusReview(any(PaymentRouteRuleStatusReviewRequestDTO.class)))
+                .thenReturn(Collections.singletonList(new PaymentRouteRuleReviewDTO()));
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
         PaymentRouteRuleValidationRequestDTO validationRequest = new PaymentRouteRuleValidationRequestDTO();
         validationRequest.setMatchExpression("terminal=APP");
         PaymentRouteRuleRollbackRequestDTO rollbackRequest = new PaymentRouteRuleRollbackRequestDTO();
         rollbackRequest.setVersionNo(Integer.valueOf(1));
+        PaymentRouteRuleStatusReviewRequestDTO statusRequest = new PaymentRouteRuleStatusReviewRequestDTO();
+        statusRequest.setRuleCode("RULE_HOME_APP");
 
         assertTrue(controller.validateRouteRule(validationRequest).getData().getValid());
         assertEquals(1, controller.listRouteRuleConflicts().getData().size());
@@ -121,7 +126,8 @@ class PaymentConfigControllerTest {
         assertEquals(1, controller.approveRouteRuleReview("RRV-001", reviewAction).getData().size());
         assertEquals(1, controller.rejectRouteRuleReview("RRV-001", reviewAction).getData().size());
         assertEquals(1, controller.listRouteRuleVersions("RULE_HOME_APP").getData().size());
-        assertEquals(overview, controller.rollbackRouteRule("RULE_HOME_APP", rollbackRequest).getData());
+        assertEquals(1, controller.submitRouteRuleRollbackReview("RULE_HOME_APP", rollbackRequest).getData().size());
+        assertEquals(1, controller.submitRouteRuleStatusReview(statusRequest).getData().size());
         verify(paymentConfigService).validateRouteRule(validationRequest);
         verify(paymentConfigService).listRouteRuleConflicts();
         verify(paymentConfigService).listRouteRuleReviews();
@@ -129,7 +135,8 @@ class PaymentConfigControllerTest {
         verify(paymentConfigService).approveRouteRuleReview("RRV-001", reviewAction);
         verify(paymentConfigService).rejectRouteRuleReview("RRV-001", reviewAction);
         verify(paymentConfigService).listRouteRuleVersions("RULE_HOME_APP");
-        verify(paymentConfigService).rollbackRouteRule("RULE_HOME_APP", rollbackRequest);
+        verify(paymentConfigService).submitRouteRuleRollbackReview("RULE_HOME_APP", rollbackRequest);
+        verify(paymentConfigService).submitRouteRuleStatusReview(statusRequest);
     }
 
     @Test
@@ -162,7 +169,6 @@ class PaymentConfigControllerTest {
     void shouldToggleGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
         when(paymentConfigService.toggleChannel(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
-        when(paymentConfigService.toggleRouteRule(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleProtocol(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleReturnCodeMapping(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleGateway(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
@@ -176,7 +182,6 @@ class PaymentConfigControllerTest {
         request.setEnabled(Boolean.TRUE);
 
         assertEquals(overview, controller.toggleChannel(request).getData());
-        assertEquals(overview, controller.toggleRouteRule(request).getData());
         assertEquals(overview, controller.toggleProtocol(request).getData());
         assertEquals(overview, controller.toggleReturnCodeMapping(request).getData());
         assertEquals(overview, controller.toggleGateway(request).getData());
@@ -184,7 +189,6 @@ class PaymentConfigControllerTest {
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
         verify(paymentConfigService).toggleChannel(request);
-        verify(paymentConfigService).toggleRouteRule(request);
         verify(paymentConfigService).toggleProtocol(request);
         verify(paymentConfigService).toggleReturnCodeMapping(request);
         verify(paymentConfigService).toggleGateway(request);

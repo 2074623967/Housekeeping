@@ -11,6 +11,7 @@ public class PaymentRouteRuleReviewEntity {
     private String requestNo;
     private String ruleCode;
     private Integer baseVersionNo;
+    private Integer sourceVersionNo;
     private String operationType;
     private String ruleName;
     private String matchScene;

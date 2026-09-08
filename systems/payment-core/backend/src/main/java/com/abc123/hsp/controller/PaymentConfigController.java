@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRollbackRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
@@ -71,11 +72,12 @@ public class PaymentConfigController {
     }
 
     /**
-     * 启停支付路由规则。
+     * 提交支付路由规则启停候选进入复核。
      */
     @PostMapping("/route-rules/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleRouteRule(@RequestBody PaymentConfigToggleRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.toggleRouteRule(request));
+    public ApiResponse<List<PaymentRouteRuleReviewDTO>> submitRouteRuleStatusReview(
+            @RequestBody PaymentRouteRuleStatusReviewRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitRouteRuleStatusReview(request));
     }
 
     /**
@@ -142,13 +144,13 @@ public class PaymentConfigController {
     }
 
     /**
-     * 将支付路由规则恢复为指定历史版本。
+     * 提交支付路由规则历史版本回滚候选进入复核。
      */
     @PostMapping("/route-rules/{ruleCode}/rollback")
-    public ApiResponse<PaymentConfigOverviewDTO> rollbackRouteRule(
+    public ApiResponse<List<PaymentRouteRuleReviewDTO>> submitRouteRuleRollbackReview(
             @PathVariable("ruleCode") String ruleCode,
             @RequestBody PaymentRouteRuleRollbackRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.rollbackRouteRule(ruleCode, request));
+        return ApiResponse.success(paymentConfigService.submitRouteRuleRollbackReview(ruleCode, request));
     }
 
     /**
