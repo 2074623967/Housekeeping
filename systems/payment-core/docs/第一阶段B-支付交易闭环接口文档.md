@@ -1391,6 +1391,7 @@ POST /api/payment-config/control-policies/self-check
 4. 渠道明确返回 `SUCCESS` 且存在渠道流水号时，通过条件更新原子抢占成功收口权；抢占成功后同步更新支付尝试、预付单、订单、账单，生成 `PAYMENT_SUCCESS` 事件，派发下游并释放提交并发令牌。
 5. 已为 `SUCCESS / CLOSED` 的支付单不会被主动查单重新打开；并发或重复查单未抢到收口权时不会重复记账、生成事件或派发下游。
 6. 外部网关调用失败、返回空数据或成功结果缺少渠道流水号时返回 `PAYMENT-1026`，不会以本地状态伪装成真实渠道结果。
+7. `gateway-access` 与共享限流开关同时启用时，所有直接、人工补跑和自动补偿查单在调用网关前统一占用渠道时间窗配额；配额耗尽返回 `PAYMENT-1027`，不调用外部渠道，也不计入单笔自动退避失败历史。
 
 配置项：
 
@@ -1400,6 +1401,9 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL` | `http://127.0.0.1:18150/api/gateway/payment-orders/query` | 统一查单地址 |
 | `HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS` | `wx_h5,alipay_h5,offline_bank` | 允许交给外部网关查询的渠道编码 |
 | `HSP_PAYMENT_CHANNEL_QUERY_TIMEOUT_MS` | `2000` | 连接与读取超时毫秒数 |
+| `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_ENABLED` | `false` | 是否启用数据库共享渠道查单限流；仅在真实网关同时启用时生效 |
+| `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_WINDOW_SECONDS` | `60` | 渠道共享固定时间窗秒数，最小归一化为 `1` |
+| `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL` | `100` | 单渠道每个时间窗允许占用的最大查单次数，最小归一化为 `1` |
 
 ## 14. 错误与边界说明
 
@@ -1424,6 +1428,7 @@ POST /api/payment-config/control-policies/self-check
 | `PAYMENT-1010` | 当前没有启用的支付渠道 |
 | `PAYMENT-1011` | 支付来源订单金额信息缺失 |
 | `PAYMENT-1026` | 外部渠道查单失败、结果不完整或无法安全收口 |
+| `PAYMENT-1027` | 当前渠道共享查单时间窗配额已耗尽 |
 
 联调说明：
 

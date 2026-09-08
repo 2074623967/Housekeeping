@@ -32,6 +32,7 @@
 8. `t_payment_event`
 9. `t_payment_issue_action_log`
 10. `t_payment_issue_alert_log`
+11. `t_payment_channel_query_rate_bucket`
 
 ## 3. 对象关系
 
@@ -55,6 +56,7 @@ t_order
 3. 一个预付单关联一个支付单。
 4. 一个支付单可有多次尝试、多条回调、多条事件。
 5. 异常处理动作和告警通知日志不改变支付单状态，只沉淀运营排障、告警通知和确认回执证据。
+6. 渠道查单限流桶是按渠道共享的运行控制对象，不与单笔支付单建立外键关系；所有实例通过渠道唯一键竞争同一固定时间窗配额。
 
 ## 4. 核心表设计
 
@@ -252,6 +254,21 @@ t_order
 | `triggered_by` | 触发来源 |
 | `ack_operator` | 回执确认人 |
 | `ack_at` | 回执确认时间 |
+
+### 4.11 支付渠道查单共享限流桶 `t_payment_channel_query_rate_bucket`
+
+作用：在真实网关查单前按渠道原子占用共享固定时间窗配额，使直接查单、人工补跑和自动补偿在多实例部署下使用同一限流口径。
+
+关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `channel_code` | 归一化后的渠道编码，唯一索引保证每个渠道只有一个共享桶 |
+| `window_started_at` | 当前固定时间窗开始时间，使用数据库时钟更新 |
+| `used_count` | 当前时间窗已占用的查单次数 |
+| `updated_at` | 最近一次成功占用或窗口重置时间 |
+
+并发规则：初始化使用幂等插入，配额占用使用带窗口过期和上限条件的单条 `UPDATE`；更新行数为 `0` 表示当前窗口配额已耗尽。既有运行库通过 `database/migrations/2026-09-08-add-payment-channel-query-rate-bucket.sql` 增量建表。
 
 ## 5. 状态建议
 

@@ -4415,3 +4415,27 @@
 2. 当前积压与到期指标可支持运营判断“总待回调中有多少已需要补查”，但尚未形成时间序列趋势、阈值配置和外部告警。
 3. 本轮没有真实渠道凭证、生产 MySQL 压测或真实网关运行态联调，相关事项继续保留为外部接入缺口。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 136. 2026-09-08 渠道查单跨实例固定窗口限流验证
+
+### 136.1 本轮补强
+
+1. 新增 `t_payment_channel_query_rate_bucket` 渠道共享桶、MyBatis 原子占用 SQL 和既有运行库增量迁移，所有实例按归一化渠道编码共用同一固定时间窗计数。
+2. 限流服务仅在真实 `gateway-access` 与限流开关同时启用时生效，默认关闭，避免本地模拟查单被误限流。
+3. 配额占用使用独立 `REQUIRES_NEW` 事务先提交，再发起外部 HTTP 查单，避免把数据库桶行锁持有到网络调用结束。
+4. 直接查单、任务中心人工补跑和自动补偿统一经过 `PaymentService.query`；配额耗尽返回 `PAYMENT-1027`，不触达渠道，也不计入自动查单退避失败历史。
+
+### 136.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 限流定向测试 | `mvn -Dtest=PaymentChannelQueryRateLimitServiceImplTest,PaymentChannelQueryRateLimitMapperIntegrationTest,PaymentServiceImplTest test` | 通过 | `40` 个用例通过，覆盖双开关、渠道归一化、参数下限、配额耗尽前阻断渠道，以及同窗 `1 / 1 / 0` 和过窗重置 |
+| 后端全量测试 | `mvn test` | 通过 | `291` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 与补丁检查 | `xmllint --noout PaymentChannelQueryRateLimitMapper.xml && git diff --check` | 通过 | XML 结构合法；使用 MySQL/H2 均支持的 `TIMESTAMPADD` 保持数据库时钟口径 |
+
+### 136.3 当前判断
+
+1. `payment-core` 已具备共享数据库上的跨实例、按渠道固定时间窗口限流基础能力，且所有现有查单入口口径一致。
+2. 当前实现是固定窗口，不等同于滑动窗口、令牌桶或网关侧限流；生产 MySQL 并发压测、容量参数校准和趋势告警仍需继续补齐。
+3. 本轮没有真实微信、支付宝或银行凭证与运行态环境，因此不记录为真实渠道联调完成。
+4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
