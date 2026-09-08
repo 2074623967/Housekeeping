@@ -62,10 +62,12 @@
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
 | `/api/payment-config/export` | `GET` | 导出支付配置治理快照 CSV |
 | `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
-| `/api/payment-config/route-rules` | `POST` | 新增支付路由规则 |
-| `/api/payment-config/route-rules/{ruleCode}` | `PUT` | 编辑支付路由规则 |
 | `/api/payment-config/route-rules/validate` | `POST` | 校验路由表达式并模拟样例命中 |
 | `/api/payment-config/route-rules/conflicts` | `GET` | 检测当前启用路由规则的冲突、重复、遮蔽和待复核项 |
+| `/api/payment-config/route-rules/reviews` | `GET` | 查询路由规则复核申请 |
+| `/api/payment-config/route-rules/reviews` | `POST` | 提交新增或修改候选快照，运行态不变 |
+| `/api/payment-config/route-rules/reviews/{requestNo}/approve` | `POST` | 异人复核通过并发布候选快照 |
+| `/api/payment-config/route-rules/reviews/{requestNo}/reject` | `POST` | 异人驳回候选快照，运行态不变 |
 | `/api/payment-config/route-rules/{ruleCode}/versions` | `GET` | 查询路由规则历史版本 |
 | `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 恢复指定历史版本并生成新版本 |
 | `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
@@ -1004,36 +1006,39 @@ POST /api/payment-config/control-policies/self-check
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。
-9. 路由规则已支持新增、编辑、保存前表达式校验和样例命中模拟；规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
+9. 路由规则新增、编辑已改为提交候选快照进入自声明 maker-checker；旧的直接新增、编辑 HTTP 写入口已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
 
 ### 12.3 路由规则维护与校验
 
-新增接口：`POST /api/payment-config/route-rules`
-
-编辑接口：`PUT /api/payment-config/route-rules/{ruleCode}`
+新增和编辑统一提交接口：`POST /api/payment-config/route-rules/reviews`
 
 请求示例：
 
 ```json
 {
-  "ruleCode": "RULE_HOME_APP",
-  "ruleName": "家政 App 小额路由",
-  "matchScene": "HOME_CLEAN/APP",
-  "matchExpression": "terminal IN (H5, APP) AND amount<=500",
-  "targetChannelCode": "wx_h5",
-  "fallbackChannelCode": "alipay_h5",
-  "priority": 10,
-  "enabled": true,
-  "changeReason": "增加 App 小额支付专用规则"
+  "requester": "maker-a",
+  "candidate": {
+    "ruleCode": "RULE_HOME_APP",
+    "ruleName": "家政 App 小额路由",
+    "matchScene": "HOME_CLEAN/APP",
+    "matchExpression": "terminal IN (H5, APP) AND amount<=500",
+    "targetChannelCode": "wx_h5",
+    "fallbackChannelCode": "alipay_h5",
+    "priority": 10,
+    "enabled": true,
+    "changeReason": "增加 App 小额支付专用规则"
+  }
 }
 ```
 
 保存约束：
 
-1. 新增时 `ruleCode` 必填且不能与现有规则重复；编辑时以路径中的 `ruleCode` 定位规则并保持编码不变。
+1. 新增时 `ruleCode` 必填且不能与现有规则重复；编辑时按候选快照中的 `ruleCode` 绑定当前规则并保持编码不变。
 2. 名称、匹配场景、表达式和目标渠道必填，优先级必须大于等于 `0`。
 3. 目标渠道和非空兜底渠道必须存在于支付渠道配置中，且二者不能相同。
 4. 表达式必须通过 V1.3 语法与字段校验；非法规则在写库前拒绝，不进入支付提交链路。
+5. `requester` 和 `changeReason` 必填；同一规则已有 `PENDING_REVIEW` 时拒绝重复提交。
+6. 提交只写入复核申请，不更新 `t_payment_route_rule_config`，也不生成运行版本。
 
 校验与模拟接口：`POST /api/payment-config/route-rules/validate`
 
@@ -1074,6 +1079,7 @@ POST /api/payment-config/control-policies/self-check
 3. `UPDATE`：编辑规则字段。
 4. `STATUS_CHANGE`：启用或停用规则。
 5. `ROLLBACK`：恢复某一历史版本后形成的新版本。
+6. `REVIEW_RELEASE`：候选快照通过轻量复核后形成的新版本；只表示代码内版本来源，不等同生产正式放行。
 
 回滚接口：`POST /api/payment-config/route-rules/{ruleCode}/rollback`
 
@@ -1120,12 +1126,36 @@ POST /api/payment-config/control-policies/self-check
 
 检测口径：
 
-1. 只扫描当前状态为 `ENABLED` 的规则，不改变规则状态、不写入版本快照，也不自动阻断保存或发布。
+1. 独立检测接口只扫描当前状态为 `ENABLED` 的规则，不改变规则状态或写入版本快照；复核发布会把候选加入当前规则集合并复用阻断级检查。
 2. 表达式先做空白与关键字大小写规范化，仅对规范化后完全相同的表达式判断重复、路由分歧和优先级遮蔽。
 3. 匹配场景以 `/` 分隔并按 OR 关系求交集与包含关系；`mobile / mobile_web / H5` 归一为 `h5`，`web / pc_web / PC` 归一为 `pc`，`app_native / APP` 归一为 `app`。空场景按全部场景处理。
 4. `INVALID_EXPRESSION / ROUTE_DIVERGENCE` 为 `BLOCKER`；`DUPLICATE_RULE / OVERLAPPING_DUPLICATE / SHADOWED_RULE / PARTIAL_SHADOW` 为 `WARNING`。
 5. 场景有交集且优先级相同、但表达式不同的规则返回 `PRIORITY_COLLISION / REVIEW`，只表示需要人工确认表达式是否互斥，不等同于已证明冲突。
 6. 当前实现是结构化静态检测，不覆盖任意不同布尔表达式之间的完整语义重叠或可满足性证明；检测结果也不代表双人复核、灰度审批或真实渠道验证已经完成。
+
+### 12.6 路由规则轻量复核
+
+查询接口：`GET /api/payment-config/route-rules/reviews`
+
+通过接口：`POST /api/payment-config/route-rules/reviews/{requestNo}/approve`
+
+驳回接口：`POST /api/payment-config/route-rules/reviews/{requestNo}/reject`
+
+处理请求示例：
+
+```json
+{
+  "reviewer": "reviewer-b",
+  "reviewComment": "配置与风险检查通过"
+}
+```
+
+处理约束：
+
+1. `requester` 与 `reviewer` 都是 `SELF_DECLARED` 自声明文本，系统仅校验两者不相同；当前未接入可信登录身份、权限或电子签名，不得解释为正式签字审批。
+2. 复核只处理 `PENDING_REVIEW` 申请。通过前重新校验当前基线版本、候选表达式、渠道有效性，以及候选加入当前规则集合后是否存在涉及候选的 `BLOCKER`。
+3. 通过后才新增或更新运行态规则，并追加 `REVIEW_RELEASE` 版本；驳回只更新申请状态，不改变运行态。
+4. 当前仅新增、修改进入复核路径；启停和版本回滚仍为直接操作。真实百分比灰度与稳定路由桶尚未实现。
 
 ## 13. 支付监控分析接口
 

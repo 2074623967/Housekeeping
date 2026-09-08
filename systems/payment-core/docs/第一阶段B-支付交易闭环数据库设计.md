@@ -302,12 +302,34 @@ t_order
 | `rule_name / match_scene / match_expression` | 规则名称、场景和表达式快照 |
 | `target_channel_code / fallback_channel_code` | 目标与兜底渠道快照 |
 | `status / status_type / priority` | 状态、样式与优先级快照 |
-| `change_type` | `CREATE / BASELINE / UPDATE / STATUS_CHANGE / ROLLBACK` |
+| `change_type` | `CREATE / BASELINE / UPDATE / STATUS_CHANGE / ROLLBACK / REVIEW_RELEASE` |
 | `source_version_no` | 回滚时指向被恢复的历史版本，其余变更为空 |
 | `change_reason` | 变更原因，最长 `255` 个字符 |
 | `created_at` | 版本形成时间，使用数据库时钟写入 |
 
 事务规则：更新、启停和回滚先锁定 `t_payment_route_rule_config` 当前规则行，再在同一事务内更新主配置并追加版本快照；回滚不会覆盖历史记录。既有运行库通过 `database/migrations/2026-09-08-add-payment-route-rule-version.sql` 幂等建表并为尚无版本记录的存量规则补 V1 基线。
+
+### 4.14 支付路由规则复核申请表 `t_payment_route_rule_review`
+
+作用：保存新增或修改规则的完整候选快照与轻量 maker-checker 处理状态。申请创建和驳回不修改运行规则；通过后才在同一事务内发布候选并生成 `REVIEW_RELEASE` 版本。
+
+关键字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `request_no` | 复核申请编号，唯一索引 |
+| `rule_code / base_version_no` | 规则编码与提交时基线版本；新建规则基线为空 |
+| `pending_rule_code` | 待复核唯一占位，提交时等于规则编码，完成后置空；唯一索引封住并发双申请 |
+| `operation_type` | `CREATE / UPDATE` |
+| `rule_name / match_scene / match_expression` | 候选规则名称、场景和表达式 |
+| `target_channel_code / fallback_channel_code` | 候选目标与兜底渠道 |
+| `status / status_type / priority` | 候选状态、样式和优先级 |
+| `requester / request_reason` | 申请人自声明与申请原因 |
+| `review_status / review_status_type` | `PENDING_REVIEW / APPROVED / REJECTED` 及展示样式 |
+| `reviewer / review_comment` | 复核人自声明与复核意见 |
+| `created_at / reviewed_at / updated_at` | 申请、处理与更新时间 |
+
+事务规则：同一规则只允许一个待复核申请；处理时锁定申请行并以 `review_status = 'PENDING_REVIEW'` 条件更新，避免重复处理。修改申请通过前比较最新规则版本与 `base_version_no`，并重新执行候选校验和阻断级冲突检查。人员字段均为自声明，表数据不是可信身份签字或生产审批证据。既有运行库通过 `database/migrations/2026-09-08-add-payment-route-rule-review.sql` 幂等建表。
 
 ## 5. 状态建议
 
