@@ -69,8 +69,8 @@
 | `/api/payment-config/route-rules/reviews/{requestNo}/approve` | `POST` | 异人复核通过并发布候选快照 |
 | `/api/payment-config/route-rules/reviews/{requestNo}/reject` | `POST` | 异人驳回候选快照，运行态不变 |
 | `/api/payment-config/route-rules/{ruleCode}/versions` | `GET` | 查询路由规则历史版本 |
-| `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 恢复指定历史版本并生成新版本 |
-| `/api/payment-config/route-rules/toggle` | `POST` | 启停路由规则 |
+| `/api/payment-config/route-rules/{ruleCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
+| `/api/payment-config/route-rules/toggle` | `POST` | 提交路由规则启停候选，运行态不变 |
 | `/api/payment-config/protocols/toggle` | `POST` | 启停支付协议 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
@@ -942,7 +942,7 @@ POST /api/refunds/retry
 5. `gateways`：支付网关接入配置，包含网关编码、网关名称、接入模式、适用渠道、环境范围、网关基础地址、报文协议、签名算法、证书别名、证书状态、发布阶段、灰度策略、回调白名单、适配器编排、超时时间、重试策略和状态。
 6. `controlPolicies`：支付控制策略配置，包含来源应用标识、来源应用名称、允许支付方式、允许渠道、分钟级限流阈值、严格模式、自检状态、自检提示和启停状态。
 
-### 12.2 启停渠道或路由规则
+### 12.2 配置启停与路由规则启停复核
 
 启停渠道：
 
@@ -950,11 +950,24 @@ POST /api/refunds/retry
 POST /api/payment-config/channels/toggle
 ```
 
-启停路由规则：
+路由规则启停申请：
 
 ```http
 POST /api/payment-config/route-rules/toggle
 ```
+
+请求示例：
+
+```json
+{
+  "ruleCode": "RULE_HOME_WX",
+  "enabled": false,
+  "requester": "maker-a",
+  "changeReason": "渠道维护期间停用微信优先规则"
+}
+```
+
+该接口只创建 `STATUS_CHANGE` 待复核候选，不直接更新运行态。规则不存在、状态未变化、申请人或原因为空，以及同规则已有待复核申请时均拒绝。
 
 启停支付协议：
 
@@ -1006,7 +1019,7 @@ POST /api/payment-config/control-policies/self-check
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。
-9. 路由规则新增、编辑已改为提交候选快照进入自声明 maker-checker；旧的直接新增、编辑 HTTP 写入口已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
+9. 路由规则新增、编辑、启停和回滚均提交候选快照进入自声明 maker-checker；旧的直接运行态写入路径已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
 
 ### 12.3 路由规则维护与校验
 
@@ -1080,9 +1093,11 @@ POST /api/payment-config/control-policies/self-check
 1. `CREATE`：通过配置接口新建规则。
 2. `BASELINE`：存量规则首次变更前自动补录的基线。
 3. `UPDATE`：编辑规则字段。
-4. `STATUS_CHANGE`：启用或停用规则。
-5. `ROLLBACK`：恢复某一历史版本后形成的新版本。
+4. `STATUS_CHANGE`：历史直接启用或停用规则形成的版本。
+5. `ROLLBACK`：历史直接恢复某一版本形成的新版本。
 6. `REVIEW_RELEASE`：候选快照通过轻量复核后形成的新版本；只表示代码内版本来源，不等同生产正式放行。
+7. `REVIEW_STATUS_CHANGE`：启停候选通过复核后形成的新版本。
+8. `REVIEW_ROLLBACK`：回滚候选通过复核后形成的新版本，`sourceVersionNo` 指向目标历史版本。
 
 回滚接口：`POST /api/payment-config/route-rules/{ruleCode}/rollback`
 
@@ -1091,17 +1106,18 @@ POST /api/payment-config/control-policies/self-check
 ```json
 {
   "versionNo": 2,
-  "changeReason": "恢复大促前稳定配置"
+  "changeReason": "恢复大促前稳定配置",
+  "requester": "maker-a"
 }
 ```
 
 回滚约束：
 
 1. 规则和目标版本必须存在，版本号必须大于 `0`。
-2. 回滚前重新校验历史快照中的表达式、目标渠道、兜底渠道、灰度比例、分桶盐值和优先级，避免已失效依赖重新进入运行态。
-3. 更新、启停和回滚会锁定当前规则行，以同一规则内串行版本号避免并发覆盖。
-4. 回滚不会删除或改写历史版本，而是恢复配置后追加一条 `ROLLBACK` 快照，并用 `sourceVersionNo` 指向来源版本。
-5. `changeReason` 最长 `255` 个字符；版本记录没有审批人字段，不应被解释为正式审批或生产发布证据。
+2. 提交回滚时重新校验历史快照中的表达式、目标渠道、兜底渠道、灰度比例、分桶盐值和优先级，避免失效依赖形成候选。
+3. 申请保存当前 `baseVersionNo` 和目标 `sourceVersionNo`；复核通过前锁定规则并重验基线，期间出现新版本时拒绝旧申请。
+4. 复核通过后才恢复配置并追加 `REVIEW_ROLLBACK` 快照；驳回或未处理不改变运行态，也不删除或改写历史版本。
+5. `requester` 和 `changeReason` 必填，分别最长 `64` 和 `255` 个字符；自声明身份不应被解释为正式审批或生产发布证据。
 
 ### 12.5 路由规则冲突检测
 
@@ -1157,8 +1173,9 @@ POST /api/payment-config/control-policies/self-check
 
 1. `requester` 与 `reviewer` 都是 `SELF_DECLARED` 自声明文本，系统仅校验两者不相同；当前未接入可信登录身份、权限或电子签名，不得解释为正式签字审批。
 2. 复核只处理 `PENDING_REVIEW` 申请。通过前重新校验当前基线版本、候选表达式、渠道有效性，以及候选加入当前规则集合后是否存在涉及候选的 `BLOCKER`。
-3. 通过后才新增或更新运行态规则，并追加 `REVIEW_RELEASE` 版本；驳回只更新申请状态，不改变运行态。
-4. 当前仅新增、修改进入复核路径；启停和版本回滚仍为直接操作。代码内稳定百分比桶已实现，但不代表生产灰度审批、真实渠道验证或发布后稳定观察已经完成。
+3. `CREATE / UPDATE / STATUS_CHANGE / ROLLBACK` 均保存完整候选快照；回滚申请额外保存 `sourceVersionNo`。同一规则同时只允许一条待复核申请。
+4. 通过后才新增或更新运行态规则，并按操作追加 `REVIEW_RELEASE / REVIEW_STATUS_CHANGE / REVIEW_ROLLBACK` 版本；驳回只更新申请状态，不改变运行态。
+5. 该能力仍是基于自声明人员文本的轻量 maker-checker。代码内稳定百分比桶已实现，但不代表生产灰度审批、真实渠道验证或发布后稳定观察已经完成。
 
 ### 12.7 路由规则稳定百分比灰度
 
