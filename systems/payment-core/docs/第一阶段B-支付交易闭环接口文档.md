@@ -1291,9 +1291,13 @@ POST /api/payment-config/control-policies/self-check
 16. `queryRateLimitRejectionCountThreshold`：限流拒绝次数 P1 告警阈值。
 17. `pendingIssueAlertDispatchCount`：待确认且状态为已生成、部分失败或派发失败的来源 `IN_APP_OUTBOX` 告警数。
 18. `failedIssueAlertDispatchCount`：上述待派发告警中仍处于部分失败或派发失败的数量。
-19. `pendingIssueAlertReceiptCount`：供应商已受理、待确认且等待送达回执回查的外发告警数。
+19. `oldestPendingIssueAlertDispatchMinutes`：最老一条待派发来源 outbox 的等待分钟数，无积压时为 `0`。
+20. `issueAlertDispatchCountThreshold`、`issueAlertDispatchTimeoutMinutes`：待派发积压升级 P1 的数量与等待时长阈值。
+21. `pendingIssueAlertReceiptCount`：供应商已受理、待确认且等待送达回执回查的外发告警数。
+22. `oldestPendingIssueAlertReceiptMinutes`：最老一条待回查外发告警的等待分钟数，无积压时为 `0`。
+23. `issueAlertReceiptCountThreshold`、`issueAlertReceiptTimeoutMinutes`：待回查积压升级 P1 的数量与等待时长阈值。
 
-异常告警派发可观测性说明：待派发数量达到 `10` 条，或其中存在派发异常时升级为 P1；存在少量待派发但无派发异常时为 P2。待回查数量达到 `10` 条时升级为 P1，存在少量待回查时为 P2。以上均为任务中心积压口径，不代表真实通知已经送达。
+异常告警派发可观测性说明：待派发数量或最老等待时长达到配置阈值，或其中存在派发异常时升级为 P1；存在少量待派发但未命中上述条件时为 P2。待回查数量或最老等待时长达到配置阈值时升级为 P1，存在少量待回查但未命中阈值时为 P2。默认阈值分别为待派发 `10` 条/`15` 分钟、待回查 `10` 条/`30` 分钟。以上均为任务中心积压口径，不代表真实通知已经送达。
 
 ### 13.8 查询支付任务执行日志
 
@@ -1365,6 +1369,10 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_DELAY_MS` | `300000` | 自动生成查单监控告警的固定扫描间隔 |
 | `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED` | `false` | outbox 告警自动派发开关；确认接收范围和通知供应商配置后显式启用 |
 | `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_DELAY_MS` | `60000` | 自动派发待处理 outbox 的固定扫描间隔 |
+| `HSP_PAYMENT_ISSUE_ALERT_DISPATCH_COUNT_THRESHOLD` | `10` | 待派发来源 outbox 升级 P1 的数量阈值，最小为 `1` |
+| `HSP_PAYMENT_ISSUE_ALERT_DISPATCH_TIMEOUT_MINUTES` | `15` | 单条待派发来源 outbox 升级 P1 的等待分钟阈值，最小为 `1` |
+| `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_COUNT_THRESHOLD` | `10` | 待回查外发告警升级 P1 的数量阈值，最小为 `1` |
+| `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_TIMEOUT_MINUTES` | `30` | 单条待回查外发告警升级 P1 的等待分钟阈值，最小为 `1` |
 
 ### 13.7.2 生成主动查单监控告警
 
