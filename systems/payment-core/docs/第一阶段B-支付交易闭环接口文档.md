@@ -1358,6 +1358,8 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_RATE_LIMIT_REJECTION_COUNT_THRESHOLD` | `10` | 触发 P1 的窗口限流拒绝次数阈值，最小为 `1` |
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_COOLDOWN_MINUTES` | `60` | 同类未确认 outbox 告警的冷却去重窗口，最小为 `1` 分钟 |
 | `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_ALERT_DELAY_MS` | `300000` | 自动生成查单监控告警的固定扫描间隔 |
+| `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED` | `false` | outbox 告警自动派发开关；确认接收范围和通知供应商配置后显式启用 |
+| `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_DELAY_MS` | `60000` | 自动派发待处理 outbox 的固定扫描间隔 |
 
 ### 13.7.2 生成主动查单监控告警
 
@@ -1371,6 +1373,12 @@ POST /api/payment-config/control-policies/self-check
 4. 告警写入 `t_payment_issue_alert_log`，来源通道为 `IN_APP_OUTBOX`，责任组为 `支付渠道运营组`，后续复用既有 IM、SMS、EMAIL 派发、重试和供应商回执链路。
 5. 同类未确认 outbox 在冷却窗口内已经存在时，本轮仅记录阈值命中和抑制数量，不重复生成；冷却时长可配置。
 6. 当前只确认 outbox 和可配置外发链路具备代码与自动化测试能力，不代表真实企业微信、短信或邮件已经送达。
+
+自动派发说明：
+
+1. 开启 `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED` 后，`PaymentCompensationScheduler` 会按配置间隔调用 `runAutoDispatchIssueAlerts()`。
+2. 自动派发继续使用 `PAYMENT_ISSUE_ALERT_DISPATCH` 任务租约，并复用人工入口相同的值班路由、供应商选择、限流、重试、失败切换、回执和来源 outbox 状态回写逻辑。
+3. 开关默认关闭；本地通知器回执和自动化测试不能替代真实通知供应商的送达证据。
 
 ### 13.7 手动执行异常 SLA 升级巡检
 

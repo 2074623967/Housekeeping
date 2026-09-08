@@ -4518,3 +4518,29 @@
 2. 当前完成的是 outbox 生成、冷却去重和可配置外发代码链路，不代表真实企业微信、短信或邮件已经送达。
 3. 生产 MySQL 并发压测、真实 `gateway-access` 运行态联调、通知供应商配置与实际送达回执仍未完成。
 4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
+
+## 140. 2026-09-08 异常告警 outbox 自动派发调度验证
+
+### 140.1 本轮补强
+
+1. 将既有但未被调度器调用的 `runAutoDispatchIssueAlerts()` 接入 `PaymentCompensationScheduler`，补齐 outbox 自动生成后的定时派发入口。
+2. 新增 `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED`，默认 `false`；只有确认通知供应商配置和接收范围后才显式开启。
+3. 新增 `HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_DELAY_MS`，默认 `60000ms`；自动入口继续复用 `PAYMENT_ISSUE_ALERT_DISPATCH` 租约、重试、供应商失败切换和回执状态机。
+4. 任务中心页面口径升级为 V1.18，明确自动派发可配置且默认关闭。
+
+### 140.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 自动派发定向测试 | `mvn -Dtest=PaymentCompensationSchedulerTest,PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `58` 个用例通过，覆盖开关启用时委派、关闭时不派发，以及既有租约、重试、供应商切换和回执链路 |
+| 后端全量测试 | `mvn test` | 通过 | `299` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build -- --configLoader runner --outDir /private/tmp/hsp-admin-web-dist-alert-auto-dispatch-v1 --emptyOutDir` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 浏览器静态检查 | `http://127.0.0.1:4176/payment-task-center` | 通过 | V1.18 标识和自动派发开关边界正常渲染；后端 `18081` 未启动，API 仍显示 `500 [PAYMENT-CLIENT]`，不记录为接口联调完成 |
+| 补丁检查 | `git diff --check` | 通过 | 代码和文档无空白符错误 |
+
+### 140.3 当前判断
+
+1. outbox 已具备“阈值自动生成 -> 可配置自动派发 -> 重试/主备切换 -> 供应商回执回写”的完整代码编排，不再必须依赖人工点击触发派发。
+2. 自动派发默认关闭，本轮没有启用真实 webhook，也没有产生企业微信、短信或邮件实际送达证据。
+3. 真实通知供应商配置、接收人核验、运行态派发和实际送达回执仍属于外部联调缺口。
+4. 本轮没有新增正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
