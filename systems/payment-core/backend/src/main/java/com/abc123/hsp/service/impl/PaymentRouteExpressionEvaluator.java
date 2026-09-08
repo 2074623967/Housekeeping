@@ -29,6 +29,20 @@ final class PaymentRouteExpressionEvaluator {
         }
     }
 
+    static boolean isValid(String expression) {
+        if (!StringUtils.hasText(expression)) {
+            return true;
+        }
+        try {
+            Parser parser = new Parser(new PaymentRouteContextDTO(), tokenize(expression));
+            parser.parseExpression();
+            parser.require(TokenType.EOF);
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
     private static List<Token> tokenize(String expression) {
         List<Token> tokens = new ArrayList<>();
         int index = 0;

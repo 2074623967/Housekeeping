@@ -5,6 +5,9 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.PathVariable;
 import com.abc123.hsp.service.PaymentConfigService;
@@ -67,6 +70,34 @@ public class PaymentConfigController {
     @PostMapping("/route-rules/toggle")
     public ApiResponse<PaymentConfigOverviewDTO> toggleRouteRule(@RequestBody PaymentConfigToggleRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleRouteRule(request));
+    }
+
+    /**
+     * 新增支付路由规则。
+     */
+    @PostMapping("/route-rules")
+    public ApiResponse<PaymentConfigOverviewDTO> createRouteRule(
+            @RequestBody PaymentRouteRuleUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.createRouteRule(request));
+    }
+
+    /**
+     * 编辑支付路由规则。
+     */
+    @PutMapping("/route-rules/{ruleCode}")
+    public ApiResponse<PaymentConfigOverviewDTO> updateRouteRule(
+            @PathVariable("ruleCode") String ruleCode,
+            @RequestBody PaymentRouteRuleUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.updateRouteRule(ruleCode, request));
+    }
+
+    /**
+     * 校验支付路由表达式并模拟样例命中。
+     */
+    @PostMapping("/route-rules/validate")
+    public ApiResponse<PaymentRouteRuleValidationDTO> validateRouteRule(
+            @RequestBody PaymentRouteRuleValidationRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.validateRouteRule(request));
     }
 
     /**

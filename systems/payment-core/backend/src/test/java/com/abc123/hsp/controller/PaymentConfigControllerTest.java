@@ -10,6 +10,9 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.service.PaymentConfigService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -72,6 +75,30 @@ class PaymentConfigControllerTest {
 
         assertEquals(overview, controller.updateProtocol("PROTO_HOME_SIGN", request).getData());
         verify(paymentConfigService).updateProtocol("PROTO_HOME_SIGN", request);
+    }
+
+    @Test
+    void shouldCreateUpdateAndValidateRouteRule() {
+        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
+        PaymentRouteRuleValidationDTO validation = new PaymentRouteRuleValidationDTO();
+        validation.setValid(Boolean.TRUE);
+        when(paymentConfigService.createRouteRule(any(PaymentRouteRuleUpsertRequestDTO.class))).thenReturn(overview);
+        when(paymentConfigService.updateRouteRule(any(String.class), any(PaymentRouteRuleUpsertRequestDTO.class)))
+                .thenReturn(overview);
+        when(paymentConfigService.validateRouteRule(any(PaymentRouteRuleValidationRequestDTO.class)))
+                .thenReturn(validation);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentRouteRuleUpsertRequestDTO upsertRequest = new PaymentRouteRuleUpsertRequestDTO();
+        upsertRequest.setRuleCode("RULE_HOME_APP");
+        PaymentRouteRuleValidationRequestDTO validationRequest = new PaymentRouteRuleValidationRequestDTO();
+        validationRequest.setMatchExpression("terminal=APP");
+
+        assertEquals(overview, controller.createRouteRule(upsertRequest).getData());
+        assertEquals(overview, controller.updateRouteRule("RULE_HOME_APP", upsertRequest).getData());
+        assertTrue(controller.validateRouteRule(validationRequest).getData().getValid());
+        verify(paymentConfigService).createRouteRule(upsertRequest);
+        verify(paymentConfigService).updateRouteRule("RULE_HOME_APP", upsertRequest);
+        verify(paymentConfigService).validateRouteRule(validationRequest);
     }
 
     @Test

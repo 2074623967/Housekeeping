@@ -48,6 +48,8 @@ class PaymentRouteExpressionEvaluatorTest {
         assertFalse(PaymentRouteExpressionEvaluator.matches(context, "(paymentMethod=微信支付"));
         assertFalse(PaymentRouteExpressionEvaluator.matches(context, "unknownField=value"));
         assertFalse(PaymentRouteExpressionEvaluator.matches(context, "terminal IN ()"));
+        assertFalse(PaymentRouteExpressionEvaluator.isValid("amount>not-a-number"));
+        assertTrue(PaymentRouteExpressionEvaluator.isValid("terminal IN (H5, APP) AND amount<=500"));
     }
 
     private PaymentRouteContextDTO buildContext(String paymentMethod,

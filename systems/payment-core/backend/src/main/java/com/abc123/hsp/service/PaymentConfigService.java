@@ -5,6 +5,9 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 
 /**
  * 支付配置中心服务。
@@ -30,6 +33,21 @@ public interface PaymentConfigService {
      * 启停路由规则。
      */
     PaymentConfigOverviewDTO toggleRouteRule(PaymentConfigToggleRequestDTO request);
+
+    /**
+     * 新增支付路由规则。
+     */
+    PaymentConfigOverviewDTO createRouteRule(PaymentRouteRuleUpsertRequestDTO request);
+
+    /**
+     * 编辑支付路由规则。
+     */
+    PaymentConfigOverviewDTO updateRouteRule(String ruleCode, PaymentRouteRuleUpsertRequestDTO request);
+
+    /**
+     * 校验路由表达式并使用样例上下文模拟命中。
+     */
+    PaymentRouteRuleValidationDTO validateRouteRule(PaymentRouteRuleValidationRequestDTO request);
 
     /**
      * 启停支付协议配置。

@@ -46,6 +46,21 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findRouteRuleByCode" resultType="com.abc123.hsp.entity.PaymentRouteRuleConfigEntity">
+        SELECT rule_code AS ruleCode,
+               rule_name AS ruleName,
+               match_scene AS matchScene,
+               match_expression AS matchExpression,
+               target_channel_code AS targetChannelCode,
+               fallback_channel_code AS fallbackChannelCode,
+               status,
+               status_type AS statusType,
+               priority
+        FROM t_payment_route_rule_config
+        WHERE rule_code = #{ruleCode}
+        LIMIT 1
+    </select>
+
     <select id="findProtocols" resultType="com.abc123.hsp.dto.PaymentProtocolConfigDTO">
         SELECT protocol_code AS protocolCode,
                protocol_name AS protocolName,
@@ -327,6 +342,46 @@
         UPDATE t_payment_route_rule_config
         SET status = #{status},
             status_type = #{statusType},
+            updated_at = NOW()
+        WHERE rule_code = #{ruleCode}
+    </update>
+
+    <insert id="insertRouteRule" parameterType="com.abc123.hsp.entity.PaymentRouteRuleConfigEntity">
+        INSERT INTO t_payment_route_rule_config (
+            rule_code,
+            rule_name,
+            match_scene,
+            match_expression,
+            target_channel_code,
+            fallback_channel_code,
+            status,
+            status_type,
+            priority,
+            updated_at
+        ) VALUES (
+            #{ruleCode},
+            #{ruleName},
+            #{matchScene},
+            #{matchExpression},
+            #{targetChannelCode},
+            #{fallbackChannelCode},
+            #{status},
+            #{statusType},
+            #{priority},
+            NOW()
+        )
+    </insert>
+
+    <update id="updateRouteRule" parameterType="com.abc123.hsp.entity.PaymentRouteRuleConfigEntity">
+        UPDATE t_payment_route_rule_config
+        SET rule_name = #{ruleName},
+            match_scene = #{matchScene},
+            match_expression = #{matchExpression},
+            target_channel_code = #{targetChannelCode},
+            fallback_channel_code = #{fallbackChannelCode},
+            status = #{status},
+            status_type = #{statusType},
+            priority = #{priority},
             updated_at = NOW()
         WHERE rule_code = #{ruleCode}
     </update>

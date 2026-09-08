@@ -15,8 +15,13 @@ import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
+import com.abc123.hsp.dto.PaymentRouteContextDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import java.util.Arrays;
@@ -104,6 +109,55 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付路由规则不存在");
         }
         return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO createRouteRule(PaymentRouteRuleUpsertRequestDTO request) {
+        PaymentRouteRuleConfigEntity entity = buildRouteRuleEntity(request, null);
+        if (paymentConfigMapper.findRouteRuleByCode(entity.getRuleCode()) != null) {
+            throw new IllegalArgumentException("支付路由规则编码已存在");
+        }
+        paymentConfigMapper.insertRouteRule(entity);
+        return overview();
+    }
+
+    @Override
+    @Transactional
+    public PaymentConfigOverviewDTO updateRouteRule(String ruleCode, PaymentRouteRuleUpsertRequestDTO request) {
+        String normalizedRuleCode = requireText(ruleCode, "路由规则编码不能为空");
+        if (paymentConfigMapper.findRouteRuleByCode(normalizedRuleCode) == null) {
+            throw new IllegalArgumentException("支付路由规则不存在");
+        }
+        paymentConfigMapper.updateRouteRule(buildRouteRuleEntity(request, normalizedRuleCode));
+        return overview();
+    }
+
+    @Override
+    public PaymentRouteRuleValidationDTO validateRouteRule(PaymentRouteRuleValidationRequestDTO request) {
+        if (request == null || !StringUtils.hasText(request.getMatchExpression())) {
+            throw new IllegalArgumentException("路由规则表达式不能为空");
+        }
+        String expression = request.getMatchExpression().trim();
+        boolean valid = PaymentRouteExpressionEvaluator.isValid(expression);
+        PaymentRouteRuleValidationDTO result = new PaymentRouteRuleValidationDTO();
+        result.setValid(Boolean.valueOf(valid));
+        if (!valid) {
+            result.setMatched(Boolean.FALSE);
+            result.setMessage("表达式语法或字段不合法");
+            return result;
+        }
+        PaymentRouteContextDTO context = new PaymentRouteContextDTO();
+        context.setPaymentMethod(request.getPaymentMethod());
+        context.setRequestedChannelCode(request.getRequestedChannelCode());
+        context.setPayScene(request.getPayScene());
+        context.setTerminal(request.getTerminal());
+        context.setAmount(request.getAmount());
+        context.setCustomerName(request.getCustomerName());
+        boolean matched = PaymentRouteExpressionEvaluator.matches(context, expression);
+        result.setMatched(Boolean.valueOf(matched));
+        result.setMessage(matched ? "表达式合法，样例上下文命中" : "表达式合法，样例上下文未命中");
+        return result;
     }
 
     @Override
@@ -775,6 +829,43 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return entity;
     }
 
+    private PaymentRouteRuleConfigEntity buildRouteRuleEntity(PaymentRouteRuleUpsertRequestDTO request,
+                                                               String overrideRuleCode) {
+        if (request == null) {
+            throw new IllegalArgumentException("支付路由规则请求不能为空");
+        }
+        PaymentRouteRuleConfigEntity entity = new PaymentRouteRuleConfigEntity();
+        entity.setRuleCode(StringUtils.hasText(overrideRuleCode)
+                ? overrideRuleCode.trim()
+                : requireText(request.getRuleCode(), "路由规则编码不能为空"));
+        entity.setRuleName(requireText(request.getRuleName(), "路由规则名称不能为空"));
+        entity.setMatchScene(requireText(request.getMatchScene(), "匹配场景不能为空"));
+        String expression = requireText(request.getMatchExpression(), "匹配表达式不能为空");
+        if (!PaymentRouteExpressionEvaluator.isValid(expression)) {
+            throw new IllegalArgumentException("路由规则表达式不合法");
+        }
+        entity.setMatchExpression(expression);
+        String targetChannelCode = requireText(request.getTargetChannelCode(), "目标渠道不能为空");
+        if (paymentConfigMapper.findChannelForRouting(targetChannelCode) == null) {
+            throw new IllegalArgumentException("目标渠道配置不存在");
+        }
+        entity.setTargetChannelCode(targetChannelCode);
+        String fallbackChannelCode = StringUtils.hasText(request.getFallbackChannelCode())
+                ? request.getFallbackChannelCode().trim() : "";
+        if (StringUtils.hasText(fallbackChannelCode)
+                && paymentConfigMapper.findChannelForRouting(fallbackChannelCode) == null) {
+            throw new IllegalArgumentException("兜底渠道配置不存在");
+        }
+        if (targetChannelCode.equalsIgnoreCase(fallbackChannelCode)) {
+            throw new IllegalArgumentException("目标渠道与兜底渠道不能相同");
+        }
+        entity.setFallbackChannelCode(fallbackChannelCode);
+        entity.setPriority(resolveRoutePriority(request.getPriority()));
+        entity.setStatus(resolveStatus(request.getEnabled()));
+        entity.setStatusType(resolveStatusType(request.getEnabled()));
+        return entity;
+    }
+
     private PaymentIssueDutyRosterEntity buildIssueDutyRosterEntity(PaymentIssueDutyRosterUpsertRequestDTO request,
                                                                     String overrideRosterCode) {
         if (request == null) {
@@ -818,6 +909,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         if (priority.intValue() < 0) {
             throw new IllegalArgumentException("协议优先级不能小于0");
+        }
+        return priority;
+    }
+
+    private Integer resolveRoutePriority(Integer priority) {
+        if (priority == null) {
+            return 99;
+        }
+        if (priority.intValue() < 0) {
+            throw new IllegalArgumentException("路由规则优先级不能小于0");
         }
         return priority;
     }

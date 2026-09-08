@@ -15,9 +15,11 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeConfigCode = ref("");
+const editingRouteRuleCode = ref("");
 const editingProtocolCode = ref("");
 const editingRosterCode = ref("");
 const protocolForm = ref(createProtocolForm());
+const routeRuleForm = ref(createRouteRuleForm());
 const rosterForm = ref(createRosterForm());
 
 const governanceMetrics = computed(() => ({
@@ -52,6 +54,25 @@ function createProtocolForm() {
     protocolBody: "",
     priority: 99,
     enabled: true
+  };
+}
+
+function createRouteRuleForm() {
+  return {
+    ruleCode: "",
+    ruleName: "",
+    matchScene: "",
+    matchExpression: "",
+    targetChannelCode: "",
+    fallbackChannelCode: "",
+    priority: 99,
+    enabled: true,
+    samplePaymentMethod: "微信支付",
+    sampleRequestedChannelCode: "",
+    samplePayScene: "HOME_CLEAN",
+    sampleTerminal: "H5",
+    sampleAmount: 100,
+    sampleCustomerName: "个人客户"
   };
 }
 
@@ -143,6 +164,82 @@ async function toggleRouteRule(rule) {
     "路由规则",
     paymentConfigApi.toggleRouteRule
   );
+}
+
+function startCreateRouteRule() {
+  editingRouteRuleCode.value = "";
+  routeRuleForm.value = createRouteRuleForm();
+  actionMessage.value = "";
+}
+
+function startEditRouteRule(rule) {
+  editingRouteRuleCode.value = rule.ruleCode;
+  routeRuleForm.value = {
+    ...createRouteRuleForm(),
+    ruleCode: rule.ruleCode,
+    ruleName: rule.ruleName,
+    matchScene: rule.matchScene,
+    matchExpression: rule.matchExpression,
+    targetChannelCode: rule.targetChannelCode,
+    fallbackChannelCode: rule.fallbackChannelCode,
+    priority: rule.priority,
+    enabled: rule.status === "ENABLED"
+  };
+  actionMessage.value = `正在编辑路由规则 ${rule.ruleCode}`;
+}
+
+async function validateRouteRuleForm() {
+  activeConfigCode.value = editingRouteRuleCode.value || routeRuleForm.value.ruleCode || "ROUTE_RULE_VALIDATION";
+  actionMessage.value = "";
+  try {
+    const result = await paymentConfigApi.validateRouteRule({
+      matchExpression: routeRuleForm.value.matchExpression,
+      paymentMethod: routeRuleForm.value.samplePaymentMethod,
+      requestedChannelCode: routeRuleForm.value.sampleRequestedChannelCode,
+      payScene: routeRuleForm.value.samplePayScene,
+      terminal: routeRuleForm.value.sampleTerminal,
+      amount: Number(routeRuleForm.value.sampleAmount || 0),
+      customerName: routeRuleForm.value.sampleCustomerName
+    });
+    actionMessage.value = `路由表达式校验：${result.message}`;
+  } catch (error) {
+    actionMessage.value = `路由表达式校验失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function submitRouteRuleForm() {
+  activeConfigCode.value = editingRouteRuleCode.value || routeRuleForm.value.ruleCode;
+  actionMessage.value = "";
+  try {
+    const savedRuleCode = editingRouteRuleCode.value || routeRuleForm.value.ruleCode;
+    const payload = {
+      ruleCode: routeRuleForm.value.ruleCode,
+      ruleName: routeRuleForm.value.ruleName,
+      matchScene: routeRuleForm.value.matchScene,
+      matchExpression: routeRuleForm.value.matchExpression,
+      targetChannelCode: routeRuleForm.value.targetChannelCode,
+      fallbackChannelCode: routeRuleForm.value.fallbackChannelCode,
+      priority: routeRuleForm.value.priority === "" || routeRuleForm.value.priority == null
+        ? 99
+        : Number(routeRuleForm.value.priority),
+      enabled: routeRuleForm.value.enabled
+    };
+    const overview = editingRouteRuleCode.value
+      ? await paymentConfigApi.updateRouteRule(editingRouteRuleCode.value, payload)
+      : await paymentConfigApi.createRouteRule(payload);
+    applyOverview(overview);
+    const successMessage = editingRouteRuleCode.value
+      ? `路由规则 ${savedRuleCode} 已更新。`
+      : `路由规则 ${savedRuleCode} 已新增。`;
+    startCreateRouteRule();
+    actionMessage.value = successMessage;
+  } catch (error) {
+    actionMessage.value = `路由规则保存失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function toggleProtocol(protocol) {
@@ -501,7 +598,103 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付路由规则</h3>
               <p class="meta">支持括号、AND / OR / NOT、IN、比较运算；非法表达式不命中并继续后续规则</p>
             </div>
-            <button class="button secondary" @click="exportGovernanceSnapshot('ROUTE_RULES')">导出路由</button>
+            <div class="toolbar-actions">
+              <button class="button secondary" @click="exportGovernanceSnapshot('ROUTE_RULES')">导出路由</button>
+              <button class="button secondary" @click="startCreateRouteRule">新建规则</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ editingRouteRuleCode ? "编辑路由规则" : "新增路由规则" }}</h3>
+                <p class="meta">保存前可使用样例上下文校验语法和命中结果</p>
+              </div>
+            </div>
+            <div class="filter-grid">
+              <label>
+                规则编码
+                <input v-model.trim="routeRuleForm.ruleCode" :disabled="Boolean(editingRouteRuleCode)" placeholder="RULE_HOME_APP" />
+              </label>
+              <label>
+                规则名称
+                <input v-model.trim="routeRuleForm.ruleName" placeholder="家政 App 小额路由" />
+              </label>
+              <label>
+                匹配场景
+                <input v-model.trim="routeRuleForm.matchScene" placeholder="HOME_CLEAN/APP" />
+              </label>
+              <label>
+                目标渠道
+                <select v-model="routeRuleForm.targetChannelCode">
+                  <option value="">请选择目标渠道</option>
+                  <option v-for="channel in channels" :key="channel.channelCode" :value="channel.channelCode">
+                    {{ channel.channelCode }} / {{ channel.channelName }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                兜底渠道
+                <select v-model="routeRuleForm.fallbackChannelCode">
+                  <option value="">无兜底渠道</option>
+                  <option v-for="channel in channels" :key="channel.channelCode" :value="channel.channelCode">
+                    {{ channel.channelCode }} / {{ channel.channelName }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                优先级
+                <input v-model.number="routeRuleForm.priority" type="number" min="0" />
+              </label>
+              <label>
+                启用状态
+                <select v-model="routeRuleForm.enabled">
+                  <option :value="true">启用</option>
+                  <option :value="false">停用</option>
+                </select>
+              </label>
+              <label class="wide-field">
+                匹配表达式
+                <textarea
+                  v-model.trim="routeRuleForm.matchExpression"
+                  rows="3"
+                  placeholder="terminal IN (H5, APP) AND amount<=500"
+                />
+              </label>
+              <label>
+                样例支付方式
+                <input v-model.trim="routeRuleForm.samplePaymentMethod" />
+              </label>
+              <label>
+                样例请求渠道
+                <input v-model.trim="routeRuleForm.sampleRequestedChannelCode" placeholder="可留空" />
+              </label>
+              <label>
+                样例支付场景
+                <input v-model.trim="routeRuleForm.samplePayScene" />
+              </label>
+              <label>
+                样例终端
+                <input v-model.trim="routeRuleForm.sampleTerminal" />
+              </label>
+              <label>
+                样例金额
+                <input v-model.number="routeRuleForm.sampleAmount" type="number" min="0" step="0.01" />
+              </label>
+              <label>
+                样例客户名称
+                <input v-model.trim="routeRuleForm.sampleCustomerName" />
+              </label>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button class="button secondary" :disabled="Boolean(activeConfigCode)" @click="validateRouteRuleForm">
+                校验并模拟
+              </button>
+              <button class="button primary" :disabled="Boolean(activeConfigCode)" @click="submitRouteRuleForm">
+                {{ editingRouteRuleCode ? "保存修改" : "新增规则" }}
+              </button>
+              <button class="button secondary" @click="startCreateRouteRule">重置表单</button>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -532,6 +725,13 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <td><span :class="['badge', rule.statusType]">{{ rule.status }}</span></td>
                   <td>{{ rule.updatedAt }}</td>
                   <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === rule.ruleCode"
+                      @click="startEditRouteRule(rule)"
+                    >
+                      编辑
+                    </button>
                     <button
                       class="link-button"
                       :disabled="activeConfigCode === rule.ruleCode"

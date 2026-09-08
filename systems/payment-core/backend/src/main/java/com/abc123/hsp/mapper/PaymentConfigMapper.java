@@ -14,6 +14,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -31,6 +32,11 @@ public interface PaymentConfigMapper {
      * 查询支付路由规则配置。
      */
     List<PaymentRouteRuleConfigDTO> findRouteRules();
+
+    /**
+     * 按规则编码查询支付路由规则。
+     */
+    PaymentRouteRuleConfigEntity findRouteRuleByCode(@Param("ruleCode") String ruleCode);
 
     /**
      * 查询支付协议配置。
@@ -115,6 +121,16 @@ public interface PaymentConfigMapper {
     int updateRouteRuleStatus(@Param("ruleCode") String ruleCode,
                               @Param("status") String status,
                               @Param("statusType") String statusType);
+
+    /**
+     * 新增支付路由规则。
+     */
+    int insertRouteRule(PaymentRouteRuleConfigEntity entity);
+
+    /**
+     * 更新支付路由规则。
+     */
+    int updateRouteRule(PaymentRouteRuleConfigEntity entity);
 
     /**
      * 更新支付协议启停状态。

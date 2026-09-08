@@ -14,8 +14,12 @@ import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
+import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
+import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +37,110 @@ class PaymentConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @Test
+    void shouldCreateAndUpdateValidatedRouteRule() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO target =
+                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+        target.setChannelCode("wx_h5");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO fallback =
+                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+        fallback.setChannelCode("alipay_h5");
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(target);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(fallback);
+        when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP")).thenReturn(null);
+        mockOverviewDependencies();
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        service.createRouteRule(request);
+
+        ArgumentCaptor<PaymentRouteRuleConfigEntity> createCaptor =
+                ArgumentCaptor.forClass(PaymentRouteRuleConfigEntity.class);
+        verify(paymentConfigMapper).insertRouteRule(createCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("RULE_HOME_APP", createCaptor.getValue().getRuleCode());
+        org.junit.jupiter.api.Assertions.assertEquals("ENABLED", createCaptor.getValue().getStatus());
+
+        when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP"))
+                .thenReturn(createCaptor.getValue());
+        service.updateRouteRule("RULE_HOME_APP", request);
+
+        verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
+                entity -> "RULE_HOME_APP".equals(entity.getRuleCode())
+                        && "terminal IN (H5, APP) AND amount<=500".equals(entity.getMatchExpression())));
+    }
+
+    @Test
+    void shouldRejectInvalidRouteRuleBeforeWrite() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        request.setMatchExpression("amount>not-a-number");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectDuplicateRouteRuleCode() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO channel =
+                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(channel);
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5")).thenReturn(channel);
+        when(paymentConfigMapper.findRouteRuleByCode("RULE_HOME_APP"))
+                .thenReturn(new PaymentRouteRuleConfigEntity());
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).createRouteRule(request));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectConflictingChannelsAndNegativePriority() {
+        PaymentRouteRuleUpsertRequestDTO request = buildRouteRuleRequest();
+        request.setFallbackChannelCode("wx_h5");
+        com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO channel =
+                new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO();
+        when(paymentConfigMapper.findChannelForRouting("wx_h5")).thenReturn(channel);
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createRouteRule(request));
+
+        request.setFallbackChannelCode("");
+        request.setPriority(-1);
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.createRouteRule(request));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldValidateAndSimulateRouteRuleExpression() {
+        PaymentRouteRuleValidationRequestDTO request = new PaymentRouteRuleValidationRequestDTO();
+        request.setMatchExpression("terminal IN (H5, APP) AND amount<=500");
+        request.setTerminal("APP");
+        request.setAmount(new java.math.BigDecimal("168.00"));
+
+        PaymentRouteRuleValidationDTO result = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .validateRouteRule(request);
+
+        org.junit.jupiter.api.Assertions.assertTrue(result.getValid());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getMatched());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getMessage().contains("样例上下文命中"));
+
+        request.setMatchExpression("unknownField=value");
+        PaymentRouteRuleValidationDTO invalidResult = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .validateRouteRule(request);
+        org.junit.jupiter.api.Assertions.assertFalse(invalidResult.getValid());
+        org.junit.jupiter.api.Assertions.assertFalse(invalidResult.getMatched());
+    }
 
     @Test
     void shouldExposeChannelFormalizationFieldsInOverview() {
@@ -563,6 +671,19 @@ class PaymentConfigServiceImplTest {
         request.setProtocolBody("1. 用户授权平台按订单金额发起收款。\n2. 平台提供账单与服务记录。");
         request.setPriority(5);
         request.setEnabled(true);
+        return request;
+    }
+
+    private PaymentRouteRuleUpsertRequestDTO buildRouteRuleRequest() {
+        PaymentRouteRuleUpsertRequestDTO request = new PaymentRouteRuleUpsertRequestDTO();
+        request.setRuleCode("RULE_HOME_APP");
+        request.setRuleName("家政 App 小额路由");
+        request.setMatchScene("HOME_CLEAN/APP");
+        request.setMatchExpression("terminal IN (H5, APP) AND amount<=500");
+        request.setTargetChannelCode("wx_h5");
+        request.setFallbackChannelCode("alipay_h5");
+        request.setPriority(10);
+        request.setEnabled(Boolean.TRUE);
         return request;
     }
 
