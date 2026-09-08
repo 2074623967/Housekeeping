@@ -472,6 +472,66 @@
         FOR UPDATE
     </select>
 
+    <select id="findReturnCodeImportReviews"
+            resultType="com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO">
+        SELECT request_no AS requestNo,
+               source_sha256 AS sourceSha256,
+               baseline_fingerprint AS baselineFingerprint,
+               total_count AS totalCount,
+               create_count AS createCount,
+               update_count AS updateCount,
+               unchanged_count AS unchangedCount,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               applied_batch_no AS appliedBatchNo,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_return_code_import_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findReturnCodeImportReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity">
+        SELECT request_no AS requestNo,
+               pending_import_key AS pendingImportKey,
+               csv_content AS csvContent,
+               source_sha256 AS sourceSha256,
+               baseline_fingerprint AS baselineFingerprint,
+               total_count AS totalCount,
+               create_count AS createCount,
+               update_count AS updateCount,
+               unchanged_count AS unchangedCount,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               applied_batch_no AS appliedBatchNo
+        FROM t_payment_return_code_import_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingReturnCodeImportReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_return_code_import_review
+        WHERE pending_import_key = 'RETURN_CODE_IMPORT'
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findActiveReturnCodeMapping"
             resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
         SELECT channel_code AS channelCode,
@@ -1150,6 +1210,32 @@
             #{appliedCount}, #{batchStatus}, #{batchStatusType}, NOW()
         )
     </insert>
+
+    <insert id="insertReturnCodeImportReview">
+        INSERT INTO t_payment_return_code_import_review (
+            request_no, pending_import_key, csv_content, source_sha256, baseline_fingerprint,
+            total_count, create_count, update_count, unchanged_count, requester, request_reason,
+            review_status, review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{pendingImportKey}, #{csvContent}, #{sourceSha256}, #{baselineFingerprint},
+            #{totalCount}, #{createCount}, #{updateCount}, #{unchangedCount}, #{requester}, #{requestReason},
+            #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeReturnCodeImportReview">
+        UPDATE t_payment_return_code_import_review
+        SET pending_import_key = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            applied_batch_no = #{appliedBatchNo},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
+    </update>
 
     <update id="updateGatewayStatus">
         UPDATE t_payment_gateway_config

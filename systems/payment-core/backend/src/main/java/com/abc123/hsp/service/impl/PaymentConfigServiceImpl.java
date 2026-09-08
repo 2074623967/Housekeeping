@@ -35,6 +35,9 @@ import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportItemDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
@@ -42,6 +45,7 @@ import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
+import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import java.io.IOException;
@@ -626,22 +630,81 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     @Override
+    public List<PaymentReturnCodeImportReviewDTO> listReturnCodeImportReviews() {
+        return paymentConfigMapper.findReturnCodeImportReviews();
+    }
+
+    @Override
     @Transactional
-    public PaymentReturnCodeImportResultDTO applyReturnCodeImport(PaymentReturnCodeImportRequestDTO request) {
-        String operator = requireImportText(request == null ? null : request.getOperator(),
-                "操作人自声明不能为空", 128);
-        String changeReason = requireImportText(request.getChangeReason(), "导入原因不能为空", 256);
+    public List<PaymentReturnCodeImportReviewDTO> submitReturnCodeImportReview(
+            PaymentReturnCodeImportReviewSubmitRequestDTO request) {
+        String requester = requireReviewIdentity(
+                request == null ? null : request.getRequester(), "申请人声明不能为空");
+        String changeReason = requireReviewText(request.getChangeReason(), "导入原因不能为空");
         String expectedBaseline = requireImportText(
                 request.getBaselineFingerprint(), "请先执行预检并携带基线指纹", 64);
+        PaymentReturnCodeImportRequestDTO importRequest = returnCodeImportRequest(request.getCsvContent());
+        if (paymentConfigMapper.findPendingReturnCodeImportReviewForUpdate() != null) {
+            throw new IllegalArgumentException("已有待复核的返回码导入申请");
+        }
         List<PaymentChannelReturnCodeConfigDTO> currentMappings =
                 paymentConfigMapper.findReturnCodeMappingsForUpdate();
         PaymentReturnCodeImportResultDTO result = buildReturnCodeImportResult(
-                request, currentMappings, resolveReturnCodeImportChannels());
+                importRequest, currentMappings, resolveReturnCodeImportChannels());
         if (!expectedBaseline.equals(result.getBaselineFingerprint())) {
-            throw new IllegalArgumentException("返回码配置已变化，请重新预检后再应用");
+            throw new IllegalArgumentException("返回码配置已变化，请重新预检后再提交复核");
         }
         if (!Boolean.TRUE.equals(result.getValid())) {
-            throw new IllegalArgumentException("CSV 存在无效行，未应用任何返回码映射");
+            throw new IllegalArgumentException("CSV 存在无效行，未提交复核申请");
+        }
+        if (result.getCreateCount().intValue() + result.getUpdateCount().intValue() == 0) {
+            throw new IllegalArgumentException("CSV 与当前返回码配置一致，无需提交复核");
+        }
+        PaymentReturnCodeImportReviewEntity review = new PaymentReturnCodeImportReviewEntity();
+        review.setRequestNo("RCR" + UUID.randomUUID().toString().replace("-", ""));
+        review.setPendingImportKey("RETURN_CODE_IMPORT");
+        review.setCsvContent(normalizeCsvContent(request.getCsvContent()));
+        review.setSourceSha256(sha256(review.getCsvContent()));
+        review.setBaselineFingerprint(result.getBaselineFingerprint());
+        review.setTotalCount(result.getTotalCount());
+        review.setCreateCount(result.getCreateCount());
+        review.setUpdateCount(result.getUpdateCount());
+        review.setUnchangedCount(result.getUnchangedCount());
+        review.setRequester(requester);
+        review.setRequestReason(changeReason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        try {
+            paymentConfigMapper.insertReturnCodeImportReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("已有待复核的返回码导入申请", exception);
+        }
+        return paymentConfigMapper.findReturnCodeImportReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentReturnCodeImportReviewDTO> approveReturnCodeImportReview(
+            String requestNo, PaymentReturnCodeImportReviewActionRequestDTO request) {
+        PaymentReturnCodeImportReviewEntity review = requirePendingReturnCodeImportReview(requestNo);
+        String reviewer = requireDistinctReturnCodeImportReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        String storedCsv = normalizeCsvContent(review.getCsvContent());
+        if (!sha256(storedCsv).equals(review.getSourceSha256())) {
+            throw new IllegalArgumentException("返回码导入候选内容校验失败，请驳回并重新提交");
+        }
+        List<PaymentChannelReturnCodeConfigDTO> currentMappings =
+                paymentConfigMapper.findReturnCodeMappingsForUpdate();
+        PaymentReturnCodeImportResultDTO result = buildReturnCodeImportResult(
+                returnCodeImportRequest(storedCsv),
+                currentMappings,
+                resolveReturnCodeImportChannels());
+        if (!review.getBaselineFingerprint().equals(result.getBaselineFingerprint())) {
+            throw new IllegalArgumentException("返回码配置已变化，请驳回并重新预检后提交");
+        }
+        if (!Boolean.TRUE.equals(result.getValid())) {
+            throw new IllegalArgumentException("返回码导入候选已失效，请驳回并重新提交");
         }
         int appliedCount = 0;
         try {
@@ -663,9 +726,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         result.setResultFingerprint(resultFingerprint);
         paymentConfigMapper.insertReturnCodeImportBatch(
                 batchNo,
-                operator,
-                changeReason,
-                sha256(normalizeCsvContent(request.getCsvContent())),
+                review.getRequester(),
+                review.getRequestReason(),
+                review.getSourceSha256(),
                 result.getBaselineFingerprint(),
                 resultFingerprint,
                 result.getTotalCount(),
@@ -675,7 +738,22 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 result.getAppliedCount(),
                 appliedCount == 0 ? "NO_CHANGE" : "APPLIED",
                 appliedCount == 0 ? "info" : "success");
-        return result;
+        completeReturnCodeImportReview(
+                review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment, batchNo);
+        return paymentConfigMapper.findReturnCodeImportReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentReturnCodeImportReviewDTO> rejectReturnCodeImportReview(
+            String requestNo, PaymentReturnCodeImportReviewActionRequestDTO request) {
+        PaymentReturnCodeImportReviewEntity review = requirePendingReturnCodeImportReview(requestNo);
+        String reviewer = requireDistinctReturnCodeImportReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "驳回原因不能为空");
+        completeReturnCodeImportReview(
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment, null);
+        return paymentConfigMapper.findReturnCodeImportReviews();
     }
 
     @Override
@@ -2059,6 +2137,49 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         throw new IllegalArgumentException("协议类型未在字典中定义");
+    }
+
+    private PaymentReturnCodeImportReviewEntity requirePendingReturnCodeImportReview(String requestNo) {
+        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        PaymentReturnCodeImportReviewEntity review =
+                paymentConfigMapper.findReturnCodeImportReviewForUpdate(normalizedRequestNo);
+        if (review == null) {
+            throw new IllegalArgumentException("返回码导入复核申请不存在");
+        }
+        if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+            throw new IllegalArgumentException("返回码导入复核申请已完成");
+        }
+        return review;
+    }
+
+    private String requireDistinctReturnCodeImportReviewer(
+            PaymentReturnCodeImportReviewEntity review,
+            PaymentReturnCodeImportReviewActionRequestDTO request) {
+        String reviewer = requireReviewIdentity(
+                request == null ? null : request.getReviewer(), "复核人声明不能为空");
+        if (review.getRequester().equalsIgnoreCase(reviewer)) {
+            throw new IllegalArgumentException("申请人与复核人声明不能相同");
+        }
+        return reviewer;
+    }
+
+    private void completeReturnCodeImportReview(String requestNo,
+                                                String reviewStatus,
+                                                String reviewStatusType,
+                                                String reviewer,
+                                                String reviewComment,
+                                                String appliedBatchNo) {
+        int affectedRows = paymentConfigMapper.completeReturnCodeImportReview(
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment, appliedBatchNo);
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("返回码导入复核状态已变化，请刷新后重试");
+        }
+    }
+
+    private PaymentReturnCodeImportRequestDTO returnCodeImportRequest(String csvContent) {
+        PaymentReturnCodeImportRequestDTO request = new PaymentReturnCodeImportRequestDTO();
+        request.setCsvContent(csvContent);
+        return request;
     }
 
     private PaymentReturnCodeImportResultDTO buildReturnCodeImportResult(

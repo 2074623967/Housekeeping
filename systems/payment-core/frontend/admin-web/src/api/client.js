@@ -920,7 +920,16 @@ export const paymentConfigApi = {
   updateIssueDutyRoster: (rosterCode, payload) => request(`/api/payment-config/issue-duty-rosters/${rosterCode}`, buildJsonRequestOptions("PUT", payload)),
   toggleReturnCodeMapping: (configCode, subCode, enabled) => postJson("/api/payment-config/return-codes/toggle", { configCode, subCode, enabled }),
   previewReturnCodeImport: (payload) => postJson("/api/payment-config/return-codes/import/preview", payload),
-  applyReturnCodeImport: (payload) => postJson("/api/payment-config/return-codes/import/apply", payload),
+  getReturnCodeImportReviews: () => request("/api/payment-config/return-codes/import/reviews"),
+  submitReturnCodeImportReview: (payload) => postJson("/api/payment-config/return-codes/import/reviews", payload),
+  approveReturnCodeImportReview: (requestNo, payload) => postJson(
+    `/api/payment-config/return-codes/import/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectReturnCodeImportReview: (requestNo, payload) => postJson(
+    `/api/payment-config/return-codes/import/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   toggleGateway: (configCode, enabled) => postJson("/api/payment-config/gateways/toggle", { configCode, enabled }),
   toggleControlPolicy: (configCode, enabled) => postJson("/api/payment-config/control-policies/toggle", { configCode, enabled }),
   toggleAlertProvider: (configCode, enabled) => postJson("/api/payment-config/alert-providers/toggle", { configCode, enabled }),

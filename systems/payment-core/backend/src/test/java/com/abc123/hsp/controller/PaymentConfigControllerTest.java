@@ -26,6 +26,9 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
 import java.util.Collections;
 import com.abc123.hsp.service.PaymentConfigService;
 import org.junit.jupiter.api.Test;
@@ -55,22 +58,39 @@ class PaymentConfigControllerTest {
     }
 
     @Test
-    void shouldPreviewAndApplyReturnCodeImport() {
+    void shouldPreviewAndReviewReturnCodeImport() {
         PaymentReturnCodeImportResultDTO preview = new PaymentReturnCodeImportResultDTO();
         preview.setValid(Boolean.TRUE);
-        PaymentReturnCodeImportResultDTO applied = new PaymentReturnCodeImportResultDTO();
-        applied.setApplied(Boolean.TRUE);
+        PaymentReturnCodeImportReviewDTO review = new PaymentReturnCodeImportReviewDTO();
         when(paymentConfigService.previewReturnCodeImport(any(PaymentReturnCodeImportRequestDTO.class)))
                 .thenReturn(preview);
-        when(paymentConfigService.applyReturnCodeImport(any(PaymentReturnCodeImportRequestDTO.class)))
-                .thenReturn(applied);
+        when(paymentConfigService.listReturnCodeImportReviews()).thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.submitReturnCodeImportReview(
+                any(PaymentReturnCodeImportReviewSubmitRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.approveReturnCodeImportReview(
+                any(String.class), any(PaymentReturnCodeImportReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.rejectReturnCodeImportReview(
+                any(String.class), any(PaymentReturnCodeImportReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
         PaymentReturnCodeImportRequestDTO request = new PaymentReturnCodeImportRequestDTO();
+        PaymentReturnCodeImportReviewSubmitRequestDTO submitRequest =
+                new PaymentReturnCodeImportReviewSubmitRequestDTO();
+        PaymentReturnCodeImportReviewActionRequestDTO actionRequest =
+                new PaymentReturnCodeImportReviewActionRequestDTO();
 
         assertTrue(controller.previewReturnCodeImport(request).getData().getValid());
-        assertTrue(controller.applyReturnCodeImport(request).getData().getApplied());
+        assertEquals(1, controller.listReturnCodeImportReviews().getData().size());
+        assertEquals(1, controller.submitReturnCodeImportReview(submitRequest).getData().size());
+        assertEquals(1, controller.approveReturnCodeImportReview("RCR-001", actionRequest).getData().size());
+        assertEquals(1, controller.rejectReturnCodeImportReview("RCR-001", actionRequest).getData().size());
         verify(paymentConfigService).previewReturnCodeImport(request);
-        verify(paymentConfigService).applyReturnCodeImport(request);
+        verify(paymentConfigService).listReturnCodeImportReviews();
+        verify(paymentConfigService).submitReturnCodeImportReview(submitRequest);
+        verify(paymentConfigService).approveReturnCodeImportReview("RCR-001", actionRequest);
+        verify(paymentConfigService).rejectReturnCodeImportReview("RCR-001", actionRequest);
     }
 
     @Test

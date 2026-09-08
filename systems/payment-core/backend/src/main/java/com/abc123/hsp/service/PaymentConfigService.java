@@ -22,6 +22,9 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
 import java.util.List;
 
 /**
@@ -161,10 +164,20 @@ public interface PaymentConfigService {
      */
     PaymentReturnCodeImportResultDTO previewReturnCodeImport(PaymentReturnCodeImportRequestDTO request);
 
-    /**
-     * 复验预检基线并原子应用渠道返回码 CSV。
-     */
-    PaymentReturnCodeImportResultDTO applyReturnCodeImport(PaymentReturnCodeImportRequestDTO request);
+    /** 查询渠道返回码导入复核申请。 */
+    List<PaymentReturnCodeImportReviewDTO> listReturnCodeImportReviews();
+
+    /** 提交渠道返回码导入候选，不改变运行态配置。 */
+    List<PaymentReturnCodeImportReviewDTO> submitReturnCodeImportReview(
+            PaymentReturnCodeImportReviewSubmitRequestDTO request);
+
+    /** 通过复核并原子应用渠道返回码导入候选。 */
+    List<PaymentReturnCodeImportReviewDTO> approveReturnCodeImportReview(
+            String requestNo, PaymentReturnCodeImportReviewActionRequestDTO request);
+
+    /** 驳回渠道返回码导入候选，不改变运行态配置。 */
+    List<PaymentReturnCodeImportReviewDTO> rejectReturnCodeImportReview(
+            String requestNo, PaymentReturnCodeImportReviewActionRequestDTO request);
 
     /**
      * 启停支付网关接入配置。

@@ -16,6 +16,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleConfigDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
@@ -23,6 +24,7 @@ import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
+import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -106,6 +108,16 @@ public interface PaymentConfigMapper {
      * 加锁查询渠道返回码映射，供批量导入基线复验。
      */
     List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappingsForUpdate();
+
+    /** 查询渠道返回码导入复核申请。 */
+    List<PaymentReturnCodeImportReviewDTO> findReturnCodeImportReviews();
+
+    /** 加锁查询渠道返回码导入复核申请。 */
+    PaymentReturnCodeImportReviewEntity findReturnCodeImportReviewForUpdate(
+            @Param("requestNo") String requestNo);
+
+    /** 加锁查询当前待复核的渠道返回码导入申请。 */
+    PaymentReturnCodeImportReviewEntity findPendingReturnCodeImportReviewForUpdate();
 
     /**
      * 查询启用且未归档的渠道返回码映射。
@@ -305,6 +317,17 @@ public interface PaymentConfigMapper {
             @Param("appliedCount") Integer appliedCount,
             @Param("batchStatus") String batchStatus,
             @Param("batchStatusType") String batchStatusType);
+
+    /** 新增渠道返回码导入复核申请。 */
+    int insertReturnCodeImportReview(PaymentReturnCodeImportReviewEntity entity);
+
+    /** 完成渠道返回码导入复核申请并释放唯一待办占位。 */
+    int completeReturnCodeImportReview(@Param("requestNo") String requestNo,
+                                       @Param("reviewStatus") String reviewStatus,
+                                       @Param("reviewStatusType") String reviewStatusType,
+                                       @Param("reviewer") String reviewer,
+                                       @Param("reviewComment") String reviewComment,
+                                       @Param("appliedBatchNo") String appliedBatchNo);
 
     /**
      * 更新支付网关启停状态。

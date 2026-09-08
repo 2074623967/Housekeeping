@@ -21,6 +21,9 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -261,13 +264,33 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.previewReturnCodeImport(request));
     }
 
-    /**
-     * 复验预检基线并原子应用渠道返回码 CSV。
-     */
-    @PostMapping("/return-codes/import/apply")
-    public ApiResponse<PaymentReturnCodeImportResultDTO> applyReturnCodeImport(
-            @RequestBody PaymentReturnCodeImportRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.applyReturnCodeImport(request));
+    /** 查询渠道返回码导入复核申请。 */
+    @GetMapping("/return-codes/import/reviews")
+    public ApiResponse<List<PaymentReturnCodeImportReviewDTO>> listReturnCodeImportReviews() {
+        return ApiResponse.success(paymentConfigService.listReturnCodeImportReviews());
+    }
+
+    /** 提交渠道返回码导入候选进入复核。 */
+    @PostMapping("/return-codes/import/reviews")
+    public ApiResponse<List<PaymentReturnCodeImportReviewDTO>> submitReturnCodeImportReview(
+            @RequestBody PaymentReturnCodeImportReviewSubmitRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitReturnCodeImportReview(request));
+    }
+
+    /** 通过渠道返回码导入复核并应用候选。 */
+    @PostMapping("/return-codes/import/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentReturnCodeImportReviewDTO>> approveReturnCodeImportReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentReturnCodeImportReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveReturnCodeImportReview(requestNo, request));
+    }
+
+    /** 驳回渠道返回码导入复核，不改变运行态。 */
+    @PostMapping("/return-codes/import/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentReturnCodeImportReviewDTO>> rejectReturnCodeImportReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentReturnCodeImportReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectReturnCodeImportReview(requestNo, request));
     }
 
     /**

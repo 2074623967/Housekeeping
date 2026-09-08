@@ -44,12 +44,18 @@ const protocolReviewer = ref("");
 const protocolReviewComment = ref("");
 const editingRosterCode = ref("");
 const returnCodeImportFileName = ref("");
+const returnCodeImportFileInput = ref(null);
 const returnCodeImportCsv = ref("");
-const returnCodeImportOperator = ref("");
+const returnCodeImportRequester = ref("");
 const returnCodeImportReason = ref("");
 const returnCodeImportPreview = ref(null);
 const isReturnCodeImportPreviewing = ref(false);
-const isReturnCodeImportApplying = ref(false);
+const isReturnCodeImportSubmitting = ref(false);
+const returnCodeImportReviews = ref([]);
+const isReturnCodeImportReviewLoading = ref(false);
+const returnCodeImportReviewError = ref("");
+const returnCodeImportReviewer = ref("");
+const returnCodeImportReviewComment = ref("");
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
 const rosterForm = ref(createRosterForm());
@@ -557,7 +563,7 @@ async function previewReturnCodeImport() {
       csvContent: returnCodeImportCsv.value
     });
     actionMessage.value = returnCodeImportPreview.value.valid
-      ? "返回码差异预检通过，可确认应用。"
+      ? "返回码差异预检通过，可提交复核。"
       : `返回码差异预检未通过：${returnCodeImportPreview.value.invalidCount} 行需要修正。`;
   } catch (error) {
     actionMessage.value = `返回码差异预检失败：${error.message}`;
@@ -566,36 +572,91 @@ async function previewReturnCodeImport() {
   }
 }
 
-async function applyReturnCodeImport() {
+async function submitReturnCodeImportReview() {
   if (!returnCodeImportPreview.value?.valid) {
-    actionMessage.value = "返回码导入失败：请先完成并通过差异预检。";
+    actionMessage.value = "返回码复核提交失败：请先完成并通过差异预检。";
     return;
   }
-  if (!returnCodeImportOperator.value || !returnCodeImportReason.value) {
-    actionMessage.value = "返回码导入失败：操作人自声明和导入原因均不能为空。";
+  if (!returnCodeImportRequester.value || !returnCodeImportReason.value) {
+    actionMessage.value = "返回码复核提交失败：申请人声明和导入原因均不能为空。";
     return;
   }
   const changedCount = returnCodeImportPreview.value.createCount + returnCodeImportPreview.value.updateCount;
-  if (!window.confirm(`确认应用 ${changedCount} 条返回码配置变化？归档记录和文件缺失项不会被修改。`)) {
+  if (!window.confirm(`确认提交 ${changedCount} 条返回码配置变化进入复核？运行态暂不改变。`)) {
     return;
   }
-  isReturnCodeImportApplying.value = true;
+  isReturnCodeImportSubmitting.value = true;
   actionMessage.value = "";
   try {
-    const result = await paymentConfigApi.applyReturnCodeImport({
+    returnCodeImportReviews.value = await paymentConfigApi.submitReturnCodeImportReview({
       csvContent: returnCodeImportCsv.value,
       baselineFingerprint: returnCodeImportPreview.value.baselineFingerprint,
-      operator: returnCodeImportOperator.value,
+      requester: returnCodeImportRequester.value,
       changeReason: returnCodeImportReason.value
     });
-    returnCodeImportPreview.value = result;
-    await loadOverview();
-    actionMessage.value = `返回码导入已应用 ${result.appliedCount} 条，审计批次 ${result.batchNo}。`;
-  } catch (error) {
     returnCodeImportPreview.value = null;
-    actionMessage.value = `返回码导入失败：${error.message}`;
+    returnCodeImportCsv.value = "";
+    returnCodeImportFileName.value = "";
+    if (returnCodeImportFileInput.value) {
+      returnCodeImportFileInput.value.value = "";
+    }
+    returnCodeImportReason.value = "";
+    actionMessage.value = "返回码导入候选已提交复核，运行态尚未改变。";
+  } catch (error) {
+    actionMessage.value = `返回码复核提交失败：${error.message}`;
   } finally {
-    isReturnCodeImportApplying.value = false;
+    isReturnCodeImportSubmitting.value = false;
+  }
+}
+
+async function loadReturnCodeImportReviews() {
+  isReturnCodeImportReviewLoading.value = true;
+  returnCodeImportReviewError.value = "";
+  try {
+    returnCodeImportReviews.value = await paymentConfigApi.getReturnCodeImportReviews();
+  } catch (error) {
+    returnCodeImportReviewError.value = error.message;
+  } finally {
+    isReturnCodeImportReviewLoading.value = false;
+  }
+}
+
+async function handleReturnCodeImportReview(review, approved) {
+  if (!returnCodeImportReviewer.value) {
+    actionMessage.value = "返回码复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!returnCodeImportReviewComment.value) {
+    actionMessage.value = `返回码复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并应用候选返回码配置？`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `return-code-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: returnCodeImportReviewer.value,
+      reviewComment: returnCodeImportReviewComment.value
+    };
+    returnCodeImportReviews.value = approved
+      ? await paymentConfigApi.approveReturnCodeImportReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectReturnCodeImportReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    returnCodeImportReviewComment.value = "";
+    actionMessage.value = approved
+      ? `返回码导入申请 ${review.requestNo} 已通过并应用。`
+      : `返回码导入申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `返回码复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
   }
 }
 
@@ -919,6 +980,7 @@ onMounted(() => {
   loadOverview();
   loadRouteRuleReviews();
   loadProtocolReviews();
+  loadReturnCodeImportReviews();
 });
 
 function exportGovernanceSnapshot(section = "ALL") {
@@ -936,7 +998,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.11</span>
+        <span class="badge info">配置中心 V1.12</span>
       </div>
     </div>
 
@@ -1841,12 +1903,12 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="filter-grid">
               <label>
                 CSV 文件
-                <input type="file" accept=".csv,text/csv" @change="handleReturnCodeImportFile" />
+                <input ref="returnCodeImportFileInput" type="file" accept=".csv,text/csv" @change="handleReturnCodeImportFile" />
                 <span v-if="returnCodeImportFileName" class="meta">{{ returnCodeImportFileName }}</span>
               </label>
               <label>
-                操作人自声明
-                <input v-model.trim="returnCodeImportOperator" maxlength="128" placeholder="请输入操作人" />
+                申请人声明
+                <input v-model.trim="returnCodeImportRequester" maxlength="64" placeholder="请输入申请人" />
               </label>
               <label class="wide-field">
                 导入原因
@@ -1856,17 +1918,17 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="table-inline-actions">
               <button
                 class="button secondary"
-                :disabled="!returnCodeImportCsv || isReturnCodeImportPreviewing || isReturnCodeImportApplying"
+                :disabled="!returnCodeImportCsv || isReturnCodeImportPreviewing || isReturnCodeImportSubmitting"
                 @click="previewReturnCodeImport"
               >
                 {{ isReturnCodeImportPreviewing ? "预检中" : "差异预检" }}
               </button>
               <button
                 class="button"
-                :disabled="!returnCodeImportPreview?.valid || isReturnCodeImportApplying || isReturnCodeImportPreviewing"
-                @click="applyReturnCodeImport"
+                :disabled="!returnCodeImportPreview?.valid || isReturnCodeImportSubmitting || isReturnCodeImportPreviewing"
+                @click="submitReturnCodeImportReview"
               >
-                {{ isReturnCodeImportApplying ? "应用中" : "确认应用" }}
+                {{ isReturnCodeImportSubmitting ? "提交中" : "提交复核" }}
               </button>
             </div>
             <template v-if="returnCodeImportPreview">
@@ -1905,6 +1967,98 @@ function exportGovernanceSnapshot(section = "ALL") {
                 </table>
               </div>
             </template>
+          </div>
+
+          <div class="return-code-import-panel">
+            <div class="section-title">
+              <div>
+                <h3>返回码导入复核申请</h3>
+                <p class="meta">申请人与复核人均为自声明身份；通过前重新校验基线，驳回不改变运行态</p>
+              </div>
+              <button
+                class="button secondary"
+                :disabled="isReturnCodeImportReviewLoading"
+                @click="loadReturnCodeImportReviews"
+              >
+                {{ isReturnCodeImportReviewLoading ? "刷新中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="notice-banner">
+              CSV 候选提交后不会直接生效，必须由不同的复核人处理；自声明异人约束不代表可信身份或正式审批。
+            </div>
+            <div class="filter-grid" style="margin-bottom: 16px;">
+              <label>
+                复核人声明
+                <input v-model.trim="returnCodeImportReviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+              </label>
+              <label class="wide-field">
+                复核意见 / 驳回原因
+                <input v-model.trim="returnCodeImportReviewComment" maxlength="256" placeholder="处理待复核申请时必填" />
+              </label>
+            </div>
+            <div v-if="returnCodeImportReviewError" class="error-banner">
+              返回码导入复核申请加载失败：{{ returnCodeImportReviewError }}
+            </div>
+            <div v-if="isReturnCodeImportReviewLoading" class="state-box">返回码导入复核申请加载中...</div>
+            <div v-else-if="!returnCodeImportReviews.length" class="state-box">当前暂无返回码导入复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>差异摘要</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>审计批次</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in returnCodeImportReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>
+                      总计 {{ review.totalCount }} / 新增 {{ review.createCount }} / 更新 {{ review.updateCount }}
+                      <div class="muted-text">不变 {{ review.unchangedCount }} / SHA {{ review.sourceSha256?.slice(0, 12) }}</div>
+                    </td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>{{ review.appliedBatchNo || "-" }}</td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleReturnCodeImportReview(review, true)"
+                        >
+                          通过并应用
+                        </button>
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleReturnCodeImportReview(review, false)"
+                        >
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="table-wrap">
