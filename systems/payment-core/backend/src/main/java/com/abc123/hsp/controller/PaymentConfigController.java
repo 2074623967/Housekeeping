@@ -24,6 +24,9 @@ import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -247,12 +250,33 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.updateIssueDutyRoster(rosterCode, request));
     }
 
-    /**
-     * 启停渠道返回码映射配置。
-     */
+    /** 提交渠道返回码启停候选进入复核。 */
     @PostMapping("/return-codes/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleReturnCodeMapping(@RequestBody PaymentConfigToggleRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.toggleReturnCodeMapping(request));
+    public ApiResponse<List<PaymentReturnCodeReviewDTO>> submitReturnCodeStatusReview(
+            @RequestBody PaymentReturnCodeStatusReviewRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitReturnCodeStatusReview(request));
+    }
+
+    /** 查询渠道返回码单条变更复核申请。 */
+    @GetMapping("/return-codes/reviews")
+    public ApiResponse<List<PaymentReturnCodeReviewDTO>> listReturnCodeReviews() {
+        return ApiResponse.success(paymentConfigService.listReturnCodeReviews());
+    }
+
+    /** 通过渠道返回码单条变更复核并应用状态候选。 */
+    @PostMapping("/return-codes/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentReturnCodeReviewDTO>> approveReturnCodeReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentReturnCodeReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveReturnCodeReview(requestNo, request));
+    }
+
+    /** 驳回渠道返回码单条变更复核，不改变运行态。 */
+    @PostMapping("/return-codes/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentReturnCodeReviewDTO>> rejectReturnCodeReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentReturnCodeReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectReturnCodeReview(requestNo, request));
     }
 
     /**

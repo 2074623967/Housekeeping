@@ -25,6 +25,9 @@ import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import java.util.List;
 
 /**
@@ -154,10 +157,20 @@ public interface PaymentConfigService {
      */
     PaymentConfigOverviewDTO updateIssueDutyRoster(String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request);
 
-    /**
-     * 启停渠道返回码映射配置。
-     */
-    PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request);
+    /** 提交渠道返回码启停候选，不改变运行态配置。 */
+    List<PaymentReturnCodeReviewDTO> submitReturnCodeStatusReview(
+            PaymentReturnCodeStatusReviewRequestDTO request);
+
+    /** 查询渠道返回码单条变更复核申请。 */
+    List<PaymentReturnCodeReviewDTO> listReturnCodeReviews();
+
+    /** 通过复核并应用渠道返回码单条状态候选。 */
+    List<PaymentReturnCodeReviewDTO> approveReturnCodeReview(
+            String requestNo, PaymentReturnCodeReviewActionRequestDTO request);
+
+    /** 驳回渠道返回码单条状态候选，不改变运行态配置。 */
+    List<PaymentReturnCodeReviewDTO> rejectReturnCodeReview(
+            String requestNo, PaymentReturnCodeReviewActionRequestDTO request);
 
     /**
      * 预检渠道返回码 CSV，不修改运行态配置。

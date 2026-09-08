@@ -472,6 +472,86 @@
         FOR UPDATE
     </select>
 
+    <select id="findReturnCodeMappingForUpdate"
+            resultType="com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO">
+        SELECT channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               standardized_code AS standardizedCode,
+               standardized_message AS standardizedMessage,
+               handling_suggestion AS handlingSuggestion,
+               retryable,
+               manual_intervention_required AS manualInterventionRequired,
+               mapping_version AS mappingVersion,
+               archive_status AS archiveStatus,
+               archive_status_type AS archiveStatusType,
+               status,
+               status_type AS statusType,
+               priority,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_payment_channel_return_code_map
+        WHERE channel_code = #{channelCode}
+          AND channel_return_code = #{channelReturnCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findReturnCodeReviews"
+            resultType="com.abc123.hsp.dto.PaymentReturnCodeReviewDTO">
+        SELECT request_no AS requestNo,
+               channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               standardized_code AS standardizedCode,
+               standardized_message AS standardizedMessage,
+               mapping_version AS mappingVersion,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_return_code_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findReturnCodeReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentReturnCodeReviewEntity">
+        SELECT request_no AS requestNo,
+               channel_code AS channelCode,
+               channel_return_code AS channelReturnCode,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_return_code_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingReturnCodeReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentReturnCodeReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_return_code_review
+        WHERE pending_mapping_key = #{pendingMappingKey}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findReturnCodeImportReviews"
             resultType="com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO">
         SELECT request_no AS requestNo,
@@ -1169,6 +1249,33 @@
             updated_at = NOW()
         WHERE channel_code = #{channelCode}
           AND channel_return_code = #{channelReturnCode}
+    </update>
+
+    <insert id="insertReturnCodeReview">
+        INSERT INTO t_payment_return_code_review (
+            request_no, channel_code, channel_return_code, standardized_code,
+            standardized_message, mapping_version, pending_mapping_key, base_fingerprint,
+            candidate_status, candidate_status_type, requester, request_reason,
+            review_status, review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{channelCode}, #{channelReturnCode}, #{standardizedCode},
+            #{standardizedMessage}, #{mappingVersion}, #{pendingMappingKey}, #{baseFingerprint},
+            #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
+            #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeReturnCodeReview">
+        UPDATE t_payment_return_code_review
+        SET pending_mapping_key = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
     </update>
 
     <insert id="upsertReturnCodeMapping">

@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
+import com.abc123.hsp.entity.PaymentReturnCodeReviewEntity;
 import java.io.InputStream;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -189,6 +191,55 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldPersistLockCompleteAndReleaseReturnCodeStatusReview() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            assertEquals("USERPAYING", mapper.findReturnCodeMappingForUpdate(
+                    "wx_h5", "USERPAYING").getChannelReturnCode());
+            PaymentReturnCodeReviewEntity review = new PaymentReturnCodeReviewEntity();
+            review.setRequestNo("RCS-TEST-001");
+            review.setChannelCode("wx_h5");
+            review.setChannelReturnCode("USERPAYING");
+            review.setStandardizedCode("PAYMENT-CHANNEL-1001");
+            review.setStandardizedMessage("用户支付中");
+            review.setMappingVersion("v2026.07.1");
+            review.setPendingMappingKey(repeat("d", 64));
+            review.setBaseFingerprint(repeat("e", 64));
+            review.setCandidateStatus("DISABLED");
+            review.setCandidateStatusType("danger");
+            review.setRequester("maker-a");
+            review.setRequestReason("暂停错误码自动承接");
+            review.setReviewStatus("PENDING_REVIEW");
+            review.setReviewStatusType("warn");
+
+            assertEquals(1, mapper.insertReturnCodeReview(review));
+            assertEquals("RCS-TEST-001", mapper.findPendingReturnCodeReviewForUpdate(
+                    repeat("d", 64)).getRequestNo());
+            assertEquals("maker-a", mapper.findReturnCodeReviewForUpdate(
+                    "RCS-TEST-001").getRequester());
+            assertEquals(1, mapper.completeReturnCodeReview(
+                    "RCS-TEST-001", "APPROVED", "success", "checker-b", "确认停用"));
+            assertNull(mapper.findPendingReturnCodeReviewForUpdate(repeat("d", 64)));
+
+            review.setRequestNo("RCS-TEST-002");
+            assertEquals(1, mapper.insertReturnCodeReview(review));
+            session.commit();
+        }
+
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentReturnCodeReviewDTO review = session.getMapper(PaymentConfigMapper.class)
+                    .findReturnCodeReviews().stream()
+                    .filter(item -> "RCS-TEST-001".equals(item.getRequestNo()))
+                    .findFirst()
+                    .orElseThrow(AssertionError::new);
+            assertEquals("APPROVED", review.getReviewStatus());
+            assertEquals("PAYMENT-CHANNEL-1001", review.getStandardizedCode());
+            assertEquals("checker-b", review.getReviewer());
+            assertEquals("SELF_DECLARED", review.getIdentityTrustLevel());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -198,6 +249,7 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_return_code_map");
             statement.execute("DROP TABLE IF EXISTS t_payment_return_code_import_batch");
             statement.execute("DROP TABLE IF EXISTS t_payment_return_code_import_review");
+            statement.execute("DROP TABLE IF EXISTS t_payment_return_code_review");
             statement.execute("CREATE TABLE t_payment_channel_return_code_map ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64), "
                     + "channel_return_code VARCHAR(64), standardized_code VARCHAR(64), "
@@ -220,6 +272,16 @@ public class PaymentConfigReturnCodeMapperIntegrationTest {
                     + "review_status VARCHAR(32), review_status_type VARCHAR(32), reviewer VARCHAR(64), "
                     + "review_comment VARCHAR(256), applied_batch_no VARCHAR(64), reviewed_at DATETIME, "
                     + "created_at DATETIME, updated_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_return_code_review ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) UNIQUE, "
+                    + "channel_code VARCHAR(64), channel_return_code VARCHAR(64), "
+                    + "standardized_code VARCHAR(64), standardized_message VARCHAR(256), "
+                    + "mapping_version VARCHAR(32), pending_mapping_key VARCHAR(64) UNIQUE, "
+                    + "base_fingerprint VARCHAR(64), candidate_status VARCHAR(32), "
+                    + "candidate_status_type VARCHAR(32), requester VARCHAR(64), request_reason VARCHAR(255), "
+                    + "review_status VARCHAR(32), review_status_type VARCHAR(32), reviewer VARCHAR(64), "
+                    + "review_comment VARCHAR(255), created_at DATETIME, reviewed_at DATETIME, "
+                    + "updated_at DATETIME)");
             insert(statement, "USERPAYING", "ACTIVE", "ENABLED");
             insert(statement, "DISABLED_CODE", "ACTIVE", "DISABLED");
             insert(statement, "ARCHIVED_CODE", "ARCHIVED", "ENABLED");

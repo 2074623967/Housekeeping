@@ -29,6 +29,9 @@ import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import java.util.Collections;
 import com.abc123.hsp.service.PaymentConfigService;
 import org.junit.jupiter.api.Test;
@@ -91,6 +94,32 @@ class PaymentConfigControllerTest {
         verify(paymentConfigService).submitReturnCodeImportReview(submitRequest);
         verify(paymentConfigService).approveReturnCodeImportReview("RCR-001", actionRequest);
         verify(paymentConfigService).rejectReturnCodeImportReview("RCR-001", actionRequest);
+    }
+
+    @Test
+    void shouldReviewReturnCodeStatusChange() {
+        PaymentReturnCodeReviewDTO review = new PaymentReturnCodeReviewDTO();
+        when(paymentConfigService.listReturnCodeReviews()).thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.submitReturnCodeStatusReview(any(PaymentReturnCodeStatusReviewRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.approveReturnCodeReview(
+                any(String.class), any(PaymentReturnCodeReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.rejectReturnCodeReview(
+                any(String.class), any(PaymentReturnCodeReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentReturnCodeStatusReviewRequestDTO statusRequest = new PaymentReturnCodeStatusReviewRequestDTO();
+        PaymentReturnCodeReviewActionRequestDTO actionRequest = new PaymentReturnCodeReviewActionRequestDTO();
+
+        assertEquals(1, controller.listReturnCodeReviews().getData().size());
+        assertEquals(1, controller.submitReturnCodeStatusReview(statusRequest).getData().size());
+        assertEquals(1, controller.approveReturnCodeReview("RCS-001", actionRequest).getData().size());
+        assertEquals(1, controller.rejectReturnCodeReview("RCS-001", actionRequest).getData().size());
+        verify(paymentConfigService).listReturnCodeReviews();
+        verify(paymentConfigService).submitReturnCodeStatusReview(statusRequest);
+        verify(paymentConfigService).approveReturnCodeReview("RCS-001", actionRequest);
+        verify(paymentConfigService).rejectReturnCodeReview("RCS-001", actionRequest);
     }
 
     @Test
@@ -231,7 +260,6 @@ class PaymentConfigControllerTest {
     void shouldToggleGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
         when(paymentConfigService.toggleChannel(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
-        when(paymentConfigService.toggleReturnCodeMapping(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleGateway(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleControlPolicy(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleAlertProvider(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
@@ -242,13 +270,11 @@ class PaymentConfigControllerTest {
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
         assertEquals(overview, controller.toggleChannel(request).getData());
-        assertEquals(overview, controller.toggleReturnCodeMapping(request).getData());
         assertEquals(overview, controller.toggleGateway(request).getData());
         assertEquals(overview, controller.toggleControlPolicy(request).getData());
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
         verify(paymentConfigService).toggleChannel(request);
-        verify(paymentConfigService).toggleReturnCodeMapping(request);
         verify(paymentConfigService).toggleGateway(request);
         verify(paymentConfigService).toggleControlPolicy(request);
         verify(paymentConfigService).toggleAlertProvider(request);

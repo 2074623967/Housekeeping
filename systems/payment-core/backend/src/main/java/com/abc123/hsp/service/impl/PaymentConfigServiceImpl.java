@@ -38,6 +38,9 @@ import com.abc123.hsp.dto.PaymentReturnCodeImportResultDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
@@ -46,6 +49,7 @@ import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
+import com.abc123.hsp.entity.PaymentReturnCodeReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import java.io.IOException;
@@ -606,19 +610,103 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleReturnCodeMapping(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
-        String subCode = requireSubCode(request);
+    public List<PaymentReturnCodeReviewDTO> submitReturnCodeStatusReview(
+            PaymentReturnCodeStatusReviewRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("渠道返回码启停状态不能为空");
+        }
+        String channelCode = requireImportText(request.getChannelCode(), "渠道编码不能为空", 64)
+                .toLowerCase(Locale.ROOT);
+        String channelReturnCode = requireImportText(
+                request.getChannelReturnCode(), "渠道返回码不能为空", 64).toUpperCase(Locale.ROOT);
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        String pendingMappingKey = sha256(returnCodeMappingKey(channelCode, channelReturnCode));
+        if (paymentConfigMapper.findPendingReturnCodeReviewForUpdate(pendingMappingKey) != null) {
+            throw new IllegalArgumentException("该渠道返回码已有待复核申请");
+        }
+        PaymentChannelReturnCodeConfigDTO current = paymentConfigMapper.findReturnCodeMappingForUpdate(
+                channelCode, channelReturnCode);
+        if (current == null) {
+            throw new IllegalArgumentException("渠道返回码映射配置不存在");
+        }
+        if ("ARCHIVED".equals(current.getArchiveStatus())) {
+            throw new IllegalArgumentException("已归档渠道返回码禁止提交启停复核");
+        }
+        String candidateStatus = resolveStatus(request.getEnabled());
+        if (candidateStatus.equals(current.getStatus())) {
+            throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
+                    ? "渠道返回码映射已启用" : "渠道返回码映射已停用");
+        }
+        PaymentReturnCodeReviewEntity review = new PaymentReturnCodeReviewEntity();
+        review.setRequestNo("RCS" + UUID.randomUUID().toString().replace("-", ""));
+        review.setChannelCode(current.getChannelCode());
+        review.setChannelReturnCode(current.getChannelReturnCode());
+        review.setStandardizedCode(current.getStandardizedCode());
+        review.setStandardizedMessage(current.getStandardizedMessage());
+        review.setMappingVersion(current.getMappingVersion());
+        review.setPendingMappingKey(pendingMappingKey);
+        review.setBaseFingerprint(fingerprintReturnCodeMapping(current));
+        review.setCandidateStatus(candidateStatus);
+        review.setCandidateStatusType(resolveStatusType(request.getEnabled()));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        try {
+            paymentConfigMapper.insertReturnCodeReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该渠道返回码已有待复核申请", exception);
+        }
+        return paymentConfigMapper.findReturnCodeReviews();
+    }
+
+    @Override
+    public List<PaymentReturnCodeReviewDTO> listReturnCodeReviews() {
+        return paymentConfigMapper.findReturnCodeReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentReturnCodeReviewDTO> approveReturnCodeReview(
+            String requestNo, PaymentReturnCodeReviewActionRequestDTO request) {
+        PaymentReturnCodeReviewEntity review = requirePendingReturnCodeReview(requestNo);
+        String reviewer = requireDistinctReturnCodeReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        if (!STATUS_ENABLED.equals(review.getCandidateStatus())
+                && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
+            throw new IllegalArgumentException("渠道返回码候选状态不支持");
+        }
+        PaymentChannelReturnCodeConfigDTO current = paymentConfigMapper.findReturnCodeMappingForUpdate(
+                review.getChannelCode(), review.getChannelReturnCode());
+        if (current == null || !review.getBaseFingerprint().equals(fingerprintReturnCodeMapping(current))) {
+            throw new IllegalArgumentException("渠道返回码映射已变化，请重新提交复核申请");
+        }
         int affectedRows = paymentConfigMapper.updateReturnCodeMappingStatus(
-                configCode,
-                subCode,
-                resolveStatus(request.getEnabled()),
-                resolveStatusType(request.getEnabled())
-        );
+                review.getChannelCode(),
+                review.getChannelReturnCode(),
+                review.getCandidateStatus(),
+                review.getCandidateStatusType());
         if (affectedRows == 0) {
             throw new IllegalArgumentException("渠道返回码映射配置不存在");
         }
-        return overview();
+        completeReturnCodeReview(
+                review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
+        return paymentConfigMapper.findReturnCodeReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentReturnCodeReviewDTO> rejectReturnCodeReview(
+            String requestNo, PaymentReturnCodeReviewActionRequestDTO request) {
+        PaymentReturnCodeReviewEntity review = requirePendingReturnCodeReview(requestNo);
+        String reviewer = requireDistinctReturnCodeReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "驳回原因不能为空");
+        completeReturnCodeReview(
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findReturnCodeReviews();
     }
 
     @Override
@@ -2152,6 +2240,42 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return review;
     }
 
+    private PaymentReturnCodeReviewEntity requirePendingReturnCodeReview(String requestNo) {
+        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        PaymentReturnCodeReviewEntity review =
+                paymentConfigMapper.findReturnCodeReviewForUpdate(normalizedRequestNo);
+        if (review == null) {
+            throw new IllegalArgumentException("渠道返回码复核申请不存在");
+        }
+        if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+            throw new IllegalArgumentException("渠道返回码复核申请已完成");
+        }
+        return review;
+    }
+
+    private String requireDistinctReturnCodeReviewer(
+            PaymentReturnCodeReviewEntity review,
+            PaymentReturnCodeReviewActionRequestDTO request) {
+        String reviewer = requireReviewIdentity(
+                request == null ? null : request.getReviewer(), "复核人声明不能为空");
+        if (review.getRequester().equalsIgnoreCase(reviewer)) {
+            throw new IllegalArgumentException("申请人与复核人声明不能相同");
+        }
+        return reviewer;
+    }
+
+    private void completeReturnCodeReview(String requestNo,
+                                          String reviewStatus,
+                                          String reviewStatusType,
+                                          String reviewer,
+                                          String reviewComment) {
+        int affectedRows = paymentConfigMapper.completeReturnCodeReview(
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("渠道返回码复核状态已变化，请刷新后重试");
+        }
+    }
+
     private String requireDistinctReturnCodeImportReviewer(
             PaymentReturnCodeImportReviewEntity review,
             PaymentReturnCodeImportReviewActionRequestDTO request) {
@@ -2401,6 +2525,10 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     private String returnCodeMappingKey(String channelCode, String channelReturnCode) {
         return normalizeImportValue(channelCode).toLowerCase(Locale.ROOT)
                 + "\u0000" + normalizeImportValue(channelReturnCode).toUpperCase(Locale.ROOT);
+    }
+
+    private String fingerprintReturnCodeMapping(PaymentChannelReturnCodeConfigDTO mapping) {
+        return fingerprintReturnCodeMappings(Collections.singletonList(mapping));
     }
 
     private String fingerprintReturnCodeMappings(List<PaymentChannelReturnCodeConfigDTO> mappings) {

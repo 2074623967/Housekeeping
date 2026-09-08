@@ -17,6 +17,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleRuntimeDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleReviewDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
+import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
@@ -25,6 +26,7 @@ import com.abc123.hsp.entity.PaymentRouteRuleConfigEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleReviewEntity;
 import com.abc123.hsp.entity.PaymentRouteRuleVersionEntity;
 import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
+import com.abc123.hsp.entity.PaymentReturnCodeReviewEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -108,6 +110,21 @@ public interface PaymentConfigMapper {
      * 加锁查询渠道返回码映射，供批量导入基线复验。
      */
     List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappingsForUpdate();
+
+    /** 加锁查询单条渠道返回码映射。 */
+    PaymentChannelReturnCodeConfigDTO findReturnCodeMappingForUpdate(
+            @Param("channelCode") String channelCode,
+            @Param("channelReturnCode") String channelReturnCode);
+
+    /** 查询渠道返回码单条变更复核申请。 */
+    List<PaymentReturnCodeReviewDTO> findReturnCodeReviews();
+
+    /** 加锁查询渠道返回码单条变更复核申请。 */
+    PaymentReturnCodeReviewEntity findReturnCodeReviewForUpdate(@Param("requestNo") String requestNo);
+
+    /** 按唯一占位加锁查询待复核申请。 */
+    PaymentReturnCodeReviewEntity findPendingReturnCodeReviewForUpdate(
+            @Param("pendingMappingKey") String pendingMappingKey);
 
     /** 查询渠道返回码导入复核申请。 */
     List<PaymentReturnCodeImportReviewDTO> findReturnCodeImportReviews();
@@ -294,6 +311,16 @@ public interface PaymentConfigMapper {
                                       @Param("channelReturnCode") String channelReturnCode,
                                       @Param("status") String status,
                                       @Param("statusType") String statusType);
+
+    /** 新增渠道返回码单条变更复核申请。 */
+    int insertReturnCodeReview(PaymentReturnCodeReviewEntity entity);
+
+    /** 完成渠道返回码单条变更复核并释放唯一待办占位。 */
+    int completeReturnCodeReview(@Param("requestNo") String requestNo,
+                                 @Param("reviewStatus") String reviewStatus,
+                                 @Param("reviewStatusType") String reviewStatusType,
+                                 @Param("reviewer") String reviewer,
+                                 @Param("reviewComment") String reviewComment);
 
     /**
      * 新增或更新启用中的渠道返回码映射；归档记录由服务层阻断。

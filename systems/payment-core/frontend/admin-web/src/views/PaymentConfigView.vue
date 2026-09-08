@@ -56,6 +56,13 @@ const isReturnCodeImportReviewLoading = ref(false);
 const returnCodeImportReviewError = ref("");
 const returnCodeImportReviewer = ref("");
 const returnCodeImportReviewComment = ref("");
+const returnCodeReviews = ref([]);
+const isReturnCodeReviewLoading = ref(false);
+const returnCodeReviewError = ref("");
+const returnCodeActionRequester = ref("");
+const returnCodeActionReason = ref("");
+const returnCodeReviewer = ref("");
+const returnCodeReviewComment = ref("");
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
 const rosterForm = ref(createRosterForm());
@@ -502,13 +509,82 @@ async function toggleProtocol(protocol) {
 }
 
 async function toggleReturnCodeMapping(mapping) {
-  await toggleMappingConfig(
-    mapping.channelCode,
-    mapping.channelReturnCode,
-    mapping.status !== "ENABLED",
-    "返回码映射",
-    paymentConfigApi.toggleReturnCodeMapping
-  );
+  if (!returnCodeActionRequester.value || !returnCodeActionReason.value) {
+    actionMessage.value = "提交返回码启停复核失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = mapping.status !== "ENABLED";
+  if (!window.confirm(`确认提交返回码 ${mapping.channelCode}/${mapping.channelReturnCode} 的${enabled ? "启用" : "停用"}复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = `${mapping.channelCode}:${mapping.channelReturnCode}`;
+  actionMessage.value = "";
+  try {
+    returnCodeReviews.value = await paymentConfigApi.submitReturnCodeStatusReview({
+      channelCode: mapping.channelCode,
+      channelReturnCode: mapping.channelReturnCode,
+      enabled,
+      requester: returnCodeActionRequester.value,
+      changeReason: returnCodeActionReason.value
+    });
+    returnCodeActionReason.value = "";
+    actionMessage.value = `返回码 ${mapping.channelCode}/${mapping.channelReturnCode} 的${enabled ? "启用" : "停用"}申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `返回码启停申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadReturnCodeReviews() {
+  isReturnCodeReviewLoading.value = true;
+  returnCodeReviewError.value = "";
+  try {
+    returnCodeReviews.value = await paymentConfigApi.getReturnCodeReviews();
+  } catch (error) {
+    returnCodeReviewError.value = error.message;
+  } finally {
+    isReturnCodeReviewLoading.value = false;
+  }
+}
+
+async function handleReturnCodeReview(review, approved) {
+  if (!returnCodeReviewer.value) {
+    actionMessage.value = "返回码复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!returnCodeReviewComment.value) {
+    actionMessage.value = `返回码复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并应用 ${review.candidateStatus} 状态？`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `return-code-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: returnCodeReviewer.value,
+      reviewComment: returnCodeReviewComment.value
+    };
+    returnCodeReviews.value = approved
+      ? await paymentConfigApi.approveReturnCodeReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectReturnCodeReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    returnCodeReviewComment.value = "";
+    actionMessage.value = approved
+      ? `返回码状态申请 ${review.requestNo} 已通过并应用。`
+      : `返回码状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `返回码复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function handleReturnCodeImportFile(event) {
@@ -717,19 +793,6 @@ async function toggleConfig(configCode, enabled, configType, toggleRunner) {
     actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
   } catch (error) {
     actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
-  } finally {
-    activeConfigCode.value = "";
-  }
-}
-
-async function toggleMappingConfig(configCode, subCode, enabled, configType, toggleRunner) {
-  activeConfigCode.value = `${configCode}:${subCode}`;
-  actionMessage.value = "";
-  try {
-    applyOverview(await toggleRunner(configCode, subCode, enabled));
-    actionMessage.value = `${configType} ${configCode}/${subCode} 已${enabled ? "启用" : "停用"}。`;
-  } catch (error) {
-    actionMessage.value = `${configType} ${configCode}/${subCode} 操作失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -980,6 +1043,7 @@ onMounted(() => {
   loadOverview();
   loadRouteRuleReviews();
   loadProtocolReviews();
+  loadReturnCodeReviews();
   loadReturnCodeImportReviews();
 });
 
@@ -998,7 +1062,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.12</span>
+        <span class="badge info">配置中心 V1.13</span>
       </div>
     </div>
 
@@ -1260,6 +1324,106 @@ function exportGovernanceSnapshot(section = "ALL") {
                 提交复核
               </button>
               <button class="button secondary" @click="startCreateRouteRule">重置表单</button>
+            </div>
+          </div>
+
+          <div class="return-code-import-panel">
+            <div class="section-title">
+              <div>
+                <h3>返回码状态变更复核</h3>
+                <p class="meta">启停先提交候选；批准前复验完整映射基线，驳回不改变运行态</p>
+              </div>
+              <button
+                class="button secondary"
+                :disabled="isReturnCodeReviewLoading"
+                @click="loadReturnCodeReviews"
+              >
+                {{ isReturnCodeReviewLoading ? "刷新中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="notice-banner">
+              申请人与复核人均为自声明身份，必须不同；该约束不代表可信身份或正式审批。
+            </div>
+            <div class="filter-grid" style="margin-bottom: 16px;">
+              <label>
+                申请人声明
+                <input v-model.trim="returnCodeActionRequester" maxlength="64" placeholder="提交启停申请时必填" />
+              </label>
+              <label>
+                申请原因
+                <input v-model.trim="returnCodeActionReason" maxlength="255" placeholder="提交启停申请时必填" />
+              </label>
+              <label>
+                复核人声明
+                <input v-model.trim="returnCodeReviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+              </label>
+              <label>
+                复核意见 / 驳回原因
+                <input v-model.trim="returnCodeReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
+              </label>
+            </div>
+            <div v-if="returnCodeReviewError" class="error-banner">
+              返回码状态复核申请加载失败：{{ returnCodeReviewError }}
+            </div>
+            <div v-if="isReturnCodeReviewLoading" class="state-box">返回码状态复核申请加载中...</div>
+            <div v-else-if="!returnCodeReviews.length" class="state-box">当前暂无返回码状态复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>映射</th>
+                    <th>候选状态</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in returnCodeReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>
+                      {{ review.channelCode }} / {{ review.channelReturnCode }}
+                      <div class="muted-text">{{ review.standardizedCode }} / {{ review.mappingVersion }}</div>
+                    </td>
+                    <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleReturnCodeReview(review, true)"
+                        >
+                          通过并应用
+                        </button>
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleReturnCodeReview(review, false)"
+                        >
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -2098,7 +2262,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                       :disabled="activeConfigCode === `${mapping.channelCode}:${mapping.channelReturnCode}`"
                       @click="toggleReturnCodeMapping(mapping)"
                     >
-                      {{ mapping.status === "ENABLED" ? "停用" : "启用" }}
+                      {{ mapping.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
                   </td>
                 </tr>
