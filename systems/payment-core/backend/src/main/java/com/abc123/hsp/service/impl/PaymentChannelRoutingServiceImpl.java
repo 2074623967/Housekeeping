@@ -11,11 +11,14 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.zip.CRC32;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -149,17 +152,68 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
                                                            List<PaymentChannelRoutingConfigDTO> enabledChannels,
                                                            Map<String, PaymentChannelQueryHealthDTO> channelHealth) {
         String normalizedMethod = normalizeText(routeContext.getPaymentMethod());
+        List<PaymentChannelRoutingConfigDTO> candidates = new ArrayList<>();
         for (PaymentChannelRoutingConfigDTO channel : enabledChannels) {
             if (normalizeText(channel.getPaymentMethod()).equals(normalizedMethod)
+                    && routeWeight(channel) > 0
                     && isRouteAvailable(routeContext, channel, channelHealth)) {
-                return buildDecision(
-                        channel.getChannelCode(),
-                        "PAYMENT_METHOD_DEFAULT",
-                        "payment method default -> " + channel.getChannelCode()
-                );
+                candidates.add(channel);
+            }
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        PaymentChannelRoutingConfigDTO selectedChannel = selectWeightedChannel(routeContext, candidates);
+        if (selectedChannel == null) {
+            return null;
+        }
+        if (candidates.size() == 1 || !StringUtils.hasText(routeContext.getRoutingKey())) {
+            return buildDecision(
+                    selectedChannel.getChannelCode(),
+                    "PAYMENT_METHOD_DEFAULT",
+                    "payment method default -> " + selectedChannel.getChannelCode()
+            );
+        }
+        return buildDecision(
+                selectedChannel.getChannelCode(),
+                "PAYMENT_METHOD_WEIGHTED",
+                "payment method weighted " + routeWeight(selectedChannel) + "/" + totalWeight(candidates)
+                        + " -> " + selectedChannel.getChannelCode()
+        );
+    }
+
+    private PaymentChannelRoutingConfigDTO selectWeightedChannel(PaymentRouteContextDTO routeContext,
+                                                                  List<PaymentChannelRoutingConfigDTO> candidates) {
+        if (candidates.size() == 1 || !StringUtils.hasText(routeContext.getRoutingKey())) {
+            return candidates.get(0);
+        }
+        long totalWeight = totalWeight(candidates);
+        if (totalWeight <= 0L) {
+            return null;
+        }
+        CRC32 crc32 = new CRC32();
+        crc32.update(routeContext.getRoutingKey().trim().getBytes(StandardCharsets.UTF_8));
+        long bucket = crc32.getValue() % totalWeight;
+        long cumulativeWeight = 0L;
+        for (PaymentChannelRoutingConfigDTO candidate : candidates) {
+            cumulativeWeight += routeWeight(candidate);
+            if (bucket < cumulativeWeight) {
+                return candidate;
             }
         }
         return null;
+    }
+
+    private long totalWeight(List<PaymentChannelRoutingConfigDTO> candidates) {
+        long total = 0L;
+        for (PaymentChannelRoutingConfigDTO candidate : candidates) {
+            total += routeWeight(candidate);
+        }
+        return total;
+    }
+
+    private int routeWeight(PaymentChannelRoutingConfigDTO channel) {
+        return channel.getRouteWeight() == null ? 100 : Math.max(channel.getRouteWeight(), 0);
     }
 
     private boolean isRouteAvailable(PaymentRouteContextDTO routeContext,

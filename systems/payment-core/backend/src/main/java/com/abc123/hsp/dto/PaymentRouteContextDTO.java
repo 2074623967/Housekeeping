@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class PaymentRouteContextDTO {
 
+    /** 用于保证重复提交稳定命中同一渠道的路由键。 */
+    private String routingKey;
     /** 支付方式。 */
     private String paymentMethod;
     /** 调用方请求的渠道编码。 */

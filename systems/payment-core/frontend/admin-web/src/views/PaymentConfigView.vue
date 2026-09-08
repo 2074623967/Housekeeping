@@ -428,7 +428,7 @@ function exportGovernanceSnapshot(section = "ALL") {
         <div class="section-title">
           <div>
             <h3>支付渠道配置</h3>
-            <p class="meta">控制渠道商户号、适用场景、单日限额和启停状态</p>
+            <p class="meta">控制渠道商户号、适用场景、默认路由权重、单日限额和启停状态</p>
           </div>
           <div class="toolbar-actions">
             <button class="button secondary" @click="exportGovernanceSnapshot('CHANNELS')">导出渠道</button>
@@ -455,6 +455,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <th>适用场景</th>
                 <th>单日限额</th>
                 <th>优先级</th>
+                <th>路由权重</th>
                 <th>状态</th>
                 <th>更新时间</th>
                 <th>操作</th>
@@ -477,6 +478,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <td>{{ channel.sceneScope }}</td>
                 <td>{{ channel.dailyLimit }}</td>
                 <td>{{ channel.priority }}</td>
+                <td>{{ channel.routeWeight }}</td>
                 <td><span :class="['badge', channel.statusType]">{{ channel.status }}</span></td>
                 <td>{{ channel.updatedAt }}</td>
                 <td>

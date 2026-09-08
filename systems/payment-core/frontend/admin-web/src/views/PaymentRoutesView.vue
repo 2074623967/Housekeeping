@@ -205,7 +205,7 @@ onMounted(loadPaymentRoutes);
     <section class="panel overview-panel">
       <div class="section-title">
         <h3>路由风险总览</h3>
-        <span class="meta">路由健康治理 V1.1 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
+        <span class="meta">路由健康与权重治理 V1.2 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
       </div>
       <div class="overview-grid">
         <article class="overview-card danger">
@@ -221,7 +221,7 @@ onMounted(loadPaymentRoutes);
         <article class="overview-card info">
           <p class="overview-title">主流方式分布</p>
           <strong>{{ metrics.wechatRouteCount }} / {{ metrics.alipayRouteCount }}</strong>
-          <span>用于快速判断微信与支付宝链路是否失衡，辅助识别终端维度和场景维度的路由偏差。</span>
+          <span>用于快速判断微信与支付宝链路是否失衡，并结合 PAYMENT_METHOD_WEIGHTED 留痕核对渠道权重分流。</span>
         </article>
       </div>
     </section>

@@ -35,8 +35,10 @@ class PaymentChannelRoutingServiceImplTest {
 
     @Test
     void shouldRouteByEnabledRule() {
+        PaymentChannelRoutingConfigDTO ruleTarget = buildChannel("wx_h5", "微信支付");
+        ruleTarget.setRouteWeight(0);
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
-                buildChannel("wx_h5", "微信支付"),
+                ruleTarget,
                 buildChannel("alipay_h5", "支付宝")
         ));
         when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.singletonList(
@@ -53,9 +55,11 @@ class PaymentChannelRoutingServiceImplTest {
 
     @Test
     void shouldFallbackToRequestedChannelWhenNoRuleMatches() {
+        PaymentChannelRoutingConfigDTO requestedChannel = buildChannel("alipay_h5", "支付宝");
+        requestedChannel.setRouteWeight(0);
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
                 buildChannel("wx_h5", "微信支付"),
-                buildChannel("alipay_h5", "支付宝")
+                requestedChannel
         ));
         when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
         when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
@@ -176,6 +180,56 @@ class PaymentChannelRoutingServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE, exception.getCode());
     }
 
+    @Test
+    void shouldSelectDefaultChannelByStableRoutingKeyAndConfiguredWeight() {
+        PaymentChannelRoutingConfigDTO primary = buildChannel("wx_primary", "微信支付");
+        primary.setRouteWeight(1);
+        PaymentChannelRoutingConfigDTO secondary = buildChannel("wx_secondary", "微信支付");
+        secondary.setRouteWeight(3);
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(primary, secondary));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_primary")).thenReturn(BigDecimal.ZERO);
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_secondary")).thenReturn(BigDecimal.ZERO);
+        PaymentChannelRoutingServiceImpl service = new PaymentChannelRoutingServiceImpl(
+                paymentConfigMapper, paymentMapper);
+
+        PaymentRouteDecisionDTO primaryDecision = service.resolve(
+                buildContext("PAY-WEIGHT-5", "微信支付", "", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
+        PaymentRouteDecisionDTO repeatedDecision = service.resolve(
+                buildContext("PAY-WEIGHT-5", "微信支付", "", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
+        PaymentRouteDecisionDTO secondaryDecision = service.resolve(
+                buildContext("PAY-WEIGHT-001", "微信支付", "", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("wx_primary", primaryDecision.getChannelCode());
+        assertEquals(primaryDecision.getChannelCode(), repeatedDecision.getChannelCode());
+        assertEquals("wx_secondary", secondaryDecision.getChannelCode());
+        assertEquals("PAYMENT_METHOD_WEIGHTED", primaryDecision.getRouteRule());
+        org.junit.jupiter.api.Assertions.assertTrue(primaryDecision.getRouteResult().contains("1/4"));
+    }
+
+    @Test
+    void shouldExcludeZeroWeightChannelFromDefaultCandidatePool() {
+        PaymentChannelRoutingConfigDTO drainedChannel = buildChannel("wx_drained", "微信支付");
+        drainedChannel.setRouteWeight(0);
+        PaymentChannelRoutingConfigDTO activeChannel = buildChannel("wx_active", "微信支付");
+        activeChannel.setRouteWeight(100);
+        when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(
+                Arrays.asList(drainedChannel, activeChannel));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_drained")).thenReturn(BigDecimal.ZERO);
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_active")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext("PAY-DRAIN-001", "微信支付", "", "HOME_CLEAN", "APP_H5", "张女士",
+                        new BigDecimal("168.00")));
+
+        assertEquals("wx_active", decision.getChannelCode());
+        assertEquals("PAYMENT_METHOD_DEFAULT", decision.getRouteRule());
+    }
+
     private PaymentChannelRoutingServiceImpl buildHealthEnabledService() {
         return new PaymentChannelRoutingServiceImpl(
                 paymentConfigMapper,
@@ -209,6 +263,20 @@ class PaymentChannelRoutingServiceImplTest {
         context.setTerminal(terminal);
         context.setCustomerName(customerName);
         context.setAmount(amount);
+        return context;
+    }
+
+    private PaymentRouteContextDTO buildContext(
+            String routingKey,
+            String paymentMethod,
+            String requestedChannelCode,
+            String payScene,
+            String terminal,
+            String customerName,
+            BigDecimal amount) {
+        PaymentRouteContextDTO context = buildContext(
+                paymentMethod, requestedChannelCode, payScene, terminal, customerName, amount);
+        context.setRoutingKey(routingKey);
         return context;
     }
 

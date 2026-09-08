@@ -916,6 +916,7 @@ public class PaymentServiceImpl implements PaymentService {
             PrepayOrderDTO currentPrepay,
             String terminal) {
         PaymentRouteContextDTO routeContext = new PaymentRouteContextDTO();
+        routeContext.setRoutingKey(currentPrepay.getPaymentOrderId());
         routeContext.setPaymentMethod(request.getPaymentMethod());
         routeContext.setRequestedChannelCode(request.getChannelCode());
         routeContext.setPayScene(currentPrepay.getPayScene());

@@ -19,4 +19,6 @@ public class PaymentChannelRoutingConfigDTO {
     private BigDecimal dailyLimit;
     /** 优先级。 */
     private Integer priority;
+    /** 默认支付方式路由权重。 */
+    private Integer routeWeight;
 }

@@ -462,6 +462,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     safeJoin(" / ",
                             "支付方式=" + defaultText(channel.getPaymentMethod()),
                             "优先级=" + valueOf(channel.getPriority()),
+                            "路由权重=" + valueOf(channel.getRouteWeight()),
                             "单日限额=" + defaultText(channel.getDailyLimit())),
                     safeJoin(" / ",
                             "场景=" + defaultText(channel.getSceneScope()),

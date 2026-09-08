@@ -60,6 +60,7 @@ CREATE TABLE t_payment_channel_config (
     status_type VARCHAR(32) NOT NULL COMMENT '渠道状态样式类型',
     daily_limit DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '单日限额',
     priority INT NOT NULL DEFAULT 0 COMMENT '渠道优先级，数字越小优先级越高',
+    route_weight INT NOT NULL DEFAULT 100 COMMENT '默认支付方式路由权重，0 表示不参与加权候选',
     updated_at DATETIME NOT NULL COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_channel_code (channel_code),

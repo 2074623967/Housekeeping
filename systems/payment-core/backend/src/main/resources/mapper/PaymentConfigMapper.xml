@@ -25,6 +25,7 @@
                status_type AS statusType,
                CONCAT('¥', FORMAT(daily_limit, 2)) AS dailyLimit,
                priority,
+               route_weight AS routeWeight,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_channel_config
         ORDER BY priority ASC, id ASC
@@ -282,7 +283,8 @@
                payment_method AS paymentMethod,
                scene_scope AS sceneScope,
                daily_limit AS dailyLimit,
-               priority
+               priority,
+               route_weight AS routeWeight
         FROM t_payment_channel_config
         WHERE status = 'ENABLED'
         ORDER BY priority ASC, id ASC
@@ -293,7 +295,8 @@
                payment_method AS paymentMethod,
                scene_scope AS sceneScope,
                daily_limit AS dailyLimit,
-               priority
+               priority,
+               route_weight AS routeWeight
         FROM t_payment_channel_config
         WHERE channel_code = #{channelCode}
         LIMIT 1

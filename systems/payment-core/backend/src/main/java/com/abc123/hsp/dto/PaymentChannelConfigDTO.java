@@ -42,6 +42,8 @@ public class PaymentChannelConfigDTO {
     private String dailyLimit;
     /** 渠道优先级。 */
     private Integer priority;
+    /** 默认支付方式路由权重。 */
+    private Integer routeWeight;
     /** 更新时间。 */
     private String updatedAt;
 }
