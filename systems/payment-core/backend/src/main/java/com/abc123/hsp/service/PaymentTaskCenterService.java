@@ -47,6 +47,16 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runAutoPendingPaymentQueries();
 
     /**
+     * 手动生成主动查单监控告警。
+     */
+    PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts();
+
+    /**
+     * 自动生成主动查单监控告警。
+     */
+    PaymentTaskActionResultDTO runAutoGenerateQueryMonitorAlerts();
+
+    /**
      * 手动执行失败事件重发。
      */
     PaymentTaskActionResultDTO runRepublishFailedEvents();

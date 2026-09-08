@@ -46,6 +46,13 @@ class PaymentCompensationSchedulerTest {
     }
 
     @Test
+    void shouldDelegateToAutoGenerateQueryMonitorAlerts() {
+        new PaymentCompensationScheduler(paymentTaskCenterService).generateQueryMonitorAlerts();
+
+        verify(paymentTaskCenterService).runAutoGenerateQueryMonitorAlerts();
+    }
+
+    @Test
     void shouldDelegateToAutoRetryFailedRefunds() {
         new PaymentCompensationScheduler(paymentTaskCenterService).retryFailedRefunds();
 

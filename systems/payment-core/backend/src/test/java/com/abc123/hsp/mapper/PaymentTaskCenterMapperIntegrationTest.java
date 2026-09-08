@@ -104,11 +104,24 @@ class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldOnlyCountRecentUnacknowledgedQueryMonitorOutboxAlerts() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(1, mapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                    "主动查单失败趋势", 60));
+            assertEquals(0, mapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                    "主动查单限流拒绝", 60));
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             Connection connection = session.getConnection();
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
@@ -124,6 +137,10 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
                     + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_issue_alert_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_alert_no VARCHAR(64), "
+                    + "issue_type VARCHAR(64), alert_channel VARCHAR(32), ack_status VARCHAR(32), "
+                    + "created_at DATETIME)");
 
             LocalDateTime now = LocalDateTime.now();
             insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
@@ -140,6 +157,12 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertQueryHistory(connection, "PAY-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
             insertQueryHistory(connection, "PAY-OUTSIDE-MONITOR-WINDOW", now, 90000);
             insertRateLimitRejections(connection, now, 30, 3600, 7200, 90000);
+            statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                    + "source_alert_no, issue_type, alert_channel, ack_status, created_at) VALUES "
+                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', NOW()),"
+                    + "(NULL, '主动查单失败趋势', 'IN_APP_OUTBOX', '已确认', NOW()),"
+                    + "('SOURCE-1', '主动查单失败趋势', 'IN_APP_OUTBOX', '待确认', NOW()),"
+                    + "(NULL, '主动查单限流拒绝', 'IM', '待确认', NOW())");
             statement.executeUpdate("UPDATE t_payment_notify_log SET notify_status = '查单失败' "
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");

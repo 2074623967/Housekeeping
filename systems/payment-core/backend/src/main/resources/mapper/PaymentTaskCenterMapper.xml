@@ -467,6 +467,16 @@
         WHERE rejected_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
     </select>
 
+    <select id="countRecentUnacknowledgedQueryMonitorAlerts" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE issue_type = #{issueType}
+          AND alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert_no IS NULL
+          AND ack_status = '待确认'
+          AND created_at &gt;= TIMESTAMPADD(MINUTE, -#{cooldownMinutes}, NOW())
+    </select>
+
     <select id="findRecentPaymentQueryTrends"
             resultType="com.abc123.hsp.dto.PaymentQueryTrendPointDTO">
         SELECT query_bucket.time_bucket AS timeBucket,

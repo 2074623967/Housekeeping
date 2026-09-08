@@ -90,6 +90,12 @@ public interface PaymentTaskCenterMapper {
     int countRecentPaymentQueryRateLimitRejections(@Param("lookbackHours") int lookbackHours);
 
     /**
+     * 统计冷却窗口内尚未确认的同类主动查单监控告警。
+     */
+    int countRecentUnacknowledgedQueryMonitorAlerts(@Param("issueType") String issueType,
+                                                    @Param("cooldownMinutes") int cooldownMinutes);
+
+    /**
      * 查询最近窗口内的渠道查单小时趋势。
      */
     List<PaymentQueryTrendPointDTO> findRecentPaymentQueryTrends(

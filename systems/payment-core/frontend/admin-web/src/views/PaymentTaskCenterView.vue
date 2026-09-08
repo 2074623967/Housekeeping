@@ -124,7 +124,7 @@ onMounted(loadOverview);
       <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看待回调查单、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
+        <p>统一查看待回调查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -242,7 +242,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>严重等级与升级口径</h3>
-              <p class="meta">任务中心 V1.16 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、限流拒绝、异常告警派发与回执回查纳入统一任务口径</p>
+              <p class="meta">任务中心 V1.17 已按任务类型、失败笔数和处理规模统一严重等级，并将待回调主动查单趋势、限流拒绝、监控告警 outbox、异常告警派发与回执回查纳入统一任务口径</p>
             </div>
           </div>
           <div class="table-wrap">
@@ -267,6 +267,12 @@ onMounted(loadOverview);
                   <td>查询失败 ≥ 3</td>
                   <td>存在查询失败或渠道仍处理中</td>
                   <td>全部成功收口或无待补查支付单</td>
+                </tr>
+                <tr>
+                  <td>主动查单监控告警</td>
+                  <td>失败笔数/失败率或限流拒绝达到配置阈值</td>
+                  <td>不适用，命中阈值即生成 P1 outbox</td>
+                  <td>未命中阈值或冷却窗口内已存在同类未确认告警</td>
                 </tr>
                 <tr>
                   <td>失败事件重发</td>
@@ -314,7 +320,7 @@ onMounted(loadOverview);
             <div class="section-title">
               <div>
               <h3>核心自动化任务</h3>
-              <p class="meta">本页触发统一任务操作；待回调主动查单、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均已纳入自动调度与人工补偿双通道</p>
+              <p class="meta">本页触发统一任务操作；待回调主动查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均已纳入自动调度与人工补偿双通道</p>
             </div>
             </div>
 
@@ -339,6 +345,18 @@ onMounted(loadOverview);
                 @click="runTask('PAYMENT_PENDING_QUERY', '待回调主动查单', paymentTaskCenterApi.runPendingPaymentQueries)"
               >
                 {{ activeTaskCode === "PAYMENT_PENDING_QUERY" ? "执行中..." : "执行主动查单" }}
+              </button>
+            </div>
+
+            <div class="sub-panel">
+              <h3>主动查单监控告警</h3>
+              <p>评估当前监控窗口内的查单失败笔数、失败率和限流拒绝次数，命中阈值时生成可由现有 IM、短信和邮件链路派发的 outbox 告警。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'PAYMENT_QUERY_MONITOR_ALERT'"
+                @click="runTask('PAYMENT_QUERY_MONITOR_ALERT', '主动查单监控告警', paymentTaskCenterApi.runGenerateQueryMonitorAlerts)"
+              >
+                {{ activeTaskCode === "PAYMENT_QUERY_MONITOR_ALERT" ? "执行中..." : "生成查单监控告警" }}
               </button>
             </div>
 
@@ -493,8 +511,8 @@ onMounted(loadOverview);
                 </tr>
                 <tr>
                   <td>升级判定口径</td>
-                  <td>V1.16</td>
-                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将查单失败、限流拒绝、异常告警派发与回执回查纳入统一任务矩阵</td>
+                  <td>V1.17</td>
+                  <td>已按任务类型、失败量和处理规模区分 P1 / P2 / P3，并将查单监控告警 outbox、异常告警派发与回执回查纳入统一任务矩阵</td>
                 </tr>
               </tbody>
             </table>

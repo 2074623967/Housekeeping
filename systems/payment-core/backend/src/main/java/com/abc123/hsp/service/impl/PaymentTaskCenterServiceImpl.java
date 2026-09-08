@@ -44,6 +44,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_STATUS_WARN = "WARNING";
     private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
     private static final String TASK_CODE_PENDING_QUERY = "PAYMENT_PENDING_QUERY";
+    private static final String TASK_CODE_QUERY_MONITOR_ALERT = "PAYMENT_QUERY_MONITOR_ALERT";
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
@@ -51,6 +52,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final int ISSUE_ALERT_CONTENT_MAX_LENGTH = 512;
+    private static final String QUERY_FAILURE_ISSUE_TYPE = "主动查单失败趋势";
+    private static final String QUERY_RATE_LIMIT_ISSUE_TYPE = "主动查单限流拒绝";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
@@ -71,6 +74,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final int queryFailureRateThresholdPercent;
     private final int queryFailureRateMinimumSampleCount;
     private final int queryRateLimitRejectionCountThreshold;
+    private final int queryMonitorAlertCooldownMinutes;
 
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -102,7 +106,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         @Value("${payment.channel-query.monitor.failure-rate-minimum-sample-count:10}")
                                                 int queryFailureRateMinimumSampleCount,
                                         @Value("${payment.channel-query.monitor.rate-limit-rejection-count-threshold:10}")
-                                                int queryRateLimitRejectionCountThreshold) {
+                                                int queryRateLimitRejectionCountThreshold,
+                                        @Value("${payment.channel-query.monitor.alert-cooldown-minutes:60}")
+                                                int queryMonitorAlertCooldownMinutes) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
@@ -125,6 +131,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 Math.max(queryFailureRateThresholdPercent, 1), 100);
         this.queryFailureRateMinimumSampleCount = Math.max(queryFailureRateMinimumSampleCount, 1);
         this.queryRateLimitRejectionCountThreshold = Math.max(queryRateLimitRejectionCountThreshold, 1);
+        this.queryMonitorAlertCooldownMinutes = Math.max(queryMonitorAlertCooldownMinutes, 1);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -152,7 +159,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 5,
                 30,
                 10,
-                10);
+                10,
+                60);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -298,6 +306,42 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
+    public PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts() {
+        return runTaskWithLease(
+                TASK_CODE_QUERY_MONITOR_ALERT,
+                "主动查单监控告警",
+                RUN_MODE_MANUAL,
+                "payment-core-admin",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runGenerateQueryMonitorAlertsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+                    }
+                }
+        );
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO runAutoGenerateQueryMonitorAlerts() {
+        return runTaskWithLease(
+                TASK_CODE_QUERY_MONITOR_ALERT,
+                "主动查单监控告警",
+                RUN_MODE_AUTO,
+                "payment-query-monitor-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runGenerateQueryMonitorAlertsByMode(
+                                RUN_MODE_AUTO,
+                                "payment-query-monitor-scheduler");
+                    }
+                }
+        );
+    }
+
+    @Override
+    @Transactional
     public PaymentTaskActionResultDTO runRepublishFailedEvents() {
         return runRepublishFailedEventsByMode(RUN_MODE_MANUAL, "payment-core-admin");
     }
@@ -420,16 +464,107 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                             String taskName,
                                                             String triggeredBy,
                                                             AutoTaskRunner runner) {
+        return runTaskWithLease(taskCode, taskName, RUN_MODE_AUTO, triggeredBy, runner);
+    }
+
+    private PaymentTaskActionResultDTO runTaskWithLease(String taskCode,
+                                                        String taskName,
+                                                        String runMode,
+                                                        String triggeredBy,
+                                                        AutoTaskRunner runner) {
         paymentTaskCenterMapper.initTaskLease(taskCode);
         int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, triggeredBy, AUTO_TASK_LEASE_SECONDS);
         if (lockedRows <= 0) {
-            return buildLeaseSkippedResult(taskCode, taskName, triggeredBy);
+            return buildLeaseSkippedResult(taskCode, taskName, runMode, triggeredBy);
         }
         try {
             return runner.run();
         } finally {
             paymentTaskCenterMapper.releaseTaskLease(taskCode, triggeredBy);
         }
+    }
+
+    private PaymentTaskActionResultDTO runGenerateQueryMonitorAlertsByMode(String runMode, String triggeredBy) {
+        int queryCount = paymentTaskCenterMapper.countRecentPaymentQueries(queryMonitorLookbackHours);
+        int failureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(queryMonitorLookbackHours);
+        int rejectionCount = paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(
+                queryMonitorLookbackHours);
+        boolean failureThresholdReached = failureCount >= queryFailureCountThreshold
+                || (queryCount >= queryFailureRateMinimumSampleCount
+                && failureCount * 100L >= queryCount * (long) queryFailureRateThresholdPercent);
+        boolean rejectionThresholdReached = rejectionCount >= queryRateLimitRejectionCountThreshold;
+
+        int matchedCount = 0;
+        int generatedCount = 0;
+        if (failureThresholdReached) {
+            matchedCount++;
+            generatedCount += generateQueryMonitorAlertIfAllowed(
+                    QUERY_FAILURE_ISSUE_TYPE,
+                    "QUERY-MONITOR-FAILURE",
+                    String.format(
+                            "近 %d 小时主动查单 %d 次，失败 %d 次，失败率 %s；告警阈值为失败 %d 次，或样本不少于 %d 次且失败率达到 %d%%。",
+                            queryMonitorLookbackHours,
+                            queryCount,
+                            failureCount,
+                            formatPercentage(failureCount, queryCount),
+                            queryFailureCountThreshold,
+                            queryFailureRateMinimumSampleCount,
+                            queryFailureRateThresholdPercent),
+                    triggeredBy);
+        }
+        if (rejectionThresholdReached) {
+            matchedCount++;
+            generatedCount += generateQueryMonitorAlertIfAllowed(
+                    QUERY_RATE_LIMIT_ISSUE_TYPE,
+                    "QUERY-MONITOR-RATE-LIMIT",
+                    String.format(
+                            "近 %d 小时主动查单限流拒绝 %d 次，已达到 %d 次告警阈值；拒绝事实独立统计，不计入渠道查询失败率。",
+                            queryMonitorLookbackHours,
+                            rejectionCount,
+                            queryRateLimitRejectionCountThreshold),
+                    triggeredBy);
+        }
+        int suppressedCount = matchedCount - generatedCount;
+        return buildAndRecordResult(
+                TASK_CODE_QUERY_MONITOR_ALERT,
+                "主动查单监控告警",
+                runMode,
+                triggeredBy,
+                matchedCount,
+                generatedCount,
+                0,
+                0,
+                matchedCount == 0
+                        ? "主动查单失败和限流拒绝指标均未达到告警阈值。"
+                        : String.format("命中 %d 类主动查单监控阈值，生成 %d 条 outbox 告警，冷却窗口抑制 %d 条重复告警。",
+                        matchedCount, generatedCount, suppressedCount)
+        );
+    }
+
+    private int generateQueryMonitorAlertIfAllowed(String issueType,
+                                                   String issueNo,
+                                                   String alertContent,
+                                                   String triggeredBy) {
+        if (paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                issueType, queryMonitorAlertCooldownMinutes) > 0) {
+            return 0;
+        }
+        PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
+        entity.setAlertNo(buildAlertLogNo());
+        entity.setIssueNo(issueNo);
+        entity.setPaymentOrderId("QUERY-MONITOR");
+        entity.setIssueType(issueType);
+        entity.setSeverity("P1");
+        entity.setResponsibilityGroup("支付渠道运营组");
+        entity.setAlertChannel("IN_APP_OUTBOX");
+        entity.setReceiver("支付运营");
+        entity.setAlertStatus("已生成");
+        entity.setAlertStatusType("warn");
+        entity.setAckStatus("待确认");
+        entity.setAckStatusType("warn");
+        entity.setAlertContent(truncateIssueAlertContent(alertContent));
+        entity.setTriggeredBy(triggeredBy);
+        return paymentTaskCenterMapper.insertIssueAlertLog(entity);
     }
 
     private PaymentTaskActionResultDTO runControlPolicySelfChecksByMode(String runMode, String triggeredBy) {
@@ -716,12 +851,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO buildLeaseSkippedResult(String taskCode,
                                                                String taskName,
+                                                               String runMode,
                                                                String triggeredBy) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
         entity.setTaskLogNo(buildTaskLogNo());
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
-        entity.setRunMode(RUN_MODE_AUTO);
+        entity.setRunMode(runMode);
         entity.setTaskStatus(TASK_STATUS_WARN);
         entity.setTaskStatusType("warn");
         entity.setSeverityLevel("P3");
@@ -732,7 +868,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setSuccessCount(0);
         entity.setWarningCount(0);
         entity.setFailCount(0);
-        entity.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
+        entity.setSummaryComment("检测到其他实例已持有任务租约，本次任务跳过执行。");
         entity.setSuggestedAction("继续观察当前实例执行结果，避免重复调度同一任务。");
         entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
         entity.setTriggeredBy(triggeredBy);
@@ -745,7 +881,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         result.setSuccessCount(0);
         result.setWarningCount(0);
         result.setFailCount(0);
-        result.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
+        result.setSummaryComment("检测到其他实例已持有任务租约，本次任务跳过执行。");
         result.setOverview(overview());
         return result;
     }
@@ -949,6 +1085,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             }
             return processedCount > 0 ? "已完成待回调支付收口，继续观察渠道回调与下游事件" : "暂无待回调支付需要补查";
         }
+        if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
+            return processedCount > 0
+                    ? "进入支付异常中心确认主动查单监控告警，并按既有派发任务通知渠道运营和值班人员"
+                    : "当前主动查单监控指标未达到告警阈值";
+        }
         if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
             if (failCount > 0) {
                 return "优先核对出站事件主题、下游订阅状态与重发表，必要时升级账务/清分值班";
@@ -988,6 +1129,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
             return "/payments";
+        }
+        if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
+            return "/payment-issues";
         }
         if (TASK_CODE_EVENT_RETRY.equals(taskCode)) {
             return "/payment-events";
@@ -1032,6 +1176,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
      * 根据任务类型、失败量和处理规模推导是否需要立即升级。
      */
     private boolean shouldEscalateImmediately(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
+            return processedCount > 0;
+        }
         if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {
             return processedCount > 0;
         }

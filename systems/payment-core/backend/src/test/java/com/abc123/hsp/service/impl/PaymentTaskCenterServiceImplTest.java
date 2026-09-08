@@ -166,6 +166,46 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldGenerateQueryMonitorOutboxAndSuppressRecentDuplicate() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                "PAYMENT_QUERY_MONITOR_ALERT", "payment-core-admin", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.countRecentPaymentQueries(24)).thenReturn(12);
+        when(paymentTaskCenterMapper.countRecentPaymentQueryFailures(24)).thenReturn(4);
+        when(paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(24)).thenReturn(10);
+        when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                "主动查单失败趋势", 60)).thenReturn(0);
+        when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                "主动查单限流拒绝", 60)).thenReturn(1);
+        when(paymentTaskCenterMapper.insertIssueAlertLog(
+                org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runGenerateQueryMonitorAlerts();
+
+        Assertions.assertEquals(2, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("冷却窗口抑制 1 条"));
+        ArgumentCaptor<PaymentIssueAlertLogEntity> alertCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(alertCaptor.capture());
+        PaymentIssueAlertLogEntity alert = alertCaptor.getValue();
+        Assertions.assertEquals("主动查单失败趋势", alert.getIssueType());
+        Assertions.assertEquals("IN_APP_OUTBOX", alert.getAlertChannel());
+        Assertions.assertEquals("P1", alert.getSeverity());
+        Assertions.assertEquals("支付渠道运营组", alert.getResponsibilityGroup());
+        Assertions.assertTrue(alert.getAlertContent().contains("失败率 33.33%"));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_QUERY_MONITOR_ALERT".equals(entity.getTaskCode())
+                        && "MANUAL".equals(entity.getRunMode())
+                        && "P1".equals(entity.getSeverityLevel())
+                        && "/payment-issues".equals(entity.getRecommendedRoute())
+        ));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                "PAYMENT_QUERY_MONITOR_ALERT", "payment-core-admin");
+    }
+
+    @Test
     void shouldRunCloseExpiredPayments() {
         when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(2);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
@@ -700,6 +740,7 @@ class PaymentTaskCenterServiceImplTest {
                 5,
                 30,
                 10,
-                10);
+                10,
+                60);
     }
 }

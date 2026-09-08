@@ -97,6 +97,14 @@ public class PaymentTaskCenterController {
     }
 
     /**
+     * 手动生成主动查单监控告警。
+     */
+    @PostMapping("/generate-query-monitor-alerts")
+    public ApiResponse<PaymentTaskActionResultDTO> runGenerateQueryMonitorAlerts() {
+        return ApiResponse.success(paymentTaskCenterService.runGenerateQueryMonitorAlerts());
+    }
+
+    /**
      * 手动执行失败事件重发。
      */
     @PostMapping("/republish-failed-events")

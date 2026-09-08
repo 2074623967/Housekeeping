@@ -47,6 +47,14 @@ public class PaymentCompensationScheduler {
     }
 
     /**
+     * 定期评估主动查单失败与限流拒绝阈值，并生成可派发的 outbox 告警。
+     */
+    @Scheduled(fixedDelayString = "${payment.channel-query.monitor.alert-fixed-delay-ms:300000}")
+    public void generateQueryMonitorAlerts() {
+        paymentTaskCenterService.runAutoGenerateQueryMonitorAlerts();
+    }
+
+    /**
      * 定期重发失败事件，优先收敛支付成功后的跨系统状态。
      */
     @Scheduled(fixedDelayString = "${payment.event-retry.fixed-delay-ms:300000}")
