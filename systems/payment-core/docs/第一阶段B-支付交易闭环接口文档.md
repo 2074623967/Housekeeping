@@ -80,7 +80,10 @@
 | `/api/payment-config/protocols/{protocolCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
 | `/api/payment-config/return-codes/toggle` | `POST` | 启停渠道返回码映射 |
 | `/api/payment-config/return-codes/import/preview` | `POST` | 解析并预检返回码 CSV，返回逐行差异，不修改运行态 |
-| `/api/payment-config/return-codes/import/apply` | `POST` | 锁定并复验预检基线，原子应用有效 CSV 并记录审计批次 |
+| `/api/payment-config/return-codes/import/reviews` | `GET` | 查询返回码 CSV 导入复核申请 |
+| `/api/payment-config/return-codes/import/reviews` | `POST` | 锁定并复验预检基线，提交导入候选，运行态不变 |
+| `/api/payment-config/return-codes/import/reviews/{requestNo}/approve` | `POST` | 异人复核通过，复验候选后原子应用并记录审计批次 |
+| `/api/payment-config/return-codes/import/reviews/{requestNo}/reject` | `POST` | 异人驳回导入候选，运行态不变 |
 | `/api/payment-config/gateways/toggle` | `POST` | 启停支付网关接入配置 |
 | `/api/payment-config/control-policies/toggle` | `POST` | 启停支付控制策略 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
@@ -1004,11 +1007,14 @@ POST /api/payment-config/protocols/toggle
 POST /api/payment-config/return-codes/toggle
 ```
 
-返回码 CSV 差异预检与应用：
+返回码 CSV 差异预检与复核：
 
 ```http
 POST /api/payment-config/return-codes/import/preview
-POST /api/payment-config/return-codes/import/apply
+GET  /api/payment-config/return-codes/import/reviews
+POST /api/payment-config/return-codes/import/reviews
+POST /api/payment-config/return-codes/import/reviews/{requestNo}/approve
+POST /api/payment-config/return-codes/import/reviews/{requestNo}/reject
 ```
 
 固定 CSV 表头：
@@ -1018,18 +1024,31 @@ channelCode,channelReturnCode,standardizedCode,standardizedMessage,handlingSugge
 wx_h5,USERPAYING,PAYMENT-CHANNEL-1001,用户支付中,等待回调或主动查单,是,否,v2026.09.1,ENABLED,1
 ```
 
-预检请求只需传 `csvContent`；响应返回 `baselineFingerprint`、整批 `valid`、新增/更新/不变/无效数量和逐行 `CREATE / UPDATE / UNCHANGED / INVALID` 结果。应用请求需原样传回 `csvContent` 和 `baselineFingerprint`，并补充：
+预检请求只需传 `csvContent`；响应返回 `baselineFingerprint`、整批 `valid`、新增/更新/不变/无效数量和逐行 `CREATE / UPDATE / UNCHANGED / INVALID` 结果。提交复核请求需原样传回 `csvContent` 和 `baselineFingerprint`，并补充：
 
 ```json
 {
   "csvContent": "channelCode,...",
   "baselineFingerprint": "64位SHA-256",
-  "operator": "ops-user",
+  "requester": "maker-a",
   "changeReason": "同步渠道最新码表"
 }
 ```
 
-应用阶段使用 `FOR UPDATE` 重新读取运行态映射并计算指纹；基线漂移、任一无效行、CSV 内重复键、引用不存在渠道、更新语义字段但未变更 `mappingVersion`，或命中归档映射时整批拒绝，不允许部分写入。单次最多 `500` 行、`512 KB`；未出现在文件中的映射保持不变，不自动归档。成功后返回 `batchNo / resultFingerprint / appliedCount`，并写入导入审计批次。`operator` 是自声明留痕，不代表可信身份或正式审批。
+提交阶段先锁唯一待办占位、再锁运行态映射并重新计算基线；基线漂移、无实际变化或任一无效行时拒绝。合法候选保存规范化 CSV、`sourceSha256`、`baselineFingerprint`、差异数量、申请人和原因，同时最多保留一条 `PENDING_REVIEW` 申请，提交不修改运行态。
+
+复核处理请求：
+
+```json
+{
+  "reviewer": "checker-b",
+  "reviewComment": "已核对渠道码表版本和差异"
+}
+```
+
+批准阶段先锁复核申请、再锁运行态映射，重新验证候选 SHA-256、基线、渠道和所有行；同人复核、重复处理、摘要不一致、基线漂移或候选失效时拒绝。批准时映射写入、导入审计批次和复核完成同事务提交；驳回只完成复核，二者都会释放唯一待办占位。列表返回 `requestNo / sourceSha256 / baselineFingerprint / totalCount / createCount / updateCount / unchangedCount / requester / requestReason / reviewStatus / reviewer / reviewComment / appliedBatchNo / createdAt / reviewedAt / identityTrustLevel`。
+
+单次最多 `500` 行、`512 KB`；未出现在文件中的映射保持不变，不自动归档。`requester / reviewer` 均是自声明，`identityTrustLevel` 固定为 `SELF_DECLARED`，不代表可信身份、正式审批或不可抵赖签字。V1.4 仅关闭 CSV 导入的直接应用入口，单条 `/return-codes/toggle` 仍直接修改运行态。
 
 启停支付网关：
 
@@ -1065,7 +1084,7 @@ POST /api/payment-config/control-policies/self-check
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 3. 协议配置当前已支持运营查看、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护、不可变版本和自声明 maker-checker；新增、编辑、启停与回滚都先提交完整候选，批准前运行态不变。该能力不等于可信审批、正式法律签署或电子签章联调。
 4. 返回码映射启停时，`configCode` 传渠道编码，`subCode` 传渠道返回码，例如 `WX_H5 + USERPAYING`。
-5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本、归档状态展示和带基线复验的 CSV 批量导入/差异预检 V1.3，并已进入渠道提交响应留痕与主动查单详情；后续继续补 maker-checker、正式身份权限、真实渠道码表校验和受控自动归档。
+5. 返回码映射当前已支持运营查看、启停、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备差异预检、唯一待办、自声明异人复核、批准阶段摘要与基线复验、原子应用和审计批次 V1.4。单条启停仍为直接路径，后续继续补可信身份权限、单条变更复核、真实渠道码表校验和受控自动归档。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
 7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。

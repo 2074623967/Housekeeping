@@ -20,6 +20,7 @@
 - `migrations/2026-09-09-add-payment-protocol-review.sql`：幂等创建支付协议复核申请表，以唯一待办占位约束同一协议最多一条待复核申请
 - `migrations/2026-09-09-add-payment-return-code-snapshot.sql`：为支付单补齐最近一次渠道返回码标准化快照字段，使提交或查单后的详情可稳定追溯；脚本非幂等，只执行一次
 - `migrations/2026-09-09-add-payment-return-code-import-batch.sql`：幂等创建返回码 CSV 导入审计批次表，记录自声明操作人、原因、源文件摘要、应用前后指纹和差异数量
+- `migrations/2026-09-09-add-payment-return-code-import-review.sql`：幂等创建返回码 CSV 导入复核申请表，以可空唯一待办占位限制同时最多一条待复核导入候选
 
 初始化方式：
 
@@ -38,7 +39,8 @@
 7. 执行 `migrations/2026-09-09-add-route-rule-review-source-version.sql`，为回滚候选补齐来源版本；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次
 8. 执行 `migrations/2026-09-09-add-payment-return-code-snapshot.sql`，为支付单补齐返回码快照；该 DDL 不是可重复脚本，需由迁移工具记录并确保只执行一次，历史支付单字段保持 `NULL`
 9. 执行 `migrations/2026-09-09-add-payment-return-code-import-batch.sql`，建立返回码批量导入审计批次表；脚本可重复执行
-10. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+10. 执行 `migrations/2026-09-09-add-payment-return-code-import-review.sql`，建立返回码导入候选复核表；脚本可重复执行
+11. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -55,6 +57,9 @@
    - 迁移前存量支付单的 `last_channel_return_code / last_standardized_code / last_mapping_matched` 均可为 `NULL`，不得批量伪造历史映射结果
    - `SHOW TABLES LIKE 't_payment_return_code_import_batch'` 返回一行
    - `SELECT batch_no, source_sha256, baseline_fingerprint, result_fingerprint, applied_count FROM t_payment_return_code_import_batch ORDER BY created_at DESC LIMIT 10` 可读取导入审计批次；操作人字段仅为自声明，不得解释为正式审批或可信身份
+   - `SHOW TABLES LIKE 't_payment_return_code_import_review'` 返回一行
+   - `SELECT pending_import_key, COUNT(*) FROM t_payment_return_code_import_review WHERE pending_import_key IS NOT NULL GROUP BY pending_import_key HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_import_key` 应为空
+   - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 
 后续继续补强：
