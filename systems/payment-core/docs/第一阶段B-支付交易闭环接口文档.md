@@ -1314,11 +1314,12 @@ POST /api/payment-config/control-policies/self-check
 
 处理规则：
 
-1. 仅选择 `WAIT_CALLBACK`、预付单尚未过期、达到最小等待时长，且最近一次查单已超过重试间隔的支付单。
+1. 人工补跑选择 `WAIT_CALLBACK`、预付单尚未过期且达到最小等待时长的支付单，不受自动重试退避窗口限制，便于运营立即复核。
 2. 单次处理数量受批次上限约束，按支付单创建时间从早到晚执行。
 3. 每笔复用 `POST /api/payments/query` 的幂等收口逻辑；渠道成功会收口支付主链路，渠道处理中计入告警，网关异常计入失败。
 4. 单笔失败与其他支付单隔离，任务摘要最多记录三个失败支付单号；自动任务使用 `PAYMENT_PENDING_QUERY` 租约避免多实例重复执行。
 5. 自动调度要求 `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED=true` 且 `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED=true`，任一关闭均不执行自动查单。
+6. 自动任务将渠道业务结果和网关查询失败都计入历史次数，并按 `基础间隔 × 退避系数^(历史次数-1)` 计算单笔支付单的下一次查询间隔，达到最大间隔后封顶。
 
 补偿配置：
 
@@ -1327,7 +1328,9 @@ POST /api/payment-config/control-policies/self-check
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED` | `false` | 自动查单补偿开关 |
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_DELAY_MS` | `60000` | 自动任务固定间隔 |
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_MIN_AGE_SECONDS` | `30` | 支付进入待回调后的首次补查等待时间 |
-| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_INTERVAL_SECONDS` | `60` | 同一支付单两次查单的最小间隔 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_INTERVAL_SECONDS` | `60` | 自动查单的基础重试间隔 |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_RETRY_BACKOFF_FACTOR` | `2` | 自动查单的指数退避系数，最小为 `1` |
+| `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_MAX_RETRY_INTERVAL_SECONDS` | `900` | 单笔支付单自动查单的最大退避间隔，不能小于基础间隔 |
 | `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_BATCH_SIZE` | `100` | 单批最大支付单数量 |
 
 ### 13.7 手动执行异常 SLA 升级巡检

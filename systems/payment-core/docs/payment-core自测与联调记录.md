@@ -4364,3 +4364,28 @@
 2. 当前自动补偿默认关闭，启用前仍需完成真实 `gateway-access` 地址、渠道凭证、证书、限流参数和运行态联调；本轮验证不代表微信、支付宝或银行渠道现场联调完成。
 3. 固定间隔扫描适合作为当前基线，后续仍需补指数退避、渠道级限流、积压指标和告警。
 4. 本轮代码级门禁通过，但 `master -> release/*` 仍受正式版发布说明、正式签字审批、发布后现场核验实录和 `master` 稳定观察结束结论约束。
+
+## 134. 2026-09-08 自动查单指数退避与人工立即补跑验证
+
+### 134.1 本轮补强
+
+1. 将待回调查单候选拆为人工与自动两种口径：人工补跑保留首次等待阈值和批次上限，但绕过最近查单退避窗口；自动调度只选择已达到下一重试时间的支付单。
+2. 自动候选将渠道业务结果和网关查询失败都计入历史次数，按 `基础间隔 × 退避系数^(历史查单次数-1)` 递增查询间隔，并以最大重试间隔封顶，避免渠道异常期间持续高频访问。
+3. 新增 `retry-backoff-factor` 与 `max-retry-interval-seconds` 配置，默认采用 `60 秒 / 2 倍 / 900 秒封顶`，非法偏小值在服务构造时归一化。
+4. 新增 Mapper 集成测试，以 H2 MySQL 兼容模式直接执行 MyBatis XML，覆盖首次查单、基础间隔未到期、二次退避未到期/已到期、最大间隔未到期/已到期和人工绕过退避。
+
+### 134.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 主动查单与任务中心定向测试 | `mvn -Dtest=PaymentTaskCenterMapperIntegrationTest,PaymentTaskCenterServiceImplTest,PaymentCompensationSchedulerTest,PaymentTaskCenterControllerTest,PaymentServiceImplTest test` | 通过 | `66` 个用例通过，`0` failures、`0` errors、`0` skipped；覆盖失败事实留痕，且 Mapper 集成测试自动候选返回 3 笔、人工候选返回 6 笔 |
+| 后端全量测试 | `mvn test` | 通过 | `284` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，人工立即补跑说明已同步到任务卡 |
+| Mapper XML 校验 | `xmllint --noout PaymentTaskCenterMapper.xml` | 通过 | XML 结构合法 |
+
+### 134.3 当前判断
+
+1. 自动查单已从固定单笔重试间隔升级为按历史查询次数递增、最大间隔封顶的补偿策略，人工处置不再被自动退避误拦截。
+2. H2 MySQL 兼容模式证明当前 MyBatis SQL 和退避函数组合可执行，但不替代生产 MySQL 压测、真实渠道限流验证或运行态联调。
+3. 下一步生产化重点收敛为渠道级并发/频率配额、待回调积压指标与告警，以及真实 `gateway-access` 渠道凭证和协议联调。
+4. 本轮没有新增任何正式审批、发布后现场核验或稳定观察结束事实，`master -> release/*` 仍不放行。
