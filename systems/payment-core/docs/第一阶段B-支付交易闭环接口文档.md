@@ -2340,6 +2340,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 可信代理链从右向左处理：跳过列表中的代理地址，首个非可信数值 IP 作为客户端地址。链中存在空项、主机名或畸形地址，头长度超过 `2048` 字符、跳数超过 `32`，或整条链都是可信代理时，统一回退直接对端。
 4. 当前配置只接受明确 IPv4/IPv6 地址，不支持 CIDR 或主机名。生产启用前必须核对负载均衡和反向代理是否清理/追加转发头、实际多跳顺序及地址漂移策略，不能照搬示例列表。
 
+### 14.47 支付提交字段与终端规范化契约
+
+1. `POST /api/payments/submit` 在查找预付单前校验请求。`prepayOrderNo` 必填且最长 `64` 字符；`paymentMethod/channelCode/sourceAppId/merchantNo/accessToken/clientIp/clientDeviceId/payerPhone` 非空时最长分别为 `32/64/64/128/128/64/128/32` 字符，所有字段去除首尾空白并拒绝 ISO 控制字符。
+2. 支付方式允许先为空并由有效运营配置补齐，但补齐结果仍必须满足必填和 `32` 字符上限；请求渠道允许为空交给路由选择，路由最终渠道必填且最长 `64` 字符。
+3. `terminal` 缺失时为 `UNKNOWN`；规范值仅有 `APP/H5/PC/UNKNOWN`。兼容别名 `APP_WEB -> APP`、`H5_WEB/MOBILE_WEB -> H5`、`PC_WEB -> PC`，其他值返回 `PAYMENT-1035`，不得形成新的限流、风控或审计维度。
+4. 显式 `idempotencyKey` 继续按 14.38 的 `128` 字符与控制字符规则返回 `PAYMENT-1028`；其他提交字段非法统一返回 `PAYMENT-1035`。以上限制不替代部署网关的整体 JSON 请求体上限和渠道专属字段规则。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2369,6 +2376,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1032` | 渠道回调签名算法缺失或不在运行时白名单 |
 | `PAYMENT-1033` | 渠道 RSA2 公钥材料存在但无法解析 |
 | `PAYMENT-1034` | 渠道回调验签窗口为空/非正，或 nonce TTL 未严格覆盖完整签名有效期 |
+| `PAYMENT-1035` | 支付提交请求为空，业务字段缺失、超长、含控制字符，或终端不在有限白名单 |
 
 联调说明：
 
