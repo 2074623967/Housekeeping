@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -103,6 +104,9 @@ class PaymentCallbackSignatureServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("WX_H5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SECRET_MISSING, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-004", "PAY-TEST-001", 600);
     }
 
     @Test
