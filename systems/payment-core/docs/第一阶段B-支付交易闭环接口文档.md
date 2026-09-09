@@ -2060,6 +2060,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 无法解析为对象或数组的载荷、消息头快照失败闭合为 `[REDACTED]`；重放发送失败的可见处置说明固定为 `重放发送失败：[REDACTED]`，不返回消息代理异常原文。
 5. 本规则只定义默认对外最小化，不提供生产敏感原文查看、可信身份、字段级授权或访问审计能力。
 
+### 14.7 未知系统异常响应规则
+
+1. 未被业务异常或参数异常处理器接管的任意 `Exception` 统一返回 `code=PAYMENT-500`、`message=system error` 和非空 `requestId`，不得返回底层异常消息或堆栈。
+2. 服务端错误日志使用同一 `requestId` 关联，仅记录异常类型，不记录异常消息与堆栈，防止数据库地址、SQL、内部端点或凭据片段进入普通日志。
+3. `BusinessException` 仍返回明确领域错误码与业务文案，`IllegalArgumentException` 仍返回 `PAYMENT-400` 和参数校验提示；调用方应使用 `code + requestId` 区分和反馈未知系统错误。
+4. 本规则不代表受控错误详情存储、集中日志权限、保留期限、告警或生产故障演练已经完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
