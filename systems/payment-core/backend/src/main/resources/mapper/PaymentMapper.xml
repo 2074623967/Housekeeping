@@ -459,7 +459,7 @@
     </insert>
 
     <insert id="insertPaymentProcessLog">
-        INSERT IGNORE INTO t_payment_process_log(
+        INSERT INTO t_payment_process_log(
             log_no,
             payment_order_id,
             order_no,
@@ -487,6 +487,7 @@
             #{source},
             NOW()
         )
+        ON DUPLICATE KEY UPDATE id = id
     </insert>
 
     <update id="updateRouteOpsConfigSnapshotVersion">

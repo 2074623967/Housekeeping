@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
 import com.abc123.hsp.dto.PaymentLogOverviewDTO;
@@ -14,6 +15,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
+import org.apache.ibatis.exceptions.PersistenceException;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -61,7 +63,7 @@ public class PaymentProcessLogMapperIntegrationTest {
         processLog.setProcessStage("渠道回调");
         processLog.setLogLevel("ERROR");
         processLog.setLogLevelType("danger");
-        processLog.setMessage("回调类型=QUERY_FAILED；处理状态=查单失败；结果=timeout");
+        processLog.setMessage("回调类型=QUERY_FAILED；处理状态=查单失败");
         processLog.setSource("wx_h5");
 
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -90,6 +92,20 @@ public class PaymentProcessLogMapperIntegrationTest {
             assertEquals(1L, overview.getTotalLogCount());
             assertEquals(1L, overview.getErrorLogCount());
             assertEquals(1, overview.getCallbackErrorCount());
+        }
+    }
+
+    @Test
+    void shouldNotIgnoreNonDuplicateDataErrors() {
+        PaymentProcessLogEntity invalidLog = new PaymentProcessLogEntity();
+        invalidLog.setLogNo("LOG-INVALID-001");
+        invalidLog.setPaymentOrderId("PAY-INVALID-001");
+        invalidLog.setSourceType("PAYMENT_EVENT");
+        invalidLog.setSourceNo("EVT-INVALID-001");
+
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            assertThrows(PersistenceException.class, () -> mapper.insertPaymentProcessLog(invalidLog));
         }
     }
 

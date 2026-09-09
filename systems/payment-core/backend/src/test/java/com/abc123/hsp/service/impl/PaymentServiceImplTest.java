@@ -709,14 +709,20 @@ class PaymentServiceImplTest {
         verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
                 "PAYMENT_ATTEMPT".equals(log.getSourceType())
                         && log.getRequestNo().equals(log.getSourceNo())
-                        && log.getMessage().contains("请求状态=处理中")));
+                        && log.getMessage().contains("请求状态=处理中")
+                        && !log.getMessage().contains("10.0.0.3")
+                        && !log.getMessage().contains("IDEMP-300")
+                        && !log.getMessage().contains("请求报文")));
         verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
                 "PAYMENT_EVENT".equals(log.getSourceType())
-                        && log.getMessage().contains("PAYMENT_SUBMIT")));
+                        && log.getMessage().contains("PAYMENT_SUBMIT")
+                        && !log.getMessage().contains("eventPayload")));
         verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
                 "PAYMENT_NOTIFY".equals(log.getSourceType())
                         && "WARN".equals(log.getLogLevel())
-                        && "offline_bank".equals(log.getSource())));
+                        && "offline_bank".equals(log.getSource())
+                        && !log.getMessage().contains("CHANNEL-300")
+                        && !log.getMessage().contains("；结果=")));
         org.junit.jupiter.api.Assertions.assertEquals("PRE-300", result.getPrepayOrderNo());
     }
 

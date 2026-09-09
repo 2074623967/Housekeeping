@@ -59,7 +59,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
             processLog.setProcessStage("业务事件");
             processLog.setLogLevel("INFO");
             processLog.setLogLevelType("info");
-            processLog.setMessage("事件类型=PAYMENT_EXPIRED_CLOSED；事件载荷=" + eventPayload);
+            processLog.setMessage("事件类型=PAYMENT_EXPIRED_CLOSED");
             processLog.setSource("payment-core");
             paymentMapper.insertPaymentProcessLog(processLog);
         }

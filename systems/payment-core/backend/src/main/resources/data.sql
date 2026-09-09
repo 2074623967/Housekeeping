@@ -146,7 +146,7 @@ SELECT pa.attempt_no, pa.payment_order_id, po.order_no, pa.attempt_no, 'PAYMENT_
        '支付提交',
        CASE WHEN pa.attempt_status_type = 'danger' THEN 'ERROR' WHEN pa.attempt_status_type = 'warn' THEN 'WARN' ELSE 'INFO' END,
        pa.attempt_status_type,
-       CONCAT('支付方式=', pa.payment_method, '；请求状态=', pa.attempt_status, '；请求报文=', pa.request_payload),
+       CONCAT('支付方式=', pa.payment_method, '；请求状态=', pa.attempt_status),
        pa.channel_code, pa.created_at
 FROM t_payment_attempt pa
          LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id;
@@ -156,7 +156,7 @@ SELECT pnl.notify_no, pnl.payment_order_id, po.order_no, NULL, 'PAYMENT_NOTIFY',
        '渠道回调',
        CASE WHEN pnl.notify_status_type = 'danger' THEN 'ERROR' WHEN pnl.notify_status_type = 'warn' THEN 'WARN' ELSE 'INFO' END,
        pnl.notify_status_type,
-       CONCAT('回调类型=', pnl.notify_type, '；处理状态=', pnl.notify_status, '；结果=', COALESCE(pnl.notify_result, '-')),
+       CONCAT('回调类型=', pnl.notify_type, '；处理状态=', pnl.notify_status),
        pnl.channel_code, pnl.created_at
 FROM t_payment_notify_log pnl
          LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id;
@@ -174,7 +174,7 @@ SELECT pe.event_no, pe.payment_order_id, pe.biz_no, NULL, 'PAYMENT_EVENT', pe.ev
        '业务事件',
        CASE WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'WARN' ELSE 'INFO' END,
        CASE WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'warn' ELSE 'info' END,
-       CONCAT('事件类型=', pe.event_type, '；事件载荷=', pe.event_payload),
+       CONCAT('事件类型=', pe.event_type),
        'payment-core', pe.created_at
 FROM t_payment_event pe;
 
