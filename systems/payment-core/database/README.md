@@ -30,6 +30,7 @@
 - `migrations/2026-09-09-add-payment-gateway-version.sql`：幂等创建支付网关不可变版本表、补齐存量 V1 基线和复核版本字段
 - `migrations/2026-09-09-create-payment-control-policy-review.sql`：幂等创建支付控制策略完整候选复核表，以可空唯一来源应用占位约束同一策略最多一条待复核申请
 - `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`：幂等创建异常告警值班路由完整候选复核表，以可空唯一路由编码占位约束同一路由最多一条待复核申请
+- `migrations/2026-09-09-create-payment-alert-provider-review.sql`：幂等创建告警通知供应商完整候选复核表，以可空唯一供应商编码占位约束同一供应商最多一条待复核申请
 
 初始化方式：
 
@@ -59,7 +60,8 @@
 18. 执行 `migrations/2026-09-09-create-payment-control-policy-review.sql`，建立支付控制策略完整候选复核表；脚本可重复执行
 19. 执行 `migrations/2026-09-09-add-payment-control-policy-version.sql`，建立支付控制策略不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
 20. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
-21. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+21. 执行 `migrations/2026-09-09-create-payment-alert-provider-review.sql`，建立告警通知供应商完整候选复核表；脚本可重复执行
+22. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -97,6 +99,8 @@
    - 管理总览、复核列表和版本历史不得返回 `access_token_value` 原文，只能返回是否已配置
    - `SHOW TABLES LIKE 't_payment_issue_duty_roster_review'` 返回一行
    - `SELECT pending_roster_code, COUNT(*) FROM t_payment_issue_duty_roster_review WHERE pending_roster_code IS NOT NULL GROUP BY pending_roster_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_roster_code` 应为空
+   - `SHOW TABLES LIKE 't_payment_alert_provider_review'` 返回一行
+   - `SELECT pending_provider_code, COUNT(*) FROM t_payment_alert_provider_review WHERE pending_provider_code IS NOT NULL GROUP BY pending_provider_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_provider_code` 应为空
    - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 

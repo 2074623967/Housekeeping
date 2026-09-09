@@ -5326,3 +5326,35 @@
 3. 页面已完成模拟响应下的桌面与手机无头渲染检查，但后端 `18081` 未监听，因此不形成真实端到端页面验收、回滚批准、生产迁移或真实网关联调证据。
 4. `SELF_DECLARED` 只表示人员声明不同，不能证明可信身份、权限、正式审批、不可抵赖签字或生产放行。
 5. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。
+
+## 167. 2026-09-09 异常告警通知供应商完整候选复核 V1.2 验证
+
+### 167.1 本轮补强
+
+1. 新增 `t_payment_alert_provider_review` 和幂等迁移，保存 CREATE/UPDATE/STATUS_CHANGE 完整候选、运行配置 SHA-256 基线、可空唯一待办占位及申请/复核记录。
+2. 新增供应商创建、编辑、启停候选、复核列表、批准和驳回接口。提交与驳回不修改运行态；批准先锁申请，再锁运行配置，并在同一事务内写入完整配置、完成复核和释放占位。
+3. 供应商编码统一大写；通道限制为 `IN_APP / IM / SMS / EMAIL`；路由优先级不得为负，文本按 schema 长度校验。CREATE 批准复验编码未占用，UPDATE/STATUS_CHANGE 批准复验完整基线。
+4. 已删除已知的 `updateAlertProviderStatus` 直接运行态写入路径。申请人与复核人仅做大小写不敏感的自声明异人校验，身份可信度为 `SELF_DECLARED`。
+5. 管理端升级到 V1.23，新增供应商完整候选表单、启停申请身份与原因、复核工作台和申请启停按钮；批准后才刷新运行态。
+6. 本能力不等于真实通知供应商配置、可信审批、生产迁移、接收人核验、运行态派发或实际送达回执完成。
+
+### 167.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 供应商复核受影响定向测试 | `mvn -Dtest=PaymentAlertProviderConfigServiceImplTest,PaymentConfigAlertProviderReviewMapperIntegrationTest,PaymentConfigControllerTest,PaymentConfigServiceImplTest test` | 通过 | `83` 个用例通过，覆盖三类候选、运行态隔离、编码规范化、唯一待办竞态、完整基线漂移、同人拒绝、原子批准、驳回及六类 Controller 入口 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `456` 个用例，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 管理端桌面模拟响应检查 | `http://127.0.0.1:4198/payment-config`，Playwright `1280 x 900` | 通过 | V1.23、完整候选表单、待复核“通过并应用”和运行态“申请停用”实际渲染；`document/body scrollWidth=1280/1280` |
+| 管理端手机模拟响应检查 | Playwright `390 x 844` | 通过 | `document/body scrollWidth=390/390`，表单、复核操作和运行态表格在各自响应式容器内展示，无页面级横向溢出或控件交叠 |
+| 运行态 API 与生产迁移 | `http://127.0.0.1:18081/api/payment-config` | 未执行 | 返回 `000`，后端未监听；不记录真实候选提交/批准、生产 MySQL 迁移、供应商参数或实际送达通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码、迁移、文档和 Mapper XML 无空白符或结构错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 脚本退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 167.3 当前判断
+
+1. 告警通知供应商新增、编辑和启停已进入统一完整候选复核链路，批准前不会改变自动派发读取的运行配置。
+2. 唯一待办、运行配置行锁、完整指纹、创建编码复验和数据库唯一键共同约束本服务内并发与陈旧候选；结论来自单元和 H2 MySQL 兼容 Mapper 测试，不代表生产 MySQL 并发压测。
+3. `SELF_DECLARED` 只表示人员声明不同，不能证明可信身份、权限、正式审批或不可抵赖签字；真实企业消息、短信和邮件供应商仍需外部联调。
+4. 页面已完成模拟响应下的桌面与手机视觉检查，但后端 `18081` 未监听，因此不形成真实端到端页面验收或通知送达证据。
+5. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。

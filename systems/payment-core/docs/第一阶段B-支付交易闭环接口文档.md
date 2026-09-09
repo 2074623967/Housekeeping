@@ -1981,6 +1981,21 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_WINDOW_SECONDS` | `60` | 渠道共享固定时间窗秒数，最小归一化为 `1` |
 | `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL` | `100` | 单渠道每个时间窗允许占用的最大查单次数，最小归一化为 `1` |
 
+### 13.10 异常告警通知供应商候选复核
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/payment-config/alert-providers` | 提交新增完整候选 |
+| `PUT` | `/api/payment-config/alert-providers/{providerCode}` | 提交编辑完整候选 |
+| `POST` | `/api/payment-config/alert-providers/toggle` | 提交启停候选 |
+| `GET` | `/api/payment-config/alert-providers/reviews` | 查询复核申请 |
+| `POST` | `/api/payment-config/alert-providers/reviews/{requestNo}/approve` | 异人声明批准并原子应用 |
+| `POST` | `/api/payment-config/alert-providers/reviews/{requestNo}/reject` | 驳回候选，不改变运行态 |
+
+新增或编辑请求包含 `providerCode / providerName / channelCode / endpointAlias / templateCode / templateBody / routeRule / routePriority / retryPolicy / rateLimitPolicy / enabled / requester / changeReason`。启停请求包含 `providerCode / enabled / requester / changeReason`；处理请求包含 `reviewer / reviewComment`。
+
+供应商编码规范化为大写，通道仅支持 `IN_APP / IM / SMS / EMAIL`，同一编码同时最多一条待办。UPDATE/STATUS_CHANGE 批准时复验完整基线，CREATE 批准时复验编码未占用。复核身份可信度固定为 `SELF_DECLARED`，不代表正式审批或真实供应商联调。
+
 ## 14. 错误与边界说明
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
