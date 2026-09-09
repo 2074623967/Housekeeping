@@ -909,7 +909,8 @@ public class PaymentServiceImpl implements PaymentService {
         paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
         PaymentChannelQueryResultDTO queryResult;
         try {
-            queryResult = paymentChannelQueryService.query(detail);
+            queryResult = PaymentChannelQueryResultValidator.validateAndNormalize(
+                    paymentChannelQueryService.query(detail));
         } catch (BusinessException exception) {
             recordChannelQueryFailure(detail, exception);
             throw exception;

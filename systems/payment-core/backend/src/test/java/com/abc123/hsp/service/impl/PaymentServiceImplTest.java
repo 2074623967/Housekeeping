@@ -1826,6 +1826,42 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRecordInvalidChannelQueryResultWithoutSettlementSideEffects() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-INVALID", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-INVALID")).thenReturn(detail);
+        PaymentChannelQueryResultDTO invalidResult = queryResult(
+                "SUCCESS", "WX-QUERY-INVALID", "GATEWAY\nINJECTED");
+        when(paymentChannelQueryService.query(detail)).thenReturn(invalidResult);
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-INVALID");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-INVALID"), eq("wx_h5"), eq("QUERY_FAILED"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
+                eq("查单失败"), eq("danger"));
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+    }
+
+    @Test
     void shouldNotReopenClosedPaymentWhenQueryReportsSuccess() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-003", "CLOSED");
         when(paymentMapper.findDetail("PAY-QUERY-003")).thenReturn(detail);

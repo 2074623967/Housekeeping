@@ -1,7 +1,14 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
@@ -57,6 +64,65 @@ class PaymentChannelQueryServiceImplTest {
         assertEquals("UNK-001", result.getChannelTransactionNo());
     }
 
+    @Test
+    void shouldRejectOversizedRawReturnCodeBeforeStandardizationLookup() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        result.setChannelReturnCode(repeat('R', 65));
+        when(adapter.query(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        Arrays.asList(adapter),
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
+    void shouldRejectEmptyAdapterResultAsInvalidChannelQuery() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.query(any())).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        Arrays.asList(adapter),
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
+    void shouldRejectOversizedStandardizedMessageBeforeReturningResult() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        when(adapter.query(any())).thenReturn(result);
+        when(standardizer.standardizeQuery(eq("wx_h5"), eq(result))).thenAnswer(invocation -> {
+            result.setStandardizedMessage(repeat('M', 257));
+            return result;
+        });
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(Arrays.asList(adapter), standardizer)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
     private PaymentChannelQueryServiceImpl buildService() {
         PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         return new PaymentChannelQueryServiceImpl(Arrays.asList(
@@ -69,5 +135,24 @@ class PaymentChannelQueryServiceImplTest {
 
     private PaymentChannelQueryAdapter ordered(PaymentChannelQueryAdapter adapter) {
         return adapter;
+    }
+
+    private PaymentDetailDTO paymentDetail() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setChannel("wx_h5");
+        return detail;
+    }
+
+    private PaymentChannelQueryResultDTO queryResult() {
+        PaymentChannelQueryResultDTO result = new PaymentChannelQueryResultDTO();
+        result.setTradeStatus("WAIT_CALLBACK");
+        result.setQuerySource("GATEWAY_ACCESS_HTTP");
+        return result;
+    }
+
+    private String repeat(char value, int count) {
+        char[] characters = new char[count];
+        Arrays.fill(characters, value);
+        return new String(characters);
     }
 }

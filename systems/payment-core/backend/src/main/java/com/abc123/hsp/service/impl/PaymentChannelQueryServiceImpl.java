@@ -28,14 +28,10 @@ public class PaymentChannelQueryServiceImpl implements PaymentChannelQueryServic
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
         for (PaymentChannelQueryAdapter adapter : adapters) {
             if (adapter.supports(paymentDetail.getChannel())) {
-                PaymentChannelQueryResultDTO result = adapter.query(paymentDetail);
-                if (result != null) {
-                    return returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result);
-                }
-                throw new BusinessException(
-                        ErrorCode.PAYMENT_CHANNEL_UNAVAILABLE,
-                        "payment channel query returned empty result"
-                );
+                PaymentChannelQueryResultDTO result = PaymentChannelQueryResultValidator.validateAndNormalize(
+                        adapter.query(paymentDetail));
+                return PaymentChannelQueryResultValidator.validateAndNormalize(
+                        returnCodeStandardizer.standardizeQuery(paymentDetail.getChannel(), result));
             }
         }
         throw new BusinessException(
