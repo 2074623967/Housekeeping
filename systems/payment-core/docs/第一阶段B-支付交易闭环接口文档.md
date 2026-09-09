@@ -2081,6 +2081,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 手工创建 MyBatis `Configuration` 的 Mapper 集成测试必须显式设置同一 `NoLoggingImpl`，避免绕过 Spring Boot 配置形成测试日志旁路。
 4. 关闭此日志会减少 SQL 文本与参数级诊断信息；生产应使用受控指标、链路追踪、慢查询设施或单独治理的诊断工具，本规则不证明生产日志 IAM、隐私或可观测性验收完成。
 
+### 14.10 主动查单失败通知快照规则
+
+1. `POST /api/payments/query` 调用渠道查单失败时，通知日志 `responsePayload` 只持久化受控 `BusinessException.code` 和固定 `message=channel query failed`，不得复制异常消息原文。
+2. 原 `BusinessException` 继续向接口异常边界抛出，调用方错误码和可操作业务提示不变；`QUERY_FAILED` 状态、查单失败统计、自动补偿退避和处理日志继续按原口径工作。
+3. 该规则阻断新失败快照扩散，不清理既有历史记录，也不代表生产字段级授权、访问审计、保留期限或真实渠道故障联调已经完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
