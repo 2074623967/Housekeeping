@@ -2178,6 +2178,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `summaryComment` 最多列出 3 个失败引用，初次告警使用异常号，升级告警优先使用来源告警号；调用方以 `failCount` 判断完整失败规模。
 4. 自动任务租约不覆盖人工入口并发，当前 `NOT EXISTS` 候选过滤也不等同于数据库级唯一约束；接口暂不承诺人工并发触发 exactly-once。
 
+### 14.24 异常 SLA 巡检并发幂等规则
+
+1. 初次告警以 `ISSUE_ACTIVE:<issueNo>` 作为数据库生成键，同一异常同时最多一条活动告警；告警确认后释放该键，仍逾期时允许后续巡检重新生成。
+2. 升级告警以 `ISSUE_ESCALATION:<sourceAlertNo>` 作为数据库生成键，确认后也不释放，保证每条来源告警最多生成一次升级 outbox。
+3. 唯一键竞争失败作为幂等重复跳过：不增加 `successCount` 或 `failCount`，增加 `warningCount`，并在 `summaryComment` 展示跳过数量；其他数据库异常继续计入 `failCount`。
+4. 幂等范围仅为本地告警生成，不代表供应商通知 exactly-once；调用方仍应使用稳定 `alertNo` 关联派发与回执事实。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

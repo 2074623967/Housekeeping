@@ -331,6 +331,18 @@ t_order
 
 事务规则：同一规则只允许一个待复核申请；处理时锁定申请行并以 `review_status = 'PENDING_REVIEW'` 条件更新，避免重复处理。修改申请通过前比较最新规则版本与 `base_version_no`，并重新执行候选校验和阻断级冲突检查。人员字段均为自声明，表数据不是可信身份签字或生产审批证据。既有运行库通过 `database/migrations/2026-09-08-add-payment-route-rule-review.sql` 幂等建表。
 
+### 4.15 异常告警生成幂等字段 `t_payment_issue_alert_log.generation_key`
+
+作用：为 SLA 初次告警与来源升级告警提供数据库最终并发防重，不改变告警号、派发日志和历史回执事实。
+
+| 取值 | 规则 |
+| --- | --- |
+| `ISSUE_ACTIVE:<issueNo>` | 当前未确认初次告警占用；确认时置空，允许未收口异常后续重新告警 |
+| `ISSUE_ESCALATION:<sourceAlertNo>` | 来源告警升级永久占用；确认时不释放 |
+| `NULL` | 查询趋势告警、外部通道派发日志及不参与 SLA 生成防重的其他记录 |
+
+索引规则：`uk_issue_alert_generation(generation_key)` 为可空唯一索引。既有运行库通过 `database/migrations/2026-09-10-add-issue-alert-generation-key.sql` 一次性加列、为每组存量记录的最早一条回填键后建索引；脚本不删除其余历史重复记录。生产执行前必须在备份库验证重复分布、DDL 锁影响、回填耗时与回滚方案。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

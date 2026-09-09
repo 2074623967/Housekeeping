@@ -31,6 +31,7 @@
 - `migrations/2026-09-09-create-payment-control-policy-review.sql`：幂等创建支付控制策略完整候选复核表，以可空唯一来源应用占位约束同一策略最多一条待复核申请
 - `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`：幂等创建异常告警值班路由完整候选复核表，以可空唯一路由编码占位约束同一路由最多一条待复核申请
 - `migrations/2026-09-09-create-payment-alert-provider-review.sql`：幂等创建告警通知供应商完整候选复核表，以可空唯一供应商编码占位约束同一供应商最多一条待复核申请
+- `migrations/2026-09-10-add-issue-alert-generation-key.sql`：为 SLA 初次告警和升级告警增加可空业务唯一键，并回填每组存量记录中最早一条；脚本非幂等，只执行一次
 
 初始化方式：
 
@@ -62,7 +63,8 @@
 20. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
 21. 执行 `migrations/2026-09-09-create-payment-alert-provider-review.sql`，建立告警通知供应商完整候选复核表；脚本可重复执行
 22. 执行 `migrations/2026-09-09-create-payment-process-log.sql`，建立独立支付处理日志事实表，并从支付尝试、通知、路由和事件表幂等回填存量日志；脚本可重复执行
-23. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+23. 执行一次 `migrations/2026-09-10-add-issue-alert-generation-key.sql`，为 SLA 告警补齐数据库级生成幂等；上线前先在备份库审查历史重复并评估加索引锁影响
+24. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -105,6 +107,8 @@
    - `SHOW TABLES LIKE 't_payment_process_log'` 返回一行
    - `SELECT source_type, source_no, COUNT(*) FROM t_payment_process_log GROUP BY source_type, source_no HAVING COUNT(*) > 1` 返回空集
    - `SELECT COUNT(*) FROM t_payment_attempt pa WHERE NOT EXISTS (SELECT 1 FROM t_payment_process_log log WHERE log.source_type = 'PAYMENT_ATTEMPT' AND log.source_no = pa.attempt_no)` 返回 `0`；通知、路由和事件表按各自来源类型执行同口径检查也应返回 `0`
+   - `SHOW COLUMNS FROM t_payment_issue_alert_log LIKE 'generation_key'` 返回一行，`SHOW INDEX FROM t_payment_issue_alert_log WHERE Key_name = 'uk_issue_alert_generation'` 返回唯一索引
+   - `SELECT generation_key, COUNT(*) FROM t_payment_issue_alert_log WHERE generation_key IS NOT NULL GROUP BY generation_key HAVING COUNT(*) > 1` 返回空集；历史重复告警允许保留，但只有每组最早一条占用生成键
    - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 
