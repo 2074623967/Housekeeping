@@ -2150,6 +2150,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 成功计数只表示渠道提交动作完成，不表示退款资金已到账；最终结果仍由退款回调或后续真实渠道查单确认。
 4. 真实渠道接入必须使用稳定退款单号实现幂等，并处理请求超时但渠道可能已受理的不确定状态；本地事务无法回滚外部渠道副作用。
 
+### 14.20 失败事件重发任务结果规则
+
+1. `POST /api/payment-task-center/actions/republish-failed-events` 的响应继续使用 `PaymentTaskActionResultDTO`；人工模式处理全部 `FAILED` 事件，自动模式只处理已到重试时间的 `FAILED` 事件。
+2. `processedCount` 为本轮候选数，`successCount` 为投递服务返回成功的数量，`failCount` 包含投递返回 `false` 和单条事务抛出运行时异常的数量。
+3. 每条事件使用独立 `REQUIRES_NEW` 事务；普通投递失败写入的 `FAILED / DEAD_LETTER` 状态正常提交，意外异常回滚当前事件且不阻断后续事件。`summaryComment` 最多列出 3 个失败事件号。
+4. 本地事务无法撤销已经交付给 HTTP 或 MQ 下游的外部事件；真实下游必须以稳定 `eventNo / messageId` 实现幂等，接口成功也不等同于所有订阅方已完成业务处理。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
