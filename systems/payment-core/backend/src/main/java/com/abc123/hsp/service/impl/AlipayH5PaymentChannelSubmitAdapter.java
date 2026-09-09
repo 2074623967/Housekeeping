@@ -23,7 +23,7 @@ public class AlipayH5PaymentChannelSubmitAdapter implements PaymentChannelSubmit
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
-        result.setChannelTransactionNo("ALI-" + System.currentTimeMillis());
+        result.setChannelTransactionNo(ChannelPayloadSupport.buildSimulatedChannelTransactionNo("ALI-"));
         result.setChannelReturnCode("WAIT_BUYER_PAY");
         result.setAttemptStatus("处理中");
         result.setAttemptStatusType("info");

@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import java.util.StringJoiner;
+import java.util.UUID;
 
 /**
  * 渠道模拟响应报文拼装工具，避免各适配器重复手写字符串。
@@ -8,6 +9,12 @@ import java.util.StringJoiner;
 final class ChannelPayloadSupport {
 
     private ChannelPayloadSupport() {
+    }
+
+    static String buildSimulatedChannelTransactionNo(String prefix) {
+        return prefix
+                + System.currentTimeMillis()
+                + UUID.randomUUID().toString().replace("-", "");
     }
 
     /**

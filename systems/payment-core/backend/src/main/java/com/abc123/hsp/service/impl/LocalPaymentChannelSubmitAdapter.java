@@ -21,7 +21,7 @@ public class LocalPaymentChannelSubmitAdapter implements PaymentChannelSubmitAda
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
-        result.setChannelTransactionNo("CHN-" + System.currentTimeMillis());
+        result.setChannelTransactionNo(ChannelPayloadSupport.buildSimulatedChannelTransactionNo("CHN-"));
         result.setChannelReturnCode("ACCEPTED");
         result.setAttemptStatus("处理中");
         result.setAttemptStatusType("info");
