@@ -6,6 +6,12 @@ import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.mapper.PaymentRouteExecutionMapper;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,6 +23,7 @@ import org.springframework.stereotype.Service;
 public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionService {
 
     private final PaymentRouteExecutionMapper paymentRouteExecutionMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
     private final boolean routeHealthEnabled;
     private final int routeHealthLookbackHours;
     private final int routeHealthFailureCountThreshold;
@@ -33,8 +40,10 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
             @Value("${payment.channel-query.monitor.failure-rate-threshold-percent:30}")
                     int routeHealthFailureRateThresholdPercent,
             @Value("${payment.channel-query.monitor.failure-rate-minimum-sample-count:10}")
-                    int routeHealthMinimumSampleCount) {
+                    int routeHealthMinimumSampleCount,
+            PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentRouteExecutionMapper = paymentRouteExecutionMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
         this.routeHealthEnabled = routeHealthEnabled;
         this.routeHealthLookbackHours = Math.max(routeHealthLookbackHours, 1);
         this.routeHealthFailureCountThreshold = Math.max(routeHealthFailureCountThreshold, 1);
@@ -44,18 +53,40 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
     }
 
     PaymentRouteExecutionServiceImpl(PaymentRouteExecutionMapper paymentRouteExecutionMapper) {
-        this(paymentRouteExecutionMapper, false, 24, 5, 30, 10);
+        this(paymentRouteExecutionMapper, false, 24, 5, 30, 10,
+                new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<PaymentRouteExecutionListItemDTO> list(PaymentRouteExecutionQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                paymentRouteExecutionMapper.findAll(query),
+                maskItems(paymentRouteExecutionMapper.findAll(query)),
                 paymentRouteExecutionMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    private List<PaymentRouteExecutionListItemDTO> maskItems(List<PaymentRouteExecutionListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private PaymentRouteExecutionListItemDTO maskedCopy(PaymentRouteExecutionListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        PaymentRouteExecutionListItemDTO copy = new PaymentRouteExecutionListItemDTO();
+        BeanUtils.copyProperties(item, copy);
+        copy.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        copy.setClientIp(sensitiveDataMasker.maskClientIp(item.getClientIp()));
+        copy.setIdempotencyKey(sensitiveDataMasker.maskIdempotencyKey(item.getIdempotencyKey()));
+        copy.setRequestPayload(sensitiveDataMasker.maskPayload(item.getRequestPayload()));
+        copy.setResponsePayload(sensitiveDataMasker.maskPayload(item.getResponsePayload()));
+        return copy;
     }
 
     @Override

@@ -4,15 +4,17 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import com.abc123.hsp.mapper.PaymentRequestMapper;
 import com.abc123.hsp.service.PaymentRequestService;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -23,12 +25,18 @@ import org.springframework.util.StringUtils;
 public class PaymentRequestServiceImpl implements PaymentRequestService {
 
     private static final Map<String, String> REQUEST_STATUS_ALIASES = buildRequestStatusAliases();
-    private static final Pattern IP_ADDRESS_PATTERN = Pattern.compile("^\\d{1,3}(?:\\.\\d{1,3}){3}$");
-
     private final PaymentRequestMapper paymentRequestMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public PaymentRequestServiceImpl(PaymentRequestMapper paymentRequestMapper) {
+    @Autowired
+    public PaymentRequestServiceImpl(PaymentRequestMapper paymentRequestMapper,
+                                     PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentRequestMapper = paymentRequestMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    PaymentRequestServiceImpl(PaymentRequestMapper paymentRequestMapper) {
+        this(paymentRequestMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
@@ -109,16 +117,20 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
         }
-        for (PaymentRequestListItemDTO item : items) {
-            if (item == null) {
-                continue;
-            }
-            item.setClientIp(maskClientIp(item.getClientIp()));
-            item.setIdempotencyKey(maskIdempotencyKey(item.getIdempotencyKey()));
-            item.setRequestPayload(maskPayload(item.getRequestPayload()));
-            item.setResponsePayload(maskPayload(item.getResponsePayload()));
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private PaymentRequestListItemDTO maskedCopy(PaymentRequestListItemDTO item) {
+        if (item == null) {
+            return null;
         }
-        return items;
+        PaymentRequestListItemDTO copy = new PaymentRequestListItemDTO();
+        BeanUtils.copyProperties(item, copy);
+        copy.setClientIp(sensitiveDataMasker.maskClientIp(item.getClientIp()));
+        copy.setIdempotencyKey(sensitiveDataMasker.maskIdempotencyKey(item.getIdempotencyKey()));
+        copy.setRequestPayload(sensitiveDataMasker.maskPayload(item.getRequestPayload()));
+        copy.setResponsePayload(sensitiveDataMasker.maskPayload(item.getResponsePayload()));
+        return copy;
     }
 
     private void normalizeQuery(PaymentRequestQueryDTO query) {
@@ -162,95 +174,4 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
         return "\"" + normalizedValue + "\"";
     }
 
-    private String maskClientIp(String clientIp) {
-        if (!StringUtils.hasText(clientIp) || "UNKNOWN".equalsIgnoreCase(clientIp.trim())) {
-            return clientIp;
-        }
-        String normalized = clientIp.trim();
-        if (IP_ADDRESS_PATTERN.matcher(normalized).matches()) {
-            String[] parts = normalized.split("\\.");
-            return parts[0] + "." + parts[1] + ".*.*";
-        }
-        if (normalized.contains(":")) {
-            String[] segments = normalized.split(":");
-            return segments.length == 0 ? normalized : segments[0] + ":****";
-        }
-        if (normalized.length() <= 4) {
-            return "****";
-        }
-        return normalized.substring(0, 2) + "****";
-    }
-
-    private String maskIdempotencyKey(String idempotencyKey) {
-        if (!StringUtils.hasText(idempotencyKey)) {
-            return idempotencyKey;
-        }
-        String normalized = idempotencyKey.trim();
-        if (normalized.length() <= 10) {
-            return normalized.substring(0, Math.min(2, normalized.length())) + "****";
-        }
-        return normalized.substring(0, 6) + "****" + normalized.substring(normalized.length() - 4);
-    }
-
-    private String maskPayload(String payload) {
-        if (!StringUtils.hasText(payload)) {
-            return payload;
-        }
-        String masked = payload;
-        masked = replaceSensitiveField(masked, "clientIp", this::maskClientIp);
-        masked = replaceSensitiveField(masked, "idempotencyKey", this::maskIdempotencyKey);
-        masked = replaceSensitiveField(masked, "mobile", this::maskPhone);
-        masked = replaceSensitiveField(masked, "phone", this::maskPhone);
-        masked = replaceSensitiveField(masked, "tel", this::maskPhone);
-        masked = replaceSensitiveField(masked, "bankCardNo", this::maskBankCardNo);
-        masked = replaceSensitiveField(masked, "cardNo", this::maskBankCardNo);
-        masked = replaceSensitiveField(masked, "customerName", this::maskName);
-        masked = replaceSensitiveField(masked, "name", this::maskName);
-        return masked;
-    }
-
-    private String replaceSensitiveField(String payload, String fieldName, Function<String, String> masker) {
-        Pattern pattern = Pattern.compile("(\"" + fieldName + "\"\\s*:\\s*\")([^\"]*)(\")");
-        Matcher matcher = pattern.matcher(payload);
-        StringBuffer stringBuffer = new StringBuffer();
-        while (matcher.find()) {
-            String replacement = matcher.group(1) + masker.apply(matcher.group(2)) + matcher.group(3);
-            matcher.appendReplacement(stringBuffer, Matcher.quoteReplacement(replacement));
-        }
-        matcher.appendTail(stringBuffer);
-        return stringBuffer.toString();
-    }
-
-    private String maskPhone(String phone) {
-        if (!StringUtils.hasText(phone)) {
-            return phone;
-        }
-        String normalized = phone.trim();
-        if (normalized.length() <= 7) {
-            return normalized.substring(0, Math.min(3, normalized.length())) + "****";
-        }
-        return normalized.substring(0, 3) + "****" + normalized.substring(normalized.length() - 4);
-    }
-
-    private String maskBankCardNo(String bankCardNo) {
-        if (!StringUtils.hasText(bankCardNo)) {
-            return bankCardNo;
-        }
-        String normalized = bankCardNo.trim();
-        if (normalized.length() <= 10) {
-            return normalized.substring(0, Math.min(4, normalized.length())) + "****";
-        }
-        return normalized.substring(0, 6) + "******" + normalized.substring(normalized.length() - 4);
-    }
-
-    private String maskName(String name) {
-        if (!StringUtils.hasText(name)) {
-            return name;
-        }
-        String normalized = name.trim();
-        if (normalized.length() <= 1) {
-            return "*";
-        }
-        return normalized.substring(0, 1) + "*";
-    }
 }

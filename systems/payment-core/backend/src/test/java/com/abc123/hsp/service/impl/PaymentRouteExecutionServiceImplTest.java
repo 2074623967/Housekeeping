@@ -1,10 +1,14 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 
+import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.mapper.PaymentRouteExecutionMapper;
+import java.util.Collections;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -85,5 +89,32 @@ class PaymentRouteExecutionServiceImplTest {
         Assertions.assertEquals(30, result.getRouteHealthFailureRateThresholdPercent());
         Assertions.assertEquals(10, result.getRouteHealthMinimumSampleCount());
         verify(paymentRouteExecutionMapper).findOverview(query);
+    }
+
+    @Test
+    void shouldMaskRouteContextWithoutMutatingMapperFacts() {
+        PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
+        PaymentRouteExecutionListItemDTO item = new PaymentRouteExecutionListItemDTO();
+        item.setCustomerName("张三");
+        item.setClientIp("10.20.30.40");
+        item.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        item.setRequestPayload("{\"payerPhone\":\"13800138000\"}");
+        item.setResponsePayload("{\"cardNo\":\"6222021234567890123\"}");
+        org.mockito.Mockito.when(paymentRouteExecutionMapper.findAll(query))
+                .thenReturn(Collections.singletonList(item));
+        org.mockito.Mockito.when(paymentRouteExecutionMapper.count(query)).thenReturn(1L);
+
+        PaymentRouteExecutionListItemDTO result = new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper)
+                .list(query)
+                .getItems()
+                .get(0);
+
+        assertEquals("张*", result.getCustomerName());
+        assertEquals("10.20.*.*", result.getClientIp());
+        assertEquals("ORDER-****DEFG", result.getIdempotencyKey());
+        assertTrue(result.getRequestPayload().contains("138****8000"));
+        assertTrue(result.getResponsePayload().contains("622202******0123"));
+        assertEquals("张三", item.getCustomerName());
+        assertEquals("10.20.30.40", item.getClientIp());
     }
 }

@@ -5,7 +5,13 @@ import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import com.abc123.hsp.mapper.PaymentFlowMapper;
 import com.abc123.hsp.service.PaymentFlowService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,16 +21,24 @@ import org.springframework.stereotype.Service;
 public class PaymentFlowServiceImpl implements PaymentFlowService {
 
     private final PaymentFlowMapper paymentFlowMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public PaymentFlowServiceImpl(PaymentFlowMapper paymentFlowMapper) {
+    @Autowired
+    public PaymentFlowServiceImpl(PaymentFlowMapper paymentFlowMapper,
+                                  PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentFlowMapper = paymentFlowMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    PaymentFlowServiceImpl(PaymentFlowMapper paymentFlowMapper) {
+        this(paymentFlowMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<PaymentFlowListItemDTO> list(PaymentFlowQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                paymentFlowMapper.findAll(query),
+                maskItems(paymentFlowMapper.findAll(query)),
                 paymentFlowMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -34,7 +48,7 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
     @Override
     public String exportCsv(PaymentFlowQueryDTO query) {
         normalizeQuery(query);
-        List<PaymentFlowListItemDTO> items = paymentFlowMapper.findAllForExport(query);
+        List<PaymentFlowListItemDTO> items = maskItems(paymentFlowMapper.findAllForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("流水编号,支付单号,订单号,预付单号,流水类型,类型标签,渠道编码,终端,客户端IP,幂等键,业务状态,状态类型,通知类型,路由规则,下游系统,事件主题,发布状态,重试次数,请求报文,响应报文,摘要,创建时间\n");
         for (PaymentFlowListItemDTO item : items) {
@@ -62,6 +76,26 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
                     .append(csvCell(item.getCreatedAt())).append('\n');
         }
         return builder.toString();
+    }
+
+    private List<PaymentFlowListItemDTO> maskItems(List<PaymentFlowListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private PaymentFlowListItemDTO maskedCopy(PaymentFlowListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        PaymentFlowListItemDTO copy = new PaymentFlowListItemDTO();
+        BeanUtils.copyProperties(item, copy);
+        copy.setClientIp(sensitiveDataMasker.maskClientIp(item.getClientIp()));
+        copy.setIdempotencyKey(sensitiveDataMasker.maskIdempotencyKey(item.getIdempotencyKey()));
+        copy.setRequestPayload(sensitiveDataMasker.maskPayload(item.getRequestPayload()));
+        copy.setResponsePayload(sensitiveDataMasker.maskPayload(item.getResponsePayload()));
+        return copy;
     }
 
     private void normalizeQuery(PaymentFlowQueryDTO query) {

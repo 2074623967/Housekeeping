@@ -91,6 +91,28 @@ class PaymentFlowServiceImplTest {
         verify(paymentFlowMapper).findAllForExport(query);
     }
 
+    @Test
+    void shouldMaskListAndExportWithoutMutatingMapperFacts() {
+        PaymentFlowQueryDTO listQuery = new PaymentFlowQueryDTO();
+        PaymentFlowListItemDTO item = buildItem("FLOW-001", "方式=微信 / 状态=处理中", 0);
+        item.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        item.setRequestPayload("{\"payerPhone\":\"13800138000\",\"nested\":{\"clientDeviceId\":\"DEVICE-12345678\"}}");
+        when(paymentFlowMapper.findAll(listQuery)).thenReturn(Collections.singletonList(item));
+        when(paymentFlowMapper.count(listQuery)).thenReturn(1L);
+
+        PaymentFlowListItemDTO result = new PaymentFlowServiceImpl(paymentFlowMapper)
+                .list(listQuery)
+                .getItems()
+                .get(0);
+
+        assertEquals("127.0.*.*", result.getClientIp());
+        assertEquals("ORDER-****DEFG", result.getIdempotencyKey());
+        assertTrue(result.getRequestPayload().contains("138****8000"));
+        assertTrue(result.getRequestPayload().contains("DEVI****5678"));
+        assertEquals("127.0.0.1", item.getClientIp());
+        assertTrue(item.getRequestPayload().contains("13800138000"));
+    }
+
     private PaymentFlowListItemDTO buildItem(String flowNo, String summary, Integer retryCount) {
         PaymentFlowListItemDTO item = new PaymentFlowListItemDTO();
         item.setFlowNo(flowNo);

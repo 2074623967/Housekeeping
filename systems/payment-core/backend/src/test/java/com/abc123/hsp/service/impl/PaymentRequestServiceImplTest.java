@@ -97,6 +97,8 @@ class PaymentRequestServiceImplTest {
         assertEquals("ORDER-****DEFG", resultItem.getIdempotencyKey());
         assertTrue(resultItem.getRequestPayload().contains("张*"));
         assertTrue(resultItem.getResponsePayload().contains("138****8000"));
+        assertEquals("10.20.30.40", item.getClientIp());
+        assertTrue(item.getRequestPayload().contains("张三"));
     }
 
     @Test
