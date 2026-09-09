@@ -69,6 +69,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final RefundRetryTaskService refundRetryTaskService;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
+    private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
     private final TransactionTemplate issueAlertTransactionTemplate;
     private final PaymentService paymentService;
     private final int pendingQueryMinAgeSeconds;
@@ -524,14 +525,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                         String triggeredBy,
                                                         AutoTaskRunner runner) {
         paymentTaskCenterMapper.initTaskLease(taskCode);
-        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, triggeredBy, AUTO_TASK_LEASE_SECONDS);
+        String leaseOwner = triggeredBy + ":" + taskLeaseOwnerSuffix;
+        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, leaseOwner, AUTO_TASK_LEASE_SECONDS);
         if (lockedRows <= 0) {
             return buildLeaseSkippedResult(taskCode, taskName, runMode, triggeredBy);
         }
         try {
             return runner.run();
         } finally {
-            paymentTaskCenterMapper.releaseTaskLease(taskCode, triggeredBy);
+            paymentTaskCenterMapper.releaseTaskLease(taskCode, leaseOwner);
         }
     }
 

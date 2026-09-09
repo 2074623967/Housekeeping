@@ -888,14 +888,13 @@
     <update id="acquireTaskLease">
         UPDATE t_payment_task_lease
         SET lock_owner = #{lockOwner},
-            lock_expires_at = DATE_ADD(NOW(), INTERVAL #{leaseSeconds} SECOND),
+            lock_expires_at = TIMESTAMPADD(SECOND, #{leaseSeconds}, NOW()),
             updated_at = NOW()
         WHERE task_code = #{taskCode}
           AND (
               lock_owner IS NULL
               OR lock_expires_at IS NULL
               OR lock_expires_at &lt;= NOW()
-              OR lock_owner = #{lockOwner}
           )
     </update>
 

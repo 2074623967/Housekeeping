@@ -180,11 +180,30 @@ class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldFenceTaskLeaseOwnersAcrossExpiry() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(1, mapper.initTaskLease("PAYMENT_LEASE_TEST"));
+            assertEquals(1, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-a", 120));
+            assertEquals(0, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-a", 120));
+            assertEquals(0, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-b", 120));
+            assertEquals(0, mapper.releaseTaskLease("PAYMENT_LEASE_TEST", "owner-b"));
+            expireTaskLease(session.getConnection(), "PAYMENT_LEASE_TEST");
+            assertEquals(1, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-b", 120));
+            assertEquals(0, mapper.releaseTaskLease("PAYMENT_LEASE_TEST", "owner-a"));
+            assertEquals(1, mapper.releaseTaskLease("PAYMENT_LEASE_TEST", "owner-b"));
+            session.commit();
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             Connection connection = session.getConnection();
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
@@ -205,6 +224,9 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
                     + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_task_lease ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_code VARCHAR(64) NOT NULL UNIQUE, "
+                    + "lock_owner VARCHAR(128), lock_expires_at DATETIME, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), source_alert_no VARCHAR(64), "
                     + "generation_key VARCHAR(191), issue_no VARCHAR(128), payment_order_id VARCHAR(64), "
@@ -261,6 +283,15 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");
             connection.commit();
+        }
+    }
+
+    private void expireTaskLease(Connection connection, String taskCode) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE t_payment_task_lease SET lock_expires_at = ? WHERE task_code = ?")) {
+            statement.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now().minusSeconds(1)));
+            statement.setString(2, taskCode);
+            statement.executeUpdate();
         }
     }
 

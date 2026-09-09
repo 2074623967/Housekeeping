@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -90,7 +91,10 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
     @Test
     void shouldSkipAutoDispatchWhenLeaseHeldByAnotherInstance() {
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_ISSUE_ALERT_DISPATCH", "payment-issue-alert-scheduler", 120))
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_DISPATCH"),
+                leaseOwner("payment-issue-alert-scheduler"),
+                eq(120)))
                 .thenReturn(0);
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
@@ -110,7 +114,10 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
         acceptedLog.setAlertNo("PIA-IM-001");
         acceptedLog.setSourceAlertNo("PIA-OUTBOX-001");
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE", "payment-issue-alert-receipt-scheduler", 120))
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"),
+                leaseOwner("payment-issue-alert-receipt-scheduler"),
+                eq(120)))
                 .thenReturn(1);
         when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Collections.singletonList(acceptedLog));
         when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
@@ -121,8 +128,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         ).autoReconcileDeliveryReceipts();
 
         verify(paymentTaskCenterMapper).releaseTaskLease(
-                "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE",
-                "payment-issue-alert-receipt-scheduler"
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"),
+                leaseOwner("payment-issue-alert-receipt-scheduler")
         );
         verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class));
     }
@@ -963,5 +970,10 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         item.setCreatedAt("2099-12-31 23:59:59");
         item.setTriggeredBy("payment-issue-sla-scheduler");
         return item;
+    }
+
+    private String leaseOwner(String prefix) {
+        return org.mockito.ArgumentMatchers.argThat(
+                owner -> owner != null && owner.startsWith(prefix + ":"));
     }
 }

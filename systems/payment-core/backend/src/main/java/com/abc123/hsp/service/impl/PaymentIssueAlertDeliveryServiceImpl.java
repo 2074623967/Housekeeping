@@ -65,6 +65,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
     private final TransactionTemplate itemTransactionTemplate;
+    private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
 
     @Autowired
     public PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -132,14 +133,15 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                             String triggeredBy,
                                                             AutoTaskRunner runner) {
         paymentTaskCenterMapper.initTaskLease(taskCode);
-        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, triggeredBy, AUTO_TASK_LEASE_SECONDS);
+        String leaseOwner = triggeredBy + ":" + taskLeaseOwnerSuffix;
+        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, leaseOwner, AUTO_TASK_LEASE_SECONDS);
         if (lockedRows <= 0) {
             return buildLeaseSkippedResult(taskCode, taskName, triggeredBy);
         }
         try {
             return runner.run();
         } finally {
-            paymentTaskCenterMapper.releaseTaskLease(taskCode, triggeredBy);
+            paymentTaskCenterMapper.releaseTaskLease(taskCode, leaseOwner);
         }
     }
 

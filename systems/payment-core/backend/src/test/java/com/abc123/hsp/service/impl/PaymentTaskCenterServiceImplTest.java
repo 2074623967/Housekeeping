@@ -1,5 +1,6 @@
 package com.abc123.hsp.service.impl;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -211,7 +212,7 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldUseLeaseForAutomaticPendingPaymentQueries() {
         when(paymentTaskCenterMapper.acquireTaskLease(
-                "PAYMENT_PENDING_QUERY", "payment-query-scheduler", 120)).thenReturn(1);
+                eq("PAYMENT_PENDING_QUERY"), leaseOwner("payment-query-scheduler"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 20, 100))
                 .thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
@@ -221,14 +222,19 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentTaskCenterMapper).initTaskLease("PAYMENT_PENDING_QUERY");
         verify(paymentTaskCenterMapper).findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 20, 100);
+        ArgumentCaptor<String> leaseOwnerCaptor = ArgumentCaptor.forClass(String.class);
+        verify(paymentTaskCenterMapper).acquireTaskLease(
+                eq("PAYMENT_PENDING_QUERY"), leaseOwnerCaptor.capture(), eq(120));
         verify(paymentTaskCenterMapper).releaseTaskLease(
-                "PAYMENT_PENDING_QUERY", "payment-query-scheduler");
+                eq("PAYMENT_PENDING_QUERY"), leaseOwnerCaptor.capture());
+        Assertions.assertEquals(leaseOwnerCaptor.getAllValues().get(0), leaseOwnerCaptor.getAllValues().get(1));
+        Assertions.assertTrue(leaseOwnerCaptor.getValue().startsWith("payment-query-scheduler:"));
     }
 
     @Test
     void shouldGenerateQueryMonitorOutboxAndSuppressRecentDuplicate() {
         when(paymentTaskCenterMapper.acquireTaskLease(
-                "PAYMENT_QUERY_MONITOR_ALERT", "payment-core-admin", 120)).thenReturn(1);
+                eq("PAYMENT_QUERY_MONITOR_ALERT"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.countRecentPaymentQueries(24)).thenReturn(12);
         when(paymentTaskCenterMapper.countRecentPaymentQueryFailures(24)).thenReturn(4);
         when(paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(24)).thenReturn(10);
@@ -262,7 +268,7 @@ class PaymentTaskCenterServiceImplTest {
                         && "/payment-issues".equals(entity.getRecommendedRoute())
         ));
         verify(paymentTaskCenterMapper).releaseTaskLease(
-                "PAYMENT_QUERY_MONITOR_ALERT", "payment-core-admin");
+                eq("PAYMENT_QUERY_MONITOR_ALERT"), leaseOwner("payment-core-admin"));
     }
 
     @Test
@@ -374,7 +380,7 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentEventRetryTaskService.retryFailedEvents(true)).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "payment-event-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_EVENT_RETRY"), leaseOwner("payment-event-scheduler"), eq(120))).thenReturn(1);
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -389,7 +395,7 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "payment-event-scheduler".equals(entity.getTriggeredBy())
         ));
-        verify(paymentTaskCenterMapper).releaseTaskLease("PAYMENT_EVENT_RETRY", "payment-event-scheduler");
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq("PAYMENT_EVENT_RETRY"), leaseOwner("payment-event-scheduler"));
     }
 
     @Test
@@ -400,7 +406,7 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(closeResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EXPIRE_CLOSE", "payment-expiry-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"), eq(120))).thenReturn(1);
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -413,7 +419,7 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.any());
-        verify(paymentTaskCenterMapper).releaseTaskLease("PAYMENT_EXPIRE_CLOSE", "payment-expiry-scheduler");
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"));
     }
 
     @Test
@@ -424,7 +430,7 @@ class PaymentTaskCenterServiceImplTest {
         when(refundRetryTaskService.retryFailedRefunds("refund-retry-scheduler")).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("REFUND_FAIL_RETRY", "refund-retry-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("REFUND_FAIL_RETRY"), leaseOwner("refund-retry-scheduler"), eq(120))).thenReturn(1);
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -439,7 +445,7 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "refund-retry-scheduler".equals(entity.getTriggeredBy())
         ));
-        verify(paymentTaskCenterMapper).releaseTaskLease("REFUND_FAIL_RETRY", "refund-retry-scheduler");
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq("REFUND_FAIL_RETRY"), leaseOwner("refund-retry-scheduler"));
     }
 
     @Test
@@ -582,7 +588,7 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_ISSUE_ESCALATE", "payment-issue-sla-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_ISSUE_ESCALATE"), leaseOwner("payment-issue-sla-scheduler"), eq(120))).thenReturn(1);
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -597,7 +603,7 @@ class PaymentTaskCenterServiceImplTest {
                 entity -> "AUTO".equals(entity.getRunMode())
                         && "payment-issue-sla-scheduler".equals(entity.getTriggeredBy())
         ));
-        verify(paymentTaskCenterMapper).releaseTaskLease("PAYMENT_ISSUE_ESCALATE", "payment-issue-sla-scheduler");
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq("PAYMENT_ISSUE_ESCALATE"), leaseOwner("payment-issue-sla-scheduler"));
     }
 
     @Test
@@ -677,7 +683,7 @@ class PaymentTaskCenterServiceImplTest {
     void shouldSkipAutoCloseExpiredPaymentsWhenLeaseHeldByAnotherInstance() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EXPIRE_CLOSE", "payment-expiry-scheduler", 120)).thenReturn(0);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_EXPIRE_CLOSE"), leaseOwner("payment-expiry-scheduler"), eq(120))).thenReturn(0);
 
         PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -707,7 +713,7 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentConfigService.runAllEnabledControlPolicySelfChecks()).thenReturn(summary);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_CONTROL_SELF_CHECK", "payment-control-self-check-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_CONTROL_SELF_CHECK"), leaseOwner("payment-control-self-check-scheduler"), eq(120))).thenReturn(1);
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -719,7 +725,7 @@ class PaymentTaskCenterServiceImplTest {
         ).runAutoControlPolicySelfChecks();
 
         verify(paymentConfigService).runAllEnabledControlPolicySelfChecks();
-        verify(paymentTaskCenterMapper).releaseTaskLease("PAYMENT_CONTROL_SELF_CHECK", "payment-control-self-check-scheduler");
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq("PAYMENT_CONTROL_SELF_CHECK"), leaseOwner("payment-control-self-check-scheduler"));
     }
 
     @Test
@@ -817,7 +823,7 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentConfigService.runAllEnabledControlPolicySelfChecks()).thenReturn(summary);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_CONTROL_SELF_CHECK", "payment-control-self-check-scheduler", 120)).thenReturn(1);
+        when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_CONTROL_SELF_CHECK"), leaseOwner("payment-control-self-check-scheduler"), eq(120))).thenReturn(1);
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -833,7 +839,7 @@ class PaymentTaskCenterServiceImplTest {
                         && "payment-control-self-check-scheduler".equals(entity.getTriggeredBy())
                         && "/payment-config".equals(entity.getRecommendedRoute())
         ));
-        verify(paymentTaskCenterMapper).releaseTaskLease("PAYMENT_CONTROL_SELF_CHECK", "payment-control-self-check-scheduler");
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq("PAYMENT_CONTROL_SELF_CHECK"), leaseOwner("payment-control-self-check-scheduler"));
     }
 
     @Test
@@ -920,5 +926,10 @@ class PaymentTaskCenterServiceImplTest {
                 15,
                 10,
                 30);
+    }
+
+    private String leaseOwner(String prefix) {
+        return org.mockito.ArgumentMatchers.argThat(
+                owner -> owner != null && owner.startsWith(prefix + ":"));
     }
 }
