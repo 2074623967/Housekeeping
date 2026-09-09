@@ -2067,6 +2067,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `BusinessException` 仍返回明确领域错误码与业务文案，`IllegalArgumentException` 仍返回 `PAYMENT-400` 和参数校验提示；调用方应使用 `code + requestId` 区分和反馈未知系统错误。
 4. 本规则不代表受控错误详情存储、集中日志权限、保留期限、告警或生产故障演练已经完成。
 
+### 14.8 请求追踪号生成规则
+
+1. `requestId` 为不透明追踪字符串，当前格式为 `REQ + yyyyMMddHHmmssSSS + 8 位小写十六进制 UUID 后缀`；调用方不得依赖长度或解析时间参与业务判断。
+2. 时间部分使用线程安全的 JDK `DateTimeFormatter`，随机部分扩大同毫秒取值空间；成功与失败响应均通过 `ApiResponse` 的同一生成入口创建。
+3. 前端应原样展示或反馈请求号，不得自行重建；当前规则不包含上游请求号接收、跨服务透传、消息 trace/span 或集中追踪平台能力。
+4. 10,000 次本地并发唯一性测试只能证明当前样本，不构成生产多实例峰值容量或全局唯一性的形式化验收。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
