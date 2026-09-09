@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
@@ -27,6 +28,8 @@ import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
+import com.abc123.hsp.entity.PaymentAlertProviderConfigEntity;
+import com.abc123.hsp.entity.PaymentAlertProviderReviewEntity;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentGatewayVersionEntity;
@@ -273,6 +276,21 @@ public interface PaymentConfigMapper {
      * 查询告警通知供应商配置。
      */
     List<PaymentAlertProviderConfigDTO> findAlertProviders();
+
+    /** 按供应商编码加锁查询完整运行配置。 */
+    PaymentAlertProviderConfigEntity findAlertProviderByCodeForUpdate(
+            @Param("providerCode") String providerCode);
+
+    /** 查询告警通知供应商配置变更复核申请。 */
+    List<PaymentAlertProviderReviewDTO> findAlertProviderReviews();
+
+    /** 加锁查询告警通知供应商配置变更复核申请。 */
+    PaymentAlertProviderReviewEntity findAlertProviderReviewForUpdate(
+            @Param("requestNo") String requestNo);
+
+    /** 按唯一占位加锁查询供应商待复核申请。 */
+    PaymentAlertProviderReviewEntity findPendingAlertProviderReviewForUpdate(
+            @Param("pendingProviderCode") String pendingProviderCode);
 
     /**
      * 查询异常告警值班路由配置。
@@ -531,12 +549,21 @@ public interface PaymentConfigMapper {
                                     @Param("reviewer") String reviewer,
                                     @Param("reviewComment") String reviewComment);
 
-    /**
-     * 更新告警通知供应商配置启停状态。
-     */
-    int updateAlertProviderStatus(@Param("providerCode") String providerCode,
-                                  @Param("status") String status,
-                                  @Param("statusType") String statusType);
+    /** 新增告警通知供应商完整运行配置。 */
+    int insertAlertProvider(PaymentAlertProviderConfigEntity entity);
+
+    /** 更新告警通知供应商完整运行配置。 */
+    int updateAlertProvider(PaymentAlertProviderConfigEntity entity);
+
+    /** 新增告警通知供应商配置变更复核申请。 */
+    int insertAlertProviderReview(PaymentAlertProviderReviewEntity entity);
+
+    /** 完成告警通知供应商配置变更复核并释放唯一待办占位。 */
+    int completeAlertProviderReview(@Param("requestNo") String requestNo,
+                                    @Param("reviewStatus") String reviewStatus,
+                                    @Param("reviewStatusType") String reviewStatusType,
+                                    @Param("reviewer") String reviewer,
+                                    @Param("reviewComment") String reviewComment);
 
     /**
      * 更新支付控制策略自检结果。

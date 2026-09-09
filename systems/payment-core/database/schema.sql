@@ -23,6 +23,7 @@ DROP TABLE IF EXISTS t_payment_channel_query_rate_bucket;
 DROP TABLE IF EXISTS t_payment_task_run_log;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster_review;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster;
+DROP TABLE IF EXISTS t_payment_alert_provider_review;
 DROP TABLE IF EXISTS t_payment_alert_provider_config;
 DROP TABLE IF EXISTS t_payment_issue_alert_log;
 DROP TABLE IF EXISTS t_payment_issue_action_log;
@@ -859,6 +860,40 @@ CREATE TABLE t_payment_issue_duty_roster_review (
     KEY idx_issue_duty_roster_review_status (review_status, created_at),
     KEY idx_issue_duty_roster_review_code (roster_code, review_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='异常告警值班路由配置变更复核表';
+
+CREATE TABLE t_payment_alert_provider_review (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
+    provider_code VARCHAR(64) NOT NULL COMMENT '供应商配置编码',
+    operation_type VARCHAR(32) NOT NULL COMMENT '操作类型：CREATE/UPDATE/STATUS_CHANGE',
+    provider_name VARCHAR(64) NOT NULL COMMENT '供应商名称',
+    channel_code VARCHAR(32) NOT NULL COMMENT '通知通道',
+    endpoint_alias VARCHAR(64) NOT NULL COMMENT '接入端点标识',
+    template_code VARCHAR(64) NOT NULL COMMENT '模板编码',
+    template_body VARCHAR(1024) NOT NULL COMMENT '模板正文',
+    route_rule VARCHAR(255) NOT NULL COMMENT '路由规则',
+    route_priority INT NOT NULL COMMENT '路由优先级',
+    retry_policy VARCHAR(128) NOT NULL COMMENT '重试策略',
+    rate_limit_policy VARCHAR(128) NOT NULL COMMENT '限流策略',
+    pending_provider_code VARCHAR(64) DEFAULT NULL COMMENT '供应商唯一待办占位，完成后置空',
+    base_fingerprint VARCHAR(64) DEFAULT NULL COMMENT '提交时完整运行配置指纹',
+    candidate_status VARCHAR(32) NOT NULL COMMENT '候选状态',
+    candidate_status_type VARCHAR(32) NOT NULL COMMENT '候选状态样式',
+    requester VARCHAR(64) NOT NULL COMMENT '申请人声明',
+    request_reason VARCHAR(255) NOT NULL COMMENT '申请原因',
+    review_status VARCHAR(32) NOT NULL COMMENT '复核状态',
+    review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
+    reviewer VARCHAR(64) DEFAULT NULL COMMENT '复核人声明',
+    review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见',
+    created_at DATETIME NOT NULL COMMENT '申请时间',
+    reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_alert_provider_review_request (request_no),
+    UNIQUE KEY uk_alert_provider_review_pending (pending_provider_code),
+    KEY idx_alert_provider_review_status (review_status, created_at),
+    KEY idx_alert_provider_review_code (provider_code, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='异常告警通知供应商配置变更复核表';
 
 CREATE TABLE t_payment_alert_provider_config (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

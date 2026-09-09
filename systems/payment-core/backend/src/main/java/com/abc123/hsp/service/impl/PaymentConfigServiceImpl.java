@@ -10,6 +10,10 @@ import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
@@ -67,6 +71,8 @@ import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
+import com.abc123.hsp.entity.PaymentAlertProviderConfigEntity;
+import com.abc123.hsp.entity.PaymentAlertProviderReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelVersionEntity;
@@ -1559,17 +1565,124 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleAlertProvider(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
-        int affectedRows = paymentConfigMapper.updateAlertProviderStatus(
-                configCode,
-                resolveStatus(request.getEnabled()),
-                resolveStatusType(request.getEnabled())
-        );
-        if (affectedRows == 0) {
+    public List<PaymentAlertProviderReviewDTO> createAlertProvider(
+            PaymentAlertProviderUpsertRequestDTO request) {
+        return submitAlertProviderReview(request, null);
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentAlertProviderReviewDTO> updateAlertProvider(
+            String providerCode, PaymentAlertProviderUpsertRequestDTO request) {
+        return submitAlertProviderReview(request, providerCode);
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentAlertProviderReviewDTO> toggleAlertProvider(
+            PaymentAlertProviderStatusReviewRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("告警通知供应商启停状态不能为空");
+        }
+        String providerCode = requireImportText(request.getProviderCode(), "供应商配置编码不能为空", 64)
+                .toUpperCase(Locale.ROOT);
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingAlertProviderReviewForUpdate(providerCode) != null) {
+            throw new IllegalArgumentException("该告警通知供应商已有待复核申请");
+        }
+        PaymentAlertProviderConfigEntity current =
+                paymentConfigMapper.findAlertProviderByCodeForUpdate(providerCode);
+        if (current == null) {
             throw new IllegalArgumentException("告警通知供应商配置不存在");
         }
-        return overview();
+        String candidateStatus = resolveStatus(request.getEnabled());
+        if (candidateStatus.equals(current.getStatus())) {
+            throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
+                    ? "告警通知供应商已启用" : "告警通知供应商已停用");
+        }
+        PaymentAlertProviderReviewEntity review = new PaymentAlertProviderReviewEntity();
+        copyAlertProviderToReview(current, review);
+        review.setRequestNo("APR" + UUID.randomUUID().toString().replace("-", ""));
+        review.setOperationType("STATUS_CHANGE");
+        review.setPendingProviderCode(providerCode);
+        review.setBaseFingerprint(fingerprintAlertProvider(current));
+        review.setCandidateStatus(candidateStatus);
+        review.setCandidateStatusType(resolveStatusType(request.getEnabled()));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertAlertProviderReview(review);
+        return paymentConfigMapper.findAlertProviderReviews();
+    }
+
+    @Override
+    public List<PaymentAlertProviderReviewDTO> listAlertProviderReviews() {
+        return paymentConfigMapper.findAlertProviderReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentAlertProviderReviewDTO> approveAlertProviderReview(
+            String requestNo, PaymentAlertProviderReviewActionRequestDTO request) {
+        PaymentAlertProviderReviewEntity review = requirePendingAlertProviderReview(requestNo);
+        String reviewer = requireDistinctAlertProviderReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        boolean createOperation = "CREATE".equals(review.getOperationType());
+        if (!createOperation
+                && !"UPDATE".equals(review.getOperationType())
+                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+            throw new IllegalArgumentException("告警通知供应商复核操作类型不支持");
+        }
+        if (!STATUS_ENABLED.equals(review.getCandidateStatus())
+                && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
+            throw new IllegalArgumentException("告警通知供应商候选状态不支持");
+        }
+        PaymentAlertProviderConfigEntity current =
+                paymentConfigMapper.findAlertProviderByCodeForUpdate(review.getProviderCode());
+        if (createOperation) {
+            if (current != null) {
+                throw new IllegalArgumentException("告警通知供应商已存在，复核申请基线已失效");
+            }
+        } else if (current == null || review.getBaseFingerprint() == null
+                || !review.getBaseFingerprint().equals(fingerprintAlertProvider(current))) {
+            throw new IllegalArgumentException("告警通知供应商配置已变化，请重新提交复核申请");
+        }
+        PaymentAlertProviderConfigEntity candidate = buildAlertProviderEntity(
+                toAlertProviderUpsertRequest(review), review.getProviderCode());
+        int affectedRows;
+        try {
+            affectedRows = createOperation
+                    ? paymentConfigMapper.insertAlertProvider(candidate)
+                    : paymentConfigMapper.updateAlertProvider(candidate);
+        } catch (DuplicateKeyException exception) {
+            if (createOperation) {
+                throw new IllegalArgumentException("告警通知供应商已存在，复核申请基线已失效", exception);
+            }
+            throw exception;
+        }
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException(createOperation
+                    ? "告警通知供应商新增失败" : "告警通知供应商配置不存在");
+        }
+        completeAlertProviderReview(
+                review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
+        return paymentConfigMapper.findAlertProviderReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentAlertProviderReviewDTO> rejectAlertProviderReview(
+            String requestNo, PaymentAlertProviderReviewActionRequestDTO request) {
+        PaymentAlertProviderReviewEntity review = requirePendingAlertProviderReview(requestNo);
+        String reviewer = requireDistinctAlertProviderReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "驳回原因不能为空");
+        completeAlertProviderReview(
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findAlertProviderReviews();
     }
 
     @Override
@@ -2788,6 +2901,169 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return rule.getPriority() == null ? 99 : rule.getPriority().intValue();
     }
 
+    private List<PaymentAlertProviderReviewDTO> submitAlertProviderReview(
+            PaymentAlertProviderUpsertRequestDTO request, String overrideProviderCode) {
+        if (request == null) {
+            throw new IllegalArgumentException("告警通知供应商请求不能为空");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        String providerCode = (StringUtils.hasText(overrideProviderCode)
+                ? requireImportText(overrideProviderCode, "供应商配置编码不能为空", 64)
+                : requireImportText(request.getProviderCode(), "供应商配置编码不能为空", 64))
+                .toUpperCase(Locale.ROOT);
+        if (paymentConfigMapper.findPendingAlertProviderReviewForUpdate(providerCode) != null) {
+            throw new IllegalArgumentException("该告警通知供应商已有待复核申请");
+        }
+        PaymentAlertProviderConfigEntity current =
+                paymentConfigMapper.findAlertProviderByCodeForUpdate(providerCode);
+        boolean createOperation = !StringUtils.hasText(overrideProviderCode);
+        if (createOperation && current != null) {
+            throw new IllegalArgumentException("告警通知供应商编码已存在");
+        }
+        if (!createOperation && current == null) {
+            throw new IllegalArgumentException("告警通知供应商配置不存在");
+        }
+        PaymentAlertProviderConfigEntity candidate = buildAlertProviderEntity(request, providerCode);
+        PaymentAlertProviderReviewEntity review = new PaymentAlertProviderReviewEntity();
+        copyAlertProviderToReview(candidate, review);
+        review.setRequestNo("APR" + UUID.randomUUID().toString().replace("-", ""));
+        review.setOperationType(createOperation ? "CREATE" : "UPDATE");
+        review.setPendingProviderCode(providerCode);
+        review.setBaseFingerprint(current == null ? null : fingerprintAlertProvider(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertAlertProviderReview(review);
+        return paymentConfigMapper.findAlertProviderReviews();
+    }
+
+    private PaymentAlertProviderReviewEntity requirePendingAlertProviderReview(String requestNo) {
+        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        PaymentAlertProviderReviewEntity review =
+                paymentConfigMapper.findAlertProviderReviewForUpdate(normalizedRequestNo);
+        if (review == null) {
+            throw new IllegalArgumentException("告警通知供应商复核申请不存在");
+        }
+        if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+            throw new IllegalArgumentException("告警通知供应商复核申请已处理");
+        }
+        return review;
+    }
+
+    private String requireDistinctAlertProviderReviewer(
+            PaymentAlertProviderReviewEntity review,
+            PaymentAlertProviderReviewActionRequestDTO request) {
+        String reviewer = requireReviewIdentity(
+                request == null ? null : request.getReviewer(), "复核人声明不能为空");
+        if (review.getRequester().equalsIgnoreCase(reviewer)) {
+            throw new IllegalArgumentException("申请人与复核人声明不能相同");
+        }
+        return reviewer;
+    }
+
+    private void completeAlertProviderReview(String requestNo,
+                                             String reviewStatus,
+                                             String reviewStatusType,
+                                             String reviewer,
+                                             String reviewComment) {
+        int affectedRows = paymentConfigMapper.completeAlertProviderReview(
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("告警通知供应商复核状态已变化，请刷新后重试");
+        }
+    }
+
+    private void insertAlertProviderReview(PaymentAlertProviderReviewEntity review) {
+        try {
+            paymentConfigMapper.insertAlertProviderReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该告警通知供应商已有待复核申请", exception);
+        }
+    }
+
+    private void copyAlertProviderToReview(
+            PaymentAlertProviderConfigEntity source, PaymentAlertProviderReviewEntity target) {
+        target.setProviderCode(source.getProviderCode());
+        target.setProviderName(source.getProviderName());
+        target.setChannelCode(source.getChannelCode());
+        target.setEndpointAlias(source.getEndpointAlias());
+        target.setTemplateCode(source.getTemplateCode());
+        target.setTemplateBody(source.getTemplateBody());
+        target.setRouteRule(source.getRouteRule());
+        target.setRoutePriority(source.getRoutePriority());
+        target.setRetryPolicy(source.getRetryPolicy());
+        target.setRateLimitPolicy(source.getRateLimitPolicy());
+        target.setCandidateStatus(source.getStatus());
+        target.setCandidateStatusType(source.getStatusType());
+    }
+
+    private PaymentAlertProviderUpsertRequestDTO toAlertProviderUpsertRequest(
+            PaymentAlertProviderReviewEntity review) {
+        PaymentAlertProviderUpsertRequestDTO request = new PaymentAlertProviderUpsertRequestDTO();
+        request.setProviderCode(review.getProviderCode());
+        request.setProviderName(review.getProviderName());
+        request.setChannelCode(review.getChannelCode());
+        request.setEndpointAlias(review.getEndpointAlias());
+        request.setTemplateCode(review.getTemplateCode());
+        request.setTemplateBody(review.getTemplateBody());
+        request.setRouteRule(review.getRouteRule());
+        request.setRoutePriority(review.getRoutePriority());
+        request.setRetryPolicy(review.getRetryPolicy());
+        request.setRateLimitPolicy(review.getRateLimitPolicy());
+        request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getCandidateStatus())));
+        return request;
+    }
+
+    private PaymentAlertProviderConfigEntity buildAlertProviderEntity(
+            PaymentAlertProviderUpsertRequestDTO request, String overrideProviderCode) {
+        if (request == null) {
+            throw new IllegalArgumentException("告警通知供应商请求不能为空");
+        }
+        if (request.getEnabled() == null) {
+            throw new IllegalArgumentException("告警通知供应商启停状态不能为空");
+        }
+        PaymentAlertProviderConfigEntity entity = new PaymentAlertProviderConfigEntity();
+        entity.setProviderCode((StringUtils.hasText(overrideProviderCode)
+                ? requireImportText(overrideProviderCode, "供应商配置编码不能为空", 64)
+                : requireImportText(request.getProviderCode(), "供应商配置编码不能为空", 64))
+                .toUpperCase(Locale.ROOT));
+        entity.setProviderName(requireImportText(request.getProviderName(), "供应商名称不能为空", 64));
+        entity.setChannelCode(resolveAlertProviderChannel(request.getChannelCode()));
+        entity.setEndpointAlias(requireImportText(request.getEndpointAlias(), "接入端点标识不能为空", 64));
+        entity.setTemplateCode(requireImportText(request.getTemplateCode(), "模板编码不能为空", 64));
+        entity.setTemplateBody(requireImportText(request.getTemplateBody(), "模板正文不能为空", 1024));
+        entity.setRouteRule(requireImportText(request.getRouteRule(), "路由规则不能为空", 255));
+        entity.setRoutePriority(resolveAlertProviderPriority(request.getRoutePriority()));
+        entity.setRetryPolicy(requireImportText(request.getRetryPolicy(), "重试策略不能为空", 128));
+        entity.setRateLimitPolicy(requireImportText(request.getRateLimitPolicy(), "限流策略不能为空", 128));
+        entity.setStatus(resolveStatus(request.getEnabled()));
+        entity.setStatusType(resolveStatusType(request.getEnabled()));
+        return entity;
+    }
+
+    private String resolveAlertProviderChannel(String channelCode) {
+        String normalized = requireImportText(channelCode, "通知通道不能为空", 32).toUpperCase(Locale.ROOT);
+        if (!"IN_APP".equals(normalized)
+                && !"IM".equals(normalized)
+                && !"SMS".equals(normalized)
+                && !"EMAIL".equals(normalized)) {
+            throw new IllegalArgumentException("通知通道仅支持 IN_APP/IM/SMS/EMAIL");
+        }
+        return normalized;
+    }
+
+    private Integer resolveAlertProviderPriority(Integer priority) {
+        if (priority == null) {
+            return Integer.valueOf(100);
+        }
+        if (priority.intValue() < 0) {
+            throw new IllegalArgumentException("供应商路由优先级不能小于0");
+        }
+        return priority;
+    }
+
     private List<PaymentIssueDutyRosterReviewDTO> submitIssueDutyRosterReview(
             PaymentIssueDutyRosterUpsertRequestDTO request, String overrideRosterCode) {
         if (request == null) {
@@ -3764,6 +4040,23 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         appendFingerprintValue(canonical, policy.getStrictMode());
         appendFingerprintValue(canonical, policy.getStatus());
         appendFingerprintValue(canonical, policy.getStatusType());
+        return sha256(canonical.toString());
+    }
+
+    private String fingerprintAlertProvider(PaymentAlertProviderConfigEntity provider) {
+        StringBuilder canonical = new StringBuilder();
+        appendFingerprintValue(canonical, provider.getProviderCode());
+        appendFingerprintValue(canonical, provider.getProviderName());
+        appendFingerprintValue(canonical, provider.getChannelCode());
+        appendFingerprintValue(canonical, provider.getEndpointAlias());
+        appendFingerprintValue(canonical, provider.getTemplateCode());
+        appendFingerprintValue(canonical, provider.getTemplateBody());
+        appendFingerprintValue(canonical, provider.getRouteRule());
+        appendFingerprintValue(canonical, provider.getRoutePriority());
+        appendFingerprintValue(canonical, provider.getRetryPolicy());
+        appendFingerprintValue(canonical, provider.getRateLimitPolicy());
+        appendFingerprintValue(canonical, provider.getStatus());
+        appendFingerprintValue(canonical, provider.getStatusType());
         return sha256(canonical.toString());
     }
 

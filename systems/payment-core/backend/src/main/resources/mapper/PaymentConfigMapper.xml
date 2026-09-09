@@ -1287,6 +1287,98 @@
         ORDER BY channel_code ASC, id ASC
     </select>
 
+    <select id="findAlertProviderByCodeForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentAlertProviderConfigEntity">
+        SELECT provider_code AS providerCode,
+               provider_name AS providerName,
+               channel_code AS channelCode,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               template_body AS templateBody,
+               route_rule AS routeRule,
+               route_priority AS routePriority,
+               retry_policy AS retryPolicy,
+               rate_limit_policy AS rateLimitPolicy,
+               status,
+               status_type AS statusType
+        FROM t_payment_alert_provider_config
+        WHERE provider_code = #{providerCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findAlertProviderReviews"
+            resultType="com.abc123.hsp.dto.PaymentAlertProviderReviewDTO">
+        SELECT request_no AS requestNo,
+               provider_code AS providerCode,
+               operation_type AS operationType,
+               provider_name AS providerName,
+               channel_code AS channelCode,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               template_body AS templateBody,
+               route_rule AS routeRule,
+               route_priority AS routePriority,
+               retry_policy AS retryPolicy,
+               rate_limit_policy AS rateLimitPolicy,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_alert_provider_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findAlertProviderReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentAlertProviderReviewEntity">
+        SELECT request_no AS requestNo,
+               provider_code AS providerCode,
+               operation_type AS operationType,
+               provider_name AS providerName,
+               channel_code AS channelCode,
+               endpoint_alias AS endpointAlias,
+               template_code AS templateCode,
+               template_body AS templateBody,
+               route_rule AS routeRule,
+               route_priority AS routePriority,
+               retry_policy AS retryPolicy,
+               rate_limit_policy AS rateLimitPolicy,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_alert_provider_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingAlertProviderReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentAlertProviderReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_alert_provider_review
+        WHERE pending_provider_code = #{pendingProviderCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findIssueDutyRosters" resultType="com.abc123.hsp.dto.PaymentIssueDutyRosterDTO">
         SELECT roster_code AS rosterCode,
                issue_type AS issueType,
@@ -2315,12 +2407,62 @@
           AND review_status = 'PENDING_REVIEW'
     </update>
 
-    <update id="updateAlertProviderStatus">
+    <insert id="insertAlertProvider" parameterType="com.abc123.hsp.entity.PaymentAlertProviderConfigEntity">
+        INSERT INTO t_payment_alert_provider_config (
+            provider_code, provider_name, channel_code, endpoint_alias, template_code,
+            template_body, route_rule, route_priority, retry_policy, rate_limit_policy,
+            status, status_type, updated_at
+        ) VALUES (
+            #{providerCode}, #{providerName}, #{channelCode}, #{endpointAlias}, #{templateCode},
+            #{templateBody}, #{routeRule}, #{routePriority}, #{retryPolicy}, #{rateLimitPolicy},
+            #{status}, #{statusType}, NOW()
+        )
+    </insert>
+
+    <update id="updateAlertProvider" parameterType="com.abc123.hsp.entity.PaymentAlertProviderConfigEntity">
         UPDATE t_payment_alert_provider_config
-        SET status = #{status},
+        SET provider_name = #{providerName},
+            channel_code = #{channelCode},
+            endpoint_alias = #{endpointAlias},
+            template_code = #{templateCode},
+            template_body = #{templateBody},
+            route_rule = #{routeRule},
+            route_priority = #{routePriority},
+            retry_policy = #{retryPolicy},
+            rate_limit_policy = #{rateLimitPolicy},
+            status = #{status},
             status_type = #{statusType},
             updated_at = NOW()
         WHERE provider_code = #{providerCode}
+    </update>
+
+    <insert id="insertAlertProviderReview">
+        INSERT INTO t_payment_alert_provider_review (
+            request_no, provider_code, operation_type, provider_name, channel_code,
+            endpoint_alias, template_code, template_body, route_rule, route_priority,
+            retry_policy, rate_limit_policy, pending_provider_code, base_fingerprint,
+            candidate_status, candidate_status_type, requester, request_reason,
+            review_status, review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{providerCode}, #{operationType}, #{providerName}, #{channelCode},
+            #{endpointAlias}, #{templateCode}, #{templateBody}, #{routeRule}, #{routePriority},
+            #{retryPolicy}, #{rateLimitPolicy}, #{pendingProviderCode}, #{baseFingerprint},
+            #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
+            #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeAlertProviderReview">
+        UPDATE t_payment_alert_provider_review
+        SET pending_provider_code = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
     </update>
 
     <update id="updateControlPolicySelfCheck">

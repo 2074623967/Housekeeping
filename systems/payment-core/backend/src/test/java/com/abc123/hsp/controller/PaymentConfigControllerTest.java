@@ -7,6 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelRollbackRequestDTO;
@@ -324,18 +328,20 @@ class PaymentConfigControllerTest {
 
     @Test
     void shouldToggleOtherGovernanceConfigs() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
+        java.util.List<PaymentAlertProviderReviewDTO> providerReviews =
+                Collections.singletonList(new PaymentAlertProviderReviewDTO());
         java.util.List<PaymentIssueDutyRosterReviewDTO> reviews =
                 Collections.singletonList(new PaymentIssueDutyRosterReviewDTO());
-        when(paymentConfigService.toggleAlertProvider(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
+        when(paymentConfigService.toggleAlertProvider(any(PaymentAlertProviderStatusReviewRequestDTO.class)))
+                .thenReturn(providerReviews);
         when(paymentConfigService.toggleIssueDutyRoster(any(PaymentIssueDutyRosterStatusReviewRequestDTO.class)))
                 .thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
-        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("WX_H5");
+        PaymentAlertProviderStatusReviewRequestDTO request = new PaymentAlertProviderStatusReviewRequestDTO();
+        request.setProviderCode("ALERT_IM_WECOM");
         request.setEnabled(Boolean.TRUE);
-        assertEquals(overview, controller.toggleAlertProvider(request).getData());
+        assertEquals(providerReviews, controller.toggleAlertProvider(request).getData());
         verify(paymentConfigService).toggleAlertProvider(request);
 
         PaymentIssueDutyRosterStatusReviewRequestDTO rosterRequest =
@@ -344,6 +350,35 @@ class PaymentConfigControllerTest {
         rosterRequest.setEnabled(Boolean.TRUE);
         assertEquals(reviews, controller.toggleIssueDutyRoster(rosterRequest).getData());
         verify(paymentConfigService).toggleIssueDutyRoster(rosterRequest);
+    }
+
+    @Test
+    void shouldExposeAlertProviderReviewFlow() {
+        java.util.List<PaymentAlertProviderReviewDTO> reviews =
+                Collections.singletonList(new PaymentAlertProviderReviewDTO());
+        when(paymentConfigService.createAlertProvider(any(PaymentAlertProviderUpsertRequestDTO.class)))
+                .thenReturn(reviews);
+        when(paymentConfigService.updateAlertProvider(
+                any(String.class), any(PaymentAlertProviderUpsertRequestDTO.class))).thenReturn(reviews);
+        when(paymentConfigService.listAlertProviderReviews()).thenReturn(reviews);
+        when(paymentConfigService.approveAlertProviderReview(
+                any(String.class), any(PaymentAlertProviderReviewActionRequestDTO.class))).thenReturn(reviews);
+        when(paymentConfigService.rejectAlertProviderReview(
+                any(String.class), any(PaymentAlertProviderReviewActionRequestDTO.class))).thenReturn(reviews);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentAlertProviderUpsertRequestDTO candidate = new PaymentAlertProviderUpsertRequestDTO();
+        PaymentAlertProviderReviewActionRequestDTO action = new PaymentAlertProviderReviewActionRequestDTO();
+
+        assertEquals(reviews, controller.createAlertProvider(candidate).getData());
+        assertEquals(reviews, controller.updateAlertProvider("ALERT_IM_WECOM", candidate).getData());
+        assertEquals(reviews, controller.listAlertProviderReviews().getData());
+        assertEquals(reviews, controller.approveAlertProviderReview("APR-001", action).getData());
+        assertEquals(reviews, controller.rejectAlertProviderReview("APR-002", action).getData());
+        verify(paymentConfigService).createAlertProvider(candidate);
+        verify(paymentConfigService).updateAlertProvider("ALERT_IM_WECOM", candidate);
+        verify(paymentConfigService).listAlertProviderReviews();
+        verify(paymentConfigService).approveAlertProviderReview("APR-001", action);
+        verify(paymentConfigService).rejectAlertProviderReview("APR-002", action);
     }
 
     @Test

@@ -1,6 +1,10 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
@@ -291,10 +295,26 @@ public interface PaymentConfigService {
     List<PaymentControlPolicyReviewDTO> submitControlPolicyRollbackReview(
             String sourceAppId, PaymentControlPolicyRollbackRequestDTO request);
 
-    /**
-     * 启停告警通知供应商配置。
-     */
-    PaymentConfigOverviewDTO toggleAlertProvider(PaymentConfigToggleRequestDTO request);
+    /** 提交告警通知供应商新增候选，不改变运行态。 */
+    List<PaymentAlertProviderReviewDTO> createAlertProvider(PaymentAlertProviderUpsertRequestDTO request);
+
+    /** 提交告警通知供应商编辑候选，不改变运行态。 */
+    List<PaymentAlertProviderReviewDTO> updateAlertProvider(
+            String providerCode, PaymentAlertProviderUpsertRequestDTO request);
+
+    /** 提交告警通知供应商启停候选，不改变运行态。 */
+    List<PaymentAlertProviderReviewDTO> toggleAlertProvider(PaymentAlertProviderStatusReviewRequestDTO request);
+
+    /** 查询告警通知供应商配置变更复核申请。 */
+    List<PaymentAlertProviderReviewDTO> listAlertProviderReviews();
+
+    /** 通过复核并应用告警通知供应商完整候选。 */
+    List<PaymentAlertProviderReviewDTO> approveAlertProviderReview(
+            String requestNo, PaymentAlertProviderReviewActionRequestDTO request);
+
+    /** 驳回告警通知供应商完整候选，不改变运行态。 */
+    List<PaymentAlertProviderReviewDTO> rejectAlertProviderReview(
+            String requestNo, PaymentAlertProviderReviewActionRequestDTO request);
 
     /**
      * 执行支付控制策略自检并回写准入结果。

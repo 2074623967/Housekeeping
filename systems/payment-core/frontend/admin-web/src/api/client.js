@@ -951,6 +951,20 @@ export const paymentConfigApi = {
     `/api/payment-config/issue-duty-rosters/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
+  createAlertProvider: (payload) => postJson("/api/payment-config/alert-providers", payload),
+  updateAlertProvider: (providerCode, payload) => request(
+    `/api/payment-config/alert-providers/${encodeURIComponent(providerCode)}`,
+    buildJsonRequestOptions("PUT", payload)
+  ),
+  getAlertProviderReviews: () => request("/api/payment-config/alert-providers/reviews"),
+  approveAlertProviderReview: (requestNo, payload) => postJson(
+    `/api/payment-config/alert-providers/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectAlertProviderReview: (requestNo, payload) => postJson(
+    `/api/payment-config/alert-providers/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   submitReturnCodeStatusReview: (payload) => postJson("/api/payment-config/return-codes/toggle", payload),
   getReturnCodeReviews: () => request("/api/payment-config/return-codes/reviews"),
   approveReturnCodeReview: (requestNo, payload) => postJson(
@@ -1001,7 +1015,7 @@ export const paymentConfigApi = {
     `/api/payment-config/control-policies/${encodeURIComponent(sourceAppId)}/rollback`,
     payload
   ),
-  toggleAlertProvider: (configCode, enabled) => postJson("/api/payment-config/alert-providers/toggle", { configCode, enabled }),
+  toggleAlertProvider: (payload) => postJson("/api/payment-config/alert-providers/toggle", payload),
   toggleIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters/toggle", payload),
   runControlPolicySelfCheck: (configCode) => postJson("/api/payment-config/control-policies/self-check", { configCode })
 };

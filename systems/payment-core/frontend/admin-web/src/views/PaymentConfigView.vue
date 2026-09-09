@@ -36,6 +36,14 @@ let controlPolicyVersionRequestId = 0;
 const editingControlPolicyId = ref("");
 const controlPolicyForm = ref(createControlPolicyForm());
 const alertProviders = ref([]);
+const alertProviderReviews = ref([]);
+const isAlertProviderReviewLoading = ref(false);
+const alertProviderReviewError = ref("");
+const alertProviderActionRequester = ref("");
+const alertProviderActionReason = ref("");
+const alertProviderReviewer = ref("");
+const alertProviderReviewComment = ref("");
+const editingAlertProviderCode = ref("");
 const issueDutyRosters = ref([]);
 const issueDutyRosterReviews = ref([]);
 const isIssueDutyRosterReviewLoading = ref(false);
@@ -112,6 +120,7 @@ const returnCodeReviewComment = ref("");
 const protocolForm = ref(createProtocolForm());
 const routeRuleForm = ref(createRouteRuleForm());
 const rosterForm = ref(createRosterForm());
+const alertProviderForm = ref(createAlertProviderForm());
 
 const governanceMetrics = computed(() => ({
   enabledChannelCount: channels.value.filter((item) => item.status === "ENABLED").length,
@@ -258,6 +267,24 @@ function createRosterForm() {
     effectiveEndHour: 23,
     weekdayScope: "1,2,3,4,5",
     holidayStrategy: "WORKDAY_ONLY",
+    enabled: true,
+    requester: "",
+    changeReason: ""
+  };
+}
+
+function createAlertProviderForm() {
+  return {
+    providerCode: "",
+    providerName: "",
+    channelCode: "IM",
+    endpointAlias: "",
+    templateCode: "",
+    templateBody: "",
+    routeRule: "",
+    routePriority: 100,
+    retryPolicy: "",
+    rateLimitPolicy: "",
     enabled: true,
     requester: "",
     changeReason: ""
@@ -1448,12 +1475,135 @@ async function rollbackControlPolicyVersion(version) {
 }
 
 async function toggleAlertProvider(provider) {
-  await toggleConfig(
-    provider.providerCode,
-    provider.status !== "ENABLED",
-    "告警通知供应商",
-    paymentConfigApi.toggleAlertProvider
-  );
+  if (!alertProviderActionRequester.value || !alertProviderActionReason.value) {
+    actionMessage.value = "供应商启停申请失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = provider.status !== "ENABLED";
+  const actionLabel = enabled ? "启用" : "停用";
+  if (!window.confirm(`确认提交供应商 ${provider.providerCode} 的${actionLabel}复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = provider.providerCode;
+  actionMessage.value = "";
+  try {
+    alertProviderReviews.value = await paymentConfigApi.toggleAlertProvider({
+      providerCode: provider.providerCode,
+      enabled,
+      requester: alertProviderActionRequester.value,
+      changeReason: alertProviderActionReason.value
+    });
+    alertProviderActionReason.value = "";
+    actionMessage.value = `供应商 ${provider.providerCode} 的${actionLabel}申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `供应商启停申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+function startCreateAlertProvider() {
+  editingAlertProviderCode.value = "";
+  alertProviderForm.value = createAlertProviderForm();
+  actionMessage.value = "";
+}
+
+function startEditAlertProvider(provider) {
+  editingAlertProviderCode.value = provider.providerCode;
+  alertProviderForm.value = {
+    ...createAlertProviderForm(),
+    providerCode: provider.providerCode,
+    providerName: provider.providerName,
+    channelCode: provider.channelCode,
+    endpointAlias: provider.endpointAlias,
+    templateCode: provider.templateCode,
+    templateBody: provider.templateBody,
+    routeRule: provider.routeRule,
+    routePriority: provider.routePriority,
+    retryPolicy: provider.retryPolicy,
+    rateLimitPolicy: provider.rateLimitPolicy,
+    enabled: provider.status === "ENABLED"
+  };
+  actionMessage.value = `正在编辑供应商 ${provider.providerCode}`;
+}
+
+async function submitAlertProviderForm() {
+  if (!alertProviderForm.value.requester || !alertProviderForm.value.changeReason) {
+    actionMessage.value = "供应商提交复核失败：请填写申请人声明和申请原因。";
+    return;
+  }
+  const providerCode = editingAlertProviderCode.value || alertProviderForm.value.providerCode;
+  activeConfigCode.value = providerCode;
+  actionMessage.value = "";
+  try {
+    const candidate = {
+      ...alertProviderForm.value,
+      routePriority: Number(alertProviderForm.value.routePriority)
+    };
+    const updateOperation = Boolean(editingAlertProviderCode.value);
+    alertProviderReviews.value = updateOperation
+      ? await paymentConfigApi.updateAlertProvider(editingAlertProviderCode.value, candidate)
+      : await paymentConfigApi.createAlertProvider(candidate);
+    startCreateAlertProvider();
+    actionMessage.value = updateOperation
+      ? `供应商 ${providerCode} 的修改候选已提交，运行态尚未改变。`
+      : `供应商 ${providerCode} 的新增候选已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `供应商提交复核失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadAlertProviderReviews() {
+  isAlertProviderReviewLoading.value = true;
+  alertProviderReviewError.value = "";
+  try {
+    alertProviderReviews.value = await paymentConfigApi.getAlertProviderReviews();
+  } catch (error) {
+    alertProviderReviewError.value = error.message;
+  } finally {
+    isAlertProviderReviewLoading.value = false;
+  }
+}
+
+async function handleAlertProviderReview(review, approved) {
+  if (!alertProviderReviewer.value) {
+    actionMessage.value = "供应商复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!alertProviderReviewComment.value) {
+    actionMessage.value = `供应商复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并将候选供应商配置写入运行态？`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `alert-provider-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: alertProviderReviewer.value,
+      reviewComment: alertProviderReviewComment.value
+    };
+    alertProviderReviews.value = approved
+      ? await paymentConfigApi.approveAlertProviderReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectAlertProviderReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    alertProviderReviewComment.value = "";
+    actionMessage.value = approved
+      ? `供应商申请 ${review.requestNo} 已通过，候选配置已写入运行态。`
+      : `供应商申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `供应商复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function runControlPolicySelfCheck(policy) {
@@ -1464,19 +1614,6 @@ async function runControlPolicySelfCheck(policy) {
     actionMessage.value = `支付控制策略 ${policy.sourceAppId} 自检已完成。`;
   } catch (error) {
     actionMessage.value = `支付控制策略 ${policy.sourceAppId} 自检失败：${error.message}`;
-  } finally {
-    activeConfigCode.value = "";
-  }
-}
-
-async function toggleConfig(configCode, enabled, configType, toggleRunner) {
-  activeConfigCode.value = configCode;
-  actionMessage.value = "";
-  try {
-    applyOverview(await toggleRunner(configCode, enabled));
-    actionMessage.value = `${configType} ${configCode} 已${enabled ? "启用" : "停用"}。`;
-  } catch (error) {
-    actionMessage.value = `${configType} ${configCode} 操作失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1810,6 +1947,7 @@ onMounted(() => {
   loadReturnCodeImportReviews();
   loadGatewayReviews();
   loadControlPolicyReviews();
+  loadAlertProviderReviews();
   loadIssueDutyRosterReviews();
 });
 
@@ -1828,7 +1966,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.22</span>
+        <span class="badge info">配置中心 V1.23</span>
       </div>
     </div>
 
@@ -3992,9 +4130,186 @@ function exportGovernanceSnapshot(section = "ALL") {
           <div class="section-title">
             <div>
               <h3>告警通知供应商配置</h3>
-              <p class="meta">统一维护 IM / 短信 / 邮件告警的供应商端点、模板编码、重试和限流策略，作为真实通知中心接入的正式配置入口</p>
+              <p class="meta">维护 IM / 短信 / 邮件告警的供应商端点、模板、路由、重试和限流策略</p>
             </div>
-            <button class="button secondary" @click="exportGovernanceSnapshot('ALERT_PROVIDERS')">导出供应商</button>
+            <div class="toolbar-actions">
+              <button class="button secondary" @click="exportGovernanceSnapshot('ALERT_PROVIDERS')">导出供应商</button>
+              <button class="button secondary" @click="startCreateAlertProvider">新建供应商</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ editingAlertProviderCode ? "编辑供应商" : "新增供应商" }}</h3>
+                <p class="meta">完整候选经异人声明复核通过后写入运行配置</p>
+              </div>
+            </div>
+            <div class="filter-grid">
+              <label>
+                供应商编码
+                <input v-model.trim="alertProviderForm.providerCode" :disabled="Boolean(editingAlertProviderCode)" maxlength="64" />
+              </label>
+              <label>
+                供应商名称
+                <input v-model.trim="alertProviderForm.providerName" maxlength="64" />
+              </label>
+              <label>
+                通知通道
+                <select v-model="alertProviderForm.channelCode">
+                  <option value="IN_APP">站内</option>
+                  <option value="IM">IM</option>
+                  <option value="SMS">短信</option>
+                  <option value="EMAIL">邮件</option>
+                </select>
+              </label>
+              <label>
+                接入端点
+                <input v-model.trim="alertProviderForm.endpointAlias" maxlength="64" />
+              </label>
+              <label>
+                模板编码
+                <input v-model.trim="alertProviderForm.templateCode" maxlength="64" />
+              </label>
+              <label>
+                路由优先级
+                <input v-model.number="alertProviderForm.routePriority" type="number" min="0" />
+              </label>
+              <label class="wide-field">
+                模板正文
+                <textarea v-model.trim="alertProviderForm.templateBody" maxlength="1024" rows="3"></textarea>
+              </label>
+              <label class="wide-field">
+                路由规则
+                <input v-model.trim="alertProviderForm.routeRule" maxlength="255" />
+              </label>
+              <label>
+                重试策略
+                <input v-model.trim="alertProviderForm.retryPolicy" maxlength="128" />
+              </label>
+              <label>
+                限流策略
+                <input v-model.trim="alertProviderForm.rateLimitPolicy" maxlength="128" />
+              </label>
+              <label>
+                启用状态
+                <select v-model="alertProviderForm.enabled">
+                  <option :value="true">启用</option>
+                  <option :value="false">停用</option>
+                </select>
+              </label>
+              <label>
+                申请人声明
+                <input v-model.trim="alertProviderForm.requester" maxlength="64" />
+              </label>
+              <label class="wide-field">
+                申请原因
+                <input v-model.trim="alertProviderForm.changeReason" maxlength="255" />
+              </label>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button
+                class="button primary"
+                :disabled="activeConfigCode === (editingAlertProviderCode || alertProviderForm.providerCode)"
+                @click="submitAlertProviderForm"
+              >
+                {{ editingAlertProviderCode ? "提交修改复核" : "提交新增复核" }}
+              </button>
+              <button class="button secondary" @click="startCreateAlertProvider">重置表单</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>供应商配置变更复核</h3>
+                <p class="meta">同一供应商仅允许一条待办；自声明异人约束不代表可信登录身份或正式审批</p>
+              </div>
+              <button class="button secondary" :disabled="isAlertProviderReviewLoading" @click="loadAlertProviderReviews">
+                {{ isAlertProviderReviewLoading ? "加载中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="filter-grid">
+              <label>
+                启停申请人声明
+                <input v-model.trim="alertProviderActionRequester" maxlength="64" />
+              </label>
+              <label>
+                启停申请原因
+                <input v-model.trim="alertProviderActionReason" maxlength="255" />
+              </label>
+              <label>
+                复核人声明
+                <input v-model.trim="alertProviderReviewer" maxlength="64" />
+              </label>
+              <label>
+                复核意见 / 驳回原因
+                <input v-model.trim="alertProviderReviewComment" maxlength="255" />
+              </label>
+            </div>
+            <div v-if="alertProviderReviewError" class="error-banner">
+              供应商复核申请加载失败：{{ alertProviderReviewError }}
+            </div>
+            <div v-if="isAlertProviderReviewLoading" class="state-box">供应商复核申请加载中...</div>
+            <div v-else-if="!alertProviderReviews.length" class="state-box">当前暂无供应商配置复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>操作</th>
+                    <th>候选供应商</th>
+                    <th>模板与策略</th>
+                    <th>候选状态</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in alertProviderReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>{{ review.operationType }}</td>
+                    <td>
+                      {{ review.providerCode }} / {{ review.providerName }} / {{ review.channelCode }}
+                      <div class="muted-text">{{ review.endpointAlias }} / 优先级 {{ review.routePriority }}</div>
+                      <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
+                    </td>
+                    <td class="flow-summary-cell">
+                      {{ review.templateCode }} / {{ review.routeRule }}
+                      <div class="muted-text">{{ review.retryPolicy }} / {{ review.rateLimitPolicy }}</div>
+                    </td>
+                    <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button class="link-button" :disabled="Boolean(activeConfigCode)" @click="handleAlertProviderReview(review, true)">
+                          通过并应用
+                        </button>
+                        <button class="link-button" :disabled="Boolean(activeConfigCode)" @click="handleAlertProviderReview(review, false)">
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -4034,9 +4349,16 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <button
                       class="link-button"
                       :disabled="activeConfigCode === provider.providerCode"
+                      @click="startEditAlertProvider(provider)"
+                    >
+                      编辑
+                    </button>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === provider.providerCode"
                       @click="toggleAlertProvider(provider)"
                     >
-                      {{ provider.status === "ENABLED" ? "停用" : "启用" }}
+                      {{ provider.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
                   </td>
                 </tr>

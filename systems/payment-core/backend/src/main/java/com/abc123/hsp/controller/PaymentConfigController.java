@@ -1,6 +1,10 @@
 package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
@@ -499,12 +503,48 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.submitControlPolicyRollbackReview(sourceAppId, request));
     }
 
-    /**
-     * 启停告警通知供应商配置。
-     */
+    /** 提交告警通知供应商新增候选。 */
+    @PostMapping("/alert-providers")
+    public ApiResponse<List<PaymentAlertProviderReviewDTO>> createAlertProvider(
+            @RequestBody PaymentAlertProviderUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.createAlertProvider(request));
+    }
+
+    /** 提交告警通知供应商编辑候选。 */
+    @PutMapping("/alert-providers/{providerCode}")
+    public ApiResponse<List<PaymentAlertProviderReviewDTO>> updateAlertProvider(
+            @PathVariable String providerCode,
+            @RequestBody PaymentAlertProviderUpsertRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.updateAlertProvider(providerCode, request));
+    }
+
+    /** 提交告警通知供应商启停候选。 */
     @PostMapping("/alert-providers/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleAlertProvider(@RequestBody PaymentConfigToggleRequestDTO request) {
+    public ApiResponse<List<PaymentAlertProviderReviewDTO>> toggleAlertProvider(
+            @RequestBody PaymentAlertProviderStatusReviewRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleAlertProvider(request));
+    }
+
+    /** 查询告警通知供应商复核申请。 */
+    @GetMapping("/alert-providers/reviews")
+    public ApiResponse<List<PaymentAlertProviderReviewDTO>> listAlertProviderReviews() {
+        return ApiResponse.success(paymentConfigService.listAlertProviderReviews());
+    }
+
+    /** 批准告警通知供应商复核申请。 */
+    @PostMapping("/alert-providers/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentAlertProviderReviewDTO>> approveAlertProviderReview(
+            @PathVariable String requestNo,
+            @RequestBody PaymentAlertProviderReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveAlertProviderReview(requestNo, request));
+    }
+
+    /** 驳回告警通知供应商复核申请。 */
+    @PostMapping("/alert-providers/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentAlertProviderReviewDTO>> rejectAlertProviderReview(
+            @PathVariable String requestNo,
+            @RequestBody PaymentAlertProviderReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectAlertProviderReview(requestNo, request));
     }
 
     /**

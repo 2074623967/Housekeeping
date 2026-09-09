@@ -8,6 +8,8 @@ import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderReviewDTO;
+import com.abc123.hsp.dto.PaymentAlertProviderStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
@@ -33,6 +35,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
+import com.abc123.hsp.entity.PaymentAlertProviderConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
@@ -957,15 +960,37 @@ class PaymentConfigServiceImplTest {
 
     @Test
     void shouldToggleAlertProviderStatus() {
-        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("ALERT_IM_WECOM");
+        PaymentAlertProviderStatusReviewRequestDTO request = new PaymentAlertProviderStatusReviewRequestDTO();
+        request.setProviderCode("alert_im_wecom");
         request.setEnabled(false);
-        when(paymentConfigMapper.updateAlertProviderStatus("ALERT_IM_WECOM", "DISABLED", "danger")).thenReturn(1);
-        mockOverviewDependencies();
+        request.setRequester("maker-a");
+        request.setChangeReason("暂停企业消息派发");
+        PaymentAlertProviderConfigEntity current = new PaymentAlertProviderConfigEntity();
+        current.setProviderCode("ALERT_IM_WECOM");
+        current.setProviderName("企业消息");
+        current.setChannelCode("IM");
+        current.setEndpointAlias("wecom-alert");
+        current.setTemplateCode("PAYMENT_ALERT");
+        current.setTemplateBody("异常：${issueNo}");
+        current.setRouteRule("P1/P2");
+        current.setRoutePriority(Integer.valueOf(10));
+        current.setRetryPolicy("最多3次");
+        current.setRateLimitPolicy("每分钟100条");
+        current.setStatus("ENABLED");
+        current.setStatusType("success");
+        when(paymentConfigMapper.findAlertProviderByCodeForUpdate("ALERT_IM_WECOM")).thenReturn(current);
+        when(paymentConfigMapper.findAlertProviderReviews())
+                .thenReturn(Collections.singletonList(new PaymentAlertProviderReviewDTO()));
 
         new PaymentConfigServiceImpl(paymentConfigMapper).toggleAlertProvider(request);
 
-        verify(paymentConfigMapper).updateAlertProviderStatus("ALERT_IM_WECOM", "DISABLED", "danger");
+        verify(paymentConfigMapper).insertAlertProviderReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "STATUS_CHANGE".equals(review.getOperationType())
+                        && "ALERT_IM_WECOM".equals(review.getPendingProviderCode())
+                        && "DISABLED".equals(review.getCandidateStatus())
+                        && review.getBaseFingerprint().length() == 64));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateAlertProvider(org.mockito.ArgumentMatchers.any(PaymentAlertProviderConfigEntity.class));
     }
 
     @Test
