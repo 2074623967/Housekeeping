@@ -25,6 +25,7 @@
 - `migrations/2026-09-09-add-payment-channel-review.sql`：幂等创建支付渠道状态变更复核表，以可空唯一渠道占位限制同一渠道最多一条待复核申请
 - `migrations/2026-09-09-expand-payment-channel-review.sql`：一次性扩展渠道复核表，增加新增/编辑操作类型与完整候选快照，并回填既有状态申请
 - `migrations/2026-09-09-add-payment-gateway-review.sql`：幂等创建支付网关状态变更复核表，以可空唯一网关占位限制同一网关最多一条待复核申请
+- `migrations/2026-09-09-expand-payment-gateway-review.sql`：一次性扩展网关复核表，增加新增/编辑操作类型与完整候选快照，并从运行配置回填既有状态申请
 
 初始化方式：
 
@@ -48,7 +49,8 @@
 12. 执行 `migrations/2026-09-09-add-payment-channel-review.sql`，建立支付渠道状态变更复核表；脚本可重复执行
 13. 执行一次 `migrations/2026-09-09-expand-payment-channel-review.sql`，扩展渠道完整候选字段；该脚本不可重复执行
 14. 执行 `migrations/2026-09-09-add-payment-gateway-review.sql`，建立支付网关状态变更复核表；脚本可重复执行
-15. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+15. 执行一次 `migrations/2026-09-09-expand-payment-gateway-review.sql`，扩展网关完整候选字段；该脚本不可重复执行
+16. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -72,6 +74,7 @@
    - `SHOW TABLES LIKE 't_payment_channel_review'` 返回一行
    - `SELECT pending_channel_code, COUNT(*) FROM t_payment_channel_review WHERE pending_channel_code IS NOT NULL GROUP BY pending_channel_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_channel_code` 应为空
    - `SHOW TABLES LIKE 't_payment_gateway_review'` 返回一行
+   - `SHOW COLUMNS FROM t_payment_gateway_review LIKE 'operation_type'` 返回一行；既有申请的完整候选字段均已从对应运行配置回填
    - `SELECT pending_gateway_code, COUNT(*) FROM t_payment_gateway_review WHERE pending_gateway_code IS NOT NULL GROUP BY pending_gateway_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_gateway_code` 应为空
    - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
