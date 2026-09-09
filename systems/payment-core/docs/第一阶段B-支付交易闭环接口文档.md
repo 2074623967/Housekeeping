@@ -66,6 +66,8 @@
 | `/api/payment-config/channels/reviews` | `POST` | 提交支付渠道新增或编辑完整候选，运行态不变 |
 | `/api/payment-config/channels/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用渠道状态候选 |
 | `/api/payment-config/channels/reviews/{requestNo}/reject` | `POST` | 异人驳回渠道状态候选，运行态不变 |
+| `/api/payment-config/channels/{channelCode}/versions` | `GET` | 查询支付渠道不可变版本历史，不返回密钥或公钥原文 |
+| `/api/payment-config/channels/{channelCode}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
 | `/api/payment-config/route-rules/validate` | `POST` | 校验路由表达式并模拟样例命中 |
 | `/api/payment-config/route-rules/conflicts` | `GET` | 检测当前启用路由规则的冲突、重复、遮蔽和待复核项 |
 | `/api/payment-config/route-rules/reviews` | `GET` | 查询路由规则复核申请 |
@@ -988,6 +990,8 @@ GET  /api/payment-config/channels/reviews
 POST /api/payment-config/channels/reviews
 POST /api/payment-config/channels/reviews/{requestNo}/approve
 POST /api/payment-config/channels/reviews/{requestNo}/reject
+GET  /api/payment-config/channels/{channelCode}/versions
+POST /api/payment-config/channels/{channelCode}/rollback
 ```
 
 提交请求示例：
@@ -1264,7 +1268,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 返回码映射启停候选使用 `channelCode / channelReturnCode / enabled / requester / changeReason`，不再使用通用 `configCode / subCode` 直接写入请求。
 6. 返回码映射当前已支持运营查看、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备 V1.4 复核与审计，单条启停具备 V1.5 独立唯一待办、完整基线指纹和自声明异人复核。后续继续补可信身份权限、真实渠道码表校验和受控自动归档。
 7. 支付网关新增、编辑和启停已统一纳入 V1.3 完整候选复核，关闭已知直接运行态写入入口；`requester / reviewer` 仍是自声明，`identityTrustLevel` 固定为 `SELF_DECLARED`，不代表可信身份、正式审批或不可抵赖签字。候选中的证书别名和状态只是治理台账字段，证书上传/轮换动作、真实灰度发布编排、渠道探活和真实网关适配仍未落地。
-8. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示，新增、编辑和启停已统一纳入 V1.3 完整候选复核；后续继续补可信身份权限、专用密钥轮换、证书上传、多商户参数模板和真实探活治理。
+8. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；新增、编辑、启停和历史回滚已统一纳入 V1.4 完整候选复核、完整指纹与版本双基线和不可变版本。管理总览、复核列表和版本历史均不返回回调密钥或公钥原文；后续继续补可信身份权限、专用密钥轮换、证书上传、多商户参数模板和真实探活治理。
 9. 支付控制策略新增、编辑、启停和历史回滚已统一纳入 V1.7 完整候选复核与不可变版本；来源应用编码统一小写，同应用唯一待办，批准前重验完整指纹和版本基线。自检仍使用 `configCode` 传来源应用标识并回写 `PASS/WARN/FAIL`；自动/人工自检属于系统运行状态，不进入配置复核。管理总览、复核列表和版本历史只展示令牌是否配置，人员仍为 `SELF_DECLARED`。
 10. 路由规则新增、编辑、启停和回滚均提交候选快照进入自声明 maker-checker；旧的直接运行态写入路径已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
 11. 异常告警值班路由新增、编辑和启停均进入 V1.1 完整候选复核；允许跨日班次，星期范围规范化，升级超时为 `5-1440` 分钟，日期策略只支持 `ALL_DAYS / WORKDAY_ONLY / NON_WORKDAY_ONLY`。

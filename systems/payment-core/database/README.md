@@ -24,6 +24,7 @@
 - `migrations/2026-09-09-add-payment-return-code-review.sql`：幂等创建单条返回码状态变更复核表，以规范化映射键摘要和可空唯一待办占位限制同一映射最多一条待复核申请
 - `migrations/2026-09-09-add-payment-channel-review.sql`：幂等创建支付渠道状态变更复核表，以可空唯一渠道占位限制同一渠道最多一条待复核申请
 - `migrations/2026-09-09-expand-payment-channel-review.sql`：一次性扩展渠道复核表，增加新增/编辑操作类型与完整候选快照，并回填既有状态申请
+- `migrations/2026-09-09-add-payment-channel-version.sql`：幂等创建支付渠道不可变版本表、补齐存量 V1 基线和复核版本字段
 - `migrations/2026-09-09-add-payment-gateway-review.sql`：幂等创建支付网关状态变更复核表，以可空唯一网关占位限制同一网关最多一条待复核申请
 - `migrations/2026-09-09-expand-payment-gateway-review.sql`：一次性扩展网关复核表，增加新增/编辑操作类型与完整候选快照，并从运行配置回填既有状态申请
 - `migrations/2026-09-09-create-payment-control-policy-review.sql`：幂等创建支付控制策略完整候选复核表，以可空唯一来源应用占位约束同一策略最多一条待复核申请
@@ -50,12 +51,13 @@
 11. 执行 `migrations/2026-09-09-add-payment-return-code-review.sql`，建立单条返回码状态变更复核表；脚本可重复执行
 12. 执行 `migrations/2026-09-09-add-payment-channel-review.sql`，建立支付渠道状态变更复核表；脚本可重复执行
 13. 执行一次 `migrations/2026-09-09-expand-payment-channel-review.sql`，扩展渠道完整候选字段；该脚本不可重复执行
-14. 执行 `migrations/2026-09-09-add-payment-gateway-review.sql`，建立支付网关状态变更复核表；脚本可重复执行
-15. 执行一次 `migrations/2026-09-09-expand-payment-gateway-review.sql`，扩展网关完整候选字段；该脚本不可重复执行
-16. 执行 `migrations/2026-09-09-create-payment-control-policy-review.sql`，建立支付控制策略完整候选复核表；脚本可重复执行
-17. 执行 `migrations/2026-09-09-add-payment-control-policy-version.sql`，建立支付控制策略不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
-18. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
-19. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+14. 执行 `migrations/2026-09-09-add-payment-channel-version.sql`，建立支付渠道不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
+15. 执行 `migrations/2026-09-09-add-payment-gateway-review.sql`，建立支付网关状态变更复核表；脚本可重复执行
+16. 执行一次 `migrations/2026-09-09-expand-payment-gateway-review.sql`，扩展网关完整候选字段；该脚本不可重复执行
+17. 执行 `migrations/2026-09-09-create-payment-control-policy-review.sql`，建立支付控制策略完整候选复核表；脚本可重复执行
+18. 执行 `migrations/2026-09-09-add-payment-control-policy-version.sql`，建立支付控制策略不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
+19. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
+20. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -77,7 +79,11 @@
    - `SHOW TABLES LIKE 't_payment_return_code_review'` 返回一行
    - `SELECT pending_mapping_key, COUNT(*) FROM t_payment_return_code_review WHERE pending_mapping_key IS NOT NULL GROUP BY pending_mapping_key HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_mapping_key` 应为空
    - `SHOW TABLES LIKE 't_payment_channel_review'` 返回一行
+   - `SHOW TABLES LIKE 't_payment_channel_version'` 返回一行
+   - `SELECT COUNT(*) FROM t_payment_channel_config config WHERE NOT EXISTS (SELECT 1 FROM t_payment_channel_version version WHERE version.channel_code = config.channel_code)` 返回 `0`
+   - `SELECT channel_code, version_no, COUNT(*) FROM t_payment_channel_version GROUP BY channel_code, version_no HAVING COUNT(*) > 1` 返回空集
    - `SELECT pending_channel_code, COUNT(*) FROM t_payment_channel_review WHERE pending_channel_code IS NOT NULL GROUP BY pending_channel_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_channel_code` 应为空
+   - 管理总览、复核列表和版本历史不得返回 `callback_secret / callback_public_key` 原文，只能返回是否已配置
    - `SHOW TABLES LIKE 't_payment_gateway_review'` 返回一行
    - `SHOW COLUMNS FROM t_payment_gateway_review LIKE 'operation_type'` 返回一行；既有申请的完整候选字段均已从对应运行配置回填
    - `SELECT pending_gateway_code, COUNT(*) FROM t_payment_gateway_review WHERE pending_gateway_code IS NOT NULL GROUP BY pending_gateway_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_gateway_code` 应为空
