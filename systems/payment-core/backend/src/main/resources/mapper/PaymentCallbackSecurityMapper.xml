@@ -18,7 +18,8 @@
 
     <insert id="insertCallbackNonce">
         INSERT INTO t_payment_callback_nonce(channel_code, nonce, payment_order_id, expires_at, created_at)
-        VALUES (LOWER(#{channelCode}), #{nonce}, #{paymentOrderId}, DATE_ADD(NOW(), INTERVAL #{expireSeconds} SECOND), NOW())
+        VALUES (LOWER(#{channelCode}), #{nonce}, #{paymentOrderId},
+                TIMESTAMPADD(SECOND, #{expireSeconds}, NOW()), NOW())
     </insert>
 
     <delete id="deleteExpiredNonce">
