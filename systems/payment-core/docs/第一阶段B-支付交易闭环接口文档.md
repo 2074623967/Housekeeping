@@ -2185,6 +2185,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 唯一键竞争失败作为幂等重复跳过：不增加 `successCount` 或 `failCount`，增加 `warningCount`，并在 `summaryComment` 展示跳过数量；其他数据库异常继续计入 `failCount`。
 4. 幂等范围仅为本地告警生成，不代表供应商通知 exactly-once；调用方仍应使用稳定 `alertNo` 关联派发与回执事实。
 
+### 14.25 模拟渠道交易号规则
+
+1. 本地微信 H5、支付宝 H5、线下银行与兜底适配器返回的 `channelTransactionNo` 使用“渠道前缀 + 13 位毫秒时间 + 32 位 UUID 十六进制段”，最大长度小于当前 `128` 字符字段上限。
+2. `PaymentChannelSubmitResultDTO.channelTransactionNo` 与 `responsePayload.channelTransactionNo` 必须保持一致，支付核心将该值回写支付单并在后续渠道查单时透传。
+3. 调用方必须把渠道交易号视为不透明字符串，不得校验固定长度、解析时间或自行重建；真实渠道接入后直接采用供应商返回值，不沿用本地模拟生成规则。
+4. 该编号不是提交幂等键，也不证明支付成功。真实渠道超时或未知结果必须先按稳定支付标识查单，禁止仅因本地未落库直接重复下单。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
