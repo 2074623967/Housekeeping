@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
+import { persistPaymentAccessToken } from "../constants/paymentSession";
 
 const props = defineProps({
   terminalVariant: {
@@ -163,6 +164,10 @@ async function createPrepay() {
     message.value = "请输入大于 0 的金额。";
     return;
   }
+  if (!persistPaymentAccessToken(terminalMeta.value.sourceAppId, terminalMeta.value.accessToken)) {
+    message.value = "浏览器会话存储不可用，无法安全保存支付接入令牌。";
+    return;
+  }
   submitting.value = true;
   message.value = "";
   try {
@@ -177,8 +182,6 @@ async function createPrepay() {
     router.push({
       path: `/cashier/${prepay.prepayOrderNo}`,
       query: {
-        accessToken: terminalMeta.value.accessToken,
-        sourceAppId: terminalMeta.value.sourceAppId,
         bizType: props.sceneType
       }
     });

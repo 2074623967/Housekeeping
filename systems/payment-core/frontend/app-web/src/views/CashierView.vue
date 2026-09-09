@@ -3,6 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { resolvePaymentChannelCode } from "../constants/payment";
+import {
+  persistPaymentAccessToken,
+  readPaymentAccessToken,
+  withoutAccessToken
+} from "../constants/paymentSession";
 
 const props = defineProps({
   terminalVariant: {
@@ -115,10 +120,6 @@ function buildResultRouteQuery(prepayOrderNo, paymentMethod) {
   if (bizType) {
     routeQuery.bizType = bizType;
   }
-  const accessToken = resolveAccessToken();
-  if (accessToken) {
-    routeQuery.accessToken = accessToken;
-  }
   return routeQuery;
 }
 
@@ -192,7 +193,6 @@ const merchantNo = computed(() => {
   }
   return "MCH_HOME_APP";
 });
-const accessTokenStorageKey = computed(() => `hsp.accessToken.${sourceAppId.value}`);
 const accessTokenAvailable = ref(false);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
 const channels = computed(() => cashier.value?.channels || []);
@@ -398,10 +398,7 @@ function backToBusinessEntry() {
 }
 
 function resolveAccessToken() {
-  if (typeof route.query.accessToken === "string") {
-    return route.query.accessToken.trim();
-  }
-  return "";
+  return readPaymentAccessToken(sourceAppId.value);
 }
 
 function resolveBizType() {
@@ -412,6 +409,16 @@ function resolveBizType() {
 }
 
 function syncAccessToken() {
+  if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
+    persistPaymentAccessToken(sourceAppId.value, route.query.accessToken.trim());
+  }
+  if (Object.prototype.hasOwnProperty.call(route.query, "accessToken")) {
+    router.replace({
+      path: route.path,
+      query: withoutAccessToken(route.query),
+      hash: route.hash
+    });
+  }
   accessTokenAvailable.value = Boolean(resolveAccessToken());
 }
 

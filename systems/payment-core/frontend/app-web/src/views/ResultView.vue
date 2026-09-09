@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { PAYMENT_RESULT_STATE_META, resolvePaymentChannelCode, resolvePaymentResultState } from "../constants/payment";
+import { persistPaymentAccessToken, withoutAccessToken } from "../constants/paymentSession";
 
 const props = defineProps({
   terminalVariant: {
@@ -100,6 +101,15 @@ const canClosePayment = computed(() => {
   return Boolean(status) && status !== "SUCCESS" && status !== "CLOSED";
 });
 const businessEntryPath = computed(() => `/${resolveBizType()}`);
+const sourceAppId = computed(() => {
+  if (props.terminalVariant === "pc") {
+    return "housekeeping-pc-web";
+  }
+  if (props.terminalVariant === "h5") {
+    return "housekeeping-h5-web";
+  }
+  return "housekeeping-app-web";
+});
 const nextStepChecklist = computed(() => {
   if (resultState.value === "success") {
     return [
@@ -222,7 +232,23 @@ async function loadDetail() {
   }
 }
 
-onMounted(loadDetail);
+onMounted(() => {
+  migrateLegacyAccessToken();
+  loadDetail();
+});
+
+function migrateLegacyAccessToken() {
+  if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
+    persistPaymentAccessToken(sourceAppId.value, route.query.accessToken.trim());
+  }
+  if (Object.prototype.hasOwnProperty.call(route.query, "accessToken")) {
+    router.replace({
+      path: route.path,
+      query: withoutAccessToken(route.query),
+      hash: route.hash
+    });
+  }
+}
 
 async function queryResult() {
   queryLoading.value = true;
@@ -278,9 +304,6 @@ function backToCashier() {
   const cashierRouteQuery = {};
   if (typeof route.query.terminalVariant === "string" && route.query.terminalVariant.trim()) {
     cashierRouteQuery.terminalVariant = route.query.terminalVariant.trim();
-  }
-  if (typeof route.query.accessToken === "string" && route.query.accessToken.trim()) {
-    cashierRouteQuery.accessToken = route.query.accessToken.trim();
   }
   if (typeof route.query.bizType === "string" && route.query.bizType.trim()) {
     cashierRouteQuery.bizType = route.query.bizType.trim();
