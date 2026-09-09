@@ -2290,6 +2290,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 默认配置为时间窗 `300` 秒、nonce TTL `601` 秒。任一启用渠道将窗口调大后，部署配置必须同步提高 TTL，否则通知在签名与 nonce 副作用前失败闭合。
 4. 该约束只保护本地防重记录生命周期；真实渠道还需验证时间戳精度、数据库时钟、多实例唯一键竞争、清理调度和渠道重试跨度。
 
+### 14.40 支付回调字段与审计快照边界
+
+1. `channel/paymentOrderId/tradeStatus/channelTransactionNo` 必填，最大长度分别为 `64/64/32/128` 字符，任一字段含 ISO 控制字符或超限均返回 `PAYMENT-400`，且发生在验签和数据库访问前。
+2. `timestamp` 最大 `20` 字符，超限或含控制字符返回 `PAYMENT-1008`；`nonce/signature` 最大 `128/8192` 字符，超限或含控制字符返回 `PAYMENT-1005`。
+3. 渠道路径去首尾空白并按小写规范化；空白或超过 `64` 字符时返回 `PAYMENT-400` 或 `PAYMENT-1009`。规范化值用于验签原文、支付单渠道绑定、通知日志和事件快照。
+4. 通知日志中的 `tradeStatus` 与事件中的渠道值按 JSON 字符串完整转义，不改变用于验签和状态判断的原始交易状态；整体 HTTP 请求体上限和渠道专属字段规则仍由接入网关补齐。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2303,11 +2310,11 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1002` | 支付单不存在 |
 | `PAYMENT-1003` | 当前支付方式无法命中可用路由渠道 |
 | `PAYMENT-1004` | 未找到可用查单适配器 |
-| `PAYMENT-1005` | 回调签名缺失或验签失败 |
+| `PAYMENT-1005` | 回调签名/nonce 缺失、超限、含控制字符或验签失败 |
 | `PAYMENT-1006` | 回调密钥未配置 |
 | `PAYMENT-1007` | 回调 `nonce` 重放 |
 | `PAYMENT-1008` | 回调时间戳非法或超出时间窗 |
-| `PAYMENT-1009` | 回调渠道缺失 |
+| `PAYMENT-1009` | 验签入口回调渠道缺失或超过安全长度 |
 | `PAYMENT-1010` | 当前没有启用的支付渠道 |
 | `PAYMENT-1011` | 支付来源订单金额信息缺失 |
 | `PAYMENT-1026` | 外部渠道查单失败、结果不完整或无法安全收口 |
