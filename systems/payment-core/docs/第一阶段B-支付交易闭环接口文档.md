@@ -2115,6 +2115,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `providerDeliveryMessage` 继续返回固定运营摘要；正常供应商 HTTP 响应回执按既有规则保存，并在查询边界执行脱敏。
 4. 本规则只约束新增失败事实，不代表历史快照清理、生产权限、审计或真实供应商验收完成。
 
+### 14.15 告警供应商正常回执持久化规则
+
+1. Webhook 原始响应只用于当前调用内解析成功码、回执号、投递状态和失败码，不直接写入普通告警日志。
+2. `providerReceiptSnapshot` 保存 `HTTP_RESPONSE:` 加递归脱敏后的对象或数组 JSON；手机号、姓名、银行卡号和凭据字段按统一规则遮蔽。
+3. 非 JSON 或 JSON 标量响应固定保存为 `[REDACTED]`；调用方应使用独立状态字段，不得从快照推导派发结论。
+4. 如生产审计必须保留原始供应商凭证，应使用独立加密、授权、审计和保留期限设施，本接口不提供原文读取能力。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

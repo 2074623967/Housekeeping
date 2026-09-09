@@ -5840,3 +5840,27 @@
 1. 新增告警派发失败事实不再长期保存底层异常原文，排障仍可使用失败分类、通道、超时和状态信息。
 2. 正常供应商响应仍按既有回执快照规则留存并在对外查询时脱敏，本轮不改变真实业务回执的审计口径。
 3. 本地测试不能替代历史数据处置、生产数据权限、独立受控诊断设施或真实供应商故障验收。
+
+## 187. 2026-09-09 告警供应商正常回执落库脱敏 V1.0 验证
+
+### 187.1 本轮补强
+
+1. `AbstractLocalPaymentIssueAlertNotifier` 在完成业务字段解析后，复用 `PaymentSensitiveDataMasker` 对正常 `HTTP_RESPONSE` 落库副本递归脱敏。
+2. 回执号、成功码、投递状态和失败码仍从原始响应解析；仅持久化快照改为脱敏副本，三类通知器无需形成平行实现。
+3. 嵌套手机号、姓名和访问令牌已纳入回归断言，畸形 JSON 与标量响应沿用失败闭合规则。
+
+### 187.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 回执脱敏定向测试 | `mvn -Dtest=PaymentSensitiveDataMaskerTest,LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖共享脱敏规则、三类通知器和派发服务；回执号与状态保持可用，模拟手机号、姓名和令牌不进入快照 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `488` 个用例，`0` failures、`0` errors、`0` skipped |
+| 历史与生产治理 | 历史快照清理、独立原始凭证库、可信权限、访问审计、保留期限、真实供应商回执 | 未执行 | 不记录历史敏感数据已清理或生产隐私验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；未修改表结构、接口字段或业务状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 187.3 当前判断
+
+1. 新增正常供应商回执不再把已知个人信息和凭据字段原文写入普通告警日志，同时保留业务解析所需的结构化结果。
+2. 脱敏后的快照用于普通运营审计；若生产确需原始供应商凭证，应进入具备加密、可信权限、访问审计和保留期限的独立设施。
+3. 本地模拟响应不能替代历史数据处置、真实供应商字段盘点或生产隐私验收。
