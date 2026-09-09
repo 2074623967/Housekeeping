@@ -541,6 +541,7 @@ class PaymentServiceImplTest {
         activePrepay.setPrepayOrderNo("PRE-001");
         activePrepay.setPaymentOrderId("PAY-001");
         activePrepay.setPaymentStatus("WAIT_CALLBACK");
+        when(paymentMapper.lockPrepayCreation("ORD-001")).thenReturn("ORD-001");
         when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-001")).thenReturn(activePrepay);
 
         PrepayRequestDTO request = new PrepayRequestDTO();
@@ -555,6 +556,10 @@ class PaymentServiceImplTest {
                 paymentChannelSubmitService)
                 .prepay(request);
 
+        org.mockito.InOrder prepayOrder = org.mockito.Mockito.inOrder(paymentMapper);
+        prepayOrder.verify(paymentMapper).initPrepayCreationLock("ORD-001");
+        prepayOrder.verify(paymentMapper).lockPrepayCreation("ORD-001");
+        prepayOrder.verify(paymentMapper).findLatestActivePrepayByOrderNo("ORD-001");
         verify(paymentMapper, times(1)).findLatestActivePrepayByOrderNo("ORD-001");
         verify(paymentMapper, never()).findOrderAmount("ORD-001");
         verify(paymentMapper, never()).insertPaymentOrder(
@@ -581,6 +586,7 @@ class PaymentServiceImplTest {
         PrepayOrderDTO createdPrepay = new PrepayOrderDTO();
         createdPrepay.setPrepayOrderNo("PRE-NEW");
         createdPrepay.setPaymentOrderId("PAY-NEW");
+        when(paymentMapper.lockPrepayCreation("ORD-002")).thenReturn("ORD-002");
         when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-002")).thenReturn(null);
         when(paymentMapper.findOrderAmount("ORD-002")).thenReturn(new java.math.BigDecimal("168.00"));
         when(paymentMapper.findPaidAmount("ORD-002")).thenReturn(java.math.BigDecimal.ZERO);
@@ -622,6 +628,7 @@ class PaymentServiceImplTest {
 
     @Test
     void shouldRejectSettledOrOverpaidOrderWithoutCreatingPayment() {
+        when(paymentMapper.lockPrepayCreation("ORD-SETTLED")).thenReturn("ORD-SETTLED");
         when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-SETTLED")).thenReturn(null);
         when(paymentMapper.findOrderAmount("ORD-SETTLED")).thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findPaidAmount("ORD-SETTLED")).thenReturn(new BigDecimal("168.01"));
@@ -654,10 +661,36 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldStopPrepayWhenCreationLockCannotBeRead() {
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORD-LOCK-MISSING");
+        request.setPayScene("HOME_CLEAN");
+        when(paymentMapper.lockPrepayCreation("ORD-LOCK-MISSING")).thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.SYSTEM_ERROR, exception.getCode());
+        verify(paymentMapper).initPrepayCreationLock("ORD-LOCK-MISSING");
+        verify(paymentMapper, never()).findLatestActivePrepayByOrderNo(anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
+    }
+
+    @Test
     void shouldCreateVirtualPrepayWhenOrderSourceMissing() {
         PrepayOrderDTO createdPrepay = new PrepayOrderDTO();
         createdPrepay.setPrepayOrderNo("PRE-VIRTUAL");
         createdPrepay.setPaymentOrderId("PAY-VIRTUAL");
+        when(paymentMapper.lockPrepayCreation("WALLET-RECHARGE-001"))
+                .thenReturn("WALLET-RECHARGE-001");
         when(paymentMapper.findLatestActivePrepayByOrderNo("WALLET-RECHARGE-001")).thenReturn(null);
         when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
         when(paymentMapper.findPaidAmount("WALLET-RECHARGE-001")).thenReturn(null);

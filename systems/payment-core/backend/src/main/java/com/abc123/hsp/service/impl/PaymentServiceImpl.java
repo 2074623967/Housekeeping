@@ -325,6 +325,11 @@ public class PaymentServiceImpl implements PaymentService {
     public PrepayOrderDTO prepay(PrepayRequestDTO request) {
         // 预付单创建会同时影响账单、支付单和收银台状态，必须放在同一个事务里。
         normalizeAndValidatePrepayRequest(request);
+        paymentMapper.initPrepayCreationLock(request.getOrderNo());
+        String lockedOrderNo = paymentMapper.lockPrepayCreation(request.getOrderNo());
+        if (!request.getOrderNo().equals(lockedOrderNo)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "预付单创建并发锁获取失败");
+        }
         PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
         if (activePrepay != null) {
             // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。

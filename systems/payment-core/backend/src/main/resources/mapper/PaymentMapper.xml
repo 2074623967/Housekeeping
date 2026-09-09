@@ -152,6 +152,19 @@
         SELECT order_amount FROM t_order WHERE order_no = #{orderNo}
     </select>
 
+    <insert id="initPrepayCreationLock">
+        INSERT IGNORE INTO t_payment_prepay_creation_lock(order_no, created_at, updated_at)
+        VALUES (#{orderNo}, NOW(), NOW())
+    </insert>
+
+    <select id="lockPrepayCreation" resultType="string">
+        SELECT order_no
+        FROM t_payment_prepay_creation_lock
+        WHERE order_no = #{orderNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findPaidAmount" resultType="java.math.BigDecimal">
         SELECT paid_amount FROM t_order WHERE order_no = #{orderNo}
     </select>

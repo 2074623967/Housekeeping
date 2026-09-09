@@ -13,6 +13,7 @@ DROP TABLE IF EXISTS t_payment_notify_log;
 DROP TABLE IF EXISTS t_payment_attempt;
 DROP TABLE IF EXISTS t_payment_submit_concurrency_token;
 DROP TABLE IF EXISTS t_payment_submit_rate_limit_bucket;
+DROP TABLE IF EXISTS t_payment_prepay_creation_lock;
 DROP TABLE IF EXISTS t_prepay_order;
 DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
@@ -650,6 +651,15 @@ CREATE TABLE t_prepay_order (
     KEY idx_prepay_expire_payment (expires_at, payment_order_id),
     KEY idx_prepay_order_created (order_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预付单表';
+
+CREATE TABLE t_payment_prepay_creation_lock (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    order_no VARCHAR(64) NOT NULL COMMENT '订单维度协调键',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_prepay_creation_order (order_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='预付单创建并发协调表';
 
 CREATE TABLE t_payment_attempt (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

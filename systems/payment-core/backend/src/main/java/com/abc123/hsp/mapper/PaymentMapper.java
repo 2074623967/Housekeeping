@@ -45,6 +45,16 @@ public interface PaymentMapper {
     PaymentDetailDTO findDetail(@Param("paymentOrderId") String paymentOrderId);
 
     /**
+     * 幂等初始化订单维度的预付单创建协调行。
+     */
+    int initPrepayCreationLock(@Param("orderNo") String orderNo);
+
+    /**
+     * 在当前事务内锁定订单维度的预付单创建协调行。
+     */
+    String lockPrepayCreation(@Param("orderNo") String orderNo);
+
+    /**
      * 查询订单应收金额。
      */
     BigDecimal findOrderAmount(@Param("orderNo") String orderNo);
