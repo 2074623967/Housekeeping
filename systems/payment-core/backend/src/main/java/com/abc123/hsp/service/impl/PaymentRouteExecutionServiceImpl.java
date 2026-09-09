@@ -68,6 +68,36 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         );
     }
 
+    @Override
+    public String exportCsv(PaymentRouteExecutionQueryDTO query) {
+        normalizeQuery(query);
+        List<PaymentRouteExecutionListItemDTO> items = maskItems(
+                paymentRouteExecutionMapper.findAllForExport(query));
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("路由记录号,支付单号,订单号,预付单号,客户名称,支付金额,支付方式,命中渠道,路由规则,路由结果,配置快照版本,终端,客户端IP,幂等键,请求报文,响应报文,创建时间\n");
+        for (PaymentRouteExecutionListItemDTO item : items) {
+            builder.append(csvCell(item.getRouteNo())).append(',')
+                    .append(csvCell(item.getPaymentOrderId())).append(',')
+                    .append(csvCell(item.getOrderNo())).append(',')
+                    .append(csvCell(item.getPrepayOrderNo())).append(',')
+                    .append(csvCell(item.getCustomerName())).append(',')
+                    .append(csvCell(item.getAmount())).append(',')
+                    .append(csvCell(item.getPaymentMethod())).append(',')
+                    .append(csvCell(item.getChannelCode())).append(',')
+                    .append(csvCell(item.getRouteRule())).append(',')
+                    .append(csvCell(item.getRouteResult())).append(',')
+                    .append(csvCell(item.getOpsConfigSnapshotVersion() == null
+                            ? null : String.valueOf(item.getOpsConfigSnapshotVersion()))).append(',')
+                    .append(csvCell(item.getTerminal())).append(',')
+                    .append(csvCell(item.getClientIp())).append(',')
+                    .append(csvCell(item.getIdempotencyKey())).append(',')
+                    .append(csvCell(item.getRequestPayload())).append(',')
+                    .append(csvCell(item.getResponsePayload())).append(',')
+                    .append(csvCell(item.getCreatedAt())).append('\n');
+        }
+        return builder.toString();
+    }
+
     private List<PaymentRouteExecutionListItemDTO> maskItems(List<PaymentRouteExecutionListItemDTO> items) {
         if (items == null || items.isEmpty()) {
             return Collections.emptyList();
@@ -137,5 +167,10 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String csvCell(String value) {
+        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }

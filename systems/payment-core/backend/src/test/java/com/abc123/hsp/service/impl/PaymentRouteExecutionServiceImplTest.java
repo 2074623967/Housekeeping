@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
@@ -116,5 +117,48 @@ class PaymentRouteExecutionServiceImplTest {
         assertTrue(result.getResponsePayload().contains("622202******0123"));
         assertEquals("张三", item.getCustomerName());
         assertEquals("10.20.30.40", item.getClientIp());
+    }
+
+    @Test
+    void shouldExportAllMatchingRoutesWithMaskedContext() {
+        PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
+        query.setPaymentOrderId(" PAY-001 ");
+        query.setRouteRule(" RULE_HOME_WX ");
+        query.setPaymentMethod(" 微信 ");
+        query.setSortField(" channelCode ");
+        query.setSortOrder(" ASC ");
+        query.setPageNo(9);
+        query.setPageSize(500);
+        PaymentRouteExecutionListItemDTO item = new PaymentRouteExecutionListItemDTO();
+        item.setRouteNo("ROUTE-001");
+        item.setPaymentOrderId("PAY-001");
+        item.setCustomerName("张三");
+        item.setRouteRule("amount>1000 => \"wx_h5\"");
+        item.setClientIp("10.20.30.40");
+        item.setIdempotencyKey("ORDER-REQUEST-20260803-ABCDEFG");
+        item.setRequestPayload("{\"payerPhone\":\"13800138000\"}");
+        item.setResponsePayload("{\"code\":\"SUCCESS\"}");
+        item.setOpsConfigSnapshotVersion(12L);
+        when(paymentRouteExecutionMapper.findAllForExport(query))
+                .thenReturn(Collections.singletonList(item));
+
+        String csv = new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper).exportCsv(query);
+
+        assertEquals("PAY-001", query.getPaymentOrderId());
+        assertEquals("RULE_HOME_WX", query.getRouteRule());
+        assertEquals("微信", query.getPaymentMethod());
+        assertEquals("channelCode", query.getSortField());
+        assertEquals("asc", query.getSortOrder());
+        assertEquals(9, query.getPageNo());
+        assertEquals(100, query.getPageSize());
+        assertTrue(csv.startsWith("\uFEFF路由记录号,支付单号,订单号,预付单号"));
+        assertTrue(csv.contains("\"张*\""));
+        assertTrue(csv.contains("\"10.20.*.*\""));
+        assertTrue(csv.contains("\"ORDER-****DEFG\""));
+        assertTrue(csv.contains("138****8000"));
+        assertTrue(csv.contains("\"amount>1000 => \"\"wx_h5\"\"\""));
+        assertTrue(csv.contains("\"12\""));
+        assertEquals("张三", item.getCustomerName());
+        verify(paymentRouteExecutionMapper).findAllForExport(query);
     }
 }

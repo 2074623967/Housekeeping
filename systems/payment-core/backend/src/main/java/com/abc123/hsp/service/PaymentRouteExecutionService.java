@@ -16,6 +16,11 @@ public interface PaymentRouteExecutionService {
     PageResultDTO<PaymentRouteExecutionListItemDTO> list(PaymentRouteExecutionQueryDTO query);
 
     /**
+     * 导出当前筛选条件下的支付路由执行结果。
+     */
+    String exportCsv(PaymentRouteExecutionQueryDTO query);
+
+    /**
      * 查询支付路由执行结果总览。
      */
     PaymentRouteExecutionOverviewDTO overview(PaymentRouteExecutionQueryDTO query);

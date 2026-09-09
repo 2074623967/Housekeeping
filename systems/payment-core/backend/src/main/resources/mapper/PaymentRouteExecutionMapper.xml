@@ -105,6 +105,54 @@
         <include refid="routeExecutionWhereClause" />
     </select>
 
+    <select id="findAllForExport" resultType="com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO">
+        SELECT prr.route_no AS routeNo,
+               prr.payment_order_id AS paymentOrderId,
+               po.order_no AS orderNo,
+               latest_pr.prepay_order_no AS prepayOrderNo,
+               po.customer_name AS customerName,
+               CONCAT('¥', FORMAT(po.amount, 2)) AS amount,
+               latest_pa.payment_method AS paymentMethod,
+               prr.channel_code AS channelCode,
+               prr.route_rule AS routeRule,
+               prr.route_result AS routeResult,
+               prr.ops_config_snapshot_version AS opsConfigSnapshotVersion,
+               CASE
+                   WHEN prr.route_result LIKE '%兜底%' THEN 'warn'
+                   WHEN prr.route_result LIKE '%线下%' THEN 'info'
+                   ELSE 'success'
+               END AS routeResultType,
+               latest_pa.terminal AS terminal,
+               latest_pa.client_ip AS clientIp,
+               latest_pa.idempotency_key AS idempotencyKey,
+               latest_pa.request_payload AS requestPayload,
+               latest_pa.response_payload AS responsePayload,
+               DATE_FORMAT(prr.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        <include refid="routeExecutionFromClause" />
+        <include refid="routeExecutionWhereClause" />
+        <choose>
+            <when test="query.sortField == 'channelCode'">
+                ORDER BY prr.channel_code
+            </when>
+            <when test="query.sortField == 'routeResult'">
+                ORDER BY prr.route_result
+            </when>
+            <otherwise>
+                ORDER BY prr.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC,
+                prr.id ASC
+            </when>
+            <otherwise>
+                DESC,
+                prr.id DESC
+            </otherwise>
+        </choose>
+    </select>
+
     <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO">
         SELECT COUNT(1) AS totalRouteCount,
                SUM(CASE

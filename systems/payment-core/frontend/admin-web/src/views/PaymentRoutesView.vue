@@ -158,6 +158,21 @@ function formatPayload(value) {
   return value || "暂无可展示报文";
 }
 
+function exportRoutes() {
+  const exportUrl = paymentRouteApi.buildExportUrl({
+    paymentOrderId: filters.value.paymentOrderId,
+    orderNo: filters.value.orderNo,
+    routeRule: filters.value.routeRule,
+    channelCode: filters.value.channelCode,
+    paymentMethod: filters.value.paymentMethod,
+    terminal: filters.value.terminal,
+    routeResult: filters.value.routeResult,
+    sortField: filters.value.sortField,
+    sortOrder: filters.value.sortOrder
+  });
+  window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
 onMounted(loadPaymentRoutes);
 </script>
 
@@ -168,7 +183,10 @@ onMounted(loadPaymentRoutes);
         <h2>支付路由执行结果</h2>
         <p>统一查看每笔支付命中的路由规则、落地渠道和请求上下文，支撑运营、研发和测试联合排障</p>
       </div>
-      <button class="button primary" @click="openPaymentConfig">查看路由配置</button>
+      <div class="table-inline-actions">
+        <button class="button secondary" @click="exportRoutes">导出路由</button>
+        <button class="button primary" @click="openPaymentConfig">查看路由配置</button>
+      </div>
     </div>
 
     <section class="card-grid">
@@ -205,7 +223,7 @@ onMounted(loadPaymentRoutes);
     <section class="panel overview-panel">
       <div class="section-title">
         <h3>路由风险总览</h3>
-        <span class="meta">路由健康、权重与表达式治理 V1.3 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
+        <span class="meta">路由排障与导出 V1.4 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
       </div>
       <div class="overview-grid">
         <article class="overview-card danger">
@@ -420,17 +438,20 @@ onMounted(loadPaymentRoutes);
 .detail-side {
   display: grid;
   align-self: start;
+  min-width: 0;
 }
 
 .detail-stack {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .detail-card {
@@ -482,5 +503,17 @@ onMounted(loadPaymentRoutes);
 
 .mono-text {
   font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+@media (max-width: 1200px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ops-row {
+    flex-direction: column;
+  }
 }
 </style>

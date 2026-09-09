@@ -6,6 +6,10 @@ import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -80,5 +84,36 @@ public class PaymentRouteExecutionController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRouteExecutionService.list(query));
+    }
+
+    /**
+     * 导出当前筛选条件下的支付路由执行结果。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(required = false) String paymentOrderId,
+            @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String routeRule,
+            @RequestParam(required = false) String channelCode,
+            @RequestParam(defaultValue = "全部") String paymentMethod,
+            @RequestParam(defaultValue = "全部") String terminal,
+            @RequestParam(defaultValue = "全部") String routeResult,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentRouteExecutionQueryDTO query = new PaymentRouteExecutionQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setRouteRule(routeRule);
+        query.setChannelCode(channelCode);
+        query.setPaymentMethod(paymentMethod);
+        query.setTerminal(terminal);
+        query.setRouteResult(routeResult);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        byte[] csvBytes = paymentRouteExecutionService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-routes.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 }

@@ -17,6 +17,12 @@ public interface PaymentRouteExecutionMapper {
     List<PaymentRouteExecutionListItemDTO> findAll(@Param("query") PaymentRouteExecutionQueryDTO query);
 
     /**
+     * 查询当前筛选条件下的全部支付路由执行结果，用于导出。
+     */
+    List<PaymentRouteExecutionListItemDTO> findAllForExport(
+            @Param("query") PaymentRouteExecutionQueryDTO query);
+
+    /**
      * 查询支付路由执行结果总览。
      */
     PaymentRouteExecutionOverviewDTO findOverview(@Param("query") PaymentRouteExecutionQueryDTO query);

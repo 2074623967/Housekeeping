@@ -402,6 +402,30 @@ export const paymentRouteApi = {
       pageSize: String(pageSize)
     });
     return request(`/api/payment-routes?${params.toString()}`);
+  },
+  buildExportUrl: ({
+    paymentOrderId = "",
+    orderNo = "",
+    routeRule = "",
+    channelCode = "",
+    paymentMethod = "全部",
+    terminal = "全部",
+    routeResult = "全部",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      paymentOrderId,
+      orderNo,
+      routeRule,
+      channelCode,
+      paymentMethod,
+      terminal,
+      routeResult,
+      sortField,
+      sortOrder
+    });
+    return `/api/payment-routes/export?${params.toString()}`;
   }
 };
 
