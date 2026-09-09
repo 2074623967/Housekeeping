@@ -22,6 +22,8 @@ const channelActionRequester = ref("");
 const channelActionReason = ref("");
 const channelReviewer = ref("");
 const channelReviewComment = ref("");
+const editingChannelCode = ref("");
+const channelForm = ref(createChannelForm());
 const editingRouteRuleCode = ref("");
 const versionRuleCode = ref("");
 const routeRuleVersions = ref([]);
@@ -106,6 +108,31 @@ function createProtocolForm() {
     protocolBody: "",
     priority: 99,
     enabled: true,
+    changeReason: "",
+    requester: ""
+  };
+}
+
+function createChannelForm() {
+  return {
+    channelCode: "",
+    channelName: "",
+    paymentMethod: "",
+    merchantNo: "",
+    merchantAppId: "",
+    callbackSecret: "",
+    callbackSignAlgorithm: "HMAC-SHA256",
+    callbackPublicKey: "",
+    callbackNotifyUrl: "",
+    certificateProfile: "",
+    notifySignWindowSec: 300,
+    refundWindowDays: 180,
+    riskControlTag: "",
+    sceneScope: "",
+    enabled: true,
+    dailyLimit: 0,
+    priority: 0,
+    routeWeight: 100,
     changeReason: "",
     requester: ""
   };
@@ -230,6 +257,74 @@ async function submitChannelStatusReview(channel) {
     actionMessage.value = `渠道 ${channel.channelCode} 的${enabled ? "启用" : "停用"}申请已提交，运行态尚未改变。`;
   } catch (error) {
     actionMessage.value = `渠道启停申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+function startCreateChannel() {
+  editingChannelCode.value = "";
+  channelForm.value = createChannelForm();
+  actionMessage.value = "";
+}
+
+function startEditChannel(channel) {
+  editingChannelCode.value = channel.channelCode;
+  channelForm.value = {
+    channelCode: channel.channelCode,
+    channelName: channel.channelName,
+    paymentMethod: channel.paymentMethod,
+    merchantNo: channel.merchantNo,
+    merchantAppId: channel.merchantAppId,
+    callbackSecret: "",
+    callbackSignAlgorithm: channel.callbackSignAlgorithm,
+    callbackPublicKey: "",
+    callbackNotifyUrl: channel.callbackNotifyUrl,
+    certificateProfile: channel.certificateProfile,
+    notifySignWindowSec: channel.notifySignWindowSec,
+    refundWindowDays: channel.refundWindowDays,
+    riskControlTag: channel.riskControlTag,
+    sceneScope: channel.sceneScope,
+    enabled: channel.status === "ENABLED",
+    dailyLimit: channel.dailyLimitValue,
+    priority: channel.priority,
+    routeWeight: channel.routeWeight,
+    changeReason: "",
+    requester: ""
+  };
+  actionMessage.value = `正在编辑渠道 ${channel.channelCode}；密钥或公钥留空表示保持现值。`;
+}
+
+async function submitChannelForm() {
+  if (!channelForm.value.requester || !channelForm.value.changeReason) {
+    actionMessage.value = "支付渠道提交复核失败：请填写申请人声明和申请原因。";
+    return;
+  }
+  if (!editingChannelCode.value && !channelForm.value.callbackSecret) {
+    actionMessage.value = "支付渠道提交复核失败：新增渠道必须填写回调验签密钥。";
+    return;
+  }
+  const channelCode = editingChannelCode.value || channelForm.value.channelCode;
+  activeConfigCode.value = channelCode;
+  actionMessage.value = "";
+  try {
+    const candidate = {
+      ...channelForm.value,
+      notifySignWindowSec: Number(channelForm.value.notifySignWindowSec),
+      refundWindowDays: Number(channelForm.value.refundWindowDays),
+      dailyLimit: Number(channelForm.value.dailyLimit),
+      priority: Number(channelForm.value.priority),
+      routeWeight: Number(channelForm.value.routeWeight)
+    };
+    delete candidate.requester;
+    channelReviews.value = await paymentConfigApi.submitChannelReview({
+      requester: channelForm.value.requester,
+      candidate
+    });
+    startCreateChannel();
+    actionMessage.value = `支付渠道 ${channelCode} 已提交复核，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付渠道提交复核失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1139,7 +1234,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.14</span>
+        <span class="badge info">配置中心 V1.15</span>
       </div>
     </div>
 
@@ -1214,6 +1309,7 @@ function exportGovernanceSnapshot(section = "ALL") {
           </div>
           <div class="toolbar-actions">
             <button class="button secondary" @click="exportGovernanceSnapshot('CHANNELS')">导出渠道</button>
+            <button class="button secondary" @click="startCreateChannel">新增渠道</button>
             <button class="button secondary" @click="loadOverview">刷新</button>
           </div>
         </div>
@@ -1221,8 +1317,111 @@ function exportGovernanceSnapshot(section = "ALL") {
         <div class="panel" style="margin-bottom: 16px;">
           <div class="section-title">
             <div>
-              <h3>支付渠道状态变更复核</h3>
-              <p class="meta">启停先提交候选，异人声明批准且完整渠道基线有效后才更新运行态</p>
+              <h3>{{ editingChannelCode ? "编辑支付渠道" : "新增支付渠道" }}</h3>
+              <p class="meta">完整候选经异人声明复核通过后才写入运行态；密钥不会出现在复核列表</p>
+            </div>
+          </div>
+          <div class="filter-grid">
+            <label>
+              渠道编码
+              <input v-model.trim="channelForm.channelCode" :disabled="Boolean(editingChannelCode)" maxlength="64" />
+            </label>
+            <label>
+              渠道名称
+              <input v-model.trim="channelForm.channelName" maxlength="128" />
+            </label>
+            <label>
+              支付方式
+              <input v-model.trim="channelForm.paymentMethod" maxlength="64" />
+            </label>
+            <label>
+              商户号
+              <input v-model.trim="channelForm.merchantNo" maxlength="128" />
+            </label>
+            <label>
+              应用标识
+              <input v-model.trim="channelForm.merchantAppId" maxlength="128" />
+            </label>
+            <label>
+              签名算法
+              <select v-model="channelForm.callbackSignAlgorithm">
+                <option value="HMAC-SHA256">HMAC-SHA256</option>
+                <option value="RSA2">RSA2</option>
+              </select>
+            </label>
+            <label>
+              回调验签密钥
+              <input v-model.trim="channelForm.callbackSecret" type="password" maxlength="256" :placeholder="editingChannelCode ? '留空保持现值' : '新增渠道必填'" />
+            </label>
+            <label class="wide-field">
+              RSA2 验签公钥
+              <textarea v-model.trim="channelForm.callbackPublicKey" rows="3" :placeholder="editingChannelCode ? '留空保持现值' : 'RSA2 算法必填'" />
+            </label>
+            <label class="wide-field">
+              回调通知地址
+              <input v-model.trim="channelForm.callbackNotifyUrl" maxlength="256" placeholder="https://..." />
+            </label>
+            <label>
+              证书档案
+              <input v-model.trim="channelForm.certificateProfile" maxlength="128" />
+            </label>
+            <label>
+              验签时间窗（秒）
+              <input v-model.number="channelForm.notifySignWindowSec" type="number" min="1" />
+            </label>
+            <label>
+              原路退款时效（天）
+              <input v-model.number="channelForm.refundWindowDays" type="number" min="1" />
+            </label>
+            <label>
+              风控标签
+              <input v-model.trim="channelForm.riskControlTag" maxlength="128" />
+            </label>
+            <label>
+              适用场景
+              <input v-model.trim="channelForm.sceneScope" maxlength="128" />
+            </label>
+            <label>
+              单日限额
+              <input v-model.number="channelForm.dailyLimit" type="number" min="0" step="0.01" />
+            </label>
+            <label>
+              优先级
+              <input v-model.number="channelForm.priority" type="number" min="0" />
+            </label>
+            <label>
+              路由权重
+              <input v-model.number="channelForm.routeWeight" type="number" min="0" max="100" />
+            </label>
+            <label>
+              启用状态
+              <select v-model="channelForm.enabled">
+                <option :value="true">启用</option>
+                <option :value="false">停用</option>
+              </select>
+            </label>
+            <label>
+              申请人声明
+              <input v-model.trim="channelForm.requester" maxlength="64" />
+            </label>
+            <label class="wide-field">
+              申请原因
+              <input v-model.trim="channelForm.changeReason" maxlength="255" />
+            </label>
+          </div>
+          <div style="display: flex; gap: 12px; margin-top: 16px;">
+            <button class="button primary" :disabled="activeConfigCode === (editingChannelCode || channelForm.channelCode)" @click="submitChannelForm">
+              {{ editingChannelCode ? "提交修改复核" : "提交新增复核" }}
+            </button>
+            <button class="button secondary" @click="startCreateChannel">重置表单</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom: 16px;">
+          <div class="section-title">
+            <div>
+              <h3>支付渠道配置变更复核</h3>
+              <p class="meta">新增、编辑和启停先提交候选，异人声明批准且渠道基线有效后才更新运行态</p>
             </div>
             <button class="button secondary" :disabled="isChannelReviewLoading" @click="loadChannelReviews">
               {{ isChannelReviewLoading ? "加载中..." : "刷新申请" }}
@@ -1250,12 +1449,13 @@ function exportGovernanceSnapshot(section = "ALL") {
             支付渠道复核申请加载失败：{{ channelReviewError }}
           </div>
           <div v-if="isChannelReviewLoading" class="state-box">支付渠道复核申请加载中...</div>
-          <div v-else-if="!channelReviews.length" class="state-box">当前暂无支付渠道状态复核申请</div>
+          <div v-else-if="!channelReviews.length" class="state-box">当前暂无支付渠道配置复核申请</div>
           <div v-else class="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>申请号</th>
+                  <th>操作</th>
                   <th>渠道</th>
                   <th>候选状态</th>
                   <th>申请声明</th>
@@ -1268,9 +1468,12 @@ function exportGovernanceSnapshot(section = "ALL") {
               <tbody>
                 <tr v-for="review in channelReviews" :key="review.requestNo">
                   <td>{{ review.requestNo }}</td>
+                  <td>{{ review.operationType }}</td>
                   <td>
                     {{ review.channelCode }} / {{ review.channelName }}
-                    <div class="muted-text">{{ review.paymentMethod }} / 基线 {{ review.baseFingerprint?.slice(0, 12) }}</div>
+                    <div class="muted-text">{{ review.paymentMethod }} / {{ review.merchantNo }}</div>
+                    <div class="muted-text">密钥 {{ review.callbackSecretMasked }} / 公钥 {{ review.callbackPublicKeyConfigured ? "已配置" : "未配置" }}</div>
+                    <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
                   </td>
                   <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
                   <td>
@@ -1357,6 +1560,13 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <td><span :class="['badge', channel.statusType]">{{ channel.status }}</span></td>
                 <td>{{ channel.updatedAt }}</td>
                 <td>
+                  <button
+                    class="link-button"
+                    :disabled="activeConfigCode === channel.channelCode"
+                    @click="startEditChannel(channel)"
+                  >
+                    编辑
+                  </button>
                   <button
                     class="link-button"
                     :disabled="activeConfigCode === channel.channelCode"

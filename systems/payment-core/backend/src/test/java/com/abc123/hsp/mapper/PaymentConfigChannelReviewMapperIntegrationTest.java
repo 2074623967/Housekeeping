@@ -54,6 +54,12 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
             PaymentChannelConfigEntity channel = mapper.findChannelByCodeForUpdate("wx_h5");
             assertEquals("MCH-WX-001", channel.getMerchantNo());
             assertEquals("secret", channel.getCallbackSecret());
+            channel.setChannelCode("new_h5");
+            channel.setChannelName("新增渠道");
+            assertEquals(1, mapper.insertChannel(channel));
+            channel.setMerchantNo("MCH-NEW-002");
+            assertEquals(1, mapper.updateChannel(channel));
+            assertEquals("MCH-NEW-002", mapper.findChannelByCodeForUpdate("new_h5").getMerchantNo());
 
             assertEquals(1, mapper.insertChannelReview(review("CSR-TEST-001")));
             assertEquals("CSR-TEST-001",
@@ -76,6 +82,8 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     .orElseThrow(AssertionError::new);
             assertEquals("APPROVED", completed.getReviewStatus());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
+            assertEquals("已配置", completed.getCallbackSecretMasked());
+            assertEquals(Boolean.TRUE, completed.getCallbackPublicKeyConfigured());
             assertEquals(2, reviews.size());
         }
     }
@@ -84,8 +92,23 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo(requestNo);
         review.setChannelCode("wx_h5");
+        review.setOperationType("STATUS_CHANGE");
         review.setChannelName("微信H5支付");
         review.setPaymentMethod("微信支付");
+        review.setMerchantNo("MCH-WX-001");
+        review.setMerchantAppId("APP-WX-001");
+        review.setCallbackSecret("secret");
+        review.setCallbackSignAlgorithm("HMAC-SHA256");
+        review.setCallbackPublicKey("public-key");
+        review.setCallbackNotifyUrl("https://example.test/notify");
+        review.setCertificateProfile("CERT-WX");
+        review.setNotifySignWindowSec(Integer.valueOf(300));
+        review.setRefundWindowDays(Integer.valueOf(180));
+        review.setRiskControlTag("实名校验");
+        review.setSceneScope("家政服务");
+        review.setDailyLimit(new java.math.BigDecimal("500000.00"));
+        review.setPriority(Integer.valueOf(1));
+        review.setRouteWeight(Integer.valueOf(100));
         review.setPendingChannelCode("wx_h5");
         review.setBaseFingerprint(repeat("a", 64));
         review.setCandidateStatus("DISABLED");
@@ -118,9 +141,17 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + "priority INT NOT NULL, route_weight INT NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_channel_review ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "channel_code VARCHAR(64) NOT NULL, channel_name VARCHAR(128) NOT NULL, "
-                    + "payment_method VARCHAR(64) NOT NULL, pending_channel_code VARCHAR(64) UNIQUE, "
-                    + "base_fingerprint VARCHAR(64) NOT NULL, candidate_status VARCHAR(32) NOT NULL, "
+                    + "channel_code VARCHAR(64) NOT NULL, operation_type VARCHAR(32) NOT NULL, "
+                    + "channel_name VARCHAR(128) NOT NULL, payment_method VARCHAR(64) NOT NULL, "
+                    + "merchant_no VARCHAR(128) NOT NULL, merchant_app_id VARCHAR(128) NOT NULL, "
+                    + "callback_secret VARCHAR(256) NOT NULL, callback_sign_algorithm VARCHAR(32) NOT NULL, "
+                    + "callback_public_key CLOB, callback_notify_url VARCHAR(256) NOT NULL, "
+                    + "certificate_profile VARCHAR(128) NOT NULL, notify_sign_window_sec INT NOT NULL, "
+                    + "refund_window_days INT NOT NULL, risk_control_tag VARCHAR(128) NOT NULL, "
+                    + "scene_scope VARCHAR(128) NOT NULL, daily_limit DECIMAL(18,2) NOT NULL, "
+                    + "priority INT NOT NULL, route_weight INT NOT NULL, "
+                    + "pending_channel_code VARCHAR(64) UNIQUE, base_fingerprint VARCHAR(64), "
+                    + "candidate_status VARCHAR(32) NOT NULL, "
                     + "candidate_status_type VARCHAR(32) NOT NULL, requester VARCHAR(64) NOT NULL, "
                     + "request_reason VARCHAR(255) NOT NULL, review_status VARCHAR(32) NOT NULL, "
                     + "review_status_type VARCHAR(32) NOT NULL, reviewer VARCHAR(64), "

@@ -46,6 +46,12 @@ public interface PaymentConfigMapper {
     /** 按渠道编码加锁查询完整运行配置。 */
     PaymentChannelConfigEntity findChannelByCodeForUpdate(@Param("channelCode") String channelCode);
 
+    /** 新增支付渠道运行配置。 */
+    int insertChannel(PaymentChannelConfigEntity entity);
+
+    /** 更新支付渠道完整运行配置。 */
+    int updateChannel(PaymentChannelConfigEntity entity);
+
     /** 查询支付渠道状态变更复核申请。 */
     List<PaymentChannelReviewDTO> findChannelReviews();
 

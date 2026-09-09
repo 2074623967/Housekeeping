@@ -3,6 +3,7 @@ package com.abc123.hsp.controller;
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
@@ -84,6 +85,13 @@ public class PaymentConfigController {
     public ApiResponse<List<PaymentChannelReviewDTO>> submitChannelStatusReview(
             @RequestBody PaymentChannelStatusReviewRequestDTO request) {
         return ApiResponse.success(paymentConfigService.submitChannelStatusReview(request));
+    }
+
+    /** 提交支付渠道新增或编辑完整候选进入复核。 */
+    @PostMapping("/channels/reviews")
+    public ApiResponse<List<PaymentChannelReviewDTO>> submitChannelReview(
+            @RequestBody PaymentChannelReviewSubmitRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitChannelReview(request));
     }
 
     /** 查询支付渠道状态变更复核申请。 */

@@ -3,8 +3,10 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
@@ -59,6 +61,8 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import java.io.IOException;
 import java.io.StringReader;
+import java.math.BigDecimal;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -168,9 +172,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
-        review.setChannelCode(current.getChannelCode());
-        review.setChannelName(current.getChannelName());
-        review.setPaymentMethod(current.getPaymentMethod());
+        copyChannelToReview(current, review);
+        review.setOperationType("STATUS_CHANGE");
         review.setPendingChannelCode(channelCode);
         review.setBaseFingerprint(fingerprintChannel(current));
         review.setCandidateStatus(candidateStatus);
@@ -188,6 +191,35 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     @Override
+    @Transactional
+    public List<PaymentChannelReviewDTO> submitChannelReview(PaymentChannelReviewSubmitRequestDTO request) {
+        if (request == null || request.getCandidate() == null) {
+            throw new IllegalArgumentException("支付渠道候选快照不能为空");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String channelCode = requireImportText(
+                request.getCandidate().getChannelCode(), "渠道编码不能为空", 64).toLowerCase(Locale.ROOT);
+        String reason = requireReviewText(request.getCandidate().getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingChannelReviewForUpdate(channelCode) != null) {
+            throw new IllegalArgumentException("该支付渠道已有待复核申请");
+        }
+        PaymentChannelConfigEntity current = paymentConfigMapper.findChannelByCodeForUpdate(channelCode);
+        PaymentChannelConfigEntity candidate = buildChannelEntity(request.getCandidate(), current, channelCode);
+        PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
+        review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
+        copyChannelToReview(candidate, review);
+        review.setOperationType(current == null ? "CREATE" : "UPDATE");
+        review.setPendingChannelCode(channelCode);
+        review.setBaseFingerprint(current == null ? null : fingerprintChannel(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertChannelReview(review);
+        return paymentConfigMapper.findChannelReviews();
+    }
+
+    @Override
     public List<PaymentChannelReviewDTO> listChannelReviews() {
         return paymentConfigMapper.findChannelReviews();
     }
@@ -200,18 +232,32 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewer = requireDistinctChannelReviewer(review, request);
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        boolean createOperation = "CREATE".equals(review.getOperationType());
+        if (!createOperation
+                && !"UPDATE".equals(review.getOperationType())
+                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+            throw new IllegalArgumentException("支付渠道复核操作类型不支持");
+        }
         if (!STATUS_ENABLED.equals(review.getCandidateStatus())
                 && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
             throw new IllegalArgumentException("支付渠道候选状态不支持");
         }
         PaymentChannelConfigEntity current = paymentConfigMapper.findChannelByCodeForUpdate(review.getChannelCode());
-        if (current == null || !review.getBaseFingerprint().equals(fingerprintChannel(current))) {
+        if (createOperation) {
+            if (current != null) {
+                throw new IllegalArgumentException("支付渠道已存在，复核申请基线已失效");
+            }
+        } else if (current == null || review.getBaseFingerprint() == null
+                || !review.getBaseFingerprint().equals(fingerprintChannel(current))) {
             throw new IllegalArgumentException("支付渠道配置已变化，请重新提交复核申请");
         }
-        int affectedRows = paymentConfigMapper.updateChannelStatus(
-                review.getChannelCode(), review.getCandidateStatus(), review.getCandidateStatusType());
+        PaymentChannelConfigEntity candidate = buildChannelEntity(toChannelUpsertRequest(review), null,
+                review.getChannelCode());
+        int affectedRows = createOperation
+                ? paymentConfigMapper.insertChannel(candidate)
+                : paymentConfigMapper.updateChannel(candidate);
         if (affectedRows == 0) {
-            throw new IllegalArgumentException("支付渠道配置不存在");
+            throw new IllegalArgumentException(createOperation ? "支付渠道新增失败" : "支付渠道配置不存在");
         }
         completeChannelReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
         return paymentConfigMapper.findChannelReviews();
@@ -2336,6 +2382,155 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付渠道复核状态已变化，请刷新后重试");
         }
+    }
+
+    private void insertChannelReview(PaymentChannelReviewEntity review) {
+        try {
+            paymentConfigMapper.insertChannelReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该支付渠道已有待复核申请", exception);
+        }
+    }
+
+    private PaymentChannelConfigEntity buildChannelEntity(PaymentChannelUpsertRequestDTO request,
+                                                            PaymentChannelConfigEntity current,
+                                                            String channelCode) {
+        if (request.getEnabled() == null) {
+            throw new IllegalArgumentException("支付渠道启停状态不能为空");
+        }
+        PaymentChannelConfigEntity entity = new PaymentChannelConfigEntity();
+        entity.setChannelCode(channelCode);
+        entity.setChannelName(requireImportText(request.getChannelName(), "渠道名称不能为空", 128));
+        entity.setPaymentMethod(requireImportText(request.getPaymentMethod(), "支付方式不能为空", 64));
+        entity.setMerchantNo(requireImportText(request.getMerchantNo(), "渠道商户号不能为空", 128));
+        entity.setMerchantAppId(requireImportText(request.getMerchantAppId(), "商户应用标识不能为空", 128));
+        String callbackSecret = optionalChannelText(request.getCallbackSecret(), 256, "回调验签密钥");
+        if (callbackSecret == null && current != null) {
+            callbackSecret = current.getCallbackSecret();
+        }
+        if (!StringUtils.hasText(callbackSecret)) {
+            throw new IllegalArgumentException("回调验签密钥不能为空");
+        }
+        entity.setCallbackSecret(callbackSecret);
+        String algorithm = requireImportText(
+                request.getCallbackSignAlgorithm(), "回调签名算法不能为空", 32).toUpperCase(Locale.ROOT);
+        if (!"HMAC-SHA256".equals(algorithm) && !"RSA2".equals(algorithm)) {
+            throw new IllegalArgumentException("回调签名算法仅支持 HMAC-SHA256/RSA2");
+        }
+        entity.setCallbackSignAlgorithm(algorithm);
+        String publicKey = optionalChannelText(request.getCallbackPublicKey(), 8192, "回调验签公钥");
+        if (publicKey == null && current != null) {
+            publicKey = current.getCallbackPublicKey();
+        }
+        if ("RSA2".equals(algorithm) && !StringUtils.hasText(publicKey)) {
+            throw new IllegalArgumentException("RSA2 回调验签公钥不能为空");
+        }
+        entity.setCallbackPublicKey(publicKey);
+        entity.setCallbackNotifyUrl(requireHttpsUrl(request.getCallbackNotifyUrl()));
+        entity.setCertificateProfile(requireImportText(
+                request.getCertificateProfile(), "证书档案不能为空", 128));
+        entity.setNotifySignWindowSec(requirePositiveInteger(
+                request.getNotifySignWindowSec(), "回调验签时间窗必须大于0"));
+        entity.setRefundWindowDays(requirePositiveInteger(
+                request.getRefundWindowDays(), "原路退款时效必须大于0"));
+        entity.setRiskControlTag(requireImportText(request.getRiskControlTag(), "风控标签不能为空", 128));
+        entity.setSceneScope(requireImportText(request.getSceneScope(), "适用场景不能为空", 128));
+        if (request.getDailyLimit() == null || request.getDailyLimit().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("单日限额不能小于0");
+        }
+        entity.setDailyLimit(request.getDailyLimit());
+        entity.setPriority(requireNonNegativeInteger(request.getPriority(), "渠道优先级不能小于0"));
+        Integer routeWeight = requireNonNegativeInteger(request.getRouteWeight(), "渠道路由权重不能小于0");
+        if (routeWeight.intValue() > 100) {
+            throw new IllegalArgumentException("渠道路由权重不能大于100");
+        }
+        entity.setRouteWeight(routeWeight);
+        entity.setStatus(resolveStatus(request.getEnabled()));
+        entity.setStatusType(resolveStatusType(request.getEnabled()));
+        return entity;
+    }
+
+    private void copyChannelToReview(PaymentChannelConfigEntity source, PaymentChannelReviewEntity target) {
+        target.setChannelCode(source.getChannelCode());
+        target.setChannelName(source.getChannelName());
+        target.setPaymentMethod(source.getPaymentMethod());
+        target.setMerchantNo(source.getMerchantNo());
+        target.setMerchantAppId(source.getMerchantAppId());
+        target.setCallbackSecret(source.getCallbackSecret());
+        target.setCallbackSignAlgorithm(source.getCallbackSignAlgorithm());
+        target.setCallbackPublicKey(source.getCallbackPublicKey());
+        target.setCallbackNotifyUrl(source.getCallbackNotifyUrl());
+        target.setCertificateProfile(source.getCertificateProfile());
+        target.setNotifySignWindowSec(source.getNotifySignWindowSec());
+        target.setRefundWindowDays(source.getRefundWindowDays());
+        target.setRiskControlTag(source.getRiskControlTag());
+        target.setSceneScope(source.getSceneScope());
+        target.setCandidateStatus(source.getStatus());
+        target.setCandidateStatusType(source.getStatusType());
+        target.setDailyLimit(source.getDailyLimit());
+        target.setPriority(source.getPriority());
+        target.setRouteWeight(source.getRouteWeight());
+    }
+
+    private PaymentChannelUpsertRequestDTO toChannelUpsertRequest(PaymentChannelReviewEntity review) {
+        PaymentChannelUpsertRequestDTO request = new PaymentChannelUpsertRequestDTO();
+        request.setChannelCode(review.getChannelCode());
+        request.setChannelName(review.getChannelName());
+        request.setPaymentMethod(review.getPaymentMethod());
+        request.setMerchantNo(review.getMerchantNo());
+        request.setMerchantAppId(review.getMerchantAppId());
+        request.setCallbackSecret(review.getCallbackSecret());
+        request.setCallbackSignAlgorithm(review.getCallbackSignAlgorithm());
+        request.setCallbackPublicKey(review.getCallbackPublicKey());
+        request.setCallbackNotifyUrl(review.getCallbackNotifyUrl());
+        request.setCertificateProfile(review.getCertificateProfile());
+        request.setNotifySignWindowSec(review.getNotifySignWindowSec());
+        request.setRefundWindowDays(review.getRefundWindowDays());
+        request.setRiskControlTag(review.getRiskControlTag());
+        request.setSceneScope(review.getSceneScope());
+        request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getCandidateStatus())));
+        request.setDailyLimit(review.getDailyLimit());
+        request.setPriority(review.getPriority());
+        request.setRouteWeight(review.getRouteWeight());
+        return request;
+    }
+
+    private String optionalChannelText(String value, int maxLength, String fieldName) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private Integer requirePositiveInteger(Integer value, String message) {
+        if (value == null || value.intValue() <= 0) {
+            throw new IllegalArgumentException(message);
+        }
+        return value;
+    }
+
+    private Integer requireNonNegativeInteger(Integer value, String message) {
+        if (value == null || value.intValue() < 0) {
+            throw new IllegalArgumentException(message);
+        }
+        return value;
+    }
+
+    private String requireHttpsUrl(String value) {
+        String normalized = requireImportText(value, "回调通知地址不能为空", 256);
+        try {
+            URI uri = URI.create(normalized);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || !StringUtils.hasText(uri.getHost())) {
+                throw new IllegalArgumentException("回调通知地址必须是有效的 HTTPS 地址");
+            }
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("回调通知地址必须是有效的 HTTPS 地址", exception);
+        }
+        return normalized;
     }
 
     private String fingerprintChannel(PaymentChannelConfigEntity channel) {

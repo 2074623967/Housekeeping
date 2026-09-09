@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
@@ -50,6 +51,9 @@ public interface PaymentConfigService {
 
     /** 提交支付渠道启停候选，不改变运行态。 */
     List<PaymentChannelReviewDTO> submitChannelStatusReview(PaymentChannelStatusReviewRequestDTO request);
+
+    /** 提交支付渠道新增或编辑完整候选，不改变运行态。 */
+    List<PaymentChannelReviewDTO> submitChannelReview(PaymentChannelReviewSubmitRequestDTO request);
 
     /** 查询支付渠道状态变更复核申请。 */
     List<PaymentChannelReviewDTO> listChannelReviews();

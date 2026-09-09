@@ -81,10 +81,25 @@ CREATE TABLE t_payment_channel_review (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码快照',
+    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE',
     channel_name VARCHAR(128) NOT NULL COMMENT '渠道名称快照',
     payment_method VARCHAR(64) NOT NULL COMMENT '支付方式快照',
+    merchant_no VARCHAR(128) NOT NULL COMMENT '渠道商户号候选',
+    merchant_app_id VARCHAR(128) NOT NULL COMMENT '商户应用标识候选',
+    callback_secret VARCHAR(256) NOT NULL COMMENT '回调验签密钥候选，仅服务端复核使用',
+    callback_sign_algorithm VARCHAR(32) NOT NULL COMMENT '回调签名算法候选',
+    callback_public_key TEXT NULL COMMENT '回调验签公钥候选，仅服务端复核使用',
+    callback_notify_url VARCHAR(256) NOT NULL COMMENT '回调通知地址候选',
+    certificate_profile VARCHAR(128) NOT NULL COMMENT '证书档案候选',
+    notify_sign_window_sec INT NOT NULL COMMENT '回调验签时间窗候选',
+    refund_window_days INT NOT NULL COMMENT '原路退款时效候选',
+    risk_control_tag VARCHAR(128) NOT NULL COMMENT '风控标签候选',
+    scene_scope VARCHAR(128) NOT NULL COMMENT '适用场景候选',
+    daily_limit DECIMAL(18, 2) NOT NULL COMMENT '单日限额候选',
+    priority INT NOT NULL COMMENT '优先级候选',
+    route_weight INT NOT NULL COMMENT '路由权重候选',
     pending_channel_code VARCHAR(64) DEFAULT NULL COMMENT '渠道唯一待办占位，完成后置空',
-    base_fingerprint VARCHAR(64) NOT NULL COMMENT '提交时完整渠道配置基线指纹',
+    base_fingerprint VARCHAR(64) DEFAULT NULL COMMENT '提交时完整渠道配置基线指纹，新增时为空',
     candidate_status VARCHAR(32) NOT NULL COMMENT '候选 ENABLED/DISABLED 状态',
     candidate_status_type VARCHAR(32) NOT NULL COMMENT '候选状态样式',
     requester VARCHAR(64) NOT NULL COMMENT '申请人自声明',
@@ -101,7 +116,7 @@ CREATE TABLE t_payment_channel_review (
     UNIQUE KEY uk_channel_review_pending (pending_channel_code),
     KEY idx_channel_review_status (review_status, created_at),
     KEY idx_channel_review_channel (channel_code, review_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道状态变更复核申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道配置变更复核申请表';
 
 CREATE TABLE t_payment_callback_nonce (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

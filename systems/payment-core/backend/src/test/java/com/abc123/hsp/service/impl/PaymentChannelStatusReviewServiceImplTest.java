@@ -10,7 +10,9 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelUpsertRequestDTO;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
@@ -51,6 +53,7 @@ class PaymentChannelStatusReviewServiceImplTest {
         verify(paymentConfigMapper).insertChannelReview(captor.capture());
         assertEquals("wx_h5", captor.getValue().getPendingChannelCode());
         assertEquals("DISABLED", captor.getValue().getCandidateStatus());
+        assertEquals("STATUS_CHANGE", captor.getValue().getOperationType());
         assertEquals(64, captor.getValue().getBaseFingerprint().length());
         verify(paymentConfigMapper, never()).updateChannelStatus(any(), any(), any());
     }
@@ -102,7 +105,7 @@ class PaymentChannelStatusReviewServiceImplTest {
         PaymentChannelReviewEntity review = review("PENDING_REVIEW", "DISABLED", fingerprint(current));
         when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
-        when(paymentConfigMapper.updateChannelStatus("wx_h5", "DISABLED", "danger")).thenReturn(1);
+        when(paymentConfigMapper.updateChannel(any(PaymentChannelConfigEntity.class))).thenReturn(1);
         when(paymentConfigMapper.completeChannelReview(any(), any(), any(), any(), any())).thenReturn(1);
         when(paymentConfigMapper.findChannelReviews())
                 .thenReturn(Collections.singletonList(new PaymentChannelReviewDTO()));
@@ -110,7 +113,10 @@ class PaymentChannelStatusReviewServiceImplTest {
         assertEquals(1, new PaymentConfigServiceImpl(paymentConfigMapper).approveChannelReview(
                 "CSR-001", action("checker-b", "确认停用")).size());
 
-        verify(paymentConfigMapper).updateChannelStatus("wx_h5", "DISABLED", "danger");
+        verify(paymentConfigMapper).updateChannel(org.mockito.ArgumentMatchers.argThat(
+                candidate -> "wx_h5".equals(candidate.getChannelCode())
+                        && "DISABLED".equals(candidate.getStatus())
+                        && "MCH-001".equals(candidate.getMerchantNo())));
         verify(paymentConfigMapper).completeChannelReview(
                 "CSR-001", "APPROVED", "success", "checker-b", "确认停用");
     }
@@ -166,6 +172,132 @@ class PaymentChannelStatusReviewServiceImplTest {
         verify(paymentConfigMapper, never()).updateChannelStatus(any(), any(), any());
     }
 
+    @Test
+    void shouldSubmitCreateCandidateWithoutPublishingSecrets() {
+        when(paymentConfigMapper.findChannelReviews())
+                .thenReturn(Collections.singletonList(new PaymentChannelReviewDTO()));
+
+        List<PaymentChannelReviewDTO> reviews = new PaymentConfigServiceImpl(paymentConfigMapper)
+                .submitChannelReview(reviewRequest(channelRequest("NEW_H5", "secret-new")));
+
+        assertEquals(1, reviews.size());
+        verify(paymentConfigMapper).insertChannelReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "new_h5".equals(review.getChannelCode())
+                        && "CREATE".equals(review.getOperationType())
+                        && review.getBaseFingerprint() == null
+                        && "secret-new".equals(review.getCallbackSecret())));
+        verify(paymentConfigMapper, never()).insertChannel(any());
+        verify(paymentConfigMapper, never()).updateChannel(any());
+    }
+
+    @Test
+    void shouldPreserveExistingSecretWhenSubmittingUpdate() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
+        PaymentChannelUpsertRequestDTO candidate = channelRequest("WX_H5", " ");
+        candidate.setChannelName("微信 H5 支付新名称");
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).submitChannelReview(reviewRequest(candidate));
+
+        verify(paymentConfigMapper).insertChannelReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "UPDATE".equals(review.getOperationType())
+                        && "secret".equals(review.getCallbackSecret())
+                        && "微信 H5 支付新名称".equals(review.getChannelName())
+                        && review.getBaseFingerprint() != null));
+        verify(paymentConfigMapper, never()).updateChannel(any());
+    }
+
+    @Test
+    void shouldApproveCreateCandidateAfterRevalidatingFields() {
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", null);
+        review.setOperationType("CREATE");
+        review.setChannelCode("new_h5");
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        when(paymentConfigMapper.insertChannel(any(PaymentChannelConfigEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.completeChannelReview(any(), any(), any(), any(), any())).thenReturn(1);
+        when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveChannelReview(
+                "CSR-001", action("checker-b", "确认新增"));
+
+        verify(paymentConfigMapper).insertChannel(org.mockito.ArgumentMatchers.argThat(
+                candidate -> "new_h5".equals(candidate.getChannelCode())
+                        && "ENABLED".equals(candidate.getStatus())
+                        && "secret".equals(candidate.getCallbackSecret())));
+        verify(paymentConfigMapper, never()).updateChannel(any());
+    }
+
+    @Test
+    void shouldApproveUpdateCandidateOnlyWhenBaselineStillMatches() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", fingerprint(current));
+        review.setOperationType("UPDATE");
+        review.setMerchantNo("MCH-UPDATED");
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.updateChannel(any(PaymentChannelConfigEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.completeChannelReview(any(), any(), any(), any(), any())).thenReturn(1);
+        when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveChannelReview(
+                "CSR-001", action("checker-b", "确认修改"));
+
+        verify(paymentConfigMapper).updateChannel(org.mockito.ArgumentMatchers.argThat(
+                candidate -> "MCH-UPDATED".equals(candidate.getMerchantNo())
+                        && "secret".equals(candidate.getCallbackSecret())));
+    }
+
+    @Test
+    void shouldRejectCreateWhenChannelCodeAppearsBeforeApproval() {
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", null);
+        review.setOperationType("CREATE");
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5"))
+                .thenReturn(channel("ENABLED", "MCH-001"));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).approveChannelReview(
+                        "CSR-001", action("checker-b", "确认新增")));
+
+        assertTrue(exception.getMessage().contains("已存在"));
+        verify(paymentConfigMapper, never()).insertChannel(any());
+        verify(paymentConfigMapper, never()).updateChannel(any());
+    }
+
+    @Test
+    void shouldRejectUnsafeChannelCandidate() {
+        PaymentChannelUpsertRequestDTO rsaCandidate = channelRequest("NEW_H5", "secret-new");
+        rsaCandidate.setCallbackSignAlgorithm("RSA2");
+        rsaCandidate.setCallbackPublicKey(" ");
+        IllegalArgumentException missingPublicKey = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(rsaCandidate)));
+        assertTrue(missingPublicKey.getMessage().contains("公钥"));
+
+        PaymentChannelUpsertRequestDTO insecureUrl = channelRequest("NEW_H5", "secret-new");
+        insecureUrl.setCallbackNotifyUrl("http://example.test/notify");
+        IllegalArgumentException invalidUrl = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(insecureUrl)));
+        assertTrue(invalidUrl.getMessage().contains("HTTPS"));
+
+        PaymentChannelUpsertRequestDTO missingHost = channelRequest("NEW_H5", "secret-new");
+        missingHost.setCallbackNotifyUrl("https://");
+        IllegalArgumentException invalidHost = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(missingHost)));
+        assertTrue(invalidHost.getMessage().contains("HTTPS"));
+
+        PaymentChannelUpsertRequestDTO invalidWeight = channelRequest("NEW_H5", "secret-new");
+        invalidWeight.setRouteWeight(Integer.valueOf(101));
+        IllegalArgumentException weight = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(invalidWeight)));
+        assertTrue(weight.getMessage().contains("不能大于100"));
+        verify(paymentConfigMapper, never()).insertChannelReview(any());
+    }
+
     private PaymentChannelStatusReviewRequestDTO statusRequest(boolean enabled) {
         PaymentChannelStatusReviewRequestDTO request = new PaymentChannelStatusReviewRequestDTO();
         request.setChannelCode("WX_H5");
@@ -186,8 +318,23 @@ class PaymentChannelStatusReviewServiceImplTest {
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo("CSR-001");
         review.setChannelCode("wx_h5");
+        review.setOperationType("STATUS_CHANGE");
         review.setChannelName("微信H5支付");
         review.setPaymentMethod("微信支付");
+        review.setMerchantNo("MCH-001");
+        review.setMerchantAppId("APP-001");
+        review.setCallbackSecret("secret");
+        review.setCallbackSignAlgorithm("HMAC-SHA256");
+        review.setCallbackPublicKey("public-key");
+        review.setCallbackNotifyUrl("https://example.test/notify");
+        review.setCertificateProfile("CERT-WX");
+        review.setNotifySignWindowSec(Integer.valueOf(300));
+        review.setRefundWindowDays(Integer.valueOf(180));
+        review.setRiskControlTag("实名校验");
+        review.setSceneScope("家政服务");
+        review.setDailyLimit(new BigDecimal("500000.00"));
+        review.setPriority(Integer.valueOf(1));
+        review.setRouteWeight(Integer.valueOf(100));
         review.setBaseFingerprint(baseline);
         review.setCandidateStatus(candidateStatus);
         review.setCandidateStatusType("ENABLED".equals(candidateStatus) ? "success" : "danger");
@@ -218,6 +365,37 @@ class PaymentChannelStatusReviewServiceImplTest {
         channel.setPriority(Integer.valueOf(1));
         channel.setRouteWeight(Integer.valueOf(100));
         return channel;
+    }
+
+    private PaymentChannelReviewSubmitRequestDTO reviewRequest(PaymentChannelUpsertRequestDTO candidate) {
+        PaymentChannelReviewSubmitRequestDTO request = new PaymentChannelReviewSubmitRequestDTO();
+        request.setRequester("maker-a");
+        request.setCandidate(candidate);
+        return request;
+    }
+
+    private PaymentChannelUpsertRequestDTO channelRequest(String channelCode, String callbackSecret) {
+        PaymentChannelUpsertRequestDTO request = new PaymentChannelUpsertRequestDTO();
+        request.setChannelCode(channelCode);
+        request.setChannelName("微信H5支付");
+        request.setPaymentMethod("微信支付");
+        request.setMerchantNo("MCH-001");
+        request.setMerchantAppId("APP-001");
+        request.setCallbackSecret(callbackSecret);
+        request.setCallbackSignAlgorithm("HMAC-SHA256");
+        request.setCallbackPublicKey("public-key");
+        request.setCallbackNotifyUrl("https://example.test/notify");
+        request.setCertificateProfile("CERT-WX");
+        request.setNotifySignWindowSec(Integer.valueOf(300));
+        request.setRefundWindowDays(Integer.valueOf(180));
+        request.setRiskControlTag("实名校验");
+        request.setSceneScope("家政服务");
+        request.setEnabled(Boolean.TRUE);
+        request.setDailyLimit(new BigDecimal("500000.00"));
+        request.setPriority(Integer.valueOf(1));
+        request.setRouteWeight(Integer.valueOf(100));
+        request.setChangeReason("新增或编辑渠道");
+        return request;
     }
 
     private String fingerprint(PaymentChannelConfigEntity channel) {

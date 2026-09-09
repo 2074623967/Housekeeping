@@ -22,14 +22,20 @@ public class PaymentChannelConfigDTO {
     private String callbackNotifyUrl;
     /** 回调签名算法。 */
     private String callbackSignAlgorithm;
+    /** 验签公钥配置情况。 */
+    private Boolean callbackPublicKeyConfigured;
     /** 验签密钥配置情况。 */
     private String callbackSecretMasked;
     /** 证书档案。 */
     private String certificateProfile;
     /** 回调验签时间窗。 */
     private String notifySignWindow;
+    /** 回调验签时间窗秒数。 */
+    private Integer notifySignWindowSec;
     /** 退款时效。 */
     private String refundWindow;
+    /** 原路退款时效天数。 */
+    private Integer refundWindowDays;
     /** 风控标签。 */
     private String riskControlTag;
     /** 适用场景范围。 */
@@ -40,6 +46,8 @@ public class PaymentChannelConfigDTO {
     private String statusType;
     /** 单日限额展示值。 */
     private String dailyLimit;
+    /** 单日限额原始值。 */
+    private java.math.BigDecimal dailyLimitValue;
     /** 渠道优先级。 */
     private Integer priority;
     /** 默认支付方式路由权重。 */

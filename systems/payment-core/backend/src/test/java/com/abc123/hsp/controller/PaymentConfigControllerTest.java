@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
@@ -69,6 +70,8 @@ class PaymentConfigControllerTest {
         when(paymentConfigService.listChannelReviews()).thenReturn(Collections.singletonList(review));
         when(paymentConfigService.submitChannelStatusReview(any(PaymentChannelStatusReviewRequestDTO.class)))
                 .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.submitChannelReview(any(PaymentChannelReviewSubmitRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
         when(paymentConfigService.approveChannelReview(
                 any(String.class), any(PaymentChannelReviewActionRequestDTO.class)))
                 .thenReturn(Collections.singletonList(review));
@@ -77,14 +80,17 @@ class PaymentConfigControllerTest {
                 .thenReturn(Collections.singletonList(review));
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
         PaymentChannelStatusReviewRequestDTO statusRequest = new PaymentChannelStatusReviewRequestDTO();
+        PaymentChannelReviewSubmitRequestDTO submitRequest = new PaymentChannelReviewSubmitRequestDTO();
         PaymentChannelReviewActionRequestDTO actionRequest = new PaymentChannelReviewActionRequestDTO();
 
         assertEquals(1, controller.listChannelReviews().getData().size());
         assertEquals(1, controller.submitChannelStatusReview(statusRequest).getData().size());
+        assertEquals(1, controller.submitChannelReview(submitRequest).getData().size());
         assertEquals(1, controller.approveChannelReview("CSR-001", actionRequest).getData().size());
         assertEquals(1, controller.rejectChannelReview("CSR-001", actionRequest).getData().size());
         verify(paymentConfigService).listChannelReviews();
         verify(paymentConfigService).submitChannelStatusReview(statusRequest);
+        verify(paymentConfigService).submitChannelReview(submitRequest);
         verify(paymentConfigService).approveChannelReview("CSR-001", actionRequest);
         verify(paymentConfigService).rejectChannelReview("CSR-001", actionRequest);
     }

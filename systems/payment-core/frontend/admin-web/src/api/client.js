@@ -888,6 +888,7 @@ export const paymentConfigApi = {
   getOverview: () => request("/api/payment-config"),
   buildExportUrl: (section = "ALL") => `/api/payment-config/export?section=${encodeURIComponent(section)}`,
   submitChannelStatusReview: (payload) => postJson("/api/payment-config/channels/toggle", payload),
+  submitChannelReview: (payload) => postJson("/api/payment-config/channels/reviews", payload),
   getChannelReviews: () => request("/api/payment-config/channels/reviews"),
   approveChannelReview: (requestNo, payload) => postJson(
     `/api/payment-config/channels/reviews/${encodeURIComponent(requestNo)}/approve`,
