@@ -2315,7 +2315,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 1. 自动任务数据库租约的 `lock_owner` 使用 `triggeredBy:instanceSuffix`，其中 UUID 实例后缀仅用于内部互斥；任务运行日志和页面仍使用原 `triggeredBy`，不新增对外字段。
 2. 有效租约不允许同 owner 或其他 owner 重入；租约到期后新 owner 可原子接管。释放语句同时匹配 `task_code + lock_owner`，旧 owner 不能释放已经由新实例持有的租约。
 3. nonce 清理使用任务码 `PAYMENT_CALLBACK_NONCE_CLEANUP` 和 `120` 秒租约；未抢到时不执行清理，执行成功或异常均尝试释放本实例租约。
-4. 当前租约没有续租接口，任务超过 `120` 秒时可能被另一实例接管；生产需确保单批任务时长低于租约，或在长任务引入续租/fencing，并验证真实 MySQL 时钟与锁行为。
+4. 本节初版尚无续租，后续已在 14.44 节补齐独立事务和周期续期；生产仍需验证真实 MySQL 时钟、锁行为、租约丢失监控和强 fencing 边界。
+
+### 14.44 自动任务租约续期内部契约
+
+1. 自动任务租约不新增对外 HTTP 接口；任务中心、告警派发/回执和 nonce 清理在内部统一调用 `PaymentTaskLeaseService`，对页面、任务日志和既有接口响应无字段变更。
+2. 初始化与获取在同一个独立 `REQUIRES_NEW` 短事务中完成，续期和释放各自使用独立短事务。获取成功后按租期三分之一调度续期，当前 `120` 秒租期对应 `40` 秒间隔。
+3. 续期 SQL 仅更新 `task_code + lock_owner` 匹配且尚未过期的记录；异 owner、已过期 owner 或已释放租约返回 `0`，不得恢复旧执行者资格。句柄关闭会取消续期并按同一 owner 幂等释放。
+4. 该契约降低正常长任务重复执行概率，但不是强 fencing token；数据库不可用、长时间 JVM 暂停或续期线程阻塞时仍可能失约，生产需要租约丢失监控、业务幂等和真实多实例故障测试。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。

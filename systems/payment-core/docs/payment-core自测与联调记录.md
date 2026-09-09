@@ -6516,3 +6516,27 @@
 1. 固定 owner 会把不同实例错误识别为同一持有者，允许重入时无法形成互斥；实例唯一后缀与禁止重入共同恢复数据库租约的基本排他语义。
 2. owner 同时是释放时的轻量 fencing token：旧任务若执行超过租约并被接管，旧 owner 的 `release` 条件不能清除新 owner；但旧业务动作本身仍可能继续，需要长任务续租或下游幂等共同约束。
 3. 当前证据覆盖本地 SQL 与服务调用顺序，不证明生产数据库时间、网络分区、进程暂停、锁超时和多实例压力下的行为；正式部署前仍需故障注入与容量验证。
+
+## 216. 2026-09-10 自动任务长执行续租 V1.0 验证
+
+### 216.1 本轮补强
+
+1. 新增统一租约服务，将初始化、获取、续期和释放放入 `PROPAGATION_REQUIRES_NEW` 事务，使租约事实不再依赖调用方长业务事务提交，并允许后台线程在任务执行期间读取和延长租约。
+2. 租约获取成功后按 `leaseSeconds / 3` 周期续期；当前 `120` 秒租约每 `40` 秒尝试延长。续期必须同时满足任务码、完整 owner 和 `lock_expires_at > NOW()`，过期旧 owner 不能自行复活。
+3. 租约句柄关闭会取消后台续期并仅释放一次；任务中心、告警派发/回执和 nonce 清理均复用统一句柄，原有跳过、异常释放和业务触发者审计语义不变。
+
+### 216.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 租约定向测试 | `mvn -Dtest=PaymentTaskLeaseServiceTest,PaymentTaskCenterMapperIntegrationTest,PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentCallbackNonceCleanupSchedulerTest test` | 通过 | `70` 个用例通过；覆盖独立事务调用、40 秒续期调度、幂等关闭、owner/有效期续期条件和原调用链回归 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 报告汇总 `542` 个用例，`0` failures、`0` errors、`0` skipped |
+| H2 MySQL 租约续期 | 正式 Mapper XML + `t_payment_task_lease` fixture | 通过 | 当前有效 owner 可续期；异 owner 和已过期 owner 续期均返回 `0` |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `canPromoteTestToMaster=true`、`canCreateRelease=false`；release 仍有候选说明、正式签字、现场核验和稳定观察结束四项真实阻断 |
+| 真实多实例长任务 | 双实例运行超过两分钟、网络分区、JVM 暂停、数据库阻塞和主从切换 | 未执行 | 不记录生产续租、故障切换或 fencing 验收通过 |
+
+### 216.3 当前判断
+
+1. 单独增加续期 SQL 无法解决外层长事务可见性问题；租约生命周期必须使用独立短事务提交，业务批处理继续保留自身事务和逐条幂等边界。
+2. 周期续期显著降低正常长任务因固定租期被重复接管的风险，但数据库不可用或线程长时间暂停仍可能失去租约；业务状态更新和外部调用仍需幂等，不能把租约等同于强 fencing token。
+3. 当前只有本地 H2 与单元测试证据，生产前仍需在目标 MySQL 上验证锁等待上限、续期延迟指标、租约丢失告警和真实双实例故障注入。
