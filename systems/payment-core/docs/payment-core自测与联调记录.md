@@ -6447,3 +6447,26 @@
 1. 回调字段即使最终无法命中支付单，也不能先触发数据库列溢出、密码库大输入或审计 JSON 结构破坏；失败应稳定落在业务校验域。
 2. `8192` 是本地签名文本防御上限，不代表所有供应商都允许该长度；真实适配应进一步按渠道密钥规格收紧，并在入口网关限制整体请求体。
 3. 本轮没有引入真实网关 WAF、请求速率限制或渠道协议映射，生产前仍需验证 UTF-8/utf8mb4 字符口径、代理路径解码和大报文资源消耗。
+
+## 213. 2026-09-10 回调 nonce 持久化 SQL 契约 V1.0 验证
+
+### 213.1 本轮补强
+
+1. `PaymentCallbackSecurityMapper.insertCallbackNonce` 将到期表达式从 `DATE_ADD(NOW(), INTERVAL expireSeconds SECOND)` 调整为 `TIMESTAMPADD(SECOND, expireSeconds, NOW())`，保持从数据库当前时间增加 TTL 秒数的等价语义。
+2. 新增 H2 MySQL 模式 Mapper 集成测试，直接加载正式 Mapper XML 和接口，验证渠道配置查询忽略大小写、nonce 渠道编码小写落库以及创建与到期时间相差 `601` 秒。
+3. 同一集成测试验证 `(channel_code, nonce)` 唯一约束拒绝重复写入，并验证将记录置为过期后可由 `deleteExpiredNonce` 清理。
+
+### 213.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 回调安全 Mapper 定向测试 | `mvn -Dtest=PaymentCallbackSecurityMapperIntegrationTest test` | 通过 | `1` 个集成用例通过；覆盖查询、规范化落库、`601` 秒 TTL、唯一键和清理 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 报告汇总 `533` 个用例，`0` failures、`0` errors、`0` skipped |
+| 真实 MySQL 验收 | 执行计划、索引与锁、数据库时钟精度、多实例并发和清理容量 | 未执行 | 不记录真实 MySQL 或生产并发验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | 当前 XML、测试和文档无空白符错误 |
+
+### 213.3 当前判断
+
+1. `TIMESTAMPADD` 与原 `DATE_ADD` 在当前用例中都表达“以数据库当前时间增加 TTL 秒数”，本轮调整是 SQL 方言兼容收口，不改变 nonce 生命周期安全不变量。
+2. H2 MySQL 模式可以验证 Mapper 绑定、列值、唯一键与清理条件，但不能证明真实 MySQL 的执行计划、锁等待、隔离级别或秒级端点行为。
+3. 生产放行前仍需使用目标 MySQL 版本执行迁移后回归，并补多实例同 nonce 竞争、数据库时钟基线、清理与插入竞争及容量验证。

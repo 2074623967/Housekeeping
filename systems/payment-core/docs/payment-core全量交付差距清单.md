@@ -657,6 +657,12 @@
 2. 验签入口额外限制 `timestamp/nonce/signature` 最大 `20/128/8192` 字符并拒绝控制字符，超限或畸形值按 `PAYMENT-1008 / PAYMENT-1005 / PAYMENT-1009` 分类，不再进入配置查询、密码计算或 nonce 写入。
 3. 回调日志 `tradeStatus` 和事件渠道 JSON 统一使用既有完整转义；新增测试后后端全量测试提升为 `532` 个并全部通过。当前不替代网关请求体限流、真实渠道字段规范、生产数据库字符集或恶意大报文压测。
 
+### 8.45 2026-09-10 回调 nonce 持久化 SQL 契约进展
+
+1. 回调 nonce 到期时间改用 MySQL 与 H2 MySQL 兼容模式均支持的 `TIMESTAMPADD(SECOND, expireSeconds, NOW())`；其业务语义与原 `DATE_ADD(NOW(), INTERVAL expireSeconds SECOND)` 等价，不改变 TTL 计算口径。
+2. 新增 Mapper 集成测试，直接覆盖渠道编码忽略大小写查询、nonce 渠道小写落库、`601` 秒到期差值、`(channel_code, nonce)` 唯一键防重和到期清理；后端全量测试提升为 `533` 个并全部通过。
+3. 当前证据仅覆盖本地 H2 MySQL 兼容语义，不代表真实 MySQL 执行计划、锁行为、数据库时钟精度、多实例竞争或生产清理容量已经验收。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

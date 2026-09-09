@@ -2297,6 +2297,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 渠道路径去首尾空白并按小写规范化；空白或超过 `64` 字符时返回 `PAYMENT-400` 或 `PAYMENT-1009`。规范化值用于验签原文、支付单渠道绑定、通知日志和事件快照。
 4. 通知日志中的 `tradeStatus` 与事件中的渠道值按 JSON 字符串完整转义，不改变用于验签和状态判断的原始交易状态；整体 HTTP 请求体上限和渠道专属字段规则仍由接入网关补齐。
 
+### 14.41 支付回调 nonce 持久化 SQL 契约
+
+1. nonce 写入使用 `TIMESTAMPADD(SECOND, #{expireSeconds}, NOW())` 计算 `expires_at`，与原 `DATE_ADD(NOW(), INTERVAL #{expireSeconds} SECOND)` 保持“数据库当前时间增加 TTL 秒数”的等价语义。
+2. `channel_code` 写入前继续按小写规范化，`(channel_code, nonce)` 唯一约束继续承担跨请求防重；`expires_at <= NOW()` 的记录仍由既有清理 SQL 删除，接口字段和错误码不变。
+3. H2 MySQL 模式集成测试已覆盖大小写查询、小写落库、`601` 秒 TTL、重复唯一键和到期清理；该结果不代表真实 MySQL 执行计划、锁行为、时钟精度或多实例竞争已经验收。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
