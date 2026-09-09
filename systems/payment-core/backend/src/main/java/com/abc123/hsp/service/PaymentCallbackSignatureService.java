@@ -17,4 +17,12 @@ public interface PaymentCallbackSignatureService {
      * @param request 回调请求
      */
     void verify(String channel, PaymentCallbackRequestDTO request);
+
+    /**
+     * 按有限批次清理历史过期 nonce。
+     *
+     * @param batchSize 单次最大清理数量
+     * @return 实际清理数量
+     */
+    int cleanupExpiredNonces(int batchSize);
 }

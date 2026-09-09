@@ -29,6 +29,14 @@ class PaymentCallbackSignatureConfigurationTest {
                 Long.valueOf(601L),
                 resolver.getProperty("payment.callback.nonce-ttl-seconds", Long.class)
         );
+        Assertions.assertEquals(
+                Long.valueOf(300000L),
+                resolver.getProperty("payment.callback.nonce-cleanup.fixed-delay-ms", Long.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(1000),
+                resolver.getProperty("payment.callback.nonce-cleanup.batch-size", Integer.class)
+        );
     }
 
     @Test

@@ -88,8 +88,21 @@ class PaymentCallbackSecurityMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             expireNonce(session.getConnection(), "nonce-001");
             PaymentCallbackSecurityMapper mapper = session.getMapper(PaymentCallbackSecurityMapper.class);
-            assertEquals(1, mapper.deleteExpiredNonce());
+            mapper.insertCallbackNonce("wx_h5", "nonce-active", "PAY-ACTIVE", 601L);
+            mapper.insertCallbackNonce("alipay_h5", "nonce-expired-other", "PAY-OTHER", 601L);
+            mapper.insertCallbackNonce("offline_bank", "nonce-expired-third", "PAY-THIRD", 601L);
+            expireNonce(session.getConnection(), "nonce-expired-other");
+            expireNonce(session.getConnection(), "nonce-expired-third");
+            assertEquals(1, mapper.deleteExpiredNonce("WX_H5", "nonce-001"));
             assertEquals(0, countNonce(session.getConnection(), "nonce-001"));
+            mapper.insertCallbackNonce("wx_h5", "nonce-001", "PAY-REUSED", 601L);
+            assertEquals(1, countNonce(session.getConnection(), "nonce-001"));
+            assertEquals(1, countNonce(session.getConnection(), "nonce-expired-other"));
+            assertEquals(1, mapper.deleteExpiredNonceBatch(1));
+            assertEquals(1, countExpiredNonce(session.getConnection()));
+            assertEquals(1, mapper.deleteExpiredNonceBatch(1));
+            assertEquals(0, countExpiredNonce(session.getConnection()));
+            assertEquals(1, countNonce(session.getConnection(), "nonce-active"));
             session.commit();
         }
     }
@@ -147,6 +160,16 @@ class PaymentCallbackSecurityMapperIntegrationTest {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT COUNT(1) FROM t_payment_callback_nonce WHERE nonce = ?")) {
             statement.setString(1, nonce);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            }
+        }
+    }
+
+    private int countExpiredNonce(Connection connection) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COUNT(1) FROM t_payment_callback_nonce WHERE expires_at <= NOW()")) {
             try (ResultSet resultSet = statement.executeQuery()) {
                 resultSet.next();
                 return resultSet.getInt(1);

@@ -83,7 +83,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (!verifySignature(payload, request.getSignature(), securityProfile)) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature verification failed");
         }
-        paymentCallbackSecurityMapper.deleteExpiredNonce();
+        paymentCallbackSecurityMapper.deleteExpiredNonce(normalizedChannel, request.getNonce());
         try {
             paymentCallbackSecurityMapper.insertCallbackNonce(
                     normalizedChannel,
@@ -94,6 +94,14 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, "callback nonce replay detected");
         }
+    }
+
+    @Override
+    public int cleanupExpiredNonces(int batchSize) {
+        if (batchSize <= 0) {
+            throw new IllegalArgumentException("payment callback nonce cleanup batch size must be positive");
+        }
+        return paymentCallbackSecurityMapper.deleteExpiredNonceBatch(batchSize);
     }
 
     /**

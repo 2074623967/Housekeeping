@@ -24,6 +24,22 @@
 
     <delete id="deleteExpiredNonce">
         DELETE FROM t_payment_callback_nonce
-        WHERE expires_at &lt;= NOW()
+        WHERE channel_code = LOWER(#{channelCode})
+          AND nonce = #{nonce}
+          AND expires_at &lt;= NOW()
+    </delete>
+
+    <delete id="deleteExpiredNonceBatch">
+        DELETE FROM t_payment_callback_nonce
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT id
+                FROM t_payment_callback_nonce
+                WHERE expires_at &lt;= NOW()
+                ORDER BY expires_at, id
+                LIMIT #{batchSize}
+            ) expired_nonce
+        )
     </delete>
 </mapper>

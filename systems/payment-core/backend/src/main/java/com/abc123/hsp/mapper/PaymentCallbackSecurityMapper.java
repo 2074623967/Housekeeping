@@ -22,7 +22,13 @@ public interface PaymentCallbackSecurityMapper {
                              @Param("expireSeconds") long expireSeconds);
 
     /**
-     * 清理已过期的 nonce 记录。
+     * 清理当前渠道已过期的同名 nonce，允许过期后按协议重新使用。
      */
-    int deleteExpiredNonce();
+    int deleteExpiredNonce(@Param("channelCode") String channelCode,
+                           @Param("nonce") String nonce);
+
+    /**
+     * 按有限批次清理历史过期 nonce。
+     */
+    int deleteExpiredNonceBatch(@Param("batchSize") int batchSize);
 }
