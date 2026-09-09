@@ -1,7 +1,11 @@
 package com.abc123.hsp.common;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /**
  * 全局异常处理器测试。
@@ -32,11 +36,27 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void shouldReturnSystemErrorCodeWhenHandleUnexpectedException() {
-        ApiResponse<Void> response = globalExceptionHandler.handleException(
-                new IllegalStateException("unexpected system exception")
-        );
+        Logger logger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            ApiResponse<Void> response = globalExceptionHandler.handleException(
+                    new IllegalStateException("database password=secret-value at jdbc:mysql://internal-host/payment")
+            );
 
-        Assertions.assertEquals(ErrorCode.SYSTEM_ERROR, response.getCode());
-        Assertions.assertEquals("unexpected system exception", response.getMessage());
+            Assertions.assertEquals(ErrorCode.SYSTEM_ERROR, response.getCode());
+            Assertions.assertEquals("system error", response.getMessage());
+            Assertions.assertFalse(response.getMessage().contains("secret-value"));
+            Assertions.assertNotNull(response.getRequestId());
+            Assertions.assertEquals(1, appender.list.size());
+            String logMessage = appender.list.get(0).getFormattedMessage();
+            Assertions.assertTrue(logMessage.contains(response.getRequestId()));
+            Assertions.assertTrue(logMessage.contains(IllegalStateException.class.getName()));
+            Assertions.assertFalse(logMessage.contains("secret-value"));
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 }
