@@ -79,7 +79,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     public PageResultDTO<PaymentIssueAlertLogRowDTO> listAlertLogs(PaymentIssueAlertLogQueryDTO query) {
         PaymentIssueAlertLogQueryDTO normalizedQuery = normalizeAlertLogQuery(query);
         return new PageResultDTO<>(
-                paymentIssueMapper.findAlertLogs(normalizedQuery),
+                maskAlertLogItems(paymentIssueMapper.findAlertLogs(normalizedQuery)),
                 paymentIssueMapper.countAlertLogs(normalizedQuery),
                 normalizedQuery.getPageNo(),
                 normalizedQuery.getPageSize()
@@ -89,7 +89,8 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Override
     public String exportAlertLogsCsv(PaymentIssueAlertLogQueryDTO query) {
         PaymentIssueAlertLogQueryDTO normalizedQuery = normalizeAlertLogQuery(query);
-        List<PaymentIssueAlertLogRowDTO> records = paymentIssueMapper.findAlertLogs(normalizedQuery);
+        List<PaymentIssueAlertLogRowDTO> records = maskAlertLogItems(
+                paymentIssueMapper.findAlertLogs(normalizedQuery));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("告警编号,异常编号,支付单号,异常类型,严重等级,责任组,告警通道,接收人,告警状态,回执状态,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
@@ -133,13 +134,13 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             throw new IllegalArgumentException("当前告警无需人工确认：" + normalizedAlertNo);
         }
         if ("已确认".equals(alertLog.getAckStatus())) {
-            return alertLog;
+            return maskedAlertLogCopy(alertLog);
         }
         String operator = request == null ? null : request.getOperator();
         String normalizedOperator = requireText(operator, "确认人不能为空");
         paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, normalizedOperator);
         acknowledgeSourceAlertIfNeeded(alertLog, normalizedOperator);
-        return paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
+        return maskedAlertLogCopy(paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo));
     }
 
     @Override
@@ -225,6 +226,24 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             return "\"" + escaped + "\"";
         }
         return escaped;
+    }
+
+    private List<PaymentIssueAlertLogRowDTO> maskAlertLogItems(List<PaymentIssueAlertLogRowDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedAlertLogCopy).collect(Collectors.toList());
+    }
+
+    private PaymentIssueAlertLogRowDTO maskedAlertLogCopy(PaymentIssueAlertLogRowDTO item) {
+        if (item == null) {
+            return null;
+        }
+        PaymentIssueAlertLogRowDTO outwardItem = new PaymentIssueAlertLogRowDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setProviderReceiptSnapshot(
+                sensitiveDataMasker.maskPayload(item.getProviderReceiptSnapshot()));
+        return outwardItem;
     }
 
     private void acknowledgeSourceAlertIfNeeded(PaymentIssueAlertLogRowDTO alertLog, String operator) {

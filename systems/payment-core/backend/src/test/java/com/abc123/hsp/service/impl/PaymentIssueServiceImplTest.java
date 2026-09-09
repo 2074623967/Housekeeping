@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -136,6 +137,9 @@ class PaymentIssueServiceImplTest {
     void shouldReturnAlertLogPageResult() {
         PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
         row.setAlertNo("PIA-002");
+        row.setProviderReceiptSnapshot(
+                "{\"result\":{\"phone\":\"13800138000\",\"customerName\":\"张女士\","
+                        + "\"bankCardNo\":\"6222021234567890\"}}");
         when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
         when(paymentIssueMapper.countAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(1L);
 
@@ -143,7 +147,13 @@ class PaymentIssueServiceImplTest {
         query.setPageNo(2);
         query.setPageSize(10);
 
-        assertEquals(1, new PaymentIssueServiceImpl(paymentIssueMapper).listAlertLogs(query).getItems().size());
+        PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .listAlertLogs(query).getItems().get(0);
+
+        assertTrue(result.getProviderReceiptSnapshot().contains("138****8000"));
+        assertTrue(result.getProviderReceiptSnapshot().contains("张*"));
+        assertTrue(result.getProviderReceiptSnapshot().contains("622202******7890"));
+        assertTrue(row.getProviderReceiptSnapshot().contains("13800138000"));
     }
 
     @Test
@@ -171,13 +181,16 @@ class PaymentIssueServiceImplTest {
         row.setTriggeredBy("任务中心");
         row.setCreatedAt("2026-08-07 09:30:00");
         row.setAlertContent("支付异常告警内容");
-        row.setProviderReceiptSnapshot("{\"status\":\"accepted\"}");
+        row.setProviderReceiptSnapshot("HTTP 502: upstream body contains 13800138000");
         when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
 
         String csv = new PaymentIssueServiceImpl(paymentIssueMapper).exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO());
 
         assertTrue(csv.contains("PIA-EXPORT-001"));
         assertTrue(csv.contains("支付异常告警内容"));
+        assertTrue(csv.contains("[REDACTED]"));
+        assertFalse(csv.contains("13800138000"));
+        assertEquals("HTTP 502: upstream body contains 13800138000", row.getProviderReceiptSnapshot());
         verify(paymentIssueMapper).findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class));
     }
 
@@ -191,6 +204,7 @@ class PaymentIssueServiceImplTest {
         acknowledgedRow.setAlertNo("PIA-ACK-001");
         acknowledgedRow.setAckStatus("已确认");
         acknowledgedRow.setAckOperator("支付运营");
+        acknowledgedRow.setProviderReceiptSnapshot("{\"phone\":\"13800138000\"}");
         when(paymentIssueMapper.findAlertLogByAlertNo("PIA-ACK-001")).thenReturn(pendingRow, acknowledgedRow);
         when(paymentIssueMapper.acknowledgeAlertByAlertNo("PIA-ACK-001", "支付运营")).thenReturn(1);
 
@@ -202,8 +216,25 @@ class PaymentIssueServiceImplTest {
 
         assertEquals("已确认", result.getAckStatus());
         assertEquals("支付运营", result.getAckOperator());
+        assertTrue(result.getProviderReceiptSnapshot().contains("138****8000"));
+        assertTrue(acknowledgedRow.getProviderReceiptSnapshot().contains("13800138000"));
         verify(paymentIssueMapper).acknowledgeAlertByAlertNo("PIA-ACK-001", "支付运营");
         verify(paymentIssueMapper).acknowledgeAlertByAlertNo("PIA-OUTBOX-001", "支付运营");
+    }
+
+    @Test
+    void shouldMaskAlreadyAcknowledgedAlertWithoutChangingMapperDto() {
+        PaymentIssueAlertLogRowDTO acknowledgedRow = new PaymentIssueAlertLogRowDTO();
+        acknowledgedRow.setAlertNo("PIA-ACKED-001");
+        acknowledgedRow.setAckStatus("已确认");
+        acknowledgedRow.setProviderReceiptSnapshot("provider response: 13800138000");
+        when(paymentIssueMapper.findAlertLogByAlertNo("PIA-ACKED-001")).thenReturn(acknowledgedRow);
+
+        PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .acknowledgeAlert("PIA-ACKED-001", null);
+
+        assertEquals("[REDACTED]", result.getProviderReceiptSnapshot());
+        assertEquals("provider response: 13800138000", acknowledgedRow.getProviderReceiptSnapshot());
     }
 
     @Test
