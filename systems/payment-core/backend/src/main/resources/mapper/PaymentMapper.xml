@@ -599,23 +599,6 @@
         LIMIT 1
     </select>
 
-    <select id="countRecentAttemptsBySourceAppAndMethod" resultType="int">
-        SELECT COUNT(1)
-        FROM t_payment_attempt
-        WHERE source_app_id = #{sourceAppId}
-          AND payment_method = #{paymentMethod}
-          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
-    </select>
-
-    <select id="countRecentAttemptsBySubmitScope" resultType="int">
-        SELECT COUNT(1)
-        FROM t_payment_attempt
-        WHERE source_app_id = #{sourceAppId}
-          AND terminal = #{terminal}
-          AND client_ip = #{clientIp}
-          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL 1 MINUTE)
-    </select>
-
     <select id="sumTodayAcceptedAmountByChannel" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(amount), 0)
         FROM t_payment_order

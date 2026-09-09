@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -36,6 +37,7 @@ import com.abc123.hsp.service.PaymentChannelQueryService;
 import com.abc123.hsp.service.PaymentChannelQueryRateLimitService;
 import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
+import com.abc123.hsp.service.PaymentSubmitRateLimitService;
 import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
@@ -93,6 +95,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
+
+    @Mock
+    private PaymentSubmitRateLimitService paymentSubmitRateLimitService;
 
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -753,21 +758,34 @@ class PaymentServiceImplTest {
         routeDecision.setRouteResult("家政 H5 微信优先 -> wx_h5");
         when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
         when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-200")).thenReturn(true);
+        PaymentControlPolicyDTO controlPolicy = new PaymentControlPolicyDTO();
+        controlPolicy.setAllowedPaymentMethods("微信支付");
+        controlPolicy.setAllowedChannelCodes("wx_h5");
+        controlPolicy.setAllowedMerchantNos("MCH_DEFAULT");
+        controlPolicy.setMinuteSubmitLimit(3);
+        controlPolicy.setInterfaceMinuteSubmitLimit(2);
+        controlPolicy.setTokenAuthRequired("关闭");
+        controlPolicy.setStrictMode("关闭");
+        controlPolicy.setSelfCheckStatus("PASS");
+        when(paymentMapper.findActiveControlPolicyBySourceAppId("default-app")).thenReturn(controlPolicy);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-200");
         request.setPaymentMethod("微信支付");
         request.setChannelCode("WX_H5");
+        request.setMerchantNo("MCH_DEFAULT");
         request.setIdempotencyKey("IDEMP-200");
 
-        PrepayOrderDTO result = new PaymentServiceImpl(
+        PaymentServiceImpl service = new PaymentServiceImpl(
                 paymentMapper,
                 paymentCallbackSignatureService,
                 paymentChannelRoutingService,
                 paymentChannelQueryService,
-                paymentChannelSubmitService)
-                .submit(request);
+                paymentChannelSubmitService);
+        service.setPaymentSubmitRateLimitService(paymentSubmitRateLimitService);
+        PrepayOrderDTO result = service.submit(request);
 
+        verifyNoInteractions(paymentSubmitRateLimitService);
         verify(paymentMapper, never()).updatePrepayToPaying("PRE-200");
         verify(paymentMapper, never()).insertPaymentAttempt(
                 org.mockito.ArgumentMatchers.anyString(),
@@ -958,7 +976,6 @@ class PaymentServiceImplTest {
         controlPolicy.setStrictMode("关闭");
         controlPolicy.setSelfCheckStatus("PASS");
         when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-pc-web")).thenReturn(controlPolicy);
-        when(paymentMapper.countRecentAttemptsBySourceAppAndMethod("housekeeping-pc-web", "银行转账")).thenReturn(0);
         when(paymentMapper.findSubmitConcurrencyToken("PRE-300", "housekeeping-pc-web")).thenReturn(null);
         PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
         submitResult.setChannelTransactionNo("CHANNEL-300");
@@ -1348,7 +1365,11 @@ class PaymentServiceImplTest {
         controlPolicy.setStrictMode("关闭");
         controlPolicy.setSelfCheckStatus("PASS");
         when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
-        when(paymentMapper.countRecentAttemptsBySubmitScope("housekeeping-app-web", "H5", "10.0.0.20")).thenReturn(2);
+        org.mockito.Mockito.doThrow(new BusinessException(
+                ErrorCode.PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED,
+                "当前接口提交过于频繁，请稍后重试"))
+                .when(paymentSubmitRateLimitService)
+                .acquire("housekeeping-app-web", "微信支付", "H5", "10.0.0.20", 2, 10);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-318");
@@ -1359,18 +1380,21 @@ class PaymentServiceImplTest {
         request.setTerminal("H5");
         request.setClientIp("10.0.0.20");
 
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+        service.setPaymentSubmitRateLimitService(paymentSubmitRateLimitService);
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> new PaymentServiceImpl(
-                        paymentMapper,
-                        paymentCallbackSignatureService,
-                        paymentChannelRoutingService,
-                        paymentChannelQueryService,
-                        paymentChannelSubmitService)
-                        .submit(request)
+                () -> service.submit(request)
         );
 
         org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED, exception.getCode());
+        verify(paymentSubmitRateLimitService)
+                .acquire("housekeeping-app-web", "微信支付", "H5", "10.0.0.20", 2, 10);
         verify(paymentMapper, never()).updatePrepayToPaying("PRE-318");
     }
 
@@ -1459,7 +1483,6 @@ class PaymentServiceImplTest {
         controlPolicy.setStrictMode("关闭");
         controlPolicy.setSelfCheckStatus("PASS");
         when(paymentMapper.findActiveControlPolicyBySourceAppId("housekeeping-app-web")).thenReturn(controlPolicy);
-        when(paymentMapper.countRecentAttemptsBySourceAppAndMethod("housekeeping-app-web", "微信支付")).thenReturn(0);
         when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-330")).thenReturn(false);
 
         PaymentSubmitConcurrencyTokenDTO token = new PaymentSubmitConcurrencyTokenDTO();

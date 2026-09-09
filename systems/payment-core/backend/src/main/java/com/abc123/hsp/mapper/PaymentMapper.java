@@ -300,19 +300,6 @@ public interface PaymentMapper {
     PaymentControlPolicyDTO findActiveControlPolicyBySourceAppId(@Param("sourceAppId") String sourceAppId);
 
     /**
-     * 查询来源应用在最近一分钟内按支付方式提交的尝试次数。
-     */
-    int countRecentAttemptsBySourceAppAndMethod(@Param("sourceAppId") String sourceAppId,
-                                                @Param("paymentMethod") String paymentMethod);
-
-    /**
-     * 查询接口提交口径在最近一分钟内的尝试次数。
-     */
-    int countRecentAttemptsBySubmitScope(@Param("sourceAppId") String sourceAppId,
-                                         @Param("terminal") String terminal,
-                                         @Param("clientIp") String clientIp);
-
-    /**
      * 查询支付提交并发令牌。
      */
     PaymentSubmitConcurrencyTokenDTO findSubmitConcurrencyToken(@Param("prepayOrderNo") String prepayOrderNo,

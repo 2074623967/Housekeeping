@@ -34,6 +34,7 @@ import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
+import com.abc123.hsp.service.PaymentSubmitRateLimitService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -75,6 +76,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRiskControlService paymentRiskControlService;
     private final PaymentOpsConfigService paymentOpsConfigService;
     private final PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
+    private PaymentSubmitRateLimitService paymentSubmitRateLimitService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
     private final TransactionTemplate submitTransactionTemplate;
 
@@ -100,6 +102,10 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentRiskControlService = paymentRiskControlService;
         this.paymentOpsConfigService = paymentOpsConfigService;
         this.paymentChannelQueryRateLimitService = paymentChannelQueryRateLimitService;
+        this.paymentSubmitRateLimitService = (sourceAppId, paymentMethod, terminal, clientIp,
+                                              interfaceMinuteLimit, sourceMethodMinuteLimit) -> {
+            // 单元测试兼容构造器默认不启用共享提交限流。
+        };
         this.sensitiveDataMasker = sensitiveDataMasker;
         this.submitTransactionTemplate = transactionManager == null
                 ? null
@@ -107,6 +113,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (this.submitTransactionTemplate != null) {
             this.submitTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         }
+    }
+
+    @Autowired
+    void setPaymentSubmitRateLimitService(PaymentSubmitRateLimitService paymentSubmitRateLimitService) {
+        this.paymentSubmitRateLimitService = paymentSubmitRateLimitService;
     }
 
     PaymentServiceImpl(
@@ -430,6 +441,7 @@ public class PaymentServiceImpl implements PaymentService {
         String resolvedChannelCode = routeDecision.getChannelCode();
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         validateSubmitIdempotencyKey(idempotencyKey);
+        boolean existingAttempt = paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey);
         validateSubmitControlPolicy(
                 sourceAppId,
                 request.getMerchantNo(),
@@ -437,7 +449,8 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getPaymentMethod(),
                 resolvedChannelCode,
                 terminal,
-                clientIp);
+                clientIp,
+                existingAttempt);
         PaymentRiskDecisionResultDTO riskDecision = paymentRiskControlService.evaluateSubmitRisk(
                 buildRiskDecisionRequest(
                         request,
@@ -454,7 +467,7 @@ public class PaymentServiceImpl implements PaymentService {
                         resolvedChannelCode,
                         riskDecision));
         }
-        if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
+        if (existingAttempt || paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
             return currentPrepay;
         }
@@ -1270,7 +1283,8 @@ public class PaymentServiceImpl implements PaymentService {
             String paymentMethod,
             String resolvedChannelCode,
             String terminal,
-            String clientIp) {
+            String clientIp,
+            boolean existingAttempt) {
         PaymentControlPolicyDTO controlPolicy = paymentMapper.findActiveControlPolicyBySourceAppId(sourceAppId);
         if (controlPolicy == null) {
             return;
@@ -1288,20 +1302,23 @@ public class PaymentServiceImpl implements PaymentService {
                 && !matchesAccessToken(controlPolicy.getAccessTokenValue(), accessToken)) {
             throw new BusinessException(ErrorCode.PAYMENT_ACCESS_TOKEN_INVALID, "当前请求的访问令牌无效或已失效");
         }
-        Integer interfaceMinuteSubmitLimit = controlPolicy.getInterfaceMinuteSubmitLimit();
-        if (interfaceMinuteSubmitLimit != null && interfaceMinuteSubmitLimit.intValue() > 0
-                && paymentMapper.countRecentAttemptsBySubmitScope(sourceAppId, terminal, clientIp) >= interfaceMinuteSubmitLimit.intValue()) {
-            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_INTERFACE_RATE_LIMITED, "当前接口提交过于频繁，请稍后重试");
-        }
         if ("开启".equals(controlPolicy.getStrictMode())
                 && !"PASS".equalsIgnoreCase(controlPolicy.getSelfCheckStatus())) {
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_SELF_CHECK_BLOCKED, controlPolicy.getSelfCheckMessage());
         }
-        Integer minuteSubmitLimit = controlPolicy.getMinuteSubmitLimit();
-        if (minuteSubmitLimit != null && minuteSubmitLimit.intValue() > 0
-                && paymentMapper.countRecentAttemptsBySourceAppAndMethod(sourceAppId, paymentMethod) >= minuteSubmitLimit.intValue()) {
-            throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_RATE_LIMITED, "当前来源应用支付提交过于频繁，请稍后重试");
+        if (!existingAttempt) {
+            paymentSubmitRateLimitService.acquire(
+                    sourceAppId,
+                    paymentMethod,
+                    terminal,
+                    clientIp,
+                    positiveLimit(controlPolicy.getInterfaceMinuteSubmitLimit()),
+                    positiveLimit(controlPolicy.getMinuteSubmitLimit()));
         }
+    }
+
+    private int positiveLimit(Integer limit) {
+        return limit == null || limit.intValue() <= 0 ? 0 : limit.intValue();
     }
 
     /**
