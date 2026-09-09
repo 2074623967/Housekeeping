@@ -2227,6 +2227,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `PAYMENT-1029` 路径不更新预付单、不追加关闭事件且不释放提交令牌；已提交后历史误关的 `CLOSED` 单据重复关闭时同样保留令牌和可信成功恢复入口。
 4. `GET /api/cashier/{prepayOrderNo}` 新增 `paymentOrderId`，供收银台直接查询与关闭对应支付单。该接口仍只是本地关单，不调用真实渠道关闭或撤销。
 
+### 14.31 支付回调渠道绑定规则
+
+1. `POST /api/payments/callback/{channel}` 先按 `{channel}` 完成既有签名、时间窗和 nonce 防重校验，再校验 `{channel}` 与支付单持久化 `channel` 忽略大小写后一致。
+2. 支付单未绑定渠道或渠道不一致时返回 `PAYMENT-1030`；该请求不得更新支付单、支付尝试、预付单、订单、账单、通知日志、事件或提交令牌。
+3. 调用方必须使用实际路由渠道的独立回调入口与凭证，不得用一个渠道的签名收口另一渠道支付。后台模拟回调也必须读取支付详情渠道，不得硬编码默认渠道。
+4. 当前绑定到平台渠道编码，尚未进一步绑定渠道商户号、应用标识、证书版本或网络来源；这些仍是生产真实渠道接入项。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2251,6 +2258,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1027` | 当前渠道共享查单时间窗配额已耗尽 |
 | `PAYMENT-1028` | 支付提交最终幂等键为空、超过 128 字符或包含控制字符 |
 | `PAYMENT-1029` | 支付已提交渠道或结果尚未确认，不能本地关闭，需先主动查单 |
+| `PAYMENT-1030` | 回调 URL 渠道与支付单实际路由渠道不一致或支付单尚未绑定渠道 |
 
 联调说明：
 
