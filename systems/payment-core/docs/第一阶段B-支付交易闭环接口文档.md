@@ -96,7 +96,11 @@
 | `/api/payment-config/gateways/reviews` | `POST` | 提交支付网关新增或编辑完整候选，运行态不变 |
 | `/api/payment-config/gateways/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用支付网关完整候选 |
 | `/api/payment-config/gateways/reviews/{requestNo}/reject` | `POST` | 异人驳回支付网关完整候选，运行态不变 |
-| `/api/payment-config/control-policies/toggle` | `POST` | 启停支付控制策略 |
+| `/api/payment-config/control-policies/toggle` | `POST` | 提交支付控制策略启停候选，运行态不变 |
+| `/api/payment-config/control-policies/reviews` | `GET` | 查询支付控制策略配置变更复核申请 |
+| `/api/payment-config/control-policies/reviews` | `POST` | 提交支付控制策略新增或编辑完整候选 |
+| `/api/payment-config/control-policies/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用完整候选 |
+| `/api/payment-config/control-policies/reviews/{requestNo}/reject` | `POST` | 异人驳回候选，运行态不变 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 | `/api/payment-day-end/overview` | `GET` | 查询支付日终处理总览与差异告警 |
 | `/api/payment-day-end/run` | `POST` | 手动触发支付日终处理 |
@@ -964,7 +968,7 @@ POST /api/refunds/retry
 3. `protocols`：支付协议配置，包含协议编码、协议名称、协议类型、模板版本、签约模式、适用场景、适用渠道、商户确认要求、风控标签、状态。
 4. `returnCodeMappings`：渠道返回码映射，包含渠道编码、渠道返回码、标准错误码、标准错误文案、处理建议、是否可重试、是否需要人工介入、映射版本、归档状态和启停状态。
 5. `gateways`：支付网关接入配置，包含网关编码、网关名称、接入模式、适用渠道、环境范围、网关基础地址、报文协议、签名算法、证书别名、证书状态、发布阶段、灰度策略、回调白名单、适配器编排、超时时间、重试策略和状态。
-6. `controlPolicies`：支付控制策略配置，包含来源应用标识、来源应用名称、允许支付方式、允许渠道、分钟级限流阈值、严格模式、自检状态、自检提示和启停状态。
+6. `controlPolicies`：支付控制策略配置，包含来源应用标识、来源应用名称、允许支付方式、允许渠道、允许商户号、两级分钟限流阈值、令牌鉴权及令牌是否配置、严格模式、自检状态、自检提示和启停状态；不返回令牌原文。
 
 ### 12.2 配置启停与路由规则启停复核
 
@@ -1195,10 +1199,14 @@ POST /api/payment-config/gateways/reviews/{requestNo}/reject
 
 批准阶段先锁复核申请、再锁网关运行配置并重新校验完整候选。CREATE 要求编码仍未占用，UPDATE/STATUS_CHANGE 要求网关存在且完整基线未漂移；同人声明、重复处理、候选非法或基线失效时拒绝。新增或完整更新与复核完成处于同一事务；驳回只完成复核。列表返回 `operationType`、全部非敏感候选字段、`baseFingerprint / candidateStatus / requester / requestReason / reviewStatus / reviewer / reviewComment / createdAt / reviewedAt / identityTrustLevel`。
 
-启停支付控制策略：
+支付控制策略完整候选复核：
 
 ```http
 POST /api/payment-config/control-policies/toggle
+GET  /api/payment-config/control-policies/reviews
+POST /api/payment-config/control-policies/reviews
+POST /api/payment-config/control-policies/reviews/{requestNo}/approve
+POST /api/payment-config/control-policies/reviews/{requestNo}/reject
 ```
 
 执行支付控制策略自检：
@@ -1207,26 +1215,30 @@ POST /api/payment-config/control-policies/toggle
 POST /api/payment-config/control-policies/self-check
 ```
 
-控制策略直接启停请求示例：
+控制策略启停候选请求示例：
 
 ```json
 {
-  "configCode": "wx_h5",
-  "enabled": false
+  "sourceAppId": "housekeeping-app-web",
+  "enabled": false,
+  "requester": "maker-a",
+  "changeReason": "暂停来源应用支付准入"
 }
 ```
 
+新增或编辑完整候选通过 `requester + candidate` 提交；candidate 包含来源应用标识/名称、支付方式/渠道/商户授权清单、两级正数限流、令牌鉴权开关、可选访问令牌、严格模式、启停状态和变更原因。新增且开启令牌鉴权时令牌必填；编辑留空继承当前令牌。管理总览和复核列表只返回 `accessTokenConfigured`，不返回 `accessTokenValue`。批准后自检状态重置为 `WARN`，严格模式必须重新自检通过后才能继续提交支付。
+
 说明：
 
-1. 启停候选或直接启停请求的 `enabled=true` 表示目标状态 `ENABLED`。
-2. 启停候选或直接启停请求的 `enabled=false` 表示目标状态 `DISABLED`。
+1. 启停候选请求的 `enabled=true` 表示目标状态 `ENABLED`。
+2. 启停候选请求的 `enabled=false` 表示目标状态 `DISABLED`。
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 4. 协议配置当前已支持运营查看、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护、不可变版本和自声明 maker-checker；新增、编辑、启停与回滚都先提交完整候选，批准前运行态不变。该能力不等于可信审批、正式法律签署或电子签章联调。
 5. 返回码映射启停候选使用 `channelCode / channelReturnCode / enabled / requester / changeReason`，不再使用通用 `configCode / subCode` 直接写入请求。
 6. 返回码映射当前已支持运营查看、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备 V1.4 复核与审计，单条启停具备 V1.5 独立唯一待办、完整基线指纹和自声明异人复核。后续继续补可信身份权限、真实渠道码表校验和受控自动归档。
 7. 支付网关新增、编辑和启停已统一纳入 V1.3 完整候选复核，关闭已知直接运行态写入入口；`requester / reviewer` 仍是自声明，`identityTrustLevel` 固定为 `SELF_DECLARED`，不代表可信身份、正式审批或不可抵赖签字。候选中的证书别名和状态只是治理台账字段，证书上传/轮换动作、真实灰度发布编排、渠道探活和真实网关适配仍未落地。
 8. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示，新增、编辑和启停已统一纳入 V1.3 完整候选复核；后续继续补可信身份权限、专用密钥轮换、证书上传、多商户参数模板和真实探活治理。
-9. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。
+9. 支付控制策略新增、编辑和启停已统一纳入 V1.6 完整候选复核；来源应用编码统一小写，同应用唯一待办，批准前重验完整基线。自检仍使用 `configCode` 传来源应用标识并回写 `PASS/WARN/FAIL`；自动/人工自检属于系统运行状态，不进入配置复核。令牌只以是否配置展示，人员仍为 `SELF_DECLARED`。
 10. 路由规则新增、编辑、启停和回滚均提交候选快照进入自声明 maker-checker；旧的直接运行态写入路径已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
 
 ### 12.3 路由规则维护与校验
