@@ -53,6 +53,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final int SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
+
     private static final int SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS = 120;
 
     private final PaymentMapper paymentMapper;
@@ -384,6 +386,8 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
                 buildRouteContext(request, currentPrepay, terminal));
         String resolvedChannelCode = routeDecision.getChannelCode();
+        String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
+        validateSubmitIdempotencyKey(idempotencyKey);
         validateSubmitControlPolicy(
                 sourceAppId,
                 request.getMerchantNo(),
@@ -408,7 +412,6 @@ public class PaymentServiceImpl implements PaymentService {
                     resolvedChannelCode,
                     riskDecision);
         }
-        String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
             return currentPrepay;
@@ -864,8 +867,11 @@ public class PaymentServiceImpl implements PaymentService {
         }
         return value.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
                 .replace("\r", "\\r")
-                .replace("\n", "\\n");
+                .replace("\n", "\\n")
+                .replace("\t", "\\t");
     }
 
     private void settleOrderAndBill(PaymentDetailDTO detail) {
@@ -998,6 +1004,26 @@ public class PaymentServiceImpl implements PaymentService {
             return request.getIdempotencyKey().trim();
         }
         return currentPrepay.getPrepayOrderNo() + "|" + request.getPaymentMethod() + "|" + resolvedChannelCode;
+    }
+
+    private void validateSubmitIdempotencyKey(String idempotencyKey) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                    "支付幂等键不能为空");
+        }
+        if (idempotencyKey.length() > SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                    "支付幂等键长度不能超过 128 个字符");
+        }
+        for (int index = 0; index < idempotencyKey.length(); index++) {
+            if (Character.isISOControl(idempotencyKey.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                        "支付幂等键不能包含控制字符");
+            }
+        }
     }
 
     /**
@@ -1248,28 +1274,28 @@ public class PaymentServiceImpl implements PaymentService {
             String idempotencyKey,
             String resolvedChannelCode) {
         return new StringJoiner(",", "{", "}")
-                .add("\"method\":\"" + request.getPaymentMethod() + "\"")
-                .add("\"channelCode\":\"" + request.getChannelCode() + "\"")
-                .add("\"sourceAppId\":\"" + sourceAppId + "\"")
-                .add("\"resolvedChannelCode\":\"" + resolvedChannelCode + "\"")
-                .add("\"terminal\":\"" + terminal + "\"")
-                .add("\"clientIp\":\"" + clientIp + "\"")
-                .add("\"clientDeviceId\":\"" + defaultText(request.getClientDeviceId()) + "\"")
-                .add("\"payerPhone\":\"" + defaultText(request.getPayerPhone()) + "\"")
-                .add("\"idempotencyKey\":\"" + idempotencyKey + "\"")
+                .add("\"method\":\"" + escapeJson(request.getPaymentMethod()) + "\"")
+                .add("\"channelCode\":\"" + escapeJson(request.getChannelCode()) + "\"")
+                .add("\"sourceAppId\":\"" + escapeJson(sourceAppId) + "\"")
+                .add("\"resolvedChannelCode\":\"" + escapeJson(resolvedChannelCode) + "\"")
+                .add("\"terminal\":\"" + escapeJson(terminal) + "\"")
+                .add("\"clientIp\":\"" + escapeJson(clientIp) + "\"")
+                .add("\"clientDeviceId\":\"" + escapeJson(defaultText(request.getClientDeviceId())) + "\"")
+                .add("\"payerPhone\":\"" + escapeJson(defaultText(request.getPayerPhone())) + "\"")
+                .add("\"idempotencyKey\":\"" + escapeJson(idempotencyKey) + "\"")
                 .toString();
     }
 
     private String buildRiskDecisionPayload(PaymentRiskDecisionResultDTO riskDecision, String resolvedChannelCode) {
         return new StringJoiner(",", "{", "}")
-                .add("\"decision\":\"" + defaultText(riskDecision.getDecision()) + "\"")
-                .add("\"decisionType\":\"" + defaultText(riskDecision.getDecisionType()) + "\"")
-                .add("\"hitCode\":\"" + defaultText(riskDecision.getHitCode()) + "\"")
-                .add("\"riskTag\":\"" + defaultText(riskDecision.getRiskTag()) + "\"")
-                .add("\"reviewNo\":\"" + defaultText(riskDecision.getReviewNo()) + "\"")
-                .add("\"eventNo\":\"" + defaultText(riskDecision.getEventNo()) + "\"")
-                .add("\"channelCode\":\"" + defaultText(resolvedChannelCode) + "\"")
-                .add("\"message\":\"" + defaultText(riskDecision.getMessage()) + "\"")
+                .add("\"decision\":\"" + escapeJson(defaultText(riskDecision.getDecision())) + "\"")
+                .add("\"decisionType\":\"" + escapeJson(defaultText(riskDecision.getDecisionType())) + "\"")
+                .add("\"hitCode\":\"" + escapeJson(defaultText(riskDecision.getHitCode())) + "\"")
+                .add("\"riskTag\":\"" + escapeJson(defaultText(riskDecision.getRiskTag())) + "\"")
+                .add("\"reviewNo\":\"" + escapeJson(defaultText(riskDecision.getReviewNo())) + "\"")
+                .add("\"eventNo\":\"" + escapeJson(defaultText(riskDecision.getEventNo())) + "\"")
+                .add("\"channelCode\":\"" + escapeJson(defaultText(resolvedChannelCode)) + "\"")
+                .add("\"message\":\"" + escapeJson(defaultText(riskDecision.getMessage())) + "\"")
                 .toString();
     }
 

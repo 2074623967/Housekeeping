@@ -560,6 +560,94 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedSubmitIdempotencyKeyBeforeControlAndChannelCalls() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-IDEMP-LONG");
+        prepay.setPaymentOrderId("PAY-IDEMP-LONG");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        when(paymentMapper.findPrepay("PRE-IDEMP-LONG")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-IDEMP-LONG");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-IDEMP-LONG")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-IDEMP-LONG");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setIdempotencyKey(repeat("A", 129));
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                exception.getCode());
+        verify(paymentMapper, never()).existsPaymentAttemptByIdempotencyKey(
+                org.mockito.ArgumentMatchers.anyString());
+        verify(paymentMapper, never()).insertSubmitConcurrencyToken(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRejectControlCharactersInSubmitIdempotencyKey() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-IDEMP-CTRL");
+        prepay.setPaymentOrderId("PAY-IDEMP-CTRL");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        when(paymentMapper.findPrepay("PRE-IDEMP-CTRL")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-IDEMP-CTRL");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-IDEMP-CTRL")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-IDEMP-CTRL");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setIdempotencyKey("IDEMP-CTRL\nINJECTED");
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                exception.getCode());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldReturnLatestPrepayWhenConcurrentSubmitAlreadyOccupiedCashier() {
         PrepayOrderDTO prepay = new PrepayOrderDTO();
         prepay.setPrepayOrderNo("PRE-250");
@@ -628,7 +716,7 @@ class PaymentServiceImplTest {
         routeDecision.setRouteRule("RULE_ENTERPRISE_BANK");
         routeDecision.setRouteResult("企业大额订单走线下银行 -> offline_bank");
         when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
-        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-300")).thenReturn(false);
+        when(paymentMapper.existsPaymentAttemptByIdempotencyKey("IDEMP-\"300")).thenReturn(false);
         when(paymentMapper.updatePrepayToPaying("PRE-300")).thenReturn(1);
         when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-300")).thenReturn("ORD-300");
         when(paymentMapper.findPrepay("PRE-300")).thenReturn(prepay);
@@ -668,7 +756,7 @@ class PaymentServiceImplTest {
         request.setAccessToken("token-housekeeping-pc-web");
         request.setTerminal("PC");
         request.setClientIp("10.0.0.3");
-        request.setIdempotencyKey("IDEMP-300");
+        request.setIdempotencyKey("IDEMP-\"300");
 
         PrepayOrderDTO result = new PaymentServiceImpl(
                 paymentMapper,
@@ -687,7 +775,7 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("PRE-300"),
                 org.mockito.ArgumentMatchers.eq("PAY-300"),
                 org.mockito.ArgumentMatchers.eq("housekeeping-pc-web"),
-                org.mockito.ArgumentMatchers.eq("IDEMP-300"),
+                org.mockito.ArgumentMatchers.eq("IDEMP-\"300"),
                 org.mockito.ArgumentMatchers.eq("PC"),
                 org.mockito.ArgumentMatchers.eq("10.0.0.3"),
                 org.mockito.ArgumentMatchers.anyInt());
@@ -706,11 +794,12 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("housekeeping-pc-web"),
                 org.mockito.ArgumentMatchers.eq("PC"),
                 org.mockito.ArgumentMatchers.eq("10.0.0.3"),
-                org.mockito.ArgumentMatchers.eq("IDEMP-300"),
+                org.mockito.ArgumentMatchers.eq("IDEMP-\"300"),
                 org.mockito.ArgumentMatchers.argThat(payload ->
                         payload != null
                                 && payload.contains("\"sourceAppId\":\"housekeeping-pc-web\"")
-                                && payload.contains("\"resolvedChannelCode\":\"offline_bank\"")),
+                                && payload.contains("\"resolvedChannelCode\":\"offline_bank\"")
+                                && payload.contains("\"idempotencyKey\":\"IDEMP-\\\"300\"")),
                 org.mockito.ArgumentMatchers.eq("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}"),
                 org.mockito.ArgumentMatchers.eq("处理中"),
                 org.mockito.ArgumentMatchers.eq("info"));
@@ -723,7 +812,7 @@ class PaymentServiceImplTest {
                         && log.getRequestNo().equals(log.getSourceNo())
                         && log.getMessage().contains("请求状态=处理中")
                         && !log.getMessage().contains("10.0.0.3")
-                        && !log.getMessage().contains("IDEMP-300")
+                        && !log.getMessage().contains("IDEMP-\"300")
                         && !log.getMessage().contains("请求报文")));
         verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
                 "PAYMENT_EVENT".equals(log.getSourceType())
@@ -1783,5 +1872,13 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("当前支付场景未配置默认支付方式，无法提交支付", exception.getMessage());
         verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
         verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    private String repeat(String value, int times) {
+        StringBuilder builder = new StringBuilder(value.length() * times);
+        for (int index = 0; index < times; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 }
