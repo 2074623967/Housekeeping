@@ -15,6 +15,13 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeConfigCode = ref("");
+const channelReviews = ref([]);
+const isChannelReviewLoading = ref(false);
+const channelReviewError = ref("");
+const channelActionRequester = ref("");
+const channelActionReason = ref("");
+const channelReviewer = ref("");
+const channelReviewComment = ref("");
 const editingRouteRuleCode = ref("");
 const versionRuleCode = ref("");
 const routeRuleVersions = ref([]);
@@ -201,13 +208,82 @@ function applyOverview(overview) {
   hasCheckedRouteRuleConflicts.value = false;
 }
 
-async function toggleChannel(channel) {
-  await toggleConfig(
-    channel.channelCode,
-    channel.status !== "ENABLED",
-    "渠道",
-    paymentConfigApi.toggleChannel
-  );
+async function submitChannelStatusReview(channel) {
+  if (!channelActionRequester.value || !channelActionReason.value) {
+    actionMessage.value = "渠道启停申请失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = channel.status !== "ENABLED";
+  if (!window.confirm(`确认提交渠道 ${channel.channelCode} 的${enabled ? "启用" : "停用"}复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = channel.channelCode;
+  actionMessage.value = "";
+  try {
+    channelReviews.value = await paymentConfigApi.submitChannelStatusReview({
+      channelCode: channel.channelCode,
+      enabled,
+      requester: channelActionRequester.value,
+      changeReason: channelActionReason.value
+    });
+    channelActionReason.value = "";
+    actionMessage.value = `渠道 ${channel.channelCode} 的${enabled ? "启用" : "停用"}申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `渠道启停申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadChannelReviews() {
+  isChannelReviewLoading.value = true;
+  channelReviewError.value = "";
+  try {
+    channelReviews.value = await paymentConfigApi.getChannelReviews();
+  } catch (error) {
+    channelReviewError.value = error.message;
+  } finally {
+    isChannelReviewLoading.value = false;
+  }
+}
+
+async function handleChannelReview(review, approved) {
+  if (!channelReviewer.value) {
+    actionMessage.value = "渠道复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!channelReviewComment.value) {
+    actionMessage.value = `渠道复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并应用 ${review.candidateStatus} 状态？`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `channel-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: channelReviewer.value,
+      reviewComment: channelReviewComment.value
+    };
+    channelReviews.value = approved
+      ? await paymentConfigApi.approveChannelReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectChannelReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    channelReviewComment.value = "";
+    actionMessage.value = approved
+      ? `渠道状态申请 ${review.requestNo} 已通过并应用。`
+      : `渠道状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `渠道复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function toggleRouteRule(rule) {
@@ -1041,6 +1117,7 @@ async function submitRosterForm() {
 
 onMounted(() => {
   loadOverview();
+  loadChannelReviews();
   loadRouteRuleReviews();
   loadProtocolReviews();
   loadReturnCodeReviews();
@@ -1062,7 +1139,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.13</span>
+        <span class="badge info">配置中心 V1.14</span>
       </div>
     </div>
 
@@ -1141,6 +1218,99 @@ function exportGovernanceSnapshot(section = "ALL") {
           </div>
         </div>
 
+        <div class="panel" style="margin-bottom: 16px;">
+          <div class="section-title">
+            <div>
+              <h3>支付渠道状态变更复核</h3>
+              <p class="meta">启停先提交候选，异人声明批准且完整渠道基线有效后才更新运行态</p>
+            </div>
+            <button class="button secondary" :disabled="isChannelReviewLoading" @click="loadChannelReviews">
+              {{ isChannelReviewLoading ? "加载中..." : "刷新申请" }}
+            </button>
+          </div>
+          <div class="filter-grid">
+            <label>
+              申请人声明
+              <input v-model.trim="channelActionRequester" maxlength="64" placeholder="提交启停申请时必填" />
+            </label>
+            <label>
+              申请原因
+              <input v-model.trim="channelActionReason" maxlength="255" placeholder="提交启停申请时必填" />
+            </label>
+            <label>
+              复核人声明
+              <input v-model.trim="channelReviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+            </label>
+            <label>
+              复核意见 / 驳回原因
+              <input v-model.trim="channelReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
+            </label>
+          </div>
+          <div v-if="channelReviewError" class="error-banner">
+            支付渠道复核申请加载失败：{{ channelReviewError }}
+          </div>
+          <div v-if="isChannelReviewLoading" class="state-box">支付渠道复核申请加载中...</div>
+          <div v-else-if="!channelReviews.length" class="state-box">当前暂无支付渠道状态复核申请</div>
+          <div v-else class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>申请号</th>
+                  <th>渠道</th>
+                  <th>候选状态</th>
+                  <th>申请声明</th>
+                  <th>复核状态</th>
+                  <th>复核记录</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="review in channelReviews" :key="review.requestNo">
+                  <td>{{ review.requestNo }}</td>
+                  <td>
+                    {{ review.channelCode }} / {{ review.channelName }}
+                    <div class="muted-text">{{ review.paymentMethod }} / 基线 {{ review.baseFingerprint?.slice(0, 12) }}</div>
+                  </td>
+                  <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
+                  <td>
+                    {{ review.requester }}
+                    <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                  </td>
+                  <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                  <td>
+                    {{ review.reviewer || "-" }}
+                    <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                  </td>
+                  <td>
+                    {{ review.createdAt }}
+                    <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                  </td>
+                  <td>
+                    <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                      <button
+                        class="link-button"
+                        :disabled="Boolean(activeConfigCode)"
+                        @click="handleChannelReview(review, true)"
+                      >
+                        通过并应用
+                      </button>
+                      <button
+                        class="link-button"
+                        :disabled="Boolean(activeConfigCode)"
+                        @click="handleChannelReview(review, false)"
+                      >
+                        驳回
+                      </button>
+                    </template>
+                    <span v-else class="muted-text">已处理</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -1190,9 +1360,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <button
                     class="link-button"
                     :disabled="activeConfigCode === channel.channelCode"
-                    @click="toggleChannel(channel)"
+                    @click="submitChannelStatusReview(channel)"
                   >
-                    {{ channel.status === "ENABLED" ? "停用" : "启用" }}
+                    {{ channel.status === "ENABLED" ? "申请停用" : "申请启用" }}
                   </button>
                 </td>
               </tr>

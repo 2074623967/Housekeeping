@@ -6,6 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
@@ -58,6 +61,32 @@ class PaymentConfigControllerTest {
 
         assertEquals(0, controller.overview().getData().getChannels().size());
         verify(paymentConfigService).overview();
+    }
+
+    @Test
+    void shouldReviewChannelStatusChange() {
+        PaymentChannelReviewDTO review = new PaymentChannelReviewDTO();
+        when(paymentConfigService.listChannelReviews()).thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.submitChannelStatusReview(any(PaymentChannelStatusReviewRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.approveChannelReview(
+                any(String.class), any(PaymentChannelReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.rejectChannelReview(
+                any(String.class), any(PaymentChannelReviewActionRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+        PaymentChannelStatusReviewRequestDTO statusRequest = new PaymentChannelStatusReviewRequestDTO();
+        PaymentChannelReviewActionRequestDTO actionRequest = new PaymentChannelReviewActionRequestDTO();
+
+        assertEquals(1, controller.listChannelReviews().getData().size());
+        assertEquals(1, controller.submitChannelStatusReview(statusRequest).getData().size());
+        assertEquals(1, controller.approveChannelReview("CSR-001", actionRequest).getData().size());
+        assertEquals(1, controller.rejectChannelReview("CSR-001", actionRequest).getData().size());
+        verify(paymentConfigService).listChannelReviews();
+        verify(paymentConfigService).submitChannelStatusReview(statusRequest);
+        verify(paymentConfigService).approveChannelReview("CSR-001", actionRequest);
+        verify(paymentConfigService).rejectChannelReview("CSR-001", actionRequest);
     }
 
     @Test
@@ -259,7 +288,6 @@ class PaymentConfigControllerTest {
     @Test
     void shouldToggleGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.toggleChannel(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleGateway(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleControlPolicy(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleAlertProvider(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
@@ -269,12 +297,10 @@ class PaymentConfigControllerTest {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
-        assertEquals(overview, controller.toggleChannel(request).getData());
         assertEquals(overview, controller.toggleGateway(request).getData());
         assertEquals(overview, controller.toggleControlPolicy(request).getData());
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
-        verify(paymentConfigService).toggleChannel(request);
         verify(paymentConfigService).toggleGateway(request);
         verify(paymentConfigService).toggleControlPolicy(request);
         verify(paymentConfigService).toggleAlertProvider(request);

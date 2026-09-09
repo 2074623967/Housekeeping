@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
@@ -19,6 +20,8 @@ import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
+import com.abc123.hsp.entity.PaymentChannelConfigEntity;
+import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
@@ -39,6 +42,19 @@ public interface PaymentConfigMapper {
      * 查询支付渠道配置。
      */
     List<PaymentChannelConfigDTO> findChannels();
+
+    /** 按渠道编码加锁查询完整运行配置。 */
+    PaymentChannelConfigEntity findChannelByCodeForUpdate(@Param("channelCode") String channelCode);
+
+    /** 查询支付渠道状态变更复核申请。 */
+    List<PaymentChannelReviewDTO> findChannelReviews();
+
+    /** 加锁查询支付渠道状态变更复核申请。 */
+    PaymentChannelReviewEntity findChannelReviewForUpdate(@Param("requestNo") String requestNo);
+
+    /** 按唯一占位加锁查询渠道待复核申请。 */
+    PaymentChannelReviewEntity findPendingChannelReviewForUpdate(
+            @Param("pendingChannelCode") String pendingChannelCode);
 
     /**
      * 查询支付路由规则配置。
@@ -199,6 +215,16 @@ public interface PaymentConfigMapper {
     int updateChannelStatus(@Param("channelCode") String channelCode,
                             @Param("status") String status,
                             @Param("statusType") String statusType);
+
+    /** 新增支付渠道状态变更复核申请。 */
+    int insertChannelReview(PaymentChannelReviewEntity entity);
+
+    /** 完成支付渠道状态变更复核并释放唯一待办占位。 */
+    int completeChannelReview(@Param("requestNo") String requestNo,
+                              @Param("reviewStatus") String reviewStatus,
+                              @Param("reviewStatusType") String reviewStatusType,
+                              @Param("reviewer") String reviewer,
+                              @Param("reviewComment") String reviewComment);
 
     /**
      * 新增支付路由规则。

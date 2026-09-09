@@ -887,7 +887,16 @@ export const settlementApi = {
 export const paymentConfigApi = {
   getOverview: () => request("/api/payment-config"),
   buildExportUrl: (section = "ALL") => `/api/payment-config/export?section=${encodeURIComponent(section)}`,
-  toggleChannel: (configCode, enabled) => postJson("/api/payment-config/channels/toggle", { configCode, enabled }),
+  submitChannelStatusReview: (payload) => postJson("/api/payment-config/channels/toggle", payload),
+  getChannelReviews: () => request("/api/payment-config/channels/reviews"),
+  approveChannelReview: (requestNo, payload) => postJson(
+    `/api/payment-config/channels/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectChannelReview: (requestNo, payload) => postJson(
+    `/api/payment-config/channels/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   submitRouteRuleStatusReview: (payload) => postJson("/api/payment-config/route-rules/toggle", payload),
   validateRouteRule: (payload) => postJson("/api/payment-config/route-rules/validate", payload),
   getRouteRuleConflicts: () => request("/api/payment-config/route-rules/conflicts"),

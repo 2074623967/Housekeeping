@@ -1,6 +1,9 @@
 package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
+import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
@@ -76,12 +79,33 @@ public class PaymentConfigController {
                 .body(csvBytes);
     }
 
-    /**
-     * 启停支付渠道。
-     */
+    /** 提交支付渠道启停候选进入复核。 */
     @PostMapping("/channels/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleChannel(@RequestBody PaymentConfigToggleRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.toggleChannel(request));
+    public ApiResponse<List<PaymentChannelReviewDTO>> submitChannelStatusReview(
+            @RequestBody PaymentChannelStatusReviewRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitChannelStatusReview(request));
+    }
+
+    /** 查询支付渠道状态变更复核申请。 */
+    @GetMapping("/channels/reviews")
+    public ApiResponse<List<PaymentChannelReviewDTO>> listChannelReviews() {
+        return ApiResponse.success(paymentConfigService.listChannelReviews());
+    }
+
+    /** 通过支付渠道状态变更复核并应用候选。 */
+    @PostMapping("/channels/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentChannelReviewDTO>> approveChannelReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentChannelReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveChannelReview(requestNo, request));
+    }
+
+    /** 驳回支付渠道状态变更复核，不改变运行态。 */
+    @PostMapping("/channels/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentChannelReviewDTO>> rejectChannelReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentChannelReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectChannelReview(requestNo, request));
     }
 
     /**

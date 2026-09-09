@@ -3,6 +3,9 @@ package com.abc123.hsp.service;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
@@ -45,10 +48,19 @@ public interface PaymentConfigService {
      */
     String exportGovernanceSnapshotCsv(String section);
 
-    /**
-     * 启停支付渠道。
-     */
-    PaymentConfigOverviewDTO toggleChannel(PaymentConfigToggleRequestDTO request);
+    /** 提交支付渠道启停候选，不改变运行态。 */
+    List<PaymentChannelReviewDTO> submitChannelStatusReview(PaymentChannelStatusReviewRequestDTO request);
+
+    /** 查询支付渠道状态变更复核申请。 */
+    List<PaymentChannelReviewDTO> listChannelReviews();
+
+    /** 通过复核并应用支付渠道状态候选。 */
+    List<PaymentChannelReviewDTO> approveChannelReview(
+            String requestNo, PaymentChannelReviewActionRequestDTO request);
+
+    /** 驳回支付渠道状态候选，不改变运行态。 */
+    List<PaymentChannelReviewDTO> rejectChannelReview(
+            String requestNo, PaymentChannelReviewActionRequestDTO request);
 
     /**
      * 提交路由规则启停候选进入复核，不直接改变运行态。

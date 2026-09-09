@@ -31,6 +31,88 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findChannelByCodeForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentChannelConfigEntity">
+        SELECT channel_code AS channelCode,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               merchant_no AS merchantNo,
+               merchant_app_id AS merchantAppId,
+               callback_secret AS callbackSecret,
+               callback_sign_algorithm AS callbackSignAlgorithm,
+               callback_public_key AS callbackPublicKey,
+               callback_notify_url AS callbackNotifyUrl,
+               certificate_profile AS certificateProfile,
+               notify_sign_window_sec AS notifySignWindowSec,
+               refund_window_days AS refundWindowDays,
+               risk_control_tag AS riskControlTag,
+               scene_scope AS sceneScope,
+               status,
+               status_type AS statusType,
+               daily_limit AS dailyLimit,
+               priority,
+               route_weight AS routeWeight
+        FROM t_payment_channel_config
+        WHERE channel_code = #{channelCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findChannelReviews" resultType="com.abc123.hsp.dto.PaymentChannelReviewDTO">
+        SELECT request_no AS requestNo,
+               channel_code AS channelCode,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_channel_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findChannelReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentChannelReviewEntity">
+        SELECT request_no AS requestNo,
+               channel_code AS channelCode,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_channel_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingChannelReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentChannelReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_channel_review
+        WHERE pending_channel_code = #{pendingChannelCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findRouteRules" resultType="com.abc123.hsp.dto.PaymentRouteRuleConfigDTO">
         SELECT rule_code AS ruleCode,
                rule_name AS ruleName,
@@ -833,6 +915,31 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE channel_code = #{channelCode}
+    </update>
+
+    <insert id="insertChannelReview">
+        INSERT INTO t_payment_channel_review (
+            request_no, channel_code, channel_name, payment_method, pending_channel_code,
+            base_fingerprint, candidate_status, candidate_status_type, requester, request_reason,
+            review_status, review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{channelCode}, #{channelName}, #{paymentMethod}, #{pendingChannelCode},
+            #{baseFingerprint}, #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
+            #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeChannelReview">
+        UPDATE t_payment_channel_review
+        SET pending_channel_code = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
     </update>
 
     <insert id="insertRouteRule" parameterType="com.abc123.hsp.entity.PaymentRouteRuleConfigEntity">

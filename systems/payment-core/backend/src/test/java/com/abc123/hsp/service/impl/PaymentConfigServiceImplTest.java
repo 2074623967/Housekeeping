@@ -929,26 +929,6 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldToggleChannelStatus() {
-        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("wx_h5");
-        request.setEnabled(false);
-        when(paymentConfigMapper.updateChannelStatus("wx_h5", "DISABLED", "danger")).thenReturn(1);
-        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
-
-        new PaymentConfigServiceImpl(paymentConfigMapper).toggleChannel(request);
-
-        verify(paymentConfigMapper).updateChannelStatus("wx_h5", "DISABLED", "danger");
-    }
-
-    @Test
     void shouldToggleIssueDutyRosterStatus() {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("DUTY_WAIT_CALLBACK_P1");
