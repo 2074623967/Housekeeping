@@ -5589,3 +5589,28 @@
 1. 供应商回执出参最小化已与通知器真实 `HTTP_RESPONSE:{...}` 存储格式对齐，结构化诊断信息不再因来源前缀被无差别丢弃。
 2. 非结构化传输异常仍不会通过告警列表、CSV 或确认响应扩散；默认遮蔽不能替代后续真实供应商样本核验和生产字段级授权。
 3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式放行治理事实。
+
+## 177. 2026-09-09 异常告警传输异常摘要最小化 V1.0 验证
+
+### 177.1 本轮补强
+
+1. IM、SMS、EMAIL 三类 Webhook 通知器发生 `RestClientException` 时，原始异常只写入内部 `providerReceiptSnapshot`，可见的 `providerDeliveryMessage` 固定输出 `transportError=[REDACTED]`。
+2. 派发服务在持久化任意通知器结果前再次截断 `transportError=` 后的内容，防止自定义通知器绕过内置实现的最小化规则。
+3. 通知器直接抛出运行时异常时，内部快照保留原始故障证据，运营摘要固定为“通知器执行异常”；主备供应商切换逻辑保持不变。
+4. 供应商业务状态、HTTP 状态、失败码、超时配置和回执号继续可见，不把故障摘要最小化扩大成无差别隐藏。
+
+### 177.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警传输异常定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `41` 个用例通过；覆盖三类内置通知器、自定义失败结果、运行时异常和主备切换 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `480` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产故障证据治理 | 原文访问授权、下载审计、保留期限、加密与真实供应商异常样本 | 未执行 | 不记录生产权限、隐私验收、渗透测试或真实异常联调通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；本轮未修改 Mapper XML、数据库结构或告警状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 177.3 当前判断
+
+1. 底层传输异常不再通过告警明细、CSV 或异常中心聚合摘要扩散，运营仍可依据通道、HTTP 状态、超时和失败分类排障。
+2. 内部快照保留原始故障证据并不等于已具备可信授权；生产前仍需补字段级访问控制、审计、加密和保留期限治理。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式放行治理事实。

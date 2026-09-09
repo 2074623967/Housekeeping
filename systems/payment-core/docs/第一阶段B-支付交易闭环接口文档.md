@@ -2046,6 +2046,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 无前缀对象或数组 JSON 沿用通用载荷脱敏；带来源前缀但正文不是结构化 JSON 时返回 `[REDACTED]`，不得透传传输异常原文。
 3. 来源识别只用于出参格式转换，不改变数据库保存值、供应商投递状态、回执号或确认状态机。
 
+### 14.5 异常告警传输异常摘要规则
+
+1. 三类 Webhook 通知器发生连接、超时等传输异常时，`providerDeliveryMessage` 固定包含通道、超时配置和 `transportError=[REDACTED]`，不返回 `RestClientException` 原文。
+2. 派发服务会再次截断第三方通知器返回消息中 `transportError=` 后的任意内容；通知器直接抛出异常时返回固定“通知器执行异常”摘要。
+3. 原始异常文本仅进入内部 `providerReceiptSnapshot`，对外查询仍按第 14.3、14.4 节失败闭合；本规则不提供生产原文查看授权。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
