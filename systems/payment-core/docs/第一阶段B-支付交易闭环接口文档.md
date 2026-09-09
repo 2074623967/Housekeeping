@@ -2136,6 +2136,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 该处理只影响展示和普通日志，供应商状态匹配仍使用原始值，标准化投递状态保持原协议口径。
 4. 当前规则不替代真实供应商码表契约、独立原始凭证存储或生产安全验收。
 
+### 14.18 超时关单任务结果规则
+
+1. `POST /api/payment-task-center/actions/close-expired-payments` 的外部响应结构保持 `PaymentTaskActionResultDTO`，其中 `processedCount` 为本轮扫描数量，`successCount` 为成功提交数量，`failCount` 为独立事务回滚数量。
+2. 单笔失败不终止批次；响应与任务日志的 `summaryComment` 最多列出 3 个失败支付单号，完整失败规模以 `failCount` 为准。
+3. 失败支付单保持未收口状态，后续自动或人工任务可再次选中；调用方不得把批次返回成功等同于每笔关单均成功。
+4. 该接口仍表达支付核心本地状态处理结果，不代表真实支付渠道撤销、关闭或资金侧收口已经完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
