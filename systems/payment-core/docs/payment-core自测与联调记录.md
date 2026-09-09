@@ -5888,3 +5888,27 @@
 1. 第三方通知器不能再用超长结果字段让普通告警日志插入因列容量失败，主备派发的故障隔离能力得到补强。
 2. 当前上限来自仓库内两份一致的 schema，未来数据库迁移调整列容量时必须同步修改归一化常量与测试。
 3. 字符截断保护不能替代生产数据库模式核验、供应商契约测试或真实负载验证。
+
+## 189. 2026-09-09 告警供应商诊断码最小化 V1.0 验证
+
+### 189.1 本轮补强
+
+1. 共享通知器基类新增诊断码白名单，`providerStatus`、`failureCode` 和成功码期望/实际值只允许 `A-Z/a-z/0-9/._:/-` 且最长 64 位。
+2. 不符合约束的值在 `providerDeliveryMessage` 中固定为 `[REDACTED]`，避免自由文本、换行或凭据片段进入普通日志与运营页面。
+3. 原始值继续参与配置状态匹配，标准状态码与失败码展示保持不变。
+
+### 189.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 三类通知器定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest test` | 通过 | 标准码正常展示；带换行的状态与带空白的失败值均显示 `[REDACTED]`，原文不进入投递说明 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `490` 个用例，`0` failures、`0` errors、`0` skipped |
+| 真实供应商契约 | 真实码表、异常样本、独立取证设施与生产安全测试 | 未执行 | 不记录真实供应商诊断字段或生产日志安全验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；未修改接口字段、数据库或状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 189.3 当前判断
+
+1. 供应商可控自由文本不能再通过配置指针进入普通投递说明，标准可运营诊断码仍保留。
+2. 业务成功与状态映射继续基于原始响应比较，展示最小化不改变派发结论。
+3. 白名单不能替代真实供应商码表盘点、受控原文取证、生产访问审计或渗透测试。
