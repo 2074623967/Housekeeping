@@ -2367,6 +2367,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 获取订单级行锁后才允许查询有效预付单、读取订单金额和创建账单/支付单/预付单；后到请求必须在前一事务提交后重新执行查重，命中有效预付单时返回同一 `prepayOrderNo/paymentOrderId`。
 3. 协调行无法读取时返回 `PAYMENT-500` 并回滚，不得退化为无锁创建。运行库必须先执行对应增量 DDL；本契约只覆盖共享 payment-core 主库，不宣称对跨库订单更新形成全局互斥。
 
+### 14.51 创建预付单到期时间与服务事务验证契约
+
+1. 账单 `due_at` 使用 `TIMESTAMPADD(DAY, 1, NOW())`，预付单 `expires_at` 使用 `TIMESTAMPADD(HOUR, 1, NOW())`；两者与原 `DATE_ADD` 口径等价，并兼容 MySQL 8 与 H2 MySQL 模式。
+2. 完整服务双事务验证要求后到请求在同订单锁释放前不能完成；锁释放后必须重新查重并返回首请求创建的相同 `prepayOrderNo/paymentOrderId`。
+3. 验证结束时协调表、账单、支付单和预付单各只能存在一条对应记录。该契约的本地自动化证据不替代真实 MySQL 多实例、锁等待超时、死锁恢复和容量验收。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

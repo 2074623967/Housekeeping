@@ -500,6 +500,13 @@
 4. 分别并发不同订单号，验证不会被同一协调行串行化；模拟首事务回滚，验证后续请求可以重新初始化或获取协调行并继续。
 5. 本地 H2 通过后，生产仍需补 MySQL 8 双实例并发、锁等待超时、死锁重试、连接池占用、协调表增长和跨库订单状态漂移测试。
 
+### 4.70 预付单完整服务事务并发与到期 SQL 兼容
+
+1. 使用正式 `PaymentMapper.xml` 和完整 `PaymentServiceImpl.prepay` 启动两个独立事务，首事务持有同订单协调锁时，断言第二请求在限定时间内不能完成。
+2. 首事务创建并提交真实账单、支付单和预付单后，断言第二请求继续执行并复用相同 `prepayOrderNo/paymentOrderId`。
+3. 查询最终数据库，断言 `t_payment_prepay_creation_lock/t_bill/t_payment_order/t_prepay_order` 各只有 `1` 条记录。
+4. 通过正式插入 SQL 验证 `TIMESTAMPADD(DAY, 1, NOW())` 与 `TIMESTAMPADD(HOUR, 1, NOW())` 可在 H2 MySQL 模式执行；另行在真实 MySQL 8 验证锁等待、死锁与执行计划。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

@@ -6685,3 +6685,28 @@
 1. 唯一协调行将同订单并发首次创建和存量查重统一到一个可持久化锁点，避免仅锁 `t_order` 时虚拟支付无行可锁，也避免在预付单表上依赖尚不存在的记录。
 2. 协调行与业务写入共用事务，后到请求只能在前一事务提交或回滚后继续；持锁后重新查重是幂等成立的关键，不能把锁移动到查重之后。
 3. 当前证据为本地 H2 MySQL 兼容模式与单元测试。生产 MySQL 的锁等待策略、死锁恢复、协调表长期增长和跨库订单金额变化仍需真实环境验证。
+
+## 223. 2026-09-10 预付单完整服务事务并发 V1.0 验证
+
+### 223.1 本轮补强
+
+1. 新增 `PaymentPrepayCreationConcurrencyIntegrationTest`，直接装载正式 `PaymentMapper.xml` 并调用完整 `PaymentServiceImpl.prepay`，不再只验证 Mapper 行锁。
+2. 首事务预先持有同订单协调锁，第二个完整服务请求在首事务提交前必须等待；首事务完成真实账单、支付单和预付单写入后，第二请求继续并命中持锁后的查重结果。
+3. `insertBill` 和 `insertPrepayOrder` 的到期时间分别等价改用 `TIMESTAMPADD(DAY, 1, NOW())` 与 `TIMESTAMPADD(HOUR, 1, NOW())`，兼容 MySQL 8 与 H2 MySQL 模式。
+
+### 223.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 完整服务并发集成测试 | `mvn -Dtest=PaymentPrepayCreationConcurrencyIntegrationTest test` | 通过 | 双事务覆盖等待、提交后查重与结果复用；两次调用返回相同 `prepayOrderNo/paymentOrderId` |
+| 最终数据库事实 | H2 MySQL 模式双连接查询 | 通过 | 协调表、账单、支付单、预付单各 `1` 条 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `568` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | XML、测试和文档无空白符错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`，release 明细仍有 `4` 项真实阻断 |
+| 真实 MySQL 多实例验证 | 锁等待、死锁恢复、连接池占用与容量 | 未执行 | 不记录生产并发幂等或容量验收通过 |
+
+### 223.3 当前判断
+
+1. 本轮把证据从“Mapper 能形成行锁”提升为“完整服务事务会等待并在提交后复用同一支付事实”，直接验证服务事务边界与正式 SQL 的组合行为。
+2. `TIMESTAMPADD` 不改变一天账单到期和一小时预付单到期语义，仅消除测试数据库对 MySQL 专用 `DATE_ADD ... INTERVAL` 语法的不兼容。
+3. H2 MySQL 兼容模式不能证明真实 MySQL 的锁等待时间、死锁选择、隔离级别差异或多实例吞吐；这些仍是 release 前的真实环境验证项。
