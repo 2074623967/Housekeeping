@@ -5,8 +5,10 @@ import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
+import com.abc123.hsp.dto.PaymentChannelRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
@@ -65,6 +67,7 @@ import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
+import com.abc123.hsp.entity.PaymentChannelVersionEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
@@ -191,10 +194,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
                     ? "支付渠道已启用" : "支付渠道已停用");
         }
+        ensureChannelBaseline(current);
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
         copyChannelToReview(current, review);
         review.setOperationType("STATUS_CHANGE");
+        review.setBaseVersionNo(paymentConfigMapper.findLatestChannelVersionNo(channelCode));
         review.setPendingChannelCode(channelCode);
         review.setBaseFingerprint(fingerprintChannel(current));
         review.setCandidateStatus(candidateStatus);
@@ -230,6 +235,10 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
         copyChannelToReview(candidate, review);
         review.setOperationType(current == null ? "CREATE" : "UPDATE");
+        if (current != null) {
+            ensureChannelBaseline(current);
+            review.setBaseVersionNo(paymentConfigMapper.findLatestChannelVersionNo(channelCode));
+        }
         review.setPendingChannelCode(channelCode);
         review.setBaseFingerprint(current == null ? null : fingerprintChannel(current));
         review.setRequester(requester);
@@ -256,8 +265,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         boolean createOperation = "CREATE".equals(review.getOperationType());
         if (!createOperation
                 && !"UPDATE".equals(review.getOperationType())
-                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+                && !"STATUS_CHANGE".equals(review.getOperationType())
+                && !"ROLLBACK".equals(review.getOperationType())) {
             throw new IllegalArgumentException("支付渠道复核操作类型不支持");
+        }
+        if ("ROLLBACK".equals(review.getOperationType())
+                && (review.getSourceVersionNo() == null || review.getSourceVersionNo().intValue() <= 0)) {
+            throw new IllegalArgumentException("支付渠道回滚候选缺少目标历史版本");
         }
         if (!STATUS_ENABLED.equals(review.getCandidateStatus())
                 && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
@@ -268,9 +282,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             if (current != null) {
                 throw new IllegalArgumentException("支付渠道已存在，复核申请基线已失效");
             }
-        } else if (current == null || review.getBaseFingerprint() == null
-                || !review.getBaseFingerprint().equals(fingerprintChannel(current))) {
-            throw new IllegalArgumentException("支付渠道配置已变化，请重新提交复核申请");
+        } else {
+            Integer latestVersionNo = paymentConfigMapper.findLatestChannelVersionNo(review.getChannelCode());
+            if (current == null || review.getBaseFingerprint() == null
+                    || !review.getBaseFingerprint().equals(fingerprintChannel(current))
+                    || !sameInteger(review.getBaseVersionNo(), latestVersionNo)) {
+                throw new IllegalArgumentException("支付渠道配置已变化，请重新提交复核申请");
+            }
         }
         PaymentChannelConfigEntity candidate = buildChannelEntity(toChannelUpsertRequest(review), null,
                 review.getChannelCode());
@@ -280,6 +298,15 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (affectedRows == 0) {
             throw new IllegalArgumentException(createOperation ? "支付渠道新增失败" : "支付渠道配置不存在");
         }
+        String versionChangeType = "REVIEW_RELEASE";
+        Integer sourceVersionNo = null;
+        if ("STATUS_CHANGE".equals(review.getOperationType())) {
+            versionChangeType = "REVIEW_STATUS_CHANGE";
+        } else if ("ROLLBACK".equals(review.getOperationType())) {
+            versionChangeType = "REVIEW_ROLLBACK";
+            sourceVersionNo = review.getSourceVersionNo();
+        }
+        recordChannelVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeChannelReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
         return paymentConfigMapper.findChannelReviews();
     }
@@ -293,6 +320,57 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeChannelReview(review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findChannelReviews();
+    }
+
+    @Override
+    public List<PaymentChannelVersionDTO> listChannelVersions(String channelCode) {
+        String normalizedChannelCode = requireImportText(channelCode, "渠道编码不能为空", 64)
+                .toLowerCase(Locale.ROOT);
+        if (paymentConfigMapper.findChannelByCode(normalizedChannelCode) == null) {
+            throw new IllegalArgumentException("支付渠道配置不存在");
+        }
+        return paymentConfigMapper.findChannelVersions(normalizedChannelCode);
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentChannelReviewDTO> submitChannelRollbackReview(
+            String channelCode, PaymentChannelRollbackRequestDTO request) {
+        String normalizedChannelCode = requireImportText(channelCode, "渠道编码不能为空", 64)
+                .toLowerCase(Locale.ROOT);
+        if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
+            throw new IllegalArgumentException("回滚版本号必须大于0");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "回滚原因不能为空");
+        if (paymentConfigMapper.findPendingChannelReviewForUpdate(normalizedChannelCode) != null) {
+            throw new IllegalArgumentException("该支付渠道已有待复核申请");
+        }
+        PaymentChannelConfigEntity current = paymentConfigMapper.findChannelByCodeForUpdate(normalizedChannelCode);
+        if (current == null) {
+            throw new IllegalArgumentException("支付渠道配置不存在");
+        }
+        ensureChannelBaseline(current);
+        PaymentChannelVersionEntity target = paymentConfigMapper.findChannelVersion(
+                normalizedChannelCode, request.getVersionNo());
+        if (target == null) {
+            throw new IllegalArgumentException("支付渠道历史版本不存在");
+        }
+        PaymentChannelConfigEntity candidate = copyChannelEntity(target);
+        PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
+        review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
+        copyChannelToReview(candidate, review);
+        review.setOperationType("ROLLBACK");
+        review.setBaseVersionNo(paymentConfigMapper.findLatestChannelVersionNo(normalizedChannelCode));
+        review.setSourceVersionNo(request.getVersionNo());
+        review.setPendingChannelCode(normalizedChannelCode);
+        review.setBaseFingerprint(fingerprintChannel(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertChannelReview(review);
         return paymentConfigMapper.findChannelReviews();
     }
 
@@ -3227,6 +3305,70 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         request.setStrictMode(Boolean.valueOf("开启".equals(review.getStrictMode())));
         request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getCandidateStatus())));
         return request;
+    }
+
+    private void ensureChannelBaseline(PaymentChannelConfigEntity current) {
+        Integer latestVersionNo = paymentConfigMapper.findLatestChannelVersionNo(current.getChannelCode());
+        if (latestVersionNo == null || latestVersionNo.intValue() == 0) {
+            recordChannelVersion(current, "BASELINE", null, "存量支付渠道变更前基线");
+        }
+    }
+
+    private void recordChannelVersion(PaymentChannelConfigEntity channel,
+                                      String changeType,
+                                      Integer sourceVersionNo,
+                                      String changeReason) {
+        Integer latestVersionNo = paymentConfigMapper.findLatestChannelVersionNo(channel.getChannelCode());
+        int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo.intValue() + 1;
+        PaymentChannelVersionEntity version = new PaymentChannelVersionEntity();
+        version.setChannelCode(channel.getChannelCode());
+        version.setVersionNo(Integer.valueOf(nextVersionNo));
+        version.setChannelName(channel.getChannelName());
+        version.setPaymentMethod(channel.getPaymentMethod());
+        version.setMerchantNo(channel.getMerchantNo());
+        version.setMerchantAppId(channel.getMerchantAppId());
+        version.setCallbackSecret(channel.getCallbackSecret());
+        version.setCallbackSignAlgorithm(channel.getCallbackSignAlgorithm());
+        version.setCallbackPublicKey(channel.getCallbackPublicKey());
+        version.setCallbackNotifyUrl(channel.getCallbackNotifyUrl());
+        version.setCertificateProfile(channel.getCertificateProfile());
+        version.setNotifySignWindowSec(channel.getNotifySignWindowSec());
+        version.setRefundWindowDays(channel.getRefundWindowDays());
+        version.setRiskControlTag(channel.getRiskControlTag());
+        version.setSceneScope(channel.getSceneScope());
+        version.setStatus(channel.getStatus());
+        version.setStatusType(channel.getStatusType());
+        version.setDailyLimit(channel.getDailyLimit());
+        version.setPriority(channel.getPriority());
+        version.setRouteWeight(channel.getRouteWeight());
+        version.setChangeType(changeType);
+        version.setSourceVersionNo(sourceVersionNo);
+        version.setChangeReason(changeReason);
+        paymentConfigMapper.insertChannelVersion(version);
+    }
+
+    private PaymentChannelConfigEntity copyChannelEntity(PaymentChannelVersionEntity version) {
+        PaymentChannelConfigEntity channel = new PaymentChannelConfigEntity();
+        channel.setChannelCode(version.getChannelCode());
+        channel.setChannelName(version.getChannelName());
+        channel.setPaymentMethod(version.getPaymentMethod());
+        channel.setMerchantNo(version.getMerchantNo());
+        channel.setMerchantAppId(version.getMerchantAppId());
+        channel.setCallbackSecret(version.getCallbackSecret());
+        channel.setCallbackSignAlgorithm(version.getCallbackSignAlgorithm());
+        channel.setCallbackPublicKey(version.getCallbackPublicKey());
+        channel.setCallbackNotifyUrl(version.getCallbackNotifyUrl());
+        channel.setCertificateProfile(version.getCertificateProfile());
+        channel.setNotifySignWindowSec(version.getNotifySignWindowSec());
+        channel.setRefundWindowDays(version.getRefundWindowDays());
+        channel.setRiskControlTag(version.getRiskControlTag());
+        channel.setSceneScope(version.getSceneScope());
+        channel.setStatus(version.getStatus());
+        channel.setStatusType(version.getStatusType());
+        channel.setDailyLimit(version.getDailyLimit());
+        channel.setPriority(version.getPriority());
+        channel.setRouteWeight(version.getRouteWeight());
+        return channel;
     }
 
     private String requireDistinctChannelReviewer(

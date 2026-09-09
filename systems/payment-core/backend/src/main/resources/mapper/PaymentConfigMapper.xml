@@ -36,6 +36,31 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findChannelByCode" resultType="com.abc123.hsp.entity.PaymentChannelConfigEntity">
+        SELECT channel_code AS channelCode,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               merchant_no AS merchantNo,
+               merchant_app_id AS merchantAppId,
+               callback_secret AS callbackSecret,
+               callback_sign_algorithm AS callbackSignAlgorithm,
+               callback_public_key AS callbackPublicKey,
+               callback_notify_url AS callbackNotifyUrl,
+               certificate_profile AS certificateProfile,
+               notify_sign_window_sec AS notifySignWindowSec,
+               refund_window_days AS refundWindowDays,
+               risk_control_tag AS riskControlTag,
+               scene_scope AS sceneScope,
+               status,
+               status_type AS statusType,
+               daily_limit AS dailyLimit,
+               priority,
+               route_weight AS routeWeight
+        FROM t_payment_channel_config
+        WHERE channel_code = #{channelCode}
+        LIMIT 1
+    </select>
+
     <select id="findChannelByCodeForUpdate"
             resultType="com.abc123.hsp.entity.PaymentChannelConfigEntity">
         SELECT channel_code AS channelCode,
@@ -63,9 +88,79 @@
         FOR UPDATE
     </select>
 
+    <select id="findChannelVersions" resultType="com.abc123.hsp.dto.PaymentChannelVersionDTO">
+        SELECT channel_code AS channelCode,
+               version_no AS versionNo,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               merchant_no AS merchantNo,
+               merchant_app_id AS merchantAppId,
+               CASE WHEN callback_secret IS NULL OR callback_secret = '' THEN 0 ELSE 1 END
+                   AS callbackSecretConfigured,
+               callback_sign_algorithm AS callbackSignAlgorithm,
+               CASE WHEN callback_public_key IS NULL OR callback_public_key = '' THEN 0 ELSE 1 END
+                   AS callbackPublicKeyConfigured,
+               callback_notify_url AS callbackNotifyUrl,
+               certificate_profile AS certificateProfile,
+               notify_sign_window_sec AS notifySignWindowSec,
+               refund_window_days AS refundWindowDays,
+               risk_control_tag AS riskControlTag,
+               scene_scope AS sceneScope,
+               status,
+               status_type AS statusType,
+               daily_limit AS dailyLimit,
+               priority,
+               route_weight AS routeWeight,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_channel_version
+        WHERE channel_code = #{channelCode}
+        ORDER BY version_no DESC
+    </select>
+
+    <select id="findChannelVersion" resultType="com.abc123.hsp.entity.PaymentChannelVersionEntity">
+        SELECT channel_code AS channelCode,
+               version_no AS versionNo,
+               channel_name AS channelName,
+               payment_method AS paymentMethod,
+               merchant_no AS merchantNo,
+               merchant_app_id AS merchantAppId,
+               callback_secret AS callbackSecret,
+               callback_sign_algorithm AS callbackSignAlgorithm,
+               callback_public_key AS callbackPublicKey,
+               callback_notify_url AS callbackNotifyUrl,
+               certificate_profile AS certificateProfile,
+               notify_sign_window_sec AS notifySignWindowSec,
+               refund_window_days AS refundWindowDays,
+               risk_control_tag AS riskControlTag,
+               scene_scope AS sceneScope,
+               status,
+               status_type AS statusType,
+               daily_limit AS dailyLimit,
+               priority,
+               route_weight AS routeWeight,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason
+        FROM t_payment_channel_version
+        WHERE channel_code = #{channelCode}
+          AND version_no = #{versionNo}
+        LIMIT 1
+    </select>
+
+    <select id="findLatestChannelVersionNo" resultType="int">
+        SELECT MAX(version_no)
+        FROM t_payment_channel_version
+        WHERE channel_code = #{channelCode}
+    </select>
+
     <select id="findChannelReviews" resultType="com.abc123.hsp.dto.PaymentChannelReviewDTO">
         SELECT request_no AS requestNo,
                channel_code AS channelCode,
+               base_version_no AS baseVersionNo,
+               source_version_no AS sourceVersionNo,
                operation_type AS operationType,
                channel_name AS channelName,
                payment_method AS paymentMethod,
@@ -107,6 +202,8 @@
             resultType="com.abc123.hsp.entity.PaymentChannelReviewEntity">
         SELECT request_no AS requestNo,
                channel_code AS channelCode,
+               base_version_no AS baseVersionNo,
+               source_version_no AS sourceVersionNo,
                operation_type AS operationType,
                channel_name AS channelName,
                payment_method AS paymentMethod,
@@ -1349,9 +1446,26 @@
         WHERE channel_code = #{channelCode}
     </update>
 
+    <insert id="insertChannelVersion" parameterType="com.abc123.hsp.entity.PaymentChannelVersionEntity">
+        INSERT INTO t_payment_channel_version (
+            channel_code, version_no, channel_name, payment_method, merchant_no,
+            merchant_app_id, callback_secret, callback_sign_algorithm, callback_public_key,
+            callback_notify_url, certificate_profile, notify_sign_window_sec, refund_window_days,
+            risk_control_tag, scene_scope, status, status_type, daily_limit, priority, route_weight,
+            change_type, source_version_no, change_reason, created_at
+        ) VALUES (
+            #{channelCode}, #{versionNo}, #{channelName}, #{paymentMethod}, #{merchantNo},
+            #{merchantAppId}, #{callbackSecret}, #{callbackSignAlgorithm}, #{callbackPublicKey},
+            #{callbackNotifyUrl}, #{certificateProfile}, #{notifySignWindowSec}, #{refundWindowDays},
+            #{riskControlTag}, #{sceneScope}, #{status}, #{statusType}, #{dailyLimit}, #{priority},
+            #{routeWeight}, #{changeType}, #{sourceVersionNo}, #{changeReason}, NOW()
+        )
+    </insert>
+
     <insert id="insertChannelReview">
         INSERT INTO t_payment_channel_review (
-            request_no, channel_code, operation_type, channel_name, payment_method,
+            request_no, channel_code, base_version_no, source_version_no,
+            operation_type, channel_name, payment_method,
             merchant_no, merchant_app_id, callback_secret, callback_sign_algorithm,
             callback_public_key, callback_notify_url, certificate_profile, notify_sign_window_sec,
             refund_window_days, risk_control_tag, scene_scope, daily_limit, priority, route_weight,
@@ -1359,7 +1473,8 @@
             base_fingerprint, candidate_status, candidate_status_type, requester, request_reason,
             review_status, review_status_type, created_at, updated_at
         ) VALUES (
-            #{requestNo}, #{channelCode}, #{operationType}, #{channelName}, #{paymentMethod},
+            #{requestNo}, #{channelCode}, #{baseVersionNo}, #{sourceVersionNo},
+            #{operationType}, #{channelName}, #{paymentMethod},
             #{merchantNo}, #{merchantAppId}, #{callbackSecret}, #{callbackSignAlgorithm},
             #{callbackPublicKey}, #{callbackNotifyUrl}, #{certificateProfile}, #{notifySignWindowSec},
             #{refundWindowDays}, #{riskControlTag}, #{sceneScope}, #{dailyLimit}, #{priority}, #{routeWeight},

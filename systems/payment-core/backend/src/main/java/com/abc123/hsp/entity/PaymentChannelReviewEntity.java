@@ -9,6 +9,8 @@ public class PaymentChannelReviewEntity {
 
     private String requestNo;
     private String channelCode;
+    private Integer baseVersionNo;
+    private Integer sourceVersionNo;
     private String operationType;
     private String channelName;
     private String paymentMethod;

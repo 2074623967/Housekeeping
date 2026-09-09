@@ -51,6 +51,10 @@ const channelActionRequester = ref("");
 const channelActionReason = ref("");
 const channelReviewer = ref("");
 const channelReviewComment = ref("");
+const channelVersionCode = ref("");
+const channelVersions = ref([]);
+const isChannelVersionLoading = ref(false);
+let channelVersionRequestId = 0;
 const editingChannelCode = ref("");
 const channelForm = ref(createChannelForm());
 const editingRouteRuleCode = ref("");
@@ -443,6 +447,9 @@ async function handleChannelReview(review, approved) {
       : await paymentConfigApi.rejectChannelReview(review.requestNo, payload);
     if (approved) {
       await loadOverview();
+      if (channelVersionCode.value) {
+        await loadChannelVersions(channelVersionCode.value);
+      }
     }
     channelReviewComment.value = "";
     actionMessage.value = approved
@@ -450,6 +457,61 @@ async function handleChannelReview(review, approved) {
       : `渠道状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
   } catch (error) {
     actionMessage.value = `渠道复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadChannelVersions(channelCode) {
+  const requestId = ++channelVersionRequestId;
+  channelVersionCode.value = channelCode;
+  channelVersions.value = [];
+  isChannelVersionLoading.value = true;
+  actionMessage.value = "";
+  try {
+    const versions = await paymentConfigApi.getChannelVersions(channelCode);
+    if (requestId === channelVersionRequestId && channelVersionCode.value === channelCode) {
+      channelVersions.value = versions;
+    }
+  } catch (error) {
+    if (requestId === channelVersionRequestId && channelVersionCode.value === channelCode) {
+      actionMessage.value = `支付渠道版本加载失败：${error.message}`;
+    }
+  } finally {
+    if (requestId === channelVersionRequestId) {
+      isChannelVersionLoading.value = false;
+    }
+  }
+}
+
+function closeChannelVersions() {
+  channelVersionRequestId += 1;
+  channelVersionCode.value = "";
+  channelVersions.value = [];
+  isChannelVersionLoading.value = false;
+}
+
+async function rollbackChannelVersion(version) {
+  const channelCode = channelVersionCode.value;
+  if (!channelActionRequester.value || !channelActionReason.value) {
+    actionMessage.value = "提交支付渠道回滚复核失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  if (!window.confirm(`确认提交渠道 ${channelCode} 回滚到 V${version.versionNo} 的复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = `${channelCode}:rollback`;
+  actionMessage.value = "";
+  try {
+    channelReviews.value = await paymentConfigApi.rollbackChannel(channelCode, {
+      versionNo: version.versionNo,
+      requester: channelActionRequester.value,
+      changeReason: channelActionReason.value
+    });
+    channelActionReason.value = "";
+    actionMessage.value = `渠道 ${channelCode} 回滚到 V${version.versionNo} 的申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付渠道回滚申请失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1704,7 +1766,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.20</span>
+        <span class="badge info">配置中心 V1.21</span>
       </div>
     </div>
 
@@ -1891,7 +1953,7 @@ function exportGovernanceSnapshot(section = "ALL") {
           <div class="section-title">
             <div>
               <h3>支付渠道配置变更复核</h3>
-              <p class="meta">新增、编辑和启停先提交候选，异人声明批准且渠道基线有效后才更新运行态</p>
+              <p class="meta">新增、编辑、启停和历史回滚共享唯一待办；批准后追加不可变版本</p>
             </div>
             <button class="button secondary" :disabled="isChannelReviewLoading" @click="loadChannelReviews">
               {{ isChannelReviewLoading ? "加载中..." : "刷新申请" }}
@@ -1900,11 +1962,11 @@ function exportGovernanceSnapshot(section = "ALL") {
           <div class="filter-grid">
             <label>
               申请人声明
-              <input v-model.trim="channelActionRequester" maxlength="64" placeholder="提交启停申请时必填" />
+              <input v-model.trim="channelActionRequester" maxlength="64" placeholder="提交启停或回滚时必填" />
             </label>
             <label>
               申请原因
-              <input v-model.trim="channelActionReason" maxlength="255" placeholder="提交启停申请时必填" />
+              <input v-model.trim="channelActionReason" maxlength="255" placeholder="提交启停或回滚时必填" />
             </label>
             <label>
               复核人声明
@@ -1943,7 +2005,8 @@ function exportGovernanceSnapshot(section = "ALL") {
                     {{ review.channelCode }} / {{ review.channelName }}
                     <div class="muted-text">{{ review.paymentMethod }} / {{ review.merchantNo }}</div>
                     <div class="muted-text">密钥 {{ review.callbackSecretMasked }} / 公钥 {{ review.callbackPublicKeyConfigured ? "已配置" : "未配置" }}</div>
-                    <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
+                    <div class="muted-text">基线 {{ review.baseVersionNo ? `V${review.baseVersionNo}` : "新增" }} / {{ review.baseFingerprint?.slice(0, 12) || "-" }}</div>
+                    <div v-if="review.sourceVersionNo" class="muted-text">回滚来源 V{{ review.sourceVersionNo }}</div>
                   </td>
                   <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
                   <td>
@@ -2044,10 +2107,80 @@ function exportGovernanceSnapshot(section = "ALL") {
                   >
                     {{ channel.status === "ENABLED" ? "申请停用" : "申请启用" }}
                   </button>
+                  <button
+                    class="link-button"
+                    :disabled="Boolean(activeConfigCode)"
+                    @click="loadChannelVersions(channel.channelCode)"
+                  >
+                    版本历史
+                  </button>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <div v-if="channelVersionCode" class="panel" style="margin-top: 16px;">
+          <div class="section-title">
+            <div>
+              <h3>{{ channelVersionCode }} 版本历史</h3>
+              <p class="meta">历史快照不可修改且不展示回调密钥、公钥原文；回滚复核通过后恢复完整渠道配置并追加新版本</p>
+            </div>
+            <button class="button secondary" @click="closeChannelVersions">关闭</button>
+          </div>
+          <div v-if="isChannelVersionLoading" class="state-box">支付渠道版本加载中...</div>
+          <div v-else-if="!channelVersions.length" class="state-box">当前暂无支付渠道版本记录</div>
+          <div v-else class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>版本</th>
+                  <th>变更</th>
+                  <th>渠道参数</th>
+                  <th>回调安全</th>
+                  <th>限制</th>
+                  <th>状态</th>
+                  <th>原因 / 时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="version in channelVersions" :key="version.versionNo">
+                  <td>V{{ version.versionNo }}</td>
+                  <td>
+                    {{ version.changeType }}
+                    <div class="muted-text">来源 {{ version.sourceVersionNo ? `V${version.sourceVersionNo}` : "-" }}</div>
+                  </td>
+                  <td class="flow-summary-cell">
+                    {{ version.channelName }} / {{ version.paymentMethod }}<br />
+                    {{ version.merchantNo }} / {{ version.merchantAppId }}<br />
+                    {{ version.sceneScope }}
+                  </td>
+                  <td class="flow-summary-cell">
+                    {{ version.callbackSignAlgorithm }} / 密钥 {{ version.callbackSecretConfigured ? "已配置" : "未配置" }}<br />
+                    公钥 {{ version.callbackPublicKeyConfigured ? "已配置" : "未配置" }} / {{ version.certificateProfile }}<br />
+                    {{ version.callbackNotifyUrl }}
+                  </td>
+                  <td>
+                    日限额 {{ version.dailyLimit }}<br />
+                    验签 {{ version.notifySignWindowSec }} 秒 / 退款 {{ version.refundWindowDays }} 天<br />
+                    优先级 {{ version.priority }} / 权重 {{ version.routeWeight }}
+                  </td>
+                  <td><span :class="['badge', version.statusType]">{{ version.status }}</span></td>
+                  <td class="flow-summary-cell">{{ version.changeReason }}<br />{{ version.createdAt }}</td>
+                  <td>
+                    <button
+                      class="link-button"
+                      :disabled="Boolean(activeConfigCode) || version.versionNo === channelVersions[0]?.versionNo"
+                      @click="rollbackChannelVersion(version)"
+                    >
+                      回滚到此版本
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="detail-panel">

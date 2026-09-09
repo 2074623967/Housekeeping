@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
+import com.abc123.hsp.entity.PaymentChannelVersionEntity;
 import java.io.InputStream;
 import java.sql.Statement;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -54,6 +56,14 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
             PaymentChannelConfigEntity channel = mapper.findChannelByCodeForUpdate("wx_h5");
             assertEquals("MCH-WX-001", channel.getMerchantNo());
             assertEquals("secret", channel.getCallbackSecret());
+            assertEquals("MCH-WX-001", mapper.findChannelByCode("wx_h5").getMerchantNo());
+            assertEquals(1, mapper.insertChannelVersion(version(channel)));
+            PaymentChannelVersionDTO displayedVersion = mapper.findChannelVersions("wx_h5").get(0);
+            assertEquals(Integer.valueOf(1), displayedVersion.getVersionNo());
+            assertEquals(Boolean.TRUE, displayedVersion.getCallbackSecretConfigured());
+            assertEquals(Boolean.TRUE, displayedVersion.getCallbackPublicKeyConfigured());
+            assertEquals("secret", mapper.findChannelVersion("wx_h5", Integer.valueOf(1)).getCallbackSecret());
+            assertEquals(Integer.valueOf(1), mapper.findLatestChannelVersionNo("wx_h5"));
             channel.setChannelCode("new_h5");
             channel.setChannelName("新增渠道");
             assertEquals(1, mapper.insertChannel(channel));
@@ -92,6 +102,7 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo(requestNo);
         review.setChannelCode("wx_h5");
+        review.setBaseVersionNo(Integer.valueOf(1));
         review.setOperationType("STATUS_CHANGE");
         review.setChannelName("微信H5支付");
         review.setPaymentMethod("微信支付");
@@ -127,6 +138,7 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + PaymentConfigProtocolVersionMapperIntegrationTest.class.getName()
                     + ".dateFormat\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_review");
+            statement.execute("DROP TABLE IF EXISTS t_payment_channel_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64) NOT NULL UNIQUE, "
@@ -141,7 +153,8 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + "priority INT NOT NULL, route_weight INT NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_channel_review ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "channel_code VARCHAR(64) NOT NULL, operation_type VARCHAR(32) NOT NULL, "
+                    + "channel_code VARCHAR(64) NOT NULL, base_version_no INT, source_version_no INT, "
+                    + "operation_type VARCHAR(32) NOT NULL, "
                     + "channel_name VARCHAR(128) NOT NULL, payment_method VARCHAR(64) NOT NULL, "
                     + "merchant_no VARCHAR(128) NOT NULL, merchant_app_id VARCHAR(128) NOT NULL, "
                     + "callback_secret VARCHAR(256) NOT NULL, callback_sign_algorithm VARCHAR(32) NOT NULL, "
@@ -157,6 +170,20 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
                     + "review_status_type VARCHAR(32) NOT NULL, reviewer VARCHAR(64), "
                     + "review_comment VARCHAR(255), created_at DATETIME NOT NULL, reviewed_at DATETIME, "
                     + "updated_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_payment_channel_version ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64) NOT NULL, "
+                    + "version_no INT NOT NULL, channel_name VARCHAR(128) NOT NULL, "
+                    + "payment_method VARCHAR(64) NOT NULL, merchant_no VARCHAR(128) NOT NULL, "
+                    + "merchant_app_id VARCHAR(128) NOT NULL, callback_secret VARCHAR(256) NOT NULL, "
+                    + "callback_sign_algorithm VARCHAR(32) NOT NULL, callback_public_key CLOB, "
+                    + "callback_notify_url VARCHAR(256) NOT NULL, certificate_profile VARCHAR(128) NOT NULL, "
+                    + "notify_sign_window_sec INT NOT NULL, refund_window_days INT NOT NULL, "
+                    + "risk_control_tag VARCHAR(128) NOT NULL, scene_scope VARCHAR(128) NOT NULL, "
+                    + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, "
+                    + "daily_limit DECIMAL(18,2) NOT NULL, priority INT NOT NULL, route_weight INT NOT NULL, "
+                    + "change_type VARCHAR(32) NOT NULL, source_version_no INT, "
+                    + "change_reason VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, "
+                    + "UNIQUE(channel_code, version_no))");
             statement.execute("INSERT INTO t_payment_channel_config ("
                     + "channel_code, channel_name, payment_method, merchant_no, merchant_app_id, "
                     + "callback_secret, callback_sign_algorithm, callback_public_key, callback_notify_url, "
@@ -172,5 +199,32 @@ class PaymentConfigChannelReviewMapperIntegrationTest {
 
     private String repeat(String value, int count) {
         return String.join("", java.util.Collections.nCopies(count, value));
+    }
+
+    private PaymentChannelVersionEntity version(PaymentChannelConfigEntity channel) {
+        PaymentChannelVersionEntity version = new PaymentChannelVersionEntity();
+        version.setChannelCode(channel.getChannelCode());
+        version.setVersionNo(Integer.valueOf(1));
+        version.setChannelName(channel.getChannelName());
+        version.setPaymentMethod(channel.getPaymentMethod());
+        version.setMerchantNo(channel.getMerchantNo());
+        version.setMerchantAppId(channel.getMerchantAppId());
+        version.setCallbackSecret(channel.getCallbackSecret());
+        version.setCallbackSignAlgorithm(channel.getCallbackSignAlgorithm());
+        version.setCallbackPublicKey(channel.getCallbackPublicKey());
+        version.setCallbackNotifyUrl(channel.getCallbackNotifyUrl());
+        version.setCertificateProfile(channel.getCertificateProfile());
+        version.setNotifySignWindowSec(channel.getNotifySignWindowSec());
+        version.setRefundWindowDays(channel.getRefundWindowDays());
+        version.setRiskControlTag(channel.getRiskControlTag());
+        version.setSceneScope(channel.getSceneScope());
+        version.setStatus(channel.getStatus());
+        version.setStatusType(channel.getStatusType());
+        version.setDailyLimit(channel.getDailyLimit());
+        version.setPriority(channel.getPriority());
+        version.setRouteWeight(channel.getRouteWeight());
+        version.setChangeType("BASELINE");
+        version.setChangeReason("测试基线");
+        return version;
     }
 }

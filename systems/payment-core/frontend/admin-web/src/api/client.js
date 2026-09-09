@@ -898,6 +898,13 @@ export const paymentConfigApi = {
     `/api/payment-config/channels/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
+  getChannelVersions: (channelCode) => request(
+    `/api/payment-config/channels/${encodeURIComponent(channelCode)}/versions`
+  ),
+  rollbackChannel: (channelCode, payload) => postJson(
+    `/api/payment-config/channels/${encodeURIComponent(channelCode)}/rollback`,
+    payload
+  ),
   submitRouteRuleStatusReview: (payload) => postJson("/api/payment-config/route-rules/toggle", payload),
   validateRouteRule: (payload) => postJson("/api/payment-config/route-rules/validate", payload),
   getRouteRuleConflicts: () => request("/api/payment-config/route-rules/conflicts"),

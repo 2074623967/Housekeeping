@@ -32,6 +32,7 @@ DROP TABLE IF EXISTS t_payment_return_code_review;
 DROP TABLE IF EXISTS t_payment_return_code_import_batch;
 DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_channel_review;
+DROP TABLE IF EXISTS t_payment_channel_version;
 DROP TABLE IF EXISTS t_payment_gateway_review;
 DROP TABLE IF EXISTS t_payment_gateway_config;
 DROP TABLE IF EXISTS t_payment_control_policy_review;
@@ -81,11 +82,44 @@ CREATE TABLE t_payment_channel_config (
     KEY idx_channel_method_status (payment_method, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道配置表';
 
+CREATE TABLE t_payment_channel_version (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    channel_code VARCHAR(64) NOT NULL COMMENT '支付渠道编码',
+    version_no INT NOT NULL COMMENT '不可变版本号',
+    channel_name VARCHAR(128) NOT NULL COMMENT '支付渠道名称快照',
+    payment_method VARCHAR(64) NOT NULL COMMENT '支付方式快照',
+    merchant_no VARCHAR(128) NOT NULL COMMENT '渠道商户号快照',
+    merchant_app_id VARCHAR(128) NOT NULL COMMENT '渠道商户应用标识快照',
+    callback_secret VARCHAR(256) NOT NULL COMMENT '回调验签密钥快照，不对管理查询返回',
+    callback_sign_algorithm VARCHAR(32) NOT NULL COMMENT '回调签名算法快照',
+    callback_public_key TEXT NULL COMMENT '回调验签公钥快照，不对管理查询返回',
+    callback_notify_url VARCHAR(256) NOT NULL COMMENT '回调通知地址快照',
+    certificate_profile VARCHAR(128) NOT NULL COMMENT '证书档案快照',
+    notify_sign_window_sec INT NOT NULL COMMENT '回调验签时间窗快照',
+    refund_window_days INT NOT NULL COMMENT '原路退款时效快照',
+    risk_control_tag VARCHAR(128) NOT NULL COMMENT '风控标签快照',
+    scene_scope VARCHAR(128) NOT NULL COMMENT '适用场景快照',
+    status VARCHAR(32) NOT NULL COMMENT '渠道状态快照',
+    status_type VARCHAR(32) NOT NULL COMMENT '渠道状态样式快照',
+    daily_limit DECIMAL(18, 2) NOT NULL COMMENT '单日限额快照',
+    priority INT NOT NULL COMMENT '优先级快照',
+    route_weight INT NOT NULL COMMENT '路由权重快照',
+    change_type VARCHAR(32) NOT NULL COMMENT 'BASELINE/REVIEW_RELEASE/REVIEW_STATUS_CHANGE/REVIEW_ROLLBACK',
+    source_version_no INT DEFAULT NULL COMMENT '回滚来源版本号',
+    change_reason VARCHAR(255) NOT NULL COMMENT '变更原因',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_channel_version (channel_code, version_no),
+    KEY idx_channel_version_created (channel_code, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道不可变版本表';
+
 CREATE TABLE t_payment_channel_review (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码快照',
-    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE',
+    base_version_no INT DEFAULT NULL COMMENT '提交时当前版本号，新增时为空',
+    source_version_no INT DEFAULT NULL COMMENT '回滚目标历史版本号',
+    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE/ROLLBACK',
     channel_name VARCHAR(128) NOT NULL COMMENT '渠道名称快照',
     payment_method VARCHAR(64) NOT NULL COMMENT '支付方式快照',
     merchant_no VARCHAR(128) NOT NULL COMMENT '渠道商户号候选',

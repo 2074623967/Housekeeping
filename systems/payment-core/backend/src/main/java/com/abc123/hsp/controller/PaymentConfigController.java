@@ -4,7 +4,9 @@ import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
@@ -127,6 +129,21 @@ public class PaymentConfigController {
             @PathVariable("requestNo") String requestNo,
             @RequestBody PaymentChannelReviewActionRequestDTO request) {
         return ApiResponse.success(paymentConfigService.rejectChannelReview(requestNo, request));
+    }
+
+    /** 查询支付渠道不可变版本历史。 */
+    @GetMapping("/channels/{channelCode}/versions")
+    public ApiResponse<List<PaymentChannelVersionDTO>> listChannelVersions(
+            @PathVariable("channelCode") String channelCode) {
+        return ApiResponse.success(paymentConfigService.listChannelVersions(channelCode));
+    }
+
+    /** 提交支付渠道历史版本回滚候选，不改变运行态。 */
+    @PostMapping("/channels/{channelCode}/rollback")
+    public ApiResponse<List<PaymentChannelReviewDTO>> submitChannelRollbackReview(
+            @PathVariable("channelCode") String channelCode,
+            @RequestBody PaymentChannelRollbackRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitChannelRollbackReview(channelCode, request));
     }
 
     /**

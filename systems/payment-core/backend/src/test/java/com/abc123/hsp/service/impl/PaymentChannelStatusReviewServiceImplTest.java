@@ -11,10 +11,12 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelUpsertRequestDTO;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
+import com.abc123.hsp.entity.PaymentChannelVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +43,7 @@ class PaymentChannelStatusReviewServiceImplTest {
     void shouldSubmitCandidateWithoutChangingRuntimeChannel() {
         PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(1));
         when(paymentConfigMapper.findChannelReviews())
                 .thenReturn(Collections.singletonList(new PaymentChannelReviewDTO()));
 
@@ -105,6 +108,7 @@ class PaymentChannelStatusReviewServiceImplTest {
         PaymentChannelReviewEntity review = review("PENDING_REVIEW", "DISABLED", fingerprint(current));
         when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(1));
         when(paymentConfigMapper.updateChannel(any(PaymentChannelConfigEntity.class))).thenReturn(1);
         when(paymentConfigMapper.completeChannelReview(any(), any(), any(), any(), any())).thenReturn(1);
         when(paymentConfigMapper.findChannelReviews())
@@ -137,6 +141,23 @@ class PaymentChannelStatusReviewServiceImplTest {
                 () -> service.approveChannelReview("CSR-001", action("checker-b", "确认停用")));
         assertTrue(stale.getMessage().contains("已变化"));
         verify(paymentConfigMapper, never()).updateChannelStatus(any(), any(), any());
+    }
+
+    @Test
+    void shouldRejectReviewWhenVersionChangesWithoutConfigChange() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "DISABLED", fingerprint(current));
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveChannelReview("CSR-001", action("checker-b", "确认停用")));
+
+        assertTrue(exception.getMessage().contains("已变化"));
+        verify(paymentConfigMapper, never()).updateChannel(any());
+        verify(paymentConfigMapper, never()).insertChannelVersion(any());
     }
 
     @Test
@@ -194,6 +215,7 @@ class PaymentChannelStatusReviewServiceImplTest {
     void shouldPreserveExistingSecretWhenSubmittingUpdate() {
         PaymentChannelConfigEntity current = channel("ENABLED", "MCH-001");
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(1));
         when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
         PaymentChannelUpsertRequestDTO candidate = channelRequest("WX_H5", " ");
         candidate.setChannelName("微信 H5 支付新名称");
@@ -236,6 +258,7 @@ class PaymentChannelStatusReviewServiceImplTest {
         review.setMerchantNo("MCH-UPDATED");
         when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(1));
         when(paymentConfigMapper.updateChannel(any(PaymentChannelConfigEntity.class))).thenReturn(1);
         when(paymentConfigMapper.completeChannelReview(any(), any(), any(), any(), any())).thenReturn(1);
         when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
@@ -246,6 +269,44 @@ class PaymentChannelStatusReviewServiceImplTest {
         verify(paymentConfigMapper).updateChannel(org.mockito.ArgumentMatchers.argThat(
                 candidate -> "MCH-UPDATED".equals(candidate.getMerchantNo())
                         && "secret".equals(candidate.getCallbackSecret())));
+    }
+
+    @Test
+    void shouldSubmitAndApproveRollbackAsNewVersion() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-NEW");
+        PaymentChannelVersionEntity target = version(channel("DISABLED", "MCH-OLD"), 1);
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findChannelVersion("wx_h5", Integer.valueOf(1))).thenReturn(target);
+        when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
+        PaymentChannelRollbackRequestDTO request = new PaymentChannelRollbackRequestDTO();
+        request.setVersionNo(Integer.valueOf(1));
+        request.setRequester("maker-a");
+        request.setChangeReason("恢复稳定渠道参数");
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        service.submitChannelRollbackReview("WX_H5", request);
+
+        ArgumentCaptor<PaymentChannelReviewEntity> captor =
+                ArgumentCaptor.forClass(PaymentChannelReviewEntity.class);
+        verify(paymentConfigMapper).insertChannelReview(captor.capture());
+        PaymentChannelReviewEntity review = captor.getValue();
+        assertEquals("ROLLBACK", review.getOperationType());
+        assertEquals(Integer.valueOf(2), review.getBaseVersionNo());
+        assertEquals(Integer.valueOf(1), review.getSourceVersionNo());
+        assertEquals("MCH-OLD", review.getMerchantNo());
+        verify(paymentConfigMapper, never()).updateChannel(any());
+
+        when(paymentConfigMapper.findChannelReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.updateChannel(any())).thenReturn(1);
+        when(paymentConfigMapper.completeChannelReview(any(), any(), any(), any(), any())).thenReturn(1);
+        service.approveChannelReview(review.getRequestNo(), action("checker-b", "确认回滚"));
+
+        verify(paymentConfigMapper).insertChannelVersion(org.mockito.ArgumentMatchers.argThat(
+                item -> Integer.valueOf(3).equals(item.getVersionNo())
+                        && "REVIEW_ROLLBACK".equals(item.getChangeType())
+                        && Integer.valueOf(1).equals(item.getSourceVersionNo())
+                        && "secret".equals(item.getCallbackSecret())));
     }
 
     @Test
@@ -319,6 +380,7 @@ class PaymentChannelStatusReviewServiceImplTest {
         review.setRequestNo("CSR-001");
         review.setChannelCode("wx_h5");
         review.setOperationType("STATUS_CHANGE");
+        review.setBaseVersionNo(Integer.valueOf(1));
         review.setChannelName("微信H5支付");
         review.setPaymentMethod("微信支付");
         review.setMerchantNo("MCH-001");
@@ -339,8 +401,36 @@ class PaymentChannelStatusReviewServiceImplTest {
         review.setCandidateStatus(candidateStatus);
         review.setCandidateStatusType("ENABLED".equals(candidateStatus) ? "success" : "danger");
         review.setRequester("maker-a");
+        review.setRequestReason("调整渠道配置");
         review.setReviewStatus(status);
         return review;
+    }
+
+    private PaymentChannelVersionEntity version(PaymentChannelConfigEntity channel, int versionNo) {
+        PaymentChannelVersionEntity version = new PaymentChannelVersionEntity();
+        version.setChannelCode(channel.getChannelCode());
+        version.setVersionNo(Integer.valueOf(versionNo));
+        version.setChannelName(channel.getChannelName());
+        version.setPaymentMethod(channel.getPaymentMethod());
+        version.setMerchantNo(channel.getMerchantNo());
+        version.setMerchantAppId(channel.getMerchantAppId());
+        version.setCallbackSecret(channel.getCallbackSecret());
+        version.setCallbackSignAlgorithm(channel.getCallbackSignAlgorithm());
+        version.setCallbackPublicKey(channel.getCallbackPublicKey());
+        version.setCallbackNotifyUrl(channel.getCallbackNotifyUrl());
+        version.setCertificateProfile(channel.getCertificateProfile());
+        version.setNotifySignWindowSec(channel.getNotifySignWindowSec());
+        version.setRefundWindowDays(channel.getRefundWindowDays());
+        version.setRiskControlTag(channel.getRiskControlTag());
+        version.setSceneScope(channel.getSceneScope());
+        version.setStatus(channel.getStatus());
+        version.setStatusType(channel.getStatusType());
+        version.setDailyLimit(channel.getDailyLimit());
+        version.setPriority(channel.getPriority());
+        version.setRouteWeight(channel.getRouteWeight());
+        version.setChangeType("REVIEW_RELEASE");
+        version.setChangeReason("历史版本");
+        return version;
     }
 
     private PaymentChannelConfigEntity channel(String status, String merchantNo) {

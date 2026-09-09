@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.PaymentChannelConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
+import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
 import com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
@@ -29,6 +30,7 @@ import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
+import com.abc123.hsp.entity.PaymentChannelVersionEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
@@ -53,14 +55,31 @@ public interface PaymentConfigMapper {
      */
     List<PaymentChannelConfigDTO> findChannels();
 
+    /** 按渠道编码查询完整运行配置。 */
+    PaymentChannelConfigEntity findChannelByCode(@Param("channelCode") String channelCode);
+
     /** 按渠道编码加锁查询完整运行配置。 */
     PaymentChannelConfigEntity findChannelByCodeForUpdate(@Param("channelCode") String channelCode);
+
+    /** 查询支付渠道不可变版本历史。 */
+    List<PaymentChannelVersionDTO> findChannelVersions(@Param("channelCode") String channelCode);
+
+    /** 查询支付渠道指定历史版本。 */
+    PaymentChannelVersionEntity findChannelVersion(
+            @Param("channelCode") String channelCode,
+            @Param("versionNo") Integer versionNo);
+
+    /** 查询支付渠道当前最大版本号。 */
+    Integer findLatestChannelVersionNo(@Param("channelCode") String channelCode);
 
     /** 新增支付渠道运行配置。 */
     int insertChannel(PaymentChannelConfigEntity entity);
 
     /** 更新支付渠道完整运行配置。 */
     int updateChannel(PaymentChannelConfigEntity entity);
+
+    /** 新增支付渠道不可变版本快照。 */
+    int insertChannelVersion(PaymentChannelVersionEntity entity);
 
     /** 查询支付渠道状态变更复核申请。 */
     List<PaymentChannelReviewDTO> findChannelReviews();

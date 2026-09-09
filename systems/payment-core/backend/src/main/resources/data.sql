@@ -9,6 +9,20 @@ INSERT INTO t_payment_channel_config (channel_code, channel_name, payment_method
 ('alipay_h5', '支付宝 H5 支付', '支付宝', 'MCH_ALI_20001', 'ali-app-h5-002', 'alipay-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/alipay_h5', 'ali-cert-profile-v2026.06', 600, 365, '大额风控+商户黑名单联动', 'H5/APP/PC', 'ENABLED', 'success', 500000.00, 2, 100, '2026-07-20 22:40:00'),
 ('offline_bank', '线下银行转账', '银行转账', 'BANK_OFFLINE_30001', 'bank-offline-batch-003', 'offline-bank-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/offline_bank', 'bank-batch-profile-v2026.05', 1800, 1095, '对公白名单+人工复核', '企业客户/大额订单', 'ENABLED', 'success', 2000000.00, 3, 100, '2026-07-20 22:40:00');
 
+INSERT INTO t_payment_channel_version (
+    channel_code, version_no, channel_name, payment_method, merchant_no, merchant_app_id,
+    callback_secret, callback_sign_algorithm, callback_public_key, callback_notify_url,
+    certificate_profile, notify_sign_window_sec, refund_window_days, risk_control_tag,
+    scene_scope, status, status_type, daily_limit, priority, route_weight,
+    change_type, source_version_no, change_reason, created_at
+)
+SELECT channel_code, 1, channel_name, payment_method, merchant_no, merchant_app_id,
+       callback_secret, callback_sign_algorithm, callback_public_key, callback_notify_url,
+       certificate_profile, notify_sign_window_sec, refund_window_days, risk_control_tag,
+       scene_scope, status, status_type, daily_limit, priority, route_weight,
+       'BASELINE', NULL, '初始化支付渠道基线', updated_at
+FROM t_payment_channel_config;
+
 INSERT INTO t_payment_route_rule_config (rule_code, rule_name, match_scene, match_expression, target_channel_code, fallback_channel_code, rollout_percentage, rollout_salt, status, status_type, priority, updated_at) VALUES
 ('RULE_HOME_WX', '家政 H5 微信优先', 'HOME_CLEAN/H5', 'paymentMethod=微信支付 AND amount<=5000', 'wx_h5', 'alipay_h5', 100, 'stable-v1', 'ENABLED', 'success', 1, '2026-07-20 22:40:00'),
 ('RULE_HOME_ALI', '家政 H5 支付宝兜底', 'HOME_CLEAN/H5', 'paymentMethod=支付宝 AND amount<=5000', 'alipay_h5', 'wx_h5', 100, 'stable-v1', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),

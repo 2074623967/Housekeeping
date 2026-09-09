@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentChannelVersionDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
@@ -91,21 +93,31 @@ class PaymentConfigControllerTest {
         when(paymentConfigService.rejectChannelReview(
                 any(String.class), any(PaymentChannelReviewActionRequestDTO.class)))
                 .thenReturn(Collections.singletonList(review));
+        when(paymentConfigService.listChannelVersions("wx_h5"))
+                .thenReturn(Collections.singletonList(new PaymentChannelVersionDTO()));
+        when(paymentConfigService.submitChannelRollbackReview(
+                any(String.class), any(PaymentChannelRollbackRequestDTO.class)))
+                .thenReturn(Collections.singletonList(review));
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
         PaymentChannelStatusReviewRequestDTO statusRequest = new PaymentChannelStatusReviewRequestDTO();
         PaymentChannelReviewSubmitRequestDTO submitRequest = new PaymentChannelReviewSubmitRequestDTO();
         PaymentChannelReviewActionRequestDTO actionRequest = new PaymentChannelReviewActionRequestDTO();
+        PaymentChannelRollbackRequestDTO rollbackRequest = new PaymentChannelRollbackRequestDTO();
 
         assertEquals(1, controller.listChannelReviews().getData().size());
         assertEquals(1, controller.submitChannelStatusReview(statusRequest).getData().size());
         assertEquals(1, controller.submitChannelReview(submitRequest).getData().size());
         assertEquals(1, controller.approveChannelReview("CSR-001", actionRequest).getData().size());
         assertEquals(1, controller.rejectChannelReview("CSR-001", actionRequest).getData().size());
+        assertEquals(1, controller.listChannelVersions("wx_h5").getData().size());
+        assertEquals(1, controller.submitChannelRollbackReview("wx_h5", rollbackRequest).getData().size());
         verify(paymentConfigService).listChannelReviews();
         verify(paymentConfigService).submitChannelStatusReview(statusRequest);
         verify(paymentConfigService).submitChannelReview(submitRequest);
         verify(paymentConfigService).approveChannelReview("CSR-001", actionRequest);
         verify(paymentConfigService).rejectChannelReview("CSR-001", actionRequest);
+        verify(paymentConfigService).listChannelVersions("wx_h5");
+        verify(paymentConfigService).submitChannelRollbackReview("wx_h5", rollbackRequest);
     }
 
     @Test
