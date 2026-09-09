@@ -42,6 +42,7 @@ public class PaymentProcessLogMapperIntegrationTest {
                 "");
         Environment environment = new Environment("test", new JdbcTransactionFactory(), dataSource);
         Configuration configuration = new Configuration(environment);
+        configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentMapper.class);
         configuration.addMapper(PaymentLogMapper.class);

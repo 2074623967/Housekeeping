@@ -37,6 +37,7 @@ class PaymentChannelQueryRateLimitMapperIntegrationTest {
                 "");
         Environment environment = new Environment("test", new JdbcTransactionFactory(), dataSource);
         Configuration configuration = new Configuration(environment);
+        configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.addMapper(PaymentChannelQueryRateLimitMapper.class);
         try (InputStream mapperXml = Resources.getResourceAsStream(
                 "mapper/PaymentChannelQueryRateLimitMapper.xml")) {

@@ -38,6 +38,7 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                 "");
         Environment environment = new Environment("test", new JdbcTransactionFactory(), dataSource);
         Configuration configuration = new Configuration(environment);
+        configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentConfigMapper.class);
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentConfigMapper.xml")) {

@@ -29,6 +29,8 @@ mybatis:
   mapper-locations: classpath:/mapper/*.xml
   configuration:
     map-underscore-to-camel-case: true
+    # 支付配置和交易参数可能含密钥或个人信息，不输出 SQL 绑定参数。
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
 
 payment:
   callback:

@@ -42,6 +42,7 @@ class PaymentTaskCenterMapperIntegrationTest {
                 new JdbcTransactionFactory(),
                 dataSource);
         Configuration configuration = new Configuration(environment);
+        configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentTaskCenterMapper.class);
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentTaskCenterMapper.xml")) {

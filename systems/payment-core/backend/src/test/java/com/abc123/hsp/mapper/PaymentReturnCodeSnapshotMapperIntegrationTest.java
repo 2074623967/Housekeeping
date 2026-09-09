@@ -35,6 +35,7 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                 "");
         Environment environment = new Environment("test", new JdbcTransactionFactory(), dataSource);
         Configuration configuration = new Configuration(environment);
+        configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentMapper.class);
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentMapper.xml")) {
