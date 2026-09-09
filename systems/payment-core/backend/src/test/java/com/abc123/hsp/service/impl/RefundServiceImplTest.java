@@ -17,13 +17,18 @@ import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
+import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundChannelSubmitService;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -204,6 +209,34 @@ class RefundServiceImplTest {
 
         verify(refundChannelSubmitService).submit(submitRequest);
         verify(refundMapper).findByRefundOrderId("REF-002");
+    }
+
+    @Test
+    void shouldResubmitChannelForTaskRetryAndKeepTriggerIdentity() {
+        when(refundMapper.updateRefundStatus("REF-TASK", "FAIL", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setRefundOrderId("REF-TASK");
+        submitRequest.setPaymentOrderId("PAY-TASK");
+        submitRequest.setChannelCode("wx_h5");
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-TASK")).thenReturn(submitRequest);
+        when(refundChannelSubmitService.submit(submitRequest)).thenReturn(new RefundChannelSubmitResultDTO());
+
+        new RefundServiceImpl(refundMapper, refundChannelSubmitService)
+                .retryForTask("REF-TASK", "refund-retry-scheduler");
+
+        verify(refundChannelSubmitService).submit(submitRequest);
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "TASK_RETRY".equals(log.getActionCode())
+                        && "refund-retry-scheduler".equals(log.getOperatorName())
+                        && "FAIL".equals(log.getFromStatus())
+                        && "PROCESSING".equals(log.getToStatus())));
+        ArgumentCaptor<RefundOperationLogEntity> logCaptor =
+                ArgumentCaptor.forClass(RefundOperationLogEntity.class);
+        verify(refundMapper, times(2)).insertOperationLog(logCaptor.capture());
+        List<RefundOperationLogEntity> logs = logCaptor.getAllValues();
+        Set<String> logNos = new HashSet<String>(Arrays.asList(
+                logs.get(0).getLogNo(), logs.get(1).getLogNo()));
+        assertEquals(2, logNos.size());
     }
 
     @Test

@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -137,7 +138,7 @@ public class RefundServiceImpl implements RefundService {
         if (refundedAmount.add(request.getRefundAmount()).compareTo(source.getPaidAmount()) > 0) {
             throw new IllegalArgumentException("累计退款金额不能超过原支付金额");
         }
-        String refundOrderId = "REF" + LocalDateTime.now().format(REFUND_NO_FORMATTER);
+        String refundOrderId = buildBusinessNo("REF");
         refundMapper.insertRefund(refundOrderId, source, request, STATUS_REVIEWING, "warn");
         refundMapper.insertOperationLog(buildOperationLog(
                 refundOrderId,
@@ -175,6 +176,22 @@ public class RefundServiceImpl implements RefundService {
         return changeStatus(request, STATUS_FAIL, STATUS_PROCESSING, "warn", false);
     }
 
+    @Override
+    @Transactional
+    public void retryForTask(String refundOrderId, String triggeredBy) {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId(refundOrderId);
+        request.setRemark("任务中心批量重试失败退款");
+        changeStatus(request,
+                STATUS_FAIL,
+                STATUS_PROCESSING,
+                "warn",
+                false,
+                StringUtils.hasText(triggeredBy) ? triggeredBy.trim() : DEFAULT_OPERATOR,
+                "TASK_RETRY",
+                "任务中心失败退款重试");
+    }
+
     /**
      * 列表查询统一收敛分页边界，避免后台误传 pageSize 造成大查询。
      */
@@ -210,6 +227,18 @@ public class RefundServiceImpl implements RefundService {
                                            String status,
                                            String statusType,
                                            boolean success) {
+        return changeStatus(request, fromStatus, status, statusType, success,
+                resolveOperator(status), resolveActionCode(fromStatus, status), resolveActionName(fromStatus, status));
+    }
+
+    private RefundListItemDTO changeStatus(RefundActionRequestDTO request,
+                                           String fromStatus,
+                                           String status,
+                                           String statusType,
+                                           boolean success,
+                                           String operator,
+                                           String actionCode,
+                                           String actionName) {
         String refundOrderId = requireRefundOrderId(request);
         int affectedRows = refundMapper.updateRefundStatus(refundOrderId, fromStatus, status, statusType, success);
         if (affectedRows == 0) {
@@ -217,11 +246,11 @@ public class RefundServiceImpl implements RefundService {
         }
         refundMapper.insertOperationLog(buildOperationLog(
                 refundOrderId,
-                resolveActionCode(fromStatus, status),
-                resolveActionName(fromStatus, status),
+                actionCode,
+                actionName,
                 fromStatus,
                 status,
-                resolveOperator(status),
+                operator,
                 StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : resolveDefaultRemark(fromStatus, status)
         ));
         if (STATUS_PROCESSING.equals(status)) {
@@ -262,7 +291,7 @@ public class RefundServiceImpl implements RefundService {
                                                              String operatorName,
                                                              String operationRemark) {
         RefundOperationLogEntity entity = new RefundOperationLogEntity();
-        entity.setLogNo("ROL" + LocalDateTime.now().format(REFUND_NO_FORMATTER));
+        entity.setLogNo(buildBusinessNo("ROL"));
         entity.setRefundOrderId(refundOrderId);
         entity.setActionCode(actionCode);
         entity.setActionName(actionName);
@@ -271,6 +300,12 @@ public class RefundServiceImpl implements RefundService {
         entity.setOperatorName(operatorName);
         entity.setOperationRemark(operationRemark);
         return entity;
+    }
+
+    private static String buildBusinessNo(String prefix) {
+        return prefix
+                + LocalDateTime.now().format(REFUND_NO_FORMATTER)
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 
     private String requireRefundOrderId(String refundOrderId) {

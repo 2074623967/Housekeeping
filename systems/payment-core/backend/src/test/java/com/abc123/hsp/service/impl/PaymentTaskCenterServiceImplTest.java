@@ -13,16 +13,17 @@ import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
+import com.abc123.hsp.dto.RefundRetryResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
-import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentService;
+import com.abc123.hsp.service.RefundRetryTaskService;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Assertions;
@@ -45,7 +46,7 @@ class PaymentTaskCenterServiceImplTest {
     @Mock
     private PaymentEventMapper paymentEventMapper;
     @Mock
-    private RefundMapper refundMapper;
+    private RefundRetryTaskService refundRetryTaskService;
     @Mock
     private PaymentConfigService paymentConfigService;
     @Mock
@@ -273,7 +274,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runCloseExpiredPayments();
@@ -317,7 +318,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).exportTaskRunsCsv(new PaymentTaskRunLogQueryDTO());
@@ -339,7 +340,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runRepublishFailedEvents();
@@ -366,7 +367,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoRepublishFailedEvents();
@@ -392,7 +393,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoCloseExpiredPayments();
@@ -404,8 +405,10 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldRunAutoRetryFailedRefunds() {
-        when(refundMapper.findFailedRefundOrderIds()).thenReturn(Collections.singletonList("REF-AUTO-1"));
-        when(refundMapper.updateRefundStatus("REF-AUTO-1", "FAIL", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundRetryResultDTO retryResult = new RefundRetryResultDTO();
+        retryResult.setProcessedCount(1);
+        retryResult.setSuccessCount(1);
+        when(refundRetryTaskService.retryFailedRefunds("refund-retry-scheduler")).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.acquireTaskLease("REFUND_FAIL_RETRY", "refund-retry-scheduler", 120)).thenReturn(1);
@@ -414,13 +417,12 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoRetryFailedRefunds();
 
-        verify(refundMapper).findFailedRefundOrderIds();
-        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.any());
+        verify(refundRetryTaskService).retryFailedRefunds("refund-retry-scheduler");
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "refund-retry-scheduler".equals(entity.getTriggeredBy())
         ));
@@ -453,7 +455,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runEscalateOverdueIssues();
@@ -502,7 +504,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runEscalateOverdueIssues();
@@ -546,7 +548,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runEscalateOverdueIssues();
@@ -571,7 +573,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoEscalateOverdueIssues();
@@ -593,7 +595,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoCloseExpiredPayments();
@@ -623,7 +625,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoControlPolicySelfChecks();
@@ -648,7 +650,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).listTaskRuns(query);
@@ -663,9 +665,11 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldEscalateImmediatelyWhenRefundRetryKeepsFailing() {
-        when(refundMapper.findFailedRefundOrderIds()).thenReturn(Arrays.asList("REF-1", "REF-2"));
-        when(refundMapper.updateRefundStatus("REF-1", "FAIL", "PROCESSING", "warn", false)).thenReturn(0);
-        when(refundMapper.updateRefundStatus("REF-2", "FAIL", "PROCESSING", "warn", false)).thenReturn(0);
+        RefundRetryResultDTO retryResult = new RefundRetryResultDTO();
+        retryResult.setProcessedCount(2);
+        retryResult.setFailCount(2);
+        retryResult.setFailedRefundOrderIds(Arrays.asList("REF-1", "REF-2"));
+        when(refundRetryTaskService.retryFailedRefunds("payment-core-admin")).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -673,7 +677,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runRetryFailedRefunds();
@@ -683,6 +687,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals("P1", logCaptor.getValue().getSeverityLevel());
         Assertions.assertEquals("升级值班负责人", logCaptor.getValue().getEscalationStatus());
         Assertions.assertTrue(logCaptor.getValue().getSuggestedAction().contains("优先核对退款渠道响应"));
+        Assertions.assertTrue(logCaptor.getValue().getSummaryComment().contains("REF-1/REF-2"));
     }
 
     @Test
@@ -700,7 +705,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runControlPolicySelfChecks();
@@ -730,7 +735,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoControlPolicySelfChecks();
@@ -753,7 +758,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runDispatchIssueAlerts();
@@ -772,7 +777,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoDispatchIssueAlerts();
@@ -794,7 +799,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
                 paymentEventDispatchService,

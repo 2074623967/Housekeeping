@@ -48,4 +48,9 @@ public interface RefundService {
      * 将失败退款单重新提交处理。
      */
     RefundListItemDTO retry(RefundActionRequestDTO request);
+
+    /**
+     * 由补偿任务重试失败退款，保留任务触发人并重新提交渠道。
+     */
+    void retryForTask(String refundOrderId, String triggeredBy);
 }

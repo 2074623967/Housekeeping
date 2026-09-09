@@ -12,18 +12,18 @@ import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
+import com.abc123.hsp.dto.RefundRetryResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
-import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
-import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
+import com.abc123.hsp.service.RefundRetryTaskService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -59,7 +59,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
     private final PaymentEventMapper paymentEventMapper;
-    private final RefundMapper refundMapper;
+    private final RefundRetryTaskService refundRetryTaskService;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -85,7 +85,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                         PaymentExpiryTaskService paymentExpiryTaskService,
                                         PaymentEventMapper paymentEventMapper,
-                                        RefundMapper refundMapper,
+                                        RefundRetryTaskService refundRetryTaskService,
                                         PaymentConfigService paymentConfigService,
                                         PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
                                         PaymentEventDispatchService paymentEventDispatchService,
@@ -125,7 +125,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventMapper = paymentEventMapper;
-        this.refundMapper = refundMapper;
+        this.refundRetryTaskService = refundRetryTaskService;
         this.paymentConfigService = paymentConfigService;
         this.paymentIssueAlertDeliveryService = paymentIssueAlertDeliveryService;
         this.paymentEventDispatchService = paymentEventDispatchService;
@@ -154,14 +154,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                  PaymentExpiryTaskService paymentExpiryTaskService,
                                  PaymentEventMapper paymentEventMapper,
-                                 RefundMapper refundMapper,
+                                 RefundRetryTaskService refundRetryTaskService,
                                  PaymentConfigService paymentConfigService,
                                  PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
                                  PaymentEventDispatchService paymentEventDispatchService) {
         this(paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
                 paymentEventDispatchService,
@@ -187,13 +187,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                  PaymentExpiryTaskService paymentExpiryTaskService,
                                  PaymentEventMapper paymentEventMapper,
-                                 RefundMapper refundMapper,
+                                 RefundRetryTaskService refundRetryTaskService,
                                  PaymentConfigService paymentConfigService,
                                  PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService) {
         this(paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventMapper,
-                refundMapper,
+                refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
                 new PaymentEventDispatchService() {
@@ -789,37 +789,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private PaymentTaskActionResultDTO runRetryFailedRefundsByMode(String runMode, String triggeredBy) {
-        List<String> failedRefundOrderIds = refundMapper.findFailedRefundOrderIds();
-        int successCount = 0;
-        for (String refundOrderId : failedRefundOrderIds) {
-            int affectedRows = refundMapper.updateRefundStatus(refundOrderId, "FAIL", "PROCESSING", "warn", false);
-            successCount += affectedRows;
-            if (affectedRows > 0) {
-                RefundOperationLogEntity logEntity = RefundServiceImpl.buildOperationLog(
-                        refundOrderId,
-                        "TASK_RETRY",
-                        "任务中心失败退款重试",
-                        "FAIL",
-                        "PROCESSING",
-                        triggeredBy,
-                        "任务中心批量重试失败退款"
-                );
-                refundMapper.insertOperationLog(logEntity);
-            }
-        }
-        int failCount = Math.max(failedRefundOrderIds.size() - successCount, 0);
+        RefundRetryResultDTO retryResult = refundRetryTaskService.retryFailedRefunds(triggeredBy);
+        int processedCount = retryResult.getProcessedCount();
+        int successCount = retryResult.getSuccessCount();
+        int failCount = retryResult.getFailCount();
+        String failedRefundHint = retryResult.getFailedRefundOrderIds().isEmpty()
+                ? ""
+                : "，失败退款单：" + String.join("/", retryResult.getFailedRefundOrderIds());
         return buildAndRecordResult(
                 TASK_CODE_REFUND_RETRY,
                 "失败退款重试",
                 runMode,
                 triggeredBy,
-                failedRefundOrderIds.size(),
+                processedCount,
                 successCount,
                 0,
                 failCount,
-                failedRefundOrderIds.isEmpty()
+                processedCount == 0
                         ? "当前没有失败退款需要重试。"
-                        : String.format("已重试 %d 笔失败退款，剩余失败 %d 笔。", successCount, failCount)
+                        : String.format("已重试 %d 笔失败退款，成功提交渠道 %d 笔，失败 %d 笔%s。",
+                        processedCount, successCount, failCount, failedRefundHint)
         );
     }
 
