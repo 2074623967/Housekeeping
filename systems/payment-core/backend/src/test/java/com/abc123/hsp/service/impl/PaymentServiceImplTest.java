@@ -6,6 +6,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 
 import com.abc123.hsp.common.BusinessException;
@@ -387,6 +388,14 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("ORD-CALLBACK-001"),
                 org.mockito.ArgumentMatchers.eq("{\"channel\":\"wx_h5\"}")
         );
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "PAYMENT_NOTIFY".equals(log.getSourceType())
+                        && "PAY-CALLBACK-001".equals(log.getPaymentOrderId())
+                        && "渠道回调".equals(log.getProcessStage())));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "PAYMENT_EVENT".equals(log.getSourceType())
+                        && "ORD-CALLBACK-001".equals(log.getOrderNo())
+                        && log.getMessage().contains("PAYMENT_SUCCESS")));
         verify(paymentEventDispatchService).publishPaymentSuccess(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("PAY-CALLBACK-001")
@@ -693,6 +702,21 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}"),
                 org.mockito.ArgumentMatchers.eq("处理中"),
                 org.mockito.ArgumentMatchers.eq("info"));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "PAYMENT_ROUTE".equals(log.getSourceType())
+                        && "PAY-300".equals(log.getPaymentOrderId())
+                        && "ORD-300".equals(log.getOrderNo())));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "PAYMENT_ATTEMPT".equals(log.getSourceType())
+                        && log.getRequestNo().equals(log.getSourceNo())
+                        && log.getMessage().contains("请求状态=处理中")));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "PAYMENT_EVENT".equals(log.getSourceType())
+                        && log.getMessage().contains("PAYMENT_SUBMIT")));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "PAYMENT_NOTIFY".equals(log.getSourceType())
+                        && "WARN".equals(log.getLogLevel())
+                        && "offline_bank".equals(log.getSource())));
         org.junit.jupiter.api.Assertions.assertEquals("PRE-300", result.getPrepayOrderNo());
     }
 

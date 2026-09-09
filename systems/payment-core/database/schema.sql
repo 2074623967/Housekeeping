@@ -5,6 +5,7 @@ CREATE DATABASE IF NOT EXISTS housekeeping_payment_core
 USE housekeeping_payment_core;
 
 DROP TABLE IF EXISTS t_dashboard_card;
+DROP TABLE IF EXISTS t_payment_process_log;
 DROP TABLE IF EXISTS t_payment_event;
 DROP TABLE IF EXISTS t_payment_callback_nonce;
 DROP TABLE IF EXISTS t_payment_route_record;
@@ -744,6 +745,28 @@ CREATE TABLE t_payment_event (
     KEY idx_event_payment_created (payment_order_id, created_at),
     KEY idx_event_biz_created (biz_no, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付事件表';
+
+CREATE TABLE t_payment_process_log (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    log_no VARCHAR(64) NOT NULL COMMENT '处理日志编号',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
+    order_no VARCHAR(64) DEFAULT NULL COMMENT '关联业务订单号',
+    request_no VARCHAR(64) DEFAULT NULL COMMENT '关联支付请求号',
+    source_type VARCHAR(32) NOT NULL COMMENT '来源事实类型',
+    source_no VARCHAR(64) NOT NULL COMMENT '来源事实编号',
+    process_stage VARCHAR(32) NOT NULL COMMENT '处理阶段',
+    log_level VARCHAR(16) NOT NULL COMMENT '日志级别',
+    log_level_type VARCHAR(16) NOT NULL COMMENT '日志级别样式',
+    message TEXT NOT NULL COMMENT '处理事实摘要',
+    source VARCHAR(64) NOT NULL COMMENT '来源渠道或系统',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_payment_process_log_no (log_no),
+    UNIQUE KEY uk_payment_process_log_source (source_type, source_no),
+    KEY idx_payment_process_log_payment (payment_order_id, created_at),
+    KEY idx_payment_process_log_order (order_no, created_at),
+    KEY idx_payment_process_log_stage_level (process_stage, log_level, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付处理日志事实表';
 
 CREATE TABLE t_refund_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

@@ -141,6 +141,43 @@ INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, dow
 ('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', 'payment-core-ops', 'payment.trade.pending.v1', 'PENDING', 'warn', 0, NULL, '2026-07-20 10:08:19', '{"amount":6800.00}', '2026-07-19 10:03:19'),
 ('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 2, '2026-07-18 18:41:30', '2026-07-20 09:00:00', '{"amount":3600.00}', '2026-07-18 18:41:21');
 
+INSERT INTO t_payment_process_log(log_no, payment_order_id, order_no, request_no, source_type, source_no, process_stage, log_level, log_level_type, message, source, created_at)
+SELECT pa.attempt_no, pa.payment_order_id, po.order_no, pa.attempt_no, 'PAYMENT_ATTEMPT', pa.attempt_no,
+       '支付提交',
+       CASE WHEN pa.attempt_status_type = 'danger' THEN 'ERROR' WHEN pa.attempt_status_type = 'warn' THEN 'WARN' ELSE 'INFO' END,
+       pa.attempt_status_type,
+       CONCAT('支付方式=', pa.payment_method, '；请求状态=', pa.attempt_status, '；请求报文=', pa.request_payload),
+       pa.channel_code, pa.created_at
+FROM t_payment_attempt pa
+         LEFT JOIN t_payment_order po ON po.payment_order_id = pa.payment_order_id;
+
+INSERT INTO t_payment_process_log(log_no, payment_order_id, order_no, request_no, source_type, source_no, process_stage, log_level, log_level_type, message, source, created_at)
+SELECT pnl.notify_no, pnl.payment_order_id, po.order_no, NULL, 'PAYMENT_NOTIFY', pnl.notify_no,
+       '渠道回调',
+       CASE WHEN pnl.notify_status_type = 'danger' THEN 'ERROR' WHEN pnl.notify_status_type = 'warn' THEN 'WARN' ELSE 'INFO' END,
+       pnl.notify_status_type,
+       CONCAT('回调类型=', pnl.notify_type, '；处理状态=', pnl.notify_status, '；结果=', COALESCE(pnl.notify_result, '-')),
+       pnl.channel_code, pnl.created_at
+FROM t_payment_notify_log pnl
+         LEFT JOIN t_payment_order po ON po.payment_order_id = pnl.payment_order_id;
+
+INSERT INTO t_payment_process_log(log_no, payment_order_id, order_no, request_no, source_type, source_no, process_stage, log_level, log_level_type, message, source, created_at)
+SELECT prr.route_no, prr.payment_order_id, po.order_no, NULL, 'PAYMENT_ROUTE', prr.route_no,
+       '支付路由', 'INFO', 'info',
+       CONCAT('路由规则=', prr.route_rule, '；路由结果=', prr.route_result),
+       prr.channel_code, prr.created_at
+FROM t_payment_route_record prr
+         LEFT JOIN t_payment_order po ON po.payment_order_id = prr.payment_order_id;
+
+INSERT INTO t_payment_process_log(log_no, payment_order_id, order_no, request_no, source_type, source_no, process_stage, log_level, log_level_type, message, source, created_at)
+SELECT pe.event_no, pe.payment_order_id, pe.biz_no, NULL, 'PAYMENT_EVENT', pe.event_no,
+       '业务事件',
+       CASE WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'WARN' ELSE 'INFO' END,
+       CASE WHEN pe.event_type = 'PAYMENT_CLOSED' THEN 'warn' ELSE 'info' END,
+       CONCAT('事件类型=', pe.event_type, '；事件载荷=', pe.event_payload),
+       'payment-core', pe.created_at
+FROM t_payment_event pe;
+
 INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES
 ('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
 ('REF202607180019', 'PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),

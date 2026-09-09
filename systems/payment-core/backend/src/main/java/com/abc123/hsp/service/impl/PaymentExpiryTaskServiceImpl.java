@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.ExpiredPaymentDTO;
+import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import java.util.List;
@@ -40,13 +41,27 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
                     "已失效",
                     "danger"
             );
+            String eventNo = "EVT" + System.currentTimeMillis()
+                    + payment.getPaymentOrderId().substring(Math.max(0, payment.getPaymentOrderId().length() - 4));
+            String eventPayload = "{\"source\":\"scheduler\",\"reason\":\"PREPAY_EXPIRED\"}";
             paymentMapper.insertEvent(
-                    "EVT" + System.currentTimeMillis() + payment.getPaymentOrderId().substring(Math.max(0, payment.getPaymentOrderId().length() - 4)),
+                    eventNo,
                     "PAYMENT_EXPIRED_CLOSED",
                     payment.getPaymentOrderId(),
                     payment.getOrderNo(),
-                    "{\"source\":\"scheduler\",\"reason\":\"PREPAY_EXPIRED\"}"
-            );
+                    eventPayload);
+            PaymentProcessLogEntity processLog = new PaymentProcessLogEntity();
+            processLog.setLogNo(eventNo);
+            processLog.setPaymentOrderId(payment.getPaymentOrderId());
+            processLog.setOrderNo(payment.getOrderNo());
+            processLog.setSourceType("PAYMENT_EVENT");
+            processLog.setSourceNo(eventNo);
+            processLog.setProcessStage("业务事件");
+            processLog.setLogLevel("INFO");
+            processLog.setLogLevelType("info");
+            processLog.setMessage("事件类型=PAYMENT_EXPIRED_CLOSED；事件载荷=" + eventPayload);
+            processLog.setSource("payment-core");
+            paymentMapper.insertPaymentProcessLog(processLog);
         }
         return expiredPayments.size();
     }

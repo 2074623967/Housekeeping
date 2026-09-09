@@ -23,6 +23,7 @@ import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
+import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
@@ -429,6 +430,7 @@ public class PaymentServiceImpl implements PaymentService {
                     submitResult.getManualInterventionRequired(),
                     submitResult.getMappingVersion(),
                     submitResult.getReturnCodeMappingMatched());
+            String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
             String routeNo = "RTR" + System.currentTimeMillis();
             paymentMapper.insertRouteRecord(
                     routeNo,
@@ -437,6 +439,18 @@ public class PaymentServiceImpl implements PaymentService {
                     routeDecision.getRouteRule(),
                     routeDecision.getRouteResult());
             String attemptNo = "ATT" + System.currentTimeMillis();
+            String requestPayload = buildSubmitRequestPayload(
+                    request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode);
+            recordProcessLog(
+                    routeNo,
+                    paymentOrderId,
+                    orderNo,
+                    attemptNo,
+                    "PAYMENT_ROUTE",
+                    "支付路由",
+                    "info",
+                    "路由规则=" + routeDecision.getRouteRule() + "；路由结果=" + routeDecision.getRouteResult(),
+                    resolvedChannelCode);
             paymentMapper.insertPaymentAttempt(
                     attemptNo,
                     request.getPrepayOrderNo(),
@@ -447,24 +461,40 @@ public class PaymentServiceImpl implements PaymentService {
                     terminal,
                     clientIp,
                     idempotencyKey,
-                    buildSubmitRequestPayload(request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode),
+                    requestPayload,
                     submitResult.getResponsePayload(),
                     submitResult.getAttemptStatus(),
                     submitResult.getAttemptStatusType()
             );
+            recordProcessLog(
+                    attemptNo,
+                    paymentOrderId,
+                    orderNo,
+                    attemptNo,
+                    "PAYMENT_ATTEMPT",
+                    "支付提交",
+                    submitResult.getAttemptStatusType(),
+                    "支付方式=" + request.getPaymentMethod()
+                            + "；请求状态=" + submitResult.getAttemptStatus()
+                            + "；请求报文=" + requestPayload,
+                    resolvedChannelCode);
             if (opsConfigSnapshotVersion != null) {
                 paymentMapper.updateRouteOpsConfigSnapshotVersion(routeNo, opsConfigSnapshotVersion);
                 paymentMapper.updateAttemptOpsConfigSnapshotVersion(attemptNo, opsConfigSnapshotVersion);
             }
+            String eventNo = "EVT" + System.currentTimeMillis();
+            String eventPayload = "{\"channel\":\"" + resolvedChannelCode
+                    + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}";
             paymentMapper.insertEvent(
-                    "EVT" + System.currentTimeMillis(),
+                    eventNo,
                     "PAYMENT_SUBMIT",
                     paymentOrderId,
-                    paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo()),
-                    "{\"channel\":\"" + resolvedChannelCode + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}"
-            );
+                    orderNo,
+                    eventPayload);
+            recordEventProcessLog(eventNo, "PAYMENT_SUBMIT", paymentOrderId, orderNo, eventPayload);
+            String notifyNo = "NTF" + System.currentTimeMillis();
             paymentMapper.insertNotifyLog(
-                    "NTF" + System.currentTimeMillis(),
+                    notifyNo,
                     paymentOrderId,
                     resolvedChannelCode,
                     "SUBMIT",
@@ -473,6 +503,16 @@ public class PaymentServiceImpl implements PaymentService {
                     "待回调",
                     "warn"
             );
+            recordNotifyProcessLog(
+                    notifyNo,
+                    paymentOrderId,
+                    orderNo,
+                    attemptNo,
+                    resolvedChannelCode,
+                    "SUBMIT",
+                    submitResult.getResponsePayload(),
+                    "待回调",
+                    "warn");
             return paymentMapper.findPrepay(request.getPrepayOrderNo());
         } catch (RuntimeException exception) {
             paymentMapper.releaseSubmitConcurrencyToken(paymentOrderId, "SUBMIT_EXCEPTION");
@@ -524,12 +564,20 @@ public class PaymentServiceImpl implements PaymentService {
                 currentDetail.getPaymentOrderId(),
                 prepayStatus,
                 statusType);
+        String eventNo = "EVT" + System.currentTimeMillis();
+        String eventPayload = buildRiskDecisionPayload(riskDecision, resolvedChannelCode);
         paymentMapper.insertEvent(
-                "EVT" + System.currentTimeMillis(),
+                eventNo,
                 eventType,
                 currentDetail.getPaymentOrderId(),
                 currentDetail.getOrderNo(),
-                buildRiskDecisionPayload(riskDecision, resolvedChannelCode));
+                eventPayload);
+        recordEventProcessLog(
+                eventNo,
+                eventType,
+                currentDetail.getPaymentOrderId(),
+                currentDetail.getOrderNo(),
+                eventPayload);
         return paymentMapper.findPrepay(currentPrepay.getPrepayOrderNo());
     }
 
@@ -555,8 +603,9 @@ public class PaymentServiceImpl implements PaymentService {
         }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
+        String notifyNo = "NTF" + System.currentTimeMillis();
         paymentMapper.insertNotifyLog(
-                "NTF" + System.currentTimeMillis(),
+                notifyNo,
                 request.getPaymentOrderId(),
                 channel,
                 request.getTradeStatus(),
@@ -565,6 +614,16 @@ public class PaymentServiceImpl implements PaymentService {
                 "已收口",
                 "success"
         );
+        recordNotifyProcessLog(
+                notifyNo,
+                request.getPaymentOrderId(),
+                detail.getOrderNo(),
+                null,
+                channel,
+                request.getTradeStatus(),
+                "{\"code\":\"SUCCESS\"}",
+                "已收口",
+                "success");
         paymentMapper.updatePaymentStatus(
                 request.getPaymentOrderId(),
                 paySuccess ? "SUCCESS" : "WAIT_CALLBACK",
@@ -592,13 +651,15 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.updateBillAfterPayment(detail.getOrderNo(), settledAmount, "已结清", "success");
         }
         String eventNo = "EVT" + System.currentTimeMillis();
+        String eventType = paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING";
+        String eventPayload = "{\"channel\":\"" + channel + "\"}";
         paymentMapper.insertEvent(
                 eventNo,
-                paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING",
+                eventType,
                 request.getPaymentOrderId(),
                 detail.getOrderNo(),
-                "{\"channel\":\"" + channel + "\"}"
-        );
+                eventPayload);
+        recordEventProcessLog(eventNo, eventType, request.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
         if (paySuccess) {
             paymentEventDispatchService.publishPaymentSuccess(eventNo, request.getPaymentOrderId());
         }
@@ -667,12 +728,16 @@ public class PaymentServiceImpl implements PaymentService {
                 detail.getPaymentOrderId(), "支付成功", "success");
         settleOrderAndBill(detail);
         String eventNo = "EVT" + System.currentTimeMillis();
+        String eventPayload = "{\"channel\":\"" + detail.getChannel()
+                + "\",\"source\":\"ACTIVE_QUERY\"}";
         paymentMapper.insertEvent(
                 eventNo,
                 "PAYMENT_SUCCESS",
                 detail.getPaymentOrderId(),
                 detail.getOrderNo(),
-                "{\"channel\":\"" + detail.getChannel() + "\",\"source\":\"ACTIVE_QUERY\"}");
+                eventPayload);
+        recordEventProcessLog(
+                eventNo, "PAYMENT_SUCCESS", detail.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
         paymentEventDispatchService.publishPaymentSuccess(eventNo, detail.getPaymentOrderId());
         paymentMapper.releaseSubmitConcurrencyToken(detail.getPaymentOrderId(), "ACTIVE_QUERY_SUCCESS");
         PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
@@ -687,15 +752,28 @@ public class PaymentServiceImpl implements PaymentService {
     private void recordChannelQuery(
             PaymentDetailDTO detail,
             PaymentChannelQueryResultDTO queryResult) {
+        String notifyNo = "QRY" + System.currentTimeMillis();
+        String responsePayload = buildChannelQueryResponsePayload(queryResult);
+        String statusType = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info";
         paymentMapper.insertNotifyLog(
-                "QRY" + System.currentTimeMillis(),
+                notifyNo,
                 detail.getPaymentOrderId(),
                 detail.getChannel(),
                 queryResult.getTradeStatus(),
                 "{\"querySource\":\"" + escapeJson(queryResult.getQuerySource()) + "\"}",
-                buildChannelQueryResponsePayload(queryResult),
+                responsePayload,
                 "已查单",
-                "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info");
+                statusType);
+        recordNotifyProcessLog(
+                notifyNo,
+                detail.getPaymentOrderId(),
+                detail.getOrderNo(),
+                null,
+                detail.getChannel(),
+                queryResult.getTradeStatus(),
+                responsePayload,
+                "已查单",
+                statusType);
     }
 
     private String buildChannelQueryResponsePayload(PaymentChannelQueryResultDTO queryResult) {
@@ -730,14 +808,26 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void recordChannelQueryFailure(PaymentDetailDTO detail, BusinessException exception) {
+        String notifyNo = "QRY" + System.currentTimeMillis();
+        String responsePayload = "{\"code\":\"" + escapeJson(exception.getCode())
+                + "\",\"message\":\"" + escapeJson(exception.getMessage()) + "\"}";
         paymentMapper.insertNotifyLog(
-                "QRY" + System.currentTimeMillis(),
+                notifyNo,
                 detail.getPaymentOrderId(),
                 detail.getChannel(),
                 "QUERY_FAILED",
                 "{\"querySource\":\"CHANNEL_QUERY\"}",
-                "{\"code\":\"" + escapeJson(exception.getCode())
-                        + "\",\"message\":\"" + escapeJson(exception.getMessage()) + "\"}",
+                responsePayload,
+                "查单失败",
+                "danger");
+        recordNotifyProcessLog(
+                notifyNo,
+                detail.getPaymentOrderId(),
+                detail.getOrderNo(),
+                null,
+                detail.getChannel(),
+                "QUERY_FAILED",
+                responsePayload,
                 "查单失败",
                 "danger");
     }
@@ -780,9 +870,92 @@ public class PaymentServiceImpl implements PaymentService {
         paymentMapper.updatePaymentStatus(request.getPaymentOrderId(), "CLOSED", "danger", detail.getChannelTransactionNo());
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
-        paymentMapper.insertEvent("EVT" + System.currentTimeMillis(), "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), "{\"close\":\"manual\"}");
+        String eventNo = "EVT" + System.currentTimeMillis();
+        String eventPayload = "{\"close\":\"manual\"}";
+        paymentMapper.insertEvent(
+                eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
+        recordEventProcessLog(
+                eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
         paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "MANUAL_CLOSE");
         return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+    }
+
+    private void recordNotifyProcessLog(
+            String notifyNo,
+            String paymentOrderId,
+            String orderNo,
+            String requestNo,
+            String channelCode,
+            String notifyType,
+            String notifyResult,
+            String notifyStatus,
+            String statusType) {
+        recordProcessLog(
+                notifyNo,
+                paymentOrderId,
+                orderNo,
+                requestNo,
+                "PAYMENT_NOTIFY",
+                "渠道回调",
+                statusType,
+                "回调类型=" + notifyType
+                        + "；处理状态=" + notifyStatus
+                        + "；结果=" + (notifyResult == null ? "-" : notifyResult),
+                channelCode);
+    }
+
+    private void recordEventProcessLog(
+            String eventNo,
+            String eventType,
+            String paymentOrderId,
+            String orderNo,
+            String eventPayload) {
+        String statusType = "PAYMENT_CLOSED".equals(eventType) ? "warn" : "info";
+        recordProcessLog(
+                eventNo,
+                paymentOrderId,
+                orderNo,
+                null,
+                "PAYMENT_EVENT",
+                "业务事件",
+                statusType,
+                "事件类型=" + eventType + "；事件载荷=" + eventPayload,
+                "payment-core");
+    }
+
+    private void recordProcessLog(
+            String sourceNo,
+            String paymentOrderId,
+            String orderNo,
+            String requestNo,
+            String sourceType,
+            String processStage,
+            String statusType,
+            String message,
+            String source) {
+        PaymentProcessLogEntity processLog = new PaymentProcessLogEntity();
+        processLog.setLogNo(sourceNo);
+        processLog.setPaymentOrderId(paymentOrderId);
+        processLog.setOrderNo(orderNo);
+        processLog.setRequestNo(requestNo);
+        processLog.setSourceType(sourceType);
+        processLog.setSourceNo(sourceNo);
+        processLog.setProcessStage(processStage);
+        processLog.setLogLevel(toLogLevel(statusType));
+        processLog.setLogLevelType(statusType);
+        processLog.setMessage(message);
+        processLog.setSource(source);
+        paymentMapper.insertPaymentProcessLog(processLog);
+    }
+
+    private String toLogLevel(String statusType) {
+        if ("danger".equalsIgnoreCase(statusType)) {
+            return "ERROR";
+        }
+        if ("warn".equalsIgnoreCase(statusType)) {
+            return "WARN";
+        }
+        return "INFO";
     }
 
     /**

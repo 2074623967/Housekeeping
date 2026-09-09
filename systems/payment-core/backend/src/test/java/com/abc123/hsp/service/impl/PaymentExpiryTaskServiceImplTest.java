@@ -43,5 +43,10 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("PAY-EXPIRED"),
                 org.mockito.ArgumentMatchers.eq("ORD-EXPIRED"),
                 org.mockito.ArgumentMatchers.contains("PREPAY_EXPIRED"));
+        verify(paymentMapper).insertPaymentProcessLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "PAYMENT_EVENT".equals(log.getSourceType())
+                        && "PAY-EXPIRED".equals(log.getPaymentOrderId())
+                        && "ORD-EXPIRED".equals(log.getOrderNo())
+                        && log.getMessage().contains("PAYMENT_EXPIRED_CLOSED")));
     }
 }

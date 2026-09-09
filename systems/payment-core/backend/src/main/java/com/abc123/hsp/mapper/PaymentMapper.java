@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
 import com.abc123.hsp.dto.PaymentSubmitConcurrencyTokenDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
+import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import java.math.BigDecimal;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -252,6 +253,11 @@ public interface PaymentMapper {
             @Param("responsePayload") String responsePayload,
             @Param("attemptStatus") String attemptStatus,
             @Param("attemptStatusType") String attemptStatusType);
+
+    /**
+     * 写入独立支付处理日志；相同来源事实重复写入时保持幂等。
+     */
+    int insertPaymentProcessLog(PaymentProcessLogEntity entity);
 
     /**
      * 回写路由记录实际消费的运营配置快照版本。

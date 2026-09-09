@@ -458,6 +458,37 @@
         VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{sourceAppId}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
     </insert>
 
+    <insert id="insertPaymentProcessLog">
+        INSERT IGNORE INTO t_payment_process_log(
+            log_no,
+            payment_order_id,
+            order_no,
+            request_no,
+            source_type,
+            source_no,
+            process_stage,
+            log_level,
+            log_level_type,
+            message,
+            source,
+            created_at
+        )
+        VALUES (
+            #{logNo},
+            #{paymentOrderId},
+            #{orderNo},
+            #{requestNo},
+            #{sourceType},
+            #{sourceNo},
+            #{processStage},
+            #{logLevel},
+            #{logLevelType},
+            #{message},
+            #{source},
+            NOW()
+        )
+    </insert>
+
     <update id="updateRouteOpsConfigSnapshotVersion">
         UPDATE t_payment_route_record
         SET ops_config_snapshot_version = #{snapshotVersion}
