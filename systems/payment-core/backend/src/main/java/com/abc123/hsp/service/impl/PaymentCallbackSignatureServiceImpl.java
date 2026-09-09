@@ -42,7 +42,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     public PaymentCallbackSignatureServiceImpl(
             PaymentCallbackSecurityMapper paymentCallbackSecurityMapper,
             @Value("${payment.callback.require-signature:true}") boolean required,
-            @Value("${payment.callback.nonce-ttl-seconds:600}") long nonceTtlSeconds) {
+            @Value("${payment.callback.nonce-ttl-seconds:601}") long nonceTtlSeconds) {
         if (nonceTtlSeconds <= 0) {
             throw new IllegalArgumentException("payment callback nonce TTL must be positive");
         }
@@ -121,7 +121,12 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID,
                     "callback signature window must be positive");
         }
-        return notifySignWindowSec.longValue();
+        long allowedWindowSeconds = notifySignWindowSec.longValue();
+        if (nonceTtlSeconds <= allowedWindowSeconds * 2L) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID,
+                    "callback nonce TTL must outlast the full signature validity period");
+        }
+        return allowedWindowSeconds;
     }
 
     private PaymentCallbackSecurityProfileDTO resolveSecurityProfile(String normalizedChannel) {

@@ -36,7 +36,7 @@ payment:
   callback:
     # 默认失败闭合；仅 demo profile 显式关闭，真实渠道环境必须注入独立密钥或公钥。
     require-signature: ${HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE:true}
-    nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:600}
+    nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:601}
   expiry-close:
     fixed-delay-ms: ${HSP_PAYMENT_EXPIRY_CLOSE_DELAY_MS:60000}
   event-retry:
