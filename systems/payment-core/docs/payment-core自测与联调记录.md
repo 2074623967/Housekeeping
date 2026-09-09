@@ -5230,3 +5230,35 @@
 3. 当前仍使用轻量自声明身份，且值班日历仅支持星期和日期策略，不具备法定节假日数据、真实轮班交接、可信审批、升级动作编排或通知网关送达证据。
 4. 桌面与 `390 x 844` 静态视觉检查已完成，但后端 `18081` 未监听，因此不形成运行态 API、候选批准或完整端到端页面验收证据。
 5. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。
+
+## 164. 2026-09-09 支付控制策略不可变版本与受控回滚 V1.7 验证
+
+### 164.1 本轮补强
+
+1. 新增 `t_payment_control_policy_version` 不可变版本表，保存完整运行配置快照、递增版本号、变更类型、回滚来源和原因；全量初始化数据与增量迁移均为存量策略生成 V1 `BASELINE`。
+2. 新增控制策略版本历史查询和回滚候选接口。管理历史只返回 `accessTokenConfigured`，不返回令牌原文；回滚复核快照内部保留恢复运行配置所需令牌。
+3. CREATE/UPDATE/STATUS_CHANGE 批准后分别追加 `REVIEW_RELEASE / REVIEW_STATUS_CHANGE` 版本；ROLLBACK 与三类现有操作共享小写来源应用唯一待办，提交和驳回不修改运行态。
+4. 回滚批准先锁复核申请，再锁运行配置，同时复验提交时完整指纹和最新版本号。恢复配置、重置自检为 `WARN`、追加 `REVIEW_ROLLBACK` 新版本与完成申请处于同一事务。
+5. 管理端升级为 V1.20，新增版本历史和回滚入口；复核列表展示基线版本与回滚来源版本，历史面板不展示令牌原文。
+6. `SELF_DECLARED` 仍只表示人员声明不同，不代表可信身份、权限、正式审批或不可抵赖签字；版本表中的令牌存储也不等于专用密钥托管或真实轮换。
+
+### 164.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付控制策略扩大定向测试 | `mvn -Dtest=PaymentControlPolicyConfigServiceImplTest,PaymentConfigControlPolicyReviewMapperIntegrationTest,PaymentConfigControllerTest,PaymentConfigServiceImplTest test` | 通过 | `88` 个用例全部通过，覆盖四类候选、版本查询、令牌脱敏、回滚来源、指纹与版本基线复验、批准后新版本和自检失效 |
+| 后端全量测试 | `mvn test` | 通过 | `444` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 管理端桌面无头渲染检查 | `http://127.0.0.1:4192/payment-config`，Playwright `1280px`，本地模拟响应 | 通过 | V1.20、控制策略版本历史和回滚按钮实际渲染；`clientWidth/scrollWidth=1280/1280`，页面文本未出现测试令牌原文。模拟响应只用于 UI，不算真实 API 联调 |
+| 管理端窄视口无头渲染检查 | Playwright `390 x 844`，本地模拟响应 | 通过 | `document/body scrollWidth=390`，版本面板和回滚入口可见，无页面级横向溢出 |
+| 运行态 API 与生产迁移 | `http://127.0.0.1:18081/api/payment-config/control-policies/*` | 未执行 | 后端 `18081` 未监听；不记录版本查询、回滚提交/批准、生产 MySQL 迁移、令牌托管或真实支付链路联调通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码与 Mapper XML 无空白符或结构错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 脚本退出码 `2` 来自 release 治理阻断；`test -> master = 是`、`release/* = 否`，正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论 |
+
+### 164.3 当前判断
+
+1. 支付控制策略新增、编辑、启停和历史回滚已进入统一候选复核与不可变版本链路；历史回滚不覆盖旧版本，而是批准后追加新版本。
+2. 来源应用唯一待办、运行配置行锁、完整指纹和最新版本号共同约束并发与陈旧候选；结论来自单元和 H2 MySQL 兼容 Mapper 测试，不代表生产 MySQL 并发压测。
+3. 管理总览、复核列表和版本历史均不返回令牌原文，但运行配置、复核快照和不可变版本仍保存令牌；可信权限、专用密钥托管与轮换和多实例分布式限流仍未完成。
+4. 页面已完成模拟响应下的桌面与手机无头渲染检查；系统锁屏阻断了人工目视检查，且后端未启动，因此不形成真实端到端页面验收证据。
+5. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。

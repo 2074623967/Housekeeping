@@ -101,6 +101,8 @@
 | `/api/payment-config/control-policies/reviews` | `POST` | 提交支付控制策略新增或编辑完整候选 |
 | `/api/payment-config/control-policies/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用完整候选 |
 | `/api/payment-config/control-policies/reviews/{requestNo}/reject` | `POST` | 异人驳回候选，运行态不变 |
+| `/api/payment-config/control-policies/{sourceAppId}/versions` | `GET` | 查询支付控制策略不可变版本历史，不返回令牌原文 |
+| `/api/payment-config/control-policies/{sourceAppId}/rollback` | `POST` | 提交指定历史版本的回滚候选，运行态不变 |
 | `/api/payment-config/issue-duty-rosters` | `POST` | 提交异常告警值班路由新增候选，运行态不变 |
 | `/api/payment-config/issue-duty-rosters/{rosterCode}` | `PUT` | 提交异常告警值班路由编辑候选，运行态不变 |
 | `/api/payment-config/issue-duty-rosters/toggle` | `POST` | 提交异常告警值班路由启停候选，运行态不变 |
@@ -1213,6 +1215,8 @@ GET  /api/payment-config/control-policies/reviews
 POST /api/payment-config/control-policies/reviews
 POST /api/payment-config/control-policies/reviews/{requestNo}/approve
 POST /api/payment-config/control-policies/reviews/{requestNo}/reject
+GET  /api/payment-config/control-policies/{sourceAppId}/versions
+POST /api/payment-config/control-policies/{sourceAppId}/rollback
 ```
 
 执行支付控制策略自检：
@@ -1233,6 +1237,8 @@ POST /api/payment-config/control-policies/self-check
 ```
 
 新增或编辑完整候选通过 `requester + candidate` 提交；candidate 包含来源应用标识/名称、支付方式/渠道/商户授权清单、两级正数限流、令牌鉴权开关、可选访问令牌、严格模式、启停状态和变更原因。新增且开启令牌鉴权时令牌必填；编辑留空继承当前令牌。管理总览和复核列表只返回 `accessTokenConfigured`，不返回 `accessTokenValue`。批准后自检状态重置为 `WARN`，严格模式必须重新自检通过后才能继续提交支付。
+
+版本历史返回完整非敏感策略快照、`versionNo / changeType / sourceVersionNo / changeReason / createdAt` 和 `accessTokenConfigured`，不返回令牌原文。回滚请求包含 `versionNo / requester / changeReason`，生成 `ROLLBACK` 候选并记录提交时完整指纹和版本号；批准同时复验两类基线，恢复完整策略、重置自检为 `WARN` 并追加 `REVIEW_ROLLBACK` 新版本。
 
 异常告警值班路由完整候选复核：
 
@@ -1259,7 +1265,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 6. 返回码映射当前已支持运营查看、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备 V1.4 复核与审计，单条启停具备 V1.5 独立唯一待办、完整基线指纹和自声明异人复核。后续继续补可信身份权限、真实渠道码表校验和受控自动归档。
 7. 支付网关新增、编辑和启停已统一纳入 V1.3 完整候选复核，关闭已知直接运行态写入入口；`requester / reviewer` 仍是自声明，`identityTrustLevel` 固定为 `SELF_DECLARED`，不代表可信身份、正式审批或不可抵赖签字。候选中的证书别名和状态只是治理台账字段，证书上传/轮换动作、真实灰度发布编排、渠道探活和真实网关适配仍未落地。
 8. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示，新增、编辑和启停已统一纳入 V1.3 完整候选复核；后续继续补可信身份权限、专用密钥轮换、证书上传、多商户参数模板和真实探活治理。
-9. 支付控制策略新增、编辑和启停已统一纳入 V1.6 完整候选复核；来源应用编码统一小写，同应用唯一待办，批准前重验完整基线。自检仍使用 `configCode` 传来源应用标识并回写 `PASS/WARN/FAIL`；自动/人工自检属于系统运行状态，不进入配置复核。令牌只以是否配置展示，人员仍为 `SELF_DECLARED`。
+9. 支付控制策略新增、编辑、启停和历史回滚已统一纳入 V1.7 完整候选复核与不可变版本；来源应用编码统一小写，同应用唯一待办，批准前重验完整指纹和版本基线。自检仍使用 `configCode` 传来源应用标识并回写 `PASS/WARN/FAIL`；自动/人工自检属于系统运行状态，不进入配置复核。管理总览、复核列表和版本历史只展示令牌是否配置，人员仍为 `SELF_DECLARED`。
 10. 路由规则新增、编辑、启停和回滚均提交候选快照进入自声明 maker-checker；旧的直接运行态写入路径已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
 11. 异常告警值班路由新增、编辑和启停均进入 V1.1 完整候选复核；允许跨日班次，星期范围规范化，升级超时为 `5-1440` 分钟，日期策略只支持 `ALL_DAYS / WORKDAY_ONLY / NON_WORKDAY_ONLY`。
 

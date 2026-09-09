@@ -53,8 +53,9 @@
 14. 执行 `migrations/2026-09-09-add-payment-gateway-review.sql`，建立支付网关状态变更复核表；脚本可重复执行
 15. 执行一次 `migrations/2026-09-09-expand-payment-gateway-review.sql`，扩展网关完整候选字段；该脚本不可重复执行
 16. 执行 `migrations/2026-09-09-create-payment-control-policy-review.sql`，建立支付控制策略完整候选复核表；脚本可重复执行
-17. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
-18. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+17. 执行 `migrations/2026-09-09-add-payment-control-policy-version.sql`，建立支付控制策略不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
+18. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
+19. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -81,8 +82,11 @@
    - `SHOW COLUMNS FROM t_payment_gateway_review LIKE 'operation_type'` 返回一行；既有申请的完整候选字段均已从对应运行配置回填
    - `SELECT pending_gateway_code, COUNT(*) FROM t_payment_gateway_review WHERE pending_gateway_code IS NOT NULL GROUP BY pending_gateway_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_gateway_code` 应为空
    - `SHOW TABLES LIKE 't_payment_control_policy_review'` 返回一行
+   - `SHOW TABLES LIKE 't_payment_control_policy_version'` 返回一行
+   - `SELECT COUNT(*) FROM t_payment_control_policy config WHERE NOT EXISTS (SELECT 1 FROM t_payment_control_policy_version version WHERE version.source_app_id = config.source_app_id)` 返回 `0`
+   - `SELECT source_app_id, version_no, COUNT(*) FROM t_payment_control_policy_version GROUP BY source_app_id, version_no HAVING COUNT(*) > 1` 返回空集
    - `SELECT pending_source_app_id, COUNT(*) FROM t_payment_control_policy_review WHERE pending_source_app_id IS NOT NULL GROUP BY pending_source_app_id HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_source_app_id` 应为空
-   - 管理查询与复核列表不得返回 `access_token_value` 原文，只能返回是否已配置
+   - 管理总览、复核列表和版本历史不得返回 `access_token_value` 原文，只能返回是否已配置
    - `SHOW TABLES LIKE 't_payment_issue_duty_roster_review'` 返回一行
    - `SELECT pending_roster_code, COUNT(*) FROM t_payment_issue_duty_roster_review WHERE pending_roster_code IS NOT NULL GROUP BY pending_roster_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_roster_code` 应为空
    - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
