@@ -8,6 +8,13 @@ const protocols = ref([]);
 const protocolTypeOptions = ref([]);
 const returnCodeMappings = ref([]);
 const gateways = ref([]);
+const gatewayReviews = ref([]);
+const isGatewayReviewLoading = ref(false);
+const gatewayReviewError = ref("");
+const gatewayActionRequester = ref("");
+const gatewayActionReason = ref("");
+const gatewayReviewer = ref("");
+const gatewayReviewComment = ref("");
 const controlPolicies = ref([]);
 const alertProviders = ref([]);
 const issueDutyRosters = ref([]);
@@ -917,12 +924,77 @@ function formatReturnCodeImportAction(action) {
 }
 
 async function toggleGateway(gateway) {
-  await toggleConfig(
-    gateway.gatewayCode,
-    gateway.status !== "ENABLED",
-    "支付网关",
-    paymentConfigApi.toggleGateway
-  );
+  if (!gatewayActionRequester.value || !gatewayActionReason.value) {
+    actionMessage.value = "支付网关提交复核失败：请填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = gateway.status !== "ENABLED";
+  activeConfigCode.value = gateway.gatewayCode;
+  actionMessage.value = "";
+  try {
+    gatewayReviews.value = await paymentConfigApi.submitGatewayStatusReview({
+      gatewayCode: gateway.gatewayCode,
+      enabled,
+      requester: gatewayActionRequester.value,
+      changeReason: gatewayActionReason.value
+    });
+    actionMessage.value = `支付网关 ${gateway.gatewayCode} 已提交${enabled ? "启用" : "停用"}复核，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付网关提交复核失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadGatewayReviews() {
+  isGatewayReviewLoading.value = true;
+  gatewayReviewError.value = "";
+  try {
+    gatewayReviews.value = await paymentConfigApi.getGatewayReviews();
+  } catch (error) {
+    gatewayReviewError.value = error.message;
+  } finally {
+    isGatewayReviewLoading.value = false;
+  }
+}
+
+async function handleGatewayReview(review, approved) {
+  if (!gatewayReviewer.value) {
+    actionMessage.value = "支付网关复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!gatewayReviewComment.value) {
+    actionMessage.value = `支付网关复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并应用 ${review.candidateStatus} 状态？`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `gateway-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: gatewayReviewer.value,
+      reviewComment: gatewayReviewComment.value
+    };
+    gatewayReviews.value = approved
+      ? await paymentConfigApi.approveGatewayReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectGatewayReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    gatewayReviewComment.value = "";
+    actionMessage.value = approved
+      ? `支付网关申请 ${review.requestNo} 已通过并应用。`
+      : `支付网关申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付网关复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function toggleControlPolicy(policy) {
@@ -1217,6 +1289,7 @@ onMounted(() => {
   loadProtocolReviews();
   loadReturnCodeReviews();
   loadReturnCodeImportReviews();
+  loadGatewayReviews();
 });
 
 function exportGovernanceSnapshot(section = "ALL") {
@@ -1234,7 +1307,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.15</span>
+        <span class="badge info">配置中心 V1.16</span>
       </div>
     </div>
 
@@ -2660,6 +2733,99 @@ function exportGovernanceSnapshot(section = "ALL") {
             <button class="button secondary" @click="exportGovernanceSnapshot('GATEWAYS')">导出网关</button>
           </div>
 
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>支付网关状态变更复核</h3>
+                <p class="meta">启停先提交候选，异人声明批准且完整网关基线有效后才更新运行态</p>
+              </div>
+              <button class="button secondary" :disabled="isGatewayReviewLoading" @click="loadGatewayReviews">
+                {{ isGatewayReviewLoading ? "加载中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="filter-grid">
+              <label>
+                申请人声明
+                <input v-model.trim="gatewayActionRequester" maxlength="64" placeholder="提交启停申请时必填" />
+              </label>
+              <label>
+                申请原因
+                <input v-model.trim="gatewayActionReason" maxlength="255" placeholder="提交启停申请时必填" />
+              </label>
+              <label>
+                复核人声明
+                <input v-model.trim="gatewayReviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+              </label>
+              <label>
+                复核意见 / 驳回原因
+                <input v-model.trim="gatewayReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
+              </label>
+            </div>
+            <div v-if="gatewayReviewError" class="error-banner">
+              支付网关复核申请加载失败：{{ gatewayReviewError }}
+            </div>
+            <div v-if="isGatewayReviewLoading" class="state-box">支付网关复核申请加载中...</div>
+            <div v-else-if="!gatewayReviews.length" class="state-box">当前暂无支付网关状态复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>网关</th>
+                    <th>候选状态</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in gatewayReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>
+                      {{ review.gatewayCode }} / {{ review.gatewayName }}
+                      <div class="muted-text">{{ review.accessMode }} / 基线 {{ review.baseFingerprint?.slice(0, 12) }}</div>
+                    </td>
+                    <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleGatewayReview(review, true)"
+                        >
+                          通过并应用
+                        </button>
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleGatewayReview(review, false)"
+                        >
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="table-wrap">
             <table>
               <thead>
@@ -2711,7 +2877,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                       :disabled="activeConfigCode === gateway.gatewayCode"
                       @click="toggleGateway(gateway)"
                     >
-                      {{ gateway.status === "ENABLED" ? "停用" : "启用" }}
+                      {{ gateway.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
                   </td>
                 </tr>

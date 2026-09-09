@@ -780,6 +780,89 @@
         ORDER BY priority ASC, id ASC
     </select>
 
+    <select id="findGatewayByCodeForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentGatewayConfigEntity">
+        SELECT gateway_code AS gatewayCode,
+               gateway_name AS gatewayName,
+               access_mode AS accessMode,
+               channel_scope AS channelScope,
+               environment_scope AS environmentScope,
+               api_base_url AS apiBaseUrl,
+               protocol_type AS protocolType,
+               sign_algorithm AS signAlgorithm,
+               certificate_alias AS certificateAlias,
+               certificate_status AS certificateStatus,
+               certificate_status_type AS certificateStatusType,
+               release_stage AS releaseStage,
+               gray_strategy AS grayStrategy,
+               callback_whitelist AS callbackWhitelist,
+               adapter_registry AS adapterRegistry,
+               timeout_ms AS timeoutMs,
+               retry_policy AS retryPolicy,
+               status,
+               status_type AS statusType,
+               priority
+        FROM t_payment_gateway_config
+        WHERE gateway_code = #{gatewayCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findGatewayReviews" resultType="com.abc123.hsp.dto.PaymentGatewayReviewDTO">
+        SELECT request_no AS requestNo,
+               gateway_code AS gatewayCode,
+               gateway_name AS gatewayName,
+               access_mode AS accessMode,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_gateway_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findGatewayReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentGatewayReviewEntity">
+        SELECT request_no AS requestNo,
+               gateway_code AS gatewayCode,
+               gateway_name AS gatewayName,
+               access_mode AS accessMode,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_gateway_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingGatewayReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentGatewayReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_gateway_review
+        WHERE pending_gateway_code = #{pendingGatewayCode}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findControlPolicies" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
         SELECT source_app_id AS sourceAppId,
                source_app_name AS sourceAppName,
@@ -1528,6 +1611,31 @@
             reviewer = #{reviewer},
             review_comment = #{reviewComment},
             applied_batch_no = #{appliedBatchNo},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
+    </update>
+
+    <insert id="insertGatewayReview">
+        INSERT INTO t_payment_gateway_review (
+            request_no, gateway_code, gateway_name, access_mode, pending_gateway_code,
+            base_fingerprint, candidate_status, candidate_status_type, requester, request_reason,
+            review_status, review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{gatewayCode}, #{gatewayName}, #{accessMode}, #{pendingGatewayCode},
+            #{baseFingerprint}, #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
+            #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeGatewayReview">
+        UPDATE t_payment_gateway_review
+        SET pending_gateway_code = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}

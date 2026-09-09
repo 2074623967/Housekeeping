@@ -7,6 +7,9 @@ import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
@@ -349,12 +352,33 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.rejectReturnCodeImportReview(requestNo, request));
     }
 
-    /**
-     * 启停支付网关接入配置。
-     */
+    /** 提交支付网关启停候选进入复核。 */
     @PostMapping("/gateways/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleGateway(@RequestBody PaymentConfigToggleRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.toggleGateway(request));
+    public ApiResponse<List<PaymentGatewayReviewDTO>> submitGatewayStatusReview(
+            @RequestBody PaymentGatewayStatusReviewRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitGatewayStatusReview(request));
+    }
+
+    /** 查询支付网关状态变更复核申请。 */
+    @GetMapping("/gateways/reviews")
+    public ApiResponse<List<PaymentGatewayReviewDTO>> listGatewayReviews() {
+        return ApiResponse.success(paymentConfigService.listGatewayReviews());
+    }
+
+    /** 通过支付网关状态变更复核并应用候选。 */
+    @PostMapping("/gateways/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentGatewayReviewDTO>> approveGatewayReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentGatewayReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveGatewayReview(requestNo, request));
+    }
+
+    /** 驳回支付网关状态变更复核，不改变运行态。 */
+    @PostMapping("/gateways/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentGatewayReviewDTO>> rejectGatewayReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentGatewayReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectGatewayReview(requestNo, request));
     }
 
     /**

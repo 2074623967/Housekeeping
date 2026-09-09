@@ -12,6 +12,9 @@ import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
@@ -294,7 +297,6 @@ class PaymentConfigControllerTest {
     @Test
     void shouldToggleGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.toggleGateway(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleControlPolicy(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleAlertProvider(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleIssueDutyRoster(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
@@ -303,14 +305,34 @@ class PaymentConfigControllerTest {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
-        assertEquals(overview, controller.toggleGateway(request).getData());
         assertEquals(overview, controller.toggleControlPolicy(request).getData());
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
-        verify(paymentConfigService).toggleGateway(request);
         verify(paymentConfigService).toggleControlPolicy(request);
         verify(paymentConfigService).toggleAlertProvider(request);
         verify(paymentConfigService).toggleIssueDutyRoster(request);
+    }
+
+    @Test
+    void shouldExposeGatewayStatusReviewFlow() {
+        PaymentGatewayStatusReviewRequestDTO submitRequest = new PaymentGatewayStatusReviewRequestDTO();
+        PaymentGatewayReviewActionRequestDTO actionRequest = new PaymentGatewayReviewActionRequestDTO();
+        java.util.List<PaymentGatewayReviewDTO> reviews =
+                Collections.singletonList(new PaymentGatewayReviewDTO());
+        when(paymentConfigService.submitGatewayStatusReview(submitRequest)).thenReturn(reviews);
+        when(paymentConfigService.listGatewayReviews()).thenReturn(reviews);
+        when(paymentConfigService.approveGatewayReview("GWR-001", actionRequest)).thenReturn(reviews);
+        when(paymentConfigService.rejectGatewayReview("GWR-001", actionRequest)).thenReturn(reviews);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+
+        assertEquals(reviews, controller.submitGatewayStatusReview(submitRequest).getData());
+        assertEquals(reviews, controller.listGatewayReviews().getData());
+        assertEquals(reviews, controller.approveGatewayReview("GWR-001", actionRequest).getData());
+        assertEquals(reviews, controller.rejectGatewayReview("GWR-001", actionRequest).getData());
+        verify(paymentConfigService).submitGatewayStatusReview(submitRequest);
+        verify(paymentConfigService).listGatewayReviews();
+        verify(paymentConfigService).approveGatewayReview("GWR-001", actionRequest);
+        verify(paymentConfigService).rejectGatewayReview("GWR-001", actionRequest);
     }
 
     @Test

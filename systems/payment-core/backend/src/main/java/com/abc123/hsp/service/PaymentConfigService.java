@@ -3,6 +3,9 @@ package com.abc123.hsp.service;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
@@ -208,10 +211,19 @@ public interface PaymentConfigService {
     List<PaymentReturnCodeImportReviewDTO> rejectReturnCodeImportReview(
             String requestNo, PaymentReturnCodeImportReviewActionRequestDTO request);
 
-    /**
-     * 启停支付网关接入配置。
-     */
-    PaymentConfigOverviewDTO toggleGateway(PaymentConfigToggleRequestDTO request);
+    /** 提交支付网关启停候选，不改变运行态。 */
+    List<PaymentGatewayReviewDTO> submitGatewayStatusReview(PaymentGatewayStatusReviewRequestDTO request);
+
+    /** 查询支付网关状态变更复核申请。 */
+    List<PaymentGatewayReviewDTO> listGatewayReviews();
+
+    /** 通过复核并应用支付网关状态候选。 */
+    List<PaymentGatewayReviewDTO> approveGatewayReview(
+            String requestNo, PaymentGatewayReviewActionRequestDTO request);
+
+    /** 驳回支付网关状态候选，不改变运行态。 */
+    List<PaymentGatewayReviewDTO> rejectGatewayReview(
+            String requestNo, PaymentGatewayReviewActionRequestDTO request);
 
     /**
      * 启停支付控制策略配置。

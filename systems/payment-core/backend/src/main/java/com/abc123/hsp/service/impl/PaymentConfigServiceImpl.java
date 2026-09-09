@@ -10,6 +10,9 @@ import com.abc123.hsp.dto.PaymentChannelUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
@@ -49,6 +52,8 @@ import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
+import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
+import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
@@ -968,17 +973,89 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleGateway(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
+    public List<PaymentGatewayReviewDTO> submitGatewayStatusReview(
+            PaymentGatewayStatusReviewRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("支付网关启停状态不能为空");
+        }
+        String gatewayCode = requireImportText(request.getGatewayCode(), "支付网关编码不能为空", 64)
+                .toUpperCase(Locale.ROOT);
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingGatewayReviewForUpdate(gatewayCode) != null) {
+            throw new IllegalArgumentException("该支付网关已有待复核申请");
+        }
+        PaymentGatewayConfigEntity current = paymentConfigMapper.findGatewayByCodeForUpdate(gatewayCode);
+        if (current == null) {
+            throw new IllegalArgumentException("支付网关接入配置不存在");
+        }
+        String candidateStatus = resolveStatus(request.getEnabled());
+        if (candidateStatus.equals(current.getStatus())) {
+            throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
+                    ? "支付网关已启用" : "支付网关已停用");
+        }
+        PaymentGatewayReviewEntity review = new PaymentGatewayReviewEntity();
+        review.setRequestNo("GWR" + UUID.randomUUID().toString().replace("-", ""));
+        review.setGatewayCode(current.getGatewayCode());
+        review.setGatewayName(current.getGatewayName());
+        review.setAccessMode(current.getAccessMode());
+        review.setPendingGatewayCode(gatewayCode);
+        review.setBaseFingerprint(fingerprintGateway(current));
+        review.setCandidateStatus(candidateStatus);
+        review.setCandidateStatusType(resolveStatusType(request.getEnabled()));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        try {
+            paymentConfigMapper.insertGatewayReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该支付网关已有待复核申请", exception);
+        }
+        return paymentConfigMapper.findGatewayReviews();
+    }
+
+    @Override
+    public List<PaymentGatewayReviewDTO> listGatewayReviews() {
+        return paymentConfigMapper.findGatewayReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentGatewayReviewDTO> approveGatewayReview(
+            String requestNo, PaymentGatewayReviewActionRequestDTO request) {
+        PaymentGatewayReviewEntity review = requirePendingGatewayReview(requestNo);
+        String reviewer = requireDistinctGatewayReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        if (!STATUS_ENABLED.equals(review.getCandidateStatus())
+                && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
+            throw new IllegalArgumentException("支付网关候选状态不支持");
+        }
+        PaymentGatewayConfigEntity current = paymentConfigMapper.findGatewayByCodeForUpdate(review.getGatewayCode());
+        if (current == null || review.getBaseFingerprint() == null
+                || !review.getBaseFingerprint().equals(fingerprintGateway(current))) {
+            throw new IllegalArgumentException("支付网关配置已变化，请重新提交复核申请");
+        }
         int affectedRows = paymentConfigMapper.updateGatewayStatus(
-                configCode,
-                resolveStatus(request.getEnabled()),
-                resolveStatusType(request.getEnabled())
-        );
+                review.getGatewayCode(), review.getCandidateStatus(), review.getCandidateStatusType());
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付网关接入配置不存在");
         }
-        return overview();
+        completeGatewayReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
+        return paymentConfigMapper.findGatewayReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentGatewayReviewDTO> rejectGatewayReview(
+            String requestNo, PaymentGatewayReviewActionRequestDTO request) {
+        PaymentGatewayReviewEntity review = requirePendingGatewayReview(requestNo);
+        String reviewer = requireDistinctGatewayReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "驳回原因不能为空");
+        completeGatewayReview(review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findGatewayReviews();
     }
 
     @Override
@@ -2361,6 +2438,41 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return review;
     }
 
+    private PaymentGatewayReviewEntity requirePendingGatewayReview(String requestNo) {
+        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        PaymentGatewayReviewEntity review = paymentConfigMapper.findGatewayReviewForUpdate(normalizedRequestNo);
+        if (review == null) {
+            throw new IllegalArgumentException("支付网关复核申请不存在");
+        }
+        if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+            throw new IllegalArgumentException("支付网关复核申请已完成");
+        }
+        return review;
+    }
+
+    private String requireDistinctGatewayReviewer(
+            PaymentGatewayReviewEntity review,
+            PaymentGatewayReviewActionRequestDTO request) {
+        String reviewer = requireReviewIdentity(
+                request == null ? null : request.getReviewer(), "复核人声明不能为空");
+        if (review.getRequester().equalsIgnoreCase(reviewer)) {
+            throw new IllegalArgumentException("申请人与复核人声明不能相同");
+        }
+        return reviewer;
+    }
+
+    private void completeGatewayReview(String requestNo,
+                                       String reviewStatus,
+                                       String reviewStatusType,
+                                       String reviewer,
+                                       String reviewComment) {
+        int affectedRows = paymentConfigMapper.completeGatewayReview(
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("支付网关复核状态已变化，请刷新后重试");
+        }
+    }
+
     private String requireDistinctChannelReviewer(
             PaymentChannelReviewEntity review,
             PaymentChannelReviewActionRequestDTO request) {
@@ -2554,6 +2666,31 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         appendFingerprintValue(canonical, channel.getDailyLimit());
         appendFingerprintValue(canonical, channel.getPriority());
         appendFingerprintValue(canonical, channel.getRouteWeight());
+        return sha256(canonical.toString());
+    }
+
+    private String fingerprintGateway(PaymentGatewayConfigEntity gateway) {
+        StringBuilder canonical = new StringBuilder();
+        appendFingerprintValue(canonical, gateway.getGatewayCode());
+        appendFingerprintValue(canonical, gateway.getGatewayName());
+        appendFingerprintValue(canonical, gateway.getAccessMode());
+        appendFingerprintValue(canonical, gateway.getChannelScope());
+        appendFingerprintValue(canonical, gateway.getEnvironmentScope());
+        appendFingerprintValue(canonical, gateway.getApiBaseUrl());
+        appendFingerprintValue(canonical, gateway.getProtocolType());
+        appendFingerprintValue(canonical, gateway.getSignAlgorithm());
+        appendFingerprintValue(canonical, gateway.getCertificateAlias());
+        appendFingerprintValue(canonical, gateway.getCertificateStatus());
+        appendFingerprintValue(canonical, gateway.getCertificateStatusType());
+        appendFingerprintValue(canonical, gateway.getReleaseStage());
+        appendFingerprintValue(canonical, gateway.getGrayStrategy());
+        appendFingerprintValue(canonical, gateway.getCallbackWhitelist());
+        appendFingerprintValue(canonical, gateway.getAdapterRegistry());
+        appendFingerprintValue(canonical, gateway.getTimeoutMs());
+        appendFingerprintValue(canonical, gateway.getRetryPolicy());
+        appendFingerprintValue(canonical, gateway.getStatus());
+        appendFingerprintValue(canonical, gateway.getStatusType());
+        appendFingerprintValue(canonical, gateway.getPriority());
         return sha256(canonical.toString());
     }
 

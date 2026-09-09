@@ -949,7 +949,16 @@ export const paymentConfigApi = {
     `/api/payment-config/return-codes/import/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  toggleGateway: (configCode, enabled) => postJson("/api/payment-config/gateways/toggle", { configCode, enabled }),
+  submitGatewayStatusReview: (payload) => postJson("/api/payment-config/gateways/toggle", payload),
+  getGatewayReviews: () => request("/api/payment-config/gateways/reviews"),
+  approveGatewayReview: (requestNo, payload) => postJson(
+    `/api/payment-config/gateways/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectGatewayReview: (requestNo, payload) => postJson(
+    `/api/payment-config/gateways/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   toggleControlPolicy: (configCode, enabled) => postJson("/api/payment-config/control-policies/toggle", { configCode, enabled }),
   toggleAlertProvider: (configCode, enabled) => postJson("/api/payment-config/alert-providers/toggle", { configCode, enabled }),
   toggleIssueDutyRoster: (configCode, enabled) => postJson("/api/payment-config/issue-duty-rosters/toggle", { configCode, enabled }),

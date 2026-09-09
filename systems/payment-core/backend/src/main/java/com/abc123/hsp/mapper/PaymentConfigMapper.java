@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
@@ -20,6 +21,8 @@ import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
+import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
+import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
@@ -169,6 +172,19 @@ public interface PaymentConfigMapper {
      * 查询支付网关接入配置。
      */
     List<PaymentGatewayConfigDTO> findGateways();
+
+    /** 按网关编码加锁查询完整运行配置。 */
+    PaymentGatewayConfigEntity findGatewayByCodeForUpdate(@Param("gatewayCode") String gatewayCode);
+
+    /** 查询支付网关状态变更复核申请。 */
+    List<PaymentGatewayReviewDTO> findGatewayReviews();
+
+    /** 加锁查询支付网关状态变更复核申请。 */
+    PaymentGatewayReviewEntity findGatewayReviewForUpdate(@Param("requestNo") String requestNo);
+
+    /** 按唯一占位加锁查询网关待复核申请。 */
+    PaymentGatewayReviewEntity findPendingGatewayReviewForUpdate(
+            @Param("pendingGatewayCode") String pendingGatewayCode);
 
     /**
      * 查询支付控制策略配置。
@@ -394,6 +410,16 @@ public interface PaymentConfigMapper {
     int updateGatewayStatus(@Param("gatewayCode") String gatewayCode,
                             @Param("status") String status,
                             @Param("statusType") String statusType);
+
+    /** 新增支付网关状态变更复核申请。 */
+    int insertGatewayReview(PaymentGatewayReviewEntity entity);
+
+    /** 完成支付网关状态变更复核申请并释放唯一待办占位。 */
+    int completeGatewayReview(@Param("requestNo") String requestNo,
+                              @Param("reviewStatus") String reviewStatus,
+                              @Param("reviewStatusType") String reviewStatusType,
+                              @Param("reviewer") String reviewer,
+                              @Param("reviewComment") String reviewComment);
 
     /**
      * 更新支付控制策略启停状态。
