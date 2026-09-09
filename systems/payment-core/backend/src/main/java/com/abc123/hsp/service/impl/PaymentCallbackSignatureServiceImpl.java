@@ -32,7 +32,6 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     private static final String RSA_SHA256 = "SHA256withRSA";
 
     private final boolean required;
-    private final String fallbackSecret;
     private final long allowedSkewSeconds;
     private final long nonceTtlSeconds;
     private final PaymentCallbackSecurityMapper paymentCallbackSecurityMapper;
@@ -40,12 +39,10 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     public PaymentCallbackSignatureServiceImpl(
             PaymentCallbackSecurityMapper paymentCallbackSecurityMapper,
             @Value("${payment.callback.require-signature:true}") boolean required,
-            @Value("${payment.callback.secret:}") String secret,
             @Value("${payment.callback.allowed-skew-seconds:300}") long allowedSkewSeconds,
             @Value("${payment.callback.nonce-ttl-seconds:600}") long nonceTtlSeconds) {
         this.paymentCallbackSecurityMapper = paymentCallbackSecurityMapper;
         this.required = required;
-        this.fallbackSecret = secret;
         this.allowedSkewSeconds = allowedSkewSeconds;
         this.nonceTtlSeconds = nonceTtlSeconds;
     }
@@ -111,9 +108,6 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         }
         if (!StringUtils.hasText(securityProfile.getCallbackSignAlgorithm())) {
             securityProfile.setCallbackSignAlgorithm("HMAC-SHA256");
-        }
-        if (!StringUtils.hasText(securityProfile.getCallbackSecret()) && StringUtils.hasText(fallbackSecret)) {
-            securityProfile.setCallbackSecret(fallbackSecret);
         }
         return securityProfile;
     }

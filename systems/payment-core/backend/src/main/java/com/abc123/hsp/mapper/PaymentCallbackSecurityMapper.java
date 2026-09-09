@@ -9,11 +9,6 @@ import org.apache.ibatis.annotations.Param;
 public interface PaymentCallbackSecurityMapper {
 
     /**
-     * 查询渠道回调验签密钥。
-     */
-    String findCallbackSecretByChannelCode(@Param("channelCode") String channelCode);
-
-    /**
      * 查询渠道回调验签安全配置。
      */
     PaymentCallbackSecurityProfileDTO findCallbackSecurityProfileByChannelCode(@Param("channelCode") String channelCode);

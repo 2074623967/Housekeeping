@@ -23,6 +23,7 @@ class PaymentCallbackSignatureConfigurationTest {
                 Boolean.TRUE,
                 resolver.getProperty("payment.callback.require-signature", Boolean.class)
         );
+        Assertions.assertNull(resolver.getProperty("payment.callback.secret"));
     }
 
     @Test

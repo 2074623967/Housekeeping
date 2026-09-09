@@ -42,7 +42,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                "",
                 300,
                 600
         );
@@ -63,7 +62,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                "",
                 300,
                 600
         );
@@ -83,7 +81,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                "",
                 300,
                 600
         );
@@ -93,19 +90,19 @@ class PaymentCallbackSignatureServiceImplTest {
     }
 
     @Test
-    void shouldFallbackToGlobalSecretWhenChannelSecretMissing() throws Exception {
+    void shouldRejectCallbackWhenChannelSecretMissing() throws Exception {
         PaymentCallbackRequestDTO request = buildRequest("wx_h5", "fallback-secret", "nonce-004",
                 String.valueOf(Instant.now().getEpochSecond()));
         when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5")).thenReturn(buildHmacProfile("wx_h5", ""));
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                "fallback-secret",
                 300,
                 600
         );
 
-        assertDoesNotThrow(() -> service.verify("WX_H5", request));
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("WX_H5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SECRET_MISSING, exception.getCode());
     }
 
     @Test
@@ -122,7 +119,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                "",
                 300,
                 600
         );
