@@ -2094,6 +2094,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. classpath 契约测试自动枚举全部 `mapper/*.xml` 并拒绝原始替换标记，新增 Mapper 文件自动纳入；当前 22 份 Mapper XML 均满足该规则。
 4. 本规则只覆盖 MyBatis XML 原始替换入口，不证明数据库账号最小权限、业务授权、存储过程、生产 SQL 审计或渗透测试已经完成。
 
+### 14.12 三端收银台接入令牌传递规则
+
+1. `POST /api/payments/submit` 的 `accessToken` 继续位于 JSON 请求体，不得通过收银台或支付结果页 URL query 传递；`sourceAppId` 由三端固定终端配置确定。
+2. APP、H5、PC 业务入口按来源应用把当前演示令牌写入标签页级 `sessionStorage`，收银台提交时读取；会话存储不可用必须失败闭合。
+3. 旧版含 `accessToken` 的收银台或结果页链接只允许一次性迁移，页面随后使用 `router.replace` 删除 URL 参数，后续页面往返不再恢复该参数。
+4. 该规则不把前端演示令牌升级为可信凭据；构建产物可见性、同源脚本访问和 XSS 风险仍存在，生产接入需改用可信身份、服务端会话或受控短期凭据。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
