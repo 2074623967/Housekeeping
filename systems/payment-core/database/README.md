@@ -27,6 +27,7 @@
 - `migrations/2026-09-09-add-payment-channel-version.sql`：幂等创建支付渠道不可变版本表、补齐存量 V1 基线和复核版本字段
 - `migrations/2026-09-09-add-payment-gateway-review.sql`：幂等创建支付网关状态变更复核表，以可空唯一网关占位限制同一网关最多一条待复核申请
 - `migrations/2026-09-09-expand-payment-gateway-review.sql`：一次性扩展网关复核表，增加新增/编辑操作类型与完整候选快照，并从运行配置回填既有状态申请
+- `migrations/2026-09-09-add-payment-gateway-version.sql`：幂等创建支付网关不可变版本表、补齐存量 V1 基线和复核版本字段
 - `migrations/2026-09-09-create-payment-control-policy-review.sql`：幂等创建支付控制策略完整候选复核表，以可空唯一来源应用占位约束同一策略最多一条待复核申请
 - `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`：幂等创建异常告警值班路由完整候选复核表，以可空唯一路由编码占位约束同一路由最多一条待复核申请
 
@@ -54,10 +55,11 @@
 14. 执行 `migrations/2026-09-09-add-payment-channel-version.sql`，建立支付渠道不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
 15. 执行 `migrations/2026-09-09-add-payment-gateway-review.sql`，建立支付网关状态变更复核表；脚本可重复执行
 16. 执行一次 `migrations/2026-09-09-expand-payment-gateway-review.sql`，扩展网关完整候选字段；该脚本不可重复执行
-17. 执行 `migrations/2026-09-09-create-payment-control-policy-review.sql`，建立支付控制策略完整候选复核表；脚本可重复执行
-18. 执行 `migrations/2026-09-09-add-payment-control-policy-version.sql`，建立支付控制策略不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
-19. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
-20. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+17. 执行 `migrations/2026-09-09-add-payment-gateway-version.sql`，建立支付网关不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
+18. 执行 `migrations/2026-09-09-create-payment-control-policy-review.sql`，建立支付控制策略完整候选复核表；脚本可重复执行
+19. 执行 `migrations/2026-09-09-add-payment-control-policy-version.sql`，建立支付控制策略不可变版本表、补齐存量 V1 基线和复核版本字段；脚本可重复执行
+20. 执行 `migrations/2026-09-09-create-payment-issue-duty-roster-review.sql`，建立异常告警值班路由完整候选复核表；脚本可重复执行
+21. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`

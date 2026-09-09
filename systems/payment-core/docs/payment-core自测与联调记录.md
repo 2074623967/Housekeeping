@@ -5294,3 +5294,35 @@
 3. 管理总览、复核列表和版本历史均不返回回调密钥、公钥原文，但运行配置、复核快照和不可变版本仍保存敏感字段；可信权限、专用密钥托管与轮换和真实渠道运维仍未完成。
 4. 页面已完成模拟响应下的桌面和手机无头渲染检查，但后端 `18081` 未监听，因此不形成真实端到端页面验收、回滚批准或渠道联调证据。
 5. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。
+
+## 166. 2026-09-09 支付网关不可变版本与受控回滚 V1.4 验证
+
+### 166.1 本轮补强
+
+1. 新增 `t_payment_gateway_version` 不可变版本表，保存完整网关运行配置快照、递增版本号、变更类型、回滚来源和原因；全量初始化数据与幂等增量迁移均为存量网关生成 V1 `BASELINE`。
+2. 新增网关版本历史查询和回滚候选接口。ROLLBACK 从指定历史版本复制完整候选，与 CREATE/UPDATE/STATUS_CHANGE 共享大写网关编码唯一待办；提交和驳回不修改运行态。
+3. 四类候选对存量网关保存 `baseVersionNo` 和完整配置指纹，回滚额外保存 `sourceVersionNo`。批准时同时复验指纹和最新版本号，任一漂移均拒绝旧候选。
+4. 运行配置写入、追加 `REVIEW_RELEASE / REVIEW_STATUS_CHANGE / REVIEW_ROLLBACK` 新版本与完成复核处于同一事务；历史版本只增不改。
+5. 管理端升级为 V1.22，新增网关版本历史和回滚入口、请求竞态保护、最新版本回滚禁用，并在批准后刷新已打开的历史面板。
+6. 版本快照只保存现有网关业务台账字段，不包含证书文件或私钥；本能力不等于证书托管/轮换、真实探活、真实灰度动作、适配器调用、可信审批或生产迁移完成。
+
+### 166.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付网关版本定向测试 | `mvn -Dtest=PaymentGatewayConfigServiceImplTest,PaymentConfigGatewayReviewMapperIntegrationTest,PaymentConfigControllerTest test` | 通过 | Surefire XML 汇总 `30` 个用例通过，覆盖版本读写、复核版本号、回滚提交/批准、版本来源、运行态隔离及仅版本号漂移时拒绝旧候选 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `449` 个用例全部通过，`0` failures、`0` errors、`0` skipped |
+| `admin-web` 构建 | `npm run build` | 通过 | Vite 生产构建成功，`68` 个模块完成转换 |
+| 管理端桌面无头渲染检查 | `http://127.0.0.1:4196/payment-config`，Playwright `1280 x 900`，本地模拟响应 | 通过 | V1.22、两条网关版本和回滚按钮实际渲染；页面 `clientWidth/scrollWidth=1280/1280`，表格在面板内独立横向滚动，最新版本回滚禁用 |
+| 管理端手机无头渲染检查 | Playwright `390 x 844`，本地模拟响应 | 通过 | 页面 `clientWidth/scrollWidth=390/390`，版本面板宽 `330px`、表格容器宽 `294px`，未出现页面级横向溢出或标题/按钮交叠 |
+| 运行态 API 与生产迁移 | `http://127.0.0.1:18081/api/payment-config/gateways/*` | 未执行 | 后端 `18081` 未监听；不记录版本查询、回滚提交/批准、生产 MySQL 迁移、证书轮换、真实探活、真实灰度或真实网关联调通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentConfigMapper.xml` | 通过 | 代码、迁移和 Mapper XML 无空白符或结构错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 脚本退出码 `2` 来自 release 治理阻断；`test -> master = 是`、`release/* = 否`，`releaseBlockerCount = 4` |
+
+### 166.3 当前判断
+
+1. 支付网关新增、编辑、启停和历史回滚已进入统一候选复核与不可变版本链路；历史回滚不会覆盖旧版本，而是在批准后追加新版本。
+2. 网关唯一待办、运行配置行锁、完整指纹和最新版本号共同约束并发与陈旧候选；结论来自单元和 H2 MySQL 兼容 Mapper 测试，不代表生产 MySQL 迁移或并发压测。
+3. 页面已完成模拟响应下的桌面与手机无头渲染检查，但后端 `18081` 未监听，因此不形成真实端到端页面验收、回滚批准、生产迁移或真实网关联调证据。
+4. `SELF_DECLARED` 只表示人员声明不同，不能证明可信身份、权限、正式审批、不可抵赖签字或生产放行。
+5. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。
