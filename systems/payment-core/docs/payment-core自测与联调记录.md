@@ -6470,3 +6470,26 @@
 1. `TIMESTAMPADD` 与原 `DATE_ADD` 在当前用例中都表达“以数据库当前时间增加 TTL 秒数”，本轮调整是 SQL 方言兼容收口，不改变 nonce 生命周期安全不变量。
 2. H2 MySQL 模式可以验证 Mapper 绑定、列值、唯一键与清理条件，但不能证明真实 MySQL 的执行计划、锁等待、隔离级别或秒级端点行为。
 3. 生产放行前仍需使用目标 MySQL 版本执行迁移后回归，并补多实例同 nonce 竞争、数据库时钟基线、清理与插入竞争及容量验证。
+
+## 214. 2026-09-10 回调 nonce 清理隔离与限量调度 V1.0 验证
+
+### 214.1 本轮补强
+
+1. 回调验签通过后只删除当前 `(channel_code, nonce)` 且已经到期的记录，不再在支付回调事务中扫描并删除所有历史过期 nonce；随后仍依赖复合唯一键裁决并发重放。
+2. 新增 `PaymentCallbackNonceCleanupScheduler`，默认每 `300000` 毫秒调用签名服务清理最多 `1000` 条历史过期记录；批量 SQL 按 `expires_at, id` 稳定选取主键后删除。
+3. Mapper 集成测试直接验证目标清理不影响其他过期记录、当前 nonce 到期后可重新写入、单轮批次数量受限且未过期记录保留；配置非正批次在组件装配前失败闭合。
+
+### 214.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| nonce 清理定向测试 | `mvn -Dtest=PaymentCallbackSecurityMapperIntegrationTest,PaymentCallbackSignatureServiceImplTest,PaymentCallbackNonceCleanupSchedulerTest,PaymentCallbackSignatureConfigurationTest test` | 通过 | `22` 个用例通过；覆盖目标清理、限量批次、服务委派、调度与配置默认值 |
+| 强化 Mapper 回归 | `mvn -Dtest=PaymentCallbackSecurityMapperIntegrationTest test` | 通过 | 验证过期后重用、两个过期记录按 `batchSize=1` 分两轮删除、活跃记录保留 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 报告汇总 `536` 个用例，`0` failures、`0` errors、`0` skipped |
+| 真实 MySQL 与多实例清理 | 执行计划、锁等待、调度租约、积压告警和容量 | 未执行 | 不记录生产清理治理通过 |
+
+### 214.3 当前判断
+
+1. 请求路径只触碰当前复合唯一键范围，历史数据维护与支付回调事务解耦；这降低锁放大风险，但不等于生产 MySQL 锁行为已验证。
+2. 有限批次使单轮事务上界可配置，稳定排序避免无序选择；当到期产生速率持续高于清理速率时仍可能积压，需要监控与容量校准。
+3. 当前调度没有跨实例租约，多实例会重复发起清理 SQL。生产前需评估是否接入既有任务租约、增加清理数量/耗时/积压指标，并按目标 MySQL 版本验证执行计划。

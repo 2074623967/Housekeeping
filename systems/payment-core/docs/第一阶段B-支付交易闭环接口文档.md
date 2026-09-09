@@ -2303,6 +2303,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. `channel_code` 写入前继续按小写规范化，`(channel_code, nonce)` 唯一约束继续承担跨请求防重；`expires_at <= NOW()` 的记录仍由既有清理 SQL 删除，接口字段和错误码不变。
 3. H2 MySQL 模式集成测试已覆盖大小写查询、小写落库、`601` 秒 TTL、重复唯一键和到期清理；该结果不代表真实 MySQL 执行计划、锁行为、时钟精度或多实例竞争已经验收。
 
+### 14.42 支付回调 nonce 清理隔离与调度配置
+
+1. `POST /api/payments/callback/{channel}` 在签名通过后只删除当前规范化 `channel + nonce` 的已过期记录，再尝试写入新 nonce；不会在回调事务中全量删除其他历史记录，重复活跃 nonce 仍返回 `PAYMENT-1007`。
+2. 历史过期记录由后台调度清理，默认配置为 `payment.callback.nonce-cleanup.fixed-delay-ms=300000`、`batch-size=1000`，对应环境变量为 `HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_DELAY_MS` 和 `HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_BATCH_SIZE`。
+3. 批量清理按 `expires_at, id` 选择有限主键集合后删除，单轮不会触碰未到期记录；批次非正会阻止清理组件装配。该内部任务不新增对外接口或页面操作。
+4. 当前没有多实例清理租约、积压监控或生产 MySQL 执行计划证据，部署前需按回调峰值和 TTL 校准周期、批次与数据库容量。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
