@@ -116,7 +116,10 @@ function canRunCallback() {
 }
 
 function canRunClose() {
-  return detail.value?.status !== "SUCCESS" && detail.value?.status !== "CLOSED";
+  return ["PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED"]
+    .includes(detail.value?.status)
+    && !detail.value?.channelTransactionNo
+    && !detail.value?.latestAttemptStatus;
 }
 
 async function handleQuery() {
@@ -242,7 +245,7 @@ onMounted(loadDetail);
             <div class="ops-card">
               <div class="ops-row"><span>主动查单</span><span>始终可用，用于拉取渠道或本地最新状态</span></div>
               <div class="ops-row"><span>模拟回调</span><span>{{ canRunCallback() ? "当前可执行" : "仅 WAIT_CALLBACK / PAYING 状态可执行" }}</span></div>
-              <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "成功或已关闭支付单不可关闭" }}</span></div>
+              <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "已提交渠道或已终态支付单不可本地关闭" }}</span></div>
             </div>
           </section>
 

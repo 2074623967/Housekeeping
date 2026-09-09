@@ -240,6 +240,24 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldExposePaymentOrderIdOnCashierPage() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-CASHIER-001");
+        prepay.setPaymentOrderId("PAY-CASHIER-001");
+        when(paymentMapper.findPrepay("PRE-CASHIER-001")).thenReturn(prepay);
+
+        com.abc123.hsp.dto.CashierPageDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .cashier("PRE-CASHIER-001");
+
+        org.junit.jupiter.api.Assertions.assertEquals("PAY-CASHIER-001", result.getPaymentOrderId());
+    }
+
+    @Test
     void shouldReuseActivePrepayWhenOrderIsStillOpen() {
         PrepayOrderDTO activePrepay = new PrepayOrderDTO();
         activePrepay.setPrepayOrderNo("PRE-001");
@@ -1368,9 +1386,9 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-CLOSE-1");
         detail.setOrderNo("ORD-CLOSE-1");
-        detail.setChannelTransactionNo("CHANNEL-CLOSE-1");
-        detail.setStatus("WAIT_CALLBACK");
+        detail.setStatus("PREPAY_CREATED");
         when(paymentMapper.findDetail("PAY-CLOSE-1")).thenReturn(detail, detail);
+        when(paymentMapper.markUnsubmittedPaymentClosed("PAY-CLOSE-1")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-CLOSE-1")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CLOSE-1")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-CLOSE-1")).thenReturn(Collections.emptyList());
@@ -1387,6 +1405,62 @@ class PaymentServiceImplTest {
                 .close(request);
 
         verify(paymentMapper, times(1)).releaseSubmitConcurrencyToken("PAY-CLOSE-1", "MANUAL_CLOSE");
+    }
+
+    @Test
+    void shouldRejectLocalCloseAfterPaymentWasSubmittedToChannel() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CLOSE-SUBMITTED");
+        detail.setOrderNo("ORD-CLOSE-SUBMITTED");
+        detail.setChannelTransactionNo("WX-CLOSE-SUBMITTED");
+        detail.setStatus("WAIT_CALLBACK");
+        detail.setLatestAttemptStatus("待回调");
+        when(paymentMapper.findDetail("PAY-CLOSE-SUBMITTED")).thenReturn(detail, detail);
+
+        com.abc123.hsp.dto.PaymentCloseRequestDTO request = new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        request.setPaymentOrderId("PAY-CLOSE-SUBMITTED");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .close(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CLOSE_CHANNEL_CONFIRMATION_REQUIRED, exception.getCode());
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(
+                "PAY-CLOSE-SUBMITTED", "MANUAL_CLOSE");
+    }
+
+    @Test
+    void shouldKeepSubmitTokenWhenLegacySubmittedPaymentIsAlreadyClosed() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CLOSE-LEGACY");
+        detail.setOrderNo("ORD-CLOSE-LEGACY");
+        detail.setStatus("CLOSED");
+        detail.setLatestAttemptStatus("结果未知，待查单");
+        when(paymentMapper.findDetail("PAY-CLOSE-LEGACY")).thenReturn(detail);
+
+        com.abc123.hsp.dto.PaymentCloseRequestDTO request = new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        request.setPaymentOrderId("PAY-CLOSE-LEGACY");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .close(request);
+
+        org.junit.jupiter.api.Assertions.assertEquals("CLOSED", result.getStatus());
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(
+                "PAY-CLOSE-LEGACY", "CLOSE_ALREADY_FINALIZED");
     }
 
     @Test

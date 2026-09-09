@@ -66,6 +66,8 @@ class PaymentMapperStateTransitionIntegrationTest {
 
             assertEquals(0, mapper.markPaymentSuccessFromChannelResult("PAY-MANUAL-CLOSED", "WX-MANUAL"));
             assertEquals(1, mapper.markPaymentSuccessFromChannelResult("PAY-EXPIRED-CLOSED", "WX-EXPIRED"));
+            assertEquals(1, mapper.markPaymentSuccessFromChannelResult(
+                    "PAY-LEGACY-SUBMITTED-CLOSED", "WX-LEGACY-MANUAL"));
 
             try (Statement statement = session.getConnection().createStatement();
                  java.sql.ResultSet resultSet = statement.executeQuery(
@@ -74,6 +76,16 @@ class PaymentMapperStateTransitionIntegrationTest {
                 resultSet.next();
                 assertEquals("SUCCESS", resultSet.getString(1));
             }
+        }
+    }
+
+    @Test
+    void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(1, mapper.markUnsubmittedPaymentClosed("PAY-MANUAL-CLOSEABLE"));
+            assertEquals(0, mapper.markUnsubmittedPaymentClosed("PAY-SUBMITTED"));
         }
     }
 
@@ -96,13 +108,17 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "VALUES ('PAY-UNSUBMITTED', 'ORD-1', 'PREPAY_CREATED', 'info'), "
                     + "('PAY-SUBMITTED', 'ORD-2', 'WAIT_CALLBACK', 'warn'), "
                     + "('PAY-MANUAL-CLOSED', 'ORD-3', 'CLOSED', 'danger'), "
-                    + "('PAY-EXPIRED-CLOSED', 'ORD-4', 'CLOSED', 'danger')");
+                    + "('PAY-EXPIRED-CLOSED', 'ORD-4', 'CLOSED', 'danger'), "
+                    + "('PAY-LEGACY-SUBMITTED-CLOSED', 'ORD-5', 'CLOSED', 'danger'), "
+                    + "('PAY-MANUAL-CLOSEABLE', 'ORD-6', 'RISK_REVIEW', 'warn')");
             statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES "
                     + "('PAY-UNSUBMITTED', TIMESTAMPADD(MINUTE, -5, NOW())), "
                     + "('PAY-SUBMITTED', TIMESTAMPADD(MINUTE, -5, NOW()))");
-            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES ('PAY-SUBMITTED')");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES "
+                    + "('PAY-SUBMITTED'), ('PAY-LEGACY-SUBMITTED-CLOSED')");
             statement.executeUpdate("INSERT INTO t_payment_event(payment_order_id, event_type) "
-                    + "VALUES ('PAY-EXPIRED-CLOSED', 'PAYMENT_EXPIRED_CLOSED')");
+                    + "VALUES ('PAY-EXPIRED-CLOSED', 'PAYMENT_EXPIRED_CLOSED'), "
+                    + "('PAY-LEGACY-SUBMITTED-CLOSED', 'PAYMENT_CLOSED')");
             connection.commit();
         }
     }

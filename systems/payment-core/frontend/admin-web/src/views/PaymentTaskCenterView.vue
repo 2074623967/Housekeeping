@@ -347,7 +347,7 @@ onMounted(loadOverview);
 
             <div class="sub-panel">
               <h3>支付超时关单</h3>
-              <p>处理超过收银台失效时间但仍处于待支付/待回调状态的支付单，并写入支付关闭事件。</p>
+              <p>只关闭超过收银台失效时间且从未提交渠道的待支付单；已提交支付继续通过主动查单收口。</p>
               <button
                 class="button primary"
                 :disabled="activeTaskCode === 'PAYMENT_EXPIRE_CLOSE'"

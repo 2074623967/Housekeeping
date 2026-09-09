@@ -156,6 +156,11 @@ public interface PaymentMapper {
     int markExpiredUnsubmittedPaymentClosed(@Param("paymentOrderId") String paymentOrderId);
 
     /**
+     * 人工原子关闭尚未向渠道提交的支付单。
+     */
+    int markUnsubmittedPaymentClosed(@Param("paymentOrderId") String paymentOrderId);
+
+    /**
      * 更新预付单为支付中状态。
      */
     int updatePrepayToPaying(@Param("prepayOrderNo") String prepayOrderNo);

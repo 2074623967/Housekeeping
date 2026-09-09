@@ -2,7 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
-import { isPaymentSubmissionPending, resolvePaymentChannelCode } from "../constants/payment";
+import {
+  canClosePaymentLocally,
+  isPaymentSubmissionPending,
+  resolvePaymentChannelCode
+} from "../constants/payment";
 import {
   persistPaymentAccessToken,
   readPaymentAccessToken,
@@ -265,8 +269,11 @@ const countdownLabel = computed(() => {
   return `${hours}:${minutes}:${seconds}`;
 });
 const canClose = computed(() => Boolean(cashier.value?.paymentOrderId)
-  && !submissionPending.value
-  && countdownSeconds.value > 0);
+  && canClosePaymentLocally(
+    cashier.value?.status,
+    latestQueriedDetail.value?.channelTransactionNo,
+    latestQueriedDetail.value?.latestAttemptStatus
+  ));
 const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const countdownRiskLevel = computed(() => {
   if (countdownSeconds.value <= 0) {
@@ -279,7 +286,9 @@ const countdownRiskLevel = computed(() => {
 });
 const countdownRiskHint = computed(() => {
   if (countdownSeconds.value <= 0) {
-    return "当前会话已过期，建议关闭支付单后重新发起新的预付单。";
+    return submissionPending.value
+      ? "当前会话已过期，但渠道结果尚未确认，请继续主动查单。"
+      : "当前会话已过期，可关闭尚未提交渠道的支付单后重新发起。";
   }
   if (countdownSeconds.value <= 300) {
     return "当前会话剩余时间较短，建议尽快完成支付，避免支付中断后重新拉起。";
@@ -318,7 +327,7 @@ const paymentMethodComparisonRows = computed(() => {
       channelCode: resolvePaymentChannelCode(item),
       description: meta.description || "系统已接入该支付方式。",
       recommendedScenes: meta.recommendedScenes || "通用支付场景",
-      fallbackAction: meta.fallbackAction || "支付异常时建议先主动查单，再决定是否关闭当前支付单。"
+      fallbackAction: meta.fallbackAction || "支付异常时先主动查单；仅未提交渠道的支付单可本地关闭。"
     };
   });
 });
@@ -608,7 +617,7 @@ watch(selectedPaymentMethod, () => {
             </div>
             <div class="desktop-hint-card">
               <strong>失败补救动作</strong>
-              <p>如浏览器关闭、扫码超时或渠道报错，可先关闭支付单，再由订单中心重新拉起新的预付单。</p>
+              <p>如浏览器关闭、扫码超时或渠道报错，应先主动查单；只有未提交渠道的支付单可关闭后重新拉起。</p>
             </div>
             <div class="desktop-hint-card">
               <strong>联查建议</strong>

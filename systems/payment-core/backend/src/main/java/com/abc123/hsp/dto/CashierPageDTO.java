@@ -9,6 +9,8 @@ import lombok.Data;
 @Data
 public class CashierPageDTO {
 
+    /** 支付单号。 */
+    private String paymentOrderId;
     /** 预付单号。 */
     private String prepayOrderNo;
     /** 订单号。 */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isPaymentSubmissionPending } from "./payment.js";
+import { canClosePaymentLocally, isPaymentSubmissionPending } from "./payment.js";
 
 test("locks submission while cashier status is not final", () => {
   assert.equal(isPaymentSubmissionPending("支付中", "-"), true);
@@ -15,4 +15,12 @@ test("locks submission while latest attempt result is unknown", () => {
 
 test("allows a fresh unpaid submission", () => {
   assert.equal(isPaymentSubmissionPending("待支付", "-"), false);
+});
+
+test("only allows local close before channel submission", () => {
+  assert.equal(canClosePaymentLocally("PREPAY_CREATED", null, null), true);
+  assert.equal(canClosePaymentLocally("待风控复核", "", "-"), true);
+  assert.equal(canClosePaymentLocally("WAIT_CALLBACK", "", "待回调"), false);
+  assert.equal(canClosePaymentLocally("PREPAY_CREATED", "WX-001", null), false);
+  assert.equal(canClosePaymentLocally("PREPAY_CREATED", "", "渠道提交中"), false);
 });

@@ -86,6 +86,11 @@ function isActionRunning(paymentOrderId, actionName) {
   return activePaymentOrderId.value === paymentOrderId && activeAction.value === actionName;
 }
 
+function canRunClose(item) {
+  return ["PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED"].includes(item.status)
+    && !item.channelTransactionNo;
+}
+
 async function handleQuery(paymentOrderId) {
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
@@ -261,7 +266,7 @@ onMounted(refreshList);
                     <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleCallback(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "callback") ? "回调中..." : "回调" }}
                     </button>
-                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleClose(item.paymentOrderId)">
+                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "close") ? "关闭中..." : "关闭" }}
                     </button>
                   </div>
@@ -289,7 +294,7 @@ onMounted(refreshList);
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先动作</span><span>查单、模拟回调、关闭单据</span></div>
+              <div class="ops-row"><span>优先动作</span><span>已提交先查单，未提交可关闭</span></div>
               <div class="ops-row"><span>重点核对</span><span>支付状态、渠道流水号、回调是否收口</span></div>
               <div class="ops-row"><span>典型场景</span><span>待回调长时间未收口、重复支付保护、关闭单保护</span></div>
             </div>

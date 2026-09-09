@@ -139,7 +139,7 @@ public class PaymentController {
     }
 
     /**
-     * 关闭支付单，供超时关闭或人工终止使用。
+     * 人工关闭尚未提交渠道的支付单；渠道结果不确定时必须先查单。
      */
     @PostMapping("/close")
     public ApiResponse<PaymentDetailDTO> close(@RequestBody PaymentCloseRequestDTO request) {

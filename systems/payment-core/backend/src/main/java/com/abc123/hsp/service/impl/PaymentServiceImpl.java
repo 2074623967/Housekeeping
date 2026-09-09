@@ -382,6 +382,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在");
         }
         CashierPageDTO cashierPage = new CashierPageDTO();
+        cashierPage.setPaymentOrderId(prepayOrder.getPaymentOrderId());
         cashierPage.setPrepayOrderNo(prepayOrder.getPrepayOrderNo());
         cashierPage.setOrderNo(prepayOrder.getOrderNo());
         cashierPage.setBillNo(prepayOrder.getBillNo());
@@ -1025,13 +1026,27 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        if ("SUCCESS".equalsIgnoreCase(detail.getStatus()) || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
             return outwardDetail(detail);
         }
+        if ("CLOSED".equalsIgnoreCase(detail.getStatus())) {
+            if (detail.getChannelTransactionNo() == null && detail.getLatestAttemptStatus() == null) {
+                paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
+            }
+            return outwardDetail(detail);
+        }
+        if (paymentMapper.markUnsubmittedPaymentClosed(request.getPaymentOrderId()) == 0) {
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
+            if (latestDetail != null && ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())
+                    || "CLOSED".equalsIgnoreCase(latestDetail.getStatus()))) {
+                return outwardDetail(latestDetail);
+            }
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CLOSE_CHANNEL_CONFIRMATION_REQUIRED,
+                    "支付已提交渠道或结果尚未确认，请先主动查单");
+        }
         // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
-        paymentMapper.updatePaymentStatus(request.getPaymentOrderId(), "CLOSED", "danger", detail.getChannelTransactionNo());
-        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         String eventNo = buildBusinessNo("EVT");
         String eventPayload = "{\"close\":\"manual\"}";

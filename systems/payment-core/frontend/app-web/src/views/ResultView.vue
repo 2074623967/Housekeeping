@@ -2,7 +2,12 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
-import { PAYMENT_RESULT_STATE_META, resolvePaymentChannelCode, resolvePaymentResultState } from "../constants/payment";
+import {
+  canClosePaymentLocally,
+  PAYMENT_RESULT_STATE_META,
+  resolvePaymentChannelCode,
+  resolvePaymentResultState
+} from "../constants/payment";
 import { persistPaymentAccessToken, withoutAccessToken } from "../constants/paymentSession";
 
 const props = defineProps({
@@ -97,8 +102,11 @@ const canMockCallback = computed(() => {
   return status === "WAIT_CALLBACK" || status === "PAYING";
 });
 const canClosePayment = computed(() => {
-  const status = paymentDetail.value?.status;
-  return Boolean(status) && status !== "SUCCESS" && status !== "CLOSED";
+  return canClosePaymentLocally(
+    paymentDetail.value?.status,
+    paymentDetail.value?.channelTransactionNo,
+    paymentDetail.value?.latestAttemptStatus
+  );
 });
 const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const sourceAppId = computed(() => {
@@ -171,7 +179,7 @@ const nextStepChecklist = computed(() => {
     bizSceneMeta.value.pendingHint,
     "当前结果尚未最终收口，可先执行主动查单刷新最新状态。",
     "若渠道回调存在延迟，建议结合路由轨迹、回调轨迹和事件轨迹一起排查。",
-    "若用户需要立即重试，先关闭当前支付单，再回到收银台切换支付方式发起新支付。"
+    "若渠道结果尚未确认，保持当前支付单并继续查单，不能直接关闭后重试。"
   ];
 });
 const recoveryActions = computed(() => {
@@ -206,7 +214,7 @@ const recoveryActions = computed(() => {
     ];
   }
   return [
-    "优先主动查单，再决定是否模拟回调或关闭支付单。",
+    "优先主动查单；只有确认从未提交渠道的支付单才可本地关闭。",
     "保留支付单号、预付单号、幂等键，便于后台快速联查。"
   ];
 });
@@ -498,7 +506,7 @@ function resolveBizType() {
         <div v-if="isPcVariant" class="desktop-hint-grid">
           <div class="desktop-hint-card">
             <strong>桌面端结果处理</strong>
-            <p>PC 端适合由客服、运营或用户本人停留在结果页，边看轨迹边执行主动查单或关闭支付动作。</p>
+            <p>PC 端适合由客服、运营或用户本人停留在结果页核对轨迹；已提交渠道的支付只能继续查单。</p>
           </div>
           <div class="desktop-hint-card">
             <strong>联调建议</strong>

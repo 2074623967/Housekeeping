@@ -290,7 +290,17 @@
                 SELECT 1
                 FROM t_payment_event pe
                 WHERE pe.payment_order_id = t_payment_order.payment_order_id
-                  AND pe.event_type = 'PAYMENT_EXPIRED_CLOSED'
+                  AND (
+                    pe.event_type = 'PAYMENT_EXPIRED_CLOSED'
+                    OR (
+                      pe.event_type = 'PAYMENT_CLOSED'
+                      AND EXISTS (
+                        SELECT 1
+                        FROM t_payment_attempt closed_attempt
+                        WHERE closed_attempt.payment_order_id = t_payment_order.payment_order_id
+                      )
+                    )
+                  )
               )
             )
           )
@@ -309,6 +319,20 @@
             WHERE pr.payment_order_id = t_payment_order.payment_order_id
               AND pr.expires_at &lt; NOW()
           )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = t_payment_order.payment_order_id
+          )
+    </update>
+
+    <update id="markUnsubmittedPaymentClosed">
+        UPDATE t_payment_order
+        SET status = 'CLOSED',
+            status_type = 'danger'
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status IN ('PREPAY_CREATED', 'RISK_REVIEW', 'RISK_BLOCKED', 'RISK_REJECTED')
+          AND channel_transaction_no IS NULL
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa

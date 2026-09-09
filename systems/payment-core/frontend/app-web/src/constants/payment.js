@@ -72,3 +72,19 @@ export function isPaymentSubmissionPending(cashierStatus, attemptStatus) {
   return ["支付中", "待回调", "结果待确认"].includes(cashierStatus)
     || ["渠道提交中", "结果未知，待查单"].includes(attemptStatus);
 }
+
+export function canClosePaymentLocally(status, channelTransactionNo, attemptStatus) {
+  const closeableStatuses = [
+    "PREPAY_CREATED",
+    "RISK_REVIEW",
+    "RISK_BLOCKED",
+    "RISK_REJECTED",
+    "待支付",
+    "待风控复核",
+    "风控拦截",
+    "风控拒绝"
+  ];
+  return closeableStatuses.includes(status)
+    && !channelTransactionNo
+    && (!attemptStatus || attemptStatus === "-");
+}
