@@ -753,13 +753,17 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        // 已经成功或关闭的支付单不允许被迟到回调重新打开，保证回调幂等和状态单向收敛。
+        boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
-                || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+                || ("CLOSED".equalsIgnoreCase(detail.getStatus()) && !paySuccess)) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return outwardDetail(detail);
         }
-        boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
+        if (paySuccess && paymentMapper.markPaymentSuccessFromChannelResult(
+                request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
+            paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
+            return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        }
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
         String notifyNo = buildBusinessNo("NTF");
         paymentMapper.insertNotifyLog(
@@ -781,12 +785,14 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getTradeStatus(),
                 "已收口",
                 "success");
-        paymentMapper.updatePaymentStatus(
-                request.getPaymentOrderId(),
-                paySuccess ? "SUCCESS" : "WAIT_CALLBACK",
-                paySuccess ? "success" : "warn",
-                request.getChannelTransactionNo()
-        );
+        if (!paySuccess) {
+            paymentMapper.updatePaymentStatus(
+                    request.getPaymentOrderId(),
+                    "WAIT_CALLBACK",
+                    "warn",
+                    request.getChannelTransactionNo()
+            );
+        }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
                 request.getPaymentOrderId(),
                 paySuccess ? "成功" : "待回调",
@@ -859,7 +865,6 @@ public class PaymentServiceImpl implements PaymentService {
         detail.setQuerySource(queryResult.getQuerySource());
         recordChannelQuery(detail, queryResult);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
-                || "CLOSED".equalsIgnoreCase(detail.getStatus())
                 || !"SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())) {
             return outwardDetail(detail);
         }
@@ -868,7 +873,7 @@ public class PaymentServiceImpl implements PaymentService {
                     ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                     "channel transaction number is required to settle a successful query");
         }
-        int settledRows = paymentMapper.markPaymentSuccessByQuery(
+        int settledRows = paymentMapper.markPaymentSuccessFromChannelResult(
                 detail.getPaymentOrderId(), channelTransactionNo);
         if (settledRows == 0) {
             PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());

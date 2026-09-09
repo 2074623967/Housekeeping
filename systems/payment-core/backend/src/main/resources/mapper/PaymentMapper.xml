@@ -88,8 +88,14 @@
                p.channel_transaction_no AS channelTransactionNo
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
-        WHERE p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+        WHERE p.status = 'PREPAY_CREATED'
+          AND p.channel_transaction_no IS NULL
           AND pr.expires_at &lt; NOW()
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = p.payment_order_id
+          )
         GROUP BY p.payment_order_id, p.order_no, p.channel_transaction_no
         ORDER BY MIN(pr.expires_at)
     </select>
@@ -270,13 +276,44 @@
         WHERE payment_order_id = #{paymentOrderId}
     </update>
 
-    <update id="markPaymentSuccessByQuery">
+    <update id="markPaymentSuccessFromChannelResult">
         UPDATE t_payment_order
         SET status = 'SUCCESS',
             status_type = 'success',
             channel_transaction_no = #{channelTransactionNo}
         WHERE payment_order_id = #{paymentOrderId}
-          AND status NOT IN ('SUCCESS', 'CLOSED')
+          AND (
+            status NOT IN ('SUCCESS', 'CLOSED')
+            OR (
+              status = 'CLOSED'
+              AND EXISTS (
+                SELECT 1
+                FROM t_payment_event pe
+                WHERE pe.payment_order_id = t_payment_order.payment_order_id
+                  AND pe.event_type = 'PAYMENT_EXPIRED_CLOSED'
+              )
+            )
+          )
+    </update>
+
+    <update id="markExpiredUnsubmittedPaymentClosed">
+        UPDATE t_payment_order
+        SET status = 'CLOSED',
+            status_type = 'danger'
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status = 'PREPAY_CREATED'
+          AND channel_transaction_no IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM t_prepay_order pr
+            WHERE pr.payment_order_id = t_payment_order.payment_order_id
+              AND pr.expires_at &lt; NOW()
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = t_payment_order.payment_order_id
+          )
     </update>
 
     <update id="updatePrepayToPaying">

@@ -67,7 +67,7 @@ class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
-    void shouldApplyExponentialBackoffForAutomaticQueriesAndBypassItForManualQueries() {
+    void shouldQuerySubmittedPaymentsAfterPrepayExpiryAndPreserveBackoffRules() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
 
@@ -92,6 +92,8 @@ class PaymentTaskCenterMapperIntegrationTest {
                     "PAY-MAX-DUE"), manualCandidates);
             org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("PAY-FRESH-ATTEMPT"));
             org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("PAY-NO-ATTEMPT"));
+            org.junit.jupiter.api.Assertions.assertTrue(manualCandidates.contains("PAY-NO-HISTORY"));
+            org.junit.jupiter.api.Assertions.assertTrue(automaticCandidates.contains("PAY-NO-HISTORY"));
             assertEquals(Arrays.asList(
                     "PAY-NO-HISTORY",
                     "PAY-BASE-WAIT",
@@ -219,6 +221,8 @@ class PaymentTaskCenterMapperIntegrationTest {
 
             LocalDateTime now = LocalDateTime.now();
             insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
+            statement.executeUpdate("UPDATE t_prepay_order SET expires_at = TIMESTAMPADD(MINUTE, -1, NOW()) "
+                    + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
             insertPayment(connection, "PAY-BASE-WAIT", "wx_h5", now.minusMinutes(9));
             insertPayment(connection, "PAY-BACKOFF-WAIT", "wx_h5", now.minusMinutes(8));
             insertPayment(connection, "PAY-BACKOFF-DUE", "wx_h5", now.minusMinutes(7));

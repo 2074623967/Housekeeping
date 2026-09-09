@@ -1241,7 +1241,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 return "优先核对 gateway-access 可用性、渠道凭证和查单返回码，再补跑主动查单任务";
             }
             if (warningCount > 0) {
-                return "仍有渠道处理中支付单，继续等待回调并按重试间隔补查，过期后进入关单任务";
+            return "仍有渠道处理中支付单，继续等待回调并按重试间隔补查，收银台过期后仍以渠道结果收口";
             }
             return processedCount > 0 ? "已完成待回调支付收口，继续观察渠道回调与下游事件" : "暂无待回调支付需要补查";
         }

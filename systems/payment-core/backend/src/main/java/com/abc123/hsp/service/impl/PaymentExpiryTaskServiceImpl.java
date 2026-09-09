@@ -51,8 +51,10 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
     }
 
     private void closeExpiredPayment(ExpiredPaymentDTO payment) {
-        paymentMapper.updatePaymentStatus(payment.getPaymentOrderId(), "CLOSED", "danger",
-                payment.getChannelTransactionNo());
+        int closedRows = paymentMapper.markExpiredUnsubmittedPaymentClosed(payment.getPaymentOrderId());
+        if (closedRows == 0) {
+            return;
+        }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(payment.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(payment.getPaymentOrderId(), "已失效", "danger");
         String eventNo = "EVT" + System.currentTimeMillis()

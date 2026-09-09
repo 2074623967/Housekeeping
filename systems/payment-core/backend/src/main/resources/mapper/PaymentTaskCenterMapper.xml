@@ -10,8 +10,14 @@
                 SELECT COUNT(1)
                 FROM t_payment_order p
                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
-                WHERE p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK')
+                WHERE p.status = 'PREPAY_CREATED'
+                  AND p.channel_transaction_no IS NULL
                   AND pr.expires_at &lt; NOW()
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM t_payment_attempt pa
+                    WHERE pa.payment_order_id = p.payment_order_id
+                  )
             ), 0) AS expiredPaymentCount,
             COALESCE((
                 SELECT COUNT(1)
@@ -370,7 +376,6 @@
                         LIMIT 1
                      )
             WHERE p.status = 'WAIT_CALLBACK'
-              AND pr.expires_at &gt; NOW()
               AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
@@ -405,7 +410,6 @@
                         GROUP BY payment_order_id
                      ) query_history ON query_history.payment_order_id = p.payment_order_id
             WHERE p.status = 'WAIT_CALLBACK'
-              AND pr.expires_at &gt; NOW()
               AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
               AND (
                 query_history.latest_query_at IS NULL
@@ -436,7 +440,6 @@
                     LIMIT 1
                  )
         WHERE p.status = 'WAIT_CALLBACK'
-          AND pr.expires_at &gt; NOW()
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
     </select>
 
@@ -460,7 +463,6 @@
                     GROUP BY payment_order_id
                  ) query_history ON query_history.payment_order_id = p.payment_order_id
         WHERE p.status = 'WAIT_CALLBACK'
-          AND pr.expires_at &gt; NOW()
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
           AND (
             query_history.latest_query_at IS NULL

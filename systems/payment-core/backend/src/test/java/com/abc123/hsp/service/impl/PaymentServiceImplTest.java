@@ -167,6 +167,44 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldSettleLateSuccessCallbackAfterLegacyExpiryClose() {
+        PaymentDetailDTO closedDetail = queryDetail("PAY-EXPIRED-CALLBACK", "CLOSED");
+        PaymentDetailDTO settledDetail = queryDetail("PAY-EXPIRED-CALLBACK", "SUCCESS");
+        when(paymentMapper.findDetail("PAY-EXPIRED-CALLBACK"))
+                .thenReturn(closedDetail, settledDetail);
+        when(paymentMapper.markPaymentSuccessFromChannelResult(
+                "PAY-EXPIRED-CALLBACK", "WX-EXPIRED-CALLBACK")).thenReturn(1);
+        when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
+                .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findRouteLogs("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-EXPIRED-CALLBACK");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-EXPIRED-CALLBACK");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback);
+
+        verify(paymentMapper).updateOrderAfterPayment(
+                "ORD-QUERY-001", new BigDecimal("168.00"), "待履约", "info");
+        verify(paymentMapper).updateBillAfterPayment(
+                "ORD-QUERY-001", new BigDecimal("168.00"), "已结清", "success");
+        verify(paymentMapper).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), eq("PAY-EXPIRED-CALLBACK"),
+                eq("ORD-QUERY-001"), eq("{\"channel\":\"wx_h5\"}"));
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
+    }
+
+    @Test
     void shouldRejectCallbackWithoutTradeStatusOrChannelTransactionNo() {
         PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
         callback.setPaymentOrderId("PAY-002");
@@ -345,6 +383,8 @@ class PaymentServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥99.00");
         when(paymentMapper.findDetail("PAY-VIRTUAL-CALLBACK")).thenReturn(detail, detail);
+        when(paymentMapper.markPaymentSuccessFromChannelResult(
+                "PAY-VIRTUAL-CALLBACK", "ALI-VIRTUAL-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
         when(paymentMapper.findRouteLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
@@ -383,6 +423,8 @@ class PaymentServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-001")).thenReturn(detail, detail);
+        when(paymentMapper.markPaymentSuccessFromChannelResult(
+                "PAY-CALLBACK-001", "WX-CALLBACK-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-CALLBACK-001")).thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findRouteLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
@@ -462,6 +504,42 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString()
         );
         verify(paymentMapper, never()).releaseSubmitConcurrencyToken("PAY-CALLBACK-002", "CALLBACK_SUCCESS");
+    }
+
+    @Test
+    void shouldNotSettleWhenAnotherSuccessCallbackAlreadyWon() {
+        PaymentDetailDTO pendingDetail = queryDetail("PAY-CALLBACK-RACE", "WAIT_CALLBACK");
+        PaymentDetailDTO settledDetail = queryDetail("PAY-CALLBACK-RACE", "SUCCESS");
+        when(paymentMapper.findDetail("PAY-CALLBACK-RACE"))
+                .thenReturn(pendingDetail, settledDetail);
+        when(paymentMapper.markPaymentSuccessFromChannelResult(
+                "PAY-CALLBACK-RACE", "WX-CALLBACK-RACE")).thenReturn(0);
+        when(paymentMapper.findRouteLogs("PAY-CALLBACK-RACE")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-CALLBACK-RACE")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-CALLBACK-RACE")).thenReturn(Collections.emptyList());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-RACE");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-RACE");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback);
+
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
     }
 
     @Test
@@ -1349,7 +1427,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-001", "WAIT_CALLBACK");
         PaymentDetailDTO settledDetail = queryDetail("PAY-QUERY-001", "SUCCESS");
         when(paymentMapper.findDetail("PAY-QUERY-001")).thenReturn(detail, settledDetail);
-        when(paymentMapper.markPaymentSuccessByQuery("PAY-QUERY-001", "WX-QUERY-001"))
+        when(paymentMapper.markPaymentSuccessFromChannelResult("PAY-QUERY-001", "WX-QUERY-001"))
                 .thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
                 .thenReturn(new BigDecimal("168.00"));
@@ -1430,7 +1508,7 @@ class PaymentServiceImplTest {
                 "PAY-QUERY-002", "USERPAYING", "PAYMENT-CHANNEL-1001", "用户支付中",
                 "等待回调或主动查单", "是", "否", "v2026.07.1", Boolean.TRUE);
 
-        verify(paymentMapper, never()).markPaymentSuccessByQuery(anyString(), anyString());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
         verify(paymentMapper, never()).updateBillAfterPayment(
                 anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
         verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
@@ -1495,7 +1573,8 @@ class PaymentServiceImplTest {
                 paymentEventDispatchService)
                 .query(request);
 
-        verify(paymentMapper, never()).markPaymentSuccessByQuery(anyString(), anyString());
+        verify(paymentMapper).markPaymentSuccessFromChannelResult(
+                "PAY-QUERY-003", "WX-QUERY-003");
         verify(paymentMapper, never()).insertEvent(
                 anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
         verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
@@ -1506,7 +1585,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-004", "WAIT_CALLBACK");
         PaymentDetailDTO settledDetail = queryDetail("PAY-QUERY-004", "SUCCESS");
         when(paymentMapper.findDetail("PAY-QUERY-004")).thenReturn(detail, settledDetail);
-        when(paymentMapper.markPaymentSuccessByQuery("PAY-QUERY-004", "WX-QUERY-004"))
+        when(paymentMapper.markPaymentSuccessFromChannelResult("PAY-QUERY-004", "WX-QUERY-004"))
                 .thenReturn(0);
         when(paymentMapper.findRouteLogs("PAY-QUERY-004")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-QUERY-004")).thenReturn(Collections.emptyList());

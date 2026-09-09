@@ -145,10 +145,15 @@ public interface PaymentMapper {
             @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
-     * 主动查单确认成功后原子抢占状态收口权，避免并发查单重复记账和重复发事件。
+     * 可信渠道结果确认成功后原子抢占状态收口权，避免并发回调或查单重复记账和重复发事件。
      */
-    int markPaymentSuccessByQuery(@Param("paymentOrderId") String paymentOrderId,
-                                  @Param("channelTransactionNo") String channelTransactionNo);
+    int markPaymentSuccessFromChannelResult(@Param("paymentOrderId") String paymentOrderId,
+                                            @Param("channelTransactionNo") String channelTransactionNo);
+
+    /**
+     * 原子关闭从未向渠道提交的过期支付单，避免与并发支付提交互相覆盖。
+     */
+    int markExpiredUnsubmittedPaymentClosed(@Param("paymentOrderId") String paymentOrderId);
 
     /**
      * 更新预付单为支付中状态。
