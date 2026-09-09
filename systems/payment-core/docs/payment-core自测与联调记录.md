@@ -5539,3 +5539,28 @@
 1. 统一支付记录详情和退款动作响应不再成为本轮覆盖敏感字段的旁路，列表与详情默认脱敏口径趋于一致。
 2. 数据库与 Mapper 原始事实继续供内部交易和受控排障使用；默认脱敏不能替代后续可信身份与字段级授权。
 3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式放行治理事实。
+
+## 175. 2026-09-09 异常告警供应商回执出参最小化 V1.0 验证
+
+### 175.1 本轮补强
+
+1. 异常告警列表在 Service 对外边界复制 Mapper DTO，并对 `providerReceiptSnapshot` 中的嵌套姓名、手机号和银行卡号等字段执行统一脱敏。
+2. CSV 复用同一出参转换；任意无法可靠解析的供应商 HTTP 响应或传输快照统一返回 `[REDACTED]`，避免原始响应扩散到下载文件。
+3. 首次确认和已确认幂等返回路径均返回脱敏副本；回执状态判断、确认写入和来源告警同步仍使用原始 DTO。
+4. `receiver` 当前为值班团队标签，`alertContent / renderedContentSnapshot` 为内部运营告警正文，本轮保留排障可用性，不做无证据遮蔽。
+
+### 175.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 异常告警回执脱敏定向测试 | `mvn -Dtest=PaymentIssueServiceImplTest test` | 通过 | `12` 个用例通过；覆盖列表嵌套 JSON、CSV 非 JSON、首次确认、已确认幂等返回和 Mapper DTO 原值保持 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `478` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产供应商与权限验收 | 真实企业 IM、短信、邮件回执，统一认证、字段级授权与访问审计 | 未执行 | 不记录真实供应商联调、生产敏感数据、授权查看、渗透测试或现场核验通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；本轮未修改 Mapper XML、数据库结构或告警状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 175.3 当前判断
+
+1. 异常告警列表、CSV 和确认动作不再直接透传任意供应商原始响应；结构化回执保留非敏感诊断信息，非结构化回执失败闭合。
+2. 数据库与 Mapper 原始回执继续供内部确认和受控排障使用；默认最小化不能替代可信身份、字段级授权和访问审计。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式候选说明、签字、发布后现场核验或稳定观察结论。

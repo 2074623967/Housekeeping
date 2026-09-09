@@ -2033,6 +2033,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `/api/refunds/apply / approve / success / fail / retry` 的成功响应均返回脱敏后的 `customerName`，不改变退款状态机和渠道提交入参。
 4. Mapper 原始 DTO 和数据库事实保持不变；当前接口不提供敏感原文恢复、可信授权或生产审计能力。
 
+### 14.3 异常告警供应商回执出参规则
+
+1. `GET /api/payment-issues/alerts` 和 `GET /api/payment-issues/alerts/export` 对 `providerReceiptSnapshot` 使用同一出参转换：对象或数组 JSON 递归脱敏后返回，非 JSON 或 JSON 标量返回 `[REDACTED]`。
+2. `POST /api/payment-issues/alerts/{alertNo}/acknowledge` 在首次确认和已确认幂等返回路径执行同一转换，避免动作响应绕过列表口径。
+3. `receiver` 当前承载值班团队标签，`alertContent / renderedContentSnapshot` 承载内部运营正文，本轮不做无证据遮蔽；供应商原始回执不会通过上述接口直接透传。
+4. 确认状态判断和来源告警同步使用 Mapper 原始 DTO，数据库事实不被覆盖；当前规则不代表真实供应商联调、生产授权或隐私验收完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
