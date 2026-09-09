@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentEventMapper;
@@ -259,7 +260,12 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldRunCloseExpiredPayments() {
-        when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(2);
+        PaymentExpiryCloseResultDTO closeResult = new PaymentExpiryCloseResultDTO();
+        closeResult.setProcessedCount(3);
+        closeResult.setSuccessCount(2);
+        closeResult.setFailCount(1);
+        closeResult.setFailedPaymentOrderIds(Collections.singletonList("PAY-FAIL"));
+        when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(closeResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -273,7 +279,15 @@ class PaymentTaskCenterServiceImplTest {
         ).runCloseExpiredPayments();
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
-        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.any());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_EXPIRE_CLOSE".equals(entity.getTaskCode())
+                        && entity.getProcessedCount() == 3
+                        && entity.getSuccessCount() == 2
+                        && entity.getFailCount() == 1
+                        && "P2".equals(entity.getSeverityLevel())
+                        && entity.getSummaryComment().contains("PAY-FAIL")
+                        && entity.getSuggestedAction().contains("复跑任务")
+        ));
     }
 
     @Test
@@ -366,7 +380,10 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldRunAutoCloseExpiredPayments() {
-        when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(1);
+        PaymentExpiryCloseResultDTO closeResult = new PaymentExpiryCloseResultDTO();
+        closeResult.setProcessedCount(1);
+        closeResult.setSuccessCount(1);
+        when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(closeResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EXPIRE_CLOSE", "payment-expiry-scheduler", 120)).thenReturn(1);

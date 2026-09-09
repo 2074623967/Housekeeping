@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -865,8 +866,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private PaymentTaskActionResultDTO runCloseExpiredPaymentsByMode(String runMode, String triggeredBy, String modeLabel) {
-        int successCount = paymentExpiryTaskService.closeExpiredPayments();
-        int processedCount = successCount;
+        PaymentExpiryCloseResultDTO closeResult = paymentExpiryTaskService.closeExpiredPayments();
+        int processedCount = closeResult.getProcessedCount();
+        int successCount = closeResult.getSuccessCount();
+        int failCount = closeResult.getFailCount();
+        String failedPaymentHint = closeResult.getFailedPaymentOrderIds().isEmpty()
+                ? ""
+                : "，失败支付单：" + String.join("/", closeResult.getFailedPaymentOrderIds());
         return buildAndRecordResult(
                 TASK_CODE_EXPIRE_CLOSE,
                 "支付超时关单",
@@ -875,8 +881,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 processedCount,
                 successCount,
                 0,
-                0,
-                successCount == 0 ? "当前没有待关闭的超时支付单。" : String.format("%s已关闭 %d 笔超时支付单。", modeLabel, successCount)
+                failCount,
+                processedCount == 0
+                        ? "当前没有待关闭的超时支付单。"
+                        : String.format("%s处理 %d 笔超时支付单，成功关闭 %d 笔，失败 %d 笔%s。",
+                        modeLabel, processedCount, successCount, failCount, failedPaymentHint)
         );
     }
 
