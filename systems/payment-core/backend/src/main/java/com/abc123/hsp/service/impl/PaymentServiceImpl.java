@@ -59,6 +59,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     private static final int SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 
+    private static final int CALLBACK_PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int CALLBACK_TRADE_STATUS_MAX_LENGTH = 32;
+    private static final int CALLBACK_CHANNEL_TRANSACTION_NO_MAX_LENGTH = 128;
+    private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
+
     private static final int SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS = 120;
 
     private final PaymentMapper paymentMapper;
@@ -743,19 +748,29 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     @Override
     public PaymentDetailDTO callback(String channel, PaymentCallbackRequestDTO request) {
-        if (!StringUtils.hasText(request.getPaymentOrderId())
+        if (!StringUtils.hasText(channel)
+                || request == null
+                || !StringUtils.hasText(request.getPaymentOrderId())
                 || !StringUtils.hasText(request.getTradeStatus())
                 || !StringUtils.hasText(request.getChannelTransactionNo())) {
             throw new IllegalArgumentException(
-                    "paymentOrderId, tradeStatus and channelTransactionNo are required");
+                    "channel, paymentOrderId, tradeStatus and channelTransactionNo are required");
         }
-        paymentCallbackSignatureService.verify(channel, request);
+        String normalizedChannel = channel.trim().toLowerCase(Locale.ROOT);
+        validateCallbackField(normalizedChannel, CALLBACK_CHANNEL_MAX_LENGTH, "channel");
+        validateCallbackField(request.getPaymentOrderId(), CALLBACK_PAYMENT_ORDER_ID_MAX_LENGTH, "paymentOrderId");
+        validateCallbackField(request.getTradeStatus(), CALLBACK_TRADE_STATUS_MAX_LENGTH, "tradeStatus");
+        validateCallbackField(
+                request.getChannelTransactionNo(),
+                CALLBACK_CHANNEL_TRANSACTION_NO_MAX_LENGTH,
+                "channelTransactionNo");
+        paymentCallbackSignatureService.verify(normalizedChannel, request);
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         if (!StringUtils.hasText(detail.getChannel())
-                || !channel.trim().equalsIgnoreCase(detail.getChannel().trim())) {
+                || !normalizedChannel.equalsIgnoreCase(detail.getChannel().trim())) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISMATCH,
                     "callback channel does not match payment channel");
@@ -782,9 +797,9 @@ public class PaymentServiceImpl implements PaymentService {
         paymentMapper.insertNotifyLog(
                 notifyNo,
                 request.getPaymentOrderId(),
-                channel,
+                normalizedChannel,
                 request.getTradeStatus(),
-                "{\"tradeStatus\":\"" + request.getTradeStatus() + "\"}",
+                "{\"tradeStatus\":\"" + escapeJson(request.getTradeStatus()) + "\"}",
                 "{\"code\":\"SUCCESS\"}",
                 "已收口",
                 "success"
@@ -794,7 +809,7 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getPaymentOrderId(),
                 detail.getOrderNo(),
                 null,
-                channel,
+                normalizedChannel,
                 request.getTradeStatus(),
                 "已收口",
                 "success");
@@ -828,7 +843,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         String eventNo = buildBusinessNo("EVT");
         String eventType = paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING";
-        String eventPayload = "{\"channel\":\"" + channel + "\"}";
+        String eventPayload = "{\"channel\":\"" + escapeJson(normalizedChannel) + "\"}";
         paymentMapper.insertEvent(
                 eventNo,
                 eventType,
@@ -843,6 +858,17 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_SUCCESS");
         }
         return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+    }
+
+    private void validateCallbackField(String value, int maxLength, String fieldName) {
+        if (value.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + " length must not exceed " + maxLength);
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + " must not contain control characters");
+            }
+        }
     }
 
     @Transactional(noRollbackFor = BusinessException.class)

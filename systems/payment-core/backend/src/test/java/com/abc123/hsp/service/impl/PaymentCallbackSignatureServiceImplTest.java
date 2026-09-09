@@ -335,6 +335,53 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals("payment callback nonce TTL must be positive", negativeException.getMessage());
     }
 
+    @Test
+    void shouldRejectOversizedSecurityFieldsBeforeConfigurationLookup() throws Exception {
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                601
+        );
+        PaymentCallbackRequestDTO request = buildRequest(
+                "wx_h5",
+                "test-secret",
+                repeat('N', 129),
+                String.valueOf(Instant.now().getEpochSecond()));
+
+        BusinessException nullRequestException = assertThrows(
+                BusinessException.class, () -> service.verify("wx_h5", null));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, nullRequestException.getCode());
+        BusinessException nonceException = assertThrows(
+                BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, nonceException.getCode());
+        request.setNonce("nonce\ninvalid");
+        BusinessException nonceControlException = assertThrows(
+                BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, nonceControlException.getCode());
+        request.setNonce("nonce-valid");
+        request.setSignature(repeat('S', 8193));
+        BusinessException signatureException = assertThrows(
+                BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, signatureException.getCode());
+        request.setSignature("signature-valid");
+        request.setTimestamp(repeat('1', 21));
+        BusinessException timestampException = assertThrows(
+                BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, timestampException.getCode());
+        request.setTimestamp("1234567890\n");
+        BusinessException timestampControlException = assertThrows(
+                BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, timestampControlException.getCode());
+        request.setTimestamp(String.valueOf(Instant.now().getEpochSecond()));
+        BusinessException channelException = assertThrows(
+                BusinessException.class, () -> service.verify(repeat('C', 65), request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISSING, channelException.getCode());
+
+        verify(paymentCallbackSecurityMapper, never())
+                .findCallbackSecurityProfileByChannelCode(org.mockito.ArgumentMatchers.anyString());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+    }
+
     private PaymentCallbackSecurityProfileDTO buildHmacProfile(String channelCode, String secret) {
         PaymentCallbackSecurityProfileDTO profile = new PaymentCallbackSecurityProfileDTO();
         profile.setChannelCode(channelCode);
@@ -409,5 +456,11 @@ class PaymentCallbackSignatureServiceImplTest {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         return Base64.getEncoder().encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    private String repeat(char value, int count) {
+        char[] characters = new char[count];
+        java.util.Arrays.fill(characters, value);
+        return new String(characters);
     }
 }

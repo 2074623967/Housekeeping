@@ -223,6 +223,37 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectCallbackFieldsOutsidePersistenceBoundsBeforeVerification() {
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId(repeat('P', 65));
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("CHANNEL-001");
+
+        assertThrows(IllegalArgumentException.class, () -> service.callback("wx_h5", callback));
+        callback.setPaymentOrderId("PAY-001");
+        callback.setTradeStatus(repeat('S', 33));
+        assertThrows(IllegalArgumentException.class, () -> service.callback("wx_h5", callback));
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo(repeat('T', 129));
+        assertThrows(IllegalArgumentException.class, () -> service.callback("wx_h5", callback));
+        callback.setChannelTransactionNo("CHANNEL\n001");
+        assertThrows(IllegalArgumentException.class, () -> service.callback("wx_h5", callback));
+        callback.setChannelTransactionNo("CHANNEL-001");
+        assertThrows(IllegalArgumentException.class, () -> service.callback(repeat('C', 65), callback));
+        assertThrows(IllegalArgumentException.class, () -> service.callback(" ", callback));
+
+        verify(paymentCallbackSignatureService, never()).verify(
+                anyString(), org.mockito.ArgumentMatchers.any(PaymentCallbackRequestDTO.class));
+        verify(paymentMapper, never()).findDetail(anyString());
+    }
+
+    @Test
     void shouldRejectCallbackFromDifferentPaymentChannel() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-CALLBACK-CHANNEL-MISMATCH");
@@ -583,7 +614,7 @@ class PaymentServiceImplTest {
 
         PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
         callback.setPaymentOrderId("PAY-CALLBACK-002");
-        callback.setTradeStatus("PROCESSING");
+        callback.setTradeStatus("PROCESS\"ING");
         callback.setChannelTransactionNo("WX-CALLBACK-002");
 
         new PaymentServiceImpl(
@@ -593,7 +624,13 @@ class PaymentServiceImplTest {
                 paymentChannelQueryService,
                 paymentChannelSubmitService,
                 paymentEventDispatchService)
-                .callback("wx_h5", callback);
+                .callback(" WX_H5 ", callback);
+
+        verify(paymentCallbackSignatureService).verify("wx_h5", callback);
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-CALLBACK-002"), eq("wx_h5"), eq("PROCESS\"ING"),
+                eq("{\"tradeStatus\":\"PROCESS\\\"ING\"}"), eq("{\"code\":\"SUCCESS\"}"),
+                eq("已收口"), eq("success"));
 
         verify(paymentMapper).insertEvent(
                 org.mockito.ArgumentMatchers.anyString(),
@@ -1779,6 +1816,12 @@ class PaymentServiceImplTest {
         detail.setAmount("¥168.00");
         detail.setStatus(status);
         return detail;
+    }
+
+    private String repeat(char value, int count) {
+        char[] characters = new char[count];
+        Arrays.fill(characters, value);
+        return new String(characters);
     }
 
     private PaymentChannelQueryResultDTO queryResult(

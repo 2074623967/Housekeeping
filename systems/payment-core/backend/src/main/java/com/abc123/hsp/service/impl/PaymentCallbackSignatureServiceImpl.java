@@ -34,6 +34,10 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     private static final String HMAC_SHA256_CONFIG = "HMAC-SHA256";
     private static final String RSA2 = "RSA2";
     private static final String RSA_SHA256 = "SHA256withRSA";
+    private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
+    private static final int CALLBACK_TIMESTAMP_MAX_LENGTH = 20;
+    private static final int CALLBACK_NONCE_MAX_LENGTH = 128;
+    private static final int CALLBACK_SIGNATURE_MAX_LENGTH = 8192;
 
     private final boolean required;
     private final long nonceTtlSeconds;
@@ -56,11 +60,13 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (!required) {
             return;
         }
-        if (!StringUtils.hasText(request.getSignature())
+        if (request == null
+                || !StringUtils.hasText(request.getSignature())
                 || !StringUtils.hasText(request.getTimestamp())
                 || !StringUtils.hasText(request.getNonce())) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature fields are required");
         }
+        validateSecurityFields(request);
         String normalizedChannel = normalizeChannel(channel);
         PaymentCallbackSecurityProfileDTO securityProfile = resolveSecurityProfile(normalizedChannel);
         long timestampSeconds = parseTimestamp(request.getTimestamp());
@@ -151,7 +157,36 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (!StringUtils.hasText(channel)) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISSING, "callback channel is required");
         }
-        return channel.trim().toLowerCase();
+        String normalizedChannel = channel.trim().toLowerCase(Locale.ROOT);
+        if (normalizedChannel.length() > CALLBACK_CHANNEL_MAX_LENGTH) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISSING,
+                    "callback channel is invalid");
+        }
+        return normalizedChannel;
+    }
+
+    private void validateSecurityFields(PaymentCallbackRequestDTO request) {
+        if (request.getTimestamp().length() > CALLBACK_TIMESTAMP_MAX_LENGTH
+                || containsIsoControl(request.getTimestamp())) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
+                    "callback timestamp is invalid");
+        }
+        if (request.getNonce().length() > CALLBACK_NONCE_MAX_LENGTH
+                || request.getSignature().length() > CALLBACK_SIGNATURE_MAX_LENGTH
+                || containsIsoControl(request.getNonce())
+                || containsIsoControl(request.getSignature())) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
+                    "callback signature fields are invalid");
+        }
+    }
+
+    private boolean containsIsoControl(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean verifySignature(String payload, String actualSignature, PaymentCallbackSecurityProfileDTO securityProfile) {
