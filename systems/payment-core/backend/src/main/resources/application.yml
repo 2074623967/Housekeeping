@@ -33,6 +33,9 @@ mybatis:
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
 
 payment:
+  submit:
+    # 默认不信任转发头；仅配置实际反向代理的 IP，多个地址使用逗号分隔。
+    trusted-proxy-addresses: ${HSP_PAYMENT_SUBMIT_TRUSTED_PROXY_ADDRESSES:}
   callback:
     # 默认失败闭合；仅 demo profile 显式关闭，真实渠道环境必须注入独立密钥或公钥。
     require-signature: ${HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE:true}

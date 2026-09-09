@@ -7,8 +7,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.service.PaymentService;
 import java.nio.charset.StandardCharsets;
+import javax.servlet.http.HttpServletRequest;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +27,9 @@ class PaymentControllerTest {
 
     @Mock
     private PaymentService paymentService;
+
+    @Mock
+    private HttpServletRequest servletRequest;
 
     @Test
     void shouldExportPayments() {
@@ -51,5 +57,82 @@ class PaymentControllerTest {
         controller.list(null, null, "全部", "全部", 1, 20);
 
         verify(paymentService).list(any(PaymentListQueryDTO.class));
+    }
+
+    @Test
+    void shouldIgnoreBodyAndForwardedIpFromUntrustedPeer() {
+        PaymentController controller = new PaymentController(paymentService, "10.0.0.1");
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setClientIp("192.0.2.99");
+        request.setTerminal("H5");
+        when(servletRequest.getRemoteAddr()).thenReturn("203.0.113.10");
+
+        controller.submit(request, servletRequest);
+
+        ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
+        verify(paymentService).submit(captor.capture());
+        assertEquals("203.0.113.10", captor.getValue().getClientIp());
+    }
+
+    @Test
+    void shouldResolveRightmostUntrustedIpFromTrustedProxyChain() {
+        PaymentController controller = new PaymentController(paymentService, "10.0.0.1,10.0.0.2");
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setClientIp("192.0.2.99");
+        request.setTerminal("H5");
+        when(servletRequest.getRemoteAddr()).thenReturn("10.0.0.2");
+        when(servletRequest.getHeader("X-Forwarded-For"))
+                .thenReturn("192.0.2.5, 198.51.100.8, 10.0.0.1");
+
+        controller.submit(request, servletRequest);
+
+        ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
+        verify(paymentService).submit(captor.capture());
+        assertEquals("198.51.100.8", captor.getValue().getClientIp());
+    }
+
+    @Test
+    void shouldFallBackToTrustedPeerWhenForwardedChainIsMalformed() {
+        PaymentController controller = new PaymentController(paymentService, "10.0.0.2");
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setTerminal("H5");
+        when(servletRequest.getRemoteAddr()).thenReturn("10.0.0.2");
+        when(servletRequest.getHeader("X-Forwarded-For")).thenReturn("198.51.100.8, forged-host");
+
+        controller.submit(request, servletRequest);
+
+        ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
+        verify(paymentService).submit(captor.capture());
+        assertEquals("10.0.0.2", captor.getValue().getClientIp());
+    }
+
+    @Test
+    void shouldNormalizeIpv6AddressesInTrustedProxyChain() {
+        PaymentController controller = new PaymentController(paymentService, "2001:db8::2");
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setTerminal("H5");
+        when(servletRequest.getRemoteAddr()).thenReturn("2001:db8::2");
+        when(servletRequest.getHeader("X-Forwarded-For")).thenReturn("2001:db8::7");
+
+        controller.submit(request, servletRequest);
+
+        ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
+        verify(paymentService).submit(captor.capture());
+        assertEquals("2001:db8:0:0:0:0:0:7", captor.getValue().getClientIp());
+    }
+
+    @Test
+    void shouldUseUnknownWhenDirectPeerAddressIsInvalid() {
+        PaymentController controller = new PaymentController(paymentService, "");
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setClientIp("192.0.2.99");
+        request.setTerminal("H5");
+        when(servletRequest.getRemoteAddr()).thenReturn("forged-host");
+
+        controller.submit(request, servletRequest);
+
+        ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
+        verify(paymentService).submit(captor.capture());
+        assertEquals("UNKNOWN", captor.getValue().getClientIp());
     }
 }

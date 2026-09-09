@@ -14,7 +14,14 @@ import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
 import javax.servlet.http.HttpServletRequest;
 import com.abc123.hsp.service.PaymentService;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -32,9 +39,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final Set<String> trustedProxyAddresses;
 
-    public PaymentController(PaymentService paymentService) {
+    @Autowired
+    public PaymentController(
+            PaymentService paymentService,
+            @Value("${payment.submit.trusted-proxy-addresses:}") String trustedProxyAddresses) {
         this.paymentService = paymentService;
+        this.trustedProxyAddresses = parseTrustedProxyAddresses(trustedProxyAddresses);
+    }
+
+    /** 单元测试兼容构造器，默认不信任任何代理转发头。 */
+    public PaymentController(PaymentService paymentService) {
+        this(paymentService, "");
     }
 
     /**
@@ -113,9 +130,7 @@ public class PaymentController {
     @PostMapping("/submit")
     public ApiResponse<PrepayOrderDTO> submit(@RequestBody PaymentSubmitRequestDTO request,
             HttpServletRequest servletRequest) {
-        if (!StringUtils.hasText(request.getClientIp())) {
-            request.setClientIp(resolveClientIp(servletRequest));
-        }
+        request.setClientIp(resolveClientIp(servletRequest));
         if (!StringUtils.hasText(request.getTerminal())) {
             request.setTerminal(resolveTerminal(servletRequest));
         }
@@ -147,14 +162,88 @@ public class PaymentController {
     }
 
     /**
-     * 优先读取代理链路中的真实客户端 IP，避免只记录网关地址。
+     * 仅当直接对端属于显式可信代理时读取转发链，防止调用方伪造 IP 绕过限流。
      */
     private String resolveClientIp(HttpServletRequest servletRequest) {
-        String forwardedFor = servletRequest.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(forwardedFor)) {
-            return forwardedFor.split(",")[0].trim();
+        String remoteAddress = normalizeIp(servletRequest.getRemoteAddr());
+        if (remoteAddress == null) {
+            return "UNKNOWN";
         }
-        return servletRequest.getRemoteAddr();
+        if (!trustedProxyAddresses.contains(remoteAddress)) {
+            return remoteAddress;
+        }
+        String forwardedFor = servletRequest.getHeader("X-Forwarded-For");
+        if (!StringUtils.hasText(forwardedFor) || forwardedFor.length() > 2048) {
+            return remoteAddress;
+        }
+        String[] forwardedAddresses = forwardedFor.split(",", -1);
+        if (forwardedAddresses.length > 32) {
+            return remoteAddress;
+        }
+        for (int index = forwardedAddresses.length - 1; index >= 0; index--) {
+            String forwardedAddress = normalizeIp(forwardedAddresses[index]);
+            if (forwardedAddress == null) {
+                return remoteAddress;
+            }
+            if (!trustedProxyAddresses.contains(forwardedAddress)) {
+                return forwardedAddress;
+            }
+        }
+        return remoteAddress;
+    }
+
+    private Set<String> parseTrustedProxyAddresses(String configuredAddresses) {
+        Set<String> addresses = new HashSet<>();
+        if (!StringUtils.hasText(configuredAddresses)) {
+            return addresses;
+        }
+        for (String configuredAddress : configuredAddresses.split(",")) {
+            String normalizedAddress = normalizeIp(configuredAddress);
+            if (normalizedAddress != null) {
+                addresses.add(normalizedAddress);
+            }
+        }
+        return addresses;
+    }
+
+    private String normalizeIp(String rawAddress) {
+        if (!StringUtils.hasText(rawAddress)) {
+            return null;
+        }
+        String address = rawAddress.trim();
+        if (address.length() > 64) {
+            return null;
+        }
+        if (address.indexOf(':') >= 0) {
+            if (!address.matches("[0-9a-fA-F:.]+")) {
+                return null;
+            }
+            try {
+                InetAddress parsedAddress = InetAddress.getByName(address);
+                return parsedAddress instanceof Inet6Address ? parsedAddress.getHostAddress() : null;
+            } catch (UnknownHostException exception) {
+                return null;
+            }
+        }
+        String[] octets = address.split("\\.", -1);
+        if (octets.length != 4) {
+            return null;
+        }
+        StringBuilder normalized = new StringBuilder();
+        for (String octet : octets) {
+            if (octet.isEmpty() || octet.length() > 3 || !octet.matches("[0-9]+")) {
+                return null;
+            }
+            int value = Integer.parseInt(octet);
+            if (value > 255) {
+                return null;
+            }
+            if (normalized.length() > 0) {
+                normalized.append('.');
+            }
+            normalized.append(value);
+        }
+        return normalized.toString();
     }
 
     /**

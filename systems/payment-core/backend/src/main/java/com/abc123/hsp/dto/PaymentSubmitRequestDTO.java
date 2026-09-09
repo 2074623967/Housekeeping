@@ -22,7 +22,7 @@ public class PaymentSubmitRequestDTO {
     private String accessToken;
     /** 发起终端。 */
     private String terminal;
-    /** 客户端 IP。 */
+    /** 客户端 IP；HTTP 入口会以可信连接上下文覆盖请求体值。 */
     private String clientIp;
     /** 客户端设备号。 */
     private String clientDeviceId;
