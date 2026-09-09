@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
+import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -15,11 +16,10 @@ import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.dto.RefundRetryResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
-import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentConfigService;
-import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
@@ -58,11 +58,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
-    private final PaymentEventMapper paymentEventMapper;
+    private final PaymentEventRetryTaskService paymentEventRetryTaskService;
     private final RefundRetryTaskService refundRetryTaskService;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
-    private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentService paymentService;
     private final int pendingQueryMinAgeSeconds;
     private final int pendingQueryRetryIntervalSeconds;
@@ -84,11 +83,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                         PaymentExpiryTaskService paymentExpiryTaskService,
-                                        PaymentEventMapper paymentEventMapper,
+                                        PaymentEventRetryTaskService paymentEventRetryTaskService,
                                         RefundRetryTaskService refundRetryTaskService,
                                         PaymentConfigService paymentConfigService,
                                         PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
-                                        PaymentEventDispatchService paymentEventDispatchService,
                                         PaymentService paymentService,
                                         @Value("${payment.channel-query.compensation.min-age-seconds:30}")
                                                 int pendingQueryMinAgeSeconds,
@@ -124,11 +122,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                 int issueAlertReceiptTimeoutMinutes) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentExpiryTaskService = paymentExpiryTaskService;
-        this.paymentEventMapper = paymentEventMapper;
+        this.paymentEventRetryTaskService = paymentEventRetryTaskService;
         this.refundRetryTaskService = refundRetryTaskService;
         this.paymentConfigService = paymentConfigService;
         this.paymentIssueAlertDeliveryService = paymentIssueAlertDeliveryService;
-        this.paymentEventDispatchService = paymentEventDispatchService;
         this.paymentService = paymentService;
         this.pendingQueryMinAgeSeconds = Math.max(pendingQueryMinAgeSeconds, 0);
         this.pendingQueryRetryIntervalSeconds = Math.max(pendingQueryRetryIntervalSeconds, 1);
@@ -153,18 +150,16 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                  PaymentExpiryTaskService paymentExpiryTaskService,
-                                 PaymentEventMapper paymentEventMapper,
+                                 PaymentEventRetryTaskService paymentEventRetryTaskService,
                                  RefundRetryTaskService refundRetryTaskService,
                                  PaymentConfigService paymentConfigService,
-                                 PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
-                                 PaymentEventDispatchService paymentEventDispatchService) {
+                                 PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService) {
         this(paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
-                paymentEventDispatchService,
                 null,
                 30,
                 60,
@@ -182,31 +177,6 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 15,
                 10,
                 30);
-    }
-
-    PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
-                                 PaymentExpiryTaskService paymentExpiryTaskService,
-                                 PaymentEventMapper paymentEventMapper,
-                                 RefundRetryTaskService refundRetryTaskService,
-                                 PaymentConfigService paymentConfigService,
-                                 PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService) {
-        this(paymentTaskCenterMapper,
-                paymentExpiryTaskService,
-                paymentEventMapper,
-                refundRetryTaskService,
-                paymentConfigService,
-                paymentIssueAlertDeliveryService,
-                new PaymentEventDispatchService() {
-                    @Override
-                    public void publishPaymentSuccess(String eventNo, String paymentOrderId) {
-                        // 单元测试兼容构造器默认不触发下游联动。
-                    }
-
-                    @Override
-                    public boolean republish(String eventNo) {
-                        return paymentEventMapper.markRepublished(eventNo) > 0;
-                    }
-                });
     }
 
     @Override
@@ -707,28 +677,27 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
-        List<String> failedEventNos = RUN_MODE_MANUAL.equals(runMode)
-                ? paymentEventMapper.findAllFailedEventNos()
-                : paymentEventMapper.findDueFailedEventNos();
-        int successCount = 0;
-        for (String eventNo : failedEventNos) {
-            if (paymentEventDispatchService.republish(eventNo)) {
-                successCount++;
-            }
-        }
-        int failCount = Math.max(failedEventNos.size() - successCount, 0);
+        PaymentEventRetryResultDTO retryResult = paymentEventRetryTaskService.retryFailedEvents(
+                RUN_MODE_AUTO.equals(runMode));
+        int processedCount = retryResult.getProcessedCount();
+        int successCount = retryResult.getSuccessCount();
+        int failCount = retryResult.getFailCount();
+        String failedEventHint = retryResult.getFailedEventNos().isEmpty()
+                ? ""
+                : "，失败事件：" + String.join("/", retryResult.getFailedEventNos());
         return buildAndRecordResult(
                 TASK_CODE_EVENT_RETRY,
                 "失败事件重发",
                 runMode,
                 triggeredBy,
-                failedEventNos.size(),
+                processedCount,
                 successCount,
                 0,
                 failCount,
-                failedEventNos.isEmpty()
+                processedCount == 0
                         ? "当前没有失败事件需要重发。"
-                        : String.format("已重发 %d 条失败事件，剩余失败 %d 条。", successCount, failCount)
+                        : String.format("已处理 %d 条失败事件，成功重发 %d 条，失败 %d 条%s。",
+                        processedCount, successCount, failCount, failedEventHint)
         );
     }
 

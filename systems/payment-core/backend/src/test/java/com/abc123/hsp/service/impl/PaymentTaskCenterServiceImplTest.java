@@ -13,15 +13,15 @@ import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
+import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.dto.RefundRetryResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
-import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
-import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import java.util.Arrays;
@@ -44,15 +44,13 @@ class PaymentTaskCenterServiceImplTest {
     @Mock
     private PaymentExpiryTaskService paymentExpiryTaskService;
     @Mock
-    private PaymentEventMapper paymentEventMapper;
+    private PaymentEventRetryTaskService paymentEventRetryTaskService;
     @Mock
     private RefundRetryTaskService refundRetryTaskService;
     @Mock
     private PaymentConfigService paymentConfigService;
     @Mock
     private PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
-    @Mock
-    private PaymentEventDispatchService paymentEventDispatchService;
     @Mock
     private PaymentService paymentService;
 
@@ -273,7 +271,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -317,7 +315,7 @@ class PaymentTaskCenterServiceImplTest {
         String csv = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -330,35 +328,42 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldRunRepublishFailedEvents() {
-        when(paymentEventMapper.findAllFailedEventNos()).thenReturn(Arrays.asList("EVT-1", "EVT-2"));
-        when(paymentEventMapper.markRepublished("EVT-1")).thenReturn(1);
-        when(paymentEventMapper.markRepublished("EVT-2")).thenReturn(1);
+        PaymentEventRetryResultDTO retryResult = new PaymentEventRetryResultDTO();
+        retryResult.setProcessedCount(3);
+        retryResult.setSuccessCount(1);
+        retryResult.setFailCount(2);
+        retryResult.setFailedEventNos(Arrays.asList("EVT-2", "EVT-3"));
+        when(paymentEventRetryTaskService.retryFailedEvents(false)).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runRepublishFailedEvents();
 
-        verify(paymentEventMapper).findAllFailedEventNos();
-        verify(paymentEventMapper).markRepublished("EVT-1");
-        verify(paymentEventMapper).markRepublished("EVT-2");
+        verify(paymentEventRetryTaskService).retryFailedEvents(false);
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "P2".equals(entity.getSeverityLevel())
                         && "纳入当班跟进".equals(entity.getEscalationStatus())
-                        && entity.getSuggestedAction().contains("复核下游是否完成收口")
+                        && entity.getProcessedCount() == 3
+                        && entity.getSuccessCount() == 1
+                        && entity.getFailCount() == 2
+                        && entity.getSummaryComment().contains("EVT-2/EVT-3")
+                        && entity.getSuggestedAction().contains("重发表")
         ));
     }
 
     @Test
     void shouldRunAutoRepublishFailedEvents() {
-        when(paymentEventMapper.findDueFailedEventNos()).thenReturn(Collections.singletonList("EVT-AUTO-1"));
-        when(paymentEventMapper.markRepublished("EVT-AUTO-1")).thenReturn(1);
+        PaymentEventRetryResultDTO retryResult = new PaymentEventRetryResultDTO();
+        retryResult.setProcessedCount(1);
+        retryResult.setSuccessCount(1);
+        when(paymentEventRetryTaskService.retryFailedEvents(true)).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "payment-event-scheduler", 120)).thenReturn(1);
@@ -366,13 +371,13 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
         ).runAutoRepublishFailedEvents();
 
-        verify(paymentEventMapper).findDueFailedEventNos();
+        verify(paymentEventRetryTaskService).retryFailedEvents(true);
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "payment-event-scheduler".equals(entity.getTriggeredBy())
         ));
@@ -392,7 +397,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -416,7 +421,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -454,7 +459,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -503,7 +508,7 @@ class PaymentTaskCenterServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -547,7 +552,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -572,7 +577,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -594,7 +599,7 @@ class PaymentTaskCenterServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -624,7 +629,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -649,7 +654,7 @@ class PaymentTaskCenterServiceImplTest {
         PageResultDTO<PaymentTaskRunLogItemDTO> result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -676,7 +681,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -704,7 +709,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -734,7 +739,7 @@ class PaymentTaskCenterServiceImplTest {
         new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -757,7 +762,7 @@ class PaymentTaskCenterServiceImplTest {
         com.abc123.hsp.dto.PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -776,7 +781,7 @@ class PaymentTaskCenterServiceImplTest {
         com.abc123.hsp.dto.PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
@@ -798,11 +803,10 @@ class PaymentTaskCenterServiceImplTest {
         return new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
-                paymentEventMapper,
+                paymentEventRetryTaskService,
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
-                paymentEventDispatchService,
                 paymentService,
                 30,
                 60,
