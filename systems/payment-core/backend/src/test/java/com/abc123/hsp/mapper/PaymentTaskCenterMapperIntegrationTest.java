@@ -90,6 +90,8 @@ class PaymentTaskCenterMapperIntegrationTest {
                     "PAY-BACKOFF-DUE",
                     "PAY-MAX-WAIT",
                     "PAY-MAX-DUE"), manualCandidates);
+            org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("PAY-FRESH-ATTEMPT"));
+            org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("PAY-NO-ATTEMPT"));
             assertEquals(Arrays.asList(
                     "PAY-NO-HISTORY",
                     "PAY-BASE-WAIT",
@@ -183,6 +185,7 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("CREATE TABLE t_payment_order ("
@@ -190,6 +193,9 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "channel_code VARCHAR(64), status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "payment_order_id VARCHAR(64), expires_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "attempt_status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_notify_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "notify_status VARCHAR(32), created_at DATETIME)");
@@ -218,6 +224,9 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertPayment(connection, "PAY-BACKOFF-DUE", "wx_h5", now.minusMinutes(7));
             insertPayment(connection, "PAY-MAX-WAIT", "alipay_h5", now.minusMinutes(6));
             insertPayment(connection, "PAY-MAX-DUE", "alipay_h5", now.minusMinutes(5));
+            insertPayment(connection, "PAY-FRESH-ATTEMPT", "wx_h5", now.minusMinutes(20));
+            insertPaymentAttempt(connection, "PAY-FRESH-ATTEMPT", now);
+            insertPaymentWithoutAttempt(connection, "PAY-NO-ATTEMPT", "wx_h5", now.minusMinutes(20));
 
             insertQueryHistory(connection, "PAY-BASE-WAIT", now, 30);
             insertQueryHistory(connection, "PAY-BACKOFF-WAIT", now, 300, 90);
@@ -303,13 +312,55 @@ class PaymentTaskCenterMapperIntegrationTest {
                 "INSERT INTO t_payment_order(payment_order_id, channel_code, status, created_at) "
                         + "VALUES (?, ?, ?, ?)");
              PreparedStatement prepayStatement = connection.prepareStatement(
-                     "INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES (?, ?)")) {
+                     "INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES (?, ?)");
+             PreparedStatement attemptStatement = connection.prepareStatement(
+                     "INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) "
+                             + "VALUES (?, ?, ?)")) {
             paymentStatement.setString(1, paymentOrderId);
             paymentStatement.setString(2, channelCode);
             paymentStatement.setString(3, "WAIT_CALLBACK");
             paymentStatement.setTimestamp(4, Timestamp.valueOf(createdAt));
             paymentStatement.executeUpdate();
 
+            prepayStatement.setString(1, paymentOrderId);
+            prepayStatement.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now().plusHours(1)));
+            prepayStatement.executeUpdate();
+
+            attemptStatement.setString(1, paymentOrderId);
+            attemptStatement.setString(2, "待回调");
+            attemptStatement.setTimestamp(3, Timestamp.valueOf(createdAt));
+            attemptStatement.executeUpdate();
+        }
+    }
+
+    private void insertPaymentAttempt(
+            Connection connection,
+            String paymentOrderId,
+            LocalDateTime createdAt) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) VALUES (?, ?, ?)")) {
+            statement.setString(1, paymentOrderId);
+            statement.setString(2, "渠道提交中");
+            statement.setTimestamp(3, Timestamp.valueOf(createdAt));
+            statement.executeUpdate();
+        }
+    }
+
+    private void insertPaymentWithoutAttempt(
+            Connection connection,
+            String paymentOrderId,
+            String channelCode,
+            LocalDateTime createdAt) throws Exception {
+        try (PreparedStatement paymentStatement = connection.prepareStatement(
+                "INSERT INTO t_payment_order(payment_order_id, channel_code, status, created_at) "
+                        + "VALUES (?, ?, ?, ?)");
+             PreparedStatement prepayStatement = connection.prepareStatement(
+                     "INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES (?, ?)")) {
+            paymentStatement.setString(1, paymentOrderId);
+            paymentStatement.setString(2, channelCode);
+            paymentStatement.setString(3, "WAIT_CALLBACK");
+            paymentStatement.setTimestamp(4, Timestamp.valueOf(createdAt));
+            paymentStatement.executeUpdate();
             prepayStatement.setString(1, paymentOrderId);
             prepayStatement.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now().plusHours(1)));
             prepayStatement.executeUpdate();

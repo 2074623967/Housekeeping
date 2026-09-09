@@ -43,14 +43,14 @@ public interface PaymentTaskCenterMapper {
     long countTaskRunLogs(PaymentTaskRunLogQueryDTO query);
 
     /**
-     * 查询达到等待阈值、尚未过期且仍待回调的支付单，供人工立即补查。
+     * 查询最新支付尝试达到等待阈值、尚未过期且仍待回调的支付单，供人工立即补查。
      */
     List<String> findPendingPaymentOrderIdsForManualQuery(@Param("minAgeSeconds") int minAgeSeconds,
                                                           @Param("perChannelBatchSize") int perChannelBatchSize,
                                                           @Param("batchSize") int batchSize);
 
     /**
-     * 查询达到自动重试退避窗口的待回调支付单。
+     * 查询最新支付尝试达到自动重试退避窗口的待回调支付单。
      */
     List<String> findDuePendingPaymentOrderIdsForQuery(
             @Param("minAgeSeconds") int minAgeSeconds,
@@ -61,7 +61,7 @@ public interface PaymentTaskCenterMapper {
             @Param("batchSize") int batchSize);
 
     /**
-     * 统计达到首次等待阈值的待回调支付单积压。
+     * 统计最新支付尝试达到首次等待阈值的待回调支付单积压。
      */
     int countPendingPaymentQueryBacklog(@Param("minAgeSeconds") int minAgeSeconds);
 

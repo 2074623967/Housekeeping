@@ -355,19 +355,26 @@
         SELECT candidates.payment_order_id
         FROM (
             SELECT p.payment_order_id,
-                   p.created_at,
+                   latest_attempt.created_at AS attempt_created_at,
                    ROW_NUMBER() OVER (
                        PARTITION BY p.channel_code
-                       ORDER BY p.created_at, p.id
+                       ORDER BY latest_attempt.created_at, latest_attempt.id
                    ) AS channel_rank
             FROM t_payment_order p
                      INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                     INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
+                        SELECT pa.id
+                        FROM t_payment_attempt pa
+                        WHERE pa.payment_order_id = p.payment_order_id
+                        ORDER BY pa.created_at DESC, pa.id DESC
+                        LIMIT 1
+                     )
             WHERE p.status = 'WAIT_CALLBACK'
               AND pr.expires_at &gt; NOW()
-              AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+              AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
-        ORDER BY candidates.created_at, candidates.payment_order_id
+        ORDER BY candidates.attempt_created_at, candidates.payment_order_id
         LIMIT #{batchSize}
     </select>
 
@@ -375,13 +382,20 @@
         SELECT candidates.payment_order_id
         FROM (
             SELECT p.payment_order_id,
-                   p.created_at,
+                   latest_attempt.created_at AS attempt_created_at,
                    ROW_NUMBER() OVER (
                        PARTITION BY p.channel_code
-                       ORDER BY p.created_at, p.id
+                       ORDER BY latest_attempt.created_at, latest_attempt.id
                    ) AS channel_rank
             FROM t_payment_order p
                      INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                     INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
+                        SELECT pa.id
+                        FROM t_payment_attempt pa
+                        WHERE pa.payment_order_id = p.payment_order_id
+                        ORDER BY pa.created_at DESC, pa.id DESC
+                        LIMIT 1
+                     )
                      LEFT JOIN (
                         SELECT payment_order_id,
                                COUNT(1) AS query_count,
@@ -392,7 +406,7 @@
                      ) query_history ON query_history.payment_order_id = p.payment_order_id
             WHERE p.status = 'WAIT_CALLBACK'
               AND pr.expires_at &gt; NOW()
-              AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+              AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
               AND (
                 query_history.latest_query_at IS NULL
                 OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
@@ -406,7 +420,7 @@
               )
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
-        ORDER BY candidates.created_at, candidates.payment_order_id
+        ORDER BY candidates.attempt_created_at, candidates.payment_order_id
         LIMIT #{batchSize}
     </select>
 
@@ -414,15 +428,29 @@
         SELECT COUNT(1)
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                 INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
+                    SELECT pa.id
+                    FROM t_payment_attempt pa
+                    WHERE pa.payment_order_id = p.payment_order_id
+                    ORDER BY pa.created_at DESC, pa.id DESC
+                    LIMIT 1
+                 )
         WHERE p.status = 'WAIT_CALLBACK'
           AND pr.expires_at &gt; NOW()
-          AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+          AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
     </select>
 
     <select id="countDuePendingPaymentQueries" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                 INNER JOIN t_payment_attempt latest_attempt ON latest_attempt.id = (
+                    SELECT pa.id
+                    FROM t_payment_attempt pa
+                    WHERE pa.payment_order_id = p.payment_order_id
+                    ORDER BY pa.created_at DESC, pa.id DESC
+                    LIMIT 1
+                 )
                  LEFT JOIN (
                     SELECT payment_order_id,
                            COUNT(1) AS query_count,
@@ -433,7 +461,7 @@
                  ) query_history ON query_history.payment_order_id = p.payment_order_id
         WHERE p.status = 'WAIT_CALLBACK'
           AND pr.expires_at &gt; NOW()
-          AND TIMESTAMPDIFF(SECOND, p.created_at, NOW()) &gt;= #{minAgeSeconds}
+          AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
           AND (
             query_history.latest_query_at IS NULL
             OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
