@@ -14,6 +14,7 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
@@ -316,20 +317,24 @@ class PaymentConfigControllerTest {
     @Test
     void shouldExposeGatewayStatusReviewFlow() {
         PaymentGatewayStatusReviewRequestDTO submitRequest = new PaymentGatewayStatusReviewRequestDTO();
+        PaymentGatewayReviewSubmitRequestDTO fullSubmitRequest = new PaymentGatewayReviewSubmitRequestDTO();
         PaymentGatewayReviewActionRequestDTO actionRequest = new PaymentGatewayReviewActionRequestDTO();
         java.util.List<PaymentGatewayReviewDTO> reviews =
                 Collections.singletonList(new PaymentGatewayReviewDTO());
         when(paymentConfigService.submitGatewayStatusReview(submitRequest)).thenReturn(reviews);
+        when(paymentConfigService.submitGatewayReview(fullSubmitRequest)).thenReturn(reviews);
         when(paymentConfigService.listGatewayReviews()).thenReturn(reviews);
         when(paymentConfigService.approveGatewayReview("GWR-001", actionRequest)).thenReturn(reviews);
         when(paymentConfigService.rejectGatewayReview("GWR-001", actionRequest)).thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
         assertEquals(reviews, controller.submitGatewayStatusReview(submitRequest).getData());
+        assertEquals(reviews, controller.submitGatewayReview(fullSubmitRequest).getData());
         assertEquals(reviews, controller.listGatewayReviews().getData());
         assertEquals(reviews, controller.approveGatewayReview("GWR-001", actionRequest).getData());
         assertEquals(reviews, controller.rejectGatewayReview("GWR-001", actionRequest).getData());
         verify(paymentConfigService).submitGatewayStatusReview(submitRequest);
+        verify(paymentConfigService).submitGatewayReview(fullSubmitRequest);
         verify(paymentConfigService).listGatewayReviews();
         verify(paymentConfigService).approveGatewayReview("GWR-001", actionRequest);
         verify(paymentConfigService).rejectGatewayReview("GWR-001", actionRequest);

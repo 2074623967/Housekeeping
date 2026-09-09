@@ -772,9 +772,11 @@
                callback_whitelist AS callbackWhitelist,
                adapter_registry AS adapterRegistry,
                CONCAT(timeout_ms, 'ms') AS timeoutMs,
+               timeout_ms AS timeoutMsValue,
                retry_policy AS retryPolicy,
                status,
                status_type AS statusType,
+               priority,
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_gateway_config
         ORDER BY priority ASC, id ASC
@@ -811,8 +813,24 @@
     <select id="findGatewayReviews" resultType="com.abc123.hsp.dto.PaymentGatewayReviewDTO">
         SELECT request_no AS requestNo,
                gateway_code AS gatewayCode,
+               operation_type AS operationType,
                gateway_name AS gatewayName,
                access_mode AS accessMode,
+               channel_scope AS channelScope,
+               environment_scope AS environmentScope,
+               api_base_url AS apiBaseUrl,
+               protocol_type AS protocolType,
+               sign_algorithm AS signAlgorithm,
+               certificate_alias AS certificateAlias,
+               certificate_status AS certificateStatus,
+               certificate_status_type AS certificateStatusType,
+               release_stage AS releaseStage,
+               gray_strategy AS grayStrategy,
+               callback_whitelist AS callbackWhitelist,
+               adapter_registry AS adapterRegistry,
+               timeout_ms AS timeoutMs,
+               retry_policy AS retryPolicy,
+               priority,
                base_fingerprint AS baseFingerprint,
                candidate_status AS candidateStatus,
                candidate_status_type AS candidateStatusType,
@@ -835,8 +853,24 @@
             resultType="com.abc123.hsp.entity.PaymentGatewayReviewEntity">
         SELECT request_no AS requestNo,
                gateway_code AS gatewayCode,
+               operation_type AS operationType,
                gateway_name AS gatewayName,
                access_mode AS accessMode,
+               channel_scope AS channelScope,
+               environment_scope AS environmentScope,
+               api_base_url AS apiBaseUrl,
+               protocol_type AS protocolType,
+               sign_algorithm AS signAlgorithm,
+               certificate_alias AS certificateAlias,
+               certificate_status AS certificateStatus,
+               certificate_status_type AS certificateStatusType,
+               release_stage AS releaseStage,
+               gray_strategy AS grayStrategy,
+               callback_whitelist AS callbackWhitelist,
+               adapter_registry AS adapterRegistry,
+               timeout_ms AS timeoutMs,
+               retry_policy AS retryPolicy,
+               priority,
                base_fingerprint AS baseFingerprint,
                candidate_status AS candidateStatus,
                candidate_status_type AS candidateStatusType,
@@ -1619,15 +1653,62 @@
 
     <insert id="insertGatewayReview">
         INSERT INTO t_payment_gateway_review (
-            request_no, gateway_code, gateway_name, access_mode, pending_gateway_code,
+            request_no, gateway_code, operation_type, gateway_name, access_mode,
+            channel_scope, environment_scope, api_base_url, protocol_type, sign_algorithm,
+            certificate_alias, certificate_status, certificate_status_type, release_stage,
+            gray_strategy, callback_whitelist, adapter_registry, timeout_ms, retry_policy, priority,
+            pending_gateway_code,
             base_fingerprint, candidate_status, candidate_status_type, requester, request_reason,
             review_status, review_status_type, created_at, updated_at
         ) VALUES (
-            #{requestNo}, #{gatewayCode}, #{gatewayName}, #{accessMode}, #{pendingGatewayCode},
+            #{requestNo}, #{gatewayCode}, #{operationType}, #{gatewayName}, #{accessMode},
+            #{channelScope}, #{environmentScope}, #{apiBaseUrl}, #{protocolType}, #{signAlgorithm},
+            #{certificateAlias}, #{certificateStatus}, #{certificateStatusType}, #{releaseStage},
+            #{grayStrategy}, #{callbackWhitelist}, #{adapterRegistry}, #{timeoutMs}, #{retryPolicy}, #{priority},
+            #{pendingGatewayCode},
             #{baseFingerprint}, #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
             #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
         )
     </insert>
+
+    <insert id="insertGateway" parameterType="com.abc123.hsp.entity.PaymentGatewayConfigEntity">
+        INSERT INTO t_payment_gateway_config (
+            gateway_code, gateway_name, access_mode, channel_scope, environment_scope, api_base_url,
+            protocol_type, sign_algorithm, certificate_alias, certificate_status, certificate_status_type,
+            release_stage, gray_strategy, callback_whitelist, adapter_registry, timeout_ms, retry_policy,
+            status, status_type, priority, updated_at
+        ) VALUES (
+            #{gatewayCode}, #{gatewayName}, #{accessMode}, #{channelScope}, #{environmentScope}, #{apiBaseUrl},
+            #{protocolType}, #{signAlgorithm}, #{certificateAlias}, #{certificateStatus},
+            #{certificateStatusType}, #{releaseStage}, #{grayStrategy}, #{callbackWhitelist},
+            #{adapterRegistry}, #{timeoutMs}, #{retryPolicy}, #{status}, #{statusType}, #{priority}, NOW()
+        )
+    </insert>
+
+    <update id="updateGateway" parameterType="com.abc123.hsp.entity.PaymentGatewayConfigEntity">
+        UPDATE t_payment_gateway_config
+        SET gateway_name = #{gatewayName},
+            access_mode = #{accessMode},
+            channel_scope = #{channelScope},
+            environment_scope = #{environmentScope},
+            api_base_url = #{apiBaseUrl},
+            protocol_type = #{protocolType},
+            sign_algorithm = #{signAlgorithm},
+            certificate_alias = #{certificateAlias},
+            certificate_status = #{certificateStatus},
+            certificate_status_type = #{certificateStatusType},
+            release_stage = #{releaseStage},
+            gray_strategy = #{grayStrategy},
+            callback_whitelist = #{callbackWhitelist},
+            adapter_registry = #{adapterRegistry},
+            timeout_ms = #{timeoutMs},
+            retry_policy = #{retryPolicy},
+            status = #{status},
+            status_type = #{statusType},
+            priority = #{priority},
+            updated_at = NOW()
+        WHERE gateway_code = #{gatewayCode}
+    </update>
 
     <update id="completeGatewayReview">
         UPDATE t_payment_gateway_review
@@ -1640,14 +1721,6 @@
             updated_at = NOW()
         WHERE request_no = #{requestNo}
           AND review_status = 'PENDING_REVIEW'
-    </update>
-
-    <update id="updateGatewayStatus">
-        UPDATE t_payment_gateway_config
-        SET status = #{status},
-            status_type = #{statusType},
-            updated_at = NOW()
-        WHERE gateway_code = #{gatewayCode}
     </update>
 
     <update id="updateControlPolicyStatus">

@@ -951,6 +951,7 @@ export const paymentConfigApi = {
   ),
   submitGatewayStatusReview: (payload) => postJson("/api/payment-config/gateways/toggle", payload),
   getGatewayReviews: () => request("/api/payment-config/gateways/reviews"),
+  submitGatewayReview: (payload) => postJson("/api/payment-config/gateways/reviews", payload),
   approveGatewayReview: (requestNo, payload) => postJson(
     `/api/payment-config/gateways/reviews/${encodeURIComponent(requestNo)}/approve`,
     payload

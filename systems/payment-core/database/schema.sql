@@ -376,10 +376,26 @@ CREATE TABLE t_payment_gateway_review (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
     gateway_code VARCHAR(64) NOT NULL COMMENT '支付网关编码快照',
+    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE',
     gateway_name VARCHAR(128) NOT NULL COMMENT '支付网关名称快照',
     access_mode VARCHAR(64) NOT NULL COMMENT '接入模式快照',
+    channel_scope VARCHAR(256) NOT NULL COMMENT '适用渠道范围候选',
+    environment_scope VARCHAR(128) NOT NULL COMMENT '环境范围候选',
+    api_base_url VARCHAR(256) NOT NULL COMMENT '网关基础地址候选',
+    protocol_type VARCHAR(64) NOT NULL COMMENT '报文协议候选',
+    sign_algorithm VARCHAR(64) NOT NULL COMMENT '签名算法候选',
+    certificate_alias VARCHAR(128) NOT NULL COMMENT '证书别名候选',
+    certificate_status VARCHAR(32) NOT NULL COMMENT '证书状态候选',
+    certificate_status_type VARCHAR(32) NOT NULL COMMENT '证书状态样式候选',
+    release_stage VARCHAR(64) NOT NULL COMMENT '发布阶段候选',
+    gray_strategy VARCHAR(256) NOT NULL COMMENT '灰度策略候选',
+    callback_whitelist VARCHAR(256) NOT NULL COMMENT '回调白名单候选',
+    adapter_registry VARCHAR(256) NOT NULL COMMENT '适配器编排候选',
+    timeout_ms INT NOT NULL COMMENT '超时时间候选',
+    retry_policy VARCHAR(128) NOT NULL COMMENT '重试策略候选',
+    priority INT NOT NULL COMMENT '优先级候选',
     pending_gateway_code VARCHAR(64) DEFAULT NULL COMMENT '网关唯一待办占位，完成后置空',
-    base_fingerprint VARCHAR(64) NOT NULL COMMENT '提交时完整网关配置基线指纹',
+    base_fingerprint VARCHAR(64) DEFAULT NULL COMMENT '提交时完整网关配置基线指纹，新增时为空',
     candidate_status VARCHAR(32) NOT NULL COMMENT '候选 ENABLED/DISABLED 状态',
     candidate_status_type VARCHAR(32) NOT NULL COMMENT '候选状态样式',
     requester VARCHAR(64) NOT NULL COMMENT '申请人自声明',
@@ -396,7 +412,7 @@ CREATE TABLE t_payment_gateway_review (
     UNIQUE KEY uk_gateway_review_pending (pending_gateway_code),
     KEY idx_gateway_review_status (review_status, created_at),
     KEY idx_gateway_review_gateway (gateway_code, review_status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付网关状态变更复核申请表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付网关配置变更复核申请表';
 
 CREATE TABLE t_payment_control_policy (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

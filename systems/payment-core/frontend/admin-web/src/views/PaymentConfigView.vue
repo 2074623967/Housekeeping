@@ -15,6 +15,8 @@ const gatewayActionRequester = ref("");
 const gatewayActionReason = ref("");
 const gatewayReviewer = ref("");
 const gatewayReviewComment = ref("");
+const editingGatewayCode = ref("");
+const gatewayForm = ref(createGatewayForm());
 const controlPolicies = ref([]);
 const alertProviders = ref([]);
 const issueDutyRosters = ref([]);
@@ -140,6 +142,31 @@ function createChannelForm() {
     dailyLimit: 0,
     priority: 0,
     routeWeight: 100,
+    changeReason: "",
+    requester: ""
+  };
+}
+
+function createGatewayForm() {
+  return {
+    gatewayCode: "",
+    gatewayName: "",
+    accessMode: "直连",
+    channelScope: "",
+    environmentScope: "生产+预发",
+    apiBaseUrl: "",
+    protocolType: "HTTP+JSON",
+    signAlgorithm: "HMAC-SHA256",
+    certificateAlias: "",
+    certificateStatus: "VALID",
+    releaseStage: "灰度",
+    grayStrategy: "",
+    callbackWhitelist: "",
+    adapterRegistry: "",
+    timeoutMs: 3000,
+    retryPolicy: "失败重试1次+超时查单",
+    enabled: true,
+    priority: 0,
     changeReason: "",
     requester: ""
   };
@@ -946,6 +973,67 @@ async function toggleGateway(gateway) {
   }
 }
 
+function startCreateGateway() {
+  editingGatewayCode.value = "";
+  gatewayForm.value = createGatewayForm();
+  actionMessage.value = "";
+}
+
+function startEditGateway(gateway) {
+  editingGatewayCode.value = gateway.gatewayCode;
+  gatewayForm.value = {
+    gatewayCode: gateway.gatewayCode,
+    gatewayName: gateway.gatewayName,
+    accessMode: gateway.accessMode,
+    channelScope: gateway.channelScope,
+    environmentScope: gateway.environmentScope,
+    apiBaseUrl: gateway.apiBaseUrl,
+    protocolType: gateway.protocolType,
+    signAlgorithm: gateway.signAlgorithm,
+    certificateAlias: gateway.certificateAlias,
+    certificateStatus: gateway.certificateStatus,
+    releaseStage: gateway.releaseStage,
+    grayStrategy: gateway.grayStrategy,
+    callbackWhitelist: gateway.callbackWhitelist,
+    adapterRegistry: gateway.adapterRegistry,
+    timeoutMs: gateway.timeoutMsValue,
+    retryPolicy: gateway.retryPolicy,
+    enabled: gateway.status === "ENABLED",
+    priority: gateway.priority,
+    changeReason: "",
+    requester: ""
+  };
+  actionMessage.value = `正在编辑支付网关 ${gateway.gatewayCode}`;
+}
+
+async function submitGatewayForm() {
+  if (!gatewayForm.value.requester || !gatewayForm.value.changeReason) {
+    actionMessage.value = "支付网关提交复核失败：请填写申请人声明和申请原因。";
+    return;
+  }
+  const gatewayCode = editingGatewayCode.value || gatewayForm.value.gatewayCode;
+  activeConfigCode.value = gatewayCode;
+  actionMessage.value = "";
+  try {
+    const candidate = {
+      ...gatewayForm.value,
+      timeoutMs: Number(gatewayForm.value.timeoutMs),
+      priority: Number(gatewayForm.value.priority)
+    };
+    delete candidate.requester;
+    gatewayReviews.value = await paymentConfigApi.submitGatewayReview({
+      requester: gatewayForm.value.requester,
+      candidate
+    });
+    startCreateGateway();
+    actionMessage.value = `支付网关 ${gatewayCode} 已提交复核，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付网关提交复核失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
 async function loadGatewayReviews() {
   isGatewayReviewLoading.value = true;
   gatewayReviewError.value = "";
@@ -968,7 +1056,7 @@ async function handleGatewayReview(review, approved) {
     return;
   }
   const confirmed = window.confirm(approved
-    ? `确认通过申请 ${review.requestNo} 并应用 ${review.candidateStatus} 状态？`
+      ? `确认通过申请 ${review.requestNo} 并应用 ${review.operationType} 候选？`
     : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
   if (!confirmed) {
     return;
@@ -988,7 +1076,7 @@ async function handleGatewayReview(review, approved) {
     }
     gatewayReviewComment.value = "";
     actionMessage.value = approved
-      ? `支付网关申请 ${review.requestNo} 已通过并应用。`
+      ? `支付网关 ${review.operationType} 申请 ${review.requestNo} 已通过并应用。`
       : `支付网关申请 ${review.requestNo} 已驳回，运行态未改变。`;
   } catch (error) {
     actionMessage.value = `支付网关复核处理失败：${error.message}`;
@@ -1307,7 +1395,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.16</span>
+        <span class="badge info">配置中心 V1.17</span>
       </div>
     </div>
 
@@ -2730,14 +2818,122 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付网关接入管理</h3>
               <p class="meta">统一维护渠道接入模式、协议算法、超时重试和网关基础地址，支撑真实渠道适配器正式化</p>
             </div>
-            <button class="button secondary" @click="exportGovernanceSnapshot('GATEWAYS')">导出网关</button>
+            <div class="toolbar-actions">
+              <button class="button secondary" @click="exportGovernanceSnapshot('GATEWAYS')">导出网关</button>
+              <button class="button secondary" @click="startCreateGateway">新增网关</button>
+            </div>
           </div>
 
           <div class="panel" style="margin-bottom: 16px;">
             <div class="section-title">
               <div>
-                <h3>支付网关状态变更复核</h3>
-                <p class="meta">启停先提交候选，异人声明批准且完整网关基线有效后才更新运行态</p>
+                <h3>{{ editingGatewayCode ? "编辑支付网关" : "新增支付网关" }}</h3>
+                <p class="meta">完整候选经异人声明复核通过后才写入运行态；本表单不执行证书上传、探活或灰度发布动作</p>
+              </div>
+            </div>
+            <div class="filter-grid">
+              <label>
+                网关编码
+                <input v-model.trim="gatewayForm.gatewayCode" :disabled="Boolean(editingGatewayCode)" maxlength="64" placeholder="GATEWAY_WX_ACQ" />
+              </label>
+              <label>
+                网关名称
+                <input v-model.trim="gatewayForm.gatewayName" maxlength="128" />
+              </label>
+              <label>
+                接入模式
+                <input v-model.trim="gatewayForm.accessMode" maxlength="64" placeholder="直连 / 服务商模式" />
+              </label>
+              <label>
+                适用渠道
+                <input v-model.trim="gatewayForm.channelScope" maxlength="256" placeholder="wx_h5,alipay_h5" />
+              </label>
+              <label>
+                环境范围
+                <input v-model.trim="gatewayForm.environmentScope" maxlength="128" placeholder="生产+预发" />
+              </label>
+              <label class="wide-field">
+                网关基础地址
+                <input v-model.trim="gatewayForm.apiBaseUrl" maxlength="256" placeholder="https://..." />
+              </label>
+              <label>
+                报文协议
+                <input v-model.trim="gatewayForm.protocolType" maxlength="64" placeholder="HTTP+JSON" />
+              </label>
+              <label>
+                签名算法
+                <input v-model.trim="gatewayForm.signAlgorithm" maxlength="64" placeholder="HMAC-SHA256 / RSA2" />
+              </label>
+              <label>
+                证书别名
+                <input v-model.trim="gatewayForm.certificateAlias" maxlength="128" />
+              </label>
+              <label>
+                证书状态
+                <select v-model="gatewayForm.certificateStatus">
+                  <option value="VALID">VALID</option>
+                  <option value="EXPIRING_SOON">EXPIRING_SOON</option>
+                  <option value="EXPIRED">EXPIRED</option>
+                  <option value="ARCHIVED">ARCHIVED</option>
+                </select>
+              </label>
+              <label>
+                发布阶段
+                <input v-model.trim="gatewayForm.releaseStage" maxlength="64" placeholder="灰度 / 全量 / 只读演练" />
+              </label>
+              <label class="wide-field">
+                灰度策略
+                <input v-model.trim="gatewayForm.grayStrategy" maxlength="256" />
+              </label>
+              <label class="wide-field">
+                回调白名单
+                <input v-model.trim="gatewayForm.callbackWhitelist" maxlength="256" placeholder="来源网段摘要" />
+              </label>
+              <label class="wide-field">
+                适配器编排
+                <input v-model.trim="gatewayForm.adapterRegistry" maxlength="256" placeholder="submit=...,query=...,refund=..." />
+              </label>
+              <label>
+                超时时间（毫秒）
+                <input v-model.number="gatewayForm.timeoutMs" type="number" min="1" />
+              </label>
+              <label>
+                重试策略
+                <input v-model.trim="gatewayForm.retryPolicy" maxlength="128" />
+              </label>
+              <label>
+                优先级
+                <input v-model.number="gatewayForm.priority" type="number" min="0" />
+              </label>
+              <label>
+                启用状态
+                <select v-model="gatewayForm.enabled">
+                  <option :value="true">启用</option>
+                  <option :value="false">停用</option>
+                </select>
+              </label>
+              <label>
+                申请人声明
+                <input v-model.trim="gatewayForm.requester" maxlength="64" />
+              </label>
+              <label class="wide-field">
+                申请原因
+                <input v-model.trim="gatewayForm.changeReason" maxlength="255" />
+              </label>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button class="button primary" :disabled="activeConfigCode === (editingGatewayCode || gatewayForm.gatewayCode)" @click="submitGatewayForm">
+                {{ editingGatewayCode ? "提交修改复核" : "提交新增复核" }}
+              </button>
+              <button class="button secondary" @click="startCreateGateway">重置表单</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>支付网关配置变更复核</h3>
+                <p class="meta">新增、编辑和启停先提交完整候选，异人声明批准且网关基线有效后才更新运行态</p>
               </div>
               <button class="button secondary" :disabled="isGatewayReviewLoading" @click="loadGatewayReviews">
                 {{ isGatewayReviewLoading ? "加载中..." : "刷新申请" }}
@@ -2765,12 +2961,13 @@ function exportGovernanceSnapshot(section = "ALL") {
               支付网关复核申请加载失败：{{ gatewayReviewError }}
             </div>
             <div v-if="isGatewayReviewLoading" class="state-box">支付网关复核申请加载中...</div>
-            <div v-else-if="!gatewayReviews.length" class="state-box">当前暂无支付网关状态复核申请</div>
+            <div v-else-if="!gatewayReviews.length" class="state-box">当前暂无支付网关配置复核申请</div>
             <div v-else class="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>申请号</th>
+                    <th>操作</th>
                     <th>网关</th>
                     <th>候选状态</th>
                     <th>申请声明</th>
@@ -2783,9 +2980,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <tbody>
                   <tr v-for="review in gatewayReviews" :key="review.requestNo">
                     <td>{{ review.requestNo }}</td>
+                    <td>{{ review.operationType }}</td>
                     <td>
                       {{ review.gatewayCode }} / {{ review.gatewayName }}
-                      <div class="muted-text">{{ review.accessMode }} / 基线 {{ review.baseFingerprint?.slice(0, 12) }}</div>
+                      <div class="muted-text">{{ review.accessMode }} / {{ review.channelScope }} / {{ review.protocolType }}</div>
+                      <div class="muted-text">{{ review.certificateStatus }} / {{ review.releaseStage }} / {{ review.timeoutMs }}ms</div>
+                      <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
                     </td>
                     <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
                     <td>
@@ -2846,6 +3046,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <th>适配器编排</th>
                   <th>超时时间</th>
                   <th>重试策略</th>
+                  <th>优先级</th>
                   <th>状态</th>
                   <th>更新时间</th>
                   <th>操作</th>
@@ -2869,9 +3070,17 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <td class="flow-summary-cell">{{ gateway.adapterRegistry }}</td>
                   <td>{{ gateway.timeoutMs }}</td>
                   <td class="flow-summary-cell">{{ gateway.retryPolicy }}</td>
+                  <td>{{ gateway.priority }}</td>
                   <td><span :class="['badge', gateway.statusType]">{{ gateway.status }}</span></td>
                   <td>{{ gateway.updatedAt }}</td>
                   <td>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === gateway.gatewayCode"
+                      @click="startEditGateway(gateway)"
+                    >
+                      编辑
+                    </button>
                     <button
                       class="link-button"
                       :disabled="activeConfigCode === gateway.gatewayCode"

@@ -12,7 +12,9 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
@@ -996,9 +998,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         PaymentGatewayReviewEntity review = new PaymentGatewayReviewEntity();
         review.setRequestNo("GWR" + UUID.randomUUID().toString().replace("-", ""));
-        review.setGatewayCode(current.getGatewayCode());
-        review.setGatewayName(current.getGatewayName());
-        review.setAccessMode(current.getAccessMode());
+        copyGatewayToReview(current, review);
+        review.setOperationType("STATUS_CHANGE");
         review.setPendingGatewayCode(gatewayCode);
         review.setBaseFingerprint(fingerprintGateway(current));
         review.setCandidateStatus(candidateStatus);
@@ -1016,6 +1017,36 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     @Override
+    @Transactional
+    public List<PaymentGatewayReviewDTO> submitGatewayReview(PaymentGatewayReviewSubmitRequestDTO request) {
+        if (request == null || request.getCandidate() == null) {
+            throw new IllegalArgumentException("支付网关候选快照不能为空");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String gatewayCode = requireImportText(
+                request.getCandidate().getGatewayCode(), "支付网关编码不能为空", 64)
+                .toUpperCase(Locale.ROOT);
+        String reason = requireReviewText(request.getCandidate().getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingGatewayReviewForUpdate(gatewayCode) != null) {
+            throw new IllegalArgumentException("该支付网关已有待复核申请");
+        }
+        PaymentGatewayConfigEntity current = paymentConfigMapper.findGatewayByCodeForUpdate(gatewayCode);
+        PaymentGatewayConfigEntity candidate = buildGatewayEntity(request.getCandidate(), gatewayCode);
+        PaymentGatewayReviewEntity review = new PaymentGatewayReviewEntity();
+        review.setRequestNo("GWR" + UUID.randomUUID().toString().replace("-", ""));
+        copyGatewayToReview(candidate, review);
+        review.setOperationType(current == null ? "CREATE" : "UPDATE");
+        review.setPendingGatewayCode(gatewayCode);
+        review.setBaseFingerprint(current == null ? null : fingerprintGateway(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertGatewayReview(review);
+        return paymentConfigMapper.findGatewayReviews();
+    }
+
+    @Override
     public List<PaymentGatewayReviewDTO> listGatewayReviews() {
         return paymentConfigMapper.findGatewayReviews();
     }
@@ -1028,19 +1059,40 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewer = requireDistinctGatewayReviewer(review, request);
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        boolean createOperation = "CREATE".equals(review.getOperationType());
+        if (!createOperation
+                && !"UPDATE".equals(review.getOperationType())
+                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+            throw new IllegalArgumentException("支付网关复核操作类型不支持");
+        }
         if (!STATUS_ENABLED.equals(review.getCandidateStatus())
                 && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
             throw new IllegalArgumentException("支付网关候选状态不支持");
         }
         PaymentGatewayConfigEntity current = paymentConfigMapper.findGatewayByCodeForUpdate(review.getGatewayCode());
-        if (current == null || review.getBaseFingerprint() == null
+        if (createOperation) {
+            if (current != null) {
+                throw new IllegalArgumentException("支付网关已存在，复核申请基线已失效");
+            }
+        } else if (current == null || review.getBaseFingerprint() == null
                 || !review.getBaseFingerprint().equals(fingerprintGateway(current))) {
             throw new IllegalArgumentException("支付网关配置已变化，请重新提交复核申请");
         }
-        int affectedRows = paymentConfigMapper.updateGatewayStatus(
-                review.getGatewayCode(), review.getCandidateStatus(), review.getCandidateStatusType());
+        PaymentGatewayConfigEntity candidate = buildGatewayEntity(
+                toGatewayUpsertRequest(review), review.getGatewayCode());
+        int affectedRows;
+        try {
+            affectedRows = createOperation
+                    ? paymentConfigMapper.insertGateway(candidate)
+                    : paymentConfigMapper.updateGateway(candidate);
+        } catch (DuplicateKeyException exception) {
+            if (createOperation) {
+                throw new IllegalArgumentException("支付网关已存在，复核申请基线已失效", exception);
+            }
+            throw exception;
+        }
         if (affectedRows == 0) {
-            throw new IllegalArgumentException("支付网关接入配置不存在");
+            throw new IllegalArgumentException(createOperation ? "支付网关新增失败" : "支付网关接入配置不存在");
         }
         completeGatewayReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
         return paymentConfigMapper.findGatewayReviews();
@@ -2473,6 +2525,108 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
     }
 
+    private void insertGatewayReview(PaymentGatewayReviewEntity review) {
+        try {
+            paymentConfigMapper.insertGatewayReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该支付网关已有待复核申请", exception);
+        }
+    }
+
+    private PaymentGatewayConfigEntity buildGatewayEntity(
+            PaymentGatewayUpsertRequestDTO request, String gatewayCode) {
+        if (request.getEnabled() == null) {
+            throw new IllegalArgumentException("支付网关启停状态不能为空");
+        }
+        PaymentGatewayConfigEntity entity = new PaymentGatewayConfigEntity();
+        entity.setGatewayCode(gatewayCode);
+        entity.setGatewayName(requireImportText(request.getGatewayName(), "支付网关名称不能为空", 128));
+        entity.setAccessMode(requireImportText(request.getAccessMode(), "接入模式不能为空", 64));
+        entity.setChannelScope(requireImportText(request.getChannelScope(), "适用渠道范围不能为空", 256));
+        entity.setEnvironmentScope(requireImportText(
+                request.getEnvironmentScope(), "环境范围不能为空", 128));
+        entity.setApiBaseUrl(requireGatewayHttpsUrl(request.getApiBaseUrl()));
+        entity.setProtocolType(requireImportText(request.getProtocolType(), "报文协议不能为空", 64));
+        entity.setSignAlgorithm(requireImportText(request.getSignAlgorithm(), "签名算法不能为空", 64));
+        entity.setCertificateAlias(requireImportText(
+                request.getCertificateAlias(), "证书别名不能为空", 128));
+        String certificateStatus = requireImportText(
+                request.getCertificateStatus(), "证书状态不能为空", 32).toUpperCase(Locale.ROOT);
+        entity.setCertificateStatus(certificateStatus);
+        entity.setCertificateStatusType(resolveCertificateStatusType(certificateStatus));
+        entity.setReleaseStage(requireImportText(request.getReleaseStage(), "发布阶段不能为空", 64));
+        entity.setGrayStrategy(requireImportText(request.getGrayStrategy(), "灰度策略不能为空", 256));
+        entity.setCallbackWhitelist(requireImportText(
+                request.getCallbackWhitelist(), "回调白名单不能为空", 256));
+        entity.setAdapterRegistry(requireImportText(
+                request.getAdapterRegistry(), "适配器编排不能为空", 256));
+        entity.setTimeoutMs(requirePositiveInteger(request.getTimeoutMs(), "网关超时时间必须大于0"));
+        entity.setRetryPolicy(requireImportText(request.getRetryPolicy(), "重试策略不能为空", 128));
+        entity.setStatus(resolveStatus(request.getEnabled()));
+        entity.setStatusType(resolveStatusType(request.getEnabled()));
+        entity.setPriority(requireNonNegativeInteger(request.getPriority(), "网关优先级不能小于0"));
+        return entity;
+    }
+
+    private String resolveCertificateStatusType(String certificateStatus) {
+        if ("VALID".equals(certificateStatus)) {
+            return "success";
+        }
+        if ("EXPIRING_SOON".equals(certificateStatus)) {
+            return "warn";
+        }
+        if ("EXPIRED".equals(certificateStatus) || "ARCHIVED".equals(certificateStatus)) {
+            return "danger";
+        }
+        throw new IllegalArgumentException("证书状态仅支持 VALID/EXPIRING_SOON/EXPIRED/ARCHIVED");
+    }
+
+    private void copyGatewayToReview(PaymentGatewayConfigEntity source, PaymentGatewayReviewEntity target) {
+        target.setGatewayCode(source.getGatewayCode());
+        target.setGatewayName(source.getGatewayName());
+        target.setAccessMode(source.getAccessMode());
+        target.setChannelScope(source.getChannelScope());
+        target.setEnvironmentScope(source.getEnvironmentScope());
+        target.setApiBaseUrl(source.getApiBaseUrl());
+        target.setProtocolType(source.getProtocolType());
+        target.setSignAlgorithm(source.getSignAlgorithm());
+        target.setCertificateAlias(source.getCertificateAlias());
+        target.setCertificateStatus(source.getCertificateStatus());
+        target.setCertificateStatusType(source.getCertificateStatusType());
+        target.setReleaseStage(source.getReleaseStage());
+        target.setGrayStrategy(source.getGrayStrategy());
+        target.setCallbackWhitelist(source.getCallbackWhitelist());
+        target.setAdapterRegistry(source.getAdapterRegistry());
+        target.setTimeoutMs(source.getTimeoutMs());
+        target.setRetryPolicy(source.getRetryPolicy());
+        target.setCandidateStatus(source.getStatus());
+        target.setCandidateStatusType(source.getStatusType());
+        target.setPriority(source.getPriority());
+    }
+
+    private PaymentGatewayUpsertRequestDTO toGatewayUpsertRequest(PaymentGatewayReviewEntity review) {
+        PaymentGatewayUpsertRequestDTO request = new PaymentGatewayUpsertRequestDTO();
+        request.setGatewayCode(review.getGatewayCode());
+        request.setGatewayName(review.getGatewayName());
+        request.setAccessMode(review.getAccessMode());
+        request.setChannelScope(review.getChannelScope());
+        request.setEnvironmentScope(review.getEnvironmentScope());
+        request.setApiBaseUrl(review.getApiBaseUrl());
+        request.setProtocolType(review.getProtocolType());
+        request.setSignAlgorithm(review.getSignAlgorithm());
+        request.setCertificateAlias(review.getCertificateAlias());
+        request.setCertificateStatus(review.getCertificateStatus());
+        request.setReleaseStage(review.getReleaseStage());
+        request.setGrayStrategy(review.getGrayStrategy());
+        request.setCallbackWhitelist(review.getCallbackWhitelist());
+        request.setAdapterRegistry(review.getAdapterRegistry());
+        request.setTimeoutMs(review.getTimeoutMs());
+        request.setRetryPolicy(review.getRetryPolicy());
+        request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getCandidateStatus())));
+        request.setPriority(review.getPriority());
+        return request;
+    }
+
     private String requireDistinctChannelReviewer(
             PaymentChannelReviewEntity review,
             PaymentChannelReviewActionRequestDTO request) {
@@ -2641,6 +2795,19 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException("回调通知地址必须是有效的 HTTPS 地址", exception);
+        }
+        return normalized;
+    }
+
+    private String requireGatewayHttpsUrl(String value) {
+        String normalized = requireImportText(value, "网关基础地址不能为空", 256);
+        try {
+            URI uri = URI.create(normalized);
+            if (!"https".equalsIgnoreCase(uri.getScheme()) || !StringUtils.hasText(uri.getHost())) {
+                throw new IllegalArgumentException("网关基础地址必须是有效的 HTTPS 地址");
+            }
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("网关基础地址必须是有效的 HTTPS 地址", exception);
         }
         return normalized;
     }

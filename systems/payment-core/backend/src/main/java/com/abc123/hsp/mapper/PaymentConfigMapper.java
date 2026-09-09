@@ -176,10 +176,16 @@ public interface PaymentConfigMapper {
     /** 按网关编码加锁查询完整运行配置。 */
     PaymentGatewayConfigEntity findGatewayByCodeForUpdate(@Param("gatewayCode") String gatewayCode);
 
-    /** 查询支付网关状态变更复核申请。 */
+    /** 新增支付网关完整运行配置。 */
+    int insertGateway(PaymentGatewayConfigEntity entity);
+
+    /** 更新支付网关完整运行配置。 */
+    int updateGateway(PaymentGatewayConfigEntity entity);
+
+    /** 查询支付网关配置变更复核申请。 */
     List<PaymentGatewayReviewDTO> findGatewayReviews();
 
-    /** 加锁查询支付网关状态变更复核申请。 */
+    /** 加锁查询支付网关配置变更复核申请。 */
     PaymentGatewayReviewEntity findGatewayReviewForUpdate(@Param("requestNo") String requestNo);
 
     /** 按唯一占位加锁查询网关待复核申请。 */
@@ -404,17 +410,10 @@ public interface PaymentConfigMapper {
                                        @Param("reviewComment") String reviewComment,
                                        @Param("appliedBatchNo") String appliedBatchNo);
 
-    /**
-     * 更新支付网关启停状态。
-     */
-    int updateGatewayStatus(@Param("gatewayCode") String gatewayCode,
-                            @Param("status") String status,
-                            @Param("statusType") String statusType);
-
-    /** 新增支付网关状态变更复核申请。 */
+    /** 新增支付网关配置变更复核申请。 */
     int insertGatewayReview(PaymentGatewayReviewEntity entity);
 
-    /** 完成支付网关状态变更复核申请并释放唯一待办占位。 */
+    /** 完成支付网关配置变更复核申请并释放唯一待办占位。 */
     int completeGatewayReview(@Param("requestNo") String requestNo,
                               @Param("reviewStatus") String reviewStatus,
                               @Param("reviewStatusType") String reviewStatusType,

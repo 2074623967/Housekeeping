@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
@@ -214,7 +215,10 @@ public interface PaymentConfigService {
     /** 提交支付网关启停候选，不改变运行态。 */
     List<PaymentGatewayReviewDTO> submitGatewayStatusReview(PaymentGatewayStatusReviewRequestDTO request);
 
-    /** 查询支付网关状态变更复核申请。 */
+    /** 提交支付网关新增或编辑完整候选进入复核。 */
+    List<PaymentGatewayReviewDTO> submitGatewayReview(PaymentGatewayReviewSubmitRequestDTO request);
+
+    /** 查询支付网关配置变更复核申请。 */
     List<PaymentGatewayReviewDTO> listGatewayReviews();
 
     /** 通过复核并应用支付网关状态候选。 */

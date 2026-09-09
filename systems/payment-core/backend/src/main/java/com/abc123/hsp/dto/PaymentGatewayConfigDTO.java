@@ -40,12 +40,16 @@ public class PaymentGatewayConfigDTO {
     private String adapterRegistry;
     /** 超时时间。 */
     private String timeoutMs;
+    /** 超时时间毫秒原值。 */
+    private Integer timeoutMsValue;
     /** 重试策略。 */
     private String retryPolicy;
     /** 网关状态。 */
     private String status;
     /** 网关状态样式。 */
     private String statusType;
+    /** 网关优先级。 */
+    private Integer priority;
     /** 更新时间。 */
     private String updatedAt;
 }

@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
@@ -359,13 +360,20 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.submitGatewayStatusReview(request));
     }
 
-    /** 查询支付网关状态变更复核申请。 */
+    /** 查询支付网关配置变更复核申请。 */
     @GetMapping("/gateways/reviews")
     public ApiResponse<List<PaymentGatewayReviewDTO>> listGatewayReviews() {
         return ApiResponse.success(paymentConfigService.listGatewayReviews());
     }
 
-    /** 通过支付网关状态变更复核并应用候选。 */
+    /** 提交支付网关新增或编辑完整候选进入复核。 */
+    @PostMapping("/gateways/reviews")
+    public ApiResponse<List<PaymentGatewayReviewDTO>> submitGatewayReview(
+            @RequestBody PaymentGatewayReviewSubmitRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitGatewayReview(request));
+    }
+
+    /** 通过支付网关配置变更复核并应用候选。 */
     @PostMapping("/gateways/reviews/{requestNo}/approve")
     public ApiResponse<List<PaymentGatewayReviewDTO>> approveGatewayReview(
             @PathVariable("requestNo") String requestNo,
@@ -373,7 +381,7 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.approveGatewayReview(requestNo, request));
     }
 
-    /** 驳回支付网关状态变更复核，不改变运行态。 */
+    /** 驳回支付网关配置变更复核，不改变运行态。 */
     @PostMapping("/gateways/reviews/{requestNo}/reject")
     public ApiResponse<List<PaymentGatewayReviewDTO>> rejectGatewayReview(
             @PathVariable("requestNo") String requestNo,
