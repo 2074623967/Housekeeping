@@ -67,3 +67,8 @@ export function resolvePaymentResultState(paymentStatus) {
   }
   return "pending";
 }
+
+export function isPaymentSubmissionPending(cashierStatus, attemptStatus) {
+  return ["支付中", "待回调", "结果待确认"].includes(cashierStatus)
+    || ["渠道提交中", "结果未知，待查单"].includes(attemptStatus);
+}

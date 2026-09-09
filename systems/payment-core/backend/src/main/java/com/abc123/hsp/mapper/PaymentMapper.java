@@ -255,6 +255,14 @@ public interface PaymentMapper {
             @Param("attemptStatusType") String attemptStatusType);
 
     /**
+     * 按支付尝试号回写渠道提交结果，避免覆盖同一支付单的历史尝试。
+     */
+    void updatePaymentAttemptSubmitResult(@Param("attemptNo") String attemptNo,
+                                          @Param("responsePayload") String responsePayload,
+                                          @Param("attemptStatus") String attemptStatus,
+                                          @Param("attemptStatusType") String attemptStatusType);
+
+    /**
      * 写入独立支付处理日志；相同来源事实重复写入时保持幂等。
      */
     int insertPaymentProcessLog(PaymentProcessLogEntity entity);

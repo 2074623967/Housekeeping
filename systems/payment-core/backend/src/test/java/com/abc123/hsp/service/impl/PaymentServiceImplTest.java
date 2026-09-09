@@ -46,6 +46,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * 支付状态收口规则单元测试。
@@ -90,6 +93,12 @@ class PaymentServiceImplTest {
 
     @Mock
     private PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
+
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
+    @Mock
+    private TransactionStatus transactionStatus;
 
     @Test
     void shouldApplySharedRateLimitBeforeCallingPaymentChannel() {
@@ -800,6 +809,11 @@ class PaymentServiceImplTest {
                                 && payload.contains("\"sourceAppId\":\"housekeeping-pc-web\"")
                                 && payload.contains("\"resolvedChannelCode\":\"offline_bank\"")
                                 && payload.contains("\"idempotencyKey\":\"IDEMP-\\\"300\"")),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq("渠道提交中"),
+                org.mockito.ArgumentMatchers.eq("warn"));
+        verify(paymentMapper).updatePaymentAttemptSubmitResult(
+                org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}"),
                 org.mockito.ArgumentMatchers.eq("处理中"),
                 org.mockito.ArgumentMatchers.eq("info"));
@@ -810,7 +824,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
                 "PAYMENT_ATTEMPT".equals(log.getSourceType())
                         && log.getRequestNo().equals(log.getSourceNo())
-                        && log.getMessage().contains("请求状态=处理中")
+                        && log.getMessage().contains("请求状态=渠道提交中")
                         && !log.getMessage().contains("10.0.0.3")
                         && !log.getMessage().contains("IDEMP-\"300")
                         && !log.getMessage().contains("请求报文")));
@@ -825,6 +839,99 @@ class PaymentServiceImplTest {
                         && !log.getMessage().contains("CHANNEL-300")
                         && !log.getMessage().contains("；结果=")));
         org.junit.jupiter.api.Assertions.assertEquals("PRE-300", result.getPrepayOrderNo());
+    }
+
+    @Test
+    void shouldPersistUnknownResultWhenChannelAcceptedButFinalizationFails() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-UNKNOWN-001");
+        prepay.setPaymentOrderId("PAY-UNKNOWN-001");
+        prepay.setOrderNo("ORD-UNKNOWN-001");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("168.00");
+        prepay.setCustomerName("张女士");
+        when(paymentMapper.findPrepay("PRE-UNKNOWN-001")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-UNKNOWN-001");
+        detail.setOrderNo("ORD-UNKNOWN-001");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-UNKNOWN-001")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("PASS");
+        when(paymentRiskControlService.evaluateSubmitRisk(
+                org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class))).thenReturn(riskDecision);
+        when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-UNKNOWN-001")).thenReturn("ORD-UNKNOWN-001");
+        when(paymentMapper.updatePrepayToPaying("PRE-UNKNOWN-001")).thenReturn(1);
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+
+        PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
+        submitResult.setChannelTransactionNo("WX-UNKNOWN-001");
+        submitResult.setResponsePayload("{\"code\":\"ACCEPTED\"}");
+        submitResult.setAttemptStatus("待回调");
+        submitResult.setAttemptStatusType("warn");
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+        org.mockito.Mockito.doThrow(new IllegalStateException("finalization failed"))
+                .when(paymentMapper).updatePaymentAttemptSubmitResult(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.eq("{\"code\":\"ACCEPTED\"}"),
+                        org.mockito.ArgumentMatchers.eq("待回调"),
+                        org.mockito.ArgumentMatchers.eq("warn"));
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-UNKNOWN-001");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setIdempotencyKey("IDEMP-UNKNOWN-001");
+
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService,
+                paymentChannelQueryRateLimitService,
+                new com.abc123.hsp.service.support.PaymentSensitiveDataMasker(
+                        new com.fasterxml.jackson.databind.ObjectMapper()),
+                transactionManager);
+
+        assertThrows(IllegalStateException.class, () -> service.submit(request));
+
+        org.mockito.InOrder transactionOrder = org.mockito.Mockito.inOrder(
+                transactionManager, paymentChannelSubmitService);
+        transactionOrder.verify(transactionManager).getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class));
+        transactionOrder.verify(transactionManager).commit(transactionStatus);
+        transactionOrder.verify(paymentChannelSubmitService).submit(org.mockito.ArgumentMatchers.any());
+        transactionOrder.verify(transactionManager).getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class));
+        transactionOrder.verify(transactionManager).rollback(transactionStatus);
+        transactionOrder.verify(transactionManager).getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class));
+        transactionOrder.verify(transactionManager).commit(transactionStatus);
+        verify(paymentMapper).updatePaymentAttemptSubmitResult(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("{\"code\":\"ACCEPTED\"}"),
+                org.mockito.ArgumentMatchers.eq("结果未知，待查单"),
+                org.mockito.ArgumentMatchers.eq("danger"));
+        verify(paymentMapper).updatePrepayStatusByPaymentOrderId(
+                "PAY-UNKNOWN-001", "结果待确认", "danger");
+        verify(paymentMapper).updatePaymentStatus(
+                "PAY-UNKNOWN-001", "WAIT_CALLBACK", "danger", "WX-UNKNOWN-001");
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(
+                "PAY-UNKNOWN-001", "SUBMIT_EXCEPTION");
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                "PAY-UNKNOWN-001", "待支付", "warn");
     }
 
     @Test

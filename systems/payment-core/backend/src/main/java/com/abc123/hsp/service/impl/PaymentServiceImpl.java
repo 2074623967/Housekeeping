@@ -43,11 +43,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -67,6 +71,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentOpsConfigService paymentOpsConfigService;
     private final PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
+    private final TransactionTemplate submitTransactionTemplate;
 
     @Autowired
     public PaymentServiceImpl(
@@ -79,7 +84,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentRiskControlService paymentRiskControlService,
             PaymentOpsConfigService paymentOpsConfigService,
             PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService,
-            PaymentSensitiveDataMasker sensitiveDataMasker) {
+            PaymentSensitiveDataMasker sensitiveDataMasker,
+            PlatformTransactionManager transactionManager) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
@@ -90,6 +96,37 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentOpsConfigService = paymentOpsConfigService;
         this.paymentChannelQueryRateLimitService = paymentChannelQueryRateLimitService;
         this.sensitiveDataMasker = sensitiveDataMasker;
+        this.submitTransactionTemplate = transactionManager == null
+                ? null
+                : new TransactionTemplate(transactionManager);
+        if (this.submitTransactionTemplate != null) {
+            this.submitTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
+    }
+
+    PaymentServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentCallbackSignatureService paymentCallbackSignatureService,
+            PaymentChannelRoutingService paymentChannelRoutingService,
+            PaymentChannelQueryService paymentChannelQueryService,
+            PaymentChannelSubmitService paymentChannelSubmitService,
+            PaymentEventDispatchService paymentEventDispatchService,
+            PaymentRiskControlService paymentRiskControlService,
+            PaymentOpsConfigService paymentOpsConfigService,
+            PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService,
+            PaymentSensitiveDataMasker sensitiveDataMasker) {
+        this(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService,
+                paymentChannelQueryRateLimitService,
+                sensitiveDataMasker,
+                null);
     }
 
     PaymentServiceImpl(
@@ -359,7 +396,6 @@ public class PaymentServiceImpl implements PaymentService {
         return cashierPage;
     }
 
-    @Transactional
     @Override
     public PrepayOrderDTO submit(PaymentSubmitRequestDTO request) {
         PrepayOrderDTO currentPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
@@ -405,15 +441,88 @@ public class PaymentServiceImpl implements PaymentService {
                         terminal,
                         clientIp));
         if (!"PASS".equalsIgnoreCase(riskDecision.getDecision())) {
-            return handleRiskDecision(
-                    request,
-                    currentPrepay,
-                    currentDetail,
-                    resolvedChannelCode,
-                    riskDecision);
+            return executeSubmitTransaction(() -> handleRiskDecision(
+                        request,
+                        currentPrepay,
+                        currentDetail,
+                        resolvedChannelCode,
+                        riskDecision));
         }
         if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
+            return currentPrepay;
+        }
+        String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
+        String routeNo = buildBusinessNo("RTR");
+        String attemptNo = buildBusinessNo("ATT");
+        String requestPayload = buildSubmitRequestPayload(
+                request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode);
+        PrepayOrderDTO concurrentResult = executeSubmitTransaction(() -> prepareSubmit(
+                request,
+                currentPrepay,
+                paymentOrderId,
+                sourceAppId,
+                terminal,
+                clientIp,
+                idempotencyKey,
+                routeDecision,
+                orderNo,
+                routeNo,
+                attemptNo,
+                requestPayload,
+                opsConfigSnapshotVersion));
+        if (concurrentResult != null) {
+            return concurrentResult;
+        }
+        PaymentChannelSubmitResultDTO submitResult = null;
+        try {
+            submitResult = paymentChannelSubmitService.submit(
+                    buildSubmitAdapterRequest(
+                            request,
+                            currentPrepay,
+                            paymentOrderId,
+                            sourceAppId,
+                            resolvedChannelCode,
+                            terminal,
+                            clientIp,
+                            idempotencyKey));
+            PaymentChannelSubmitResultDTO finalSubmitResult = submitResult;
+            return executeSubmitTransaction(() -> completeSubmit(
+                    request,
+                    paymentOrderId,
+                    resolvedChannelCode,
+                    orderNo,
+                    attemptNo,
+                    finalSubmitResult));
+        } catch (RuntimeException exception) {
+            PaymentChannelSubmitResultDTO uncertainResult = submitResult;
+            try {
+                executeSubmitTransaction(() -> {
+                    markSubmitResultUnknown(paymentOrderId, attemptNo, uncertainResult);
+                    return null;
+                });
+            } catch (RuntimeException recoveryException) {
+                exception.addSuppressed(recoveryException);
+            }
+            throw exception;
+        }
+    }
+
+    private PrepayOrderDTO prepareSubmit(
+            PaymentSubmitRequestDTO request,
+            PrepayOrderDTO currentPrepay,
+            String paymentOrderId,
+            String sourceAppId,
+            String terminal,
+            String clientIp,
+            String idempotencyKey,
+            PaymentRouteDecisionDTO routeDecision,
+            String orderNo,
+            String routeNo,
+            String attemptNo,
+            String requestPayload,
+            Long opsConfigSnapshotVersion) {
+        if (paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey)) {
             return currentPrepay;
         }
         occupySubmitConcurrencyToken(
@@ -438,120 +547,137 @@ public class PaymentServiceImpl implements PaymentService {
             }
             throw new BusinessException(ErrorCode.PAYMENT_SUBMIT_IN_PROGRESS, "支付提交处理中，请稍后刷新结果");
         }
-        try {
-            PaymentChannelSubmitResultDTO submitResult = paymentChannelSubmitService.submit(
-                    buildSubmitAdapterRequest(
-                            request,
-                            currentPrepay,
-                            paymentOrderId,
-                            sourceAppId,
-                            resolvedChannelCode,
-                            terminal,
-                            clientIp,
-                            idempotencyKey));
-            // 收银台提交后，补齐支付单上的支付方式和渠道。
-            paymentMapper.updatePaymentMethodAndChannel(
-                    paymentOrderId,
-                    request.getPaymentMethod(),
-                    resolvedChannelCode,
-                    submitResult.getChannelTransactionNo());
-            paymentMapper.updatePaymentReturnCodeSnapshot(
-                    paymentOrderId,
-                    submitResult.getChannelReturnCode(),
-                    submitResult.getStandardizedCode(),
-                    submitResult.getStandardizedMessage(),
-                    submitResult.getHandlingSuggestion(),
-                    submitResult.getRetryable(),
-                    submitResult.getManualInterventionRequired(),
-                    submitResult.getMappingVersion(),
-                    submitResult.getReturnCodeMappingMatched());
-            String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
-            String routeNo = buildBusinessNo("RTR");
-            paymentMapper.insertRouteRecord(
-                    routeNo,
-                    paymentOrderId,
-                    resolvedChannelCode,
-                    routeDecision.getRouteRule(),
-                    routeDecision.getRouteResult());
-            String attemptNo = buildBusinessNo("ATT");
-            String requestPayload = buildSubmitRequestPayload(
-                    request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode);
-            recordProcessLog(
-                    routeNo,
-                    paymentOrderId,
-                    orderNo,
-                    attemptNo,
-                    "PAYMENT_ROUTE",
-                    "支付路由",
-                    "info",
-                    "路由规则=" + routeDecision.getRouteRule() + "；路由结果=" + routeDecision.getRouteResult(),
-                    resolvedChannelCode);
-            paymentMapper.insertPaymentAttempt(
-                    attemptNo,
-                    request.getPrepayOrderNo(),
-                    paymentOrderId,
-                    resolvedChannelCode,
-                    request.getPaymentMethod(),
-                    sourceAppId,
-                    terminal,
-                    clientIp,
-                    idempotencyKey,
-                    requestPayload,
-                    submitResult.getResponsePayload(),
-                    submitResult.getAttemptStatus(),
-                    submitResult.getAttemptStatusType()
-            );
-            recordProcessLog(
-                    attemptNo,
-                    paymentOrderId,
-                    orderNo,
-                    attemptNo,
-                    "PAYMENT_ATTEMPT",
-                    "支付提交",
-                    submitResult.getAttemptStatusType(),
-                    "支付方式=" + request.getPaymentMethod()
-                            + "；请求状态=" + submitResult.getAttemptStatus(),
-                    resolvedChannelCode);
-            if (opsConfigSnapshotVersion != null) {
-                paymentMapper.updateRouteOpsConfigSnapshotVersion(routeNo, opsConfigSnapshotVersion);
-                paymentMapper.updateAttemptOpsConfigSnapshotVersion(attemptNo, opsConfigSnapshotVersion);
-            }
-            String eventNo = buildBusinessNo("EVT");
-            String eventPayload = "{\"channel\":\"" + resolvedChannelCode
-                    + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}";
-            paymentMapper.insertEvent(
-                    eventNo,
-                    "PAYMENT_SUBMIT",
-                    paymentOrderId,
-                    orderNo,
-                    eventPayload);
-            recordEventProcessLog(eventNo, "PAYMENT_SUBMIT", paymentOrderId, orderNo);
-            String notifyNo = buildBusinessNo("NTF");
-            paymentMapper.insertNotifyLog(
-                    notifyNo,
-                    paymentOrderId,
-                    resolvedChannelCode,
-                    "SUBMIT",
-                    "{\"method\":\"" + request.getPaymentMethod() + "\"}",
-                    submitResult.getResponsePayload(),
-                    "待回调",
-                    "warn"
-            );
-            recordNotifyProcessLog(
-                    notifyNo,
-                    paymentOrderId,
-                    orderNo,
-                    attemptNo,
-                    resolvedChannelCode,
-                    "SUBMIT",
-                    "待回调",
-                    "warn");
-            return paymentMapper.findPrepay(request.getPrepayOrderNo());
-        } catch (RuntimeException exception) {
-            paymentMapper.releaseSubmitConcurrencyToken(paymentOrderId, "SUBMIT_EXCEPTION");
-            paymentMapper.updatePrepayStatusByPaymentOrderId(paymentOrderId, "待支付", "warn");
-            throw exception;
+        String resolvedChannelCode = routeDecision.getChannelCode();
+        paymentMapper.updatePaymentMethodAndChannel(
+                paymentOrderId, request.getPaymentMethod(), resolvedChannelCode, null);
+        paymentMapper.insertRouteRecord(
+                routeNo,
+                paymentOrderId,
+                resolvedChannelCode,
+                routeDecision.getRouteRule(),
+                routeDecision.getRouteResult());
+        recordProcessLog(
+                routeNo,
+                paymentOrderId,
+                orderNo,
+                attemptNo,
+                "PAYMENT_ROUTE",
+                "支付路由",
+                "info",
+                "路由规则=" + routeDecision.getRouteRule() + "；路由结果=" + routeDecision.getRouteResult(),
+                resolvedChannelCode);
+        paymentMapper.insertPaymentAttempt(
+                attemptNo,
+                request.getPrepayOrderNo(),
+                paymentOrderId,
+                resolvedChannelCode,
+                request.getPaymentMethod(),
+                sourceAppId,
+                terminal,
+                clientIp,
+                idempotencyKey,
+                requestPayload,
+                null,
+                "渠道提交中",
+                "warn");
+        recordProcessLog(
+                attemptNo,
+                paymentOrderId,
+                orderNo,
+                attemptNo,
+                "PAYMENT_ATTEMPT",
+                "支付提交",
+                "warn",
+                "支付方式=" + request.getPaymentMethod() + "；请求状态=渠道提交中",
+                resolvedChannelCode);
+        if (opsConfigSnapshotVersion != null) {
+            paymentMapper.updateRouteOpsConfigSnapshotVersion(routeNo, opsConfigSnapshotVersion);
+            paymentMapper.updateAttemptOpsConfigSnapshotVersion(attemptNo, opsConfigSnapshotVersion);
         }
+        return null;
+    }
+
+    private PrepayOrderDTO completeSubmit(
+            PaymentSubmitRequestDTO request,
+            String paymentOrderId,
+            String resolvedChannelCode,
+            String orderNo,
+            String attemptNo,
+            PaymentChannelSubmitResultDTO submitResult) {
+        paymentMapper.updatePaymentMethodAndChannel(
+                paymentOrderId,
+                request.getPaymentMethod(),
+                resolvedChannelCode,
+                submitResult.getChannelTransactionNo());
+        paymentMapper.updatePaymentReturnCodeSnapshot(
+                paymentOrderId,
+                submitResult.getChannelReturnCode(),
+                submitResult.getStandardizedCode(),
+                submitResult.getStandardizedMessage(),
+                submitResult.getHandlingSuggestion(),
+                submitResult.getRetryable(),
+                submitResult.getManualInterventionRequired(),
+                submitResult.getMappingVersion(),
+                submitResult.getReturnCodeMappingMatched());
+        paymentMapper.updatePaymentAttemptSubmitResult(
+                attemptNo,
+                submitResult.getResponsePayload(),
+                submitResult.getAttemptStatus(),
+                submitResult.getAttemptStatusType());
+        String eventNo = buildBusinessNo("EVT");
+        String eventPayload = "{\"channel\":\"" + escapeJson(resolvedChannelCode)
+                + "\",\"paymentMethod\":\"" + escapeJson(request.getPaymentMethod()) + "\"}";
+        paymentMapper.insertEvent(
+                eventNo,
+                "PAYMENT_SUBMIT",
+                paymentOrderId,
+                orderNo,
+                eventPayload);
+        recordEventProcessLog(eventNo, "PAYMENT_SUBMIT", paymentOrderId, orderNo);
+        String notifyNo = buildBusinessNo("NTF");
+        paymentMapper.insertNotifyLog(
+                notifyNo,
+                paymentOrderId,
+                resolvedChannelCode,
+                "SUBMIT",
+                "{\"method\":\"" + escapeJson(request.getPaymentMethod()) + "\"}",
+                submitResult.getResponsePayload(),
+                "待回调",
+                "warn");
+        recordNotifyProcessLog(
+                notifyNo,
+                paymentOrderId,
+                orderNo,
+                attemptNo,
+                resolvedChannelCode,
+                "SUBMIT",
+                "待回调",
+                "warn");
+        return paymentMapper.findPrepay(request.getPrepayOrderNo());
+    }
+
+    private void markSubmitResultUnknown(
+            String paymentOrderId,
+            String attemptNo,
+            PaymentChannelSubmitResultDTO submitResult) {
+        String responsePayload = submitResult == null ? null : submitResult.getResponsePayload();
+        paymentMapper.updatePaymentAttemptSubmitResult(
+                attemptNo, responsePayload, "结果未知，待查单", "danger");
+        paymentMapper.updatePrepayStatusByPaymentOrderId(paymentOrderId, "结果待确认", "danger");
+        if (submitResult != null && StringUtils.hasText(submitResult.getChannelTransactionNo())) {
+            paymentMapper.updatePaymentStatus(
+                    paymentOrderId,
+                    "WAIT_CALLBACK",
+                    "danger",
+                    submitResult.getChannelTransactionNo());
+        }
+    }
+
+    private <T> T executeSubmitTransaction(Supplier<T> action) {
+        if (submitTransactionTemplate == null) {
+            return action.get();
+        }
+        return submitTransactionTemplate.execute(status -> action.get());
     }
 
     /**

@@ -458,6 +458,14 @@
         VALUES (#{attemptNo}, #{prepayOrderNo}, #{paymentOrderId}, #{channelCode}, #{paymentMethod}, #{sourceAppId}, #{terminal}, #{clientIp}, #{idempotencyKey}, #{requestPayload}, #{responsePayload}, #{attemptStatus}, #{attemptStatusType}, NOW())
     </insert>
 
+    <update id="updatePaymentAttemptSubmitResult">
+        UPDATE t_payment_attempt
+        SET response_payload = #{responsePayload},
+            attempt_status = #{attemptStatus},
+            attempt_status_type = #{attemptStatusType}
+        WHERE attempt_no = #{attemptNo}
+    </update>
+
     <insert id="insertPaymentProcessLog">
         INSERT INTO t_payment_process_log(
             log_no,

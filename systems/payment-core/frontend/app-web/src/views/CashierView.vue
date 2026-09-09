@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
-import { resolvePaymentChannelCode } from "../constants/payment";
+import { isPaymentSubmissionPending, resolvePaymentChannelCode } from "../constants/payment";
 import {
   persistPaymentAccessToken,
   readPaymentAccessToken,
@@ -161,7 +161,9 @@ async function loadCashier() {
   try {
     syncAccessToken();
     cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
-    idempotencyKey.value = generateIdempotencyKey();
+    if (!idempotencyKey.value) {
+      idempotencyKey.value = generateIdempotencyKey();
+    }
     if (cashier.value?.channels?.length > 0) {
       selectedPaymentMethod.value = cashier.value.channels[0];
     }
@@ -199,13 +201,24 @@ const channels = computed(() => cashier.value?.channels || []);
 const hasChannels = computed(() => channels.value.length > 0);
 const selectedChannelMeta = computed(() => CHANNEL_META[selectedPaymentMethod.value] || null);
 const selectedChannelCode = computed(() => resolvePaymentChannelCode(selectedPaymentMethod.value));
+const submissionPending = computed(() => {
+  return isPaymentSubmissionPending(
+    cashier.value?.status,
+    latestQueriedDetail.value?.latestAttemptStatus
+  );
+});
 const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
 });
 const canSubmit = computed(() => {
   const status = cashier.value?.status;
-  return hasChannels.value && status !== "待风控复核" && status !== "支付成功" && countdownSeconds.value > 0;
+  return hasChannels.value
+    && !submissionPending.value
+    && status !== "待风控复核"
+    && status !== "支付成功"
+    && status !== "已关闭"
+    && countdownSeconds.value > 0;
 });
 const submitBlockedHint = computed(() => {
   const status = cashier.value?.status;
@@ -214,6 +227,12 @@ const submitBlockedHint = computed(() => {
   }
   if (status === "支付成功") {
     return "当前支付单已支付成功，无需再次提交。";
+  }
+  if (submissionPending.value) {
+    return "当前支付结果尚未确认，请先主动查单。";
+  }
+  if (status === "已关闭") {
+    return "当前支付单已关闭，请重新发起支付。";
   }
   if (countdownSeconds.value <= 0) {
     return "当前收银台会话已过期，请关闭后重新拉起新的预付单。";
@@ -245,7 +264,9 @@ const countdownLabel = computed(() => {
   const seconds = String(countdownSeconds.value % 60).padStart(2, "0");
   return `${hours}:${minutes}:${seconds}`;
 });
-const canClose = computed(() => Boolean(cashier.value?.paymentOrderId) && countdownSeconds.value > 0);
+const canClose = computed(() => Boolean(cashier.value?.paymentOrderId)
+  && !submissionPending.value
+  && countdownSeconds.value > 0);
 const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const countdownRiskLevel = computed(() => {
   if (countdownSeconds.value <= 0) {
@@ -365,7 +386,16 @@ async function pay() {
       query: buildResultRouteQuery(submitResult?.prepayOrderNo, selectedPaymentMethod.value)
     });
   } catch (error) {
-    message.value = error.message;
+    try {
+      cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
+      startCountdown(cashier.value?.expiresAt);
+    } catch (refreshError) {
+      message.value = error.message;
+      return;
+    }
+    message.value = submissionPending.value
+      ? "支付结果尚未确认，当前请求已锁定，请先主动查单。"
+      : error.message;
   } finally {
     submitLoading.value = false;
   }
@@ -389,6 +419,10 @@ async function closeCurrentPayment() {
 }
 
 function regenerateIdempotencyKey() {
+  if (submissionPending.value) {
+    message.value = "支付结果尚未确认，不能重置幂等键。";
+    return;
+  }
   idempotencyKey.value = generateIdempotencyKey();
   message.value = "已重新生成本次支付的幂等键，可用于重新联调当前支付方式。";
 }
@@ -423,7 +457,9 @@ function syncAccessToken() {
 }
 
 watch(selectedPaymentMethod, () => {
-  idempotencyKey.value = generateIdempotencyKey();
+  if (!submissionPending.value) {
+    idempotencyKey.value = generateIdempotencyKey();
+  }
 });
 </script>
 
@@ -467,6 +503,7 @@ watch(selectedPaymentMethod, () => {
             type="button"
             class="channel-card"
             :class="{ active: selectedPaymentMethod === item }"
+            :disabled="submissionPending"
             @click="selectedPaymentMethod = item"
           >
             <div class="channel-icon">{{ CHANNEL_META[item]?.icon || "PAY" }}</div>
@@ -513,7 +550,7 @@ watch(selectedPaymentMethod, () => {
           <button class="action-button ghost" :disabled="closeLoading || !canClose" @click="closeCurrentPayment">
             {{ closeLoading ? "关闭中..." : terminalMeta.closeLabel }}
           </button>
-          <button class="action-button secondary" @click="regenerateIdempotencyKey">
+          <button class="action-button secondary" :disabled="submissionPending" @click="regenerateIdempotencyKey">
             重置幂等键
           </button>
         </div>
