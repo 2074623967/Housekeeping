@@ -34,6 +34,8 @@ DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_channel_review;
 DROP TABLE IF EXISTS t_payment_gateway_review;
 DROP TABLE IF EXISTS t_payment_gateway_config;
+DROP TABLE IF EXISTS t_payment_control_policy_review;
+DROP TABLE IF EXISTS t_payment_control_policy_version;
 DROP TABLE IF EXISTS t_payment_control_policy;
 DROP TABLE IF EXISTS t_payment_protocol_config;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
@@ -438,11 +440,37 @@ CREATE TABLE t_payment_control_policy (
     KEY idx_control_policy_status (status, source_app_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付控制策略表';
 
+CREATE TABLE t_payment_control_policy_version (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识',
+    version_no INT NOT NULL COMMENT '不可变版本号',
+    source_app_name VARCHAR(128) NOT NULL COMMENT '来源应用名称快照',
+    allowed_payment_methods VARCHAR(255) NOT NULL COMMENT '允许支付方式快照',
+    allowed_channel_codes VARCHAR(255) NOT NULL COMMENT '允许渠道快照',
+    allowed_merchant_nos VARCHAR(255) NOT NULL COMMENT '允许商户号快照',
+    minute_submit_limit INT NOT NULL COMMENT '分钟级提交限流快照',
+    interface_minute_submit_limit INT NOT NULL COMMENT '接口级分钟限流快照',
+    token_auth_required VARCHAR(32) NOT NULL COMMENT '令牌鉴权开关快照',
+    access_token_value VARCHAR(128) NOT NULL COMMENT '接口访问令牌快照，不对管理查询返回',
+    strict_mode VARCHAR(32) NOT NULL COMMENT '严格模式快照',
+    status VARCHAR(32) NOT NULL COMMENT '策略状态快照',
+    status_type VARCHAR(32) NOT NULL COMMENT '策略状态样式快照',
+    change_type VARCHAR(32) NOT NULL COMMENT 'BASELINE/REVIEW_RELEASE/REVIEW_STATUS_CHANGE/REVIEW_ROLLBACK',
+    source_version_no INT DEFAULT NULL COMMENT '回滚来源版本号',
+    change_reason VARCHAR(255) NOT NULL COMMENT '变更原因',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_control_policy_version (source_app_id, version_no),
+    KEY idx_control_policy_version_created (source_app_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付控制策略不可变版本表';
+
 CREATE TABLE t_payment_control_policy_review (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
     source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识快照',
-    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE',
+    base_version_no INT DEFAULT NULL COMMENT '提交时当前版本号，新增时为空',
+    source_version_no INT DEFAULT NULL COMMENT '回滚目标历史版本号',
+    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE/ROLLBACK',
     source_app_name VARCHAR(128) NOT NULL COMMENT '来源应用名称候选',
     allowed_payment_methods VARCHAR(255) NOT NULL COMMENT '允许支付方式候选',
     allowed_channel_codes VARCHAR(255) NOT NULL COMMENT '允许渠道候选',

@@ -942,10 +942,67 @@
         FOR UPDATE
     </select>
 
+    <select id="findControlPolicyVersions"
+            resultType="com.abc123.hsp.dto.PaymentControlPolicyVersionDTO">
+        SELECT source_app_id AS sourceAppId,
+               version_no AS versionNo,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               CASE WHEN access_token_value IS NULL OR access_token_value = '' THEN 0 ELSE 1 END
+                   AS accessTokenConfigured,
+               strict_mode AS strictMode,
+               status,
+               status_type AS statusType,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_payment_control_policy_version
+        WHERE source_app_id = #{sourceAppId}
+        ORDER BY version_no DESC
+    </select>
+
+    <select id="findControlPolicyVersion"
+            resultType="com.abc123.hsp.entity.PaymentControlPolicyVersionEntity">
+        SELECT source_app_id AS sourceAppId,
+               version_no AS versionNo,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               access_token_value AS accessTokenValue,
+               strict_mode AS strictMode,
+               status,
+               status_type AS statusType,
+               change_type AS changeType,
+               source_version_no AS sourceVersionNo,
+               change_reason AS changeReason
+        FROM t_payment_control_policy_version
+        WHERE source_app_id = #{sourceAppId}
+          AND version_no = #{versionNo}
+        LIMIT 1
+    </select>
+
+    <select id="findLatestControlPolicyVersionNo" resultType="int">
+        SELECT MAX(version_no)
+        FROM t_payment_control_policy_version
+        WHERE source_app_id = #{sourceAppId}
+    </select>
+
     <select id="findControlPolicyReviews"
             resultType="com.abc123.hsp.dto.PaymentControlPolicyReviewDTO">
         SELECT request_no AS requestNo,
                source_app_id AS sourceAppId,
+               base_version_no AS baseVersionNo,
+               source_version_no AS sourceVersionNo,
                operation_type AS operationType,
                source_app_name AS sourceAppName,
                allowed_payment_methods AS allowedPaymentMethods,
@@ -979,6 +1036,8 @@
             resultType="com.abc123.hsp.entity.PaymentControlPolicyReviewEntity">
         SELECT request_no AS requestNo,
                source_app_id AS sourceAppId,
+               base_version_no AS baseVersionNo,
+               source_version_no AS sourceVersionNo,
                operation_type AS operationType,
                source_app_name AS sourceAppName,
                allowed_payment_methods AS allowedPaymentMethods,
@@ -1975,19 +2034,38 @@
 
     <insert id="insertControlPolicyReview">
         INSERT INTO t_payment_control_policy_review (
-            request_no, source_app_id, operation_type, source_app_name,
+            request_no, source_app_id, base_version_no, source_version_no,
+            operation_type, source_app_name,
             allowed_payment_methods, allowed_channel_codes, allowed_merchant_nos,
             minute_submit_limit, interface_minute_submit_limit, token_auth_required,
             access_token_value, strict_mode, pending_source_app_id, base_fingerprint,
             candidate_status, candidate_status_type, requester, request_reason,
             review_status, review_status_type, created_at, updated_at
         ) VALUES (
-            #{requestNo}, #{sourceAppId}, #{operationType}, #{sourceAppName},
+            #{requestNo}, #{sourceAppId}, #{baseVersionNo}, #{sourceVersionNo},
+            #{operationType}, #{sourceAppName},
             #{allowedPaymentMethods}, #{allowedChannelCodes}, #{allowedMerchantNos},
             #{minuteSubmitLimit}, #{interfaceMinuteSubmitLimit}, #{tokenAuthRequired},
             #{accessTokenValue}, #{strictMode}, #{pendingSourceAppId}, #{baseFingerprint},
             #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
             #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <insert id="insertControlPolicyVersion"
+            parameterType="com.abc123.hsp.entity.PaymentControlPolicyVersionEntity">
+        INSERT INTO t_payment_control_policy_version (
+            source_app_id, version_no, source_app_name, allowed_payment_methods,
+            allowed_channel_codes, allowed_merchant_nos, minute_submit_limit,
+            interface_minute_submit_limit, token_auth_required, access_token_value,
+            strict_mode, status, status_type, change_type, source_version_no,
+            change_reason, created_at
+        ) VALUES (
+            #{sourceAppId}, #{versionNo}, #{sourceAppName}, #{allowedPaymentMethods},
+            #{allowedChannelCodes}, #{allowedMerchantNos}, #{minuteSubmitLimit},
+            #{interfaceMinuteSubmitLimit}, #{tokenAuthRequired}, #{accessTokenValue},
+            #{strictMode}, #{status}, #{statusType}, #{changeType}, #{sourceVersionNo},
+            #{changeReason}, NOW()
         )
     </insert>
 

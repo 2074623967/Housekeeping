@@ -15,10 +15,12 @@ import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyUpsertRequestDTO;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
+import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -177,6 +179,30 @@ class PaymentControlPolicyConfigServiceImplTest {
     }
 
     @Test
+    void shouldRejectReviewWhenVersionChangesWithoutConfigChange() {
+        PaymentControlPolicyEntity current = policy("ENABLED");
+        when(paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web"))
+                .thenReturn(current);
+        when(paymentConfigMapper.findLatestControlPolicyVersionNo("housekeeping-app-web"))
+                .thenReturn(Integer.valueOf(1), Integer.valueOf(1), Integer.valueOf(2));
+        when(paymentConfigMapper.findControlPolicyReviews()).thenReturn(Collections.emptyList());
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        service.submitControlPolicyReview(reviewRequest(policyRequest("housekeeping-app-web")));
+        ArgumentCaptor<PaymentControlPolicyReviewEntity> reviewCaptor =
+                ArgumentCaptor.forClass(PaymentControlPolicyReviewEntity.class);
+        verify(paymentConfigMapper).insertControlPolicyReview(reviewCaptor.capture());
+        PaymentControlPolicyReviewEntity review = reviewCaptor.getValue();
+        when(paymentConfigMapper.findControlPolicyReviewForUpdate(review.getRequestNo())).thenReturn(review);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.approveControlPolicyReview(review.getRequestNo(), action("checker-b")));
+
+        assertTrue(exception.getMessage().contains("已变化"));
+        verify(paymentConfigMapper, never()).updateControlPolicy(any());
+        verify(paymentConfigMapper, never()).insertControlPolicyVersion(any());
+    }
+
+    @Test
     void shouldRejectReviewWithoutChangingRuntime() {
         PaymentControlPolicyReviewEntity review = review("STATUS_CHANGE", "baseline");
         when(paymentConfigMapper.findControlPolicyReviewForUpdate("CPR-001")).thenReturn(review);
@@ -228,6 +254,51 @@ class PaymentControlPolicyConfigServiceImplTest {
         assertFalse(json.contains("token-sensitive"));
         assertFalse(json.contains("accessTokenValue"));
         assertTrue(json.contains("\"accessTokenConfigured\":true"));
+    }
+
+    @Test
+    void shouldSubmitAndApproveRollbackAsNewVersion() {
+        PaymentControlPolicyEntity current = policy("ENABLED");
+        PaymentControlPolicyVersionEntity target = version(current, 1, "token-old");
+        when(paymentConfigMapper.findPendingControlPolicyReviewForUpdate("housekeeping-app-web"))
+                .thenReturn(null);
+        when(paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web"))
+                .thenReturn(current);
+        when(paymentConfigMapper.findLatestControlPolicyVersionNo("housekeeping-app-web"))
+                .thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findControlPolicyVersion("housekeeping-app-web", Integer.valueOf(1)))
+                .thenReturn(target);
+        when(paymentConfigMapper.findControlPolicyReviews()).thenReturn(Collections.emptyList());
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        PaymentControlPolicyRollbackRequestDTO rollback = new PaymentControlPolicyRollbackRequestDTO();
+        rollback.setVersionNo(Integer.valueOf(1));
+        rollback.setRequester("maker-a");
+        rollback.setChangeReason("恢复稳定控制策略");
+
+        service.submitControlPolicyRollbackReview("HOUSEKEEPING-APP-WEB", rollback);
+
+        ArgumentCaptor<PaymentControlPolicyReviewEntity> reviewCaptor =
+                ArgumentCaptor.forClass(PaymentControlPolicyReviewEntity.class);
+        verify(paymentConfigMapper).insertControlPolicyReview(reviewCaptor.capture());
+        PaymentControlPolicyReviewEntity review = reviewCaptor.getValue();
+        assertEquals("ROLLBACK", review.getOperationType());
+        assertEquals(Integer.valueOf(2), review.getBaseVersionNo());
+        assertEquals(Integer.valueOf(1), review.getSourceVersionNo());
+        assertEquals("token-old", review.getAccessTokenValue());
+
+        when(paymentConfigMapper.findControlPolicyReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.updateControlPolicy(any(PaymentControlPolicyEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.completeControlPolicyReview(any(), any(), any(), any(), any())).thenReturn(1);
+
+        service.approveControlPolicyReview(review.getRequestNo(), action("checker-b"));
+
+        verify(paymentConfigMapper).updateControlPolicy(org.mockito.ArgumentMatchers.argThat(
+                applied -> "token-old".equals(applied.getAccessTokenValue())
+                        && "WARN".equals(applied.getSelfCheckStatus())));
+        verify(paymentConfigMapper).insertControlPolicyVersion(org.mockito.ArgumentMatchers.argThat(
+                version -> Integer.valueOf(3).equals(version.getVersionNo())
+                        && "REVIEW_ROLLBACK".equals(version.getChangeType())
+                        && Integer.valueOf(1).equals(version.getSourceVersionNo())));
     }
 
     private PaymentControlPolicyStatusReviewRequestDTO statusRequest(String sourceAppId, boolean enabled) {
@@ -315,5 +386,26 @@ class PaymentControlPolicyConfigServiceImplTest {
         policy.setStatus(status);
         policy.setStatusType("ENABLED".equals(status) ? "success" : "danger");
         return policy;
+    }
+
+    private PaymentControlPolicyVersionEntity version(
+            PaymentControlPolicyEntity policy, int versionNo, String accessToken) {
+        PaymentControlPolicyVersionEntity version = new PaymentControlPolicyVersionEntity();
+        version.setSourceAppId(policy.getSourceAppId());
+        version.setVersionNo(Integer.valueOf(versionNo));
+        version.setSourceAppName(policy.getSourceAppName());
+        version.setAllowedPaymentMethods(policy.getAllowedPaymentMethods());
+        version.setAllowedChannelCodes(policy.getAllowedChannelCodes());
+        version.setAllowedMerchantNos(policy.getAllowedMerchantNos());
+        version.setMinuteSubmitLimit(policy.getMinuteSubmitLimit());
+        version.setInterfaceMinuteSubmitLimit(policy.getInterfaceMinuteSubmitLimit());
+        version.setTokenAuthRequired(policy.getTokenAuthRequired());
+        version.setAccessTokenValue(accessToken);
+        version.setStrictMode(policy.getStrictMode());
+        version.setStatus(policy.getStatus());
+        version.setStatusType(policy.getStatusType());
+        version.setChangeType("REVIEW_RELEASE");
+        version.setChangeReason("历史版本");
+        return version;
     }
 }

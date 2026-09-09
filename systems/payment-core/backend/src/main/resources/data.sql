@@ -46,6 +46,20 @@ INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_pa
 ('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_ALI_20001,BANK_OFFLINE_30001', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'WARN', 'warn', 'PC 端银行卡链路处于观察期，大额订单请优先人工复核', 'ENABLED', 'success', '2026-07-21 09:00:00');
 
+INSERT INTO t_payment_control_policy_version (
+    source_app_id, version_no, source_app_name, allowed_payment_methods,
+    allowed_channel_codes, allowed_merchant_nos, minute_submit_limit,
+    interface_minute_submit_limit, token_auth_required, access_token_value,
+    strict_mode, status, status_type, change_type, source_version_no,
+    change_reason, created_at
+)
+SELECT source_app_id, 1, source_app_name, allowed_payment_methods,
+       allowed_channel_codes, allowed_merchant_nos, minute_submit_limit,
+       interface_minute_submit_limit, token_auth_required, access_token_value,
+       strict_mode, status, status_type, 'BASELINE', NULL,
+       '初始化支付控制策略基线', updated_at
+FROM t_payment_control_policy;
+
 INSERT INTO t_payment_alert_provider_config (provider_code, provider_name, channel_code, endpoint_alias, template_code, template_body, route_rule, route_priority, retry_policy, rate_limit_policy, status, status_type, updated_at) VALUES
 ('ALERT_IM_WECOM_P1', '企业微信告警机器人-P1', 'IM', 'wecom-bot-alerts', 'TPL_PAYMENT_ISSUE_IM_P1_V1', '[{{severity}}] {{issueType}}\\n异常单号：{{issueNo}}\\n支付单号：{{paymentOrderId}}\\n责任组：{{responsibilityGroup}}\\n接收人：{{receiver}}\\n班次：{{scheduleTag}}\\n说明：{{alertContent}}', 'severity=P1', 10, '失败重试2次/间隔5分钟', '每分钟 60 条', 'ENABLED', 'success', '2026-07-24 15:20:00'),
 ('ALERT_IM_WECOM_DEFAULT', '企业微信告警机器人-默认', 'IM', 'wecom-bot-alerts-default', 'TPL_PAYMENT_ISSUE_IM_V1', '[{{severity}}] {{issueType}} | 支付单{{paymentOrderId}} | {{alertContent}}', 'DEFAULT', 100, '失败重试2次/间隔5分钟', '每分钟 60 条', 'ENABLED', 'success', '2026-07-24 15:20:00'),

@@ -19,10 +19,12 @@ import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
@@ -65,6 +67,7 @@ import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
+import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
@@ -1204,10 +1207,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
                     ? "支付控制策略已启用" : "支付控制策略已停用");
         }
+        ensureControlPolicyBaseline(current);
         PaymentControlPolicyReviewEntity review = new PaymentControlPolicyReviewEntity();
         review.setRequestNo("CPR" + UUID.randomUUID().toString().replace("-", ""));
         copyControlPolicyToReview(current, review);
         review.setOperationType("STATUS_CHANGE");
+        review.setBaseVersionNo(paymentConfigMapper.findLatestControlPolicyVersionNo(sourceAppId));
         review.setPendingSourceAppId(sourceAppId);
         review.setBaseFingerprint(fingerprintControlPolicy(current));
         review.setCandidateStatus(candidateStatus);
@@ -1243,6 +1248,10 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         review.setRequestNo("CPR" + UUID.randomUUID().toString().replace("-", ""));
         copyControlPolicyToReview(candidate, review);
         review.setOperationType(current == null ? "CREATE" : "UPDATE");
+        if (current != null) {
+            ensureControlPolicyBaseline(current);
+            review.setBaseVersionNo(paymentConfigMapper.findLatestControlPolicyVersionNo(sourceAppId));
+        }
         review.setPendingSourceAppId(sourceAppId);
         review.setBaseFingerprint(current == null ? null : fingerprintControlPolicy(current));
         review.setRequester(requester);
@@ -1269,8 +1278,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         boolean createOperation = "CREATE".equals(review.getOperationType());
         if (!createOperation
                 && !"UPDATE".equals(review.getOperationType())
-                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+                && !"STATUS_CHANGE".equals(review.getOperationType())
+                && !"ROLLBACK".equals(review.getOperationType())) {
             throw new IllegalArgumentException("支付控制策略复核操作类型不支持");
+        }
+        if ("ROLLBACK".equals(review.getOperationType())
+                && (review.getSourceVersionNo() == null || review.getSourceVersionNo().intValue() <= 0)) {
+            throw new IllegalArgumentException("支付控制策略回滚候选缺少目标历史版本");
         }
         if (!STATUS_ENABLED.equals(review.getCandidateStatus())
                 && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
@@ -1282,9 +1296,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             if (current != null) {
                 throw new IllegalArgumentException("支付控制策略已存在，复核申请基线已失效");
             }
-        } else if (current == null || review.getBaseFingerprint() == null
-                || !review.getBaseFingerprint().equals(fingerprintControlPolicy(current))) {
-            throw new IllegalArgumentException("支付控制策略配置已变化，请重新提交复核申请");
+        } else {
+            Integer latestVersionNo = paymentConfigMapper.findLatestControlPolicyVersionNo(review.getSourceAppId());
+            if (current == null || review.getBaseFingerprint() == null
+                    || !review.getBaseFingerprint().equals(fingerprintControlPolicy(current))
+                    || !sameInteger(review.getBaseVersionNo(), latestVersionNo)) {
+                throw new IllegalArgumentException("支付控制策略配置已变化，请重新提交复核申请");
+            }
         }
         PaymentControlPolicyEntity candidate = buildControlPolicyEntity(
                 toControlPolicyUpsertRequest(review), null, review.getSourceAppId());
@@ -1303,6 +1321,15 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException(createOperation
                     ? "支付控制策略新增失败" : "支付控制策略配置不存在");
         }
+        String versionChangeType = "REVIEW_RELEASE";
+        Integer sourceVersionNo = null;
+        if ("STATUS_CHANGE".equals(review.getOperationType())) {
+            versionChangeType = "REVIEW_STATUS_CHANGE";
+        } else if ("ROLLBACK".equals(review.getOperationType())) {
+            versionChangeType = "REVIEW_ROLLBACK";
+            sourceVersionNo = review.getSourceVersionNo();
+        }
+        recordControlPolicyVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
         completeControlPolicyReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
         return paymentConfigMapper.findControlPolicyReviews();
@@ -1318,6 +1345,58 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeControlPolicyReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findControlPolicyReviews();
+    }
+
+    @Override
+    public List<PaymentControlPolicyVersionDTO> listControlPolicyVersions(String sourceAppId) {
+        String normalizedSourceAppId = requireImportText(
+                sourceAppId, "来源应用标识不能为空", 64).toLowerCase(Locale.ROOT);
+        if (paymentConfigMapper.findControlPolicyBySourceAppId(normalizedSourceAppId) == null) {
+            throw new IllegalArgumentException("支付控制策略配置不存在");
+        }
+        return paymentConfigMapper.findControlPolicyVersions(normalizedSourceAppId);
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentControlPolicyReviewDTO> submitControlPolicyRollbackReview(
+            String sourceAppId, PaymentControlPolicyRollbackRequestDTO request) {
+        String normalizedSourceAppId = requireImportText(
+                sourceAppId, "来源应用标识不能为空", 64).toLowerCase(Locale.ROOT);
+        if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
+            throw new IllegalArgumentException("回滚版本号必须大于0");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "回滚原因不能为空");
+        if (paymentConfigMapper.findPendingControlPolicyReviewForUpdate(normalizedSourceAppId) != null) {
+            throw new IllegalArgumentException("该支付控制策略已有待复核申请");
+        }
+        PaymentControlPolicyEntity current =
+                paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate(normalizedSourceAppId);
+        if (current == null) {
+            throw new IllegalArgumentException("支付控制策略配置不存在");
+        }
+        ensureControlPolicyBaseline(current);
+        PaymentControlPolicyVersionEntity target = paymentConfigMapper.findControlPolicyVersion(
+                normalizedSourceAppId, request.getVersionNo());
+        if (target == null) {
+            throw new IllegalArgumentException("支付控制策略历史版本不存在");
+        }
+        PaymentControlPolicyEntity candidate = copyControlPolicyEntity(target);
+        PaymentControlPolicyReviewEntity review = new PaymentControlPolicyReviewEntity();
+        review.setRequestNo("CPR" + UUID.randomUUID().toString().replace("-", ""));
+        copyControlPolicyToReview(candidate, review);
+        review.setOperationType("ROLLBACK");
+        review.setBaseVersionNo(paymentConfigMapper.findLatestControlPolicyVersionNo(normalizedSourceAppId));
+        review.setSourceVersionNo(request.getVersionNo());
+        review.setPendingSourceAppId(normalizedSourceAppId);
+        review.setBaseFingerprint(fingerprintControlPolicy(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertControlPolicyReview(review);
         return paymentConfigMapper.findControlPolicyReviews();
     }
 
@@ -3008,6 +3087,59 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (affectedRows == 0) {
             throw new IllegalArgumentException("支付控制策略复核状态已变化，请刷新后重试");
         }
+    }
+
+    private void ensureControlPolicyBaseline(PaymentControlPolicyEntity current) {
+        Integer latestVersionNo = paymentConfigMapper.findLatestControlPolicyVersionNo(current.getSourceAppId());
+        if (latestVersionNo == null || latestVersionNo.intValue() == 0) {
+            recordControlPolicyVersion(current, "BASELINE", null, "存量支付控制策略变更前基线");
+        }
+    }
+
+    private void recordControlPolicyVersion(PaymentControlPolicyEntity policy,
+                                            String changeType,
+                                            Integer sourceVersionNo,
+                                            String changeReason) {
+        Integer latestVersionNo = paymentConfigMapper.findLatestControlPolicyVersionNo(policy.getSourceAppId());
+        int nextVersionNo = latestVersionNo == null ? 1 : latestVersionNo.intValue() + 1;
+        PaymentControlPolicyVersionEntity version = new PaymentControlPolicyVersionEntity();
+        version.setSourceAppId(policy.getSourceAppId());
+        version.setVersionNo(Integer.valueOf(nextVersionNo));
+        version.setSourceAppName(policy.getSourceAppName());
+        version.setAllowedPaymentMethods(policy.getAllowedPaymentMethods());
+        version.setAllowedChannelCodes(policy.getAllowedChannelCodes());
+        version.setAllowedMerchantNos(policy.getAllowedMerchantNos());
+        version.setMinuteSubmitLimit(policy.getMinuteSubmitLimit());
+        version.setInterfaceMinuteSubmitLimit(policy.getInterfaceMinuteSubmitLimit());
+        version.setTokenAuthRequired(policy.getTokenAuthRequired());
+        version.setAccessTokenValue(policy.getAccessTokenValue());
+        version.setStrictMode(policy.getStrictMode());
+        version.setStatus(policy.getStatus());
+        version.setStatusType(policy.getStatusType());
+        version.setChangeType(changeType);
+        version.setSourceVersionNo(sourceVersionNo);
+        version.setChangeReason(changeReason);
+        paymentConfigMapper.insertControlPolicyVersion(version);
+    }
+
+    private PaymentControlPolicyEntity copyControlPolicyEntity(PaymentControlPolicyVersionEntity version) {
+        PaymentControlPolicyEntity policy = new PaymentControlPolicyEntity();
+        policy.setSourceAppId(version.getSourceAppId());
+        policy.setSourceAppName(version.getSourceAppName());
+        policy.setAllowedPaymentMethods(version.getAllowedPaymentMethods());
+        policy.setAllowedChannelCodes(version.getAllowedChannelCodes());
+        policy.setAllowedMerchantNos(version.getAllowedMerchantNos());
+        policy.setMinuteSubmitLimit(version.getMinuteSubmitLimit());
+        policy.setInterfaceMinuteSubmitLimit(version.getInterfaceMinuteSubmitLimit());
+        policy.setTokenAuthRequired(version.getTokenAuthRequired());
+        policy.setAccessTokenValue(version.getAccessTokenValue());
+        policy.setStrictMode(version.getStrictMode());
+        policy.setSelfCheckStatus("WARN");
+        policy.setSelfCheckStatusType("warn");
+        policy.setSelfCheckMessage("配置已回滚，待重新执行支付控制策略自检");
+        policy.setStatus(version.getStatus());
+        policy.setStatusType(version.getStatusType());
+        return policy;
     }
 
     private void insertControlPolicyReview(PaymentControlPolicyReviewEntity review) {

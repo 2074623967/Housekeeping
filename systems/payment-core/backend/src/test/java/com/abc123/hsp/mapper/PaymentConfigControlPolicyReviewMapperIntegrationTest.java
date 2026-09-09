@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
+import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
 import java.io.InputStream;
 import java.sql.Statement;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -60,6 +62,17 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                     mapper.findControlPolicyBySourceAppIdForUpdate("housekeeping-app-web");
             assertEquals("token-current", current.getAccessTokenValue());
 
+            PaymentControlPolicyVersionEntity version = version(current);
+            assertEquals(1, mapper.insertControlPolicyVersion(version));
+            PaymentControlPolicyVersionDTO displayedVersion =
+                    mapper.findControlPolicyVersions("housekeeping-app-web").get(0);
+            assertEquals(Integer.valueOf(1), displayedVersion.getVersionNo());
+            assertEquals(Boolean.TRUE, displayedVersion.getAccessTokenConfigured());
+            assertEquals("token-current", mapper.findControlPolicyVersion(
+                    "housekeeping-app-web", Integer.valueOf(1)).getAccessTokenValue());
+            assertEquals(Integer.valueOf(1),
+                    mapper.findLatestControlPolicyVersionNo("housekeeping-app-web"));
+
             assertEquals(1, mapper.insertControlPolicyReview(review("CPR-TEST-001")));
             assertEquals("CPR-TEST-001",
                     mapper.findPendingControlPolicyReviewForUpdate("housekeeping-app-web").getRequestNo());
@@ -103,6 +116,7 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
         PaymentControlPolicyReviewEntity review = new PaymentControlPolicyReviewEntity();
         review.setRequestNo(requestNo);
         review.setSourceAppId("housekeeping-app-web");
+        review.setBaseVersionNo(Integer.valueOf(1));
         review.setOperationType("UPDATE");
         review.setSourceAppName("家政 App 收银台新版");
         review.setAllowedPaymentMethods("微信支付,支付宝");
@@ -122,6 +136,26 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         return review;
+    }
+
+    private PaymentControlPolicyVersionEntity version(PaymentControlPolicyEntity policy) {
+        PaymentControlPolicyVersionEntity version = new PaymentControlPolicyVersionEntity();
+        version.setSourceAppId(policy.getSourceAppId());
+        version.setVersionNo(Integer.valueOf(1));
+        version.setSourceAppName(policy.getSourceAppName());
+        version.setAllowedPaymentMethods(policy.getAllowedPaymentMethods());
+        version.setAllowedChannelCodes(policy.getAllowedChannelCodes());
+        version.setAllowedMerchantNos(policy.getAllowedMerchantNos());
+        version.setMinuteSubmitLimit(policy.getMinuteSubmitLimit());
+        version.setInterfaceMinuteSubmitLimit(policy.getInterfaceMinuteSubmitLimit());
+        version.setTokenAuthRequired(policy.getTokenAuthRequired());
+        version.setAccessTokenValue(policy.getAccessTokenValue());
+        version.setStrictMode(policy.getStrictMode());
+        version.setStatus(policy.getStatus());
+        version.setStatusType(policy.getStatusType());
+        version.setChangeType("BASELINE");
+        version.setChangeReason("测试基线");
+        return version;
     }
 
     private PaymentControlPolicyEntity policy(String sourceAppId) {
@@ -151,6 +185,7 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                     + PaymentConfigProtocolVersionMapperIntegrationTest.class.getName()
                     + ".dateFormat\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_control_policy_review");
+            statement.execute("DROP TABLE IF EXISTS t_payment_control_policy_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_control_policy");
             statement.execute("CREATE TABLE t_payment_control_policy ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_app_id VARCHAR(64) NOT NULL UNIQUE, "
@@ -163,7 +198,8 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                     + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, updated_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_control_policy_review ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "source_app_id VARCHAR(64) NOT NULL, operation_type VARCHAR(32) NOT NULL, "
+                    + "source_app_id VARCHAR(64) NOT NULL, base_version_no INT, source_version_no INT, "
+                    + "operation_type VARCHAR(32) NOT NULL, "
                     + "source_app_name VARCHAR(128) NOT NULL, allowed_payment_methods VARCHAR(255) NOT NULL, "
                     + "allowed_channel_codes VARCHAR(255) NOT NULL, allowed_merchant_nos VARCHAR(255) NOT NULL, "
                     + "minute_submit_limit INT NOT NULL, interface_minute_submit_limit INT NOT NULL, "
@@ -175,6 +211,16 @@ class PaymentConfigControlPolicyReviewMapperIntegrationTest {
                     + "review_status_type VARCHAR(32) NOT NULL, reviewer VARCHAR(64), "
                     + "review_comment VARCHAR(255), created_at DATETIME NOT NULL, reviewed_at DATETIME, "
                     + "updated_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_payment_control_policy_version ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_app_id VARCHAR(64) NOT NULL, "
+                    + "version_no INT NOT NULL, source_app_name VARCHAR(128) NOT NULL, "
+                    + "allowed_payment_methods VARCHAR(255) NOT NULL, allowed_channel_codes VARCHAR(255) NOT NULL, "
+                    + "allowed_merchant_nos VARCHAR(255) NOT NULL, minute_submit_limit INT NOT NULL, "
+                    + "interface_minute_submit_limit INT NOT NULL, token_auth_required VARCHAR(32) NOT NULL, "
+                    + "access_token_value VARCHAR(128) NOT NULL, strict_mode VARCHAR(32) NOT NULL, "
+                    + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, change_type VARCHAR(32) NOT NULL, "
+                    + "source_version_no INT, change_reason VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, "
+                    + "UNIQUE(source_app_id, version_no))");
             statement.execute("INSERT INTO t_payment_control_policy ("
                     + "source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes, "
                     + "allowed_merchant_nos, minute_submit_limit, interface_minute_submit_limit, "

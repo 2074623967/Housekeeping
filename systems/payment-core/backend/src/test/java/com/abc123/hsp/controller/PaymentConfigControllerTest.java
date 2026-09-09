@@ -15,7 +15,9 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
@@ -357,6 +359,8 @@ class PaymentConfigControllerTest {
                 new PaymentControlPolicyReviewSubmitRequestDTO();
         PaymentControlPolicyReviewActionRequestDTO actionRequest =
                 new PaymentControlPolicyReviewActionRequestDTO();
+        PaymentControlPolicyRollbackRequestDTO rollbackRequest =
+                new PaymentControlPolicyRollbackRequestDTO();
         java.util.List<PaymentControlPolicyReviewDTO> reviews =
                 Collections.singletonList(new PaymentControlPolicyReviewDTO());
         when(paymentConfigService.submitControlPolicyStatusReview(statusRequest)).thenReturn(reviews);
@@ -364,6 +368,10 @@ class PaymentConfigControllerTest {
         when(paymentConfigService.listControlPolicyReviews()).thenReturn(reviews);
         when(paymentConfigService.approveControlPolicyReview("CPR-001", actionRequest)).thenReturn(reviews);
         when(paymentConfigService.rejectControlPolicyReview("CPR-001", actionRequest)).thenReturn(reviews);
+        when(paymentConfigService.listControlPolicyVersions("housekeeping-app-web"))
+                .thenReturn(Collections.singletonList(new PaymentControlPolicyVersionDTO()));
+        when(paymentConfigService.submitControlPolicyRollbackReview(
+                "housekeeping-app-web", rollbackRequest)).thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
         assertEquals(reviews, controller.submitControlPolicyStatusReview(statusRequest).getData());
@@ -371,11 +379,17 @@ class PaymentConfigControllerTest {
         assertEquals(reviews, controller.listControlPolicyReviews().getData());
         assertEquals(reviews, controller.approveControlPolicyReview("CPR-001", actionRequest).getData());
         assertEquals(reviews, controller.rejectControlPolicyReview("CPR-001", actionRequest).getData());
+        assertEquals(1, controller.listControlPolicyVersions("housekeeping-app-web").getData().size());
+        assertEquals(reviews, controller.submitControlPolicyRollbackReview(
+                "housekeeping-app-web", rollbackRequest).getData());
         verify(paymentConfigService).submitControlPolicyStatusReview(statusRequest);
         verify(paymentConfigService).submitControlPolicyReview(submitRequest);
         verify(paymentConfigService).listControlPolicyReviews();
         verify(paymentConfigService).approveControlPolicyReview("CPR-001", actionRequest);
         verify(paymentConfigService).rejectControlPolicyReview("CPR-001", actionRequest);
+        verify(paymentConfigService).listControlPolicyVersions("housekeeping-app-web");
+        verify(paymentConfigService).submitControlPolicyRollbackReview(
+                "housekeeping-app-web", rollbackRequest);
     }
 
     @Test

@@ -8,6 +8,8 @@ public class PaymentControlPolicyReviewDTO {
 
     private String requestNo;
     private String sourceAppId;
+    private Integer baseVersionNo;
+    private Integer sourceVersionNo;
     private String operationType;
     private String sourceAppName;
     private String allowedPaymentMethods;

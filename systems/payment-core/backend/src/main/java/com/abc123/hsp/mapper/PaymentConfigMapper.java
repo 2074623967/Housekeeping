@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
@@ -30,6 +31,7 @@ import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
+import com.abc123.hsp.entity.PaymentControlPolicyVersionEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
@@ -205,6 +207,18 @@ public interface PaymentConfigMapper {
     /** 按来源应用标识加锁查询完整支付控制策略。 */
     PaymentControlPolicyEntity findControlPolicyBySourceAppIdForUpdate(
             @Param("sourceAppId") String sourceAppId);
+
+    /** 查询支付控制策略不可变版本历史。 */
+    List<PaymentControlPolicyVersionDTO> findControlPolicyVersions(
+            @Param("sourceAppId") String sourceAppId);
+
+    /** 查询支付控制策略指定历史版本。 */
+    PaymentControlPolicyVersionEntity findControlPolicyVersion(
+            @Param("sourceAppId") String sourceAppId,
+            @Param("versionNo") Integer versionNo);
+
+    /** 查询支付控制策略当前最大版本号。 */
+    Integer findLatestControlPolicyVersionNo(@Param("sourceAppId") String sourceAppId);
 
     /** 查询支付控制策略配置变更复核申请。 */
     List<PaymentControlPolicyReviewDTO> findControlPolicyReviews();
@@ -465,6 +479,9 @@ public interface PaymentConfigMapper {
 
     /** 更新支付控制策略完整运行配置。 */
     int updateControlPolicy(PaymentControlPolicyEntity entity);
+
+    /** 新增支付控制策略不可变版本快照。 */
+    int insertControlPolicyVersion(PaymentControlPolicyVersionEntity entity);
 
     /** 新增支付控制策略配置变更复核申请。 */
     int insertControlPolicyReview(PaymentControlPolicyReviewEntity entity);

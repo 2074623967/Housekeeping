@@ -980,6 +980,13 @@ export const paymentConfigApi = {
     `/api/payment-config/control-policies/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
+  getControlPolicyVersions: (sourceAppId) => request(
+    `/api/payment-config/control-policies/${encodeURIComponent(sourceAppId)}/versions`
+  ),
+  rollbackControlPolicy: (sourceAppId, payload) => postJson(
+    `/api/payment-config/control-policies/${encodeURIComponent(sourceAppId)}/rollback`,
+    payload
+  ),
   toggleAlertProvider: (configCode, enabled) => postJson("/api/payment-config/alert-providers/toggle", { configCode, enabled }),
   toggleIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters/toggle", payload),
   runControlPolicySelfCheck: (configCode) => postJson("/api/payment-config/control-policies/self-check", { configCode })

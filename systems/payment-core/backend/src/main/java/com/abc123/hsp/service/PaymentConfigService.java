@@ -5,7 +5,9 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
@@ -263,6 +265,13 @@ public interface PaymentConfigService {
     /** 驳回支付控制策略完整候选，不改变运行态。 */
     List<PaymentControlPolicyReviewDTO> rejectControlPolicyReview(
             String requestNo, PaymentControlPolicyReviewActionRequestDTO request);
+
+    /** 查询支付控制策略不可变版本历史。 */
+    List<PaymentControlPolicyVersionDTO> listControlPolicyVersions(String sourceAppId);
+
+    /** 提交指定历史版本的回滚候选，不改变运行态。 */
+    List<PaymentControlPolicyReviewDTO> submitControlPolicyRollbackReview(
+            String sourceAppId, PaymentControlPolicyRollbackRequestDTO request);
 
     /**
      * 启停告警通知供应商配置。

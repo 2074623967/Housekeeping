@@ -10,7 +10,9 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
@@ -448,6 +450,21 @@ public class PaymentConfigController {
             @PathVariable("requestNo") String requestNo,
             @RequestBody PaymentControlPolicyReviewActionRequestDTO request) {
         return ApiResponse.success(paymentConfigService.rejectControlPolicyReview(requestNo, request));
+    }
+
+    /** 查询支付控制策略不可变版本历史。 */
+    @GetMapping("/control-policies/{sourceAppId}/versions")
+    public ApiResponse<List<PaymentControlPolicyVersionDTO>> listControlPolicyVersions(
+            @PathVariable("sourceAppId") String sourceAppId) {
+        return ApiResponse.success(paymentConfigService.listControlPolicyVersions(sourceAppId));
+    }
+
+    /** 提交支付控制策略历史版本回滚候选，不改变运行态。 */
+    @PostMapping("/control-policies/{sourceAppId}/rollback")
+    public ApiResponse<List<PaymentControlPolicyReviewDTO>> submitControlPolicyRollbackReview(
+            @PathVariable("sourceAppId") String sourceAppId,
+            @RequestBody PaymentControlPolicyRollbackRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitControlPolicyRollbackReview(sourceAppId, request));
     }
 
     /**

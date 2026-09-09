@@ -25,6 +25,10 @@ const controlPolicyActionRequester = ref("");
 const controlPolicyActionReason = ref("");
 const controlPolicyReviewer = ref("");
 const controlPolicyReviewComment = ref("");
+const controlPolicyVersionSourceAppId = ref("");
+const controlPolicyVersions = ref([]);
+const isControlPolicyVersionLoading = ref(false);
+let controlPolicyVersionRequestId = 0;
 const editingControlPolicyId = ref("");
 const controlPolicyForm = ref(createControlPolicyForm());
 const alertProviders = ref([]);
@@ -1247,6 +1251,9 @@ async function handleControlPolicyReview(review, approved) {
       : await paymentConfigApi.rejectControlPolicyReview(review.requestNo, payload);
     if (approved) {
       await loadOverview();
+      if (controlPolicyVersionSourceAppId.value) {
+        await loadControlPolicyVersions(controlPolicyVersionSourceAppId.value);
+      }
     }
     controlPolicyReviewComment.value = "";
     actionMessage.value = approved
@@ -1254,6 +1261,63 @@ async function handleControlPolicyReview(review, approved) {
       : `支付控制策略申请 ${review.requestNo} 已驳回，运行态未改变。`;
   } catch (error) {
     actionMessage.value = `支付控制策略复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadControlPolicyVersions(sourceAppId) {
+  const requestId = ++controlPolicyVersionRequestId;
+  controlPolicyVersionSourceAppId.value = sourceAppId;
+  controlPolicyVersions.value = [];
+  isControlPolicyVersionLoading.value = true;
+  actionMessage.value = "";
+  try {
+    const versions = await paymentConfigApi.getControlPolicyVersions(sourceAppId);
+    if (requestId === controlPolicyVersionRequestId
+        && controlPolicyVersionSourceAppId.value === sourceAppId) {
+      controlPolicyVersions.value = versions;
+    }
+  } catch (error) {
+    if (requestId === controlPolicyVersionRequestId
+        && controlPolicyVersionSourceAppId.value === sourceAppId) {
+      actionMessage.value = `控制策略版本加载失败：${error.message}`;
+    }
+  } finally {
+    if (requestId === controlPolicyVersionRequestId) {
+      isControlPolicyVersionLoading.value = false;
+    }
+  }
+}
+
+function closeControlPolicyVersions() {
+  controlPolicyVersionRequestId += 1;
+  controlPolicyVersionSourceAppId.value = "";
+  controlPolicyVersions.value = [];
+  isControlPolicyVersionLoading.value = false;
+}
+
+async function rollbackControlPolicyVersion(version) {
+  const sourceAppId = controlPolicyVersionSourceAppId.value;
+  if (!controlPolicyActionRequester.value || !controlPolicyActionReason.value) {
+    actionMessage.value = "提交控制策略回滚复核失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  if (!window.confirm(`确认提交控制策略 ${sourceAppId} 回滚到 V${version.versionNo} 的复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = `${sourceAppId}:rollback`;
+  actionMessage.value = "";
+  try {
+    controlPolicyReviews.value = await paymentConfigApi.rollbackControlPolicy(sourceAppId, {
+      versionNo: version.versionNo,
+      requester: controlPolicyActionRequester.value,
+      changeReason: controlPolicyActionReason.value
+    });
+    controlPolicyActionReason.value = "";
+    actionMessage.value = `控制策略 ${sourceAppId} 回滚到 V${version.versionNo} 的申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `控制策略回滚申请失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1640,7 +1704,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.19</span>
+        <span class="badge info">配置中心 V1.20</span>
       </div>
     </div>
 
@@ -3434,7 +3498,7 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="section-title">
               <div>
                 <h3>支付控制策略配置变更复核</h3>
-                <p class="meta">新增、编辑和启停共享唯一待办；批准后旧自检结论失效，严格模式需重新通过自检</p>
+                <p class="meta">新增、编辑、启停和历史回滚共享唯一待办；批准后追加不可变版本并使旧自检结论失效</p>
               </div>
               <button class="button secondary" :disabled="isControlPolicyReviewLoading" @click="loadControlPolicyReviews">
                 {{ isControlPolicyReviewLoading ? "加载中..." : "刷新申请" }}
@@ -3445,12 +3509,12 @@ function exportGovernanceSnapshot(section = "ALL") {
             </div>
             <div class="filter-grid" style="margin-bottom: 16px;">
               <label>
-                启停申请人声明
-                <input v-model.trim="controlPolicyActionRequester" maxlength="64" placeholder="提交启停时必填" />
+                申请人声明
+                <input v-model.trim="controlPolicyActionRequester" maxlength="64" placeholder="提交启停或回滚时必填" />
               </label>
               <label>
-                启停申请原因
-                <input v-model.trim="controlPolicyActionReason" maxlength="255" placeholder="提交启停时必填" />
+                申请原因
+                <input v-model.trim="controlPolicyActionReason" maxlength="255" placeholder="提交启停或回滚时必填" />
               </label>
               <label>
                 复核人声明
@@ -3488,7 +3552,8 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <td>
                       {{ review.sourceAppId }}
                       <div class="muted-text">{{ review.sourceAppName }}</div>
-                      <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
+                      <div class="muted-text">基线 {{ review.baseVersionNo ? `V${review.baseVersionNo}` : "新增" }} / {{ review.baseFingerprint?.slice(0, 12) || "-" }}</div>
+                      <div v-if="review.sourceVersionNo" class="muted-text">回滚来源 V{{ review.sourceVersionNo }}</div>
                     </td>
                     <td class="flow-summary-cell">
                       支付方式 {{ review.allowedPaymentMethods }}<br />
@@ -3582,10 +3647,75 @@ function exportGovernanceSnapshot(section = "ALL") {
                     >
                       执行自检
                     </button>
+                    <button
+                      class="link-button"
+                      :disabled="Boolean(activeConfigCode)"
+                      @click="loadControlPolicyVersions(policy.sourceAppId)"
+                    >
+                      版本历史
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div v-if="controlPolicyVersionSourceAppId" class="panel" style="margin-top: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ controlPolicyVersionSourceAppId }} 版本历史</h3>
+                <p class="meta">历史快照不可修改且不展示令牌原文；回滚复核通过后恢复完整配置、重置自检并追加新版本</p>
+              </div>
+              <button class="button secondary" @click="closeControlPolicyVersions">关闭</button>
+            </div>
+            <div v-if="isControlPolicyVersionLoading" class="state-box">控制策略版本加载中...</div>
+            <div v-else-if="!controlPolicyVersions.length" class="state-box">当前暂无控制策略版本记录</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>版本</th>
+                    <th>变更类型</th>
+                    <th>来源版本</th>
+                    <th>授权范围</th>
+                    <th>限流 / 安全</th>
+                    <th>状态</th>
+                    <th>变更原因</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="version in controlPolicyVersions" :key="version.versionNo">
+                    <td>V{{ version.versionNo }}</td>
+                    <td>{{ version.changeType }}</td>
+                    <td>{{ version.sourceVersionNo ? `V${version.sourceVersionNo}` : "-" }}</td>
+                    <td class="flow-summary-cell">
+                      支付方式 {{ version.allowedPaymentMethods }}<br />
+                      渠道 {{ version.allowedChannelCodes }}<br />
+                      商户 {{ version.allowedMerchantNos }}
+                    </td>
+                    <td>
+                      {{ version.minuteSubmitLimit }} / {{ version.interfaceMinuteSubmitLimit }}<br />
+                      令牌鉴权 {{ version.tokenAuthRequired }} / {{ version.accessTokenConfigured ? "已配置" : "未配置" }}<br />
+                      严格模式 {{ version.strictMode }}
+                    </td>
+                    <td><span :class="['badge', version.statusType]">{{ version.status }}</span></td>
+                    <td class="flow-summary-cell">{{ version.changeReason }}</td>
+                    <td>{{ version.createdAt }}</td>
+                    <td>
+                      <button
+                        class="link-button"
+                        :disabled="Boolean(activeConfigCode) || version.versionNo === controlPolicyVersions[0]?.versionNo"
+                        @click="rollbackControlPolicyVersion(version)"
+                      >
+                        回滚到此版本
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
