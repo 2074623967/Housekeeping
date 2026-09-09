@@ -2354,6 +2354,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 支付服务会对最终结果防御性复验。任何空缺、超长或控制字符返回 `PAYMENT-1026`，只允许写入固定文案的查单失败日志，不得更新支付返回码快照或进入支付成功结算、事件和令牌处理。
 4. 本契约限制单字段，不替代 gateway-access 和 HTTP 客户端的整体响应体上限、渠道状态枚举与真实报文协议校验。
 
+### 14.49 支付入口标识与创建预付单字段契约
+
+1. `GET /api/payments/{paymentOrderId}`、`GET /api/payments/cashier/{prepayOrderNo}`、`POST /api/payments/query` 和 `POST /api/payments/close` 的业务标识均必填、trim 后不超过 `64` 字符且不得包含 ISO 控制字符；非法请求返回 `PAYMENT-1036`，不进入数据库或查单限流。
+2. `POST /api/payments/prepay` 的 `orderNo/payScene` 必填且分别不超过 `64/32` 字符；可选 `customerName/cashierTitle` 分别不超过 `128/128` 字符。所有非空字符串 trim 后不得包含 ISO 控制字符。
+3. 可选 `amount` 一旦提供必须大于 `0`、最多 `16` 位整数和 `2` 位小数。虚拟支付仍要求客户名称和金额；标准订单只缺一项金额事实返回 `PAYMENT-1011`。
+4. 标准订单剩余应付 `orderAmount - paidAmount <= 0` 时返回 `PAYMENT-1037`，不得创建账单、支付单或预付单。该校验不替代跨服务并发结算、订单锁或生产数据库隔离验证。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2384,6 +2391,8 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1033` | 渠道 RSA2 公钥材料存在但无法解析 |
 | `PAYMENT-1034` | 渠道回调验签窗口为空/非正，或 nonce TTL 未严格覆盖完整签名有效期 |
 | `PAYMENT-1035` | 支付提交请求为空，业务字段缺失、超长、含控制字符，或终端不在有限白名单 |
+| `PAYMENT-1036` | 支付通用入口或预付请求为空，标识/业务字段缺失、超长、含控制字符，或金额格式越界 |
+| `PAYMENT-1037` | 订单已结清或已超额支付，无需再次创建支付单 |
 
 联调说明：
 
