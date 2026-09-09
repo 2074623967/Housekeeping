@@ -2206,6 +2206,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 渠道调用抛出异常，或渠道已经返回但本地结果事务失败时，服务保持支付单 `WAIT_CALLBACK`，将尝试标记为“结果未知，待查单”、收银台标记为“结果待确认”，并保留活跃并发令牌。
 4. 调用方收到提交异常后必须查询原支付单，不得自动创建新幂等键重提。只有可信回调、主动查单或受控关单能结束未知状态；本接口不承诺跨数据库与渠道的原子提交。
 
+### 14.28 批量主动查单候选时间规则
+
+1. `POST /api/payment-task-center/actions/query-pending-payments` 的人工与自动模式均要求支付单为 `WAIT_CALLBACK`、预付单未过期且存在支付尝试。
+2. 首次等待阈值 `minAgeSeconds` 以该支付单最新 `t_payment_attempt.created_at` 为起点；同一渠道的批次排名也按最新尝试时间和尝试主键排序，不使用支付单创建时间。
+3. 自动模式在首次等待之外继续应用既有查询历史指数退避；人工批量模式绕过历史退避但不绕过首次等待、渠道批次上限或总批次上限。
+4. 缺少支付尝试的 `WAIT_CALLBACK` 异常数据不进入候选和积压计数，调用方应走数据异常排查而不是直接调用渠道查单。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
