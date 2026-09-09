@@ -66,9 +66,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         long allowedWindowSeconds = securityProfile.getNotifySignWindowSec() == null || securityProfile.getNotifySignWindowSec() <= 0
                 ? allowedSkewSeconds
                 : securityProfile.getNotifySignWindowSec().longValue();
-        if (Math.abs(nowSeconds - timestampSeconds) > allowedWindowSeconds) {
-            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, "callback timestamp is out of allowed window");
-        }
+        verifyTimestampWindow(timestampSeconds, nowSeconds, allowedWindowSeconds);
         String payload = String.join("|",
                 normalizedChannel,
                 request.getPaymentOrderId(),
@@ -100,6 +98,24 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             return Long.parseLong(timestamp.trim());
         } catch (NumberFormatException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, "callback timestamp is invalid", exception);
+        }
+    }
+
+    private void verifyTimestampWindow(long timestampSeconds, long nowSeconds, long allowedWindowSeconds) {
+        if (allowedWindowSeconds <= 0) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
+                    "callback timestamp window is invalid");
+        }
+        long differenceSeconds;
+        try {
+            differenceSeconds = Math.subtractExact(nowSeconds, timestampSeconds);
+        } catch (ArithmeticException exception) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
+                    "callback timestamp is out of allowed window", exception);
+        }
+        if (differenceSeconds > allowedWindowSeconds || differenceSeconds < -allowedWindowSeconds) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
+                    "callback timestamp is out of allowed window");
         }
     }
 

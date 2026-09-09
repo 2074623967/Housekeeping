@@ -91,6 +91,29 @@ class PaymentCallbackSignatureServiceImplTest {
     }
 
     @Test
+    void shouldRejectTimestampWhenDifferenceOverflowsLong() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest(
+                "wx_h5",
+                "test-secret",
+                "nonce-overflow",
+                String.valueOf(Long.MIN_VALUE));
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5"))
+                .thenReturn(buildHmacProfile("wx_h5", "test-secret"));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                300,
+                600
+        );
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-overflow", "PAY-TEST-001", 600);
+    }
+
+    @Test
     void shouldRejectCallbackWhenChannelSecretMissing() throws Exception {
         PaymentCallbackRequestDTO request = buildRequest("wx_h5", "fallback-secret", "nonce-004",
                 String.valueOf(Instant.now().getEpochSecond()));
