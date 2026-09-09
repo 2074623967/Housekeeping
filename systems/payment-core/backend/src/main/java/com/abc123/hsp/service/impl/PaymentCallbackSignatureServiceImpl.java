@@ -39,7 +39,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
 
     public PaymentCallbackSignatureServiceImpl(
             PaymentCallbackSecurityMapper paymentCallbackSecurityMapper,
-            @Value("${payment.callback.require-signature:false}") boolean required,
+            @Value("${payment.callback.require-signature:true}") boolean required,
             @Value("${payment.callback.secret:}") String secret,
             @Value("${payment.callback.allowed-skew-seconds:300}") long allowedSkewSeconds,
             @Value("${payment.callback.nonce-ttl-seconds:600}") long nonceTtlSeconds) {

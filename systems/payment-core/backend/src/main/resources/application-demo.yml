@@ -6,3 +6,8 @@ spring:
     init:
       # 仅演示环境允许用仓库样例数据重建数据库。
       mode: always
+
+payment:
+  callback:
+    # 仅本地演示允许模拟未签名回调，不得用于真实渠道环境。
+    require-signature: false
