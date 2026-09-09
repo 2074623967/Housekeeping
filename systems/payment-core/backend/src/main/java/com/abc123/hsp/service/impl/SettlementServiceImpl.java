@@ -6,22 +6,37 @@ import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.mapper.SettlementMapper;
 import com.abc123.hsp.service.SettlementService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class SettlementServiceImpl implements SettlementService {
 
     private final SettlementMapper settlementMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public SettlementServiceImpl(SettlementMapper settlementMapper) {
+    @Autowired
+    public SettlementServiceImpl(SettlementMapper settlementMapper,
+                                 PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.settlementMapper = settlementMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    SettlementServiceImpl(SettlementMapper settlementMapper) {
+        this(settlementMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<WorkerSettlementListItemDTO> workerList(WorkerSettlementQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                settlementMapper.findWorkerSettlements(query),
+                maskItems(settlementMapper.findWorkerSettlements(query)),
                 settlementMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -68,7 +83,8 @@ public class SettlementServiceImpl implements SettlementService {
     @Override
     public String exportCsv(WorkerSettlementQueryDTO query) {
         normalizeQuery(query);
-        java.util.List<WorkerSettlementListItemDTO> items = settlementMapper.findWorkerSettlementsForExport(query);
+        List<WorkerSettlementListItemDTO> items = maskItems(
+                settlementMapper.findWorkerSettlementsForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("结算单号,服务者,账期,应结金额,已扣减金额,实结金额,保证金影响,结算状态,出款状态\n");
         for (WorkerSettlementListItemDTO item : items) {
@@ -83,6 +99,23 @@ public class SettlementServiceImpl implements SettlementService {
                     .append(csvCell(item.getPayoutStatus())).append('\n');
         }
         return builder.toString();
+    }
+
+    private List<WorkerSettlementListItemDTO> maskItems(List<WorkerSettlementListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private WorkerSettlementListItemDTO maskedCopy(WorkerSettlementListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        WorkerSettlementListItemDTO outwardItem = new WorkerSettlementListItemDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setWorkerName(sensitiveDataMasker.maskName(item.getWorkerName()));
+        return outwardItem;
     }
 
     private void normalizeQuery(WorkerSettlementQueryDTO query) {

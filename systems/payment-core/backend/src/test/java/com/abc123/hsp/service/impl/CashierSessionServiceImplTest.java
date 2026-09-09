@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
 import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.CashierSessionMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,21 @@ class CashierSessionServiceImplTest {
     }
 
     @Test
+    void shouldMaskCashierSessionListWithoutChangingMapperDto() {
+        CashierSessionQueryDTO query = new CashierSessionQueryDTO();
+        CashierSessionListItemDTO item = new CashierSessionListItemDTO();
+        item.setCustomerName("王先生");
+        when(cashierSessionMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(cashierSessionMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<CashierSessionListItemDTO> result =
+                new CashierSessionServiceImpl(cashierSessionMapper).list(query);
+
+        assertEquals("王*", result.getItems().get(0).getCustomerName());
+        assertEquals("王先生", item.getCustomerName());
+    }
+
+    @Test
     void shouldExportNormalizedCashierSessionsAsCsv() {
         CashierSessionQueryDTO query = new CashierSessionQueryDTO();
         query.setSessionNo(" PRE-001 ");
@@ -61,6 +78,7 @@ class CashierSessionServiceImplTest {
         CashierSessionListItemDTO item = new CashierSessionListItemDTO();
         item.setSessionNo("PRE-001");
         item.setPrepayOrderNo("PRE-001");
+        item.setCustomerName("张\"女士");
         item.setCashierTitle("张\"女士的收银台");
         item.setSessionStatusType("danger");
         when(cashierSessionMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
@@ -72,7 +90,10 @@ class CashierSessionServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         assertTrue(csv.startsWith("\uFEFF会话编号,预付单号,支付单号"));
         assertTrue(csv.contains("\"danger\""));
+        assertTrue(csv.contains("\"张*\""));
+        assertFalse(csv.contains("\"张\"\"女士\","));
         assertTrue(csv.contains("\"张\"\"女士的收银台\""));
+        assertEquals("张\"女士", item.getCustomerName());
         verify(cashierSessionMapper).findAllForExport(query);
     }
 

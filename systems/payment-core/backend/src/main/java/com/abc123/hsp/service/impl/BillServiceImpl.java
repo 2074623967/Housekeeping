@@ -6,6 +6,13 @@ import com.abc123.hsp.dto.BillQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.BillMapper;
 import com.abc123.hsp.service.BillService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,16 +22,23 @@ import org.springframework.stereotype.Service;
 public class BillServiceImpl implements BillService {
 
     private final BillMapper billMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public BillServiceImpl(BillMapper billMapper) {
+    @Autowired
+    public BillServiceImpl(BillMapper billMapper, PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.billMapper = billMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    BillServiceImpl(BillMapper billMapper) {
+        this(billMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<BillListItemDTO> list(BillQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                billMapper.findAll(query),
+                maskItems(billMapper.findAll(query)),
                 billMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -70,7 +84,7 @@ public class BillServiceImpl implements BillService {
         normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型,到期时间,创建时间\n");
-        for (BillListItemDTO item : billMapper.findAllForExport(query)) {
+        for (BillListItemDTO item : maskItems(billMapper.findAllForExport(query))) {
             builder.append(csvCell(item.getBillNo())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getCustomerName())).append(',')
@@ -83,6 +97,23 @@ public class BillServiceImpl implements BillService {
                     .append(csvCell(item.getCreatedAt())).append('\n');
         }
         return builder.toString();
+    }
+
+    private List<BillListItemDTO> maskItems(List<BillListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private BillListItemDTO maskedCopy(BillListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        BillListItemDTO outwardItem = new BillListItemDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        return outwardItem;
     }
 
     private void normalizeQuery(BillQueryDTO query) {

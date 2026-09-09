@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
 import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.SettlementMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,21 @@ class SettlementServiceImplTest {
     }
 
     @Test
+    void shouldMaskWorkerSettlementListWithoutChangingMapperDto() {
+        WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
+        WorkerSettlementListItemDTO item = new WorkerSettlementListItemDTO();
+        item.setWorkerName("李师傅");
+        when(settlementMapper.findWorkerSettlements(query)).thenReturn(Collections.singletonList(item));
+        when(settlementMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<WorkerSettlementListItemDTO> result =
+                new SettlementServiceImpl(settlementMapper).workerList(query);
+
+        assertEquals("李*", result.getItems().get(0).getWorkerName());
+        assertEquals("李师傅", item.getWorkerName());
+    }
+
+    @Test
     void shouldExportWorkerSettlements() {
         WorkerSettlementQueryDTO query = new WorkerSettlementQueryDTO();
         query.setSettlementOrderId(" SETTLE-001 ");
@@ -60,8 +77,10 @@ class SettlementServiceImplTest {
         assertEquals("SETTLE-001", query.getSettlementOrderId());
         assertEquals("李师傅", query.getWorkerKeyword());
         assertTrue(csv.contains("SETTLE-001"));
-        assertTrue(csv.contains("李师傅"));
+        assertTrue(csv.contains("李*"));
+        assertFalse(csv.contains("李师傅"));
         assertTrue(csv.contains("¥888.00"));
+        assertEquals("李师傅", item.getWorkerName());
         verify(settlementMapper).findWorkerSettlementsForExport(query);
     }
 

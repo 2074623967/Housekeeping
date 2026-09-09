@@ -5,7 +5,13 @@ import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import com.abc123.hsp.service.OrderService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -13,16 +19,23 @@ import org.springframework.util.StringUtils;
 public class OrderServiceImpl implements OrderService {
 
     private final OrderMapper orderMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public OrderServiceImpl(OrderMapper orderMapper) {
+    @Autowired
+    public OrderServiceImpl(OrderMapper orderMapper, PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.orderMapper = orderMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    OrderServiceImpl(OrderMapper orderMapper) {
+        this(orderMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<OrderListItemDTO> list(OrderQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                orderMapper.findAll(query),
+                maskItems(orderMapper.findAll(query)),
                 orderMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -32,7 +45,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public String exportCsv(OrderQueryDTO query) {
         normalizeQuery(query);
-        List<OrderListItemDTO> records = orderMapper.findForExport(query);
+        List<OrderListItemDTO> records = maskItems(orderMapper.findForExport(query));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("订单号,账单号,客户名称,服务品类,服务者,订单金额,已付金额,订单状态,履约状态,最近支付状态,最近收银台状态,创建时间\n");
@@ -51,6 +64,24 @@ public class OrderServiceImpl implements OrderService {
                     .append(csv(item.getCreatedAt())).append('\n');
         }
         return builder.toString();
+    }
+
+    private List<OrderListItemDTO> maskItems(List<OrderListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private OrderListItemDTO maskedCopy(OrderListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        OrderListItemDTO outwardItem = new OrderListItemDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        outwardItem.setWorkerName(sensitiveDataMasker.maskName(item.getWorkerName()));
+        return outwardItem;
     }
 
     /**

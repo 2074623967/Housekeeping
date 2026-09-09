@@ -13,10 +13,16 @@ import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.abc123.hsp.service.RefundService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -35,18 +41,28 @@ public class RefundServiceImpl implements RefundService {
 
     private final RefundMapper refundMapper;
     private final RefundChannelSubmitService refundChannelSubmitService;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
+    @Autowired
     public RefundServiceImpl(RefundMapper refundMapper,
-                             RefundChannelSubmitService refundChannelSubmitService) {
+                             RefundChannelSubmitService refundChannelSubmitService,
+                             PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.refundMapper = refundMapper;
         this.refundChannelSubmitService = refundChannelSubmitService;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    RefundServiceImpl(RefundMapper refundMapper,
+                      RefundChannelSubmitService refundChannelSubmitService) {
+        this(refundMapper, refundChannelSubmitService,
+                new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<RefundListItemDTO> list(RefundQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                refundMapper.findAll(query),
+                maskItems(refundMapper.findAll(query)),
                 refundMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -56,7 +72,7 @@ public class RefundServiceImpl implements RefundService {
     @Override
     public String exportCsv(RefundQueryDTO query) {
         normalizeQuery(query);
-        List<RefundListItemDTO> items = refundMapper.findAllForExport(query);
+        List<RefundListItemDTO> items = maskItems(refundMapper.findAllForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("退款单号,支付单号,订单号,客户名称,退款金额,退款方式,退款状态,状态类型,申请时间,成功时间\n");
         for (RefundListItemDTO item : items) {
@@ -81,8 +97,28 @@ public class RefundServiceImpl implements RefundService {
         if (detail == null) {
             throw new IllegalArgumentException("退款单不存在");
         }
-        detail.setOperationLogs(refundMapper.findOperationLogs(requiredRefundOrderId));
-        return detail;
+        RefundDetailDTO outwardDetail = new RefundDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        outwardDetail.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
+        outwardDetail.setOperationLogs(refundMapper.findOperationLogs(requiredRefundOrderId));
+        return outwardDetail;
+    }
+
+    private List<RefundListItemDTO> maskItems(List<RefundListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private RefundListItemDTO maskedCopy(RefundListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        RefundListItemDTO outwardItem = new RefundListItemDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        return outwardItem;
     }
 
     @Override

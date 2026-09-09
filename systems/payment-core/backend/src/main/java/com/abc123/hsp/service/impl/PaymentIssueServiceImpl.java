@@ -10,8 +10,14 @@ import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
 import com.abc123.hsp.service.PaymentIssueService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -23,20 +29,45 @@ import org.springframework.util.StringUtils;
 public class PaymentIssueServiceImpl implements PaymentIssueService {
 
     private final PaymentIssueMapper paymentIssueMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper) {
+    @Autowired
+    public PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper,
+                                   PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentIssueMapper = paymentIssueMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper) {
+        this(paymentIssueMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<PaymentIssueRowDTO> list(PaymentIssueQueryDTO query) {
         PaymentIssueQueryDTO normalizedQuery = normalizeQuery(query);
         return new PageResultDTO<>(
-                paymentIssueMapper.findAll(normalizedQuery),
+                maskItems(paymentIssueMapper.findAll(normalizedQuery)),
                 paymentIssueMapper.count(normalizedQuery),
                 normalizedQuery.getPageNo(),
                 normalizedQuery.getPageSize()
         );
+    }
+
+    private List<PaymentIssueRowDTO> maskItems(List<PaymentIssueRowDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private PaymentIssueRowDTO maskedCopy(PaymentIssueRowDTO item) {
+        if (item == null) {
+            return null;
+        }
+        PaymentIssueRowDTO outwardItem = new PaymentIssueRowDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        return outwardItem;
     }
 
     @Override

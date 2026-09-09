@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
@@ -58,6 +60,21 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldMaskRefundListWithoutChangingMapperDto() {
+        RefundQueryDTO query = new RefundQueryDTO();
+        RefundListItemDTO item = new RefundListItemDTO();
+        item.setCustomerName("张女士");
+        when(refundMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(refundMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<RefundListItemDTO> result =
+                new RefundServiceImpl(refundMapper, refundChannelSubmitService).list(query);
+
+        assertEquals("张*", result.getItems().get(0).getCustomerName());
+        assertEquals("张女士", item.getCustomerName());
+    }
+
+    @Test
     void shouldExportNormalizedRefundsAsCsv() {
         RefundQueryDTO query = new RefundQueryDTO();
         query.setRefundOrderId(" REF-001 ");
@@ -78,7 +95,9 @@ class RefundServiceImplTest {
         assertEquals("原路退款", query.getRefundMethod());
         assertTrue(csv.startsWith("\uFEFF退款单号,支付单号,订单号,客户名称"));
         assertTrue(csv.contains("\"success\""));
-        assertTrue(csv.contains("\"张\"\"女士\""));
+        assertTrue(csv.contains("\"张*\""));
+        assertFalse(csv.contains("张\"女士"));
+        assertEquals("张\"女士", item.getCustomerName());
         verify(refundMapper).findAllForExport(query);
     }
 
@@ -191,6 +210,7 @@ class RefundServiceImplTest {
     void shouldLoadRefundDetailWithOperationLogs() {
         RefundDetailDTO detail = new RefundDetailDTO();
         detail.setRefundOrderId("REF-001");
+        detail.setCustomerName("张女士");
         RefundOperationLogItemDTO logItem = new RefundOperationLogItemDTO();
         logItem.setLogNo("ROL-001");
         when(refundMapper.findDetailByRefundOrderId("REF-001")).thenReturn(detail);
@@ -199,7 +219,10 @@ class RefundServiceImplTest {
         RefundDetailDTO result = new RefundServiceImpl(refundMapper, refundChannelSubmitService).detail("REF-001");
 
         org.junit.jupiter.api.Assertions.assertEquals("REF-001", result.getRefundOrderId());
+        org.junit.jupiter.api.Assertions.assertEquals("张*", result.getCustomerName());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getOperationLogs().size());
+        org.junit.jupiter.api.Assertions.assertEquals("张女士", detail.getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals(null, detail.getOperationLogs());
         verify(refundMapper).findDetailByRefundOrderId("REF-001");
         verify(refundMapper).findOperationLogs("REF-001");
     }

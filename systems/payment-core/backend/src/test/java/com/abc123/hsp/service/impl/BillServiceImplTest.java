@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.dto.BillListItemDTO;
 import com.abc123.hsp.dto.BillOverviewDTO;
 import com.abc123.hsp.dto.BillQueryDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.BillMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,20 @@ class BillServiceImplTest {
     }
 
     @Test
+    void shouldMaskBillListWithoutChangingMapperDto() {
+        BillQueryDTO query = new BillQueryDTO();
+        BillListItemDTO item = new BillListItemDTO();
+        item.setCustomerName("张女士");
+        when(billMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(billMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<BillListItemDTO> result = new BillServiceImpl(billMapper).list(query);
+
+        assertEquals("张*", result.getItems().get(0).getCustomerName());
+        assertEquals("张女士", item.getCustomerName());
+    }
+
+    @Test
     void shouldExportNormalizedBillsAsCsv() {
         BillQueryDTO query = new BillQueryDTO();
         query.setBillNo(" BILL-001 ");
@@ -71,7 +87,9 @@ class BillServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         assertTrue(csv.startsWith("\uFEFF账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型"));
         assertTrue(csv.contains("\"warning\""));
-        assertTrue(csv.contains("\"张\"\"女士\""));
+        assertTrue(csv.contains("\"张*\""));
+        assertFalse(csv.contains("张\"女士"));
+        assertEquals("张\"女士", item.getCustomerName());
         verify(billMapper).findAllForExport(query);
     }
 

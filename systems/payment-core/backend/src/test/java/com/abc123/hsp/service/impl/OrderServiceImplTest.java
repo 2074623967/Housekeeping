@@ -1,10 +1,13 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 
 import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.OrderListItemDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -43,6 +46,23 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void shouldMaskOrderNamesWithoutChangingMapperDto() {
+        OrderQueryDTO query = new OrderQueryDTO();
+        OrderListItemDTO item = new OrderListItemDTO();
+        item.setCustomerName("王阿姨");
+        item.setWorkerName("李师傅");
+        org.mockito.Mockito.when(orderMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        org.mockito.Mockito.when(orderMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<OrderListItemDTO> result = new OrderServiceImpl(orderMapper).list(query);
+
+        assertEquals("王*", result.getItems().get(0).getCustomerName());
+        assertEquals("李*", result.getItems().get(0).getWorkerName());
+        assertEquals("王阿姨", item.getCustomerName());
+        assertEquals("李师傅", item.getWorkerName());
+    }
+
+    @Test
     void shouldExportOrderCsv() {
         OrderQueryDTO query = new OrderQueryDTO();
         query.setOrderNo("ORD-001");
@@ -68,6 +88,11 @@ class OrderServiceImplTest {
 
         assertTrue(csv.contains("订单号,账单号,客户名称"));
         assertTrue(csv.contains("ORD-001"));
-        assertTrue(csv.contains("王阿姨"));
+        assertTrue(csv.contains("王*"));
+        assertTrue(csv.contains("李*"));
+        assertFalse(csv.contains("王阿姨"));
+        assertFalse(csv.contains("李师傅"));
+        assertEquals("王阿姨", item.getCustomerName());
+        assertEquals("李师傅", item.getWorkerName());
     }
 }

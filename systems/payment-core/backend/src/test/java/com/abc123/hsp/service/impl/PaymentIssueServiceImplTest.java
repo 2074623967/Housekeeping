@@ -14,6 +14,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,6 +61,22 @@ class PaymentIssueServiceImplTest {
         assertEquals("支付宝", normalized.getPaymentMethod());
         assertEquals(1, normalized.getPageNo());
         assertEquals(100, normalized.getPageSize());
+    }
+
+    @Test
+    void shouldMaskPaymentIssueListWithoutChangingMapperDto() {
+        PaymentIssueRowDTO row = new PaymentIssueRowDTO();
+        row.setIssueNo("ISSUE-001");
+        row.setCustomerName("张女士");
+        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class)))
+                .thenReturn(Collections.singletonList(row));
+        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(1L);
+
+        PageResultDTO<PaymentIssueRowDTO> result =
+                new PaymentIssueServiceImpl(paymentIssueMapper).list(new PaymentIssueQueryDTO());
+
+        assertEquals("张*", result.getItems().get(0).getCustomerName());
+        assertEquals("张女士", row.getCustomerName());
     }
 
     @Test

@@ -6,6 +6,13 @@ import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.CashierSessionMapper;
 import com.abc123.hsp.service.CashierSessionService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -15,16 +22,24 @@ import org.springframework.stereotype.Service;
 public class CashierSessionServiceImpl implements CashierSessionService {
 
     private final CashierSessionMapper cashierSessionMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public CashierSessionServiceImpl(CashierSessionMapper cashierSessionMapper) {
+    @Autowired
+    public CashierSessionServiceImpl(CashierSessionMapper cashierSessionMapper,
+                                     PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.cashierSessionMapper = cashierSessionMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    CashierSessionServiceImpl(CashierSessionMapper cashierSessionMapper) {
+        this(cashierSessionMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<CashierSessionListItemDTO> list(CashierSessionQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                cashierSessionMapper.findAll(query),
+                maskItems(cashierSessionMapper.findAll(query)),
                 cashierSessionMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -70,7 +85,7 @@ public class CashierSessionServiceImpl implements CashierSessionService {
         normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("会话编号,预付单号,支付单号,订单号,账单号,客户名称,收银台标题,终端,金额,会话状态,状态类型,创建时间,失效时间\n");
-        for (CashierSessionListItemDTO item : cashierSessionMapper.findAllForExport(query)) {
+        for (CashierSessionListItemDTO item : maskItems(cashierSessionMapper.findAllForExport(query))) {
             builder.append(csvCell(item.getSessionNo())).append(',')
                     .append(csvCell(item.getPrepayOrderNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')
@@ -86,6 +101,23 @@ public class CashierSessionServiceImpl implements CashierSessionService {
                     .append(csvCell(item.getExpiresAt())).append('\n');
         }
         return builder.toString();
+    }
+
+    private List<CashierSessionListItemDTO> maskItems(List<CashierSessionListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedCopy).collect(Collectors.toList());
+    }
+
+    private CashierSessionListItemDTO maskedCopy(CashierSessionListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        CashierSessionListItemDTO outwardItem = new CashierSessionListItemDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        return outwardItem;
     }
 
     private void normalizeQuery(CashierSessionQueryDTO query) {
