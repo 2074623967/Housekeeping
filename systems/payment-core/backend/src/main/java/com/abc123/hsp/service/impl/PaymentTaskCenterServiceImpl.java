@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -57,6 +58,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final int ISSUE_ALERT_CONTENT_MAX_LENGTH = 512;
+    private static final String ISSUE_ACTIVE_GENERATION_KEY_PREFIX = "ISSUE_ACTIVE:";
+    private static final String ISSUE_ESCALATION_GENERATION_KEY_PREFIX = "ISSUE_ESCALATION:";
     private static final String QUERY_FAILURE_ISSUE_TYPE = "主动查单失败趋势";
     private static final String QUERY_RATE_LIMIT_ISSUE_TYPE = "主动查单限流拒绝";
 
@@ -641,18 +644,25 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         List<PaymentIssueAlertCandidateDTO> alertCandidates = paymentTaskCenterMapper.findOverdueIssueAlertCandidates();
         List<PaymentIssueAlertCandidateDTO> escalationCandidates = paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates();
         int generatedAlertCount = 0;
+        int duplicateAlertCount = 0;
         int failCount = 0;
         List<String> failedIssueNos = new ArrayList<String>();
         for (PaymentIssueAlertCandidateDTO candidate : alertCandidates) {
-            if (generateIssueAlert(candidate, triggeredBy, failedIssueNos)) {
+            IssueAlertGenerationResult generationResult = generateIssueAlert(candidate, triggeredBy, failedIssueNos);
+            if (generationResult == IssueAlertGenerationResult.GENERATED) {
                 generatedAlertCount++;
+            } else if (generationResult == IssueAlertGenerationResult.DUPLICATE) {
+                duplicateAlertCount++;
             } else {
                 failCount++;
             }
         }
         for (PaymentIssueAlertCandidateDTO candidate : escalationCandidates) {
-            if (generateIssueAlert(candidate, triggeredBy, failedIssueNos)) {
+            IssueAlertGenerationResult generationResult = generateIssueAlert(candidate, triggeredBy, failedIssueNos);
+            if (generationResult == IssueAlertGenerationResult.GENERATED) {
                 generatedAlertCount++;
+            } else if (generationResult == IssueAlertGenerationResult.DUPLICATE) {
+                duplicateAlertCount++;
             } else {
                 failCount++;
             }
@@ -668,29 +678,32 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 triggeredBy,
                 processedCount,
                 generatedAlertCount,
-                0,
+                duplicateAlertCount,
                 failCount,
                 processedCount == 0
                         ? "当前没有超过 SLA 的支付交易异常。"
-                        : String.format("发现 %d 条超过 SLA 的支付交易异常，%d 条未确认告警触发升级，本次生成 %d 条告警通知，失败 %d 条%s。",
-                        overdueIssueCount, escalationCandidates.size(), generatedAlertCount, failCount, failedIssueHint)
+                        : String.format("发现 %d 条超过 SLA 的支付交易异常，%d 条未确认告警触发升级，本次生成 %d 条告警通知，并发重复跳过 %d 条，失败 %d 条%s。",
+                        overdueIssueCount, escalationCandidates.size(), generatedAlertCount, duplicateAlertCount,
+                        failCount, failedIssueHint)
         );
     }
 
-    private boolean generateIssueAlert(PaymentIssueAlertCandidateDTO candidate,
-                                       String triggeredBy,
-                                       List<String> failedIssueNos) {
+    private IssueAlertGenerationResult generateIssueAlert(PaymentIssueAlertCandidateDTO candidate,
+                                                          String triggeredBy,
+                                                          List<String> failedIssueNos) {
         try {
             Integer insertedRows = executeIssueAlertTransaction(() ->
                     paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy)));
             if (valueOrZero(insertedRows) > 0) {
-                return true;
+                return IssueAlertGenerationResult.GENERATED;
             }
+        } catch (DuplicateKeyException exception) {
+            return IssueAlertGenerationResult.DUPLICATE;
         } catch (RuntimeException exception) {
             // 当前候选由独立事务回滚，批次继续处理后续异常。
         }
         recordFailedIssueNo(failedIssueNos, candidate);
-        return false;
+        return IssueAlertGenerationResult.FAILED;
     }
 
     private <T> T executeIssueAlertTransaction(Supplier<T> action) {
@@ -716,6 +729,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
         entity.setAlertNo(buildAlertLogNo());
         entity.setSourceAlertNo(candidate.getSourceAlertNo());
+        entity.setGenerationKey(buildIssueAlertGenerationKey(candidate));
         entity.setIssueNo(candidate.getIssueNo());
         entity.setPaymentOrderId(candidate.getPaymentOrderId());
         entity.setIssueType(candidate.getIssueType());
@@ -730,6 +744,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setAlertContent(truncateIssueAlertContent(buildScheduledAlertContent(candidate)));
         entity.setTriggeredBy(triggeredBy);
         return entity;
+    }
+
+    private String buildIssueAlertGenerationKey(PaymentIssueAlertCandidateDTO candidate) {
+        if (hasText(candidate.getSourceAlertNo())) {
+            return ISSUE_ESCALATION_GENERATION_KEY_PREFIX + candidate.getSourceAlertNo().trim();
+        }
+        return ISSUE_ACTIVE_GENERATION_KEY_PREFIX + candidate.getIssueNo().trim();
+    }
+
+    private enum IssueAlertGenerationResult {
+        GENERATED,
+        DUPLICATE,
+        FAILED
     }
 
     private String buildScheduledAlertContent(PaymentIssueAlertCandidateDTO candidate) {

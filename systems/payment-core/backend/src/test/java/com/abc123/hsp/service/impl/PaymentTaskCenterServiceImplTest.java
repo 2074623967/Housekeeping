@@ -32,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -480,6 +481,7 @@ class PaymentTaskCenterServiceImplTest {
         ));
         verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PIA".equals(entity.getAlertNo().substring(0, 3))
+                        && "ISSUE_ACTIVE:ISSUE-WAIT-PAY-001".equals(entity.getGenerationKey())
                         && "待确认".equals(entity.getAckStatus())
                         && "IN_APP_OUTBOX".equals(entity.getAlertChannel())
                         && entity.getAlertContent().contains("交易链路白班")
@@ -525,6 +527,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1, result.getSuccessCount());
         verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PIA-SOURCE-001".equals(entity.getSourceAlertNo())
+                        && "ISSUE_ESCALATION:PIA-SOURCE-001".equals(entity.getGenerationKey())
                         && "支付技术负责人".equals(entity.getReceiver())
                         && "待确认".equals(entity.getAckStatus())
                         && entity.getAlertContent().contains("PIA-SOURCE-001")
@@ -638,6 +641,36 @@ class PaymentTaskCenterServiceImplTest {
         verify(transactionManager).rollback(transactionStatus);
         verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "ISSUE-3".equals(entity.getIssueNo())));
+    }
+
+    @Test
+    void shouldReportConcurrentDuplicateIssueAlertAsSkipped() {
+        PaymentIssueAlertCandidateDTO candidate = buildIssueAlertCandidate("ISSUE-DUP", "PAY-DUP");
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates())
+                .thenReturn(Collections.singletonList(candidate));
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates())
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.insertIssueAlertLog(
+                org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class)))
+                .thenThrow(new DuplicateKeyException("duplicate generation key"));
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runEscalateOverdueIssues();
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertEquals(0, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("并发重复跳过 1 条"));
     }
 
     @Test

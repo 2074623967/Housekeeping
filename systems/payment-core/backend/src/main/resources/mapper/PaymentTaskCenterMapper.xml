@@ -591,6 +591,7 @@
         INSERT INTO t_payment_issue_alert_log (
             alert_no,
             source_alert_no,
+            generation_key,
             issue_no,
             payment_order_id,
             issue_type,
@@ -617,6 +618,7 @@
         ) VALUES (
             #{alertNo},
             #{sourceAlertNo},
+            #{generationKey},
             #{issueNo},
             #{paymentOrderId},
             #{issueType},

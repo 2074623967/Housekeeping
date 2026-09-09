@@ -537,7 +537,11 @@
         SET ack_status = '已确认',
             ack_status_type = 'success',
             ack_operator = #{operator},
-            ack_at = NOW()
+            ack_at = NOW(),
+            generation_key = CASE
+                WHEN generation_key LIKE 'ISSUE_ACTIVE:%' THEN NULL
+                ELSE generation_key
+            END
         WHERE issue_no = #{issueNo}
           AND ack_status = '待确认'
     </update>
@@ -547,7 +551,11 @@
         SET ack_status = '已确认',
             ack_status_type = 'success',
             ack_operator = #{operator},
-            ack_at = NOW()
+            ack_at = NOW(),
+            generation_key = CASE
+                WHEN generation_key LIKE 'ISSUE_ACTIVE:%' THEN NULL
+                ELSE generation_key
+            END
         WHERE alert_no = #{alertNo}
           AND ack_status = '待确认'
     </update>

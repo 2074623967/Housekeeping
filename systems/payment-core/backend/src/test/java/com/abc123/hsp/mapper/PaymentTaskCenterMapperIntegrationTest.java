@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
+import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -16,6 +17,7 @@ import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.exceptions.PersistenceException;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -45,11 +47,19 @@ class PaymentTaskCenterMapperIntegrationTest {
         configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.addMapper(PaymentTaskCenterMapper.class);
+        configuration.addMapper(PaymentIssueMapper.class);
         try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentTaskCenterMapper.xml")) {
             new XMLMapperBuilder(
                     mapperXml,
                     configuration,
                     "mapper/PaymentTaskCenterMapper.xml",
+                    configuration.getSqlFragments()).parse();
+        }
+        try (InputStream mapperXml = Resources.getResourceAsStream("mapper/PaymentIssueMapper.xml")) {
+            new XMLMapperBuilder(
+                    mapperXml,
+                    configuration,
+                    "mapper/PaymentIssueMapper.xml",
                     configuration.getSqlFragments()).parse();
         }
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
@@ -130,6 +140,42 @@ class PaymentTaskCenterMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRejectDuplicateIssueAlertGenerationKeyWithoutOverwritingOriginalAlert() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity original = buildIssueAlertLog("PIA-IDEMPOTENT-1");
+            PaymentIssueAlertLogEntity duplicate = buildIssueAlertLog("PIA-IDEMPOTENT-2");
+
+            assertEquals(1, mapper.insertIssueAlertLog(original));
+            org.junit.jupiter.api.Assertions.assertThrows(
+                    PersistenceException.class,
+                    () -> mapper.insertIssueAlertLog(duplicate));
+            assertEquals(1, countAlertsByGenerationKey(
+                    session.getConnection(), "ISSUE_ACTIVE:ISSUE-IDEMPOTENT"));
+            assertEquals("PIA-IDEMPOTENT-1", findAlertNoByGenerationKey(
+                    session.getConnection(), "ISSUE_ACTIVE:ISSUE-IDEMPOTENT"));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    @Test
+    void shouldReleaseActiveIssueGenerationKeyAfterAcknowledgement() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper taskCenterMapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);
+            PaymentIssueAlertLogEntity original = buildIssueAlertLog("PIA-ACK-1");
+            PaymentIssueAlertLogEntity replacement = buildIssueAlertLog("PIA-ACK-2");
+
+            assertEquals(1, taskCenterMapper.insertIssueAlertLog(original));
+            assertEquals(1, issueMapper.acknowledgeAlertByAlertNo("PIA-ACK-1", "支付运营"));
+            assertEquals(1, taskCenterMapper.insertIssueAlertLog(replacement));
+            assertEquals(1, countAlertsByGenerationKey(
+                    session.getConnection(), "ISSUE_ACTIVE:ISSUE-IDEMPOTENT"));
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -152,10 +198,18 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
                     + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, source_alert_no VARCHAR(64), "
-                    + "issue_type VARCHAR(64), alert_channel VARCHAR(32), ack_status VARCHAR(32), "
-                    + "alert_status VARCHAR(32), provider_delivery_status VARCHAR(32), "
-                    + "created_at DATETIME)");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), source_alert_no VARCHAR(64), "
+                    + "generation_key VARCHAR(191), issue_no VARCHAR(128), payment_order_id VARCHAR(64), "
+                    + "issue_type VARCHAR(64), severity VARCHAR(32), responsibility_group VARCHAR(64), "
+                    + "alert_channel VARCHAR(32), receiver VARCHAR(64), alert_status VARCHAR(32), "
+                    + "alert_status_type VARCHAR(32), ack_status VARCHAR(32), ack_status_type VARCHAR(32), "
+                    + "alert_content VARCHAR(512), provider_code VARCHAR(64), provider_name VARCHAR(128), "
+                    + "endpoint_alias VARCHAR(128), template_code VARCHAR(128), "
+                    + "provider_receipt_snapshot VARCHAR(2048), provider_receipt_no VARCHAR(128), "
+                    + "provider_delivery_status VARCHAR(64), provider_delivery_message VARCHAR(255), "
+                    + "rendered_content_snapshot VARCHAR(1024), triggered_by VARCHAR(64), "
+                    + "ack_operator VARCHAR(64), ack_at DATETIME, created_at DATETIME, "
+                    + "UNIQUE (alert_no), UNIQUE (generation_key))");
 
             LocalDateTime now = LocalDateTime.now();
             insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
@@ -194,6 +248,48 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "WHERE payment_order_id = 'PAY-BACKOFF-WAIT' AND id = ("
                     + "SELECT MAX(id) FROM t_payment_notify_log WHERE payment_order_id = 'PAY-BACKOFF-WAIT')");
             connection.commit();
+        }
+    }
+
+    private PaymentIssueAlertLogEntity buildIssueAlertLog(String alertNo) {
+        PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
+        entity.setAlertNo(alertNo);
+        entity.setGenerationKey("ISSUE_ACTIVE:ISSUE-IDEMPOTENT");
+        entity.setIssueNo("ISSUE-IDEMPOTENT");
+        entity.setPaymentOrderId("PAY-IDEMPOTENT");
+        entity.setIssueType("待回调未收口");
+        entity.setSeverity("P1");
+        entity.setResponsibilityGroup("支付运营组");
+        entity.setAlertChannel("IN_APP_OUTBOX");
+        entity.setReceiver("支付运营");
+        entity.setAlertStatus("已生成");
+        entity.setAlertStatusType("warn");
+        entity.setAckStatus("待确认");
+        entity.setAckStatusType("warn");
+        entity.setAlertContent("幂等测试告警");
+        entity.setTriggeredBy("integration-test");
+        return entity;
+    }
+
+    private int countAlertsByGenerationKey(Connection connection, String generationKey) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT COUNT(*) FROM t_payment_issue_alert_log WHERE generation_key = ?")) {
+            statement.setString(1, generationKey);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getInt(1);
+            }
+        }
+    }
+
+    private String findAlertNoByGenerationKey(Connection connection, String generationKey) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT alert_no FROM t_payment_issue_alert_log WHERE generation_key = ?")) {
+            statement.setString(1, generationKey);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                return resultSet.getString(1);
+            }
         }
     }
 

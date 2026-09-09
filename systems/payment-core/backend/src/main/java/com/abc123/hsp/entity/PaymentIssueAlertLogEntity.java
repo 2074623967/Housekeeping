@@ -12,6 +12,8 @@ public class PaymentIssueAlertLogEntity {
     private String alertNo;
     /** 来源站内告警编号。 */
     private String sourceAlertNo;
+    /** 告警生成幂等键。 */
+    private String generationKey;
     /** 异常编号。 */
     private String issueNo;
     /** 支付单号。 */
