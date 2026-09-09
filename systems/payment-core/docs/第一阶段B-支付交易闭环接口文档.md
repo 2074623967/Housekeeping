@@ -2074,6 +2074,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 前端应原样展示或反馈请求号，不得自行重建；当前规则不包含上游请求号接收、跨服务透传、消息 trace/span 或集中追踪平台能力。
 4. 10,000 次本地并发唯一性测试只能证明当前样本，不构成生产多实例峰值容量或全局唯一性的形式化验收。
 
+### 14.9 MyBatis SQL 与绑定参数日志规则
+
+1. `application.yml` 显式配置 `mybatis.configuration.log-impl=org.apache.ibatis.logging.nologging.NoLoggingImpl`，默认不输出 MyBatis SQL 语句、结果集和绑定参数。
+2. 该配置不依赖普通日志根级别，因此将 root logger 调到 DEBUG 不会重新打开 MyBatis 语句与参数输出；支付渠道密钥、公钥、控制策略令牌和交易个人信息不得通过此日志路径扩散。
+3. 手工创建 MyBatis `Configuration` 的 Mapper 集成测试必须显式设置同一 `NoLoggingImpl`，避免绕过 Spring Boot 配置形成测试日志旁路。
+4. 关闭此日志会减少 SQL 文本与参数级诊断信息；生产应使用受控指标、链路追踪、慢查询设施或单独治理的诊断工具，本规则不证明生产日志 IAM、隐私或可观测性验收完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

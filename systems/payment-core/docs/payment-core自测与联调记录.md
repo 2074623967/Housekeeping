@@ -5689,3 +5689,28 @@
 1. 请求号生成器已具备进程内并发安全，碰撞空间较三位随机数显著扩大，能够更可靠地支撑错误响应与日志关联。
 2. 8 位 UUID 后缀是工程上的低碰撞实现，不是数学上的全局唯一证明；跨系统追踪仍需网关、消息和下游服务共同透传上下文。
 3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮本地并发测试替代生产压测、正式审批或稳定观察结论。
+
+## 181. 2026-09-09 MyBatis SQL 与绑定参数日志默认关闭 V1.0 验证
+
+### 181.1 本轮补强
+
+1. `application.yml` 显式配置 MyBatis `NoLoggingImpl`，不再把 SQL 语句、查询结果和绑定参数交给普通日志实现；普通日志根级别升到 DEBUG 也不会恢复 MyBatis 参数输出。
+2. 仓库内 13 个手工创建 MyBatis `Configuration` 的 Mapper 集成测试显式设置同一日志实现，避免绕过 Spring Boot 自动配置形成测试日志旁路。
+3. 新增配置契约测试，直接校验 `mybatis.configuration.log-impl` 的安全默认值，防止后续配置整理时静默回退。
+4. 关闭 MyBatis 日志会牺牲 SQL 文本和参数级诊断便利性；生产排障应使用受控指标、链路追踪、慢查询设施或单独治理的工具。
+
+### 181.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| MyBatis 日志定向测试 | `mvn -Dtest=PaymentMyBatisLoggingConfigurationTest,PaymentConfigChannelReviewMapperIntegrationTest,PaymentConfigControlPolicyReviewMapperIntegrationTest,PaymentConfigGatewayReviewMapperIntegrationTest test` | 通过 | `4` 个用例通过；配置契约与三类含敏感参数的 Mapper 路径均未输出 SQL 或绑定参数 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `485` 个用例，`0` failures、`0` errors、`0` skipped；完整日志无 `Preparing:`、`Parameters:`、模拟密钥、公钥或访问令牌绑定值 |
+| 生产日志与观测治理 | 日志 IAM、指标、trace、慢查询授权、保留期限、真实负载与隐私验收 | 未执行 | 不记录生产日志权限、可观测性、隐私审计或现场核验通过 |
+| 补丁检查 | `git diff --check` | 通过 | 配置、Java 测试和文档无空白符错误；本轮未修改 Mapper XML、数据库结构、接口字段或业务状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 待复判 | 预期仍由 release 治理事实决定，不以本轮日志安全回归替代正式放行条件 |
+
+### 181.3 当前判断
+
+1. 支付配置、凭据和交易参数不再因 MyBatis DEBUG 日志进入普通测试或应用日志，且应用与手工 Mapper 测试配置保持一致。
+2. 失去 SQL 文本和参数级日志是数据最小化优先的明确取舍；本轮没有建立生产指标、链路追踪、慢查询授权或受控原文诊断能力。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮自动化通过替代正式审批、生产观测或隐私验收结论。

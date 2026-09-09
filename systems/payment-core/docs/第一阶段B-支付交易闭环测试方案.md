@@ -201,6 +201,13 @@
 3. 验证生成器不再使用共享 `SimpleDateFormat` 或仅三位随机数，不因并发格式化出现损坏或显著缩小碰撞空间。
 4. 本地并发测试不替代生产多实例峰值压测、跨服务追踪上下文透传、集中检索和碰撞监控。
 
+### 4.28 MyBatis SQL 与绑定参数日志默认关闭
+
+1. 验证 `application.yml` 显式配置 `org.apache.ibatis.logging.nologging.NoLoggingImpl`，避免后续配置调整静默恢复 SQL 与绑定参数输出。
+2. 验证所有手工创建 MyBatis `Configuration` 的 Mapper 集成测试应用相同日志实现，不绕过应用默认值。
+3. 在包含模拟渠道密钥、公钥和控制策略令牌的 Mapper 回归中，验证日志不出现 `Preparing:`、`Parameters:` 或对应绑定值；允许 MyBatis 日志工厂初始化信息存在。
+4. 自动化测试不替代生产日志 IAM、隐私审计、受控慢查询设施、真实负载观测或现场验收。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
