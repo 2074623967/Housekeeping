@@ -6492,4 +6492,27 @@
 
 1. 请求路径只触碰当前复合唯一键范围，历史数据维护与支付回调事务解耦；这降低锁放大风险，但不等于生产 MySQL 锁行为已验证。
 2. 有限批次使单轮事务上界可配置，稳定排序避免无序选择；当到期产生速率持续高于清理速率时仍可能积压，需要监控与容量校准。
-3. 当前调度没有跨实例租约，多实例会重复发起清理 SQL。生产前需评估是否接入既有任务租约、增加清理数量/耗时/积压指标，并按目标 MySQL 版本验证执行计划。
+3. 本节初版调度尚未接入跨实例租约，后续已在第 215 节复用既有任务租约并修正 owner 隔离；生产仍需增加清理数量/耗时/积压指标，并按目标 MySQL 版本验证执行计划。
+
+## 215. 2026-09-10 自动任务租约 owner 隔离 V1.0 验证
+
+### 215.1 本轮补强
+
+1. `PaymentTaskCenterServiceImpl` 与 `PaymentIssueAlertDeliveryServiceImpl` 将业务 `triggeredBy` 与数据库 `lock_owner` 分离；每个服务实例生成独立 UUID 后缀，日志仍记录稳定触发者，租约使用 `triggeredBy:instanceSuffix`。
+2. `acquireTaskLease` 删除 `lock_owner = currentOwner` 重入条件，并将到期计算改为 `TIMESTAMPADD`；同实例定时任务由 Spring `fixedDelay` 串行执行，不需要数据库重入。
+3. nonce 清理调度接入相同租约表，未抢到租约时跳过，成功或异常均只用本次实例 owner 释放；旧 owner 在租约过期并被接管后无法释放新 owner 的锁。
+
+### 215.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 租约定向测试 | `mvn -Dtest=PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterMapperIntegrationTest,PaymentCallbackNonceCleanupSchedulerTest test` | 通过 | `66` 个用例通过；覆盖 owner 前缀、获取/释放一致、跳过与 Mapper 租约裁决 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 报告汇总 `539` 个用例，`0` failures、`0` errors、`0` skipped |
+| H2 MySQL 租约集成 | 正式 Mapper XML + `t_payment_task_lease` fixture | 通过 | 同 owner 和异 owner在有效期内均不可重入，过期后新 owner 可接管，旧 owner 释放返回 `0` |
+| 真实多实例验证 | 进程中止、租约过期接管、长任务超时、锁等待与主从切换 | 未执行 | 不记录生产租约验收通过 |
+
+### 215.3 当前判断
+
+1. 固定 owner 会把不同实例错误识别为同一持有者，允许重入时无法形成互斥；实例唯一后缀与禁止重入共同恢复数据库租约的基本排他语义。
+2. owner 同时是释放时的轻量 fencing token：旧任务若执行超过租约并被接管，旧 owner 的 `release` 条件不能清除新 owner；但旧业务动作本身仍可能继续，需要长任务续租或下游幂等共同约束。
+3. 当前证据覆盖本地 SQL 与服务调用顺序，不证明生产数据库时间、网络分区、进程暂停、锁超时和多实例压力下的行为；正式部署前仍需故障注入与容量验证。
