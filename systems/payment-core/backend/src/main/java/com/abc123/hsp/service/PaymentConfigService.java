@@ -2,6 +2,10 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
@@ -229,10 +233,24 @@ public interface PaymentConfigService {
     List<PaymentGatewayReviewDTO> rejectGatewayReview(
             String requestNo, PaymentGatewayReviewActionRequestDTO request);
 
-    /**
-     * 启停支付控制策略配置。
-     */
-    PaymentConfigOverviewDTO toggleControlPolicy(PaymentConfigToggleRequestDTO request);
+    /** 提交支付控制策略启停候选，不改变运行态。 */
+    List<PaymentControlPolicyReviewDTO> submitControlPolicyStatusReview(
+            PaymentControlPolicyStatusReviewRequestDTO request);
+
+    /** 提交支付控制策略新增或编辑完整候选，不改变运行态。 */
+    List<PaymentControlPolicyReviewDTO> submitControlPolicyReview(
+            PaymentControlPolicyReviewSubmitRequestDTO request);
+
+    /** 查询支付控制策略配置变更复核申请。 */
+    List<PaymentControlPolicyReviewDTO> listControlPolicyReviews();
+
+    /** 通过复核并应用支付控制策略完整候选。 */
+    List<PaymentControlPolicyReviewDTO> approveControlPolicyReview(
+            String requestNo, PaymentControlPolicyReviewActionRequestDTO request);
+
+    /** 驳回支付控制策略完整候选，不改变运行态。 */
+    List<PaymentControlPolicyReviewDTO> rejectControlPolicyReview(
+            String requestNo, PaymentControlPolicyReviewActionRequestDTO request);
 
     /**
      * 启停告警通知供应商配置。

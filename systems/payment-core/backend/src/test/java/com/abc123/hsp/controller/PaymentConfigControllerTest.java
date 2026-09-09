@@ -12,6 +12,10 @@ import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
@@ -296,9 +300,8 @@ class PaymentConfigControllerTest {
     }
 
     @Test
-    void shouldToggleGovernanceConfigs() {
+    void shouldToggleOtherGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.toggleControlPolicy(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleAlertProvider(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         when(paymentConfigService.toggleIssueDutyRoster(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
@@ -306,12 +309,39 @@ class PaymentConfigControllerTest {
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
-        assertEquals(overview, controller.toggleControlPolicy(request).getData());
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
         assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
-        verify(paymentConfigService).toggleControlPolicy(request);
         verify(paymentConfigService).toggleAlertProvider(request);
         verify(paymentConfigService).toggleIssueDutyRoster(request);
+    }
+
+    @Test
+    void shouldExposeControlPolicyReviewFlow() {
+        PaymentControlPolicyStatusReviewRequestDTO statusRequest =
+                new PaymentControlPolicyStatusReviewRequestDTO();
+        PaymentControlPolicyReviewSubmitRequestDTO submitRequest =
+                new PaymentControlPolicyReviewSubmitRequestDTO();
+        PaymentControlPolicyReviewActionRequestDTO actionRequest =
+                new PaymentControlPolicyReviewActionRequestDTO();
+        java.util.List<PaymentControlPolicyReviewDTO> reviews =
+                Collections.singletonList(new PaymentControlPolicyReviewDTO());
+        when(paymentConfigService.submitControlPolicyStatusReview(statusRequest)).thenReturn(reviews);
+        when(paymentConfigService.submitControlPolicyReview(submitRequest)).thenReturn(reviews);
+        when(paymentConfigService.listControlPolicyReviews()).thenReturn(reviews);
+        when(paymentConfigService.approveControlPolicyReview("CPR-001", actionRequest)).thenReturn(reviews);
+        when(paymentConfigService.rejectControlPolicyReview("CPR-001", actionRequest)).thenReturn(reviews);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+
+        assertEquals(reviews, controller.submitControlPolicyStatusReview(statusRequest).getData());
+        assertEquals(reviews, controller.submitControlPolicyReview(submitRequest).getData());
+        assertEquals(reviews, controller.listControlPolicyReviews().getData());
+        assertEquals(reviews, controller.approveControlPolicyReview("CPR-001", actionRequest).getData());
+        assertEquals(reviews, controller.rejectControlPolicyReview("CPR-001", actionRequest).getData());
+        verify(paymentConfigService).submitControlPolicyStatusReview(statusRequest);
+        verify(paymentConfigService).submitControlPolicyReview(submitRequest);
+        verify(paymentConfigService).listControlPolicyReviews();
+        verify(paymentConfigService).approveControlPolicyReview("CPR-001", actionRequest);
+        verify(paymentConfigService).rejectControlPolicyReview("CPR-001", actionRequest);
     }
 
     @Test

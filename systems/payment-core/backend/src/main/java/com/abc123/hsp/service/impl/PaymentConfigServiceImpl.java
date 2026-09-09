@@ -16,8 +16,13 @@ import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
@@ -54,6 +59,8 @@ import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
+import com.abc123.hsp.entity.PaymentControlPolicyEntity;
+import com.abc123.hsp.entity.PaymentControlPolicyReviewEntity;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
@@ -1112,17 +1119,143 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleControlPolicy(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
-        int affectedRows = paymentConfigMapper.updateControlPolicyStatus(
-                configCode,
-                resolveStatus(request.getEnabled()),
-                resolveStatusType(request.getEnabled())
-        );
-        if (affectedRows == 0) {
+    public List<PaymentControlPolicyReviewDTO> submitControlPolicyStatusReview(
+            PaymentControlPolicyStatusReviewRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("支付控制策略启停状态不能为空");
+        }
+        String sourceAppId = requireImportText(request.getSourceAppId(), "来源应用标识不能为空", 64)
+                .toLowerCase(Locale.ROOT);
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingControlPolicyReviewForUpdate(sourceAppId) != null) {
+            throw new IllegalArgumentException("该支付控制策略已有待复核申请");
+        }
+        PaymentControlPolicyEntity current =
+                paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate(sourceAppId);
+        if (current == null) {
             throw new IllegalArgumentException("支付控制策略配置不存在");
         }
-        return overview();
+        String candidateStatus = resolveStatus(request.getEnabled());
+        if (candidateStatus.equals(current.getStatus())) {
+            throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
+                    ? "支付控制策略已启用" : "支付控制策略已停用");
+        }
+        PaymentControlPolicyReviewEntity review = new PaymentControlPolicyReviewEntity();
+        review.setRequestNo("CPR" + UUID.randomUUID().toString().replace("-", ""));
+        copyControlPolicyToReview(current, review);
+        review.setOperationType("STATUS_CHANGE");
+        review.setPendingSourceAppId(sourceAppId);
+        review.setBaseFingerprint(fingerprintControlPolicy(current));
+        review.setCandidateStatus(candidateStatus);
+        review.setCandidateStatusType(resolveStatusType(request.getEnabled()));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertControlPolicyReview(review);
+        return paymentConfigMapper.findControlPolicyReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentControlPolicyReviewDTO> submitControlPolicyReview(
+            PaymentControlPolicyReviewSubmitRequestDTO request) {
+        if (request == null || request.getCandidate() == null) {
+            throw new IllegalArgumentException("支付控制策略候选快照不能为空");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String sourceAppId = requireImportText(
+                request.getCandidate().getSourceAppId(), "来源应用标识不能为空", 64)
+                .toLowerCase(Locale.ROOT);
+        String reason = requireReviewText(request.getCandidate().getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingControlPolicyReviewForUpdate(sourceAppId) != null) {
+            throw new IllegalArgumentException("该支付控制策略已有待复核申请");
+        }
+        PaymentControlPolicyEntity current =
+                paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate(sourceAppId);
+        PaymentControlPolicyEntity candidate =
+                buildControlPolicyEntity(request.getCandidate(), current, sourceAppId);
+        PaymentControlPolicyReviewEntity review = new PaymentControlPolicyReviewEntity();
+        review.setRequestNo("CPR" + UUID.randomUUID().toString().replace("-", ""));
+        copyControlPolicyToReview(candidate, review);
+        review.setOperationType(current == null ? "CREATE" : "UPDATE");
+        review.setPendingSourceAppId(sourceAppId);
+        review.setBaseFingerprint(current == null ? null : fingerprintControlPolicy(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertControlPolicyReview(review);
+        return paymentConfigMapper.findControlPolicyReviews();
+    }
+
+    @Override
+    public List<PaymentControlPolicyReviewDTO> listControlPolicyReviews() {
+        return paymentConfigMapper.findControlPolicyReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentControlPolicyReviewDTO> approveControlPolicyReview(
+            String requestNo, PaymentControlPolicyReviewActionRequestDTO request) {
+        PaymentControlPolicyReviewEntity review = requirePendingControlPolicyReview(requestNo);
+        String reviewer = requireDistinctControlPolicyReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        boolean createOperation = "CREATE".equals(review.getOperationType());
+        if (!createOperation
+                && !"UPDATE".equals(review.getOperationType())
+                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+            throw new IllegalArgumentException("支付控制策略复核操作类型不支持");
+        }
+        if (!STATUS_ENABLED.equals(review.getCandidateStatus())
+                && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
+            throw new IllegalArgumentException("支付控制策略候选状态不支持");
+        }
+        PaymentControlPolicyEntity current =
+                paymentConfigMapper.findControlPolicyBySourceAppIdForUpdate(review.getSourceAppId());
+        if (createOperation) {
+            if (current != null) {
+                throw new IllegalArgumentException("支付控制策略已存在，复核申请基线已失效");
+            }
+        } else if (current == null || review.getBaseFingerprint() == null
+                || !review.getBaseFingerprint().equals(fingerprintControlPolicy(current))) {
+            throw new IllegalArgumentException("支付控制策略配置已变化，请重新提交复核申请");
+        }
+        PaymentControlPolicyEntity candidate = buildControlPolicyEntity(
+                toControlPolicyUpsertRequest(review), null, review.getSourceAppId());
+        int affectedRows;
+        try {
+            affectedRows = createOperation
+                    ? paymentConfigMapper.insertControlPolicy(candidate)
+                    : paymentConfigMapper.updateControlPolicy(candidate);
+        } catch (DuplicateKeyException exception) {
+            if (createOperation) {
+                throw new IllegalArgumentException("支付控制策略已存在，复核申请基线已失效", exception);
+            }
+            throw exception;
+        }
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException(createOperation
+                    ? "支付控制策略新增失败" : "支付控制策略配置不存在");
+        }
+        completeControlPolicyReview(
+                review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
+        return paymentConfigMapper.findControlPolicyReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentControlPolicyReviewDTO> rejectControlPolicyReview(
+            String requestNo, PaymentControlPolicyReviewActionRequestDTO request) {
+        PaymentControlPolicyReviewEntity review = requirePendingControlPolicyReview(requestNo);
+        String reviewer = requireDistinctControlPolicyReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "驳回原因不能为空");
+        completeControlPolicyReview(
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findControlPolicyReviews();
     }
 
     @Override
@@ -2627,6 +2760,129 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return request;
     }
 
+    private PaymentControlPolicyReviewEntity requirePendingControlPolicyReview(String requestNo) {
+        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        PaymentControlPolicyReviewEntity review =
+                paymentConfigMapper.findControlPolicyReviewForUpdate(normalizedRequestNo);
+        if (review == null) {
+            throw new IllegalArgumentException("支付控制策略复核申请不存在");
+        }
+        if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+            throw new IllegalArgumentException("支付控制策略复核申请已处理");
+        }
+        return review;
+    }
+
+    private String requireDistinctControlPolicyReviewer(
+            PaymentControlPolicyReviewEntity review,
+            PaymentControlPolicyReviewActionRequestDTO request) {
+        String reviewer = requireReviewIdentity(
+                request == null ? null : request.getReviewer(), "复核人声明不能为空");
+        if (review.getRequester().equalsIgnoreCase(reviewer)) {
+            throw new IllegalArgumentException("申请人与复核人声明不能相同");
+        }
+        return reviewer;
+    }
+
+    private void completeControlPolicyReview(String requestNo,
+                                             String reviewStatus,
+                                             String reviewStatusType,
+                                             String reviewer,
+                                             String reviewComment) {
+        int affectedRows = paymentConfigMapper.completeControlPolicyReview(
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("支付控制策略复核状态已变化，请刷新后重试");
+        }
+    }
+
+    private void insertControlPolicyReview(PaymentControlPolicyReviewEntity review) {
+        try {
+            paymentConfigMapper.insertControlPolicyReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该支付控制策略已有待复核申请", exception);
+        }
+    }
+
+    private PaymentControlPolicyEntity buildControlPolicyEntity(
+            PaymentControlPolicyUpsertRequestDTO request,
+            PaymentControlPolicyEntity current,
+            String sourceAppId) {
+        if (request.getTokenAuthRequired() == null) {
+            throw new IllegalArgumentException("令牌鉴权开关不能为空");
+        }
+        if (request.getStrictMode() == null) {
+            throw new IllegalArgumentException("严格模式开关不能为空");
+        }
+        if (request.getEnabled() == null) {
+            throw new IllegalArgumentException("支付控制策略启停状态不能为空");
+        }
+        String accessToken = StringUtils.hasText(request.getAccessTokenValue())
+                ? request.getAccessTokenValue().trim()
+                : current == null ? "" : current.getAccessTokenValue();
+        if (accessToken.length() > 128) {
+            throw new IllegalArgumentException("接口访问令牌不能超过128个字符");
+        }
+        if (request.getTokenAuthRequired().booleanValue() && !StringUtils.hasText(accessToken)) {
+            throw new IllegalArgumentException("开启令牌鉴权时接口访问令牌不能为空");
+        }
+        PaymentControlPolicyEntity entity = new PaymentControlPolicyEntity();
+        entity.setSourceAppId(sourceAppId);
+        entity.setSourceAppName(requireImportText(request.getSourceAppName(), "来源应用名称不能为空", 128));
+        entity.setAllowedPaymentMethods(requireImportText(
+                request.getAllowedPaymentMethods(), "允许支付方式不能为空", 255));
+        entity.setAllowedChannelCodes(requireImportText(
+                request.getAllowedChannelCodes(), "允许渠道不能为空", 255));
+        entity.setAllowedMerchantNos(requireImportText(
+                request.getAllowedMerchantNos(), "允许商户号不能为空", 255));
+        entity.setMinuteSubmitLimit(requirePositiveInteger(
+                request.getMinuteSubmitLimit(), "分钟级提交限流阈值必须大于0"));
+        entity.setInterfaceMinuteSubmitLimit(requirePositiveInteger(
+                request.getInterfaceMinuteSubmitLimit(), "接口级分钟限流阈值必须大于0"));
+        entity.setTokenAuthRequired(request.getTokenAuthRequired().booleanValue() ? "开启" : "关闭");
+        entity.setAccessTokenValue(accessToken);
+        entity.setStrictMode(request.getStrictMode().booleanValue() ? "开启" : "关闭");
+        entity.setSelfCheckStatus("WARN");
+        entity.setSelfCheckStatusType("warn");
+        entity.setSelfCheckMessage("配置已变更，待重新执行支付控制策略自检");
+        entity.setStatus(resolveStatus(request.getEnabled()));
+        entity.setStatusType(resolveStatusType(request.getEnabled()));
+        return entity;
+    }
+
+    private void copyControlPolicyToReview(
+            PaymentControlPolicyEntity source, PaymentControlPolicyReviewEntity target) {
+        target.setSourceAppId(source.getSourceAppId());
+        target.setSourceAppName(source.getSourceAppName());
+        target.setAllowedPaymentMethods(source.getAllowedPaymentMethods());
+        target.setAllowedChannelCodes(source.getAllowedChannelCodes());
+        target.setAllowedMerchantNos(source.getAllowedMerchantNos());
+        target.setMinuteSubmitLimit(source.getMinuteSubmitLimit());
+        target.setInterfaceMinuteSubmitLimit(source.getInterfaceMinuteSubmitLimit());
+        target.setTokenAuthRequired(source.getTokenAuthRequired());
+        target.setAccessTokenValue(source.getAccessTokenValue());
+        target.setStrictMode(source.getStrictMode());
+        target.setCandidateStatus(source.getStatus());
+        target.setCandidateStatusType(source.getStatusType());
+    }
+
+    private PaymentControlPolicyUpsertRequestDTO toControlPolicyUpsertRequest(
+            PaymentControlPolicyReviewEntity review) {
+        PaymentControlPolicyUpsertRequestDTO request = new PaymentControlPolicyUpsertRequestDTO();
+        request.setSourceAppId(review.getSourceAppId());
+        request.setSourceAppName(review.getSourceAppName());
+        request.setAllowedPaymentMethods(review.getAllowedPaymentMethods());
+        request.setAllowedChannelCodes(review.getAllowedChannelCodes());
+        request.setAllowedMerchantNos(review.getAllowedMerchantNos());
+        request.setMinuteSubmitLimit(review.getMinuteSubmitLimit());
+        request.setInterfaceMinuteSubmitLimit(review.getInterfaceMinuteSubmitLimit());
+        request.setTokenAuthRequired(Boolean.valueOf("开启".equals(review.getTokenAuthRequired())));
+        request.setAccessTokenValue(review.getAccessTokenValue());
+        request.setStrictMode(Boolean.valueOf("开启".equals(review.getStrictMode())));
+        request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getCandidateStatus())));
+        return request;
+    }
+
     private String requireDistinctChannelReviewer(
             PaymentChannelReviewEntity review,
             PaymentChannelReviewActionRequestDTO request) {
@@ -2858,6 +3114,23 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         appendFingerprintValue(canonical, gateway.getStatus());
         appendFingerprintValue(canonical, gateway.getStatusType());
         appendFingerprintValue(canonical, gateway.getPriority());
+        return sha256(canonical.toString());
+    }
+
+    private String fingerprintControlPolicy(PaymentControlPolicyEntity policy) {
+        StringBuilder canonical = new StringBuilder();
+        appendFingerprintValue(canonical, policy.getSourceAppId());
+        appendFingerprintValue(canonical, policy.getSourceAppName());
+        appendFingerprintValue(canonical, policy.getAllowedPaymentMethods());
+        appendFingerprintValue(canonical, policy.getAllowedChannelCodes());
+        appendFingerprintValue(canonical, policy.getAllowedMerchantNos());
+        appendFingerprintValue(canonical, policy.getMinuteSubmitLimit());
+        appendFingerprintValue(canonical, policy.getInterfaceMinuteSubmitLimit());
+        appendFingerprintValue(canonical, policy.getTokenAuthRequired());
+        appendFingerprintValue(canonical, policy.getAccessTokenValue());
+        appendFingerprintValue(canonical, policy.getStrictMode());
+        appendFingerprintValue(canonical, policy.getStatus());
+        appendFingerprintValue(canonical, policy.getStatusType());
         return sha256(canonical.toString());
     }
 

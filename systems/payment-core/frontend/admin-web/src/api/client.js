@@ -960,7 +960,17 @@ export const paymentConfigApi = {
     `/api/payment-config/gateways/reviews/${encodeURIComponent(requestNo)}/reject`,
     payload
   ),
-  toggleControlPolicy: (configCode, enabled) => postJson("/api/payment-config/control-policies/toggle", { configCode, enabled }),
+  submitControlPolicyStatusReview: (payload) => postJson("/api/payment-config/control-policies/toggle", payload),
+  getControlPolicyReviews: () => request("/api/payment-config/control-policies/reviews"),
+  submitControlPolicyReview: (payload) => postJson("/api/payment-config/control-policies/reviews", payload),
+  approveControlPolicyReview: (requestNo, payload) => postJson(
+    `/api/payment-config/control-policies/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectControlPolicyReview: (requestNo, payload) => postJson(
+    `/api/payment-config/control-policies/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   toggleAlertProvider: (configCode, enabled) => postJson("/api/payment-config/alert-providers/toggle", { configCode, enabled }),
   toggleIssueDutyRoster: (configCode, enabled) => postJson("/api/payment-config/issue-duty-rosters/toggle", { configCode, enabled }),
   runControlPolicySelfCheck: (configCode) => postJson("/api/payment-config/control-policies/self-check", { configCode })

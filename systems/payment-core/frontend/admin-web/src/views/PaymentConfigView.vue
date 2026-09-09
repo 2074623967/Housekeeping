@@ -18,6 +18,15 @@ const gatewayReviewComment = ref("");
 const editingGatewayCode = ref("");
 const gatewayForm = ref(createGatewayForm());
 const controlPolicies = ref([]);
+const controlPolicyReviews = ref([]);
+const isControlPolicyReviewLoading = ref(false);
+const controlPolicyReviewError = ref("");
+const controlPolicyActionRequester = ref("");
+const controlPolicyActionReason = ref("");
+const controlPolicyReviewer = ref("");
+const controlPolicyReviewComment = ref("");
+const editingControlPolicyId = ref("");
+const controlPolicyForm = ref(createControlPolicyForm());
 const alertProviders = ref([]);
 const issueDutyRosters = ref([]);
 const isLoading = ref(true);
@@ -167,6 +176,24 @@ function createGatewayForm() {
     retryPolicy: "失败重试1次+超时查单",
     enabled: true,
     priority: 0,
+    changeReason: "",
+    requester: ""
+  };
+}
+
+function createControlPolicyForm() {
+  return {
+    sourceAppId: "",
+    sourceAppName: "",
+    allowedPaymentMethods: "",
+    allowedChannelCodes: "",
+    allowedMerchantNos: "",
+    minuteSubmitLimit: 60,
+    interfaceMinuteSubmitLimit: 30,
+    tokenAuthRequired: true,
+    accessTokenValue: "",
+    strictMode: true,
+    enabled: true,
     changeReason: "",
     requester: ""
   };
@@ -1085,13 +1112,142 @@ async function handleGatewayReview(review, approved) {
   }
 }
 
-async function toggleControlPolicy(policy) {
-  await toggleConfig(
-    policy.sourceAppId,
-    policy.status !== "ENABLED",
-    "支付控制策略",
-    paymentConfigApi.toggleControlPolicy
-  );
+async function submitControlPolicyStatusReview(policy) {
+  if (!controlPolicyActionRequester.value || !controlPolicyActionReason.value) {
+    actionMessage.value = "支付控制策略启停申请失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = policy.status !== "ENABLED";
+  if (!window.confirm(`确认提交支付控制策略 ${policy.sourceAppId} 的${enabled ? "启用" : "停用"}复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = policy.sourceAppId;
+  actionMessage.value = "";
+  try {
+    controlPolicyReviews.value = await paymentConfigApi.submitControlPolicyStatusReview({
+      sourceAppId: policy.sourceAppId,
+      enabled,
+      requester: controlPolicyActionRequester.value,
+      changeReason: controlPolicyActionReason.value
+    });
+    controlPolicyActionReason.value = "";
+    actionMessage.value = `支付控制策略 ${policy.sourceAppId} 的${enabled ? "启用" : "停用"}申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付控制策略启停申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+function startCreateControlPolicy() {
+  editingControlPolicyId.value = "";
+  controlPolicyForm.value = createControlPolicyForm();
+  actionMessage.value = "";
+}
+
+function startEditControlPolicy(policy) {
+  editingControlPolicyId.value = policy.sourceAppId;
+  controlPolicyForm.value = {
+    sourceAppId: policy.sourceAppId,
+    sourceAppName: policy.sourceAppName,
+    allowedPaymentMethods: policy.allowedPaymentMethods,
+    allowedChannelCodes: policy.allowedChannelCodes,
+    allowedMerchantNos: policy.allowedMerchantNos,
+    minuteSubmitLimit: policy.minuteSubmitLimit,
+    interfaceMinuteSubmitLimit: policy.interfaceMinuteSubmitLimit,
+    tokenAuthRequired: policy.tokenAuthRequired === "开启",
+    accessTokenValue: "",
+    strictMode: policy.strictMode === "开启",
+    enabled: policy.status === "ENABLED",
+    changeReason: "",
+    requester: ""
+  };
+  actionMessage.value = `正在编辑支付控制策略 ${policy.sourceAppId}；访问令牌留空表示保持现值。`;
+}
+
+async function submitControlPolicyForm() {
+  if (!controlPolicyForm.value.requester || !controlPolicyForm.value.changeReason) {
+    actionMessage.value = "支付控制策略提交复核失败：请填写申请人声明和申请原因。";
+    return;
+  }
+  if (!editingControlPolicyId.value
+      && controlPolicyForm.value.tokenAuthRequired
+      && !controlPolicyForm.value.accessTokenValue) {
+    actionMessage.value = "支付控制策略提交复核失败：新增且开启令牌鉴权时必须填写访问令牌。";
+    return;
+  }
+  const sourceAppId = editingControlPolicyId.value || controlPolicyForm.value.sourceAppId;
+  activeConfigCode.value = sourceAppId;
+  actionMessage.value = "";
+  try {
+    const candidate = {
+      ...controlPolicyForm.value,
+      minuteSubmitLimit: Number(controlPolicyForm.value.minuteSubmitLimit),
+      interfaceMinuteSubmitLimit: Number(controlPolicyForm.value.interfaceMinuteSubmitLimit)
+    };
+    delete candidate.requester;
+    controlPolicyReviews.value = await paymentConfigApi.submitControlPolicyReview({
+      requester: controlPolicyForm.value.requester,
+      candidate
+    });
+    startCreateControlPolicy();
+    actionMessage.value = `支付控制策略 ${sourceAppId} 已提交复核，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付控制策略提交复核失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadControlPolicyReviews() {
+  isControlPolicyReviewLoading.value = true;
+  controlPolicyReviewError.value = "";
+  try {
+    controlPolicyReviews.value = await paymentConfigApi.getControlPolicyReviews();
+  } catch (error) {
+    controlPolicyReviewError.value = error.message;
+  } finally {
+    isControlPolicyReviewLoading.value = false;
+  }
+}
+
+async function handleControlPolicyReview(review, approved) {
+  if (!controlPolicyReviewer.value) {
+    actionMessage.value = "支付控制策略复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!controlPolicyReviewComment.value) {
+    actionMessage.value = `支付控制策略复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并应用 ${review.operationType} 候选？通过后自检状态重置为 WARN。`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `control-policy-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: controlPolicyReviewer.value,
+      reviewComment: controlPolicyReviewComment.value
+    };
+    controlPolicyReviews.value = approved
+      ? await paymentConfigApi.approveControlPolicyReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectControlPolicyReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    controlPolicyReviewComment.value = "";
+    actionMessage.value = approved
+      ? `支付控制策略 ${review.operationType} 申请 ${review.requestNo} 已通过并应用，请重新执行自检。`
+      : `支付控制策略申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付控制策略复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 async function toggleAlertProvider(provider) {
@@ -1378,6 +1534,7 @@ onMounted(() => {
   loadReturnCodeReviews();
   loadReturnCodeImportReviews();
   loadGatewayReviews();
+  loadControlPolicyReviews();
 });
 
 function exportGovernanceSnapshot(section = "ALL") {
@@ -1395,7 +1552,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.17</span>
+        <span class="badge info">配置中心 V1.18</span>
       </div>
     </div>
 
@@ -3101,7 +3258,181 @@ function exportGovernanceSnapshot(section = "ALL") {
               <h3>支付控制策略</h3>
               <p class="meta">统一维护来源应用的支付方式权限、渠道权限、分钟级限流与自检准入，控制正向支付主链路风险</p>
             </div>
-            <button class="button secondary" @click="exportGovernanceSnapshot('CONTROL_POLICIES')">导出策略</button>
+            <div class="toolbar-actions">
+              <button class="button secondary" @click="exportGovernanceSnapshot('CONTROL_POLICIES')">导出策略</button>
+              <button class="button secondary" @click="startCreateControlPolicy">新增策略</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <div class="section-title">
+              <div>
+                <h3>{{ editingControlPolicyId ? "编辑支付控制策略" : "新增支付控制策略" }}</h3>
+                <p class="meta">完整候选经异人声明复核通过后才写入运行态；编辑时访问令牌留空表示保持现值</p>
+              </div>
+            </div>
+            <div class="filter-grid">
+              <label>
+                来源应用标识
+                <input v-model.trim="controlPolicyForm.sourceAppId" :disabled="Boolean(editingControlPolicyId)" maxlength="64" placeholder="housekeeping-app-web" />
+              </label>
+              <label>
+                来源应用名称
+                <input v-model.trim="controlPolicyForm.sourceAppName" maxlength="128" />
+              </label>
+              <label class="wide-field">
+                允许支付方式
+                <input v-model.trim="controlPolicyForm.allowedPaymentMethods" maxlength="255" placeholder="微信支付,支付宝" />
+              </label>
+              <label class="wide-field">
+                允许渠道
+                <input v-model.trim="controlPolicyForm.allowedChannelCodes" maxlength="255" placeholder="wx_h5,alipay_h5" />
+              </label>
+              <label class="wide-field">
+                允许商户号
+                <input v-model.trim="controlPolicyForm.allowedMerchantNos" maxlength="255" placeholder="MCH_WX_10001,MCH_ALI_20001" />
+              </label>
+              <label>
+                分钟级提交限流
+                <input v-model.number="controlPolicyForm.minuteSubmitLimit" type="number" min="1" />
+              </label>
+              <label>
+                接口级分钟限流
+                <input v-model.number="controlPolicyForm.interfaceMinuteSubmitLimit" type="number" min="1" />
+              </label>
+              <label>
+                令牌鉴权
+                <select v-model="controlPolicyForm.tokenAuthRequired">
+                  <option :value="true">开启</option>
+                  <option :value="false">关闭</option>
+                </select>
+              </label>
+              <label class="wide-field">
+                接口访问令牌
+                <input v-model.trim="controlPolicyForm.accessTokenValue" type="password" maxlength="128" autocomplete="new-password" />
+              </label>
+              <label>
+                严格模式
+                <select v-model="controlPolicyForm.strictMode">
+                  <option :value="true">开启</option>
+                  <option :value="false">关闭</option>
+                </select>
+              </label>
+              <label>
+                启用状态
+                <select v-model="controlPolicyForm.enabled">
+                  <option :value="true">启用</option>
+                  <option :value="false">停用</option>
+                </select>
+              </label>
+              <label>
+                申请人声明
+                <input v-model.trim="controlPolicyForm.requester" maxlength="64" />
+              </label>
+              <label class="wide-field">
+                申请原因
+                <input v-model.trim="controlPolicyForm.changeReason" maxlength="255" />
+              </label>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button class="button primary" :disabled="activeConfigCode === (editingControlPolicyId || controlPolicyForm.sourceAppId)" @click="submitControlPolicyForm">
+                {{ editingControlPolicyId ? "提交修改复核" : "提交新增复核" }}
+              </button>
+              <button class="button secondary" @click="startCreateControlPolicy">重置表单</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 20px;">
+            <div class="section-title">
+              <div>
+                <h3>支付控制策略配置变更复核</h3>
+                <p class="meta">新增、编辑和启停共享唯一待办；批准后旧自检结论失效，严格模式需重新通过自检</p>
+              </div>
+              <button class="button secondary" :disabled="isControlPolicyReviewLoading" @click="loadControlPolicyReviews">
+                {{ isControlPolicyReviewLoading ? "加载中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="notice-box" style="margin-bottom: 16px;">
+              申请人与复核人均为自声明且必须不同；列表只展示令牌是否配置，不返回令牌原文。
+            </div>
+            <div class="filter-grid" style="margin-bottom: 16px;">
+              <label>
+                启停申请人声明
+                <input v-model.trim="controlPolicyActionRequester" maxlength="64" placeholder="提交启停时必填" />
+              </label>
+              <label>
+                启停申请原因
+                <input v-model.trim="controlPolicyActionReason" maxlength="255" placeholder="提交启停时必填" />
+              </label>
+              <label>
+                复核人声明
+                <input v-model.trim="controlPolicyReviewer" maxlength="64" placeholder="必须与申请人不同" />
+              </label>
+              <label class="wide-field">
+                复核意见 / 驳回原因
+                <input v-model.trim="controlPolicyReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
+              </label>
+            </div>
+            <div v-if="controlPolicyReviewError" class="error-box" style="margin-bottom: 16px;">
+              支付控制策略复核申请加载失败：{{ controlPolicyReviewError }}
+            </div>
+            <div v-if="isControlPolicyReviewLoading" class="state-box">支付控制策略复核申请加载中...</div>
+            <div v-else-if="!controlPolicyReviews.length" class="state-box">当前暂无支付控制策略配置复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>操作</th>
+                    <th>来源应用</th>
+                    <th>授权范围</th>
+                    <th>限流 / 安全</th>
+                    <th>候选状态</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>处理</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in controlPolicyReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>{{ review.operationType }}</td>
+                    <td>
+                      {{ review.sourceAppId }}
+                      <div class="muted-text">{{ review.sourceAppName }}</div>
+                      <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
+                    </td>
+                    <td class="flow-summary-cell">
+                      支付方式 {{ review.allowedPaymentMethods }}<br />
+                      渠道 {{ review.allowedChannelCodes }}<br />
+                      商户 {{ review.allowedMerchantNos }}
+                    </td>
+                    <td>
+                      {{ review.minuteSubmitLimit }} / {{ review.interfaceMinuteSubmitLimit }}<br />
+                      令牌鉴权 {{ review.tokenAuthRequired }} / {{ review.accessTokenConfigured ? "已配置" : "未配置" }}<br />
+                      严格模式 {{ review.strictMode }}
+                    </td>
+                    <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }}</div>
+                      <div class="muted-text">{{ review.createdAt }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td>
+                      <span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span>
+                      <div class="muted-text">{{ review.reviewer || "待复核" }} / {{ review.reviewComment || "暂无意见" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button class="link-button" :disabled="activeConfigCode === `control-policy-review:${review.requestNo}`" @click="handleControlPolicyReview(review, true)">通过</button>
+                        <button class="link-button" :disabled="activeConfigCode === `control-policy-review:${review.requestNo}`" @click="handleControlPolicyReview(review, false)">驳回</button>
+                      </template>
+                      <span v-else class="muted-text">{{ review.reviewedAt || "已处理" }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -3116,6 +3447,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <th>分钟限流</th>
                   <th>接口限流</th>
                   <th>令牌鉴权</th>
+                  <th>令牌状态</th>
                   <th>严格模式</th>
                   <th>自检状态</th>
                   <th>自检提示</th>
@@ -3134,6 +3466,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <td>{{ policy.minuteSubmitLimit }}</td>
                   <td>{{ policy.interfaceMinuteSubmitLimit }}</td>
                   <td>{{ policy.tokenAuthRequired }}</td>
+                  <td>{{ policy.accessTokenConfigured ? "已配置" : "未配置" }}</td>
                   <td>{{ policy.strictMode }}</td>
                   <td><span :class="['badge', policy.selfCheckStatusType]">{{ policy.selfCheckStatus }}</span></td>
                   <td class="flow-summary-cell">{{ policy.selfCheckMessage }}</td>
@@ -3143,9 +3476,16 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <button
                       class="link-button"
                       :disabled="activeConfigCode === policy.sourceAppId"
-                      @click="toggleControlPolicy(policy)"
+                      @click="startEditControlPolicy(policy)"
                     >
-                      {{ policy.status === "ENABLED" ? "停用" : "启用" }}
+                      编辑
+                    </button>
+                    <button
+                      class="link-button"
+                      :disabled="activeConfigCode === policy.sourceAppId"
+                      @click="submitControlPolicyStatusReview(policy)"
+                    >
+                      {{ policy.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
                     <button
                       class="link-button"

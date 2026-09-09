@@ -7,6 +7,10 @@ import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentConfigOverviewDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentControlPolicyStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
@@ -389,12 +393,40 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.rejectGatewayReview(requestNo, request));
     }
 
-    /**
-     * 启停支付控制策略配置。
-     */
+    /** 提交支付控制策略启停候选，不改变运行态。 */
     @PostMapping("/control-policies/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleControlPolicy(@RequestBody PaymentConfigToggleRequestDTO request) {
-        return ApiResponse.success(paymentConfigService.toggleControlPolicy(request));
+    public ApiResponse<List<PaymentControlPolicyReviewDTO>> submitControlPolicyStatusReview(
+            @RequestBody PaymentControlPolicyStatusReviewRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitControlPolicyStatusReview(request));
+    }
+
+    /** 查询支付控制策略配置变更复核申请。 */
+    @GetMapping("/control-policies/reviews")
+    public ApiResponse<List<PaymentControlPolicyReviewDTO>> listControlPolicyReviews() {
+        return ApiResponse.success(paymentConfigService.listControlPolicyReviews());
+    }
+
+    /** 提交支付控制策略新增或编辑完整候选，不改变运行态。 */
+    @PostMapping("/control-policies/reviews")
+    public ApiResponse<List<PaymentControlPolicyReviewDTO>> submitControlPolicyReview(
+            @RequestBody PaymentControlPolicyReviewSubmitRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitControlPolicyReview(request));
+    }
+
+    /** 通过支付控制策略配置变更复核并应用候选。 */
+    @PostMapping("/control-policies/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentControlPolicyReviewDTO>> approveControlPolicyReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentControlPolicyReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveControlPolicyReview(requestNo, request));
+    }
+
+    /** 驳回支付控制策略配置变更复核，不改变运行态。 */
+    @PostMapping("/control-policies/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentControlPolicyReviewDTO>> rejectControlPolicyReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentControlPolicyReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectControlPolicyReview(requestNo, request));
     }
 
     /**

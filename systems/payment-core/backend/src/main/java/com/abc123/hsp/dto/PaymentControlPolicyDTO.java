@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 /**
@@ -25,7 +26,10 @@ public class PaymentControlPolicyDTO {
     /** 是否要求接口令牌鉴权。 */
     private String tokenAuthRequired;
     /** 接口访问令牌。 */
+    @JsonIgnore
     private String accessTokenValue;
+    /** 接口访问令牌是否已配置。 */
+    private Boolean accessTokenConfigured;
     /** 严格控制模式。 */
     private String strictMode;
     /** 自检状态。 */

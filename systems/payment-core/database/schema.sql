@@ -437,6 +437,40 @@ CREATE TABLE t_payment_control_policy (
     KEY idx_control_policy_status (status, source_app_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付控制策略表';
 
+CREATE TABLE t_payment_control_policy_review (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
+    source_app_id VARCHAR(64) NOT NULL COMMENT '来源应用标识快照',
+    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE',
+    source_app_name VARCHAR(128) NOT NULL COMMENT '来源应用名称候选',
+    allowed_payment_methods VARCHAR(255) NOT NULL COMMENT '允许支付方式候选',
+    allowed_channel_codes VARCHAR(255) NOT NULL COMMENT '允许渠道候选',
+    allowed_merchant_nos VARCHAR(255) NOT NULL COMMENT '允许商户号候选',
+    minute_submit_limit INT NOT NULL COMMENT '分钟级提交限流候选',
+    interface_minute_submit_limit INT NOT NULL COMMENT '接口级分钟限流候选',
+    token_auth_required VARCHAR(32) NOT NULL COMMENT '令牌鉴权开关候选',
+    access_token_value VARCHAR(128) NOT NULL COMMENT '接口访问令牌候选，不对管理查询返回',
+    strict_mode VARCHAR(32) NOT NULL COMMENT '严格模式候选',
+    pending_source_app_id VARCHAR(64) DEFAULT NULL COMMENT '来源应用唯一待办占位，完成后置空',
+    base_fingerprint VARCHAR(64) DEFAULT NULL COMMENT '提交时完整策略配置基线指纹，新增时为空',
+    candidate_status VARCHAR(32) NOT NULL COMMENT '候选 ENABLED/DISABLED 状态',
+    candidate_status_type VARCHAR(32) NOT NULL COMMENT '候选状态样式',
+    requester VARCHAR(64) NOT NULL COMMENT '申请人自声明',
+    request_reason VARCHAR(255) NOT NULL COMMENT '申请原因',
+    review_status VARCHAR(32) NOT NULL COMMENT 'PENDING_REVIEW/APPROVED/REJECTED',
+    review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
+    reviewer VARCHAR(64) DEFAULT NULL COMMENT '复核人自声明',
+    review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见或驳回原因',
+    created_at DATETIME NOT NULL COMMENT '申请时间',
+    reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_control_policy_review_request (request_no),
+    UNIQUE KEY uk_control_policy_review_pending (pending_source_app_id),
+    KEY idx_control_policy_review_status (review_status, created_at),
+    KEY idx_control_policy_review_source (source_app_id, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付控制策略配置变更复核申请表';
+
 CREATE TABLE t_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     order_no VARCHAR(64) NOT NULL COMMENT '订单号',

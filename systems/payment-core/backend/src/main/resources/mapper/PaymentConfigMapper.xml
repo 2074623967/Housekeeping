@@ -906,7 +906,8 @@
                minute_submit_limit AS minuteSubmitLimit,
                interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
                token_auth_required AS tokenAuthRequired,
-               access_token_value AS accessTokenValue,
+               CASE WHEN access_token_value IS NULL OR access_token_value = '' THEN 0 ELSE 1 END
+                   AS accessTokenConfigured,
                strict_mode AS strictMode,
                self_check_status AS selfCheckStatus,
                self_check_status_type AS selfCheckStatusType,
@@ -916,6 +917,102 @@
                DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
         FROM t_payment_control_policy
         ORDER BY id ASC
+    </select>
+
+    <select id="findControlPolicyBySourceAppIdForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentControlPolicyEntity">
+        SELECT source_app_id AS sourceAppId,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               access_token_value AS accessTokenValue,
+               strict_mode AS strictMode,
+               self_check_status AS selfCheckStatus,
+               self_check_status_type AS selfCheckStatusType,
+               self_check_message AS selfCheckMessage,
+               status,
+               status_type AS statusType
+        FROM t_payment_control_policy
+        WHERE source_app_id = #{sourceAppId}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findControlPolicyReviews"
+            resultType="com.abc123.hsp.dto.PaymentControlPolicyReviewDTO">
+        SELECT request_no AS requestNo,
+               source_app_id AS sourceAppId,
+               operation_type AS operationType,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               CASE WHEN access_token_value IS NULL OR access_token_value = '' THEN 0 ELSE 1 END
+                   AS accessTokenConfigured,
+               strict_mode AS strictMode,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_control_policy_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findControlPolicyReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentControlPolicyReviewEntity">
+        SELECT request_no AS requestNo,
+               source_app_id AS sourceAppId,
+               operation_type AS operationType,
+               source_app_name AS sourceAppName,
+               allowed_payment_methods AS allowedPaymentMethods,
+               allowed_channel_codes AS allowedChannelCodes,
+               allowed_merchant_nos AS allowedMerchantNos,
+               minute_submit_limit AS minuteSubmitLimit,
+               interface_minute_submit_limit AS interfaceMinuteSubmitLimit,
+               token_auth_required AS tokenAuthRequired,
+               access_token_value AS accessTokenValue,
+               strict_mode AS strictMode,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_control_policy_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingControlPolicyReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentControlPolicyReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_control_policy_review
+        WHERE pending_source_app_id = #{pendingSourceAppId}
+        LIMIT 1
+        FOR UPDATE
     </select>
 
     <select id="findAlertProviders" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
@@ -1723,12 +1820,71 @@
           AND review_status = 'PENDING_REVIEW'
     </update>
 
-    <update id="updateControlPolicyStatus">
+    <insert id="insertControlPolicy"
+            parameterType="com.abc123.hsp.entity.PaymentControlPolicyEntity">
+        INSERT INTO t_payment_control_policy (
+            source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes,
+            allowed_merchant_nos, minute_submit_limit, interface_minute_submit_limit,
+            token_auth_required, access_token_value, strict_mode, self_check_status,
+            self_check_status_type, self_check_message, status, status_type, updated_at
+        ) VALUES (
+            #{sourceAppId}, #{sourceAppName}, #{allowedPaymentMethods}, #{allowedChannelCodes},
+            #{allowedMerchantNos}, #{minuteSubmitLimit}, #{interfaceMinuteSubmitLimit},
+            #{tokenAuthRequired}, #{accessTokenValue}, #{strictMode}, #{selfCheckStatus},
+            #{selfCheckStatusType}, #{selfCheckMessage}, #{status}, #{statusType}, NOW()
+        )
+    </insert>
+
+    <update id="updateControlPolicy"
+            parameterType="com.abc123.hsp.entity.PaymentControlPolicyEntity">
         UPDATE t_payment_control_policy
-        SET status = #{status},
+        SET source_app_name = #{sourceAppName},
+            allowed_payment_methods = #{allowedPaymentMethods},
+            allowed_channel_codes = #{allowedChannelCodes},
+            allowed_merchant_nos = #{allowedMerchantNos},
+            minute_submit_limit = #{minuteSubmitLimit},
+            interface_minute_submit_limit = #{interfaceMinuteSubmitLimit},
+            token_auth_required = #{tokenAuthRequired},
+            access_token_value = #{accessTokenValue},
+            strict_mode = #{strictMode},
+            self_check_status = #{selfCheckStatus},
+            self_check_status_type = #{selfCheckStatusType},
+            self_check_message = #{selfCheckMessage},
+            status = #{status},
             status_type = #{statusType},
             updated_at = NOW()
         WHERE source_app_id = #{sourceAppId}
+    </update>
+
+    <insert id="insertControlPolicyReview">
+        INSERT INTO t_payment_control_policy_review (
+            request_no, source_app_id, operation_type, source_app_name,
+            allowed_payment_methods, allowed_channel_codes, allowed_merchant_nos,
+            minute_submit_limit, interface_minute_submit_limit, token_auth_required,
+            access_token_value, strict_mode, pending_source_app_id, base_fingerprint,
+            candidate_status, candidate_status_type, requester, request_reason,
+            review_status, review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{sourceAppId}, #{operationType}, #{sourceAppName},
+            #{allowedPaymentMethods}, #{allowedChannelCodes}, #{allowedMerchantNos},
+            #{minuteSubmitLimit}, #{interfaceMinuteSubmitLimit}, #{tokenAuthRequired},
+            #{accessTokenValue}, #{strictMode}, #{pendingSourceAppId}, #{baseFingerprint},
+            #{candidateStatus}, #{candidateStatusType}, #{requester}, #{requestReason},
+            #{reviewStatus}, #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeControlPolicyReview">
+        UPDATE t_payment_control_policy_review
+        SET pending_source_app_id = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
     </update>
 
     <update id="updateAlertProviderStatus">
