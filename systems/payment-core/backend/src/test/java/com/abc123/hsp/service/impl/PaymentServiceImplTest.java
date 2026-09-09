@@ -546,6 +546,9 @@ class PaymentServiceImplTest {
         activePrepay.setAmount("¥168.00");
         activePrepay.setCashierTitle("家政服务收银台");
         when(paymentMapper.lockPrepayCreation("ORD-001")).thenReturn("ORD-001");
+        when(paymentMapper.findOrderAmount("ORD-001")).thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findPaidAmount("ORD-001")).thenReturn(BigDecimal.ZERO);
+        when(paymentMapper.findCustomerNameByOrderNo("ORD-001")).thenReturn("张女士");
         when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-001")).thenReturn(activePrepay);
 
         PrepayRequestDTO request = new PrepayRequestDTO();
@@ -565,9 +568,11 @@ class PaymentServiceImplTest {
         org.mockito.InOrder prepayOrder = org.mockito.Mockito.inOrder(paymentMapper);
         prepayOrder.verify(paymentMapper).initPrepayCreationLock("ORD-001");
         prepayOrder.verify(paymentMapper).lockPrepayCreation("ORD-001");
+        prepayOrder.verify(paymentMapper).findOrderAmount("ORD-001");
+        prepayOrder.verify(paymentMapper).findPaidAmount("ORD-001");
+        prepayOrder.verify(paymentMapper).findCustomerNameByOrderNo("ORD-001");
         prepayOrder.verify(paymentMapper).findLatestActivePrepayByOrderNo("ORD-001");
         verify(paymentMapper, times(1)).findLatestActivePrepayByOrderNo("ORD-001");
-        verify(paymentMapper, never()).findOrderAmount("ORD-001");
         verify(paymentMapper, never()).insertPaymentOrder(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
@@ -585,6 +590,74 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-001", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-001", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldRejectActiveStandardPrepayWhenOrderFactsHaveChanged() {
+        PrepayOrderDTO activePrepay = new PrepayOrderDTO();
+        activePrepay.setPrepayOrderNo("PRE-STALE");
+        activePrepay.setPaymentOrderId("PAY-STALE");
+        activePrepay.setPaymentStatus("PREPAY_CREATED");
+        activePrepay.setPayScene("HOME_CLEAN");
+        activePrepay.setCustomerName("张女士");
+        activePrepay.setAmount("¥168.00");
+        activePrepay.setCashierTitle("家政服务收银台");
+        when(paymentMapper.lockPrepayCreation("ORD-STALE"))
+                .thenReturn("ORD-STALE");
+        when(paymentMapper.findOrderAmount("ORD-STALE"))
+                .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findPaidAmount("ORD-STALE"))
+                .thenReturn(new BigDecimal("20.00"));
+        when(paymentMapper.findCustomerNameByOrderNo("ORD-STALE"))
+                .thenReturn("张女士");
+        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-STALE"))
+                .thenReturn(activePrepay);
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORD-STALE");
+        request.setPayScene("HOME_CLEAN");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT, exception.getCode());
+        verify(paymentMapper, never()).findBillNoByOrderNo(anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
+    }
+
+    @Test
+    void shouldRejectVirtualPrepayRetryWhenIdentityFieldsAreMissing() {
+        when(paymentMapper.lockPrepayCreation("VIRTUAL-INCOMPLETE"))
+                .thenReturn("VIRTUAL-INCOMPLETE");
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("VIRTUAL-INCOMPLETE");
+        request.setPayScene("WALLET_RECHARGE_APP");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, exception.getCode());
+        verify(paymentMapper, never()).findLatestActivePrepayByOrderNo(anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
     }
 
     @Test
@@ -620,7 +693,7 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT, exception.getCode());
-        verify(paymentMapper, never()).findOrderAmount(anyString());
+        verify(paymentMapper).findLatestActivePrepayByOrderNo("WALLET-RECHARGE-CONFLICT");
         verify(paymentMapper, never()).insertPaymentOrder(
                 anyString(), anyString(), anyString(),
                 org.mockito.ArgumentMatchers.any(), anyString());
@@ -681,8 +754,6 @@ class PaymentServiceImplTest {
     void shouldRejectStandardPrepayWhenAmountConflictsWithOrderFacts() {
         when(paymentMapper.lockPrepayCreation("ORD-STANDARD-CONFLICT"))
                 .thenReturn("ORD-STANDARD-CONFLICT");
-        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-STANDARD-CONFLICT"))
-                .thenReturn(null);
         when(paymentMapper.findOrderAmount("ORD-STANDARD-CONFLICT"))
                 .thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findPaidAmount("ORD-STANDARD-CONFLICT"))
@@ -721,8 +792,6 @@ class PaymentServiceImplTest {
     void shouldRejectStandardPrepayWhenCustomerConflictsWithOrderFacts() {
         when(paymentMapper.lockPrepayCreation("ORD-CUSTOMER-CONFLICT"))
                 .thenReturn("ORD-CUSTOMER-CONFLICT");
-        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-CUSTOMER-CONFLICT"))
-                .thenReturn(null);
         when(paymentMapper.findOrderAmount("ORD-CUSTOMER-CONFLICT"))
                 .thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findPaidAmount("ORD-CUSTOMER-CONFLICT"))
@@ -756,7 +825,6 @@ class PaymentServiceImplTest {
     @Test
     void shouldRejectSettledOrOverpaidOrderWithoutCreatingPayment() {
         when(paymentMapper.lockPrepayCreation("ORD-SETTLED")).thenReturn("ORD-SETTLED");
-        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-SETTLED")).thenReturn(null);
         when(paymentMapper.findOrderAmount("ORD-SETTLED")).thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findPaidAmount("ORD-SETTLED")).thenReturn(new BigDecimal("168.01"));
 

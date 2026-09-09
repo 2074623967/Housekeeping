@@ -330,30 +330,40 @@ public class PaymentServiceImpl implements PaymentService {
         if (!request.getOrderNo().equals(lockedOrderNo)) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "预付单创建并发锁获取失败");
         }
-        PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
-        if (activePrepay != null) {
-            validateActivePrepayRequest(activePrepay, request);
-            // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
-            return activePrepay;
-        }
         BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
         BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
-        if (orderAmount == null && paidAmount == null) {
-            return createVirtualPrepay(request);
-        }
-        if (orderAmount == null || paidAmount == null) {
+        boolean virtualSource = orderAmount == null && paidAmount == null;
+        if (!virtualSource && (orderAmount == null || paidAmount == null)) {
             throw new BusinessException(
                     ErrorCode.PAYMENT_ORDER_SOURCE_MISSING,
                     "订单金额数据不完整");
         }
-        BigDecimal remainAmount = orderAmount.subtract(paidAmount);
-        if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(
-                    ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED,
-                    "订单已结清或已超额支付，无需再次创建支付单");
+        BigDecimal remainAmount = null;
+        String customerName = null;
+        if (virtualSource) {
+            validateVirtualPrepayRequest(request);
+        } else {
+            remainAmount = orderAmount.subtract(paidAmount);
+            if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED,
+                        "订单已结清或已超额支付，无需再次创建支付单");
+            }
+            customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
+            validateStandardPrepayRequest(request, customerName, remainAmount);
         }
-        String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
-        validateStandardPrepayRequest(request, customerName, remainAmount);
+        PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
+        if (activePrepay != null) {
+            validateActivePrepayRequest(activePrepay, request);
+            if (!virtualSource) {
+                validateActivePrepayOrderFacts(activePrepay, customerName, remainAmount);
+            }
+            // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
+            return activePrepay;
+        }
+        if (virtualSource) {
+            return createVirtualPrepay(request);
+        }
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
         if (billNo == null) {
             billNo = buildBusinessNo("BILL");
@@ -388,12 +398,7 @@ public class PaymentServiceImpl implements PaymentService {
      * 钱包充值、转账补款等非标准订单场景在当前阶段通过虚拟单方式接入统一收银台。
      */
     private PrepayOrderDTO createVirtualPrepay(PrepayRequestDTO request) {
-        if (!StringUtils.hasText(request.getOrderNo())
-                || !StringUtils.hasText(request.getCustomerName())
-                || request.getAmount() == null
-                || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(ErrorCode.PAYMENT_ORDER_SOURCE_MISSING, "虚拟支付场景缺少订单号、客户名称或金额");
-        }
+        validateVirtualPrepayRequest(request);
         String customerName = request.getCustomerName().trim();
         String cashierTitle = StringUtils.hasText(request.getCashierTitle())
                 ? request.getCashierTitle().trim()
@@ -1294,6 +1299,22 @@ public class PaymentServiceImpl implements PaymentService {
                     && request.getAmount().compareTo(remainAmount) != 0);
         if (conflict) {
             throw prepayRequestConflict("预付请求与订单当前客户或剩余应付不一致");
+        }
+    }
+
+    private void validateActivePrepayOrderFacts(
+            PrepayOrderDTO activePrepay, String customerName, BigDecimal remainAmount) {
+        if (!customerName.equals(activePrepay.getCustomerName())
+                || remainAmount.compareTo(parseAmount(activePrepay.getAmount())) != 0) {
+            throw prepayRequestConflict("有效预付单与订单当前客户或剩余应付不一致");
+        }
+    }
+
+    private void validateVirtualPrepayRequest(PrepayRequestDTO request) {
+        if (!StringUtils.hasText(request.getCustomerName()) || request.getAmount() == null) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_ORDER_SOURCE_MISSING,
+                    "虚拟支付场景缺少订单号、客户名称或金额");
         }
     }
 
