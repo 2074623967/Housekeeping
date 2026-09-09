@@ -2220,6 +2220,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 可信成功回调或主动查单通过同一条件更新抢占成功收口权。普通 `PAYMENT_CLOSED` 不可重开；历史上带 `PAYMENT_EXPIRED_CLOSED` 事件的关闭单允许恢复为 `SUCCESS`，且只有抢占成功者记账和发布成功事件。
 4. 当前接口没有实现真实渠道关闭或撤销调用，非成功渠道结果不会被本地过期任务推断为渠道已关闭；生产接入需补渠道终态码表、关闭请求幂等、关闭与成功竞态及对账规则。
 
+### 14.30 人工关闭支付单规则
+
+1. `POST /api/payments/close` 仅接受尚未提交渠道的支付单：状态属于 `PREPAY_CREATED / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED`，渠道交易号为空且不存在任何支付尝试。
+2. 服务端使用条件更新原子抢占关闭权。条件更新失败后若最新状态为 `SUCCESS / CLOSED` 则幂等返回最新详情；其他状态返回 `PAYMENT-1029`，要求调用方先执行主动查单。
+3. `PAYMENT-1029` 路径不更新预付单、不追加关闭事件且不释放提交令牌；已提交后历史误关的 `CLOSED` 单据重复关闭时同样保留令牌和可信成功恢复入口。
+4. `GET /api/cashier/{prepayOrderNo}` 新增 `paymentOrderId`，供收银台直接查询与关闭对应支付单。该接口仍只是本地关单，不调用真实渠道关闭或撤销。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2243,6 +2250,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1026` | 外部渠道查单失败、结果不完整或无法安全收口 |
 | `PAYMENT-1027` | 当前渠道共享查单时间窗配额已耗尽 |
 | `PAYMENT-1028` | 支付提交最终幂等键为空、超过 128 字符或包含控制字符 |
+| `PAYMENT-1029` | 支付已提交渠道或结果尚未确认，不能本地关闭，需先主动查单 |
 
 联调说明：
 
