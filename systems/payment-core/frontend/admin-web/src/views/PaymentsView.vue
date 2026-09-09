@@ -91,6 +91,10 @@ function canRunClose(item) {
     && !item.channelTransactionNo;
 }
 
+function canRunCallback(item) {
+  return Boolean(item.channel) && ["WAIT_CALLBACK", "PAYING"].includes(item.status);
+}
+
 async function handleQuery(paymentOrderId) {
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
@@ -123,15 +127,15 @@ async function handleClose(paymentOrderId) {
   }
 }
 
-async function handleCallback(paymentOrderId) {
-  activePaymentOrderId.value = paymentOrderId;
+async function handleCallback(item) {
+  activePaymentOrderId.value = item.paymentOrderId;
   activeAction.value = "callback";
   try {
-    const paymentDetail = await paymentApi.callback("WX_H5", paymentOrderId);
-    actionMessage.value = `支付单 ${paymentOrderId} 已模拟回调，当前状态为 ${paymentDetail.status}。`;
+    const paymentDetail = await paymentApi.callback(item.channel, item.paymentOrderId);
+    actionMessage.value = `支付单 ${item.paymentOrderId} 已按渠道 ${item.channel} 模拟回调，当前状态为 ${paymentDetail.status}。`;
     await refreshList();
   } catch (error) {
-    actionMessage.value = `支付单 ${paymentOrderId} 模拟回调失败：${error.message}`;
+    actionMessage.value = `支付单 ${item.paymentOrderId} 模拟回调失败：${error.message}`;
   } finally {
     activePaymentOrderId.value = "";
     activeAction.value = "";
@@ -263,7 +267,7 @@ onMounted(refreshList);
                     <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleQuery(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
                     </button>
-                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleCallback(item.paymentOrderId)">
+                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId || !canRunCallback(item)" @click="handleCallback(item)">
                       {{ isActionRunning(item.paymentOrderId, "callback") ? "回调中..." : "回调" }}
                     </button>
                     <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">

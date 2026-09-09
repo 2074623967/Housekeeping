@@ -754,6 +754,12 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
+        if (!StringUtils.hasText(detail.getChannel())
+                || !channel.trim().equalsIgnoreCase(detail.getChannel().trim())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISMATCH,
+                    "callback channel does not match payment channel");
+        }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || ("CLOSED".equalsIgnoreCase(detail.getStatus()) && !paySuccess)) {

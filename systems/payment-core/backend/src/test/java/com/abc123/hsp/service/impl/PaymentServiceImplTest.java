@@ -134,6 +134,7 @@ class PaymentServiceImplTest {
     void shouldIgnoreLateCallbackWhenPaymentAlreadySucceeded() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-001");
+        detail.setChannel("wx_h5");
         detail.setStatus("SUCCESS");
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findRouteLogs("PAY-001")).thenReturn(Collections.emptyList());
@@ -219,6 +220,49 @@ class PaymentServiceImplTest {
                         paymentChannelSubmitService)
                         .callback("wx_h5", callback)
         );
+    }
+
+    @Test
+    void shouldRejectCallbackFromDifferentPaymentChannel() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CALLBACK-CHANNEL-MISMATCH");
+        detail.setChannel("alipay_h5");
+        detail.setStatus("WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-CHANNEL-MISMATCH")).thenReturn(detail);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-CHANNEL-MISMATCH");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CROSS-CHANNEL-001");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISMATCH, exception.getCode());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertPaymentProcessLog(
+                org.mockito.ArgumentMatchers.any(com.abc123.hsp.entity.PaymentProcessLogEntity.class));
+        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(anyString(), anyString());
     }
 
     @Test
@@ -398,6 +442,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-VIRTUAL-CALLBACK");
         detail.setOrderNo("WALLET-RECHARGE-001");
+        detail.setChannel("alipay_h5");
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥99.00");
         when(paymentMapper.findDetail("PAY-VIRTUAL-CALLBACK")).thenReturn(detail, detail);
@@ -438,6 +483,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-CALLBACK-001");
         detail.setOrderNo("ORD-CALLBACK-001");
+        detail.setChannel("wx_h5");
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-001")).thenReturn(detail, detail);
@@ -489,6 +535,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-CALLBACK-002");
         detail.setOrderNo("ORD-CALLBACK-002");
+        detail.setChannel("wx_h5");
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-002")).thenReturn(detail, detail);

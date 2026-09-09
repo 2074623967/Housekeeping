@@ -112,7 +112,8 @@ function isActionRunning(actionName) {
 }
 
 function canRunCallback() {
-  return detail.value?.status === "WAIT_CALLBACK" || detail.value?.status === "PAYING";
+  return Boolean(detail.value?.channel)
+    && (detail.value?.status === "WAIT_CALLBACK" || detail.value?.status === "PAYING");
 }
 
 function canRunClose() {
@@ -138,7 +139,7 @@ async function handleQuery() {
 async function handleCallback() {
   activeAction.value = "callback";
   try {
-    const paymentDetail = await paymentApi.callback("WX_H5", route.params.paymentOrderId);
+    const paymentDetail = await paymentApi.callback(detail.value.channel, route.params.paymentOrderId);
     actionMessage.value = `支付单 ${route.params.paymentOrderId} 已模拟回调，当前状态为 ${paymentDetail.status}。`;
     await loadDetail();
   } catch (error) {

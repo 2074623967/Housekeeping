@@ -40,4 +40,5 @@ public final class ErrorCode {
     public static final String PAYMENT_CHANNEL_QUERY_RATE_LIMITED = "PAYMENT-1027";
     public static final String PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID = "PAYMENT-1028";
     public static final String PAYMENT_CLOSE_CHANNEL_CONFIRMATION_REQUIRED = "PAYMENT-1029";
+    public static final String PAYMENT_CALLBACK_CHANNEL_MISMATCH = "PAYMENT-1030";
 }
