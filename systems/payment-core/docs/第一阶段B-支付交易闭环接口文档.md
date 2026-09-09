@@ -2379,6 +2379,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 参数一致时接口继续返回原 `prepayOrderNo/paymentOrderId`；任一参数冲突时返回 `PAYMENT-1038`，不得读取后续订单金额、覆盖旧单或创建第二组账单/支付单/预付单。
 3. 一致性校验在订单级事务锁内、查询有效预付单后执行，确保并发后到请求基于已提交事实判断。当前契约不包含上游订单版本号或跨系统请求摘要。
 
+### 14.53 标准订单显式参数契约
+
+1. 标准订单首次创建时，若请求显式传入 `customerName`，必须与订单当前客户一致；显式 `amount` 必须与 `orderAmount - paidAmount` 的当前剩余应付数值一致，否则返回 `PAYMENT-1038`。
+2. 显式 `cashierTitle` 会写入新预付单；未传时使用“家政服务收银台”。后续同订单有效预付单复用按相同有效标题校验，不得出现首次忽略、重试冲突。
+3. 客户或金额冲突在账单查询及任何支付事实写入前失败。当前读取仍是 payment-core 本地快照，不构成跨系统订单版本锁定。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
