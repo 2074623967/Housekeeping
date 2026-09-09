@@ -201,8 +201,8 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Read timed out"));
-        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_TRANSPORT_ERROR"));
-        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("Read timed out"));
+        Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());
+        Assertions.assertFalse(result.getProviderReceiptSnapshot().contains("Read timed out"));
     }
 
     @Test

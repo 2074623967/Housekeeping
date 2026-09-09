@@ -531,7 +531,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                                   PaymentIssueAlertDispatchItemDTO item) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
         String diagnosticMessage = StringUtils.hasText(message) ? message : "未知异常";
-        result.setProviderReceiptSnapshot("LOCAL_FAILURE:" + status + ":" + diagnosticMessage);
+        result.setProviderReceiptSnapshot("LOCAL_FAILURE:" + status + ":[REDACTED]");
         result.setProviderDeliveryStatus(status);
         result.setProviderDeliveryMessage("SEND_EXCEPTION".equals(status)
                 ? "通知器执行异常，transportError=[REDACTED]"

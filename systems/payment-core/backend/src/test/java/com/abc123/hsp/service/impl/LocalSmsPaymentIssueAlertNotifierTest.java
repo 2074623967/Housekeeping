@@ -194,8 +194,8 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Connection reset"));
-        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_TRANSPORT_ERROR"));
-        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("Connection reset"));
+        Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());
+        Assertions.assertFalse(result.getProviderReceiptSnapshot().contains("Connection reset"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

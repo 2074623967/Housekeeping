@@ -200,7 +200,7 @@ public class LocalImPaymentIssueAlertNotifier extends AbstractLocalPaymentIssueA
                     failureCodeJsonPointer
             );
         } catch (RestClientException exception) {
-            return buildWebhookTransportFailureResult(item, "IM", timeoutMs, exception.getMessage());
+            return buildWebhookTransportFailureResult(item, "IM", timeoutMs);
         }
     }
 

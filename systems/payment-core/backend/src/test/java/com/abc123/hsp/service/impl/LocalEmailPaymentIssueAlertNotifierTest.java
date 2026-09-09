@@ -194,8 +194,8 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Connect timed out"));
-        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_TRANSPORT_ERROR"));
-        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("Connect timed out"));
+        Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());
+        Assertions.assertFalse(result.getProviderReceiptSnapshot().contains("Connect timed out"));
     }
 
     private PaymentIssueAlertDispatchItemDTO buildDispatchItem() {

@@ -238,10 +238,9 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
      */
     protected PaymentIssueAlertDeliveryResultDTO buildWebhookTransportFailureResult(PaymentIssueAlertDispatchItemDTO item,
                                                                                     String channelLabel,
-                                                                                    int timeoutMs,
-                                                                                    String exceptionMessage) {
+                                                                                    int timeoutMs) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
-        result.setProviderReceiptSnapshot(buildSnapshot("HTTP_TRANSPORT_ERROR", exceptionMessage));
+        result.setProviderReceiptSnapshot(buildSnapshot("HTTP_TRANSPORT_ERROR", "[REDACTED]"));
         result.setProviderReceiptNo(buildWebhookReceiptNo(channelLabel + "-HTTP", item == null ? null : item.getAlertNo()));
         result.setProviderDeliveryStatus("FAILED");
         result.setProviderDeliveryMessage(new StringBuilder(channelLabel)

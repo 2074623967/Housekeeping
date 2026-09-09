@@ -200,7 +200,7 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                     failureCodeJsonPointer
             );
         } catch (RestClientException exception) {
-            return buildWebhookTransportFailureResult(item, "EMAIL", timeoutMs, exception.getMessage());
+            return buildWebhookTransportFailureResult(item, "EMAIL", timeoutMs);
         }
     }
 

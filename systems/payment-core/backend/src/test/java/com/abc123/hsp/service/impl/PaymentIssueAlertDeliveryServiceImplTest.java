@@ -574,7 +574,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                         && "派发失败".equals(log.getAlertStatus())
                         && log.getProviderDeliveryMessage().contains("transportError=[REDACTED]")
                         && !log.getProviderDeliveryMessage().contains("primary down")
-                        && log.getProviderReceiptSnapshot().contains("primary down")));
+                        && "LOCAL_FAILURE:SEND_EXCEPTION:[REDACTED]".equals(log.getProviderReceiptSnapshot())));
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-备".equals(log.getProviderName()) && "已派发".equals(log.getAlertStatus())));
     }
