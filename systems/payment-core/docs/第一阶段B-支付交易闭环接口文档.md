@@ -2347,6 +2347,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `terminal` 缺失时为 `UNKNOWN`；规范值仅有 `APP/H5/PC/UNKNOWN`。兼容别名 `APP_WEB -> APP`、`H5_WEB/MOBILE_WEB -> H5`、`PC_WEB -> PC`，其他值返回 `PAYMENT-1035`，不得形成新的限流、风控或审计维度。
 4. 显式 `idempotencyKey` 继续按 14.38 的 `128` 字符与控制字符规则返回 `PAYMENT-1028`；其他提交字段非法统一返回 `PAYMENT-1035`。以上限制不替代部署网关的整体 JSON 请求体上限和渠道专属字段规则。
 
+### 14.48 渠道查单结果字段契约
+
+1. 查单适配器必须返回非空对象，`tradeStatus` 和 `querySource` 必填且最长分别为 `32/64` 字符；`channelTransactionNo/channelReturnCode` 非空时最长分别为 `128/64` 字符。所有字符串 trim 后不得含 ISO 控制字符。
+2. 标准化字段 `standardizedCode/standardizedMessage/handlingSuggestion/retryable/manualInterventionRequired/mappingVersion` 非空时最长分别为 `64/256/256/16/16/32` 字符；原始结果在映射前校验，映射产物在返回前再次校验。
+3. 支付服务会对最终结果防御性复验。任何空缺、超长或控制字符返回 `PAYMENT-1026`，只允许写入固定文案的查单失败日志，不得更新支付返回码快照或进入支付成功结算、事件和令牌处理。
+4. 本契约限制单字段，不替代 gateway-access 和 HTTP 客户端的整体响应体上限、渠道状态枚举与真实报文协议校验。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2367,7 +2374,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1009` | 验签入口回调渠道缺失或超过安全长度 |
 | `PAYMENT-1010` | 当前没有启用的支付渠道 |
 | `PAYMENT-1011` | 支付来源订单金额信息缺失 |
-| `PAYMENT-1026` | 外部渠道查单失败、结果不完整或无法安全收口 |
+| `PAYMENT-1026` | 外部渠道查单失败，结果为空、字段非法/不完整或无法安全收口 |
 | `PAYMENT-1027` | 当前渠道共享查单时间窗配额已耗尽 |
 | `PAYMENT-1028` | 支付提交最终幂等键为空、超过 128 字符或包含控制字符 |
 | `PAYMENT-1029` | 支付已提交渠道或结果尚未确认，不能本地关闭，需先主动查单 |
