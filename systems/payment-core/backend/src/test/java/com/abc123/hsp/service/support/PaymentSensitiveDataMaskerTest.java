@@ -66,6 +66,28 @@ class PaymentSensitiveDataMaskerTest {
     }
 
     @Test
+    void shouldMaskPrefixedProviderReceiptJsonAndRetainSource() throws Exception {
+        String snapshot = "HTTP_RESPONSE:{\"code\":\"SUCCESS\",\"result\":{\"phone\":\"13800138000\"}}";
+
+        String masked = masker.maskProviderReceiptSnapshot(snapshot);
+
+        assertTrue(masked.startsWith("HTTP_RESPONSE:"));
+        JsonNode payload = objectMapper.readTree(masked.substring("HTTP_RESPONSE:".length()));
+        assertEquals("SUCCESS", payload.get("code").asText());
+        assertEquals("138****8000", payload.at("/result/phone").asText());
+    }
+
+    @Test
+    void shouldFailClosedForPrefixedNonJsonProviderReceipt() {
+        String masked = masker.maskProviderReceiptSnapshot(
+                "HTTP_TRANSPORT_ERROR:connection refused for 13800138000");
+
+        assertEquals("[REDACTED]", masked);
+        assertFalse(masked.contains("13800138000"));
+        assertEquals("[REDACTED]", masker.maskProviderReceiptSnapshot("HTTP_RESPONSE:"));
+    }
+
+    @Test
     void shouldMaskUserReferenceWithoutRetainingNameSuffix() {
         assertEquals("user-****", masker.maskUserReference(" user-张女士 "));
         assertEquals("****", masker.maskUserReference("张女士"));

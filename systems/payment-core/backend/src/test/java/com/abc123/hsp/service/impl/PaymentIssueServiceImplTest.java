@@ -138,7 +138,7 @@ class PaymentIssueServiceImplTest {
         PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
         row.setAlertNo("PIA-002");
         row.setProviderReceiptSnapshot(
-                "{\"result\":{\"phone\":\"13800138000\",\"customerName\":\"张女士\","
+                "HTTP_RESPONSE:{\"result\":{\"phone\":\"13800138000\",\"customerName\":\"张女士\","
                         + "\"bankCardNo\":\"6222021234567890\"}}");
         when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
         when(paymentIssueMapper.countAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(1L);
@@ -150,6 +150,7 @@ class PaymentIssueServiceImplTest {
         PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
                 .listAlertLogs(query).getItems().get(0);
 
+        assertTrue(result.getProviderReceiptSnapshot().startsWith("HTTP_RESPONSE:"));
         assertTrue(result.getProviderReceiptSnapshot().contains("138****8000"));
         assertTrue(result.getProviderReceiptSnapshot().contains("张*"));
         assertTrue(result.getProviderReceiptSnapshot().contains("622202******7890"));

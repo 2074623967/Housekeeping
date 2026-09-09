@@ -242,7 +242,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         PaymentIssueAlertLogRowDTO outwardItem = new PaymentIssueAlertLogRowDTO();
         BeanUtils.copyProperties(item, outwardItem);
         outwardItem.setProviderReceiptSnapshot(
-                sensitiveDataMasker.maskPayload(item.getProviderReceiptSnapshot()));
+                sensitiveDataMasker.maskProviderReceiptSnapshot(item.getProviderReceiptSnapshot()));
         return outwardItem;
     }
 

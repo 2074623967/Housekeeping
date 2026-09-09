@@ -21,6 +21,7 @@ import org.springframework.util.StringUtils;
 public class PaymentSensitiveDataMasker {
 
     private static final Pattern IP_ADDRESS_PATTERN = Pattern.compile("^\\d{1,3}(?:\\.\\d{1,3}){3}$");
+    private static final Pattern PROVIDER_RECEIPT_SOURCE_PATTERN = Pattern.compile("^[A-Z][A-Z0-9_]*$");
     private static final Set<String> PHONE_FIELDS = fields("payerPhone", "mobile", "phone", "tel");
     private static final Set<String> CARD_FIELDS = fields("bankCardNo", "cardNo");
     private static final Set<String> NAME_FIELDS = fields("customerName", "name");
@@ -94,6 +95,28 @@ public class PaymentSensitiveDataMasker {
         } catch (JsonProcessingException exception) {
             return "[REDACTED]";
         }
+    }
+
+    public String maskProviderReceiptSnapshot(String snapshot) {
+        if (!StringUtils.hasText(snapshot)) {
+            return snapshot;
+        }
+        String normalized = snapshot.trim();
+        int separatorIndex = normalized.indexOf(':');
+        if (separatorIndex > 0) {
+            String source = normalized.substring(0, separatorIndex);
+            if (PROVIDER_RECEIPT_SOURCE_PATTERN.matcher(source).matches()) {
+                String providerPayload = normalized.substring(separatorIndex + 1);
+                if (!StringUtils.hasText(providerPayload)) {
+                    return "[REDACTED]";
+                }
+                String maskedPayload = maskPayload(providerPayload);
+                return "[REDACTED]".equals(maskedPayload)
+                        ? maskedPayload
+                        : source + ":" + maskedPayload;
+            }
+        }
+        return maskPayload(normalized);
     }
 
     private void maskNode(JsonNode node) {
