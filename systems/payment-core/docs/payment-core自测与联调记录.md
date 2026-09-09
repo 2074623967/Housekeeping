@@ -5489,3 +5489,28 @@
 1. 支付主对象不再通过支付单列表、CSV、只读详情或动作响应直接暴露本轮覆盖的个人与请求上下文字段。
 2. 原始事实仍保留在数据库并供事务内业务处理使用；当前默认脱敏不能替代后续可信身份和按角色字段分级授权。
 3. `test -> master` 与 `release/*` 结论仍以本轮统一门禁复判为准，不以本功能通过替代正式放行治理事实。
+
+## 173. 2026-09-09 支付运营查询出参敏感数据最小化 V1.0 验证
+
+### 173.1 本轮补强
+
+1. 订单、账单、收银台会话、退款、服务者结算和支付异常列表在 Service 出参边界复制 Mapper DTO，并脱敏客户或服务者姓名。
+2. 账单、收银台会话、订单、退款和服务者结算 CSV 使用同一转换结果；订单同时脱敏客户与服务者姓名。
+3. 退款详情在独立副本上装配操作日志并脱敏客户姓名，不再改写 Mapper 详情 DTO。
+4. 原始筛选、退款渠道下发、内部路由判断和下游支付事件仍使用原始业务事实；本轮未改变数据库结构、交易状态机或用户端收银台返回。
+
+### 173.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 运营查询脱敏定向测试 | `mvn -Dtest=BillServiceImplTest,CashierSessionServiceImplTest,OrderServiceImplTest,RefundServiceImplTest,SettlementServiceImplTest,PaymentIssueServiceImplTest test` | 通过 | `35` 个用例通过；覆盖六类列表、五类 CSV、退款详情和 Mapper DTO 原值保持 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `474` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产身份权限与访问审计 | 统一认证、角色/字段级授权、导出审批、水印和审计平台 | 未执行 | 不记录敏感原文受控查看、生产隐私验收、渗透测试或现场核验通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；本轮未修改 Mapper XML 或数据库结构 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 173.3 当前判断
+
+1. 后台运营查询不再从本轮覆盖的列表、退款详情和 CSV 直接返回客户或服务者姓名原文。
+2. 默认脱敏没有删除或修改数据库事实，也不影响交易链路；后续敏感原文查看必须建立在可信身份、字段级授权和访问审计之上。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，本功能通过不能替代正式候选说明、签字、发布后现场核验或稳定观察结论。
