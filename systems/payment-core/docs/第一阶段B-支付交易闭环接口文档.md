@@ -101,6 +101,12 @@
 | `/api/payment-config/control-policies/reviews` | `POST` | 提交支付控制策略新增或编辑完整候选 |
 | `/api/payment-config/control-policies/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用完整候选 |
 | `/api/payment-config/control-policies/reviews/{requestNo}/reject` | `POST` | 异人驳回候选，运行态不变 |
+| `/api/payment-config/issue-duty-rosters` | `POST` | 提交异常告警值班路由新增候选，运行态不变 |
+| `/api/payment-config/issue-duty-rosters/{rosterCode}` | `PUT` | 提交异常告警值班路由编辑候选，运行态不变 |
+| `/api/payment-config/issue-duty-rosters/toggle` | `POST` | 提交异常告警值班路由启停候选，运行态不变 |
+| `/api/payment-config/issue-duty-rosters/reviews` | `GET` | 查询异常告警值班路由复核申请 |
+| `/api/payment-config/issue-duty-rosters/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用完整候选 |
+| `/api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject` | `POST` | 异人驳回完整候选，运行态不变 |
 | `/api/payment-monitor/overview` | `GET` | 查询支付趋势、渠道表现和异常告警 |
 | `/api/payment-day-end/overview` | `GET` | 查询支付日终处理总览与差异告警 |
 | `/api/payment-day-end/run` | `POST` | 手动触发支付日终处理 |
@@ -1228,6 +1234,21 @@ POST /api/payment-config/control-policies/self-check
 
 新增或编辑完整候选通过 `requester + candidate` 提交；candidate 包含来源应用标识/名称、支付方式/渠道/商户授权清单、两级正数限流、令牌鉴权开关、可选访问令牌、严格模式、启停状态和变更原因。新增且开启令牌鉴权时令牌必填；编辑留空继承当前令牌。管理总览和复核列表只返回 `accessTokenConfigured`，不返回 `accessTokenValue`。批准后自检状态重置为 `WARN`，严格模式必须重新自检通过后才能继续提交支付。
 
+异常告警值班路由完整候选复核：
+
+```http
+POST /api/payment-config/issue-duty-rosters
+PUT  /api/payment-config/issue-duty-rosters/{rosterCode}
+POST /api/payment-config/issue-duty-rosters/toggle
+GET  /api/payment-config/issue-duty-rosters/reviews
+POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/approve
+POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
+```
+
+新增和编辑请求为完整值班路由候选，并附带 `requester / changeReason`；启停请求包含 `rosterCode / enabled / requester / changeReason`。编码统一大写，三类操作共享同一路由唯一待办。候选覆盖异常类型、严重等级、责任组、接收人、通知通道、升级配置、班次小时、星期范围、日期策略和状态。
+
+批准或驳回请求包含 `reviewer / reviewComment`。批准先锁申请，再锁运行配置并复验存在性和完整基线；CREATE 编码占用、UPDATE/STATUS_CHANGE 基线漂移、同人声明和重复处理均拒绝。只有批准才在同一事务新增或完整更新运行态；驳回仅完成申请。`identityTrustLevel=SELF_DECLARED` 不代表可信身份、正式审批、真实排班或通知送达。
+
 说明：
 
 1. 启停候选请求的 `enabled=true` 表示目标状态 `ENABLED`。
@@ -1240,6 +1261,7 @@ POST /api/payment-config/control-policies/self-check
 8. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示，新增、编辑和启停已统一纳入 V1.3 完整候选复核；后续继续补可信身份权限、专用密钥轮换、证书上传、多商户参数模板和真实探活治理。
 9. 支付控制策略新增、编辑和启停已统一纳入 V1.6 完整候选复核；来源应用编码统一小写，同应用唯一待办，批准前重验完整基线。自检仍使用 `configCode` 传来源应用标识并回写 `PASS/WARN/FAIL`；自动/人工自检属于系统运行状态，不进入配置复核。令牌只以是否配置展示，人员仍为 `SELF_DECLARED`。
 10. 路由规则新增、编辑、启停和回滚均提交候选快照进入自声明 maker-checker；旧的直接运行态写入路径已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
+11. 异常告警值班路由新增、编辑和启停均进入 V1.1 完整候选复核；允许跨日班次，星期范围规范化，升级超时为 `5-1440` 分钟，日期策略只支持 `ALL_DAYS / WORKDAY_ONLY / NON_WORKDAY_ONLY`。
 
 ### 12.3 路由规则维护与校验
 
