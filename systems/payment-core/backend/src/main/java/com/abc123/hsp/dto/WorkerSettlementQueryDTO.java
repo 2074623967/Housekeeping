@@ -21,11 +21,15 @@ public class WorkerSettlementQueryDTO {
     /** 每页条数。 */
     private int pageSize = 20;
 
+    public int getPageNo() {
+        return PageQueryBounds.normalizePageNo(pageNo);
+    }
+
     public int getOffset() {
-        return (Math.max(pageNo, 1) - 1) * Math.min(Math.max(pageSize, 1), 100);
+        return PageQueryBounds.offset(pageNo, pageSize);
     }
 
     public int getLimit() {
-        return Math.min(Math.max(pageSize, 1), 100);
+        return PageQueryBounds.normalizePageSize(pageSize);
     }
 }

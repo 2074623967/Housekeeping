@@ -21,10 +21,14 @@ public class PaymentTaskRunLogQueryDTO {
     /** 每页条数。 */
     private int pageSize = 10;
 
+    public int getPageNo() {
+        return PageQueryBounds.normalizePageNo(pageNo);
+    }
+
     /**
      * 分页偏移量。
      */
     public int getOffset() {
-        return (Math.max(pageNo, 1) - 1) * Math.max(pageSize, 1);
+        return PageQueryBounds.offset(pageNo, pageSize);
     }
 }

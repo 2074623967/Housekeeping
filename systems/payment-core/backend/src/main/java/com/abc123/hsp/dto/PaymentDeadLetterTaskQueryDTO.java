@@ -12,11 +12,15 @@ public class PaymentDeadLetterTaskQueryDTO {
     private int pageNo;
     private int pageSize;
 
+    public int getPageNo() {
+        return PageQueryBounds.normalizePageNo(pageNo);
+    }
+
     public int getOffset() {
-        return (Math.max(pageNo, 1) - 1) * Math.max(pageSize, 1);
+        return PageQueryBounds.offset(pageNo, pageSize);
     }
 
     public int getLimit() {
-        return Math.max(pageSize, 1);
+        return PageQueryBounds.normalizePageSize(pageSize);
     }
 }
