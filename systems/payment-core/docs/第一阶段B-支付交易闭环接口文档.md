@@ -33,6 +33,7 @@
 | `/api/payment-flows/export` | `GET` | 导出统一支付流水排障台 |
 | `/api/payment-routes` | `GET` | 查询支付路由执行结果台 |
 | `/api/payment-routes/overview` | `GET` | 查询支付路由执行结果总览指标 |
+| `/api/payment-routes/export` | `GET` | 导出当前筛选条件下的支付路由执行结果 CSV |
 | `/api/payment-requests` | `GET` | 查询支付请求管理台 |
 | `/api/payment-requests/overview` | `GET` | 查询支付请求总览指标 |
 | `/api/payment-logs` | `GET` | 查询支付处理日志台 |
@@ -270,6 +271,13 @@
 7. 配置 `HSP_PAYMENT_CHANNEL_ROUTE_HEALTH_ENABLED` 默认值为 `false`；统计窗口及失败阈值复用 `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_*` 配置。启用前需确认 fallback 覆盖并按真实渠道容量校准阈值。
 8. 当前 V1.3 健康信号来自可审计的主动查单事实，不等同于网关主动探活；支付方式默认路由已补稳定加权，规则表达式已补括号和复合布尔求值，后续仍需补规则编辑校验和真实渠道探活联动。
 9. 路由列表中的客户名称、客户端 IP、幂等键及请求/响应 JSON 与支付请求、支付流水使用同一套出参脱敏规则；原始事实仍保留在数据库，不代表字段级授权已经完成。
+
+导出接口：`GET /api/payment-routes/export`
+
+1. 导出接口复用列表的 `paymentOrderId / orderNo / routeRule / channelCode / paymentMethod / terminal / routeResult / sortField / sortOrder`，不接收分页参数。
+2. 导出文件名固定为 `payment-routes.csv`，使用 UTF-8 BOM；查询直接返回全部匹配记录，不通过分页循环拼接。
+3. 导出列覆盖路由记录号、支付单号、订单号、预付单号、客户名称、支付金额、支付方式、命中渠道、路由规则、路由结果、配置快照版本、终端、客户端 IP、幂等键、请求报文、响应报文和创建时间。
+4. 客户名称、客户端 IP、幂等键及 JSON 报文使用与列表相同的脱敏规则，文本按 CSV 双引号规则转义；生产仍需补导出权限、审批、水印和下载审计。
 
 ## 5. 支付请求管理查询
 
