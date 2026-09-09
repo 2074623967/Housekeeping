@@ -2087,6 +2087,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 原 `BusinessException` 继续向接口异常边界抛出，调用方错误码和可操作业务提示不变；`QUERY_FAILED` 状态、查单失败统计、自动补偿退避和处理日志继续按原口径工作。
 3. 该规则阻断新失败快照扩散，不清理既有历史记录，也不代表生产字段级授权、访问审计、保留期限或真实渠道故障联调已经完成。
 
+### 14.11 Mapper SQL 参数绑定规则
+
+1. `payment-core` 的 MyBatis Mapper XML 禁止使用 `${...}` 原始字符串替换，筛选值、分页参数和写入字段必须使用 `#{...}` 参数绑定。
+2. 排序字段、排序方向及其他不能作为 JDBC 参数的位置必须通过 `<choose>` 等固定 SQL 分支生成，不得直接使用请求参数拼接列名或关键字。
+3. classpath 契约测试自动枚举全部 `mapper/*.xml` 并拒绝原始替换标记，新增 Mapper 文件自动纳入；当前 22 份 Mapper XML 均满足该规则。
+4. 本规则只覆盖 MyBatis XML 原始替换入口，不证明数据库账号最小权限、业务授权、存储过程、生产 SQL 审计或渗透测试已经完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

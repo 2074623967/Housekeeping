@@ -5738,3 +5738,28 @@
 1. 新产生的主动查单失败通知快照不再保存任意异常消息，运营仍可依赖错误码、状态、渠道和支付单标识完成分类与补偿判断。
 2. 固定快照会减少支付轨迹中的底层错误细节，这是在缺少可信原文权限和审计前的数据最小化取舍；原调用方业务提示仍保留。
 3. `test -> master` 与 `release/*` 继续以统一门禁复判为准，不以本轮本地测试替代生产历史清理、真实渠道验证或正式审批。
+
+## 183. 2026-09-09 Mapper SQL 原始字符串替换禁用 V1.0 验证
+
+### 183.1 本轮补强
+
+1. 新增 `PaymentMapperSqlBindingSafetyTest`，通过 `classpath*:mapper/*.xml` 枚举运行时全部 Mapper XML，并逐份拒绝 `${` 原始字符串替换标记。
+2. 当前 22 份 Mapper XML 均只使用 `#{...}` 参数绑定或 `<choose>` 固定 SQL 分支；排序字段和方向不直接拼接调用方输入。
+3. 测试不锁定文件名或文件数量，后续新增 Mapper XML 会由 classpath 通配符自动纳入，避免安全清单随模块增长失效。
+
+### 183.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| Mapper SQL 绑定契约测试 | `mvn -Dtest=PaymentMapperSqlBindingSafetyTest test` | 通过 | `1` 个用例通过；运行时发现的全部 Mapper XML 均无 `${` 原始替换标记 |
+| Mapper 静态复核 | `rg -n '\$\{' backend/src/main/resources/mapper` | 通过 | 当前 22 份 XML 无匹配；动态排序与方向使用 `<choose>` 固定分支 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `486` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产数据库安全 | 数据库账号最小权限、业务授权、存储过程审计、真实攻击与 SQL 审计 | 未执行 | 不记录生产数据库权限、渗透测试或现场安全验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java 测试与文档无空白符错误；本轮未修改生产 SQL、数据库结构、接口字段或业务状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 待复判 | 仍由 release 治理事实决定，不以 Mapper 契约测试替代正式放行条件 |
+
+### 183.3 当前判断
+
+1. MyBatis XML 原始字符串替换已从人工约定升级为自动化门禁，后续新增 Mapper 会默认接受同一检查。
+2. 禁止 `${...}` 能关闭一类直接 SQL 拼接入口，但不能证明所有业务授权、数据库权限、存储过程和生产运行环境均安全。
+3. `test -> master` 与 `release/*` 继续以统一门禁复判为准，不以本轮本地静态契约与回归测试替代正式审批或生产安全验收。
