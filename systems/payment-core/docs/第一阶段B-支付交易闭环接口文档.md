@@ -2192,6 +2192,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 调用方必须把渠道交易号视为不透明字符串，不得校验固定长度、解析时间或自行重建；真实渠道接入后直接采用供应商返回值，不沿用本地模拟生成规则。
 4. 该编号不是提交幂等键，也不证明支付成功。真实渠道超时或未知结果必须先按稳定支付标识查单，禁止仅因本地未落库直接重复下单。
 
+### 14.26 支付提交幂等键规则
+
+1. `POST /api/payments/submit` 在路由解析后确定最终 `idempotencyKey`；显式键优先，未提供时沿用“预付单号 + 支付方式 + 实际渠道”的既有派生规则。
+2. 最终键必须包含非空白字符、长度不超过 `128` 字符且不含 ISO 控制字符。校验失败返回 `PAYMENT-1028`，并在控制策略、风控、尝试查询、并发令牌和渠道提交前终止请求。
+3. `128` 字符限制与 `t_payment_attempt.idempotency_key` 和 `t_payment_submit_concurrency_token.holder_idempotency_key` 对齐；调用方不得依赖数据库截断，也不得对失败键自动裁剪后重试。
+4. 合法原始键用于持久化判重和并发占位，JSON 请求快照使用转义后的表示；两者表达同一键值，但调用方不得把快照文本当作新的幂等键。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2214,6 +2221,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1011` | 支付来源订单金额信息缺失 |
 | `PAYMENT-1026` | 外部渠道查单失败、结果不完整或无法安全收口 |
 | `PAYMENT-1027` | 当前渠道共享查单时间窗配额已耗尽 |
+| `PAYMENT-1028` | 支付提交最终幂等键为空、超过 128 字符或包含控制字符 |
 
 联调说明：
 
