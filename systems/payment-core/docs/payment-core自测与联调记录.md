@@ -5816,3 +5816,27 @@
 1. 极端分页输入不再产生负 offset 或无限深分页，16 类运营列表在 DTO、Service 响应和 Mapper 参数上形成统一边界。
 2. 页码 1000、每页 100 是当前 offset 分页的保护上限，不构成生产大数据量性能承诺；深层历史查询仍需索引、归档或游标分页。
 3. `test -> master` 与 `release/*` 继续以统一门禁复判为准，不以本轮自动化通过替代生产容量验证、稳定观察或正式审批。
+
+## 186. 2026-09-09 告警派发失败快照最小化 V1.0 验证
+
+### 186.1 本轮补强
+
+1. 三类 Webhook 通知器不再把底层传输异常消息写入 `providerReceiptSnapshot`，固定保存 `HTTP_TRANSPORT_ERROR:[REDACTED]`。
+2. 派发服务捕获通知器运行时异常后只保存失败分类码与遮蔽标记，不再持久化异常消息；可见派发消息继续使用固定运营摘要。
+3. 正常 HTTP 响应回执、派发状态、主备供应商切换、回执确认及任务状态机均保持原口径。
+
+### 186.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警派发定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | 覆盖三类传输异常及通知器运行时异常，断言模拟异常原文不进入消息或持久化失败快照 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `488` 个用例，`0` failures、`0` errors、`0` skipped |
+| 历史数据与生产治理 | 历史记录清理、加密存储、可信权限、访问审计、保留期限、真实供应商故障样本 | 未执行 | 不记录历史异常原文已清理或生产隐私验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；未修改表结构、接口字段或业务状态机 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 186.3 当前判断
+
+1. 新增告警派发失败事实不再长期保存底层异常原文，排障仍可使用失败分类、通道、超时和状态信息。
+2. 正常供应商响应仍按既有回执快照规则留存并在对外查询时脱敏，本轮不改变真实业务回执的审计口径。
+3. 本地测试不能替代历史数据处置、生产数据权限、独立受控诊断设施或真实供应商故障验收。

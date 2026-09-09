@@ -2108,6 +2108,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. Service 返回的分页元数据使用归一化后的页码和每页数量，调用方不得依赖越界入参原样回显。
 4. 本规则不改变非分页 CSV 导出，也不代表索引、游标分页、查询超时、生产大数据量性能或数据库容量已经验收。
 
+### 14.14 告警派发失败回执规则
+
+1. Webhook 连接、读取超时等传输异常的 `providerReceiptSnapshot` 固定为 `HTTP_TRANSPORT_ERROR:[REDACTED]`。
+2. 通知器抛出的运行时异常固定为 `LOCAL_FAILURE:<providerDeliveryStatus>:[REDACTED]`，不得回传或持久化底层异常消息。
+3. `providerDeliveryMessage` 继续返回固定运营摘要；正常供应商 HTTP 响应回执按既有规则保存，并在查询边界执行脱敏。
+4. 本规则只约束新增失败事实，不代表历史快照清理、生产权限、审计或真实供应商验收完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
