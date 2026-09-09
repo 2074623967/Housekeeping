@@ -32,6 +32,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * 支付任务中心服务测试。
@@ -53,6 +56,10 @@ class PaymentTaskCenterServiceImplTest {
     private PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
     @Mock
     private PaymentService paymentService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
+    @Mock
+    private TransactionStatus transactionStatus;
 
     @Test
     void shouldExposePendingQueryBacklogMetricsInOverview() {
@@ -591,6 +598,49 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRollbackFailedIssueAlertAndContinueEscalationBatch() {
+        PaymentIssueAlertCandidateDTO first = buildIssueAlertCandidate("ISSUE-1", "PAY-1");
+        PaymentIssueAlertCandidateDTO failed = buildIssueAlertCandidate("ISSUE-FAIL", "PAY-2");
+        PaymentIssueAlertCandidateDTO last = buildIssueAlertCandidate("ISSUE-3", "PAY-3");
+        when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(3);
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates())
+                .thenReturn(Arrays.asList(first, failed, last));
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates())
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class)))
+                .thenAnswer(invocation -> {
+                    PaymentIssueAlertLogEntity entity = invocation.getArgument(0);
+                    if ("ISSUE-FAIL".equals(entity.getIssueNo())) {
+                        throw new IllegalStateException("alert insert failed");
+                    }
+                    return 1;
+                });
+        when(transactionManager.getTransaction(org.mockito.ArgumentMatchers.any(TransactionDefinition.class)))
+                .thenReturn(transactionStatus);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService,
+                transactionManager
+        ).runEscalateOverdueIssues();
+
+        Assertions.assertEquals(3, result.getProcessedCount());
+        Assertions.assertEquals(2, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("ISSUE-FAIL"));
+        verify(transactionManager, org.mockito.Mockito.times(2)).commit(transactionStatus);
+        verify(transactionManager).rollback(transactionStatus);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "ISSUE-3".equals(entity.getIssueNo())));
+    }
+
+    @Test
     void shouldSkipAutoCloseExpiredPaymentsWhenLeaseHeldByAnotherInstance() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -799,6 +849,18 @@ class PaymentTaskCenterServiceImplTest {
         return builder.toString();
     }
 
+    private PaymentIssueAlertCandidateDTO buildIssueAlertCandidate(String issueNo, String paymentOrderId) {
+        PaymentIssueAlertCandidateDTO candidate = new PaymentIssueAlertCandidateDTO();
+        candidate.setIssueNo(issueNo);
+        candidate.setPaymentOrderId(paymentOrderId);
+        candidate.setIssueType("待回调未收口");
+        candidate.setSeverity("P1");
+        candidate.setResponsibilityGroup("支付后端值班组");
+        candidate.setReceiver("支付后端值班");
+        candidate.setAlertContent("支付异常 " + issueNo + " 已超过 P1 SLA，请进入异常中心处理。");
+        return candidate;
+    }
+
     private PaymentTaskCenterServiceImpl buildQueryTaskCenterService() {
         return new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
@@ -807,6 +869,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
+                null,
                 paymentService,
                 30,
                 60,

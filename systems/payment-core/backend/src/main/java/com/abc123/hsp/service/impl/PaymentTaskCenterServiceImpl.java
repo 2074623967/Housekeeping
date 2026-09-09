@@ -28,10 +28,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 支付任务中心服务默认实现。
@@ -62,6 +66,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final RefundRetryTaskService refundRetryTaskService;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
+    private final TransactionTemplate issueAlertTransactionTemplate;
     private final PaymentService paymentService;
     private final int pendingQueryMinAgeSeconds;
     private final int pendingQueryRetryIntervalSeconds;
@@ -87,6 +92,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         RefundRetryTaskService refundRetryTaskService,
                                         PaymentConfigService paymentConfigService,
                                         PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
+                                        PlatformTransactionManager transactionManager,
                                         PaymentService paymentService,
                                         @Value("${payment.channel-query.compensation.min-age-seconds:30}")
                                                 int pendingQueryMinAgeSeconds,
@@ -126,6 +132,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.refundRetryTaskService = refundRetryTaskService;
         this.paymentConfigService = paymentConfigService;
         this.paymentIssueAlertDeliveryService = paymentIssueAlertDeliveryService;
+        this.issueAlertTransactionTemplate = transactionManager == null
+                ? null
+                : new TransactionTemplate(transactionManager);
+        if (this.issueAlertTransactionTemplate != null) {
+            this.issueAlertTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
         this.paymentService = paymentService;
         this.pendingQueryMinAgeSeconds = Math.max(pendingQueryMinAgeSeconds, 0);
         this.pendingQueryRetryIntervalSeconds = Math.max(pendingQueryRetryIntervalSeconds, 1);
@@ -160,6 +172,40 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
+                null,
+                null,
+                30,
+                60,
+                2,
+                900,
+                20,
+                100,
+                24,
+                5,
+                30,
+                10,
+                10,
+                60,
+                10,
+                15,
+                10,
+                30);
+    }
+
+    PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                 PaymentExpiryTaskService paymentExpiryTaskService,
+                                 PaymentEventRetryTaskService paymentEventRetryTaskService,
+                                 RefundRetryTaskService refundRetryTaskService,
+                                 PaymentConfigService paymentConfigService,
+                                 PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService,
+                                 PlatformTransactionManager transactionManager) {
+        this(paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService,
+                transactionManager,
                 null,
                 30,
                 60,
@@ -595,13 +641,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         List<PaymentIssueAlertCandidateDTO> alertCandidates = paymentTaskCenterMapper.findOverdueIssueAlertCandidates();
         List<PaymentIssueAlertCandidateDTO> escalationCandidates = paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates();
         int generatedAlertCount = 0;
+        int failCount = 0;
+        List<String> failedIssueNos = new ArrayList<String>();
         for (PaymentIssueAlertCandidateDTO candidate : alertCandidates) {
-            generatedAlertCount += paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy));
+            if (generateIssueAlert(candidate, triggeredBy, failedIssueNos)) {
+                generatedAlertCount++;
+            } else {
+                failCount++;
+            }
         }
         for (PaymentIssueAlertCandidateDTO candidate : escalationCandidates) {
-            generatedAlertCount += paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy));
+            if (generateIssueAlert(candidate, triggeredBy, failedIssueNos)) {
+                generatedAlertCount++;
+            } else {
+                failCount++;
+            }
         }
         int processedCount = overdueIssueCount + escalationCandidates.size();
+        String failedIssueHint = failedIssueNos.isEmpty()
+                ? ""
+                : "，失败异常：" + String.join("/", failedIssueNos);
         return buildAndRecordResult(
                 TASK_CODE_ISSUE_ESCALATE,
                 "异常 SLA 升级巡检",
@@ -610,12 +669,47 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 processedCount,
                 generatedAlertCount,
                 0,
-                0,
+                failCount,
                 processedCount == 0
                         ? "当前没有超过 SLA 的支付交易异常。"
-                        : String.format("发现 %d 条超过 SLA 的支付交易异常，%d 条未确认告警触发升级，本次生成 %d 条告警通知。",
-                        overdueIssueCount, escalationCandidates.size(), generatedAlertCount)
+                        : String.format("发现 %d 条超过 SLA 的支付交易异常，%d 条未确认告警触发升级，本次生成 %d 条告警通知，失败 %d 条%s。",
+                        overdueIssueCount, escalationCandidates.size(), generatedAlertCount, failCount, failedIssueHint)
         );
+    }
+
+    private boolean generateIssueAlert(PaymentIssueAlertCandidateDTO candidate,
+                                       String triggeredBy,
+                                       List<String> failedIssueNos) {
+        try {
+            Integer insertedRows = executeIssueAlertTransaction(() ->
+                    paymentTaskCenterMapper.insertIssueAlertLog(buildIssueAlertLog(candidate, triggeredBy)));
+            if (valueOrZero(insertedRows) > 0) {
+                return true;
+            }
+        } catch (RuntimeException exception) {
+            // 当前候选由独立事务回滚，批次继续处理后续异常。
+        }
+        recordFailedIssueNo(failedIssueNos, candidate);
+        return false;
+    }
+
+    private <T> T executeIssueAlertTransaction(Supplier<T> action) {
+        if (issueAlertTransactionTemplate == null) {
+            return action.get();
+        }
+        return issueAlertTransactionTemplate.execute(status -> action.get());
+    }
+
+    private void recordFailedIssueNo(List<String> failedIssueNos, PaymentIssueAlertCandidateDTO candidate) {
+        if (failedIssueNos.size() >= 3 || candidate == null) {
+            return;
+        }
+        String referenceNo = hasText(candidate.getSourceAlertNo())
+                ? candidate.getSourceAlertNo().trim()
+                : candidate.getIssueNo();
+        if (hasText(referenceNo)) {
+            failedIssueNos.add(referenceNo.trim());
+        }
     }
 
     private PaymentIssueAlertLogEntity buildIssueAlertLog(PaymentIssueAlertCandidateDTO candidate, String triggeredBy) {
