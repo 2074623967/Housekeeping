@@ -2199,6 +2199,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `128` 字符限制与 `t_payment_attempt.idempotency_key` 和 `t_payment_submit_concurrency_token.holder_idempotency_key` 对齐；调用方不得依赖数据库截断，也不得对失败键自动裁剪后重试。
 4. 合法原始键用于持久化判重和并发占位，JSON 请求快照使用转义后的表示；两者表达同一键值，但调用方不得把快照文本当作新的幂等键。
 
+### 14.27 支付提交事务与未知结果规则
+
+1. `POST /api/payments/submit` 在渠道调用前提交本地预处理事务：支付单进入 `WAIT_CALLBACK`，收银台进入支付中，路由记录、并发令牌和幂等支付尝试均已持久化；渠道调用不持有该本地事务。
+2. 渠道正常返回后，独立结果事务按支付尝试号回写渠道响应和尝试状态，并追加 `PAYMENT_SUBMIT` 事件及 `SUBMIT` 通知事实；历史支付尝试不被批量覆盖。
+3. 渠道调用抛出异常，或渠道已经返回但本地结果事务失败时，服务保持支付单 `WAIT_CALLBACK`，将尝试标记为“结果未知，待查单”、收银台标记为“结果待确认”，并保留活跃并发令牌。
+4. 调用方收到提交异常后必须查询原支付单，不得自动创建新幂等键重提。只有可信回调、主动查单或受控关单能结束未知状态；本接口不承诺跨数据库与渠道的原子提交。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
