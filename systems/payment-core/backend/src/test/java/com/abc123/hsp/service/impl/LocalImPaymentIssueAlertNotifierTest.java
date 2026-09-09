@@ -48,7 +48,7 @@ class LocalImPaymentIssueAlertNotifierTest {
                 Mockito.eq("https://hooks.example.com/payment-alert"),
                 Mockito.any(),
                 Mockito.eq(String.class)
-        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"data\":{\"receiptNo\":\"IM-EXT-001\",\"deliveryStatus\":\"SENT\",\"errorCode\":\"0\"}}", HttpStatus.OK));
+        )).thenReturn(new ResponseEntity<String>("{\"code\":\"0\",\"accessToken\":\"provider-secret-token\",\"data\":{\"receiptNo\":\"IM-EXT-001\",\"deliveryStatus\":\"SENT\",\"errorCode\":\"0\",\"mobile\":\"13800138000\",\"customerName\":\"张三\"}}", HttpStatus.OK));
 
         PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
                 restTemplate,
@@ -80,6 +80,12 @@ class LocalImPaymentIssueAlertNotifierTest {
         Assertions.assertEquals("DELIVERED", result.getProviderDeliveryStatus());
         Assertions.assertEquals("IM-EXT-001", result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("HTTP_RESPONSE:{\"code\":\"0\""));
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("\"accessToken\":\"[REDACTED]\""));
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("\"mobile\":\"138****8000\""));
+        Assertions.assertTrue(result.getProviderReceiptSnapshot().contains("\"customerName\":\"张*\""));
+        Assertions.assertFalse(result.getProviderReceiptSnapshot().contains("provider-secret-token"));
+        Assertions.assertFalse(result.getProviderReceiptSnapshot().contains("13800138000"));
+        Assertions.assertFalse(result.getProviderReceiptSnapshot().contains("张三"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("HTTP=200"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("providerStatus=SENT"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=4500ms"));

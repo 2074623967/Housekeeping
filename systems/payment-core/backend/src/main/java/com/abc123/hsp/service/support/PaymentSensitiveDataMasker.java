@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Masks sensitive payment facts at outward-facing API and export boundaries. */
+/** Masks sensitive payment facts at persistence, API and export boundaries. */
 @Component
 public class PaymentSensitiveDataMasker {
 

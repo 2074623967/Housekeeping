@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
@@ -27,6 +28,8 @@ import org.springframework.web.client.RestTemplate;
 abstract class AbstractLocalPaymentIssueAlertNotifier {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final PaymentSensitiveDataMasker SENSITIVE_DATA_MASKER =
+            new PaymentSensitiveDataMasker(OBJECT_MAPPER);
     private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
 
     /**
@@ -215,7 +218,10 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         }
         String failureCode = resolveWebhookPointerText(channelLabel, responseBody, failureCodeJsonPointer);
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
-        result.setProviderReceiptSnapshot(buildSnapshot("HTTP_RESPONSE", responseBody));
+        result.setProviderReceiptSnapshot(buildSnapshot(
+                "HTTP_RESPONSE",
+                SENSITIVE_DATA_MASKER.maskPayload(responseBody)
+        ));
         result.setProviderReceiptNo(resolveWebhookReceiptNo(item, receiptPrefix, responseBody, receiptNoJsonPointer));
         result.setProviderDeliveryStatus(normalizedDeliveryStatus);
         result.setProviderDeliveryMessage(buildWebhookDeliveryMessage(
