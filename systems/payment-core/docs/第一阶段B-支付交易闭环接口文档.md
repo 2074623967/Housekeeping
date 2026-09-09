@@ -2122,6 +2122,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 非 JSON 或 JSON 标量响应固定保存为 `[REDACTED]`；调用方应使用独立状态字段，不得从快照推导派发结论。
 4. 如生产审计必须保留原始供应商凭证，应使用独立加密、授权、审计和保留期限设施，本接口不提供原文读取能力。
 
+### 14.16 告警供应商结果字段容量规则
+
+1. 通知器结果进入告警日志前统一限制：`providerReceiptNo<=128`、`providerDeliveryStatus<=64`、`providerDeliveryMessage<=255`、`renderedContentSnapshot<=1024`、`providerReceiptSnapshot<=2048` 字符。
+2. 超长内容按字段上限截断；调用方必须使用独立状态字段，不得依赖说明或快照尾部表达业务结论。
+3. 该边界覆盖内置和自定义通知器，防止单个供应商异常结果因列容量错误阻断备用通道派发。
+4. 字符上限不代表真实供应商契约、数据库字节容量或生产峰值负载已经验收。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
