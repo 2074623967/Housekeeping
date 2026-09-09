@@ -23,6 +23,7 @@
 - `migrations/2026-09-09-add-payment-return-code-import-review.sql`：幂等创建返回码 CSV 导入复核申请表，以可空唯一待办占位限制同时最多一条待复核导入候选
 - `migrations/2026-09-09-add-payment-return-code-review.sql`：幂等创建单条返回码状态变更复核表，以规范化映射键摘要和可空唯一待办占位限制同一映射最多一条待复核申请
 - `migrations/2026-09-09-add-payment-channel-review.sql`：幂等创建支付渠道状态变更复核表，以可空唯一渠道占位限制同一渠道最多一条待复核申请
+- `migrations/2026-09-09-expand-payment-channel-review.sql`：一次性扩展渠道复核表，增加新增/编辑操作类型与完整候选快照，并回填既有状态申请
 
 初始化方式：
 
@@ -44,7 +45,8 @@
 10. 执行 `migrations/2026-09-09-add-payment-return-code-import-review.sql`，建立返回码导入候选复核表；脚本可重复执行
 11. 执行 `migrations/2026-09-09-add-payment-return-code-review.sql`，建立单条返回码状态变更复核表；脚本可重复执行
 12. 执行 `migrations/2026-09-09-add-payment-channel-review.sql`，建立支付渠道状态变更复核表；脚本可重复执行
-13. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+13. 执行一次 `migrations/2026-09-09-expand-payment-channel-review.sql`，扩展渠道完整候选字段；该脚本不可重复执行
+14. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
