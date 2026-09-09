@@ -43,7 +43,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -63,7 +62,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -82,7 +80,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -102,7 +99,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -121,7 +117,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -142,7 +137,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -163,7 +157,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -186,7 +179,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -208,7 +200,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -219,6 +210,33 @@ class PaymentCallbackSignatureServiceImplTest {
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
         verify(paymentCallbackSecurityMapper, never())
                 .insertCallbackNonce("alipay_h5", "nonce-rsa-signature", "PAY-TEST-001", 600);
+    }
+
+    @Test
+    void shouldRejectWrongLengthRsaSignatureAsBusinessError() throws Exception {
+        KeyPair keyPair = generateRsaKeyPair();
+        String publicKey = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        PaymentCallbackRequestDTO request = buildRsaRequest(
+                "alipay_h5",
+                keyPair,
+                "nonce-rsa-length",
+                String.valueOf(Instant.now().getEpochSecond()));
+        request.setSignature(Base64.getEncoder().encodeToString(new byte[] {1, 2, 3}));
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("alipay_h5"))
+                .thenReturn(buildRsaProfile("alipay_h5", publicKey));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                600
+        );
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.verify("alipay_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("alipay_h5", "nonce-rsa-length", "PAY-TEST-001", 600);
     }
 
     @Test
@@ -233,7 +251,6 @@ class PaymentCallbackSignatureServiceImplTest {
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
-                300,
                 600
         );
 
@@ -244,6 +261,59 @@ class PaymentCallbackSignatureServiceImplTest {
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
         verify(paymentCallbackSecurityMapper, never())
                 .insertCallbackNonce("alipay_h5", "nonce-rsa-key", "PAY-TEST-001", 600);
+    }
+
+    @Test
+    void shouldRejectMissingChannelSignatureWindow() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-window-missing",
+                String.valueOf(Instant.now().getEpochSecond()));
+        PaymentCallbackSecurityProfileDTO profile = buildHmacProfile("wx_h5", "test-secret");
+        profile.setNotifySignWindowSec(null);
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5")).thenReturn(profile);
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                600
+        );
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-window-missing", "PAY-TEST-001", 600);
+    }
+
+    @Test
+    void shouldRejectNonPositiveChannelSignatureWindow() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-window-zero",
+                String.valueOf(Instant.now().getEpochSecond()));
+        PaymentCallbackSecurityProfileDTO profile = buildHmacProfile("wx_h5", "test-secret");
+        profile.setNotifySignWindowSec(0);
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5")).thenReturn(profile);
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                600
+        );
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-window-zero", "PAY-TEST-001", 600);
+    }
+
+    @Test
+    void shouldRejectNonPositiveNonceTtlAtStartup() {
+        IllegalArgumentException zeroException = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentCallbackSignatureServiceImpl(paymentCallbackSecurityMapper, true, 0));
+        IllegalArgumentException negativeException = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentCallbackSignatureServiceImpl(paymentCallbackSecurityMapper, true, -1));
+
+        assertEquals("payment callback nonce TTL must be positive", zeroException.getMessage());
+        assertEquals("payment callback nonce TTL must be positive", negativeException.getMessage());
     }
 
     private PaymentCallbackSecurityProfileDTO buildHmacProfile(String channelCode, String secret) {

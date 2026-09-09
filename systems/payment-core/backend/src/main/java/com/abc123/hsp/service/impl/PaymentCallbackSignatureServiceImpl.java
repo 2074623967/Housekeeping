@@ -36,18 +36,18 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     private static final String RSA_SHA256 = "SHA256withRSA";
 
     private final boolean required;
-    private final long allowedSkewSeconds;
     private final long nonceTtlSeconds;
     private final PaymentCallbackSecurityMapper paymentCallbackSecurityMapper;
 
     public PaymentCallbackSignatureServiceImpl(
             PaymentCallbackSecurityMapper paymentCallbackSecurityMapper,
             @Value("${payment.callback.require-signature:true}") boolean required,
-            @Value("${payment.callback.allowed-skew-seconds:300}") long allowedSkewSeconds,
             @Value("${payment.callback.nonce-ttl-seconds:600}") long nonceTtlSeconds) {
+        if (nonceTtlSeconds <= 0) {
+            throw new IllegalArgumentException("payment callback nonce TTL must be positive");
+        }
         this.paymentCallbackSecurityMapper = paymentCallbackSecurityMapper;
         this.required = required;
-        this.allowedSkewSeconds = allowedSkewSeconds;
         this.nonceTtlSeconds = nonceTtlSeconds;
     }
 
@@ -65,9 +65,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         PaymentCallbackSecurityProfileDTO securityProfile = resolveSecurityProfile(normalizedChannel);
         long timestampSeconds = parseTimestamp(request.getTimestamp());
         long nowSeconds = Instant.now().getEpochSecond();
-        long allowedWindowSeconds = securityProfile.getNotifySignWindowSec() == null || securityProfile.getNotifySignWindowSec() <= 0
-                ? allowedSkewSeconds
-                : securityProfile.getNotifySignWindowSec().longValue();
+        long allowedWindowSeconds = resolveNotifySignWindowSeconds(securityProfile);
         verifyTimestampWindow(timestampSeconds, nowSeconds, allowedWindowSeconds);
         String payload = String.join("|",
                 normalizedChannel,
@@ -104,10 +102,6 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     }
 
     private void verifyTimestampWindow(long timestampSeconds, long nowSeconds, long allowedWindowSeconds) {
-        if (allowedWindowSeconds <= 0) {
-            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
-                    "callback timestamp window is invalid");
-        }
         long differenceSeconds;
         try {
             differenceSeconds = Math.subtractExact(nowSeconds, timestampSeconds);
@@ -119,6 +113,15 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
                     "callback timestamp is out of allowed window");
         }
+    }
+
+    private long resolveNotifySignWindowSeconds(PaymentCallbackSecurityProfileDTO securityProfile) {
+        Integer notifySignWindowSec = securityProfile.getNotifySignWindowSec();
+        if (notifySignWindowSec == null || notifySignWindowSec <= 0) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID,
+                    "callback signature window must be positive");
+        }
+        return notifySignWindowSec.longValue();
     }
 
     private PaymentCallbackSecurityProfileDTO resolveSecurityProfile(String normalizedChannel) {

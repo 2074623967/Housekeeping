@@ -24,6 +24,11 @@ class PaymentCallbackSignatureConfigurationTest {
                 resolver.getProperty("payment.callback.require-signature", Boolean.class)
         );
         Assertions.assertNull(resolver.getProperty("payment.callback.secret"));
+        Assertions.assertNull(resolver.getProperty("payment.callback.allowed-skew-seconds"));
+        Assertions.assertEquals(
+                Long.valueOf(600L),
+                resolver.getProperty("payment.callback.nonce-ttl-seconds", Long.class)
+        );
     }
 
     @Test
