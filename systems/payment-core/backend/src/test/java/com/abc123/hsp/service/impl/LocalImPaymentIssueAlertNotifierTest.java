@@ -175,6 +175,43 @@ class LocalImPaymentIssueAlertNotifierTest {
     }
 
     @Test
+    void shouldRedactUnsafeProviderDiagnosticValues() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>("{\"data\":{\"deliveryStatus\":\"FAILED\\nforged-status\",\"errorCode\":\"token secret value\"}}", HttpStatus.INTERNAL_SERVER_ERROR));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/data/deliveryStatus",
+                "",
+                "",
+                "",
+                "/data/errorCode"
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("providerStatus=[REDACTED]"));
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("failureCode=[REDACTED]"));
+        Assertions.assertFalse(result.getProviderDeliveryMessage().contains("forged-status"));
+        Assertions.assertFalse(result.getProviderDeliveryMessage().contains("token secret value"));
+    }
+
+    @Test
     void shouldReturnFailedStatusWhenImWebhookTransportFails() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.postForEntity(

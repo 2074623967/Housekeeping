@@ -13,6 +13,7 @@ import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.HttpEntity;
@@ -31,6 +32,8 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
     private static final PaymentSensitiveDataMasker SENSITIVE_DATA_MASKER =
             new PaymentSensitiveDataMasker(OBJECT_MAPPER);
     private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
+    private static final Pattern SAFE_PROVIDER_DIAGNOSTIC_PATTERN =
+            Pattern.compile("[A-Za-z0-9._:/-]{1,64}");
 
     /**
      * 为外部 HTTP/Webhook 通知器配置统一的连接与读取超时，避免网关长时间阻塞任务线程。
@@ -271,10 +274,10 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 .append("，timeout=").append(timeoutMs).append("ms")
                 .append("，normalizedStatus=").append(normalizedDeliveryStatus);
         if (StringUtils.hasText(rawDeliveryStatus)) {
-            builder.append("，providerStatus=").append(rawDeliveryStatus);
+            builder.append("，providerStatus=").append(sanitizeProviderDiagnostic(rawDeliveryStatus));
         }
         if (StringUtils.hasText(failureCode)) {
-            builder.append("，failureCode=").append(failureCode);
+            builder.append("，failureCode=").append(sanitizeProviderDiagnostic(failureCode));
         }
         if (StringUtils.hasText(businessFailureMessage)) {
             builder.append("，businessCheck=").append(businessFailureMessage);
@@ -304,9 +307,20 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         JsonNode successNode = node.at(successJsonPointer);
         String actualValue = successNode.isMissingNode() || successNode.isNull() ? "" : successNode.asText();
         if (!successExpectedValue.equals(actualValue)) {
-            return "期望=" + successExpectedValue + "，实际=" + actualValue;
+            return "期望=" + sanitizeProviderDiagnostic(successExpectedValue)
+                    + "，实际=" + sanitizeProviderDiagnostic(actualValue);
         }
         return "";
+    }
+
+    private String sanitizeProviderDiagnostic(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String normalized = value.trim();
+        return SAFE_PROVIDER_DIAGNOSTIC_PATTERN.matcher(normalized).matches()
+                ? normalized
+                : "[REDACTED]";
     }
 
     private String resolveWebhookReceiptNo(PaymentIssueAlertDispatchItemDTO item,
