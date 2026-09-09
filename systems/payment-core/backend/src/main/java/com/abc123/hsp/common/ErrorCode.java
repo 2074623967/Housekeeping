@@ -45,4 +45,5 @@ public final class ErrorCode {
     public static final String PAYMENT_CALLBACK_ALGORITHM_INVALID = "PAYMENT-1032";
     public static final String PAYMENT_CALLBACK_CREDENTIAL_INVALID = "PAYMENT-1033";
     public static final String PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID = "PAYMENT-1034";
+    public static final String PAYMENT_SUBMIT_REQUEST_INVALID = "PAYMENT-1035";
 }

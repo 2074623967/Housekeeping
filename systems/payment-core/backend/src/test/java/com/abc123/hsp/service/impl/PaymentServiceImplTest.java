@@ -106,6 +106,89 @@ class PaymentServiceImplTest {
     private TransactionStatus transactionStatus;
 
     @Test
+    void shouldRejectInvalidPrepayOrderNoBeforeAnySubmitInteraction() {
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE\nINJECTED");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_REQUEST_INVALID,
+                exception.getCode());
+        verifyNoInteractions(
+                paymentMapper,
+                paymentChannelRoutingService,
+                paymentRiskControlService,
+                paymentSubmitRateLimitService,
+                paymentChannelSubmitService);
+    }
+
+    @Test
+    void shouldRejectUnknownTerminalBeforeAnySubmitInteraction() {
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-INVALID-TERMINAL");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setTerminal("attacker-rotated-terminal");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_REQUEST_INVALID,
+                exception.getCode());
+        verifyNoInteractions(
+                paymentMapper,
+                paymentChannelRoutingService,
+                paymentRiskControlService,
+                paymentSubmitRateLimitService,
+                paymentChannelSubmitService);
+    }
+
+    @Test
+    void shouldRejectOversizedRiskFieldBeforeAnySubmitInteraction() {
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-INVALID-DEVICE");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setClientDeviceId(String.join("", Collections.nCopies(129, "D")));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_REQUEST_INVALID,
+                exception.getCode());
+        verifyNoInteractions(
+                paymentMapper,
+                paymentChannelRoutingService,
+                paymentRiskControlService,
+                paymentSubmitRateLimitService,
+                paymentChannelSubmitService);
+    }
+
+    @Test
     void shouldApplySharedRateLimitBeforeCallingPaymentChannel() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-LIMIT", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-QUERY-LIMIT")).thenReturn(detail);
@@ -806,22 +889,6 @@ class PaymentServiceImplTest {
 
     @Test
     void shouldRejectOversizedSubmitIdempotencyKeyBeforeControlAndChannelCalls() {
-        PrepayOrderDTO prepay = new PrepayOrderDTO();
-        prepay.setPrepayOrderNo("PRE-IDEMP-LONG");
-        prepay.setPaymentOrderId("PAY-IDEMP-LONG");
-        prepay.setPayScene("HOME_CLEAN");
-        prepay.setAmount("¥168.00");
-        when(paymentMapper.findPrepay("PRE-IDEMP-LONG")).thenReturn(prepay);
-
-        PaymentDetailDTO detail = new PaymentDetailDTO();
-        detail.setPaymentOrderId("PAY-IDEMP-LONG");
-        detail.setStatus("PREPAY_CREATED");
-        when(paymentMapper.findDetail("PAY-IDEMP-LONG")).thenReturn(detail);
-
-        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
-        routeDecision.setChannelCode("wx_h5");
-        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
-
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-IDEMP-LONG");
         request.setPaymentMethod("微信支付");
@@ -840,6 +907,8 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
                 exception.getCode());
+        verify(paymentMapper, never()).findPrepay(org.mockito.ArgumentMatchers.anyString());
+        verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
         verify(paymentMapper, never()).existsPaymentAttemptByIdempotencyKey(
                 org.mockito.ArgumentMatchers.anyString());
         verify(paymentMapper, never()).insertSubmitConcurrencyToken(
@@ -855,22 +924,6 @@ class PaymentServiceImplTest {
 
     @Test
     void shouldRejectControlCharactersInSubmitIdempotencyKey() {
-        PrepayOrderDTO prepay = new PrepayOrderDTO();
-        prepay.setPrepayOrderNo("PRE-IDEMP-CTRL");
-        prepay.setPaymentOrderId("PAY-IDEMP-CTRL");
-        prepay.setPayScene("HOME_CLEAN");
-        prepay.setAmount("¥168.00");
-        when(paymentMapper.findPrepay("PRE-IDEMP-CTRL")).thenReturn(prepay);
-
-        PaymentDetailDTO detail = new PaymentDetailDTO();
-        detail.setPaymentOrderId("PAY-IDEMP-CTRL");
-        detail.setStatus("PREPAY_CREATED");
-        when(paymentMapper.findDetail("PAY-IDEMP-CTRL")).thenReturn(detail);
-
-        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
-        routeDecision.setChannelCode("wx_h5");
-        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
-
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-IDEMP-CTRL");
         request.setPaymentMethod("微信支付");
@@ -889,6 +942,8 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
                 exception.getCode());
+        verify(paymentMapper, never()).findPrepay(org.mockito.ArgumentMatchers.anyString());
+        verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
         verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
     }
 
@@ -1377,7 +1432,7 @@ class PaymentServiceImplTest {
         request.setChannelCode("WX_H5");
         request.setSourceAppId("housekeeping-app-web");
         request.setMerchantNo("MCH_HOME_APP");
-        request.setTerminal("H5");
+        request.setTerminal("H5_WEB");
         request.setClientIp("10.0.0.20");
 
         PaymentServiceImpl service = new PaymentServiceImpl(
@@ -2187,6 +2242,50 @@ class PaymentServiceImplTest {
         verify(paymentChannelSubmitService, times(1)).submit(org.mockito.ArgumentMatchers.any());
         verify(paymentMapper, times(1)).updateRouteOpsConfigSnapshotVersion(anyString(), eq(12L));
         verify(paymentMapper, times(1)).updateAttemptOpsConfigSnapshotVersion(anyString(), eq(12L));
+    }
+
+    @Test
+    void shouldRejectOversizedPaymentMethodFromOpsConfigBeforeRouting() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-OPS-INVALID-METHOD");
+        prepayOrder.setPaymentOrderId("PAY-OPS-INVALID-METHOD");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-OPS-INVALID-METHOD");
+        paymentDetail.setStatus("CREATED");
+
+        PaymentOpsConfigSnapshotDTO snapshot = new PaymentOpsConfigSnapshotDTO();
+        snapshot.setDefaultPayMethod(String.join("", Collections.nCopies(33, "M")));
+
+        when(paymentMapper.findPrepay("PRE-OPS-INVALID-METHOD")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-OPS-INVALID-METHOD")).thenReturn(paymentDetail);
+        when(paymentOpsConfigService.loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP"))
+                .thenReturn(snapshot);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-OPS-INVALID-METHOD");
+        request.setChannelCode("wx_h5");
+        request.setTerminal("APP_WEB");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService,
+                        paymentEventDispatchService,
+                        paymentRiskControlService,
+                        paymentOpsConfigService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_REQUEST_INVALID,
+                exception.getCode());
+        verify(paymentOpsConfigService).loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP");
+        verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(paymentRiskControlService, paymentChannelSubmitService);
     }
 
     @Test

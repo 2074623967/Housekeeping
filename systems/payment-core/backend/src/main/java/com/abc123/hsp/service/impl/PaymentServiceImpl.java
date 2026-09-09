@@ -59,6 +59,15 @@ import org.springframework.util.StringUtils;
 public class PaymentServiceImpl implements PaymentService {
 
     private static final int SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
+    private static final int SUBMIT_PREPAY_ORDER_NO_MAX_LENGTH = 64;
+    private static final int SUBMIT_PAYMENT_METHOD_MAX_LENGTH = 32;
+    private static final int SUBMIT_CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int SUBMIT_SOURCE_APP_ID_MAX_LENGTH = 64;
+    private static final int SUBMIT_MERCHANT_NO_MAX_LENGTH = 128;
+    private static final int SUBMIT_ACCESS_TOKEN_MAX_LENGTH = 128;
+    private static final int SUBMIT_CLIENT_IP_MAX_LENGTH = 64;
+    private static final int SUBMIT_CLIENT_DEVICE_ID_MAX_LENGTH = 128;
+    private static final int SUBMIT_PAYER_PHONE_MAX_LENGTH = 32;
 
     private static final int CALLBACK_PAYMENT_ORDER_ID_MAX_LENGTH = 64;
     private static final int CALLBACK_TRADE_STATUS_MAX_LENGTH = 32;
@@ -415,6 +424,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PrepayOrderDTO submit(PaymentSubmitRequestDTO request) {
+        normalizeAndValidateSubmitRequest(request);
         PrepayOrderDTO currentPrepay = paymentMapper.findPrepay(request.getPrepayOrderNo());
         if (currentPrepay == null || !StringUtils.hasText(currentPrepay.getPaymentOrderId())) {
             throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在或未绑定支付单");
@@ -432,13 +442,18 @@ public class PaymentServiceImpl implements PaymentService {
             // 收银台重复点击提交按钮时直接复用当前支付状态，避免重复写支付尝试、路由和待回调日志。
             return currentPrepay;
         }
-        String terminal = StringUtils.hasText(request.getTerminal()) ? request.getTerminal().trim() : "UNKNOWN";
-        String clientIp = StringUtils.hasText(request.getClientIp()) ? request.getClientIp().trim() : "UNKNOWN";
+        String terminal = request.getTerminal();
+        String clientIp = request.getClientIp();
         String sourceAppId = resolveSourceAppId(request);
         Long opsConfigSnapshotVersion = applyOpsConfigDefaults(request, currentPrepay, terminal);
+        normalizeAndValidateResolvedSubmitFields(request);
         PaymentRouteDecisionDTO routeDecision = paymentChannelRoutingService.resolve(
                 buildRouteContext(request, currentPrepay, terminal));
         String resolvedChannelCode = routeDecision.getChannelCode();
+        validateRequiredSubmitField(
+                resolvedChannelCode,
+                "支付路由渠道",
+                SUBMIT_CHANNEL_CODE_MAX_LENGTH);
         String idempotencyKey = buildIdempotencyKey(request, currentPrepay, resolvedChannelCode);
         validateSubmitIdempotencyKey(idempotencyKey);
         boolean existingAttempt = paymentMapper.existsPaymentAttemptByIdempotencyKey(idempotencyKey);
@@ -1221,6 +1236,101 @@ public class PaymentServiceImpl implements PaymentService {
                         "支付幂等键不能包含控制字符");
             }
         }
+    }
+
+    /**
+     * 在任何数据库读取或外部协作前收口客户端可控字段，避免非法值进入路由、风控和限流维度。
+     */
+    private void normalizeAndValidateSubmitRequest(PaymentSubmitRequestDTO request) {
+        if (request == null) {
+            throw invalidSubmitRequest("支付提交请求不能为空");
+        }
+        request.setPrepayOrderNo(normalizeRequiredSubmitField(
+                request.getPrepayOrderNo(), "预付单号", SUBMIT_PREPAY_ORDER_NO_MAX_LENGTH));
+        request.setPaymentMethod(normalizeOptionalSubmitField(
+                request.getPaymentMethod(), "支付方式", SUBMIT_PAYMENT_METHOD_MAX_LENGTH));
+        request.setChannelCode(normalizeOptionalSubmitField(
+                request.getChannelCode(), "渠道编码", SUBMIT_CHANNEL_CODE_MAX_LENGTH));
+        request.setSourceAppId(normalizeOptionalSubmitField(
+                request.getSourceAppId(), "来源应用标识", SUBMIT_SOURCE_APP_ID_MAX_LENGTH));
+        request.setMerchantNo(normalizeOptionalSubmitField(
+                request.getMerchantNo(), "商户号", SUBMIT_MERCHANT_NO_MAX_LENGTH));
+        request.setAccessToken(normalizeOptionalSubmitField(
+                request.getAccessToken(), "访问令牌", SUBMIT_ACCESS_TOKEN_MAX_LENGTH));
+        request.setTerminal(normalizeSubmitTerminal(request.getTerminal()));
+        String clientIp = normalizeOptionalSubmitField(
+                request.getClientIp(), "客户端 IP", SUBMIT_CLIENT_IP_MAX_LENGTH);
+        request.setClientIp(clientIp == null ? "UNKNOWN" : clientIp);
+        request.setClientDeviceId(normalizeOptionalSubmitField(
+                request.getClientDeviceId(), "客户端设备号", SUBMIT_CLIENT_DEVICE_ID_MAX_LENGTH));
+        request.setPayerPhone(normalizeOptionalSubmitField(
+                request.getPayerPhone(), "付款手机号", SUBMIT_PAYER_PHONE_MAX_LENGTH));
+        if (StringUtils.hasText(request.getIdempotencyKey())) {
+            String idempotencyKey = request.getIdempotencyKey().trim();
+            validateSubmitIdempotencyKey(idempotencyKey);
+            request.setIdempotencyKey(idempotencyKey);
+        }
+    }
+
+    private void normalizeAndValidateResolvedSubmitFields(PaymentSubmitRequestDTO request) {
+        request.setPaymentMethod(normalizeRequiredSubmitField(
+                request.getPaymentMethod(), "支付方式", SUBMIT_PAYMENT_METHOD_MAX_LENGTH));
+        request.setChannelCode(normalizeOptionalSubmitField(
+                request.getChannelCode(), "渠道编码", SUBMIT_CHANNEL_CODE_MAX_LENGTH));
+    }
+
+    private String normalizeSubmitTerminal(String terminal) {
+        String normalized = StringUtils.hasText(terminal)
+                ? terminal.trim().toUpperCase(Locale.ROOT)
+                : "UNKNOWN";
+        if ("APP".equals(normalized) || "APP_WEB".equals(normalized)) {
+            return "APP";
+        }
+        if ("H5".equals(normalized) || "H5_WEB".equals(normalized) || "MOBILE_WEB".equals(normalized)) {
+            return "H5";
+        }
+        if ("PC".equals(normalized) || "PC_WEB".equals(normalized)) {
+            return "PC";
+        }
+        if ("UNKNOWN".equals(normalized)) {
+            return normalized;
+        }
+        throw invalidSubmitRequest("终端标识仅支持 APP、H5、PC 或 UNKNOWN");
+    }
+
+    private String normalizeRequiredSubmitField(String value, String fieldName, int maxLength) {
+        String normalized = normalizeOptionalSubmitField(value, fieldName, maxLength);
+        if (normalized == null) {
+            throw invalidSubmitRequest(fieldName + "不能为空");
+        }
+        return normalized;
+    }
+
+    private String normalizeOptionalSubmitField(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        validateRequiredSubmitField(normalized, fieldName, maxLength);
+        return normalized;
+    }
+
+    private void validateRequiredSubmitField(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            throw invalidSubmitRequest(fieldName + "不能为空");
+        }
+        if (value.length() > maxLength) {
+            throw invalidSubmitRequest(fieldName + "长度不能超过 " + maxLength + " 个字符");
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidSubmitRequest(fieldName + "不能包含控制字符");
+            }
+        }
+    }
+
+    private BusinessException invalidSubmitRequest(String message) {
+        return new BusinessException(ErrorCode.PAYMENT_SUBMIT_REQUEST_INVALID, message);
     }
 
     /**
