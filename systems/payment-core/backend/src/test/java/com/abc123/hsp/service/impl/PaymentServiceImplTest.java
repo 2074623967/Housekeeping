@@ -106,6 +106,83 @@ class PaymentServiceImplTest {
     private TransactionStatus transactionStatus;
 
     @Test
+    void shouldRejectInvalidPaymentIdentifiersBeforeAnyMapperInteraction() {
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+        com.abc123.hsp.dto.PaymentQueryRequestDTO queryRequest =
+                new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        queryRequest.setPaymentOrderId("PAY\nQUERY");
+        com.abc123.hsp.dto.PaymentCloseRequestDTO closeRequest =
+                new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        closeRequest.setPaymentOrderId(String.join("", Collections.nCopies(65, "P")));
+
+        BusinessException detailException = assertThrows(
+                BusinessException.class, () -> service.detail(" "));
+        BusinessException cashierException = assertThrows(
+                BusinessException.class, () -> service.cashier("PRE\rINJECTED"));
+        BusinessException queryException = assertThrows(
+                BusinessException.class, () -> service.query(queryRequest));
+        BusinessException closeException = assertThrows(
+                BusinessException.class, () -> service.close(closeRequest));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, detailException.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, cashierException.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, queryException.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, closeException.getCode());
+        verifyNoInteractions(paymentMapper, paymentChannelQueryRateLimitService);
+    }
+
+    @Test
+    void shouldRejectInvalidPrepayRequestBeforeAnyMapperInteraction() {
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORD\nINJECTED");
+        request.setPayScene("HOME_CLEAN");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, exception.getCode());
+        verifyNoInteractions(paymentMapper);
+    }
+
+    @Test
+    void shouldRejectInvalidPrepayAmountBeforeAnyMapperInteraction() {
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("WALLET-INVALID-AMOUNT");
+        request.setPayScene("WALLET_RECHARGE_APP");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("1.001"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, exception.getCode());
+        verifyNoInteractions(paymentMapper);
+    }
+
+    @Test
     void shouldRejectInvalidPrepayOrderNoBeforeAnySubmitInteraction() {
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE\nINJECTED");
@@ -541,6 +618,39 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-NEW", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-NEW", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldRejectSettledOrOverpaidOrderWithoutCreatingPayment() {
+        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-SETTLED")).thenReturn(null);
+        when(paymentMapper.findOrderAmount("ORD-SETTLED")).thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findPaidAmount("ORD-SETTLED")).thenReturn(new BigDecimal("168.01"));
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORD-SETTLED");
+        request.setPayScene("HOME_CLEAN");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED, exception.getCode());
+        verify(paymentMapper, never()).insertBill(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                anyString(), anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
+        verify(paymentMapper, never()).insertPrepayOrder(
+                anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString(), anyString(), anyString());
     }
 
     @Test

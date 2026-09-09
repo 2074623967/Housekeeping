@@ -46,4 +46,6 @@ public final class ErrorCode {
     public static final String PAYMENT_CALLBACK_CREDENTIAL_INVALID = "PAYMENT-1033";
     public static final String PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID = "PAYMENT-1034";
     public static final String PAYMENT_SUBMIT_REQUEST_INVALID = "PAYMENT-1035";
+    public static final String PAYMENT_REQUEST_INVALID = "PAYMENT-1036";
+    public static final String PAYMENT_ORDER_ALREADY_SETTLED = "PAYMENT-1037";
 }

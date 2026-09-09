@@ -58,6 +58,15 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final int BUSINESS_ORDER_NO_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int PREPAY_ORDER_NO_MAX_LENGTH = 64;
+    private static final int PREPAY_PAY_SCENE_MAX_LENGTH = 32;
+    private static final int PREPAY_CUSTOMER_NAME_MAX_LENGTH = 128;
+    private static final int PREPAY_CASHIER_TITLE_MAX_LENGTH = 128;
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
+
     private static final int SUBMIT_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
     private static final int SUBMIT_PREPAY_ORDER_NO_MAX_LENGTH = 64;
     private static final int SUBMIT_PAYMENT_METHOD_MAX_LENGTH = 32;
@@ -306,13 +315,16 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentDetailDTO detail(String paymentOrderId) {
-        return outwardDetail(paymentMapper.findDetail(paymentOrderId));
+        String normalizedPaymentOrderId = normalizeRequiredRequestField(
+                paymentOrderId, "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH);
+        return outwardDetail(paymentMapper.findDetail(normalizedPaymentOrderId));
     }
 
     @Transactional
     @Override
     public PrepayOrderDTO prepay(PrepayRequestDTO request) {
         // 预付单创建会同时影响账单、支付单和收银台状态，必须放在同一个事务里。
+        normalizeAndValidatePrepayRequest(request);
         PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
         if (activePrepay != null) {
             // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
@@ -320,12 +332,22 @@ public class PaymentServiceImpl implements PaymentService {
         }
         BigDecimal orderAmount = paymentMapper.findOrderAmount(request.getOrderNo());
         BigDecimal paidAmount = paymentMapper.findPaidAmount(request.getOrderNo());
-        if (orderAmount == null || paidAmount == null) {
+        if (orderAmount == null && paidAmount == null) {
             return createVirtualPrepay(request);
+        }
+        if (orderAmount == null || paidAmount == null) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_ORDER_SOURCE_MISSING,
+                    "订单金额数据不完整");
+        }
+        BigDecimal remainAmount = orderAmount.subtract(paidAmount);
+        if (remainAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED,
+                    "订单已结清或已超额支付，无需再次创建支付单");
         }
         String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
-        BigDecimal remainAmount = orderAmount.subtract(paidAmount);
         if (billNo == null) {
             billNo = buildBusinessNo("BILL");
             String billStatus = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "已结清" : "待支付";
@@ -402,7 +424,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public CashierPageDTO cashier(String prepayOrderNo) {
-        PrepayOrderDTO prepayOrder = paymentMapper.findPrepay(prepayOrderNo);
+        String normalizedPrepayOrderNo = normalizeRequiredRequestField(
+                prepayOrderNo, "预付单号", PREPAY_ORDER_NO_MAX_LENGTH);
+        PrepayOrderDTO prepayOrder = paymentMapper.findPrepay(normalizedPrepayOrderNo);
         if (prepayOrder == null) {
             throw new BusinessException(ErrorCode.PREPAY_ORDER_NOT_FOUND, "预付单不存在");
         }
@@ -902,6 +926,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(noRollbackFor = BusinessException.class)
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
+        if (request == null) {
+            throw invalidPaymentRequest("支付查单请求不能为空");
+        }
+        request.setPaymentOrderId(normalizeRequiredRequestField(
+                request.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
@@ -1089,6 +1118,11 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     @Override
     public PaymentDetailDTO close(PaymentCloseRequestDTO request) {
+        if (request == null) {
+            throw invalidPaymentRequest("支付关闭请求不能为空");
+        }
+        request.setPaymentOrderId(normalizeRequiredRequestField(
+                request.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
         PaymentDetailDTO detail = paymentMapper.findDetail(request.getPaymentOrderId());
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
@@ -1204,6 +1238,61 @@ public class PaymentServiceImpl implements PaymentService {
         return prefix
                 + System.currentTimeMillis()
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+    private void normalizeAndValidatePrepayRequest(PrepayRequestDTO request) {
+        if (request == null) {
+            throw invalidPaymentRequest("预付单创建请求不能为空");
+        }
+        request.setOrderNo(normalizeRequiredRequestField(
+                request.getOrderNo(), "订单号", BUSINESS_ORDER_NO_MAX_LENGTH));
+        request.setPayScene(normalizeRequiredRequestField(
+                request.getPayScene(), "支付场景", PREPAY_PAY_SCENE_MAX_LENGTH));
+        request.setCustomerName(normalizeOptionalRequestField(
+                request.getCustomerName(), "客户名称", PREPAY_CUSTOMER_NAME_MAX_LENGTH));
+        request.setCashierTitle(normalizeOptionalRequestField(
+                request.getCashierTitle(), "收银台标题", PREPAY_CASHIER_TITLE_MAX_LENGTH));
+        if (request.getAmount() != null) {
+            validatePrepayAmount(request.getAmount());
+        }
+    }
+
+    private void validatePrepayAmount(BigDecimal amount) {
+        BigDecimal normalizedAmount = amount.stripTrailingZeros();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw invalidPaymentRequest("预付金额必须大于 0");
+        }
+        if (normalizedAmount.scale() > MONEY_MAX_SCALE || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw invalidPaymentRequest("预付金额最多支持 16 位整数和 2 位小数");
+        }
+    }
+
+    private String normalizeRequiredRequestField(String value, String fieldName, int maxLength) {
+        String normalized = normalizeOptionalRequestField(value, fieldName, maxLength);
+        if (normalized == null) {
+            throw invalidPaymentRequest(fieldName + "不能为空");
+        }
+        return normalized;
+    }
+
+    private String normalizeOptionalRequestField(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidPaymentRequest(fieldName + "长度不能超过 " + maxLength + " 个字符");
+        }
+        for (int index = 0; index < normalized.length(); index++) {
+            if (Character.isISOControl(normalized.charAt(index))) {
+                throw invalidPaymentRequest(fieldName + "不能包含控制字符");
+            }
+        }
+        return normalized;
+    }
+
+    private BusinessException invalidPaymentRequest(String message) {
+        return new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, message);
     }
 
     /**
