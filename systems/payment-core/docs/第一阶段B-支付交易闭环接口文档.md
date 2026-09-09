@@ -2324,6 +2324,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 续期 SQL 仅更新 `task_code + lock_owner` 匹配且尚未过期的记录；异 owner、已过期 owner 或已释放租约返回 `0`，不得恢复旧执行者资格。句柄关闭会取消续期并按同一 owner 幂等释放。
 4. 该契约降低正常长任务重复执行概率，但不是强 fencing token；数据库不可用、长时间 JVM 暂停或续期线程阻塞时仍可能失约，生产需要租约丢失监控、业务幂等和真实多实例故障测试。
 
+### 14.45 支付提交共享限流内部契约
+
+1. `POST /api/payments/submit` 在控制策略权限、访问令牌和严格自检通过后，对尚无相同幂等键支付尝试的请求占用共享分钟配额；已有尝试直接沿用幂等恢复路径，不重复计数。
+2. 接口配额范围为 `sourceAppId + terminal + clientIp`，耗尽返回 `PAYMENT-1023`；来源支付方式配额范围为 `sourceAppId + paymentMethod`，耗尽返回 `PAYMENT-1018`。两个组合范围只以 SHA-256 摘要写入数据库。
+3. 服务先占接口额度，再占来源支付方式额度；占用通过独立短事务立即提交。第二个范围拒绝不会退还第一个范围额度，避免失败重试绕过入口流量约束。
+4. 固定窗口长度为 `60` 秒，阈值继续来自生效支付控制策略的 `interfaceMinuteSubmitLimit / minuteSubmitLimit`；非正值表示对应范围不启用。该内部契约不新增请求或响应字段。
+5. 当前只完成本地 H2 MySQL 模式并发验证，真实 MySQL 的行锁、热点范围、代理客户端 IP 可信边界、网关限流与生产容量仍需部署前验收。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
