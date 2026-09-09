@@ -50,6 +50,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern TEMPLATE_PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_]+)\\s*}}");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
+    private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
+    private static final int PROVIDER_RECEIPT_NO_MAX_LENGTH = 128;
+    private static final int PROVIDER_DELIVERY_STATUS_MAX_LENGTH = 64;
+    private static final int PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH = 255;
+    private static final int RENDERED_CONTENT_SNAPSHOT_MAX_LENGTH = 1024;
     private static final String TRANSPORT_ERROR_MARKER = "transportError=";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
 
@@ -511,19 +516,46 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryStatus())) {
             normalizedResult.setProviderDeliveryStatus(defaultStatus);
         }
+        normalizedResult.setProviderDeliveryStatus(truncate(
+                normalizedResult.getProviderDeliveryStatus(),
+                PROVIDER_DELIVERY_STATUS_MAX_LENGTH
+        ));
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryMessage())) {
             normalizedResult.setProviderDeliveryMessage(defaultMessage);
         } else {
             normalizedResult.setProviderDeliveryMessage(
                     sanitizeProviderDeliveryMessage(normalizedResult.getProviderDeliveryMessage()));
         }
+        normalizedResult.setProviderDeliveryMessage(truncate(
+                normalizedResult.getProviderDeliveryMessage(),
+                PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH
+        ));
         if (!StringUtils.hasText(normalizedResult.getProviderReceiptSnapshot())) {
             normalizedResult.setProviderReceiptSnapshot("LOCAL_RESULT:" + defaultStatus);
         }
+        normalizedResult.setProviderReceiptSnapshot(truncate(
+                normalizedResult.getProviderReceiptSnapshot(),
+                PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH
+        ));
+        normalizedResult.setProviderReceiptNo(truncate(
+                normalizedResult.getProviderReceiptNo(),
+                PROVIDER_RECEIPT_NO_MAX_LENGTH
+        ));
         if (!StringUtils.hasText(normalizedResult.getRenderedContentSnapshot())) {
             normalizedResult.setRenderedContentSnapshot(buildAlertContent(item));
         }
+        normalizedResult.setRenderedContentSnapshot(truncate(
+                normalizedResult.getRenderedContentSnapshot(),
+                RENDERED_CONTENT_SNAPSHOT_MAX_LENGTH
+        ));
         return normalizedResult;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private PaymentIssueAlertDeliveryResultDTO buildFailureResult(String status,

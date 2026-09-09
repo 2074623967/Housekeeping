@@ -615,6 +615,45 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldBoundCustomNotifierResultBeforePersistingAndFallback() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult(
+                        repeated("R", 256),
+                        "FAILED-" + repeated("S", 128),
+                        repeated("M", 512),
+                        repeated("C", 2048),
+                        repeated("P", 4096)
+                ))
+                .thenReturn(buildDeliveryResult("IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
+        PaymentIssueAlertLogEntity primaryLog = logCaptor.getAllValues().get(0);
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(128, primaryLog.getProviderReceiptNo().length());
+        Assertions.assertEquals(64, primaryLog.getProviderDeliveryStatus().length());
+        Assertions.assertEquals(255, primaryLog.getProviderDeliveryMessage().length());
+        Assertions.assertEquals(1024, primaryLog.getRenderedContentSnapshot().length());
+        Assertions.assertEquals(2048, primaryLog.getProviderReceiptSnapshot().length());
+    }
+
+    @Test
     void shouldFallbackToNextProviderWhenPrimaryProviderReturnsTransportFailureResult() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
@@ -734,13 +773,26 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                                                                    String deliveryStatus,
                                                                    String deliveryMessage,
                                                                    String renderedContent) {
+        return buildDeliveryResult(receiptNo, deliveryStatus, deliveryMessage, renderedContent,
+                "LOCAL:TEST:" + deliveryStatus);
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO buildDeliveryResult(String receiptNo,
+                                                                   String deliveryStatus,
+                                                                   String deliveryMessage,
+                                                                   String renderedContent,
+                                                                   String receiptSnapshot) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
-        result.setProviderReceiptSnapshot("LOCAL:TEST:" + deliveryStatus);
+        result.setProviderReceiptSnapshot(receiptSnapshot);
         result.setProviderReceiptNo(receiptNo);
         result.setProviderDeliveryStatus(deliveryStatus);
         result.setProviderDeliveryMessage(deliveryMessage);
         result.setRenderedContentSnapshot(renderedContent);
         return result;
+    }
+
+    private String repeated(String value, int count) {
+        return String.join("", Collections.nCopies(count, value));
     }
 
     private PaymentAlertProviderConfigDTO buildProvider(String providerCode,
