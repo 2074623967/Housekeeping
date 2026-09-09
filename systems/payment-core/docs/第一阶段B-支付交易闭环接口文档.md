@@ -2269,6 +2269,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 时间窗失败发生在签名计算、nonce 清理/写入和支付单状态处理之前，即使攻击者为极端时间戳生成正确签名也不会产生业务副作用。
 4. 渠道接入必须明确时间戳单位和签名原文；毫秒值不得直接作为秒值传入，服务端也不做启发式单位转换。
 
+### 14.37 RSA2 回调异常分类
+
+1. `signature` 不是合法 Base64，或解码后的字节无法作为 RSA2 签名验证时，返回 `PAYMENT-1005`；响应不回显原始签名字节。
+2. 渠道公钥为空返回 `PAYMENT-1006`；公钥 Base64、X.509 SubjectPublicKeyInfo 或 RSA 解析失败返回 `PAYMENT-1033`。
+3. 上述异常发生在 nonce 清理/写入和支付单状态处理之前，不产生支付、资金、事件或防重事实副作用。
+4. 当前只接受可解析为 X.509 RSA 公钥的文本；真实渠道如使用证书、不同 PEM 类型或密钥版本标识，需在适配层明确转换与轮换契约。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2296,6 +2303,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1030` | 回调 URL 渠道与支付单实际路由渠道不一致或支付单尚未绑定渠道 |
 | `PAYMENT-1031` | 回调渠道交易号与支付单已绑定的渠道交易号不一致 |
 | `PAYMENT-1032` | 渠道回调签名算法缺失或不在运行时白名单 |
+| `PAYMENT-1033` | 渠道 RSA2 公钥材料存在但无法解析 |
 
 联调说明：
 
