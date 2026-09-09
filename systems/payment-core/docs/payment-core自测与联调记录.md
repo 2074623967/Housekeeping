@@ -6660,3 +6660,28 @@
 1. 业务标识必须在首次查库前收口，避免将数据库异常、全表扫描风险或不稳定审计维度当成输入校验；同一规范化值贯穿后续查询和状态处理。
 2. 创建支付单前必须保证剩余应付严格大于零，已结清和超额支付属于明确业务终态，不应通过数据库默认值容纳零或负金额。
 3. 本轮没有增加订单级锁或原子剩余金额裁决；生产前仍需验证创建预付单与支付成功并发、目标 MySQL 隔离行为及跨服务订单事实一致性。
+
+## 222. 2026-09-10 预付单创建订单级并发协调 V1.0 验证
+
+### 222.1 本轮补强
+
+1. 新增 `t_payment_prepay_creation_lock` 及幂等迁移脚本，以 `order_no` 唯一键为标准订单和虚拟支付建立同一套数据库协调边界。
+2. `PaymentServiceImpl.prepay` 在字段校验后先初始化协调行并于当前事务内 `FOR UPDATE`，成功持锁后才查询有效预付单、读取金额和创建账单/支付单/预付单；锁行无法读取时以 `PAYMENT-500` 失败闭合。
+3. 两套全量 schema、Mapper 接口/XML、数据库 README 和迁移验收 SQL 已同步，避免代码先于运行库表结构发布。
+
+### 222.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 服务与并发 Mapper 定向测试 | `mvn -Dtest=PaymentServiceImplTest,PaymentPrepayCreationLockMapperIntegrationTest test` | 通过 | `59` 个用例通过；覆盖加锁后查重顺序、锁行失败闭合和两个独立事务同订单串行化 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `567` 个用例，`0` failures、`0` errors、`0` skipped |
+| schema 与迁移检查 | 双全量 schema + `2026-09-10-add-payment-prepay-creation-lock.sql` | 通过 | 表名、`order_no VARCHAR(64)` 和唯一索引 `uk_prepay_creation_order` 一致 |
+| 补丁检查 | `git diff --check` | 通过 | Java、XML、SQL、测试和文档无空白符错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`，release 明细仍有 `4` 项真实阻断 |
+| 真实 MySQL 多实例验证 | 锁等待、死锁、连接池、吞吐、协调表容量和跨库订单并发 | 未执行 | 不记录生产并发幂等验收通过 |
+
+### 222.3 当前判断
+
+1. 唯一协调行将同订单并发首次创建和存量查重统一到一个可持久化锁点，避免仅锁 `t_order` 时虚拟支付无行可锁，也避免在预付单表上依赖尚不存在的记录。
+2. 协调行与业务写入共用事务，后到请求只能在前一事务提交或回滚后继续；持锁后重新查重是幂等成立的关键，不能把锁移动到查重之后。
+3. 当前证据为本地 H2 MySQL 兼容模式与单元测试。生产 MySQL 的锁等待策略、死锁恢复、协调表长期增长和跨库订单金额变化仍需真实环境验证。

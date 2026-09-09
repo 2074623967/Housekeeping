@@ -2361,6 +2361,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 可选 `amount` 一旦提供必须大于 `0`、最多 `16` 位整数和 `2` 位小数。虚拟支付仍要求客户名称和金额；标准订单只缺一项金额事实返回 `PAYMENT-1011`。
 4. 标准订单剩余应付 `orderAmount - paidAmount <= 0` 时返回 `PAYMENT-1037`，不得创建账单、支付单或预付单。该校验不替代跨服务并发结算、订单锁或生产数据库隔离验证。
 
+### 14.50 创建预付单并发幂等契约
+
+1. `POST /api/payments/prepay` 在字段校验后，以规范化 `orderNo` 幂等初始化 `t_payment_prepay_creation_lock` 协调行，并在当前事务内通过 `SELECT ... FOR UPDATE` 串行化同订单请求。
+2. 获取订单级行锁后才允许查询有效预付单、读取订单金额和创建账单/支付单/预付单；后到请求必须在前一事务提交后重新执行查重，命中有效预付单时返回同一 `prepayOrderNo/paymentOrderId`。
+3. 协调行无法读取时返回 `PAYMENT-500` 并回滚，不得退化为无锁创建。运行库必须先执行对应增量 DDL；本契约只覆盖共享 payment-core 主库，不宣称对跨库订单更新形成全局互斥。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
