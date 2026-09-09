@@ -277,7 +277,7 @@ async function mockSuccessCallback() {
   try {
     paymentDetail.value = await paymentApi.callback(callbackChannelCode.value, {
       paymentOrderId: route.params.paymentOrderId,
-      channelTransactionNo: `SIM${Date.now()}`,
+      channelTransactionNo: paymentDetail.value?.channelTransactionNo || `SIM${Date.now()}`,
       tradeStatus: "SUCCESS"
     });
     syncStatusByDetail();

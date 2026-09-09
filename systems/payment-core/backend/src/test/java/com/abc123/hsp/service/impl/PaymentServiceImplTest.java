@@ -266,6 +266,44 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectCallbackForDifferentChannelTransaction() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CALLBACK-TRANSACTION-MISMATCH");
+        detail.setChannel("alipay_h5");
+        detail.setChannelTransactionNo("ALI-BOUND-001");
+        detail.setStatus("WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-TRANSACTION-MISMATCH")).thenReturn(detail);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-TRANSACTION-MISMATCH");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("ALI-OTHER-002");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .callback("alipay_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(anyString(), anyString());
+    }
+
+    @Test
     void shouldThrowBusinessExceptionWhenCashierPrepayOrderMissing() {
         when(paymentMapper.findPrepay("PRE-MISSING")).thenReturn(null);
 

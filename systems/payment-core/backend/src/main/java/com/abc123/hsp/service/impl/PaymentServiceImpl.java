@@ -760,6 +760,12 @@ public class PaymentServiceImpl implements PaymentService {
                     ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISMATCH,
                     "callback channel does not match payment channel");
         }
+        if (StringUtils.hasText(detail.getChannelTransactionNo())
+                && !detail.getChannelTransactionNo().equals(request.getChannelTransactionNo())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH,
+                    "callback transaction does not match payment transaction");
+        }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || ("CLOSED".equalsIgnoreCase(detail.getStatus()) && !paySuccess)) {

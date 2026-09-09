@@ -131,7 +131,11 @@ async function handleCallback(item) {
   activePaymentOrderId.value = item.paymentOrderId;
   activeAction.value = "callback";
   try {
-    const paymentDetail = await paymentApi.callback(item.channel, item.paymentOrderId);
+    const paymentDetail = await paymentApi.callback(
+      item.channel,
+      item.paymentOrderId,
+      item.channelTransactionNo
+    );
     actionMessage.value = `支付单 ${item.paymentOrderId} 已按渠道 ${item.channel} 模拟回调，当前状态为 ${paymentDetail.status}。`;
     await refreshList();
   } catch (error) {
