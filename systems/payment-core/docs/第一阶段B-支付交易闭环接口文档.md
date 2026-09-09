@@ -537,10 +537,11 @@
   "merchantNo": "MCH_HOME_APP",
   "accessToken": "runtime-injected-token",
   "terminal": "APP_WEB",
-  "clientIp": "127.0.0.1",
   "idempotencyKey": "PRE1752912345678|微信支付|WX_H5"
 }
 ```
+
+`clientIp` 请求字段仅为兼容保留，HTTP 入口不会信任该值，而是始终按 14.46 节的连接与可信代理规则覆盖。
 
 `channelCode` 会由支付核心统一规范化为标准编码：
 
@@ -2331,6 +2332,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 服务先占接口额度，再占来源支付方式额度；占用通过独立短事务立即提交。第二个范围拒绝不会退还第一个范围额度，避免失败重试绕过入口流量约束。
 4. 固定窗口长度为 `60` 秒，阈值继续来自生效支付控制策略的 `interfaceMinuteSubmitLimit / minuteSubmitLimit`；非正值表示对应范围不启用。该内部契约不新增请求或响应字段。
 5. 当前只完成本地 H2 MySQL 模式并发验证，真实 MySQL 的行锁、热点范围、代理客户端 IP 可信边界、网关限流与生产容量仍需部署前验收。
+
+### 14.46 支付提交客户端 IP 可信代理契约
+
+1. `POST /api/payments/submit` 始终覆盖 JSON 中的 `clientIp`。默认使用 `HttpServletRequest.remoteAddr`，直接调用方不能通过请求体或 `X-Forwarded-For` 自选限流维度。
+2. `payment.submit.trusted-proxy-addresses` 对应环境变量 `HSP_PAYMENT_SUBMIT_TRUSTED_PROXY_ADDRESSES`，默认空；多个固定代理 IP 以逗号分隔。只有直接对端规范化后命中该列表时才解析 `X-Forwarded-For`。
+3. 可信代理链从右向左处理：跳过列表中的代理地址，首个非可信数值 IP 作为客户端地址。链中存在空项、主机名或畸形地址，头长度超过 `2048` 字符、跳数超过 `32`，或整条链都是可信代理时，统一回退直接对端。
+4. 当前配置只接受明确 IPv4/IPv6 地址，不支持 CIDR 或主机名。生产启用前必须核对负载均衡和反向代理是否清理/追加转发头、实际多跳顺序及地址漂移策略，不能照搬示例列表。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
