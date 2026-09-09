@@ -163,8 +163,8 @@
         "flowTypeTag": "info",
         "channelCode": "alipay_h5",
         "terminal": "H5",
-        "clientIp": "127.0.0.1",
-        "idempotencyKey": "PRE202607190002|支付宝|alipay_h5",
+        "clientIp": "127.0.*.*",
+        "idempotencyKey": "PRE202****y_h5",
         "businessStatus": "等待回调",
         "businessStatusType": "warn",
         "notifyType": null,
@@ -175,7 +175,7 @@
         "retryCount": null,
         "requestPayload": "{\"scene\":\"H5\",\"amount\":6800.00}",
         "responsePayload": "{\"payUrl\":\"https://pay.example.com/ali/2\"}",
-        "summary": "方式=支付宝 / 请求={\"scene\":\"H5\",\"amount\":6800.00}",
+        "summary": "方式=支付宝 / 状态=等待回调",
         "createdAt": "2026-07-19 10:03:11"
       }
     ],
@@ -190,8 +190,8 @@
 业务说明：
 
 1. 当前统一聚合支付尝试、渠道回调、路由记录、业务事件四类过程流水。
-2. 不同流水类型会按统一字段口径返回深度排障信息，例如终端、IP、幂等键、回调类型、路由规则、下游系统、事件主题、发布状态和重试次数。
-3. 前端可直接使用 `requestPayload`、`responsePayload` 展开原始报文区，无需再拼接二次接口。
+2. 不同流水类型会按统一字段口径返回排障信息；客户端 IP、幂等键和请求/响应 JSON 中的手机号、设备标识、卡号、客户名称等字段在出参边界统一脱敏。
+3. 前端可直接使用 `requestPayload`、`responsePayload` 展开脱敏报文；非法 JSON 整体返回 `[REDACTED]`，流水摘要不再重复拼接原始载荷。
 
 导出接口：`GET /api/payment-flows/export`
 
@@ -199,7 +199,7 @@
 2. 导出文件名固定为 `payment-flows.csv`，以 UTF-8 BOM 返回，兼容 Excel 直接打开。
 3. 导出查询严格复用当前统一流水排障台的 union SQL 口径，不再另起分页循环导出路径。
 4. 导出列包含流水编号、支付单号、订单号、预付单号、流水类型、类型标签、渠道编码、终端、客户端 IP、幂等键、业务状态、状态类型、通知类型、路由规则、下游系统、事件主题、发布状态、重试次数、请求报文、响应报文、摘要、创建时间。
-5. 请求报文、响应报文、摘要等文本列统一按 CSV 双引号规则转义，避免原始 JSON 中的引号破坏文件结构。
+5. 请求报文、响应报文、摘要等文本列先执行与列表一致的脱敏，再按 CSV 双引号规则转义。
 
 ## 4. 支付路由执行结果台查询
 
@@ -236,7 +236,7 @@
         "paymentOrderId": "PAY202607190002",
         "orderNo": "ORD202607190002",
         "prepayOrderNo": "PRE202607190002",
-        "customerName": "王先生",
+        "customerName": "王*",
         "amount": "¥2000.00",
         "paymentMethod": "支付宝",
         "channelCode": "alipay_h5",
@@ -244,8 +244,8 @@
         "routeResult": "支付宝H5",
         "routeResultType": "success",
         "terminal": "H5",
-        "clientIp": "127.0.0.1",
-        "idempotencyKey": "PRE202607190002|支付宝|alipay_h5",
+        "clientIp": "127.0.*.*",
+        "idempotencyKey": "PRE202****y_h5",
         "requestPayload": "{\"scene\":\"H5\",\"amount\":6800.00}",
         "responsePayload": "{\"payUrl\":\"https://pay.example.com/ali/2\"}",
         "createdAt": "2026-07-19 10:03:02"
@@ -269,6 +269,7 @@
 6. 规则目标渠道不健康时，命中可用 fallback 并以 `_HEALTH_FALLBACK` 规则后缀和“短窗健康熔断”结果说明留痕；显式指定不健康渠道时返回 `PAYMENT-1010`，不会静默改用其他支付方式；支付方式默认路由会跳过不健康候选。
 7. 配置 `HSP_PAYMENT_CHANNEL_ROUTE_HEALTH_ENABLED` 默认值为 `false`；统计窗口及失败阈值复用 `HSP_PAYMENT_CHANNEL_QUERY_MONITOR_*` 配置。启用前需确认 fallback 覆盖并按真实渠道容量校准阈值。
 8. 当前 V1.3 健康信号来自可审计的主动查单事实，不等同于网关主动探活；支付方式默认路由已补稳定加权，规则表达式已补括号和复合布尔求值，后续仍需补规则编辑校验和真实渠道探活联动。
+9. 路由列表中的客户名称、客户端 IP、幂等键及请求/响应 JSON 与支付请求、支付流水使用同一套出参脱敏规则；原始事实仍保留在数据库，不代表字段级授权已经完成。
 
 ## 5. 支付请求管理查询
 
@@ -296,8 +297,9 @@
 2. 前端可通过 `clientIp + terminal + channelCode` 组合快速反查同一批终端流量。
 3. 新增 `GET /api/payment-requests/export` 导出能力，沿用同一组筛选参数输出 CSV 快照，便于测试留档、问题复盘和跨团队对数。
 4. 当前接口已兼容 `请求已发起/请求成功/请求失败` 与底层 `处理中/成功/失败` 状态别名映射，避免页面口径与数据库状态不一致。
-5. 当前已对 `clientIp / idempotencyKey / mobile / cardNo / customerName` 等敏感字段做基础脱敏，生产环境后续继续补权限分域控制和更细粒度脱敏策略。
+5. 当前支付请求、支付流水和路由执行统一递归脱敏 `clientIp / clientDeviceId / idempotencyKey / payerPhone / mobile / phone / tel / bankCardNo / cardNo / customerName / name` 等字段；支持嵌套对象、数组和大小写变体，非法 JSON 返回 `[REDACTED]`。
 6. 新增 `GET /api/payment-requests/overview`，复用同一组筛选条件返回总量、成功/失败/处理中/等待回调分布、涉及渠道数、涉及终端数、重复支付单请求数、缺响应报文数和最近请求时间，方便运营先看全局再下钻列表。
+7. 列表和导出只返回脱敏副本，数据库原始支付请求事实不被覆盖；生产仍需补统一身份、角色与字段级授权、导出审计和留存策略。
 
 ## 6. 支付处理日志查询
 

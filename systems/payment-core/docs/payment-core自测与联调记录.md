@@ -5412,3 +5412,28 @@
 2. 原始事实没有被删除或伪脱敏，研发排障仍可通过支付单号和来源编号联查；其生产访问必须继续由后续统一身份与字段级授权约束。
 3. 精准唯一键幂等不会再静默忽略非重复数据错误，独立日志与支付主事务的一致性语义更符合设计。
 4. `test -> master = 是`、`release/* = 否`；正式放行仍缺候选说明正式化、正式签字、发布后现场核验和稳定观察结束结论。
+
+## 170. 2026-09-09 支付排障出参敏感数据最小化 V1.0 验证
+
+### 170.1 本轮补强
+
+1. 新增统一支付敏感数据脱敏组件，在三类列表及支付请求、支付流水 CSV 出参边界复用；数据库和 Mapper 原始事实保持不变。
+2. JSON 脱敏从字段正则替换升级为 Jackson 递归遍历，覆盖嵌套对象、数组、大小写变体、付款手机号、设备标识、通用电话、银行卡号、客户名称、客户端 IP、幂等键及内嵌原始载荷字段。
+3. 非字符串敏感值固定掩码，非法 JSON 整体返回 `[REDACTED]`；支付流水摘要只保留最小方式/状态、类型/状态或事件/发布状态，不再重复输出原始载荷。
+4. 本能力只形成基础出参最小化，不等于统一身份、角色权限、字段级授权、导出审批、水印、生产审计或渗透测试完成。
+
+### 170.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 出参脱敏定向测试 | `mvn -Dtest=PaymentSensitiveDataMaskerTest,PaymentRequestServiceImplTest,PaymentFlowServiceImplTest,PaymentRouteExecutionServiceImplTest test` | 通过 | `15` 个用例通过，覆盖递归脱敏、非法/标量 JSON 失败闭合、三条服务链路及 Mapper DTO 不被修改 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `465` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产身份权限与访问审计 | 统一认证、字段级授权、导出审批、水印与审计平台 | 未执行 | 不记录可信授权、生产隐私验收、渗透测试或现场核验通过 |
+| 补丁与 XML 检查 | `git diff --check && xmllint --noout PaymentFlowMapper.xml` | 通过 | Java、Mapper XML、测试和文档无空白符或 XML 结构错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 170.3 当前判断
+
+1. 三个支付排障入口已使用同一套出参脱敏规则，避免支付请求已脱敏而流水、路由仍直出原始上下文的不一致。
+2. 结构化递归和失败闭合覆盖了原正则无法可靠处理的嵌套、数组、转义、大小写和非字符串场景；原始事实仍只应通过后续受控权限链路访问。
+3. `test -> master = 是`、`release/* = 否`；本功能测试通过不能替代候选说明正式化、正式签字、发布后现场核验或稳定观察结束结论。
