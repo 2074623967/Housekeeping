@@ -14,6 +14,7 @@ import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Locale;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ import org.springframework.util.StringUtils;
 public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSignatureService {
 
     private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final String HMAC_SHA256_CONFIG = "HMAC-SHA256";
     private static final String RSA2 = "RSA2";
     private static final String RSA_SHA256 = "SHA256withRSA";
 
@@ -107,8 +109,15 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SECRET_MISSING, "callback security profile is not configured");
         }
         if (!StringUtils.hasText(securityProfile.getCallbackSignAlgorithm())) {
-            securityProfile.setCallbackSignAlgorithm("HMAC-SHA256");
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_ALGORITHM_INVALID,
+                    "callback signature algorithm is not configured");
         }
+        String algorithm = securityProfile.getCallbackSignAlgorithm().trim().toUpperCase(Locale.ROOT);
+        if (!HMAC_SHA256_CONFIG.equals(algorithm) && !RSA2.equals(algorithm)) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_ALGORITHM_INVALID,
+                    "callback signature algorithm is unsupported");
+        }
+        securityProfile.setCallbackSignAlgorithm(algorithm);
         return securityProfile;
     }
 
@@ -121,8 +130,8 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
 
     private boolean verifySignature(String payload, String actualSignature, PaymentCallbackSecurityProfileDTO securityProfile) {
         try {
-            String algorithm = securityProfile.getCallbackSignAlgorithm().trim().toUpperCase();
-            if (algorithm.contains(RSA2) || algorithm.contains("RSA")) {
+            String algorithm = securityProfile.getCallbackSignAlgorithm();
+            if (RSA2.equals(algorithm)) {
                 return verifyRsa(payload, actualSignature, securityProfile.getCallbackPublicKey());
             }
             return verifyHmac(payload, actualSignature, securityProfile.getCallbackSecret());

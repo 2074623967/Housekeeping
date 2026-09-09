@@ -110,13 +110,55 @@ class PaymentCallbackSignatureServiceImplTest {
     }
 
     @Test
+    void shouldRejectCallbackWhenSignatureAlgorithmMissing() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-005",
+                String.valueOf(Instant.now().getEpochSecond()));
+        PaymentCallbackSecurityProfileDTO profile = buildHmacProfile("wx_h5", "test-secret");
+        profile.setCallbackSignAlgorithm(" ");
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5")).thenReturn(profile);
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                300,
+                600
+        );
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_ALGORITHM_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-005", "PAY-TEST-001", 600);
+    }
+
+    @Test
+    void shouldRejectCallbackWhenSignatureAlgorithmUnsupported() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest("wx_h5", "test-secret", "nonce-006",
+                String.valueOf(Instant.now().getEpochSecond()));
+        PaymentCallbackSecurityProfileDTO profile = buildHmacProfile("wx_h5", "test-secret");
+        profile.setCallbackSignAlgorithm("RSA-SHA1");
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5")).thenReturn(profile);
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                300,
+                600
+        );
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_ALGORITHM_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-006", "PAY-TEST-001", 600);
+    }
+
+    @Test
     void shouldVerifyRsa2SignedCallback() throws Exception {
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
         keyPairGenerator.initialize(2048);
         KeyPair keyPair = keyPairGenerator.generateKeyPair();
         String publicKey = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
-        PaymentCallbackRequestDTO request = buildRsaRequest("alipay_h5", keyPair, "nonce-005", timestamp);
+        PaymentCallbackRequestDTO request = buildRsaRequest("alipay_h5", keyPair, "nonce-007", timestamp);
         when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("alipay_h5"))
                 .thenReturn(buildRsaProfile("alipay_h5", publicKey));
 

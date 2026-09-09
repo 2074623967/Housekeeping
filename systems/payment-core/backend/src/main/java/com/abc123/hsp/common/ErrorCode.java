@@ -42,4 +42,5 @@ public final class ErrorCode {
     public static final String PAYMENT_CLOSE_CHANNEL_CONFIRMATION_REQUIRED = "PAYMENT-1029";
     public static final String PAYMENT_CALLBACK_CHANNEL_MISMATCH = "PAYMENT-1030";
     public static final String PAYMENT_CALLBACK_TRANSACTION_MISMATCH = "PAYMENT-1031";
+    public static final String PAYMENT_CALLBACK_ALGORITHM_INVALID = "PAYMENT-1032";
 }
