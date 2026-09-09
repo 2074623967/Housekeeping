@@ -50,6 +50,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern TEMPLATE_PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_]+)\\s*}}");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
+    private static final String TRANSPORT_ERROR_MARKER = "transportError=";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
@@ -512,6 +513,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         }
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryMessage())) {
             normalizedResult.setProviderDeliveryMessage(defaultMessage);
+        } else {
+            normalizedResult.setProviderDeliveryMessage(
+                    sanitizeProviderDeliveryMessage(normalizedResult.getProviderDeliveryMessage()));
         }
         if (!StringUtils.hasText(normalizedResult.getProviderReceiptSnapshot())) {
             normalizedResult.setProviderReceiptSnapshot("LOCAL_RESULT:" + defaultStatus);
@@ -526,11 +530,25 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                                   String message,
                                                                   PaymentIssueAlertDispatchItemDTO item) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
-        result.setProviderReceiptSnapshot("LOCAL_FAILURE:" + status + ":" + (StringUtils.hasText(message) ? message : "未知异常"));
+        String diagnosticMessage = StringUtils.hasText(message) ? message : "未知异常";
+        result.setProviderReceiptSnapshot("LOCAL_FAILURE:" + status + ":" + diagnosticMessage);
         result.setProviderDeliveryStatus(status);
-        result.setProviderDeliveryMessage(StringUtils.hasText(message) ? message : "未知异常");
+        result.setProviderDeliveryMessage("SEND_EXCEPTION".equals(status)
+                ? "通知器执行异常，transportError=[REDACTED]"
+                : sanitizeProviderDeliveryMessage(diagnosticMessage));
         result.setRenderedContentSnapshot(buildAlertContent(item));
         return result;
+    }
+
+    private String sanitizeProviderDeliveryMessage(String message) {
+        if (!StringUtils.hasText(message)) {
+            return message;
+        }
+        int markerIndex = message.indexOf(TRANSPORT_ERROR_MARKER);
+        if (markerIndex < 0) {
+            return message;
+        }
+        return message.substring(0, markerIndex + TRANSPORT_ERROR_MARKER.length()) + "[REDACTED]";
     }
 
     private boolean isSuccessfulProviderDeliveryStatus(String providerDeliveryStatus) {

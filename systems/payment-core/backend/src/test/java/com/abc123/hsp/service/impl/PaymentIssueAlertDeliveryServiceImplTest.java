@@ -570,7 +570,11 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals(0, result.getWarningCount());
         Assertions.assertEquals(0, result.getFailCount());
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
-                "企业微信告警机器人-主".equals(log.getProviderName()) && "派发失败".equals(log.getAlertStatus())));
+                "企业微信告警机器人-主".equals(log.getProviderName())
+                        && "派发失败".equals(log.getAlertStatus())
+                        && log.getProviderDeliveryMessage().contains("transportError=[REDACTED]")
+                        && !log.getProviderDeliveryMessage().contains("primary down")
+                        && log.getProviderReceiptSnapshot().contains("primary down")));
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-备".equals(log.getProviderName()) && "已派发".equals(log.getAlertStatus())));
     }
@@ -639,7 +643,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 "企业微信告警机器人-主".equals(log.getProviderName())
                         && "派发失败".equals(log.getAlertStatus())
                         && "FAILED".equals(log.getProviderDeliveryStatus())
-                        && log.getProviderDeliveryMessage().contains("transportError=Read timed out")));
+                        && log.getProviderDeliveryMessage().contains("transportError=[REDACTED]")
+                        && !log.getProviderDeliveryMessage().contains("Read timed out")));
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-备".equals(log.getProviderName())
                         && "已派发".equals(log.getAlertStatus())

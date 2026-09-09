@@ -246,7 +246,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         result.setProviderDeliveryStatus("FAILED");
         result.setProviderDeliveryMessage(new StringBuilder(channelLabel)
                 .append(" HTTP 网关请求失败，timeout=").append(timeoutMs).append("ms")
-                .append("，transportError=").append(StringUtils.hasText(exceptionMessage) ? exceptionMessage : "未知异常")
+                .append("，transportError=[REDACTED]")
                 .toString());
         result.setRenderedContentSnapshot(item != null && StringUtils.hasText(item.getRenderedAlertContent())
                 ? item.getRenderedAlertContent()
