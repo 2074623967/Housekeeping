@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +22,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * 支付交易异常告警派发服务测试。
@@ -36,6 +40,10 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     private PaymentIssueAlertNotifier smsNotifier;
     @Mock
     private PaymentIssueAlertNotifier emailNotifier;
+    @Mock
+    private PlatformTransactionManager transactionManager;
+    @Mock
+    private TransactionStatus transactionStatus;
 
     @Test
     void shouldDispatchAllChannelsSuccessfully() {
@@ -767,6 +775,90 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals(0, result.getProcessedCount());
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldRollbackFailedAlertDispatchAndContinueWithNextAlert() {
+        PaymentIssueAlertDispatchItemDTO first = buildDispatchItem();
+        first.setAlertNo("PIA-OUTBOX-FAIL");
+        first.setNotifyChannels("IM");
+        PaymentIssueAlertDispatchItemDTO second = buildDispatchItem();
+        second.setAlertNo("PIA-OUTBOX-NEXT");
+        second.setNotifyChannels("IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Arrays.asList(first, second));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
+                .thenReturn(Collections.singletonList(buildProvider(
+                        "ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult("IM-RECEIPT", "ACCEPTED", "企业微信已接单", "[IM] ISSUE-001"));
+        when(paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class)))
+                .thenAnswer(invocation -> {
+                    PaymentIssueAlertLogEntity update = invocation.getArgument(0);
+                    if ("PIA-OUTBOX-FAIL".equals(update.getAlertNo())) {
+                        throw new IllegalStateException("source status update failed");
+                    }
+                    return 1;
+                });
+        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                transactionManager
+        ).dispatchPendingAlerts();
+
+        Assertions.assertEquals(2, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("PIA-OUTBOX-FAIL"));
+        verify(imNotifier, times(2)).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(transactionManager).rollback(transactionStatus);
+        verify(transactionManager).commit(transactionStatus);
+    }
+
+    @Test
+    void shouldRollbackFailedReceiptReconcileAndContinueWithNextReceipt() {
+        PaymentIssueAlertLogEntity first = buildAcceptedLog("PIA-IM-FAIL", "PIA-OUTBOX-FAIL");
+        PaymentIssueAlertLogEntity second = buildAcceptedLog("PIA-IM-NEXT", "PIA-OUTBOX-NEXT");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs()).thenReturn(Arrays.asList(first, second));
+        when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class)))
+                .thenReturn(1);
+        when(paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class)))
+                .thenAnswer(invocation -> {
+                    PaymentIssueAlertLogEntity update = invocation.getArgument(0);
+                    if ("PIA-OUTBOX-FAIL".equals(update.getAlertNo())) {
+                        throw new IllegalStateException("source acknowledgement failed");
+                    }
+                    return 1;
+                });
+        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                transactionManager
+        ).reconcileDeliveryReceipts();
+
+        Assertions.assertEquals(2, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("PIA-IM-FAIL"));
+        verify(paymentTaskCenterMapper, times(2))
+                .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
+        verify(transactionManager).rollback(transactionStatus);
+        verify(transactionManager).commit(transactionStatus);
+    }
+
+    private PaymentIssueAlertLogEntity buildAcceptedLog(String alertNo, String sourceAlertNo) {
+        PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
+        acceptedLog.setAlertNo(alertNo);
+        acceptedLog.setSourceAlertNo(sourceAlertNo);
+        acceptedLog.setIssueNo("ISSUE-001");
+        acceptedLog.setAlertChannel("IM");
+        acceptedLog.setProviderDeliveryStatus("ACCEPTED");
+        return acceptedLog;
     }
 
     private PaymentIssueAlertDeliveryResultDTO buildDeliveryResult(String receiptNo,

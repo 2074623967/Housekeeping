@@ -18,12 +18,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -60,12 +64,23 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final List<PaymentIssueAlertNotifier> notifiers;
+    private final TransactionTemplate itemTransactionTemplate;
 
     @Autowired
     public PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
-                                                List<PaymentIssueAlertNotifier> notifiers) {
+                                                List<PaymentIssueAlertNotifier> notifiers,
+                                                PlatformTransactionManager transactionManager) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.notifiers = notifiers;
+        this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                         List<PaymentIssueAlertNotifier> notifiers) {
+        this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.notifiers = notifiers;
+        this.itemTransactionTemplate = null;
     }
 
     @Override
@@ -137,20 +152,32 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         int successCount = 0;
         int warningCount = 0;
         int failCount = 0;
+        List<String> failedAlertNos = new ArrayList<String>();
         for (PaymentIssueAlertDispatchItemDTO item : pendingAlerts) {
             if (shouldSkipAcknowledgedSourceAlert(item)) {
                 continue;
             }
             processedCount++;
-            DispatchOutcome outcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
-            if (outcome.isAllSucceeded()) {
-                successCount++;
-            } else if (outcome.hasAnySuccess()) {
-                warningCount++;
-            } else {
+            try {
+                DispatchOutcome outcome = executeInItemTransaction(() -> {
+                    DispatchOutcome currentOutcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
+                    paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
+                            buildSourceAlertStatus(item, triggeredBy, currentOutcome));
+                    return currentOutcome;
+                });
+                if (outcome.isAllSucceeded()) {
+                    successCount++;
+                } else if (outcome.hasAnySuccess()) {
+                    warningCount++;
+                    recordFailedAlertNo(failedAlertNos, item == null ? null : item.getAlertNo());
+                } else {
+                    failCount++;
+                    recordFailedAlertNo(failedAlertNos, item == null ? null : item.getAlertNo());
+                }
+            } catch (RuntimeException exception) {
                 failCount++;
+                recordFailedAlertNo(failedAlertNos, item == null ? null : item.getAlertNo());
             }
-            paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(buildSourceAlertStatus(item, triggeredBy, outcome));
         }
 
         return buildResult(
@@ -160,7 +187,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 successCount,
                 warningCount,
                 failCount,
-                buildSummaryComment(processedCount, successCount, warningCount, failCount),
+                buildSummaryComment(processedCount, successCount, warningCount, failCount, failedAlertNos),
                 resolveHighestEscalationLevel(pendingAlerts)
         );
     }
@@ -874,16 +901,24 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         return "PIA-" + channelCode + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
     }
 
-    private String buildSummaryComment(int processedCount, int successCount, int warningCount, int failCount) {
+    private String buildSummaryComment(int processedCount,
+                                       int successCount,
+                                       int warningCount,
+                                       int failCount,
+                                       List<String> failedAlertNos) {
         if (processedCount == 0) {
             return "当前没有待派发的异常告警。";
         }
+        String failedAlertHint = failedAlertNos.isEmpty()
+                ? ""
+                : "，未完全送达告警：" + String.join("/", failedAlertNos);
         return String.format(
-                "待派发/补发 %d 条异常告警，完全成功 %d 条，部分失败 %d 条，全部失败 %d 条。",
+                "待派发/补发 %d 条异常告警，完全成功 %d 条，部分失败 %d 条，全部失败 %d 条%s。",
                 processedCount,
                 successCount,
                 warningCount,
-                failCount
+                failCount,
+                failedAlertHint
         );
     }
 
@@ -891,14 +926,19 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         List<PaymentIssueAlertLogEntity> acceptedLogs = paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs();
         int successCount = 0;
         int failCount = 0;
+        List<String> failedAlertNos = new ArrayList<String>();
         for (PaymentIssueAlertLogEntity acceptedLog : acceptedLogs) {
-            PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, triggeredBy);
-            int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
-            if (affectedRows > 0) {
-                acknowledgeSourceAlertFromReceipt(acceptedLog, receiptUpdate);
-                successCount++;
-            } else {
+            try {
+                Boolean reconciled = executeInItemTransaction(() -> reconcileDeliveryReceipt(acceptedLog, triggeredBy));
+                if (Boolean.TRUE.equals(reconciled)) {
+                    successCount++;
+                } else {
+                    failCount++;
+                    recordFailedAlertNo(failedAlertNos, acceptedLog == null ? null : acceptedLog.getAlertNo());
+                }
+            } catch (RuntimeException exception) {
                 failCount++;
+                recordFailedAlertNo(failedAlertNos, acceptedLog == null ? null : acceptedLog.getAlertNo());
             }
         }
         return buildReceiptReconcileResult(
@@ -907,8 +947,18 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 acceptedLogs.size(),
                 successCount,
                 failCount,
-                buildReceiptReconcileSummary(acceptedLogs.size(), successCount, failCount)
+                buildReceiptReconcileSummary(acceptedLogs.size(), successCount, failCount, failedAlertNos)
         );
+    }
+
+    private boolean reconcileDeliveryReceipt(PaymentIssueAlertLogEntity acceptedLog, String triggeredBy) {
+        PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, triggeredBy);
+        int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
+        if (affectedRows <= 0) {
+            return false;
+        }
+        acknowledgeSourceAlertFromReceipt(acceptedLog, receiptUpdate);
+        return true;
     }
 
     private PaymentIssueAlertLogEntity buildReceiptUpdate(PaymentIssueAlertLogEntity acceptedLog, String triggeredBy) {
@@ -937,11 +987,31 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
     }
 
-    private String buildReceiptReconcileSummary(int processedCount, int successCount, int failCount) {
+    private String buildReceiptReconcileSummary(int processedCount,
+                                                int successCount,
+                                                int failCount,
+                                                List<String> failedAlertNos) {
         if (processedCount == 0) {
             return "当前没有供应商已受理但未确认送达的异常告警。";
         }
-        return String.format("已回查 %d 条供应商告警回执，确认送达 %d 条，回写失败 %d 条。", processedCount, successCount, failCount);
+        String failedAlertHint = failedAlertNos.isEmpty()
+                ? ""
+                : "，失败告警：" + String.join("/", failedAlertNos);
+        return String.format("已回查 %d 条供应商告警回执，确认送达 %d 条，回写失败 %d 条%s。",
+                processedCount, successCount, failCount, failedAlertHint);
+    }
+
+    private <T> T executeInItemTransaction(Supplier<T> action) {
+        if (itemTransactionTemplate == null) {
+            return action.get();
+        }
+        return itemTransactionTemplate.execute(status -> action.get());
+    }
+
+    private void recordFailedAlertNo(List<String> failedAlertNos, String alertNo) {
+        if (failedAlertNos.size() < 3 && StringUtils.hasText(alertNo)) {
+            failedAlertNos.add(alertNo.trim());
+        }
     }
 
     private PaymentTaskActionResultDTO buildReceiptReconcileResult(String runMode,
