@@ -2040,6 +2040,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `receiver` 当前承载值班团队标签，`alertContent / renderedContentSnapshot` 承载内部运营正文，本轮不做无证据遮蔽；供应商原始回执不会通过上述接口直接透传。
 4. 确认状态判断和来源告警同步使用 Mapper 原始 DTO，数据库事实不被覆盖；当前规则不代表真实供应商联调、生产授权或隐私验收完成。
 
+### 14.4 异常告警供应商回执来源前缀规则
+
+1. 服务端识别形如 `HTTP_RESPONSE:{...}` 的受控大写来源前缀，返回时保留来源前缀并对冒号后的对象或数组 JSON 递归脱敏。
+2. 无前缀对象或数组 JSON 沿用通用载荷脱敏；带来源前缀但正文不是结构化 JSON 时返回 `[REDACTED]`，不得透传传输异常原文。
+3. 来源识别只用于出参格式转换，不改变数据库保存值、供应商投递状态、回执号或确认状态机。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

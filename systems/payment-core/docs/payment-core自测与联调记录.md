@@ -5564,3 +5564,28 @@
 1. 异常告警列表、CSV 和确认动作不再直接透传任意供应商原始响应；结构化回执保留非敏感诊断信息，非结构化回执失败闭合。
 2. 数据库与 Mapper 原始回执继续供内部确认和受控排障使用；默认最小化不能替代可信身份、字段级授权和访问审计。
 3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式候选说明、签字、发布后现场核验或稳定观察结论。
+
+## 176. 2026-09-09 异常告警供应商回执真实格式兼容 V1.1 验证
+
+### 176.1 本轮补强
+
+1. 复核通知器实际持久化格式后，确认外部响应使用 `HTTP_RESPONSE:{...}`，而非无前缀 JSON；第 175 节的通用 `maskPayload` 会将该真实格式整体判为非 JSON。
+2. `PaymentSensitiveDataMasker` 新增供应商回执专用转换，识别受控大写来源前缀后对 JSON 正文递归脱敏，并保留来源标识及非敏感诊断字段。
+3. 原始无前缀对象或数组 JSON 继续兼容；带来源前缀的非 JSON、JSON 标量和任意异常文本继续失败闭合为 `[REDACTED]`。
+4. 异常告警列表、CSV 和两类确认返回路径仍共享同一副本转换，不改写 Mapper DTO、数据库回执或通知器输入输出事实。
+
+### 176.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 真实格式兼容定向测试 | `mvn -Dtest=PaymentSensitiveDataMaskerTest,PaymentIssueServiceImplTest test` | 通过 | `20` 个用例通过；覆盖 `HTTP_RESPONSE:` 嵌套 JSON、无前缀 JSON、带前缀传输异常、列表及既有 CSV/确认路径 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `480` 个用例，`0` failures、`0` errors、`0` skipped |
+| 真实供应商响应核验 | 企业 IM、短信、邮件生产响应样本与权限审计 | 未执行 | 本轮只依据仓库通知器生成格式和本地测试，不记录真实供应商联调、生产数据或隐私验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；本轮未修改 Mapper XML、数据库结构或通知器持久化格式 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 176.3 当前判断
+
+1. 供应商回执出参最小化已与通知器真实 `HTTP_RESPONSE:{...}` 存储格式对齐，结构化诊断信息不再因来源前缀被无差别丢弃。
+2. 非结构化传输异常仍不会通过告警列表、CSV 或确认响应扩散；默认遮蔽不能替代后续真实供应商样本核验和生产字段级授权。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式放行治理事实。
