@@ -7,10 +7,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskActionRequestDTO;
+import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
 import com.abc123.hsp.entity.PaymentDeadLetterTaskEntity;
 import com.abc123.hsp.mapper.PaymentDeadLetterTaskMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -86,6 +90,37 @@ class PaymentDeadLetterTaskServiceImplTest {
     }
 
     @Test
+    void shouldMaskListSnapshotsWithoutChangingMapperEntity() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.findAll(any(PaymentDeadLetterTaskQueryDTO.class)))
+                .thenReturn(Collections.singletonList(task));
+        when(paymentDeadLetterTaskMapper.count(any(PaymentDeadLetterTaskQueryDTO.class))).thenReturn(1L);
+
+        PageResultDTO<PaymentDeadLetterTaskEntity> result = service().list(new PaymentDeadLetterTaskQueryDTO());
+
+        assertEquals("138****8000", readJson(result.getItems().get(0).getPayloadSnapshot())
+                .at("/customer/phone").asText());
+        assertEquals("[REDACTED]", readJson(result.getItems().get(0).getHeaderSnapshot())
+                .get("Authorization").asText());
+        org.junit.jupiter.api.Assertions.assertTrue(task.getPayloadSnapshot().contains("13800138000"));
+        org.junit.jupiter.api.Assertions.assertTrue(task.getHeaderSnapshot().contains("secret-token"));
+    }
+
+    @Test
+    void shouldMaskActionResponseWithoutChangingReplaySource() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.markReadyToReplay("DLQ-001", "支付运营", "核对完成"))
+                .thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+
+        PaymentDeadLetterTaskEntity result = service()
+                .markReadyToReplay("DLQ-001", action("支付运营", "核对完成"));
+
+        org.junit.jupiter.api.Assertions.assertFalse(result.getPayloadSnapshot().contains("13800138000"));
+        org.junit.jupiter.api.Assertions.assertTrue(task.getPayloadSnapshot().contains("13800138000"));
+    }
+
+    @Test
     void shouldReplayOnlyTheOriginalConsumerAfterReview() {
         PaymentDeadLetterTaskEntity task = replayTask();
         when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营")).thenReturn(1);
@@ -102,9 +137,12 @@ class PaymentDeadLetterTaskServiceImplTest {
         verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
         verify(paymentDeadLetterTaskMapper).markReplayed("DLQ-001");
         assertEquals("MSG-001", messageCaptor.getValue().getMessageProperties().getMessageId());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                new String(messageCaptor.getValue().getBody(), StandardCharsets.UTF_8).contains("13800138000"));
         org.junit.jupiter.api.Assertions.assertFalse(messageCaptor.getValue().getMessageProperties().getHeaders()
                 .containsKey("x-retry-count"));
         assertEquals("DLQ-001", result.getTaskNo());
+        org.junit.jupiter.api.Assertions.assertFalse(result.getPayloadSnapshot().contains("13800138000"));
     }
 
     @Test
@@ -116,7 +154,7 @@ class PaymentDeadLetterTaskServiceImplTest {
 
         service().replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
-        verify(paymentDeadLetterTaskMapper).markReplayFailed(eq("DLQ-001"), org.mockito.ArgumentMatchers.contains("broker unavailable"));
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
     }
 
     @Test
@@ -143,7 +181,16 @@ class PaymentDeadLetterTaskServiceImplTest {
         task.setCorrelationId("CORR-001");
         task.setReplayExchange("payment.trade.replay");
         task.setReplayRoutingKey("payment.success.clearing.replay.v1");
-        task.setPayloadSnapshot("{\"paymentOrderId\":\"PAY-001\"}");
+        task.setPayloadSnapshot("{\"paymentOrderId\":\"PAY-001\",\"customer\":{\"phone\":\"13800138000\"}}");
+        task.setHeaderSnapshot("{\"Authorization\":\"Bearer secret-token\",\"x-retry-count\":3}");
         return task;
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode readJson(String json) {
+        try {
+            return new ObjectMapper().readTree(json);
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
     }
 }

@@ -27,6 +27,10 @@ public class PaymentSensitiveDataMasker {
     private static final Set<String> NAME_FIELDS = fields("customerName", "name");
     private static final Set<String> IDENTIFIER_FIELDS = fields("clientDeviceId");
     private static final Set<String> PAYLOAD_FIELDS = fields("requestPayload", "responsePayload");
+    private static final Set<String> CREDENTIAL_FIELDS = fields(
+            "authorization", "proxyAuthorization", "accessToken", "accessTokenValue",
+            "token", "apiKey", "accessKey", "secret", "signature", "authHeaderValue",
+            "signatureSecret", "callbackSecret", "privateKey", "cookie", "setCookie");
 
     private final ObjectMapper objectMapper;
 
@@ -137,9 +141,11 @@ public class PaymentSensitiveDataMasker {
         Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> field = fields.next();
-            String normalizedName = field.getKey().toLowerCase(Locale.ROOT);
+            String normalizedName = canonicalFieldName(field.getKey());
             JsonNode value = field.getValue();
-            if ("clientip".equals(normalizedName)) {
+            if (isCredentialField(normalizedName)) {
+                objectNode.set(field.getKey(), TextNode.valueOf("[REDACTED]"));
+            } else if ("clientip".equals(normalizedName)) {
                 objectNode.set(field.getKey(), maskedText(value, this::maskClientIp));
             } else if ("idempotencykey".equals(normalizedName)) {
                 objectNode.set(field.getKey(), maskedText(value, this::maskIdempotencyKey));
@@ -199,10 +205,23 @@ public class PaymentSensitiveDataMasker {
         return normalized.substring(0, 4) + "****" + normalized.substring(normalized.length() - 4);
     }
 
+    private boolean isCredentialField(String fieldName) {
+        return CREDENTIAL_FIELDS.contains(fieldName)
+                || fieldName.endsWith("token")
+                || fieldName.endsWith("secret")
+                || fieldName.endsWith("signature")
+                || fieldName.endsWith("apikey")
+                || fieldName.endsWith("accesskey");
+    }
+
+    private static String canonicalFieldName(String fieldName) {
+        return fieldName.replace("-", "").replace("_", "").toLowerCase(Locale.ROOT);
+    }
+
     private static Set<String> fields(String... fieldNames) {
         Set<String> fields = new HashSet<String>();
         Arrays.stream(fieldNames)
-                .map(fieldName -> fieldName.toLowerCase(Locale.ROOT))
+                .map(PaymentSensitiveDataMasker::canonicalFieldName)
                 .forEach(fields::add);
         return fields;
     }

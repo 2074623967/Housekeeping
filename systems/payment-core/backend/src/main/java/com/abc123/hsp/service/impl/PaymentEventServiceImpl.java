@@ -8,6 +8,12 @@ import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +27,21 @@ public class PaymentEventServiceImpl implements PaymentEventService {
 
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
     @Autowired
     public PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper,
-                                   PaymentEventDispatchService paymentEventDispatchService) {
+                                   PaymentEventDispatchService paymentEventDispatchService,
+                                   PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentEventMapper = paymentEventMapper;
         this.paymentEventDispatchService = paymentEventDispatchService;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper,
+                            PaymentEventDispatchService paymentEventDispatchService) {
+        this(paymentEventMapper, paymentEventDispatchService,
+                new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     PaymentEventServiceImpl(PaymentEventMapper paymentEventMapper) {
@@ -40,14 +55,14 @@ public class PaymentEventServiceImpl implements PaymentEventService {
             public boolean republish(String eventNo) {
                 return paymentEventMapper.markRepublished(eventNo) > 0;
             }
-        });
+        }, new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
     public PageResultDTO<PaymentEventListItemDTO> list(PaymentEventQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                paymentEventMapper.findAll(query),
+                maskEventItems(paymentEventMapper.findAll(query)),
                 paymentEventMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -94,7 +109,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     @Override
     public String exportCsv(PaymentEventQueryDTO query) {
         normalizeQuery(query);
-        java.util.List<PaymentEventListItemDTO> items = paymentEventMapper.findAllForExport(query);
+        List<PaymentEventListItemDTO> items = maskEventItems(paymentEventMapper.findAllForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,重试次数,最近发布时间,下次重试时间,事件摘要,创建时间\n");
         for (PaymentEventListItemDTO item : items) {
@@ -144,5 +159,22 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     private String csvCell(String value) {
         String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
+    }
+
+    private List<PaymentEventListItemDTO> maskEventItems(List<PaymentEventListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedEventCopy).collect(Collectors.toList());
+    }
+
+    private PaymentEventListItemDTO maskedEventCopy(PaymentEventListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        PaymentEventListItemDTO outwardItem = new PaymentEventListItemDTO();
+        BeanUtils.copyProperties(item, outwardItem);
+        outwardItem.setEventPayload(sensitiveDataMasker.maskPayload(item.getEventPayload()));
+        return outwardItem;
     }
 }

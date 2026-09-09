@@ -41,6 +41,19 @@ class PaymentSensitiveDataMaskerTest {
     }
 
     @Test
+    void shouldRedactCredentialFieldsAcrossHeaderNamingStyles() throws Exception {
+        String payload = "{\"Authorization\":\"Bearer secret-token\",\"X-Api-Key\":\"api-key\","
+                + "\"nested\":{\"signature_secret\":\"signing-secret\",\"Cookie\":\"SESSION=abc\"}}";
+
+        JsonNode masked = objectMapper.readTree(masker.maskPayload(payload));
+
+        assertEquals("[REDACTED]", masked.get("Authorization").asText());
+        assertEquals("[REDACTED]", masked.get("X-Api-Key").asText());
+        assertEquals("[REDACTED]", masked.at("/nested/signature_secret").asText());
+        assertEquals("[REDACTED]", masked.at("/nested/Cookie").asText());
+    }
+
+    @Test
     void shouldFailClosedForMalformedPayload() {
         String malformed = "payerPhone=13800138000&clientDeviceId=DEVICE-12345678";
 

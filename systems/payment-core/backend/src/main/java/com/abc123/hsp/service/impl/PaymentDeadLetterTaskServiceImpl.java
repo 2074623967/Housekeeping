@@ -6,10 +6,13 @@ import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
 import com.abc123.hsp.entity.PaymentDeadLetterTaskEntity;
 import com.abc123.hsp.mapper.PaymentDeadLetterTaskMapper;
 import com.abc123.hsp.service.PaymentDeadLetterTaskService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -17,6 +20,8 @@ import java.util.regex.Pattern;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -40,18 +45,30 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private final PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper;
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
     private final long publisherConfirmTimeoutMs;
 
+    @Autowired
     public PaymentDeadLetterTaskServiceImpl(PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper,
                                             RabbitTemplate rabbitTemplate,
                                             ObjectMapper objectMapper,
+                                            PaymentSensitiveDataMasker sensitiveDataMasker,
                                             @Value("${payment.amqp.publisher-confirm-timeout-ms:5000}")
                                             long publisherConfirmTimeoutMs) {
         this.paymentDeadLetterTaskMapper = paymentDeadLetterTaskMapper;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
         this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0
                 ? DEFAULT_CONFIRM_TIMEOUT_MS : publisherConfirmTimeoutMs;
+    }
+
+    PaymentDeadLetterTaskServiceImpl(PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper,
+                                     RabbitTemplate rabbitTemplate,
+                                     ObjectMapper objectMapper,
+                                     long publisherConfirmTimeoutMs) {
+        this(paymentDeadLetterTaskMapper, rabbitTemplate, objectMapper,
+                new PaymentSensitiveDataMasker(objectMapper), publisherConfirmTimeoutMs);
     }
 
     @Override
@@ -81,7 +98,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     public PageResultDTO<PaymentDeadLetterTaskEntity> list(PaymentDeadLetterTaskQueryDTO query) {
         PaymentDeadLetterTaskQueryDTO normalizedQuery = normalizeQuery(query);
         return new PageResultDTO<PaymentDeadLetterTaskEntity>(
-                paymentDeadLetterTaskMapper.findAll(normalizedQuery),
+                maskTasks(paymentDeadLetterTaskMapper.findAll(normalizedQuery)),
                 paymentDeadLetterTaskMapper.count(normalizedQuery),
                 normalizedQuery.getPageNo(),
                 normalizedQuery.getPageSize());
@@ -94,7 +111,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
                 normalizedRequest.getResolutionNote()) <= 0) {
             throw new IllegalArgumentException("死信任务不存在或当前状态不允许重放");
         }
-        return findRequiredTask(taskNo);
+        return maskedTaskCopy(findRequiredTask(taskNo));
     }
 
     @Override
@@ -104,7 +121,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
                 normalizedRequest.getResolutionNote()) <= 0) {
             throw new IllegalArgumentException("死信任务不存在或当前状态不允许人工结案");
         }
-        return findRequiredTask(taskNo);
+        return maskedTaskCopy(findRequiredTask(taskNo));
     }
 
     @Override
@@ -123,9 +140,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
             });
             paymentDeadLetterTaskMapper.markReplayed(normalizedTaskNo);
         } catch (RuntimeException exception) {
-            paymentDeadLetterTaskMapper.markReplayFailed(normalizedTaskNo, buildFailureNote(exception));
+            paymentDeadLetterTaskMapper.markReplayFailed(normalizedTaskNo, buildFailureNote());
         }
-        return findRequiredTask(normalizedTaskNo);
+        return maskedTaskCopy(findRequiredTask(normalizedTaskNo));
     }
 
     private Message buildReplayMessage(PaymentDeadLetterTaskEntity task) {
@@ -192,10 +209,26 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    private String buildFailureNote(RuntimeException exception) {
-        String message = exception.getMessage();
-        String normalizedMessage = StringUtils.hasText(message) ? message.trim() : exception.getClass().getSimpleName();
-        return "重放发送失败：" + normalizedMessage.substring(0, Math.min(normalizedMessage.length(), 450));
+    private String buildFailureNote() {
+        return "重放发送失败：[REDACTED]";
+    }
+
+    private List<PaymentDeadLetterTaskEntity> maskTasks(List<PaymentDeadLetterTaskEntity> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return tasks.stream().map(this::maskedTaskCopy).collect(java.util.stream.Collectors.toList());
+    }
+
+    private PaymentDeadLetterTaskEntity maskedTaskCopy(PaymentDeadLetterTaskEntity task) {
+        if (task == null) {
+            return null;
+        }
+        PaymentDeadLetterTaskEntity outwardTask = new PaymentDeadLetterTaskEntity();
+        BeanUtils.copyProperties(task, outwardTask);
+        outwardTask.setPayloadSnapshot(sensitiveDataMasker.maskPayload(task.getPayloadSnapshot()));
+        outwardTask.setHeaderSnapshot(sensitiveDataMasker.maskPayload(task.getHeaderSnapshot()));
+        return outwardTask;
     }
 
     private static final class ReplayRoute {
