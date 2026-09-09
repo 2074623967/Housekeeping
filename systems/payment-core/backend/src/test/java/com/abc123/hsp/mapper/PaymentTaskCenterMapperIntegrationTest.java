@@ -189,8 +189,11 @@ class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(1, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-a", 120));
             assertEquals(0, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-a", 120));
             assertEquals(0, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-b", 120));
+            assertEquals(0, mapper.renewTaskLease("PAYMENT_LEASE_TEST", "owner-b", 120));
+            assertEquals(1, mapper.renewTaskLease("PAYMENT_LEASE_TEST", "owner-a", 120));
             assertEquals(0, mapper.releaseTaskLease("PAYMENT_LEASE_TEST", "owner-b"));
             expireTaskLease(session.getConnection(), "PAYMENT_LEASE_TEST");
+            assertEquals(0, mapper.renewTaskLease("PAYMENT_LEASE_TEST", "owner-a", 120));
             assertEquals(1, mapper.acquireTaskLease("PAYMENT_LEASE_TEST", "owner-b", 120));
             assertEquals(0, mapper.releaseTaskLease("PAYMENT_LEASE_TEST", "owner-a"));
             assertEquals(1, mapper.releaseTaskLease("PAYMENT_LEASE_TEST", "owner-b"));

@@ -223,6 +223,13 @@ public interface PaymentTaskCenterMapper {
                          @Param("leaseSeconds") int leaseSeconds);
 
     /**
+     * 仅允许当前有效租约的 owner 延长租期。
+     */
+    int renewTaskLease(@Param("taskCode") String taskCode,
+                       @Param("lockOwner") String lockOwner,
+                       @Param("leaseSeconds") int leaseSeconds);
+
+    /**
      * 释放当前实例持有的任务租约锁。
      */
     int releaseTaskLease(@Param("taskCode") String taskCode,

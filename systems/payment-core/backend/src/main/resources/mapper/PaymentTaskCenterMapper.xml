@@ -898,6 +898,15 @@
           )
     </update>
 
+    <update id="renewTaskLease">
+        UPDATE t_payment_task_lease
+        SET lock_expires_at = TIMESTAMPADD(SECOND, #{leaseSeconds}, NOW()),
+            updated_at = NOW()
+        WHERE task_code = #{taskCode}
+          AND lock_owner = #{lockOwner}
+          AND lock_expires_at &gt; NOW()
+    </update>
+
     <update id="releaseTaskLease">
         UPDATE t_payment_task_lease
         SET lock_owner = NULL,

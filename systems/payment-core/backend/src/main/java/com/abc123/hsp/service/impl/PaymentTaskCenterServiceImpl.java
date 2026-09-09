@@ -23,6 +23,7 @@ import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
+import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,6 +65,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String QUERY_RATE_LIMIT_ISSUE_TYPE = "主动查单限流拒绝";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
+    private PaymentTaskLeaseService paymentTaskLeaseService;
     private final PaymentExpiryTaskService paymentExpiryTaskService;
     private final PaymentEventRetryTaskService paymentEventRetryTaskService;
     private final RefundRetryTaskService refundRetryTaskService;
@@ -131,6 +133,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         @Value("${payment.issue-alert.monitor.receipt-timeout-minutes:30}")
                                                 int issueAlertReceiptTimeoutMinutes) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.paymentExpiryTaskService = paymentExpiryTaskService;
         this.paymentEventRetryTaskService = paymentEventRetryTaskService;
         this.refundRetryTaskService = refundRetryTaskService;
@@ -162,6 +165,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.issueAlertDispatchTimeoutMinutes = Math.max(issueAlertDispatchTimeoutMinutes, 1);
         this.issueAlertReceiptCountThreshold = Math.max(issueAlertReceiptCountThreshold, 1);
         this.issueAlertReceiptTimeoutMinutes = Math.max(issueAlertReceiptTimeoutMinutes, 1);
+    }
+
+    @Autowired
+    void setPaymentTaskLeaseService(PaymentTaskLeaseService paymentTaskLeaseService) {
+        this.paymentTaskLeaseService = paymentTaskLeaseService;
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -524,16 +532,16 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                         String runMode,
                                                         String triggeredBy,
                                                         AutoTaskRunner runner) {
-        paymentTaskCenterMapper.initTaskLease(taskCode);
         String leaseOwner = triggeredBy + ":" + taskLeaseOwnerSuffix;
-        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, leaseOwner, AUTO_TASK_LEASE_SECONDS);
-        if (lockedRows <= 0) {
+        PaymentTaskLeaseService.Lease lease = paymentTaskLeaseService.tryAcquire(
+                taskCode, leaseOwner, AUTO_TASK_LEASE_SECONDS);
+        if (lease == null) {
             return buildLeaseSkippedResult(taskCode, taskName, runMode, triggeredBy);
         }
         try {
             return runner.run();
         } finally {
-            paymentTaskCenterMapper.releaseTaskLease(taskCode, leaseOwner);
+            lease.close();
         }
     }
 

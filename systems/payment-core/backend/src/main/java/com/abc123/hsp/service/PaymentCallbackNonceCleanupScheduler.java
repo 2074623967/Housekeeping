@@ -19,6 +19,7 @@ public class PaymentCallbackNonceCleanupScheduler {
 
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
+    private PaymentTaskLeaseService paymentTaskLeaseService;
     private final int batchSize;
     private final String leaseOwner = LEASE_OWNER_PREFIX + UUID.randomUUID().toString().replace("-", "");
 
@@ -32,7 +33,13 @@ public class PaymentCallbackNonceCleanupScheduler {
         }
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.batchSize = batchSize;
+    }
+
+    @Autowired
+    void setPaymentTaskLeaseService(PaymentTaskLeaseService paymentTaskLeaseService) {
+        this.paymentTaskLeaseService = paymentTaskLeaseService;
     }
 
     /**
@@ -40,14 +47,15 @@ public class PaymentCallbackNonceCleanupScheduler {
      */
     @Scheduled(fixedDelayString = "${payment.callback.nonce-cleanup.fixed-delay-ms:300000}")
     public void cleanupExpiredNonces() {
-        paymentTaskCenterMapper.initTaskLease(TASK_CODE);
-        if (paymentTaskCenterMapper.acquireTaskLease(TASK_CODE, leaseOwner, LEASE_SECONDS) <= 0) {
+        PaymentTaskLeaseService.Lease lease = paymentTaskLeaseService.tryAcquire(
+                TASK_CODE, leaseOwner, LEASE_SECONDS);
+        if (lease == null) {
             return;
         }
         try {
             paymentCallbackSignatureService.cleanupExpiredNonces(batchSize);
         } finally {
-            paymentTaskCenterMapper.releaseTaskLease(TASK_CODE, leaseOwner);
+            lease.close();
         }
     }
 }

@@ -9,6 +9,7 @@ import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
+import com.abc123.hsp.service.PaymentTaskLeaseService;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -63,6 +64,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
+    private PaymentTaskLeaseService paymentTaskLeaseService;
     private final List<PaymentIssueAlertNotifier> notifiers;
     private final TransactionTemplate itemTransactionTemplate;
     private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
@@ -72,14 +74,21 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                 List<PaymentIssueAlertNotifier> notifiers,
                                                 PlatformTransactionManager transactionManager) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
         this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
+    @Autowired
+    void setPaymentTaskLeaseService(PaymentTaskLeaseService paymentTaskLeaseService) {
+        this.paymentTaskLeaseService = paymentTaskLeaseService;
+    }
+
     PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                          List<PaymentIssueAlertNotifier> notifiers) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.itemTransactionTemplate = null;
     }
@@ -132,16 +141,16 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                             String taskName,
                                                             String triggeredBy,
                                                             AutoTaskRunner runner) {
-        paymentTaskCenterMapper.initTaskLease(taskCode);
         String leaseOwner = triggeredBy + ":" + taskLeaseOwnerSuffix;
-        int lockedRows = paymentTaskCenterMapper.acquireTaskLease(taskCode, leaseOwner, AUTO_TASK_LEASE_SECONDS);
-        if (lockedRows <= 0) {
+        PaymentTaskLeaseService.Lease lease = paymentTaskLeaseService.tryAcquire(
+                taskCode, leaseOwner, AUTO_TASK_LEASE_SECONDS);
+        if (lease == null) {
             return buildLeaseSkippedResult(taskCode, taskName, triggeredBy);
         }
         try {
             return runner.run();
         } finally {
-            paymentTaskCenterMapper.releaseTaskLease(taskCode, leaseOwner);
+            lease.close();
         }
     }
 
