@@ -657,7 +657,7 @@
 
 `channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce`
 
-使用渠道独立密钥计算 HMAC-SHA256，并将结果 Base64 编码后放入 `signature`。渠道密钥优先从支付渠道配置中读取，找不到时才回退到全局环境变量。
+使用渠道独立密钥计算 HMAC-SHA256，并将结果 Base64 编码后放入 `signature`。渠道密钥只从支付渠道配置中读取；渠道安全配置或对应密钥/公钥缺失时返回 `PAYMENT-1006`，不存在全局共享密钥回退。
 
 返回示例：
 
@@ -2247,6 +2247,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 仅 `application-demo.yml` 显式配置为 `false`，用于本地页面模拟回调。测试、预发与生产不得设置 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE=false`，也不得在验签失败后自动降级重试。
 3. 默认开启不等于安全材料已经就绪。非 demo 环境必须按渠道配置 HMAC-SHA256 密钥或 RSA2 公钥；材料缺失返回 `PAYMENT-1006`，字段缺失或验签失败返回 `PAYMENT-1005`。
 4. 当前契约测试只锁定配置默认值，不替代真实渠道签名规范、商户应用绑定、证书轮换、密钥托管、网络来源限制及生产报文验收。
+
+### 14.34 支付回调渠道凭证隔离规则
+
+1. HMAC-SHA256 验签只读取 URL 渠道对应 `t_payment_channel_config.callback_secret`，RSA2 只读取同一渠道的 `callback_public_key`；服务不接受全局回调密钥。
+2. 渠道安全配置不存在、HMAC 密钥为空或 RSA2 公钥为空均返回 `PAYMENT-1006`，且不进入 nonce 写入、支付单读取、渠道/交易号绑定或支付状态处理。
+3. `payment.callback.secret` 与 `HSP_PAYMENT_CALLBACK_SECRET` 已从有效配置契约移除。调用方不得以共享凭证兜底多个渠道，也不得在单渠道配置失败时切换其他渠道密钥重试。
+4. 当前渠道配置仍将密钥材料存于业务数据库；生产需要继续迁移到专用密钥托管并绑定密钥版本、商户应用和证书轮换事实。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。

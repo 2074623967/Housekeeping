@@ -6285,3 +6285,26 @@
 1. 默认失败闭合消除了部署遗漏环境变量时直接绕过回调验签的风险；验签所需字段或渠道安全配置缺失时，服务继续以明确业务错误拒绝请求。
 2. demo 配置只服务本地模拟交互。非 demo 环境即使技术上可覆盖环境变量，也不得将关闭验签作为联调或故障绕过手段，发布检查应阻断该配置。
 3. 本轮没有引入或验证真实渠道材料；生产仍需完成渠道商户/应用绑定、密钥托管与轮换、网络白名单、真实报文适配和重放乱序测试。
+
+## 206. 2026-09-10 支付回调渠道凭证隔离 V1.0 验证
+
+### 206.1 本轮补强
+
+1. 移除 `application.yml` 中的全局 `payment.callback.secret`，并删除 `PaymentCallbackSignatureServiceImpl` 的共享密钥字段、构造参数和缺省回退逻辑。
+2. HMAC-SHA256 回调只能使用 `t_payment_channel_config` 对应渠道的 `callback_secret`；缺失时返回 `PAYMENT-1006`。RSA2 仍只使用对应渠道公钥。
+3. 删除未使用的 `findCallbackSecretByChannelCode` Mapper 方法和 SQL；配置契约新增“全局回调密钥属性不存在”断言。
+
+### 206.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 回调凭证定向测试 | `mvn -Dtest=PaymentCallbackSignatureServiceImplTest,PaymentCallbackSignatureConfigurationTest,PaymentMapperSqlBindingSafetyTest test` | 通过 | `8` 个用例通过；覆盖缺渠道密钥拒绝、配置无全局 secret 和 Mapper 绑定安全 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 报告汇总 `520` 个用例，`0` failures、`0` errors、`0` skipped |
+| 真实凭证治理 | 专用密钥托管、密钥/证书轮换、版本绑定与生产审计 | 未执行 | 不记录真实渠道凭证治理或生产验收通过 |
+| 补丁检查 | `git diff --check` | 通过 | 当前 Java、配置、Mapper、测试和文档无空白符错误 |
+
+### 206.3 当前判断
+
+1. URL 渠道、支付单渠道与验签凭证现在使用同一渠道配置边界，某渠道缺少凭证时不能借用全局共享密钥继续处理。
+2. 数据库字段非空和配置服务校验承担配置入口保护，验签服务仍对存量空值失败闭合；两层校验不能替代密钥托管与运行态配置审计。
+3. 本轮未变更 demo 的未签名模拟能力；demo 关闭验签时不会读取渠道凭证，非 demo 环境不得沿用该行为。
