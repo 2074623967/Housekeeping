@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -262,13 +263,13 @@ public class PaymentServiceImpl implements PaymentService {
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
         BigDecimal remainAmount = orderAmount.subtract(paidAmount);
         if (billNo == null) {
-            billNo = "BILL" + System.currentTimeMillis();
+            billNo = buildBusinessNo("BILL");
             String billStatus = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "已结清" : "待支付";
             String billStatusType = remainAmount.compareTo(BigDecimal.ZERO) <= 0 ? "success" : "warn";
             paymentMapper.insertBill(billNo, request.getOrderNo(), customerName, orderAmount, paidAmount, billStatus, billStatusType);
         }
         // 每次拉起收银台都生成独立支付单，避免多个预付单复用同一支付单造成状态串单。
-        String paymentOrderId = "PAY" + System.currentTimeMillis();
+        String paymentOrderId = buildBusinessNo("PAY");
         paymentMapper.insertPaymentOrder(
                 paymentOrderId,
                 request.getOrderNo(),
@@ -276,7 +277,7 @@ public class PaymentServiceImpl implements PaymentService {
                 remainAmount,
                 request.getPayScene()
         );
-        String prepayOrderNo = "PRE" + System.currentTimeMillis();
+        String prepayOrderNo = buildBusinessNo("PRE");
         paymentMapper.insertPrepayOrder(
                 prepayOrderNo,
                 billNo,
@@ -304,7 +305,7 @@ public class PaymentServiceImpl implements PaymentService {
         String cashierTitle = StringUtils.hasText(request.getCashierTitle())
                 ? request.getCashierTitle().trim()
                 : "家政服务收银台";
-        String billNo = "BILL" + System.currentTimeMillis();
+        String billNo = buildBusinessNo("BILL");
         paymentMapper.insertBill(
                 billNo,
                 request.getOrderNo(),
@@ -313,7 +314,7 @@ public class PaymentServiceImpl implements PaymentService {
                 BigDecimal.ZERO,
                 "待支付",
                 "warn");
-        String paymentOrderId = "PAY" + System.currentTimeMillis();
+        String paymentOrderId = buildBusinessNo("PAY");
         paymentMapper.insertPaymentOrder(
                 paymentOrderId,
                 request.getOrderNo(),
@@ -321,7 +322,7 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getAmount(),
                 request.getPayScene()
         );
-        String prepayOrderNo = "PRE" + System.currentTimeMillis();
+        String prepayOrderNo = buildBusinessNo("PRE");
         paymentMapper.insertPrepayOrder(
                 prepayOrderNo,
                 billNo,
@@ -462,14 +463,14 @@ public class PaymentServiceImpl implements PaymentService {
                     submitResult.getMappingVersion(),
                     submitResult.getReturnCodeMappingMatched());
             String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
-            String routeNo = "RTR" + System.currentTimeMillis();
+            String routeNo = buildBusinessNo("RTR");
             paymentMapper.insertRouteRecord(
                     routeNo,
                     paymentOrderId,
                     resolvedChannelCode,
                     routeDecision.getRouteRule(),
                     routeDecision.getRouteResult());
-            String attemptNo = "ATT" + System.currentTimeMillis();
+            String attemptNo = buildBusinessNo("ATT");
             String requestPayload = buildSubmitRequestPayload(
                     request, sourceAppId, terminal, clientIp, idempotencyKey, resolvedChannelCode);
             recordProcessLog(
@@ -512,7 +513,7 @@ public class PaymentServiceImpl implements PaymentService {
                 paymentMapper.updateRouteOpsConfigSnapshotVersion(routeNo, opsConfigSnapshotVersion);
                 paymentMapper.updateAttemptOpsConfigSnapshotVersion(attemptNo, opsConfigSnapshotVersion);
             }
-            String eventNo = "EVT" + System.currentTimeMillis();
+            String eventNo = buildBusinessNo("EVT");
             String eventPayload = "{\"channel\":\"" + resolvedChannelCode
                     + "\",\"paymentMethod\":\"" + request.getPaymentMethod() + "\"}";
             paymentMapper.insertEvent(
@@ -522,7 +523,7 @@ public class PaymentServiceImpl implements PaymentService {
                     orderNo,
                     eventPayload);
             recordEventProcessLog(eventNo, "PAYMENT_SUBMIT", paymentOrderId, orderNo);
-            String notifyNo = "NTF" + System.currentTimeMillis();
+            String notifyNo = buildBusinessNo("NTF");
             paymentMapper.insertNotifyLog(
                     notifyNo,
                     paymentOrderId,
@@ -593,7 +594,7 @@ public class PaymentServiceImpl implements PaymentService {
                 currentDetail.getPaymentOrderId(),
                 prepayStatus,
                 statusType);
-        String eventNo = "EVT" + System.currentTimeMillis();
+        String eventNo = buildBusinessNo("EVT");
         String eventPayload = buildRiskDecisionPayload(riskDecision, resolvedChannelCode);
         paymentMapper.insertEvent(
                 eventNo,
@@ -631,7 +632,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
-        String notifyNo = "NTF" + System.currentTimeMillis();
+        String notifyNo = buildBusinessNo("NTF");
         paymentMapper.insertNotifyLog(
                 notifyNo,
                 request.getPaymentOrderId(),
@@ -677,7 +678,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
             paymentMapper.updateBillAfterPayment(detail.getOrderNo(), settledAmount, "已结清", "success");
         }
-        String eventNo = "EVT" + System.currentTimeMillis();
+        String eventNo = buildBusinessNo("EVT");
         String eventType = paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING";
         String eventPayload = "{\"channel\":\"" + channel + "\"}";
         paymentMapper.insertEvent(
@@ -754,7 +755,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentMapper.updatePrepayStatusByPaymentOrderId(
                 detail.getPaymentOrderId(), "支付成功", "success");
         settleOrderAndBill(detail);
-        String eventNo = "EVT" + System.currentTimeMillis();
+        String eventNo = buildBusinessNo("EVT");
         String eventPayload = "{\"channel\":\"" + detail.getChannel()
                 + "\",\"source\":\"ACTIVE_QUERY\"}";
         paymentMapper.insertEvent(
@@ -779,7 +780,7 @@ public class PaymentServiceImpl implements PaymentService {
     private void recordChannelQuery(
             PaymentDetailDTO detail,
             PaymentChannelQueryResultDTO queryResult) {
-        String notifyNo = "QRY" + System.currentTimeMillis();
+        String notifyNo = buildBusinessNo("QRY");
         String responsePayload = buildChannelQueryResponsePayload(queryResult);
         String statusType = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info";
         paymentMapper.insertNotifyLog(
@@ -834,7 +835,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void recordChannelQueryFailure(PaymentDetailDTO detail, BusinessException exception) {
-        String notifyNo = "QRY" + System.currentTimeMillis();
+        String notifyNo = buildBusinessNo("QRY");
         String responsePayload = "{\"code\":\"" + escapeJson(exception.getCode())
                 + "\",\"message\":\"channel query failed\"}";
         paymentMapper.insertNotifyLog(
@@ -895,7 +896,7 @@ public class PaymentServiceImpl implements PaymentService {
         paymentMapper.updatePaymentStatus(request.getPaymentOrderId(), "CLOSED", "danger", detail.getChannelTransactionNo());
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
-        String eventNo = "EVT" + System.currentTimeMillis();
+        String eventNo = buildBusinessNo("EVT");
         String eventPayload = "{\"close\":\"manual\"}";
         paymentMapper.insertEvent(
                 eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
@@ -978,6 +979,12 @@ public class PaymentServiceImpl implements PaymentService {
             return "WARN";
         }
         return "INFO";
+    }
+
+    static String buildBusinessNo(String prefix) {
+        return prefix
+                + System.currentTimeMillis()
+                + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 
     /**

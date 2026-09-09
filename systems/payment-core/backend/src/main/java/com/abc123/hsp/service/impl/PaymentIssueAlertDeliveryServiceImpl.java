@@ -1021,7 +1021,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                                    int failCount,
                                                                    String summaryComment) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
-        entity.setTaskLogNo("TL" + System.currentTimeMillis());
+        entity.setTaskLogNo(buildTaskLogNo());
         entity.setTaskCode(TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE);
         entity.setTaskName("异常告警回执回查");
         entity.setRunMode(runMode);
@@ -1063,7 +1063,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                    String summaryComment,
                                                    String highestEscalationLevel) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
-        entity.setTaskLogNo("TL" + System.currentTimeMillis());
+        entity.setTaskLogNo(buildTaskLogNo());
         entity.setTaskCode(TASK_CODE_ISSUE_ALERT_DISPATCH);
         entity.setTaskName("异常告警派发");
         entity.setRunMode(runMode);
@@ -1106,7 +1106,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                                String taskName,
                                                                String triggeredBy) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
-        entity.setTaskLogNo("TL" + System.currentTimeMillis());
+        entity.setTaskLogNo(buildTaskLogNo());
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
         entity.setRunMode(RUN_MODE_AUTO);
@@ -1139,6 +1139,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private interface AutoTaskRunner {
         PaymentTaskActionResultDTO run();
+    }
+
+    private String buildTaskLogNo() {
+        return "TL" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
     }
 
     /**

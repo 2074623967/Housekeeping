@@ -778,6 +778,26 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldGenerateUniqueTaskLogNumbersWithoutMillisecondCollision() {
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.emptyList());
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        service.dispatchPendingAlerts();
+        service.dispatchPendingAlerts();
+
+        ArgumentCaptor<PaymentTaskRunLogEntity> captor = ArgumentCaptor.forClass(PaymentTaskRunLogEntity.class);
+        verify(paymentTaskCenterMapper, times(2)).insertTaskRunLog(captor.capture());
+        String firstTaskLogNo = captor.getAllValues().get(0).getTaskLogNo();
+        String secondTaskLogNo = captor.getAllValues().get(1).getTaskLogNo();
+        Assertions.assertTrue(firstTaskLogNo.matches("TL[0-9A-F]{16}"));
+        Assertions.assertTrue(secondTaskLogNo.matches("TL[0-9A-F]{16}"));
+        Assertions.assertNotEquals(firstTaskLogNo, secondTaskLogNo);
+    }
+
+    @Test
     void shouldRollbackFailedAlertDispatchAndContinueWithNextAlert() {
         PaymentIssueAlertDispatchItemDTO first = buildDispatchItem();
         first.setAlertNo("PIA-OUTBOX-FAIL");

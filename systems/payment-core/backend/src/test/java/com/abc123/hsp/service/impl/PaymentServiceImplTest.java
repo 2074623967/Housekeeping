@@ -53,6 +53,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceImplTest {
 
+    @Test
+    void shouldGenerateUniqueBusinessNumbersWithStablePrefix() {
+        java.util.Set<String> businessNos = new java.util.HashSet<String>();
+
+        for (int index = 0; index < 1000; index++) {
+            String businessNo = PaymentServiceImpl.buildBusinessNo("EVT");
+            org.junit.jupiter.api.Assertions.assertTrue(businessNo.matches("EVT\\d{13}[0-9a-f]{8}"));
+            org.junit.jupiter.api.Assertions.assertTrue(businessNos.add(businessNo));
+        }
+    }
+
     @Mock
     private PaymentMapper paymentMapper;
 
