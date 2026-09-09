@@ -5514,3 +5514,28 @@
 1. 后台运营查询不再从本轮覆盖的列表、退款详情和 CSV 直接返回客户或服务者姓名原文。
 2. 默认脱敏没有删除或修改数据库事实，也不影响交易链路；后续敏感原文查看必须建立在可信身份、字段级授权和访问审计之上。
 3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，本功能通过不能替代正式候选说明、签字、发布后现场核验或稳定观察结论。
+
+## 174. 2026-09-09 统一支付记录与退款动作出参最小化 V1.0 验证
+
+### 174.1 本轮补强
+
+1. 统一支付记录列表复制 Mapper DTO 后隐藏 `userId / userPaymentChannelId` 中由客户姓名派生的后缀，查询仍使用原始筛选值。
+2. 支付记录详情在独立副本上脱敏用户引用、客户端 IP、幂等键和请求/响应 JSON，再装配路由、回调和事件轨迹；Mapper 详情 DTO 不被修改。
+3. 退款申请、批准、成功、失败和重试五类动作响应统一返回客户姓名脱敏副本，渠道提交和状态 CAS 更新仍使用原始事实。
+4. 银行卡号当前由 Mapper 固定输出 `54**54`，本轮不伪造真实卡号接入或生产卡数据验证。
+
+### 174.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 记录与退款动作定向测试 | `mvn -Dtest=PaymentSensitiveDataMaskerTest,PaymentRecordServiceListTest,PaymentRecordServiceImplTest,RefundServiceImplTest test` | 通过 | `20` 个用例通过；覆盖用户引用、详情请求上下文、三类轨迹、退款动作响应和 Mapper DTO 原值保持 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `477` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产身份权限与卡数据 | 统一认证、字段级授权、真实卡数据、访问审计与渗透测试 | 未执行 | 不记录真实卡号、生产隐私验收、授权查看或现场核验通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；本轮未修改 Mapper XML 或数据库结构 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 174.3 当前判断
+
+1. 统一支付记录详情和退款动作响应不再成为本轮覆盖敏感字段的旁路，列表与详情默认脱敏口径趋于一致。
+2. 数据库与 Mapper 原始事实继续供内部交易和受控排障使用；默认脱敏不能替代后续可信身份与字段级授权。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式放行治理事实。

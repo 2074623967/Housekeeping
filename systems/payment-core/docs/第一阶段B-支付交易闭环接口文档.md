@@ -2026,6 +2026,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 筛选参数仍按原始输入查询，Mapper DTO、数据库事实、退款渠道请求和支付事件载荷不因展示脱敏而改变。
 4. 当前接口不提供敏感原文查看能力；后续如需查看，必须先接入可信身份、按角色字段授权和访问审计，不能由前端还原。
 
+### 14.2 统一支付记录与退款动作出参规则
+
+1. `GET /api/payment-records` 将 `userId / userPaymentChannelId` 中由客户名称派生的后缀替换为 `****`；查询参数仍按原始输入匹配。
+2. `GET /api/payment-records/{paymentOrderId}` 额外脱敏最近客户端 IP、幂等键和请求/响应 JSON，路由、回调和事件轨迹保持可用。
+3. `/api/refunds/apply / approve / success / fail / retry` 的成功响应均返回脱敏后的 `customerName`，不改变退款状态机和渠道提交入参。
+4. Mapper 原始 DTO 和数据库事实保持不变；当前接口不提供敏感原文恢复、可信授权或生产审计能力。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
