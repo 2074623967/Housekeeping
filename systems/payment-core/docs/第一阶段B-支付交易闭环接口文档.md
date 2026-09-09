@@ -2143,6 +2143,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 失败支付单保持未收口状态，后续自动或人工任务可再次选中；调用方不得把批次返回成功等同于每笔关单均成功。
 4. 该接口仍表达支付核心本地状态处理结果，不代表真实支付渠道撤销、关闭或资金侧收口已经完成。
 
+### 14.19 失败退款重试任务结果规则
+
+1. `POST /api/payment-task-center/retry-failed-refunds` 的响应继续使用 `PaymentTaskActionResultDTO`；`processedCount` 为本轮候选数，`successCount` 为完成本地状态流转并提交渠道的数量，`failCount` 为单笔事务失败数量。
+2. 单笔失败不终止批次，`summaryComment` 最多列出 3 个失败退款单号；调用方应以 `failCount` 判断完整失败规模。
+3. 成功计数只表示渠道提交动作完成，不表示退款资金已到账；最终结果仍由退款回调或后续真实渠道查单确认。
+4. 真实渠道接入必须使用稳定退款单号实现幂等，并处理请求超时但渠道可能已受理的不确定状态；本地事务无法回滚外部渠道副作用。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
