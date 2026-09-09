@@ -851,6 +851,14 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return outwardDetail(detail);
         }
+        if (paySuccess) {
+            detail = lockAndReloadPaymentForSettlement(detail);
+            if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                paymentMapper.releaseSubmitConcurrencyToken(
+                        request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
+                return outwardDetail(detail);
+            }
+        }
         if (paySuccess && paymentMapper.markPaymentSuccessFromChannelResult(
                 request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
@@ -956,6 +964,11 @@ public class PaymentServiceImpl implements PaymentService {
             recordChannelQueryFailure(detail, exception);
             throw exception;
         }
+        boolean requiresSettlement = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())
+                && !"SUCCESS".equalsIgnoreCase(detail.getStatus());
+        if (requiresSettlement) {
+            detail = lockAndReloadPaymentForSettlement(detail);
+        }
         applyReturnCodeStandardization(detail, queryResult);
         paymentMapper.updatePaymentReturnCodeSnapshot(
                 detail.getPaymentOrderId(),
@@ -1018,6 +1031,26 @@ public class PaymentServiceImpl implements PaymentService {
         latestDetail.setQuerySource(queryResult.getQuerySource());
         applyReturnCodeStandardization(latestDetail, queryResult);
         return outwardDetail(latestDetail);
+    }
+
+    private PaymentDetailDTO lockAndReloadPaymentForSettlement(PaymentDetailDTO detail) {
+        String orderNo = detail.getOrderNo();
+        if (!StringUtils.hasText(orderNo)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付单缺少订单号，无法完成成功收口");
+        }
+        paymentMapper.initPrepayCreationLock(orderNo);
+        String lockedOrderNo = paymentMapper.lockPrepayCreation(orderNo);
+        if (!orderNo.equals(lockedOrderNo)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付成功收口并发锁获取失败");
+        }
+        PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
+        if (latestDetail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+        }
+        if (!orderNo.equals(latestDetail.getOrderNo())) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "支付单关联订单在成功收口前发生变化");
+        }
+        return latestDetail;
     }
 
     private void recordChannelQuery(

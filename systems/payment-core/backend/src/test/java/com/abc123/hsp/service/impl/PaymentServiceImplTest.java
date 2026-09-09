@@ -337,7 +337,8 @@ class PaymentServiceImplTest {
         PaymentDetailDTO closedDetail = queryDetail("PAY-EXPIRED-CALLBACK", "CLOSED");
         PaymentDetailDTO settledDetail = queryDetail("PAY-EXPIRED-CALLBACK", "SUCCESS");
         when(paymentMapper.findDetail("PAY-EXPIRED-CALLBACK"))
-                .thenReturn(closedDetail, settledDetail);
+                .thenReturn(closedDetail, closedDetail, settledDetail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult(
                 "PAY-EXPIRED-CALLBACK", "WX-EXPIRED-CALLBACK")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
@@ -941,6 +942,8 @@ class PaymentServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥99.00");
         when(paymentMapper.findDetail("PAY-VIRTUAL-CALLBACK")).thenReturn(detail, detail);
+        when(paymentMapper.lockPrepayCreation("WALLET-RECHARGE-001"))
+                .thenReturn("WALLET-RECHARGE-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult(
                 "PAY-VIRTUAL-CALLBACK", "ALI-VIRTUAL-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
@@ -982,6 +985,8 @@ class PaymentServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-001")).thenReturn(detail, detail);
+        when(paymentMapper.lockPrepayCreation("ORD-CALLBACK-001"))
+                .thenReturn("ORD-CALLBACK-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult(
                 "PAY-CALLBACK-001", "WX-CALLBACK-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-CALLBACK-001")).thenReturn(new BigDecimal("168.00"));
@@ -1023,6 +1028,13 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("PAY-CALLBACK-001")
         );
         verify(paymentMapper).releaseSubmitConcurrencyToken("PAY-CALLBACK-001", "CALLBACK_SUCCESS");
+        org.mockito.InOrder settlementOrder = org.mockito.Mockito.inOrder(paymentMapper);
+        settlementOrder.verify(paymentMapper).initPrepayCreationLock("ORD-CALLBACK-001");
+        settlementOrder.verify(paymentMapper).lockPrepayCreation("ORD-CALLBACK-001");
+        settlementOrder.verify(paymentMapper).markPaymentSuccessFromChannelResult(
+                "PAY-CALLBACK-001", "WX-CALLBACK-001");
+        settlementOrder.verify(paymentMapper).updateOrderAfterPayment(
+                "ORD-CALLBACK-001", new BigDecimal("168.00"), "待履约", "info");
     }
 
     @Test
@@ -1078,8 +1090,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO settledDetail = queryDetail("PAY-CALLBACK-RACE", "SUCCESS");
         when(paymentMapper.findDetail("PAY-CALLBACK-RACE"))
                 .thenReturn(pendingDetail, settledDetail);
-        when(paymentMapper.markPaymentSuccessFromChannelResult(
-                "PAY-CALLBACK-RACE", "WX-CALLBACK-RACE")).thenReturn(0);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.findRouteLogs("PAY-CALLBACK-RACE")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CALLBACK-RACE")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-CALLBACK-RACE")).thenReturn(Collections.emptyList());
@@ -1106,6 +1117,34 @@ class PaymentServiceImplTest {
                 anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
         verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
         org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+    }
+
+    @Test
+    void shouldStopSuccessCallbackWhenSettlementLockCannotBeRead() {
+        PaymentDetailDTO detail = queryDetail("PAY-CALLBACK-LOCK-MISSING", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-LOCK-MISSING")).thenReturn(detail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn(null);
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-LOCK-MISSING");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-LOCK-MISSING");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService).callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.SYSTEM_ERROR, exception.getCode());
+        verify(paymentMapper).initPrepayCreationLock("ORD-QUERY-001");
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
     }
 
     @Test
@@ -2038,7 +2077,8 @@ class PaymentServiceImplTest {
     void shouldSettlePaymentWhenActiveQueryConfirmsSuccess() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-001", "WAIT_CALLBACK");
         PaymentDetailDTO settledDetail = queryDetail("PAY-QUERY-001", "SUCCESS");
-        when(paymentMapper.findDetail("PAY-QUERY-001")).thenReturn(detail, settledDetail);
+        when(paymentMapper.findDetail("PAY-QUERY-001")).thenReturn(detail, detail, settledDetail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult("PAY-QUERY-001", "WX-QUERY-001"))
                 .thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
@@ -2080,6 +2120,17 @@ class PaymentServiceImplTest {
                 "PAY-QUERY-001", "ACTIVE_QUERY_SUCCESS");
         org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
         org.junit.jupiter.api.Assertions.assertEquals("GATEWAY_ACCESS_HTTP", result.getQuerySource());
+        org.mockito.InOrder settlementOrder = org.mockito.Mockito.inOrder(paymentMapper);
+        settlementOrder.verify(paymentMapper).initPrepayCreationLock("ORD-QUERY-001");
+        settlementOrder.verify(paymentMapper).lockPrepayCreation("ORD-QUERY-001");
+        settlementOrder.verify(paymentMapper).updatePaymentReturnCodeSnapshot(
+                eq("PAY-QUERY-001"), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull());
+        settlementOrder.verify(paymentMapper).markPaymentSuccessFromChannelResult(
+                "PAY-QUERY-001", "WX-QUERY-001");
     }
 
     @Test
@@ -2203,6 +2254,7 @@ class PaymentServiceImplTest {
     void shouldNotReopenClosedPaymentWhenQueryReportsSuccess() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-003", "CLOSED");
         when(paymentMapper.findDetail("PAY-QUERY-003")).thenReturn(detail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.findRouteLogs("PAY-QUERY-003")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-QUERY-003")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-QUERY-003")).thenReturn(Collections.emptyList());
@@ -2233,8 +2285,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-004", "WAIT_CALLBACK");
         PaymentDetailDTO settledDetail = queryDetail("PAY-QUERY-004", "SUCCESS");
         when(paymentMapper.findDetail("PAY-QUERY-004")).thenReturn(detail, settledDetail);
-        when(paymentMapper.markPaymentSuccessFromChannelResult("PAY-QUERY-004", "WX-QUERY-004"))
-                .thenReturn(0);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.findRouteLogs("PAY-QUERY-004")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-QUERY-004")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-QUERY-004")).thenReturn(Collections.emptyList());
@@ -2258,6 +2309,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).insertEvent(
                 anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
         verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
     }
 
     private PaymentDetailDTO queryDetail(String paymentOrderId, String status) {

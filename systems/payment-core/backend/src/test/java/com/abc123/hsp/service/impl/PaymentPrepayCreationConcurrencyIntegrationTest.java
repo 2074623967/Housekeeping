@@ -133,6 +133,39 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
         }
     }
 
+    @Test
+    void shouldReadSettledAmountAfterWaitingForPaymentSuccessLock() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch prepayStarted = new CountDownLatch(1);
+        try (SqlSession settlementSession = sqlSessionFactory.openSession()) {
+            PaymentMapper settlementMapper = settlementSession.getMapper(PaymentMapper.class);
+            settlementMapper.initPrepayCreationLock(ORDER_NO);
+            assertEquals(ORDER_NO, settlementMapper.lockPrepayCreation(ORDER_NO));
+
+            Future<PrepayOrderDTO> prepay = executor.submit(
+                    () -> createPrepayInSecondTransaction(prepayStarted));
+            prepayStarted.await(5, TimeUnit.SECONDS);
+            assertThrows(TimeoutException.class, () -> prepay.get(200, TimeUnit.MILLISECONDS));
+
+            try (Statement statement = settlementSession.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_order SET paid_amount = 168.00 WHERE order_no = '"
+                        + ORDER_NO + "'");
+            }
+            settlementSession.commit();
+
+            ExecutionException exception = assertThrows(
+                    ExecutionException.class, () -> prepay.get(5, TimeUnit.SECONDS));
+            com.abc123.hsp.common.BusinessException settled =
+                    (com.abc123.hsp.common.BusinessException) exception.getCause();
+            assertEquals(com.abc123.hsp.common.ErrorCode.PAYMENT_ORDER_ALREADY_SETTLED,
+                    settled.getCode());
+            assertEquals(0, countRows("t_payment_order"));
+            assertEquals(0, countRows("t_prepay_order"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     private PrepayOrderDTO createPrepayInSecondTransaction(CountDownLatch started) throws Exception {
         return createPrepayInSecondTransaction(started, prepayRequest());
     }
