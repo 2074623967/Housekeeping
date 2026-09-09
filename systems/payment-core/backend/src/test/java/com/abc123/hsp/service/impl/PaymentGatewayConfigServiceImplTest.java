@@ -13,10 +13,13 @@ import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayVersionDTO;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
+import com.abc123.hsp.entity.PaymentGatewayVersionEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
 import java.util.Collections;
@@ -217,6 +220,80 @@ class PaymentGatewayConfigServiceImplTest {
     }
 
     @Test
+    void shouldSubmitAndApproveGatewayRollbackAsNewVersion() {
+        PaymentGatewayConfigEntity current = gateway("ENABLED");
+        PaymentGatewayVersionEntity target = version(gateway("DISABLED"), 1);
+        when(paymentConfigMapper.findGatewayByCodeForUpdate("GATEWAY_BANK_OFFLINE")).thenReturn(current);
+        when(paymentConfigMapper.findLatestGatewayVersionNo("GATEWAY_BANK_OFFLINE"))
+                .thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findGatewayVersion("GATEWAY_BANK_OFFLINE", Integer.valueOf(1)))
+                .thenReturn(target);
+        when(paymentConfigMapper.findGatewayReviews()).thenReturn(Collections.emptyList());
+        PaymentGatewayRollbackRequestDTO rollback = new PaymentGatewayRollbackRequestDTO();
+        rollback.setVersionNo(Integer.valueOf(1));
+        rollback.setRequester("maker-a");
+        rollback.setChangeReason("回退到停用基线排查异常");
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        service.submitGatewayRollbackReview("gateway_bank_offline", rollback);
+
+        ArgumentCaptor<PaymentGatewayReviewEntity> reviewCaptor =
+                ArgumentCaptor.forClass(PaymentGatewayReviewEntity.class);
+        verify(paymentConfigMapper).insertGatewayReview(reviewCaptor.capture());
+        PaymentGatewayReviewEntity review = reviewCaptor.getValue();
+        assertEquals("ROLLBACK", review.getOperationType());
+        assertEquals(Integer.valueOf(2), review.getBaseVersionNo());
+        assertEquals(Integer.valueOf(1), review.getSourceVersionNo());
+        verify(paymentConfigMapper, never()).updateGateway(any());
+
+        when(paymentConfigMapper.findGatewayReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.updateGateway(any(PaymentGatewayConfigEntity.class))).thenReturn(1);
+        when(paymentConfigMapper.completeGatewayReview(any(), any(), any(), any(), any())).thenReturn(1);
+        service.approveGatewayReview(review.getRequestNo(), action("checker-b", "确认回滚"));
+
+        verify(paymentConfigMapper).updateGateway(org.mockito.ArgumentMatchers.argThat(
+                gateway -> "DISABLED".equals(gateway.getStatus())));
+        verify(paymentConfigMapper).insertGatewayVersion(org.mockito.ArgumentMatchers.argThat(
+                version -> "REVIEW_ROLLBACK".equals(version.getChangeType())
+                        && Integer.valueOf(1).equals(version.getSourceVersionNo())
+                        && Integer.valueOf(3).equals(version.getVersionNo())));
+    }
+
+    @Test
+    void shouldRejectGatewayApprovalWhenOnlyLatestVersionDrifts() {
+        PaymentGatewayConfigEntity current = gateway("ENABLED");
+        when(paymentConfigMapper.findGatewayByCodeForUpdate("GATEWAY_BANK_OFFLINE")).thenReturn(current);
+        when(paymentConfigMapper.findLatestGatewayVersionNo("GATEWAY_BANK_OFFLINE"))
+                .thenReturn(Integer.valueOf(1), Integer.valueOf(1), Integer.valueOf(2));
+        when(paymentConfigMapper.findGatewayReviews()).thenReturn(Collections.emptyList());
+        PaymentGatewayUpsertRequestDTO candidate = gatewayRequest("gateway_bank_offline");
+        candidate.setGatewayName("线下银行网关新版");
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        service.submitGatewayReview(reviewRequest(candidate));
+        ArgumentCaptor<PaymentGatewayReviewEntity> captor =
+                ArgumentCaptor.forClass(PaymentGatewayReviewEntity.class);
+        verify(paymentConfigMapper).insertGatewayReview(captor.capture());
+        PaymentGatewayReviewEntity review = captor.getValue();
+        when(paymentConfigMapper.findGatewayReviewForUpdate(review.getRequestNo())).thenReturn(review);
+
+        IllegalArgumentException stale = assertThrows(IllegalArgumentException.class,
+                () -> service.approveGatewayReview(review.getRequestNo(), action("checker-b", "确认修改")));
+
+        assertTrue(stale.getMessage().contains("已变化"));
+        verify(paymentConfigMapper, never()).updateGateway(any());
+    }
+
+    @Test
+    void shouldListGatewayVersionsOnlyForExistingGateway() {
+        when(paymentConfigMapper.findGatewayByCode("GATEWAY_BANK_OFFLINE")).thenReturn(gateway("ENABLED"));
+        when(paymentConfigMapper.findGatewayVersions("GATEWAY_BANK_OFFLINE"))
+                .thenReturn(Collections.singletonList(new PaymentGatewayVersionDTO()));
+
+        assertEquals(1, new PaymentConfigServiceImpl(paymentConfigMapper)
+                .listGatewayVersions("gateway_bank_offline").size());
+    }
+
+    @Test
     void shouldTranslateConcurrentGatewayCreateConflict() {
         PaymentGatewayReviewEntity review = review(null);
         review.setOperationType("CREATE");
@@ -395,5 +472,33 @@ class PaymentGatewayConfigServiceImplTest {
         gateway.setStatusType("ENABLED".equals(status) ? "success" : "danger");
         gateway.setPriority(Integer.valueOf(1));
         return gateway;
+    }
+
+    private PaymentGatewayVersionEntity version(PaymentGatewayConfigEntity gateway, int versionNo) {
+        PaymentGatewayVersionEntity version = new PaymentGatewayVersionEntity();
+        version.setGatewayCode(gateway.getGatewayCode());
+        version.setVersionNo(Integer.valueOf(versionNo));
+        version.setGatewayName(gateway.getGatewayName());
+        version.setAccessMode(gateway.getAccessMode());
+        version.setChannelScope(gateway.getChannelScope());
+        version.setEnvironmentScope(gateway.getEnvironmentScope());
+        version.setApiBaseUrl(gateway.getApiBaseUrl());
+        version.setProtocolType(gateway.getProtocolType());
+        version.setSignAlgorithm(gateway.getSignAlgorithm());
+        version.setCertificateAlias(gateway.getCertificateAlias());
+        version.setCertificateStatus(gateway.getCertificateStatus());
+        version.setCertificateStatusType(gateway.getCertificateStatusType());
+        version.setReleaseStage(gateway.getReleaseStage());
+        version.setGrayStrategy(gateway.getGrayStrategy());
+        version.setCallbackWhitelist(gateway.getCallbackWhitelist());
+        version.setAdapterRegistry(gateway.getAdapterRegistry());
+        version.setTimeoutMs(gateway.getTimeoutMs());
+        version.setRetryPolicy(gateway.getRetryPolicy());
+        version.setStatus(gateway.getStatus());
+        version.setStatusType(gateway.getStatusType());
+        version.setPriority(gateway.getPriority());
+        version.setChangeType("BASELINE");
+        version.setChangeReason("历史版本");
+        return version;
     }
 }

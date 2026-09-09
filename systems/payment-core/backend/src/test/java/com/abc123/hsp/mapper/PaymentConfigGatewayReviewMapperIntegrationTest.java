@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayVersionDTO;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
+import com.abc123.hsp.entity.PaymentGatewayVersionEntity;
 import java.io.InputStream;
 import java.sql.Statement;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -54,6 +56,11 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
             PaymentGatewayConfigEntity gateway = mapper.findGatewayByCodeForUpdate("GATEWAY_WX_ACQ");
             assertEquals("wx_h5", gateway.getChannelScope());
             assertEquals(Integer.valueOf(3000), gateway.getTimeoutMs());
+            assertEquals("微信收单网关", mapper.findGatewayByCode("GATEWAY_WX_ACQ").getGatewayName());
+            PaymentGatewayVersionEntity baseline = version(gateway, 1);
+            assertEquals(1, mapper.insertGatewayVersion(baseline));
+            assertEquals(Integer.valueOf(1), mapper.findLatestGatewayVersionNo("GATEWAY_WX_ACQ"));
+            assertEquals("BASELINE", mapper.findGatewayVersion("GATEWAY_WX_ACQ", 1).getChangeType());
             assertEquals(1, mapper.insertGatewayReview(review("GWR-TEST-001")));
             assertEquals("GWR-TEST-001",
                     mapper.findPendingGatewayReviewForUpdate("GATEWAY_WX_ACQ").getRequestNo());
@@ -82,9 +89,14 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     .orElseThrow(AssertionError::new);
             assertEquals("APPROVED", completed.getReviewStatus());
             assertEquals("STATUS_CHANGE", completed.getOperationType());
+            assertEquals(Integer.valueOf(1), completed.getBaseVersionNo());
             assertEquals("https://gateway.example.test", completed.getApiBaseUrl());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
             assertEquals(2, reviews.size());
+            java.util.List<PaymentGatewayVersionDTO> versions =
+                    session.getMapper(PaymentConfigMapper.class).findGatewayVersions("GATEWAY_WX_ACQ");
+            assertEquals(1, versions.size());
+            assertEquals("BASELINE", versions.get(0).getChangeType());
         }
     }
 
@@ -92,6 +104,7 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
         PaymentGatewayReviewEntity review = new PaymentGatewayReviewEntity();
         review.setRequestNo(requestNo);
         review.setGatewayCode("GATEWAY_WX_ACQ");
+        review.setBaseVersionNo(Integer.valueOf(1));
         review.setOperationType("STATUS_CHANGE");
         review.setGatewayName("微信收单网关");
         review.setAccessMode("直连");
@@ -146,6 +159,34 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
         return gateway;
     }
 
+    private PaymentGatewayVersionEntity version(PaymentGatewayConfigEntity gateway, int versionNo) {
+        PaymentGatewayVersionEntity version = new PaymentGatewayVersionEntity();
+        version.setGatewayCode(gateway.getGatewayCode());
+        version.setVersionNo(Integer.valueOf(versionNo));
+        version.setGatewayName(gateway.getGatewayName());
+        version.setAccessMode(gateway.getAccessMode());
+        version.setChannelScope(gateway.getChannelScope());
+        version.setEnvironmentScope(gateway.getEnvironmentScope());
+        version.setApiBaseUrl(gateway.getApiBaseUrl());
+        version.setProtocolType(gateway.getProtocolType());
+        version.setSignAlgorithm(gateway.getSignAlgorithm());
+        version.setCertificateAlias(gateway.getCertificateAlias());
+        version.setCertificateStatus(gateway.getCertificateStatus());
+        version.setCertificateStatusType(gateway.getCertificateStatusType());
+        version.setReleaseStage(gateway.getReleaseStage());
+        version.setGrayStrategy(gateway.getGrayStrategy());
+        version.setCallbackWhitelist(gateway.getCallbackWhitelist());
+        version.setAdapterRegistry(gateway.getAdapterRegistry());
+        version.setTimeoutMs(gateway.getTimeoutMs());
+        version.setRetryPolicy(gateway.getRetryPolicy());
+        version.setStatus(gateway.getStatus());
+        version.setStatusType(gateway.getStatusType());
+        version.setPriority(gateway.getPriority());
+        version.setChangeType("BASELINE");
+        version.setChangeReason("初始化基线");
+        return version;
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -153,6 +194,7 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     + PaymentConfigProtocolVersionMapperIntegrationTest.class.getName()
                     + ".dateFormat\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_gateway_review");
+            statement.execute("DROP TABLE IF EXISTS t_payment_gateway_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_gateway_config");
             statement.execute("CREATE TABLE t_payment_gateway_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, gateway_code VARCHAR(64) NOT NULL UNIQUE, "
@@ -166,9 +208,25 @@ class PaymentConfigGatewayReviewMapperIntegrationTest {
                     + "timeout_ms INT NOT NULL, retry_policy VARCHAR(128) NOT NULL, "
                     + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, "
                     + "priority INT NOT NULL, updated_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_payment_gateway_version ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, gateway_code VARCHAR(64) NOT NULL, "
+                    + "version_no INT NOT NULL, gateway_name VARCHAR(128) NOT NULL, "
+                    + "access_mode VARCHAR(64) NOT NULL, channel_scope VARCHAR(256) NOT NULL, "
+                    + "environment_scope VARCHAR(128) NOT NULL, api_base_url VARCHAR(256) NOT NULL, "
+                    + "protocol_type VARCHAR(64) NOT NULL, sign_algorithm VARCHAR(64) NOT NULL, "
+                    + "certificate_alias VARCHAR(128) NOT NULL, certificate_status VARCHAR(32) NOT NULL, "
+                    + "certificate_status_type VARCHAR(32) NOT NULL, release_stage VARCHAR(64) NOT NULL, "
+                    + "gray_strategy VARCHAR(256) NOT NULL, callback_whitelist VARCHAR(256) NOT NULL, "
+                    + "adapter_registry VARCHAR(256) NOT NULL, timeout_ms INT NOT NULL, "
+                    + "retry_policy VARCHAR(128) NOT NULL, status VARCHAR(32) NOT NULL, "
+                    + "status_type VARCHAR(32) NOT NULL, priority INT NOT NULL, "
+                    + "change_type VARCHAR(32) NOT NULL, source_version_no INT, "
+                    + "change_reason VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL, "
+                    + "UNIQUE(gateway_code, version_no))");
             statement.execute("CREATE TABLE t_payment_gateway_review ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, request_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "gateway_code VARCHAR(64) NOT NULL, operation_type VARCHAR(32) NOT NULL, "
+                    + "gateway_code VARCHAR(64) NOT NULL, base_version_no INT, source_version_no INT, "
+                    + "operation_type VARCHAR(32) NOT NULL, "
                     + "gateway_name VARCHAR(128) NOT NULL, access_mode VARCHAR(64) NOT NULL, "
                     + "channel_scope VARCHAR(256) NOT NULL, environment_scope VARCHAR(128) NOT NULL, "
                     + "api_base_url VARCHAR(256) NOT NULL, protocol_type VARCHAR(64) NOT NULL, "

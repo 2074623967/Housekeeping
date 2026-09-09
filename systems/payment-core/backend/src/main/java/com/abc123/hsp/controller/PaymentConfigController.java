@@ -18,7 +18,9 @@ import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayVersionDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
@@ -431,6 +433,19 @@ public class PaymentConfigController {
             @PathVariable("requestNo") String requestNo,
             @RequestBody PaymentGatewayReviewActionRequestDTO request) {
         return ApiResponse.success(paymentConfigService.rejectGatewayReview(requestNo, request));
+    }
+
+    @GetMapping("/gateways/{gatewayCode}/versions")
+    public ApiResponse<List<PaymentGatewayVersionDTO>> listGatewayVersions(
+            @PathVariable String gatewayCode) {
+        return ApiResponse.success(paymentConfigService.listGatewayVersions(gatewayCode));
+    }
+
+    @PostMapping("/gateways/{gatewayCode}/rollback")
+    public ApiResponse<List<PaymentGatewayReviewDTO>> submitGatewayRollbackReview(
+            @PathVariable String gatewayCode,
+            @RequestBody PaymentGatewayRollbackRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.submitGatewayRollbackReview(gatewayCode, request));
     }
 
     /** 提交支付控制策略启停候选，不改变运行态。 */

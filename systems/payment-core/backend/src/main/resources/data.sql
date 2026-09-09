@@ -54,6 +54,20 @@ INSERT INTO t_payment_gateway_config (gateway_code, gateway_name, access_mode, c
 ('GATEWAY_ALI_ACQ', '支付宝收单网关', '直连', 'alipay_h5', '生产+预发', 'https://gateway.housekeeping.local/alipay/acquire', 'HTTP+FORM', 'RSA2', 'ali-mch-cert-v2026.06', 'EXPIRING_SOON', 'warn', '全量', '已全量开放，预发保留联调商户', '110.75.0.0/16,110.76.0.0/16', 'submit=alipay-h5,query=alipay-query,refund=alipay-refund', 3500, '失败重试1次+异步回调兜底', 'ENABLED', 'success', 2, '2026-07-20 22:40:00'),
 ('GATEWAY_BANK_OFFLINE', '线下银行清算网关', '银行服务商', 'offline_bank', '生产+演练', 'https://gateway.housekeeping.local/bank/offline', 'SFTP+文件', 'RSA2048', 'bank-batch-cert-v2026.05', 'ARCHIVED', 'danger', '只读演练', '仅保留对公线下演练，不接新单', '10.8.1.0/24', 'submit=offline-bank,query=bank-batch-query,refund=manual-offline', 8000, '人工复核+批次补传', 'DISABLED', 'danger', 3, '2026-07-20 22:40:00');
 
+INSERT INTO t_payment_gateway_version (
+    gateway_code, version_no, gateway_name, access_mode, channel_scope, environment_scope,
+    api_base_url, protocol_type, sign_algorithm, certificate_alias, certificate_status,
+    certificate_status_type, release_stage, gray_strategy, callback_whitelist,
+    adapter_registry, timeout_ms, retry_policy, status, status_type, priority,
+    change_type, source_version_no, change_reason, created_at
+)
+SELECT gateway_code, 1, gateway_name, access_mode, channel_scope, environment_scope,
+       api_base_url, protocol_type, sign_algorithm, certificate_alias, certificate_status,
+       certificate_status_type, release_stage, gray_strategy, callback_whitelist,
+       adapter_registry, timeout_ms, retry_policy, status, status_type, priority,
+       'BASELINE', NULL, '初始化支付网关基线', updated_at
+FROM t_payment_gateway_config;
+
 INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_payment_methods, allowed_channel_codes, allowed_merchant_nos, minute_submit_limit, interface_minute_submit_limit, token_auth_required, access_token_value, strict_mode, self_check_status, self_check_status_type, self_check_message, status, status_type, updated_at) VALUES
 ('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 'MCH_WX_10001,MCH_ALI_20001,BANK_OFFLINE_30001', 120, 90, '关闭', 'token-default-app', '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 40, 20, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),

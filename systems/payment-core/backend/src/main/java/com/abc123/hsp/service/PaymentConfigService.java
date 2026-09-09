@@ -12,7 +12,9 @@ import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayVersionDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
@@ -255,6 +257,13 @@ public interface PaymentConfigService {
     /** 驳回支付网关状态候选，不改变运行态。 */
     List<PaymentGatewayReviewDTO> rejectGatewayReview(
             String requestNo, PaymentGatewayReviewActionRequestDTO request);
+
+    /** 查询支付网关不可变版本历史。 */
+    List<PaymentGatewayVersionDTO> listGatewayVersions(String gatewayCode);
+
+    /** 提交指定支付网关历史版本的回滚候选，不改变运行态。 */
+    List<PaymentGatewayReviewDTO> submitGatewayRollbackReview(
+            String gatewayCode, PaymentGatewayRollbackRequestDTO request);
 
     /** 提交支付控制策略启停候选，不改变运行态。 */
     List<PaymentControlPolicyReviewDTO> submitControlPolicyStatusReview(

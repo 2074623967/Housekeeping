@@ -28,6 +28,7 @@ DROP TABLE IF EXISTS t_payment_channel_return_code_map;
 DROP TABLE IF EXISTS t_payment_channel_review;
 DROP TABLE IF EXISTS t_payment_channel_version;
 DROP TABLE IF EXISTS t_payment_gateway_review;
+DROP TABLE IF EXISTS t_payment_gateway_version;
 DROP TABLE IF EXISTS t_payment_gateway_config;
 DROP TABLE IF EXISTS t_payment_control_policy_review;
 DROP TABLE IF EXISTS t_payment_control_policy_version;
@@ -462,11 +463,45 @@ CREATE TABLE t_payment_gateway_config (
     KEY idx_gateway_status_priority (status, priority)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付网关接入配置表';
 
+CREATE TABLE t_payment_gateway_version (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    gateway_code VARCHAR(64) NOT NULL COMMENT '支付网关编码',
+    version_no INT NOT NULL COMMENT '不可变版本号',
+    gateway_name VARCHAR(128) NOT NULL COMMENT '支付网关名称快照',
+    access_mode VARCHAR(64) NOT NULL COMMENT '接入模式快照',
+    channel_scope VARCHAR(256) NOT NULL COMMENT '适用渠道范围快照',
+    environment_scope VARCHAR(128) NOT NULL COMMENT '环境范围快照',
+    api_base_url VARCHAR(256) NOT NULL COMMENT '网关基础地址快照',
+    protocol_type VARCHAR(64) NOT NULL COMMENT '报文协议快照',
+    sign_algorithm VARCHAR(64) NOT NULL COMMENT '签名算法快照',
+    certificate_alias VARCHAR(128) NOT NULL COMMENT '证书别名快照',
+    certificate_status VARCHAR(32) NOT NULL COMMENT '证书状态快照',
+    certificate_status_type VARCHAR(32) NOT NULL COMMENT '证书状态样式快照',
+    release_stage VARCHAR(64) NOT NULL COMMENT '发布阶段快照',
+    gray_strategy VARCHAR(256) NOT NULL COMMENT '灰度策略快照',
+    callback_whitelist VARCHAR(256) NOT NULL COMMENT '回调白名单快照',
+    adapter_registry VARCHAR(256) NOT NULL COMMENT '适配器编排快照',
+    timeout_ms INT NOT NULL COMMENT '超时时间快照',
+    retry_policy VARCHAR(128) NOT NULL COMMENT '重试策略快照',
+    status VARCHAR(32) NOT NULL COMMENT '网关状态快照',
+    status_type VARCHAR(32) NOT NULL COMMENT '网关状态样式快照',
+    priority INT NOT NULL COMMENT '优先级快照',
+    change_type VARCHAR(32) NOT NULL COMMENT '版本变更类型',
+    source_version_no INT DEFAULT NULL COMMENT '回滚来源版本号',
+    change_reason VARCHAR(255) NOT NULL COMMENT '变更原因',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_gateway_version (gateway_code, version_no),
+    KEY idx_gateway_version_created (gateway_code, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付网关不可变版本表';
+
 CREATE TABLE t_payment_gateway_review (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
     gateway_code VARCHAR(64) NOT NULL COMMENT '支付网关编码快照',
-    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE',
+    base_version_no INT DEFAULT NULL COMMENT '提交时当前版本号，新增时为空',
+    source_version_no INT DEFAULT NULL COMMENT '回滚目标历史版本号',
+    operation_type VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/STATUS_CHANGE/ROLLBACK',
     gateway_name VARCHAR(128) NOT NULL COMMENT '支付网关名称快照',
     access_mode VARCHAR(64) NOT NULL COMMENT '接入模式快照',
     channel_scope VARCHAR(256) NOT NULL COMMENT '适用渠道范围候选',

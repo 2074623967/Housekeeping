@@ -23,7 +23,9 @@ import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayRollbackRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
+import com.abc123.hsp.dto.PaymentGatewayVersionDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
@@ -416,6 +418,12 @@ class PaymentConfigControllerTest {
         when(paymentConfigService.listGatewayReviews()).thenReturn(reviews);
         when(paymentConfigService.approveGatewayReview("GWR-001", actionRequest)).thenReturn(reviews);
         when(paymentConfigService.rejectGatewayReview("GWR-001", actionRequest)).thenReturn(reviews);
+        when(paymentConfigService.listGatewayVersions("GATEWAY_WX_ACQ"))
+                .thenReturn(Collections.singletonList(new PaymentGatewayVersionDTO()));
+        PaymentGatewayRollbackRequestDTO rollbackRequest = new PaymentGatewayRollbackRequestDTO();
+        rollbackRequest.setVersionNo(Integer.valueOf(1));
+        when(paymentConfigService.submitGatewayRollbackReview("GATEWAY_WX_ACQ", rollbackRequest))
+                .thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
         assertEquals(reviews, controller.submitGatewayStatusReview(submitRequest).getData());
@@ -423,11 +431,16 @@ class PaymentConfigControllerTest {
         assertEquals(reviews, controller.listGatewayReviews().getData());
         assertEquals(reviews, controller.approveGatewayReview("GWR-001", actionRequest).getData());
         assertEquals(reviews, controller.rejectGatewayReview("GWR-001", actionRequest).getData());
+        assertEquals(1, controller.listGatewayVersions("GATEWAY_WX_ACQ").getData().size());
+        assertEquals(reviews, controller.submitGatewayRollbackReview(
+                "GATEWAY_WX_ACQ", rollbackRequest).getData());
         verify(paymentConfigService).submitGatewayStatusReview(submitRequest);
         verify(paymentConfigService).submitGatewayReview(fullSubmitRequest);
         verify(paymentConfigService).listGatewayReviews();
         verify(paymentConfigService).approveGatewayReview("GWR-001", actionRequest);
         verify(paymentConfigService).rejectGatewayReview("GWR-001", actionRequest);
+        verify(paymentConfigService).listGatewayVersions("GATEWAY_WX_ACQ");
+        verify(paymentConfigService).submitGatewayRollbackReview("GATEWAY_WX_ACQ", rollbackRequest);
     }
 
     @Test

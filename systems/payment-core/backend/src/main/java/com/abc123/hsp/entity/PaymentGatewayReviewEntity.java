@@ -8,6 +8,8 @@ public class PaymentGatewayReviewEntity {
 
     private String requestNo;
     private String gatewayCode;
+    private Integer baseVersionNo;
+    private Integer sourceVersionNo;
     private String operationType;
     private String gatewayName;
     private String accessMode;

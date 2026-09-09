@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentControlPolicyVersionDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
+import com.abc123.hsp.dto.PaymentGatewayVersionDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
@@ -28,6 +29,7 @@ import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
+import com.abc123.hsp.entity.PaymentGatewayVersionEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelVersionEntity;
@@ -199,14 +201,31 @@ public interface PaymentConfigMapper {
      */
     List<PaymentGatewayConfigDTO> findGateways();
 
+    /** 按网关编码查询完整运行配置。 */
+    PaymentGatewayConfigEntity findGatewayByCode(@Param("gatewayCode") String gatewayCode);
+
     /** 按网关编码加锁查询完整运行配置。 */
     PaymentGatewayConfigEntity findGatewayByCodeForUpdate(@Param("gatewayCode") String gatewayCode);
+
+    /** 查询支付网关不可变版本历史。 */
+    List<PaymentGatewayVersionDTO> findGatewayVersions(@Param("gatewayCode") String gatewayCode);
+
+    /** 查询支付网关指定历史版本。 */
+    PaymentGatewayVersionEntity findGatewayVersion(
+            @Param("gatewayCode") String gatewayCode,
+            @Param("versionNo") Integer versionNo);
+
+    /** 查询支付网关当前最大版本号。 */
+    Integer findLatestGatewayVersionNo(@Param("gatewayCode") String gatewayCode);
 
     /** 新增支付网关完整运行配置。 */
     int insertGateway(PaymentGatewayConfigEntity entity);
 
     /** 更新支付网关完整运行配置。 */
     int updateGateway(PaymentGatewayConfigEntity entity);
+
+    /** 新增支付网关不可变版本快照。 */
+    int insertGatewayVersion(PaymentGatewayVersionEntity entity);
 
     /** 查询支付网关配置变更复核申请。 */
     List<PaymentGatewayReviewDTO> findGatewayReviews();

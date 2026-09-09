@@ -15,6 +15,10 @@ const gatewayActionRequester = ref("");
 const gatewayActionReason = ref("");
 const gatewayReviewer = ref("");
 const gatewayReviewComment = ref("");
+const gatewayVersionCode = ref("");
+const gatewayVersions = ref([]);
+const isGatewayVersionLoading = ref(false);
+let gatewayVersionRequestId = 0;
 const editingGatewayCode = ref("");
 const gatewayForm = ref(createGatewayForm());
 const controlPolicies = ref([]);
@@ -457,6 +461,61 @@ async function handleChannelReview(review, approved) {
       : `渠道状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
   } catch (error) {
     actionMessage.value = `渠道复核处理失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadGatewayVersions(gatewayCode) {
+  const requestId = ++gatewayVersionRequestId;
+  gatewayVersionCode.value = gatewayCode;
+  gatewayVersions.value = [];
+  isGatewayVersionLoading.value = true;
+  actionMessage.value = "";
+  try {
+    const versions = await paymentConfigApi.getGatewayVersions(gatewayCode);
+    if (requestId === gatewayVersionRequestId && gatewayVersionCode.value === gatewayCode) {
+      gatewayVersions.value = versions;
+    }
+  } catch (error) {
+    if (requestId === gatewayVersionRequestId && gatewayVersionCode.value === gatewayCode) {
+      actionMessage.value = `支付网关版本加载失败：${error.message}`;
+    }
+  } finally {
+    if (requestId === gatewayVersionRequestId) {
+      isGatewayVersionLoading.value = false;
+    }
+  }
+}
+
+function closeGatewayVersions() {
+  gatewayVersionRequestId += 1;
+  gatewayVersionCode.value = "";
+  gatewayVersions.value = [];
+  isGatewayVersionLoading.value = false;
+}
+
+async function rollbackGatewayVersion(version) {
+  const gatewayCode = gatewayVersionCode.value;
+  if (!gatewayActionRequester.value || !gatewayActionReason.value) {
+    actionMessage.value = "提交支付网关回滚复核失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  if (!window.confirm(`确认提交网关 ${gatewayCode} 回滚到 V${version.versionNo} 的复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = `${gatewayCode}:rollback`;
+  actionMessage.value = "";
+  try {
+    gatewayReviews.value = await paymentConfigApi.rollbackGateway(gatewayCode, {
+      versionNo: version.versionNo,
+      requester: gatewayActionRequester.value,
+      changeReason: gatewayActionReason.value
+    });
+    gatewayActionReason.value = "";
+    actionMessage.value = `网关 ${gatewayCode} 回滚到 V${version.versionNo} 的申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `支付网关回滚申请失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1175,6 +1234,9 @@ async function handleGatewayReview(review, approved) {
       : await paymentConfigApi.rejectGatewayReview(review.requestNo, payload);
     if (approved) {
       await loadOverview();
+      if (gatewayVersionCode.value) {
+        await loadGatewayVersions(gatewayVersionCode.value);
+      }
     }
     gatewayReviewComment.value = "";
     actionMessage.value = approved
@@ -1766,7 +1828,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.21</span>
+        <span class="badge info">配置中心 V1.22</span>
       </div>
     </div>
 
@@ -3427,7 +3489,11 @@ function exportGovernanceSnapshot(section = "ALL") {
                       {{ review.gatewayCode }} / {{ review.gatewayName }}
                       <div class="muted-text">{{ review.accessMode }} / {{ review.channelScope }} / {{ review.protocolType }}</div>
                       <div class="muted-text">{{ review.certificateStatus }} / {{ review.releaseStage }} / {{ review.timeoutMs }}ms</div>
-                      <div class="muted-text">基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
+                      <div class="muted-text">
+                        基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}
+                        / V{{ review.baseVersionNo || "-" }}
+                        <template v-if="review.sourceVersionNo"> / 来源 V{{ review.sourceVersionNo }}</template>
+                      </div>
                     </td>
                     <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
                     <td>
@@ -3530,10 +3596,80 @@ function exportGovernanceSnapshot(section = "ALL") {
                     >
                       {{ gateway.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
+                    <button
+                      class="link-button"
+                      :disabled="Boolean(activeConfigCode)"
+                      @click="loadGatewayVersions(gateway.gatewayCode)"
+                    >
+                      版本历史
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div v-if="gatewayVersionCode" class="panel" style="margin-top: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>支付网关版本历史 / {{ gatewayVersionCode }}</h3>
+                <p class="meta">历史快照不可变；回滚需重新提交完整候选并经异人声明复核，当前运行态不会立即改变</p>
+              </div>
+              <button class="button secondary" @click="closeGatewayVersions">关闭</button>
+            </div>
+            <div v-if="isGatewayVersionLoading" class="state-box">支付网关版本加载中...</div>
+            <div v-else-if="!gatewayVersions.length" class="state-box">当前暂无支付网关版本记录</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>版本</th>
+                    <th>变更类型</th>
+                    <th>配置摘要</th>
+                    <th>证书 / 发布</th>
+                    <th>运行参数</th>
+                    <th>状态</th>
+                    <th>变更原因</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="version in gatewayVersions" :key="version.versionNo">
+                    <td>V{{ version.versionNo }}</td>
+                    <td>
+                      {{ version.changeType }}
+                      <div v-if="version.sourceVersionNo" class="muted-text">来源 V{{ version.sourceVersionNo }}</div>
+                    </td>
+                    <td>
+                      {{ version.gatewayName }} / {{ version.accessMode }}
+                      <div class="muted-text">{{ version.channelScope }} / {{ version.environmentScope }}</div>
+                      <div class="muted-text">{{ version.protocolType }} / {{ version.signAlgorithm }}</div>
+                    </td>
+                    <td>
+                      {{ version.certificateAlias }}
+                      <div class="muted-text">{{ version.certificateStatus }} / {{ version.releaseStage }}</div>
+                    </td>
+                    <td>
+                      {{ version.timeoutMs }}ms / 优先级 {{ version.priority }}
+                      <div class="muted-text">{{ version.retryPolicy }}</div>
+                    </td>
+                    <td><span :class="['badge', version.statusType]">{{ version.status }}</span></td>
+                    <td>{{ version.changeReason }}</td>
+                    <td>{{ version.createdAt }}</td>
+                    <td>
+                      <button
+                        class="link-button"
+                        :disabled="Boolean(activeConfigCode) || version.versionNo === gatewayVersions[0]?.versionNo"
+                        @click="rollbackGatewayVersion(version)"
+                      >
+                        提交回滚复核
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 

@@ -905,6 +905,13 @@ export const paymentConfigApi = {
     `/api/payment-config/channels/${encodeURIComponent(channelCode)}/rollback`,
     payload
   ),
+  getGatewayVersions: (gatewayCode) => request(
+    `/api/payment-config/gateways/${encodeURIComponent(gatewayCode)}/versions`
+  ),
+  rollbackGateway: (gatewayCode, payload) => postJson(
+    `/api/payment-config/gateways/${encodeURIComponent(gatewayCode)}/rollback`,
+    payload
+  ),
   submitRouteRuleStatusReview: (payload) => postJson("/api/payment-config/route-rules/toggle", payload),
   validateRouteRule: (payload) => postJson("/api/payment-config/route-rules/validate", payload),
   getRouteRuleConflicts: () => request("/api/payment-config/route-rules/conflicts"),
