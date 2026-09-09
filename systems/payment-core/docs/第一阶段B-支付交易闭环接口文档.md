@@ -2280,8 +2280,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 1. 回调时间窗只读取 URL 渠道安全配置中的 `notifySignWindowSec`；基础配置不再提供 `payment.callback.allowed-skew-seconds` 或环境变量回退。
 2. `notifySignWindowSec` 为空、为 `0` 或负数时返回 `PAYMENT-1034`，失败发生在时间窗计算、签名验证、nonce 清理/写入和支付状态处理之前。
-3. `payment.callback.nonce-ttl-seconds` 默认 `600` 秒且必须为正数；显式配置非正值会阻止应用启动，而不是写入立即过期的防重记录。
-4. 生产环境应保证 nonce TTL 不短于允许通知窗口和渠道合理重试跨度，并通过配置发布门禁、真实数据库时间语义和多实例重放测试验证。
+3. `payment.callback.nonce-ttl-seconds` 必须为正数；显式配置非正值会阻止应用启动，而不是写入立即过期的防重记录。默认值后续按 14.39 节修正为 `601` 秒。
+4. 生产环境应通过配置发布门禁、真实数据库时间语义和多实例重放测试验证 nonce 生命周期；对称时间窗的严格计算见 14.39 节。
+
+### 14.39 支付回调 nonce 生命周期覆盖规则
+
+1. 若渠道时间窗为 `W` 秒，时间戳在当前时间前后 `W` 秒内均有效；未来边界通知从首次接收到最终失效最多持续 `2W` 秒。
+2. nonce 到期记录在 `expires_at <= NOW()` 时可清理，故 `payment.callback.nonce-ttl-seconds` 必须严格大于 `2 * notifySignWindowSec`；等于 `2W` 仍返回 `PAYMENT-1034`。
+3. 默认配置为时间窗 `300` 秒、nonce TTL `601` 秒。任一启用渠道将窗口调大后，部署配置必须同步提高 TTL，否则通知在签名与 nonce 副作用前失败闭合。
+4. 该约束只保护本地防重记录生命周期；真实渠道还需验证时间戳精度、数据库时钟、多实例唯一键竞争、清理调度和渠道重试跨度。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
@@ -2311,7 +2318,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1031` | 回调渠道交易号与支付单已绑定的渠道交易号不一致 |
 | `PAYMENT-1032` | 渠道回调签名算法缺失或不在运行时白名单 |
 | `PAYMENT-1033` | 渠道 RSA2 公钥材料存在但无法解析 |
-| `PAYMENT-1034` | 渠道回调验签窗口为空或非正，安全配置无效 |
+| `PAYMENT-1034` | 渠道回调验签窗口为空/非正，或 nonce TTL 未严格覆盖完整签名有效期 |
 
 联调说明：
 
