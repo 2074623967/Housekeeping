@@ -1871,8 +1871,8 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 处理规则：
 
-1. 人工补跑选择 `WAIT_CALLBACK`、预付单尚未过期且达到最小等待时长的支付单，不受自动重试退避窗口限制，便于运营立即复核。
-2. 单次处理数量受批次上限约束，按支付单创建时间从早到晚执行。
+1. 人工补跑选择存在支付尝试、达到最小等待时长且仍为 `WAIT_CALLBACK` 的支付单，收银台过期后仍可补查；人工模式不受自动重试退避窗口限制，便于运营立即复核。
+2. 单次处理数量受批次上限约束，按最新支付尝试时间从早到晚执行。
 3. 每笔复用 `POST /api/payments/query` 的幂等收口逻辑；渠道成功会收口支付主链路，渠道处理中计入告警，网关异常计入失败。
 4. 单笔失败与其他支付单隔离，任务摘要最多记录三个失败支付单号；自动任务使用 `PAYMENT_PENDING_QUERY` 租约避免多实例重复执行。
 5. 自动调度要求 `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED=true` 且 `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_ENABLED=true`，任一关闭均不执行自动查单。
@@ -2208,10 +2208,17 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.28 批量主动查单候选时间规则
 
-1. `POST /api/payment-task-center/actions/query-pending-payments` 的人工与自动模式均要求支付单为 `WAIT_CALLBACK`、预付单未过期且存在支付尝试。
+1. `POST /api/payment-task-center/actions/query-pending-payments` 的人工与自动模式均要求支付单为 `WAIT_CALLBACK` 且存在支付尝试；预付单是否过期不再作为排除条件。
 2. 首次等待阈值 `minAgeSeconds` 以该支付单最新 `t_payment_attempt.created_at` 为起点；同一渠道的批次排名也按最新尝试时间和尝试主键排序，不使用支付单创建时间。
 3. 自动模式在首次等待之外继续应用既有查询历史指数退避；人工批量模式绕过历史退避但不绕过首次等待、渠道批次上限或总批次上限。
 4. 缺少支付尝试的 `WAIT_CALLBACK` 异常数据不进入候选和积压计数，调用方应走数据异常排查而不是直接调用渠道查单。
+
+### 14.29 过期支付关闭与成功恢复规则
+
+1. `POST /api/payment-task-center/actions/close-expired-payments` 仅关闭仍为 `PREPAY_CREATED`、渠道交易号为空、不存在支付尝试且预付单已过期的支付单；更新时再次校验条件，并发提交已开始时不写关闭事件。
+2. 存在支付尝试的 `WAIT_CALLBACK` 即使预付单已过期，仍计入达到等待阈值的人工和自动查单候选；自动模式继续使用查询历史指数退避、最大间隔、渠道批次配额和限流。
+3. 可信成功回调或主动查单通过同一条件更新抢占成功收口权。普通 `PAYMENT_CLOSED` 不可重开；历史上带 `PAYMENT_EXPIRED_CLOSED` 事件的关闭单允许恢复为 `SUCCESS`，且只有抢占成功者记账和发布成功事件。
+4. 当前接口没有实现真实渠道关闭或撤销调用，非成功渠道结果不会被本地过期任务推断为渠道已关闭；生产接入需补渠道终态码表、关闭请求幂等、关闭与成功竞态及对账规则。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
