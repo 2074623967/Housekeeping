@@ -11,6 +11,7 @@ import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentConfigToggleRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
 import com.abc123.hsp.dto.PaymentProtocolUpsertRequestDTO;
@@ -31,6 +32,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleValidationDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleValidationRequestDTO;
 import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolConfigEntity;
 import com.abc123.hsp.entity.PaymentProtocolReviewEntity;
 import com.abc123.hsp.entity.PaymentProtocolVersionEntity;
@@ -930,22 +932,27 @@ class PaymentConfigServiceImplTest {
 
     @Test
     void shouldToggleIssueDutyRosterStatus() {
-        PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
-        request.setConfigCode("DUTY_WAIT_CALLBACK_P1");
+        PaymentIssueDutyRosterStatusReviewRequestDTO request =
+                new PaymentIssueDutyRosterStatusReviewRequestDTO();
+        request.setRosterCode("duty_wait_callback_p1");
         request.setEnabled(false);
-        when(paymentConfigMapper.updateIssueDutyRosterStatus("DUTY_WAIT_CALLBACK_P1", "DISABLED", "danger")).thenReturn(1);
-        when(paymentConfigMapper.findChannels()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findProtocols()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findProtocolTypeOptions()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findReturnCodeMappings()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findGateways()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findControlPolicies()).thenReturn(Collections.emptyList());
-        when(paymentConfigMapper.findIssueDutyRosters()).thenReturn(Collections.emptyList());
+        request.setRequester("maker-a");
+        request.setChangeReason("暂停该值班路由");
+        PaymentIssueDutyRosterEntity current = buildIssueDutyRosterEntity("ENABLED");
+        current.setRosterCode("DUTY_WAIT_CALLBACK_P1");
+        when(paymentConfigMapper.findIssueDutyRosterByCodeForUpdate("DUTY_WAIT_CALLBACK_P1"))
+                .thenReturn(current);
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).toggleIssueDutyRoster(request);
 
-        verify(paymentConfigMapper).updateIssueDutyRosterStatus("DUTY_WAIT_CALLBACK_P1", "DISABLED", "danger");
+        verify(paymentConfigMapper).insertIssueDutyRosterReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "STATUS_CHANGE".equals(review.getOperationType())
+                        && "DUTY_WAIT_CALLBACK_P1".equals(review.getPendingRosterCode())
+                        && "DISABLED".equals(review.getCandidateStatus())
+                        && review.getBaseFingerprint().length() == 64));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateIssueDutyRoster(org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterEntity.class));
     }
 
     @Test
@@ -964,48 +971,55 @@ class PaymentConfigServiceImplTest {
     @Test
     void shouldCreateIssueDutyRoster() {
         PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
-        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(null);
-        mockOverviewDependencies();
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request);
 
-        ArgumentCaptor<PaymentIssueDutyRosterEntity> entityCaptor = ArgumentCaptor.forClass(PaymentIssueDutyRosterEntity.class);
-        verify(paymentConfigMapper).insertIssueDutyRoster(entityCaptor.capture());
-        org.junit.jupiter.api.Assertions.assertEquals("待回调未收口", entityCaptor.getValue().getIssueType());
-        org.junit.jupiter.api.Assertions.assertEquals("P1", entityCaptor.getValue().getSeverity());
-        org.junit.jupiter.api.Assertions.assertEquals("支付后端值班组", entityCaptor.getValue().getResponsibilityGroup());
-        org.junit.jupiter.api.Assertions.assertEquals("1,2,3,4,5", entityCaptor.getValue().getWeekdayScope());
-        org.junit.jupiter.api.Assertions.assertEquals("WORKDAY_ONLY", entityCaptor.getValue().getHolidayStrategy());
-        org.junit.jupiter.api.Assertions.assertEquals("支付技术负责人", entityCaptor.getValue().getEscalationReceiver());
-        org.junit.jupiter.api.Assertions.assertEquals("30分钟未确认升级支付技术负责人", entityCaptor.getValue().getEscalationPolicy());
-        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(30), entityCaptor.getValue().getEscalationTimeoutMinutes());
+        ArgumentCaptor<PaymentIssueDutyRosterReviewEntity> reviewCaptor =
+                ArgumentCaptor.forClass(PaymentIssueDutyRosterReviewEntity.class);
+        verify(paymentConfigMapper).insertIssueDutyRosterReview(reviewCaptor.capture());
+        PaymentIssueDutyRosterReviewEntity review = reviewCaptor.getValue();
+        org.junit.jupiter.api.Assertions.assertEquals("CREATE", review.getOperationType());
+        org.junit.jupiter.api.Assertions.assertEquals("待回调未收口", review.getIssueType());
+        org.junit.jupiter.api.Assertions.assertEquals("P1", review.getSeverity());
+        org.junit.jupiter.api.Assertions.assertEquals("支付后端值班组", review.getResponsibilityGroup());
+        org.junit.jupiter.api.Assertions.assertEquals("1,2,3,4,5", review.getWeekdayScope());
+        org.junit.jupiter.api.Assertions.assertEquals("WORKDAY_ONLY", review.getHolidayStrategy());
+        org.junit.jupiter.api.Assertions.assertEquals("支付技术负责人", review.getEscalationReceiver());
+        org.junit.jupiter.api.Assertions.assertEquals("30分钟未确认升级支付技术负责人", review.getEscalationPolicy());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(30), review.getEscalationTimeoutMinutes());
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertIssueDutyRoster(org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterEntity.class));
     }
 
     @Test
     void shouldUpdateIssueDutyRoster() {
         PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
-        PaymentIssueDutyRosterEntity entity = new PaymentIssueDutyRosterEntity();
-        entity.setRosterCode("DUTY_NEW_P1");
-        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(entity);
-        mockOverviewDependencies();
+        PaymentIssueDutyRosterEntity entity = buildIssueDutyRosterEntity("ENABLED");
+        when(paymentConfigMapper.findIssueDutyRosterByCodeForUpdate("DUTY_NEW_P1")).thenReturn(entity);
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).updateIssueDutyRoster("DUTY_NEW_P1", request);
 
-        verify(paymentConfigMapper).updateIssueDutyRoster(org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterEntity.class));
+        verify(paymentConfigMapper).insertIssueDutyRosterReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "UPDATE".equals(review.getOperationType())
+                        && review.getBaseFingerprint().length() == 64));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateIssueDutyRoster(org.mockito.ArgumentMatchers.any(PaymentIssueDutyRosterEntity.class));
     }
 
     @Test
     void shouldNormalizeIssueDutyRosterWeekdayScope() {
         PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
         request.setWeekdayScope("5,1,3,3");
-        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(null);
-        mockOverviewDependencies();
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request);
 
-        ArgumentCaptor<PaymentIssueDutyRosterEntity> entityCaptor = ArgumentCaptor.forClass(PaymentIssueDutyRosterEntity.class);
-        verify(paymentConfigMapper).insertIssueDutyRoster(entityCaptor.capture());
-        org.junit.jupiter.api.Assertions.assertEquals("5,1,3", entityCaptor.getValue().getWeekdayScope());
+        ArgumentCaptor<PaymentIssueDutyRosterReviewEntity> reviewCaptor =
+                ArgumentCaptor.forClass(PaymentIssueDutyRosterReviewEntity.class);
+        verify(paymentConfigMapper).insertIssueDutyRosterReview(reviewCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("5,1,3", reviewCaptor.getValue().getWeekdayScope());
     }
 
     @Test
@@ -1035,15 +1049,15 @@ class PaymentConfigServiceImplTest {
         PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
         request.setEffectiveStartHour(22);
         request.setEffectiveEndHour(6);
-        when(paymentConfigMapper.findIssueDutyRosterByCode("DUTY_NEW_P1")).thenReturn(null);
-        mockOverviewDependencies();
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
 
         new PaymentConfigServiceImpl(paymentConfigMapper).createIssueDutyRoster(request);
 
-        ArgumentCaptor<PaymentIssueDutyRosterEntity> entityCaptor = ArgumentCaptor.forClass(PaymentIssueDutyRosterEntity.class);
-        verify(paymentConfigMapper).insertIssueDutyRoster(entityCaptor.capture());
-        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(22), entityCaptor.getValue().getEffectiveStartHour());
-        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(6), entityCaptor.getValue().getEffectiveEndHour());
+        ArgumentCaptor<PaymentIssueDutyRosterReviewEntity> reviewCaptor =
+                ArgumentCaptor.forClass(PaymentIssueDutyRosterReviewEntity.class);
+        verify(paymentConfigMapper).insertIssueDutyRosterReview(reviewCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(22), reviewCaptor.getValue().getEffectiveStartHour());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(6), reviewCaptor.getValue().getEffectiveEndHour());
     }
 
     @Test
@@ -1739,7 +1753,32 @@ class PaymentConfigServiceImplTest {
         request.setWeekdayScope("1,2,3,4,5");
         request.setHolidayStrategy("WORKDAY_ONLY");
         request.setEnabled(true);
+        request.setRequester("maker-a");
+        request.setChangeReason("调整异常告警值班路由");
         return request;
+    }
+
+    private PaymentIssueDutyRosterEntity buildIssueDutyRosterEntity(String status) {
+        PaymentIssueDutyRosterUpsertRequestDTO request = buildIssueDutyRosterRequest();
+        PaymentIssueDutyRosterEntity entity = new PaymentIssueDutyRosterEntity();
+        entity.setRosterCode(request.getRosterCode());
+        entity.setIssueType(request.getIssueType());
+        entity.setSeverity(request.getSeverity());
+        entity.setResponsibilityGroup(request.getResponsibilityGroup());
+        entity.setReceiver(request.getReceiver());
+        entity.setNotifyChannels(request.getNotifyChannels());
+        entity.setEscalationLevel(request.getEscalationLevel());
+        entity.setEscalationReceiver(request.getEscalationReceiver());
+        entity.setEscalationPolicy(request.getEscalationPolicy());
+        entity.setEscalationTimeoutMinutes(request.getEscalationTimeoutMinutes());
+        entity.setScheduleTag(request.getScheduleTag());
+        entity.setEffectiveStartHour(request.getEffectiveStartHour());
+        entity.setEffectiveEndHour(request.getEffectiveEndHour());
+        entity.setWeekdayScope(request.getWeekdayScope());
+        entity.setHolidayStrategy(request.getHolidayStrategy());
+        entity.setStatus(status);
+        entity.setStatusType("ENABLED".equals(status) ? "success" : "danger");
+        return entity;
     }
 
     private PaymentProtocolTypeOptionDTO buildProtocolTypeOption() {

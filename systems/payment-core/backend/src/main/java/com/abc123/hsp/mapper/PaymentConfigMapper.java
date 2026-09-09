@@ -11,6 +11,7 @@ import com.abc123.hsp.dto.PaymentControlPolicySelfCheckItemDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolTypeOptionDTO;
@@ -22,6 +23,7 @@ import com.abc123.hsp.dto.PaymentRouteRuleVersionDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeImportReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.entity.PaymentGatewayConfigEntity;
 import com.abc123.hsp.entity.PaymentGatewayReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
@@ -225,10 +227,20 @@ public interface PaymentConfigMapper {
      */
     List<PaymentIssueDutyRosterDTO> findIssueDutyRosters();
 
-    /**
-     * 按路由编码查询异常告警值班路由配置。
-     */
-    PaymentIssueDutyRosterEntity findIssueDutyRosterByCode(@Param("rosterCode") String rosterCode);
+    /** 按路由编码加锁查询完整值班路由运行配置。 */
+    PaymentIssueDutyRosterEntity findIssueDutyRosterByCodeForUpdate(
+            @Param("rosterCode") String rosterCode);
+
+    /** 查询异常告警值班路由配置变更复核申请。 */
+    List<PaymentIssueDutyRosterReviewDTO> findIssueDutyRosterReviews();
+
+    /** 加锁查询异常告警值班路由配置变更复核申请。 */
+    PaymentIssueDutyRosterReviewEntity findIssueDutyRosterReviewForUpdate(
+            @Param("requestNo") String requestNo);
+
+    /** 按唯一占位加锁查询值班路由待复核申请。 */
+    PaymentIssueDutyRosterReviewEntity findPendingIssueDutyRosterReviewForUpdate(
+            @Param("pendingRosterCode") String pendingRosterCode);
 
     /**
      * 按来源应用标识查询支付控制策略配置。
@@ -376,6 +388,16 @@ public interface PaymentConfigMapper {
      */
     int updateIssueDutyRoster(PaymentIssueDutyRosterEntity entity);
 
+    /** 新增异常告警值班路由配置变更复核申请。 */
+    int insertIssueDutyRosterReview(PaymentIssueDutyRosterReviewEntity entity);
+
+    /** 完成值班路由配置变更复核并释放唯一待办占位。 */
+    int completeIssueDutyRosterReview(@Param("requestNo") String requestNo,
+                                      @Param("reviewStatus") String reviewStatus,
+                                      @Param("reviewStatusType") String reviewStatusType,
+                                      @Param("reviewer") String reviewer,
+                                      @Param("reviewComment") String reviewComment);
+
     /**
      * 更新渠道返回码映射启停状态。
      */
@@ -469,10 +491,4 @@ public interface PaymentConfigMapper {
                                      @Param("selfCheckStatusType") String selfCheckStatusType,
                                      @Param("selfCheckMessage") String selfCheckMessage);
 
-    /**
-     * 更新异常告警值班路由启停状态。
-     */
-    int updateIssueDutyRosterStatus(@Param("rosterCode") String rosterCode,
-                                    @Param("status") String status,
-                                    @Param("statusType") String statusType);
 }

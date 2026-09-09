@@ -40,4 +40,8 @@ public class PaymentIssueDutyRosterUpsertRequestDTO {
     private String holidayStrategy;
     /** 是否启用。 */
     private Boolean enabled;
+    /** 申请人声明。 */
+    private String requester;
+    /** 变更原因。 */
+    private String changeReason;
 }

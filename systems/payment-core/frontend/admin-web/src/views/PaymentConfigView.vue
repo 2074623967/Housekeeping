@@ -29,6 +29,13 @@ const editingControlPolicyId = ref("");
 const controlPolicyForm = ref(createControlPolicyForm());
 const alertProviders = ref([]);
 const issueDutyRosters = ref([]);
+const issueDutyRosterReviews = ref([]);
+const isIssueDutyRosterReviewLoading = ref(false);
+const issueDutyRosterReviewError = ref("");
+const issueDutyRosterActionRequester = ref("");
+const issueDutyRosterActionReason = ref("");
+const issueDutyRosterReviewer = ref("");
+const issueDutyRosterReviewComment = ref("");
 const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
@@ -239,7 +246,9 @@ function createRosterForm() {
     effectiveEndHour: 23,
     weekdayScope: "1,2,3,4,5",
     holidayStrategy: "WORKDAY_ONLY",
-    enabled: true
+    enabled: true,
+    requester: "",
+    changeReason: ""
   };
 }
 
@@ -1470,12 +1479,31 @@ async function handleProtocolReview(review, approved) {
 }
 
 async function toggleIssueDutyRoster(roster) {
-  await toggleConfig(
-    roster.rosterCode,
-    roster.status !== "ENABLED",
-    "异常告警值班路由",
-    paymentConfigApi.toggleIssueDutyRoster
-  );
+  if (!issueDutyRosterActionRequester.value || !issueDutyRosterActionReason.value) {
+    actionMessage.value = "值班路由启停申请失败：请先填写申请人声明和申请原因。";
+    return;
+  }
+  const enabled = roster.status !== "ENABLED";
+  const actionLabel = enabled ? "启用" : "停用";
+  if (!window.confirm(`确认提交值班路由 ${roster.rosterCode} 的${actionLabel}复核申请？运行态暂不改变。`)) {
+    return;
+  }
+  activeConfigCode.value = roster.rosterCode;
+  actionMessage.value = "";
+  try {
+    issueDutyRosterReviews.value = await paymentConfigApi.toggleIssueDutyRoster({
+      rosterCode: roster.rosterCode,
+      enabled,
+      requester: issueDutyRosterActionRequester.value,
+      changeReason: issueDutyRosterActionReason.value
+    });
+    issueDutyRosterActionReason.value = "";
+    actionMessage.value = `值班路由 ${roster.rosterCode} 的${actionLabel}申请已提交，运行态尚未改变。`;
+  } catch (error) {
+    actionMessage.value = `值班路由启停申请失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
 }
 
 function startCreateRoster() {
@@ -1487,6 +1515,7 @@ function startCreateRoster() {
 function startEditRoster(roster) {
   editingRosterCode.value = roster.rosterCode;
   rosterForm.value = {
+    ...createRosterForm(),
     rosterCode: roster.rosterCode,
     issueType: roster.issueType,
     severity: roster.severity,
@@ -1502,25 +1531,83 @@ function startEditRoster(roster) {
     effectiveEndHour: roster.effectiveEndHour,
     weekdayScope: roster.weekdayScope || "1,2,3,4,5,6,7",
     holidayStrategy: roster.holidayStrategy || "ALL_DAYS",
-    enabled: roster.status === "ENABLED"
+    enabled: roster.status === "ENABLED",
+    requester: "",
+    changeReason: ""
   };
   actionMessage.value = `正在编辑值班路由 ${roster.rosterCode}`;
 }
 
 async function submitRosterForm() {
+  if (!rosterForm.value.requester || !rosterForm.value.changeReason) {
+    actionMessage.value = "值班路由提交复核失败：请填写申请人声明和申请原因。";
+    return;
+  }
   activeConfigCode.value = editingRosterCode.value || rosterForm.value.rosterCode;
   actionMessage.value = "";
   try {
-    const overview = editingRosterCode.value
+    const submittedRosterCode = editingRosterCode.value || rosterForm.value.rosterCode;
+    const updateOperation = Boolean(editingRosterCode.value);
+    issueDutyRosterReviews.value = editingRosterCode.value
       ? await paymentConfigApi.updateIssueDutyRoster(editingRosterCode.value, rosterForm.value)
       : await paymentConfigApi.createIssueDutyRoster(rosterForm.value);
-    applyOverview(overview);
-    actionMessage.value = editingRosterCode.value
-      ? `异常告警值班路由 ${editingRosterCode.value} 已更新。`
-      : `异常告警值班路由 ${rosterForm.value.rosterCode} 已新增。`;
     startCreateRoster();
+    actionMessage.value = updateOperation
+      ? `值班路由 ${submittedRosterCode} 的修改候选已提交，运行态尚未改变。`
+      : `值班路由 ${submittedRosterCode} 的新增候选已提交，运行态尚未改变。`;
   } catch (error) {
-    actionMessage.value = `异常告警值班路由保存失败：${error.message}`;
+    actionMessage.value = `值班路由提交复核失败：${error.message}`;
+  } finally {
+    activeConfigCode.value = "";
+  }
+}
+
+async function loadIssueDutyRosterReviews() {
+  isIssueDutyRosterReviewLoading.value = true;
+  issueDutyRosterReviewError.value = "";
+  try {
+    issueDutyRosterReviews.value = await paymentConfigApi.getIssueDutyRosterReviews();
+  } catch (error) {
+    issueDutyRosterReviewError.value = error.message;
+  } finally {
+    isIssueDutyRosterReviewLoading.value = false;
+  }
+}
+
+async function handleIssueDutyRosterReview(review, approved) {
+  if (!issueDutyRosterReviewer.value) {
+    actionMessage.value = "值班路由复核处理失败：复核人声明不能为空。";
+    return;
+  }
+  if (!issueDutyRosterReviewComment.value) {
+    actionMessage.value = `值班路由复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  const confirmed = window.confirm(approved
+    ? `确认通过申请 ${review.requestNo} 并将候选值班路由写入运行态？`
+    : `确认驳回申请 ${review.requestNo}？运行态不会改变。`);
+  if (!confirmed) {
+    return;
+  }
+  activeConfigCode.value = `issue-duty-roster-review:${review.requestNo}`;
+  actionMessage.value = "";
+  try {
+    const payload = {
+      reviewer: issueDutyRosterReviewer.value,
+      reviewComment: issueDutyRosterReviewComment.value
+    };
+    issueDutyRosterReviews.value = approved
+      ? await paymentConfigApi.approveIssueDutyRosterReview(review.requestNo, payload)
+      : await paymentConfigApi.rejectIssueDutyRosterReview(review.requestNo, payload);
+    if (approved) {
+      await loadOverview();
+    }
+    issueDutyRosterReviewComment.value = "";
+    actionMessage.value = approved
+      ? `值班路由申请 ${review.requestNo} 已通过，候选配置已写入运行态。`
+      : `值班路由申请 ${review.requestNo} 已驳回，运行态未改变。`;
+  } catch (error) {
+    actionMessage.value = `值班路由复核处理失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1535,6 +1622,7 @@ onMounted(() => {
   loadReturnCodeImportReviews();
   loadGatewayReviews();
   loadControlPolicyReviews();
+  loadIssueDutyRosterReviews();
 });
 
 function exportGovernanceSnapshot(section = "ALL") {
@@ -1552,7 +1640,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
-        <span class="badge info">配置中心 V1.18</span>
+        <span class="badge info">配置中心 V1.19</span>
       </div>
     </div>
 
@@ -3574,7 +3662,7 @@ function exportGovernanceSnapshot(section = "ALL") {
             <div class="section-title">
               <div>
                 <h3>{{ editingRosterCode ? "编辑值班路由" : "新增值班路由" }}</h3>
-                <p class="meta">维护异常类型与严重等级对应的责任组、接收人、通知通道和升级班次，供任务中心自动派发使用</p>
+                <p class="meta">新增和编辑仅提交完整候选，异人声明复核通过后才写入运行态</p>
               </div>
             </div>
 
@@ -3654,6 +3742,14 @@ function exportGovernanceSnapshot(section = "ALL") {
                   <option :value="false">停用</option>
                 </select>
               </label>
+              <label>
+                申请人声明
+                <input v-model.trim="rosterForm.requester" maxlength="64" />
+              </label>
+              <label class="wide-field">
+                申请原因
+                <input v-model.trim="rosterForm.changeReason" maxlength="255" />
+              </label>
             </div>
 
             <div style="display: flex; gap: 12px; margin-top: 16px;">
@@ -3662,9 +3758,111 @@ function exportGovernanceSnapshot(section = "ALL") {
                 :disabled="activeConfigCode === (editingRosterCode || rosterForm.rosterCode)"
                 @click="submitRosterForm"
               >
-                {{ editingRosterCode ? "保存修改" : "新增路由" }}
+                {{ editingRosterCode ? "提交修改复核" : "提交新增复核" }}
               </button>
               <button class="button secondary" @click="startCreateRoster">重置表单</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-bottom: 16px;">
+            <div class="section-title">
+              <div>
+                <h3>值班路由配置变更复核</h3>
+                <p class="meta">新增、编辑和启停共用同一路由编码待办；自声明异人约束不代表可信登录身份或正式审批</p>
+              </div>
+              <button class="button secondary" :disabled="isIssueDutyRosterReviewLoading" @click="loadIssueDutyRosterReviews">
+                {{ isIssueDutyRosterReviewLoading ? "加载中..." : "刷新申请" }}
+              </button>
+            </div>
+            <div class="filter-grid">
+              <label>
+                启停申请人声明
+                <input v-model.trim="issueDutyRosterActionRequester" maxlength="64" placeholder="提交启停申请时必填" />
+              </label>
+              <label>
+                启停申请原因
+                <input v-model.trim="issueDutyRosterActionReason" maxlength="255" placeholder="提交启停申请时必填" />
+              </label>
+              <label>
+                复核人声明
+                <input v-model.trim="issueDutyRosterReviewer" maxlength="64" placeholder="必填，且须与申请人不同" />
+              </label>
+              <label>
+                复核意见 / 驳回原因
+                <input v-model.trim="issueDutyRosterReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
+              </label>
+            </div>
+            <div v-if="issueDutyRosterReviewError" class="error-banner">
+              值班路由复核申请加载失败：{{ issueDutyRosterReviewError }}
+            </div>
+            <div v-if="isIssueDutyRosterReviewLoading" class="state-box">值班路由复核申请加载中...</div>
+            <div v-else-if="!issueDutyRosterReviews.length" class="state-box">当前暂无值班路由配置复核申请</div>
+            <div v-else class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>申请号</th>
+                    <th>操作</th>
+                    <th>候选值班路由</th>
+                    <th>班次与升级</th>
+                    <th>候选状态</th>
+                    <th>申请声明</th>
+                    <th>复核状态</th>
+                    <th>复核记录</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="review in issueDutyRosterReviews" :key="review.requestNo">
+                    <td>{{ review.requestNo }}</td>
+                    <td>{{ review.operationType }}</td>
+                    <td>
+                      {{ review.rosterCode }} / {{ review.issueType }} / {{ review.severity }}
+                      <div class="muted-text">{{ review.responsibilityGroup }} / {{ review.receiver }}</div>
+                      <div class="muted-text">{{ review.notifyChannels }} / 基线 {{ review.baseFingerprint?.slice(0, 12) || "新增" }}</div>
+                    </td>
+                    <td>
+                      {{ review.scheduleTag }} / {{ review.effectiveStartHour }}:00-{{ review.effectiveEndHour }}:00
+                      <div class="muted-text">{{ formatWeekdayScopeLabel(review.weekdayScope) }} / {{ formatHolidayStrategyLabel(review.holidayStrategy) }}</div>
+                      <div class="muted-text">{{ review.escalationLevel }} / {{ review.escalationReceiver }} / {{ review.escalationTimeoutMinutes }}分钟</div>
+                    </td>
+                    <td><span :class="['badge', review.candidateStatusType]">{{ review.candidateStatus }}</span></td>
+                    <td>
+                      {{ review.requester }}
+                      <div class="muted-text">{{ review.requestReason }} / {{ review.identityTrustLevel }}</div>
+                    </td>
+                    <td><span :class="['badge', review.reviewStatusType]">{{ review.reviewStatus }}</span></td>
+                    <td>
+                      {{ review.reviewer || "-" }}
+                      <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                    </td>
+                    <td>
+                      {{ review.createdAt }}
+                      <div class="muted-text">{{ review.reviewedAt || "-" }}</div>
+                    </td>
+                    <td>
+                      <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleIssueDutyRosterReview(review, true)"
+                        >
+                          通过并应用
+                        </button>
+                        <button
+                          class="link-button"
+                          :disabled="Boolean(activeConfigCode)"
+                          @click="handleIssueDutyRosterReview(review, false)"
+                        >
+                          驳回
+                        </button>
+                      </template>
+                      <span v-else class="muted-text">已处理</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -3720,7 +3918,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                       :disabled="activeConfigCode === roster.rosterCode"
                       @click="toggleIssueDutyRoster(roster)"
                     >
-                      {{ roster.status === "ENABLED" ? "停用" : "启用" }}
+                      {{ roster.status === "ENABLED" ? "申请停用" : "申请启用" }}
                     </button>
                   </td>
                 </tr>

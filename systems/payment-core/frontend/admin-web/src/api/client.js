@@ -928,6 +928,15 @@ export const paymentConfigApi = {
   rollbackProtocol: (protocolCode, payload) => postJson(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/rollback`, payload),
   createIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters", payload),
   updateIssueDutyRoster: (rosterCode, payload) => request(`/api/payment-config/issue-duty-rosters/${rosterCode}`, buildJsonRequestOptions("PUT", payload)),
+  getIssueDutyRosterReviews: () => request("/api/payment-config/issue-duty-rosters/reviews"),
+  approveIssueDutyRosterReview: (requestNo, payload) => postJson(
+    `/api/payment-config/issue-duty-rosters/reviews/${encodeURIComponent(requestNo)}/approve`,
+    payload
+  ),
+  rejectIssueDutyRosterReview: (requestNo, payload) => postJson(
+    `/api/payment-config/issue-duty-rosters/reviews/${encodeURIComponent(requestNo)}/reject`,
+    payload
+  ),
   submitReturnCodeStatusReview: (payload) => postJson("/api/payment-config/return-codes/toggle", payload),
   getReturnCodeReviews: () => request("/api/payment-config/return-codes/reviews"),
   approveReturnCodeReview: (requestNo, payload) => postJson(
@@ -972,6 +981,6 @@ export const paymentConfigApi = {
     payload
   ),
   toggleAlertProvider: (configCode, enabled) => postJson("/api/payment-config/alert-providers/toggle", { configCode, enabled }),
-  toggleIssueDutyRoster: (configCode, enabled) => postJson("/api/payment-config/issue-duty-rosters/toggle", { configCode, enabled }),
+  toggleIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters/toggle", payload),
   runControlPolicySelfCheck: (configCode) => postJson("/api/payment-config/control-policies/self-check", { configCode })
 };

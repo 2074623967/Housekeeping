@@ -26,6 +26,9 @@ import com.abc123.hsp.dto.PaymentControlPolicyUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolConfigDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
@@ -57,6 +60,7 @@ import com.abc123.hsp.dto.PaymentReturnCodeReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeReviewDTO;
 import com.abc123.hsp.dto.PaymentReturnCodeStatusReviewRequestDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
+import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.entity.PaymentChannelConfigEntity;
 import com.abc123.hsp.entity.PaymentChannelReviewEntity;
 import com.abc123.hsp.entity.PaymentControlPolicyEntity;
@@ -723,25 +727,84 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO createIssueDutyRoster(PaymentIssueDutyRosterUpsertRequestDTO request) {
-        PaymentIssueDutyRosterEntity entity = buildIssueDutyRosterEntity(request, null);
-        if (paymentConfigMapper.findIssueDutyRosterByCode(entity.getRosterCode()) != null) {
-            throw new IllegalArgumentException("异常告警值班路由编码已存在");
-        }
-        paymentConfigMapper.insertIssueDutyRoster(entity);
-        return overview();
+    public List<PaymentIssueDutyRosterReviewDTO> createIssueDutyRoster(
+            PaymentIssueDutyRosterUpsertRequestDTO request) {
+        return submitIssueDutyRosterReview(request, null);
     }
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO updateIssueDutyRoster(String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request) {
-        String normalizedRosterCode = requireText(rosterCode, "值班路由编码不能为空");
-        if (paymentConfigMapper.findIssueDutyRosterByCode(normalizedRosterCode) == null) {
-            throw new IllegalArgumentException("异常告警值班路由配置不存在");
+    public List<PaymentIssueDutyRosterReviewDTO> updateIssueDutyRoster(
+            String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request) {
+        return submitIssueDutyRosterReview(request, rosterCode);
+    }
+
+    @Override
+    public List<PaymentIssueDutyRosterReviewDTO> listIssueDutyRosterReviews() {
+        return paymentConfigMapper.findIssueDutyRosterReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentIssueDutyRosterReviewDTO> approveIssueDutyRosterReview(
+            String requestNo, PaymentIssueDutyRosterReviewActionRequestDTO request) {
+        PaymentIssueDutyRosterReviewEntity review = requirePendingIssueDutyRosterReview(requestNo);
+        String reviewer = requireDistinctIssueDutyRosterReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "复核意见不能为空");
+        boolean createOperation = "CREATE".equals(review.getOperationType());
+        if (!createOperation
+                && !"UPDATE".equals(review.getOperationType())
+                && !"STATUS_CHANGE".equals(review.getOperationType())) {
+            throw new IllegalArgumentException("异常告警值班路由复核操作类型不支持");
         }
-        PaymentIssueDutyRosterEntity entity = buildIssueDutyRosterEntity(request, normalizedRosterCode);
-        paymentConfigMapper.updateIssueDutyRoster(entity);
-        return overview();
+        if (!STATUS_ENABLED.equals(review.getCandidateStatus())
+                && !STATUS_DISABLED.equals(review.getCandidateStatus())) {
+            throw new IllegalArgumentException("异常告警值班路由候选状态不支持");
+        }
+        PaymentIssueDutyRosterEntity current = paymentConfigMapper.findIssueDutyRosterByCodeForUpdate(
+                review.getRosterCode());
+        if (createOperation) {
+            if (current != null) {
+                throw new IllegalArgumentException("异常告警值班路由已存在，复核申请基线已失效");
+            }
+        } else if (current == null || review.getBaseFingerprint() == null
+                || !review.getBaseFingerprint().equals(fingerprintIssueDutyRoster(current))) {
+            throw new IllegalArgumentException("异常告警值班路由配置已变化，请重新提交复核申请");
+        }
+        PaymentIssueDutyRosterEntity candidate = buildIssueDutyRosterEntity(
+                toIssueDutyRosterUpsertRequest(review), review.getRosterCode());
+        int affectedRows;
+        try {
+            affectedRows = createOperation
+                    ? paymentConfigMapper.insertIssueDutyRoster(candidate)
+                    : paymentConfigMapper.updateIssueDutyRoster(candidate);
+        } catch (DuplicateKeyException exception) {
+            if (createOperation) {
+                throw new IllegalArgumentException("异常告警值班路由已存在，复核申请基线已失效", exception);
+            }
+            throw exception;
+        }
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException(createOperation
+                    ? "异常告警值班路由新增失败" : "异常告警值班路由配置不存在");
+        }
+        completeIssueDutyRosterReview(
+                review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
+        return paymentConfigMapper.findIssueDutyRosterReviews();
+    }
+
+    @Override
+    @Transactional
+    public List<PaymentIssueDutyRosterReviewDTO> rejectIssueDutyRosterReview(
+            String requestNo, PaymentIssueDutyRosterReviewActionRequestDTO request) {
+        PaymentIssueDutyRosterReviewEntity review = requirePendingIssueDutyRosterReview(requestNo);
+        String reviewer = requireDistinctIssueDutyRosterReviewer(review, request);
+        String reviewComment = requireReviewText(
+                request == null ? null : request.getReviewComment(), "驳回原因不能为空");
+        completeIssueDutyRosterReview(
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        return paymentConfigMapper.findIssueDutyRosterReviews();
     }
 
     @Override
@@ -1293,17 +1356,42 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     @Transactional
-    public PaymentConfigOverviewDTO toggleIssueDutyRoster(PaymentConfigToggleRequestDTO request) {
-        String configCode = requireConfigCode(request);
-        int affectedRows = paymentConfigMapper.updateIssueDutyRosterStatus(
-                configCode,
-                resolveStatus(request.getEnabled()),
-                resolveStatusType(request.getEnabled())
-        );
-        if (affectedRows == 0) {
+    public List<PaymentIssueDutyRosterReviewDTO> toggleIssueDutyRoster(
+            PaymentIssueDutyRosterStatusReviewRequestDTO request) {
+        if (request == null || request.getEnabled() == null) {
+            throw new IllegalArgumentException("异常告警值班路由启停状态不能为空");
+        }
+        String rosterCode = requireImportText(request.getRosterCode(), "值班路由编码不能为空", 64)
+                .toUpperCase(Locale.ROOT);
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        if (paymentConfigMapper.findPendingIssueDutyRosterReviewForUpdate(rosterCode) != null) {
+            throw new IllegalArgumentException("该异常告警值班路由已有待复核申请");
+        }
+        PaymentIssueDutyRosterEntity current =
+                paymentConfigMapper.findIssueDutyRosterByCodeForUpdate(rosterCode);
+        if (current == null) {
             throw new IllegalArgumentException("异常告警值班路由配置不存在");
         }
-        return overview();
+        String candidateStatus = resolveStatus(request.getEnabled());
+        if (candidateStatus.equals(current.getStatus())) {
+            throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
+                    ? "异常告警值班路由已启用" : "异常告警值班路由已停用");
+        }
+        PaymentIssueDutyRosterReviewEntity review = new PaymentIssueDutyRosterReviewEntity();
+        copyIssueDutyRosterToReview(current, review);
+        review.setRequestNo("DRR" + UUID.randomUUID().toString().replace("-", ""));
+        review.setOperationType("STATUS_CHANGE");
+        review.setPendingRosterCode(rosterCode);
+        review.setBaseFingerprint(fingerprintIssueDutyRoster(current));
+        review.setCandidateStatus(candidateStatus);
+        review.setCandidateStatusType(resolveStatusType(request.getEnabled()));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertIssueDutyRosterReview(review);
+        return paymentConfigMapper.findIssueDutyRosterReviews();
     }
 
     @Override
@@ -2464,15 +2552,141 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return rule.getPriority() == null ? 99 : rule.getPriority().intValue();
     }
 
+    private List<PaymentIssueDutyRosterReviewDTO> submitIssueDutyRosterReview(
+            PaymentIssueDutyRosterUpsertRequestDTO request, String overrideRosterCode) {
+        if (request == null) {
+            throw new IllegalArgumentException("异常告警值班路由请求不能为空");
+        }
+        String requester = requireReviewIdentity(request.getRequester(), "申请人声明不能为空");
+        String reason = requireReviewText(request.getChangeReason(), "申请原因不能为空");
+        String rosterCode = (StringUtils.hasText(overrideRosterCode)
+                ? requireImportText(overrideRosterCode, "值班路由编码不能为空", 64)
+                : requireImportText(request.getRosterCode(), "值班路由编码不能为空", 64))
+                .toUpperCase(Locale.ROOT);
+        if (paymentConfigMapper.findPendingIssueDutyRosterReviewForUpdate(rosterCode) != null) {
+            throw new IllegalArgumentException("该异常告警值班路由已有待复核申请");
+        }
+        PaymentIssueDutyRosterEntity current =
+                paymentConfigMapper.findIssueDutyRosterByCodeForUpdate(rosterCode);
+        boolean createOperation = !StringUtils.hasText(overrideRosterCode);
+        if (createOperation && current != null) {
+            throw new IllegalArgumentException("异常告警值班路由编码已存在");
+        }
+        if (!createOperation && current == null) {
+            throw new IllegalArgumentException("异常告警值班路由配置不存在");
+        }
+        PaymentIssueDutyRosterEntity candidate = buildIssueDutyRosterEntity(request, rosterCode);
+        PaymentIssueDutyRosterReviewEntity review = new PaymentIssueDutyRosterReviewEntity();
+        copyIssueDutyRosterToReview(candidate, review);
+        review.setRequestNo("DRR" + UUID.randomUUID().toString().replace("-", ""));
+        review.setOperationType(createOperation ? "CREATE" : "UPDATE");
+        review.setPendingRosterCode(rosterCode);
+        review.setBaseFingerprint(current == null ? null : fingerprintIssueDutyRoster(current));
+        review.setRequester(requester);
+        review.setRequestReason(reason);
+        review.setReviewStatus("PENDING_REVIEW");
+        review.setReviewStatusType("warn");
+        insertIssueDutyRosterReview(review);
+        return paymentConfigMapper.findIssueDutyRosterReviews();
+    }
+
+    private PaymentIssueDutyRosterReviewEntity requirePendingIssueDutyRosterReview(String requestNo) {
+        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        PaymentIssueDutyRosterReviewEntity review =
+                paymentConfigMapper.findIssueDutyRosterReviewForUpdate(normalizedRequestNo);
+        if (review == null) {
+            throw new IllegalArgumentException("异常告警值班路由复核申请不存在");
+        }
+        if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+            throw new IllegalArgumentException("异常告警值班路由复核申请已处理");
+        }
+        return review;
+    }
+
+    private String requireDistinctIssueDutyRosterReviewer(
+            PaymentIssueDutyRosterReviewEntity review,
+            PaymentIssueDutyRosterReviewActionRequestDTO request) {
+        String reviewer = requireReviewIdentity(
+                request == null ? null : request.getReviewer(), "复核人声明不能为空");
+        if (review.getRequester().equalsIgnoreCase(reviewer)) {
+            throw new IllegalArgumentException("申请人与复核人声明不能相同");
+        }
+        return reviewer;
+    }
+
+    private void completeIssueDutyRosterReview(String requestNo,
+                                               String reviewStatus,
+                                               String reviewStatusType,
+                                               String reviewer,
+                                               String reviewComment) {
+        int affectedRows = paymentConfigMapper.completeIssueDutyRosterReview(
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
+        if (affectedRows == 0) {
+            throw new IllegalArgumentException("异常告警值班路由复核状态已变化，请刷新后重试");
+        }
+    }
+
+    private void insertIssueDutyRosterReview(PaymentIssueDutyRosterReviewEntity review) {
+        try {
+            paymentConfigMapper.insertIssueDutyRosterReview(review);
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("该异常告警值班路由已有待复核申请", exception);
+        }
+    }
+
+    private void copyIssueDutyRosterToReview(
+            PaymentIssueDutyRosterEntity source, PaymentIssueDutyRosterReviewEntity target) {
+        target.setRosterCode(source.getRosterCode());
+        target.setIssueType(source.getIssueType());
+        target.setSeverity(source.getSeverity());
+        target.setResponsibilityGroup(source.getResponsibilityGroup());
+        target.setReceiver(source.getReceiver());
+        target.setNotifyChannels(source.getNotifyChannels());
+        target.setEscalationLevel(source.getEscalationLevel());
+        target.setEscalationReceiver(source.getEscalationReceiver());
+        target.setEscalationPolicy(source.getEscalationPolicy());
+        target.setEscalationTimeoutMinutes(source.getEscalationTimeoutMinutes());
+        target.setScheduleTag(source.getScheduleTag());
+        target.setEffectiveStartHour(source.getEffectiveStartHour());
+        target.setEffectiveEndHour(source.getEffectiveEndHour());
+        target.setWeekdayScope(source.getWeekdayScope());
+        target.setHolidayStrategy(source.getHolidayStrategy());
+        target.setCandidateStatus(source.getStatus());
+        target.setCandidateStatusType(source.getStatusType());
+    }
+
+    private PaymentIssueDutyRosterUpsertRequestDTO toIssueDutyRosterUpsertRequest(
+            PaymentIssueDutyRosterReviewEntity review) {
+        PaymentIssueDutyRosterUpsertRequestDTO request = new PaymentIssueDutyRosterUpsertRequestDTO();
+        request.setRosterCode(review.getRosterCode());
+        request.setIssueType(review.getIssueType());
+        request.setSeverity(review.getSeverity());
+        request.setResponsibilityGroup(review.getResponsibilityGroup());
+        request.setReceiver(review.getReceiver());
+        request.setNotifyChannels(review.getNotifyChannels());
+        request.setEscalationLevel(review.getEscalationLevel());
+        request.setEscalationReceiver(review.getEscalationReceiver());
+        request.setEscalationPolicy(review.getEscalationPolicy());
+        request.setEscalationTimeoutMinutes(review.getEscalationTimeoutMinutes());
+        request.setScheduleTag(review.getScheduleTag());
+        request.setEffectiveStartHour(review.getEffectiveStartHour());
+        request.setEffectiveEndHour(review.getEffectiveEndHour());
+        request.setWeekdayScope(review.getWeekdayScope());
+        request.setHolidayStrategy(review.getHolidayStrategy());
+        request.setEnabled(Boolean.valueOf(STATUS_ENABLED.equals(review.getCandidateStatus())));
+        return request;
+    }
+
     private PaymentIssueDutyRosterEntity buildIssueDutyRosterEntity(PaymentIssueDutyRosterUpsertRequestDTO request,
                                                                     String overrideRosterCode) {
         if (request == null) {
             throw new IllegalArgumentException("异常告警值班路由请求不能为空");
         }
         PaymentIssueDutyRosterEntity entity = new PaymentIssueDutyRosterEntity();
-        entity.setRosterCode(StringUtils.hasText(overrideRosterCode)
+        entity.setRosterCode((StringUtils.hasText(overrideRosterCode)
                 ? overrideRosterCode.trim()
-                : requireText(request.getRosterCode(), "值班路由编码不能为空"));
+                : requireText(request.getRosterCode(), "值班路由编码不能为空"))
+                .toUpperCase(Locale.ROOT));
         entity.setIssueType(requireText(request.getIssueType(), "异常类型不能为空"));
         entity.setSeverity(resolveSeverity(request.getSeverity()));
         entity.setResponsibilityGroup(requireText(request.getResponsibilityGroup(), "责任组不能为空"));
@@ -3131,6 +3345,28 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         appendFingerprintValue(canonical, policy.getStrictMode());
         appendFingerprintValue(canonical, policy.getStatus());
         appendFingerprintValue(canonical, policy.getStatusType());
+        return sha256(canonical.toString());
+    }
+
+    private String fingerprintIssueDutyRoster(PaymentIssueDutyRosterEntity roster) {
+        StringBuilder canonical = new StringBuilder();
+        appendFingerprintValue(canonical, roster.getRosterCode());
+        appendFingerprintValue(canonical, roster.getIssueType());
+        appendFingerprintValue(canonical, roster.getSeverity());
+        appendFingerprintValue(canonical, roster.getResponsibilityGroup());
+        appendFingerprintValue(canonical, roster.getReceiver());
+        appendFingerprintValue(canonical, roster.getNotifyChannels());
+        appendFingerprintValue(canonical, roster.getEscalationLevel());
+        appendFingerprintValue(canonical, roster.getEscalationReceiver());
+        appendFingerprintValue(canonical, roster.getEscalationPolicy());
+        appendFingerprintValue(canonical, roster.getEscalationTimeoutMinutes());
+        appendFingerprintValue(canonical, roster.getScheduleTag());
+        appendFingerprintValue(canonical, roster.getEffectiveStartHour());
+        appendFingerprintValue(canonical, roster.getEffectiveEndHour());
+        appendFingerprintValue(canonical, roster.getWeekdayScope());
+        appendFingerprintValue(canonical, roster.getHolidayStrategy());
+        appendFingerprintValue(canonical, roster.getStatus());
+        appendFingerprintValue(canonical, roster.getStatusType());
         return sha256(canonical.toString());
     }
 

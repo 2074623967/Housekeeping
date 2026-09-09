@@ -1066,7 +1066,8 @@
         ORDER BY issue_type ASC, severity ASC, id ASC
     </select>
 
-    <select id="findIssueDutyRosterByCode" resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
+    <select id="findIssueDutyRosterByCodeForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
         SELECT roster_code AS rosterCode,
                issue_type AS issueType,
                severity,
@@ -1087,6 +1088,89 @@
         FROM t_payment_issue_duty_roster
         WHERE roster_code = #{rosterCode}
         LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findIssueDutyRosterReviews"
+            resultType="com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO">
+        SELECT request_no AS requestNo,
+               roster_code AS rosterCode,
+               operation_type AS operationType,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               receiver,
+               notify_channels AS notifyChannels,
+               escalation_level AS escalationLevel,
+               escalation_receiver AS escalationReceiver,
+               escalation_policy AS escalationPolicy,
+               escalation_timeout_minutes AS escalationTimeoutMinutes,
+               schedule_tag AS scheduleTag,
+               effective_start_hour AS effectiveStartHour,
+               effective_end_hour AS effectiveEndHour,
+               weekday_scope AS weekdayScope,
+               holiday_strategy AS holidayStrategy,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
+               DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
+               'SELF_DECLARED' AS identityTrustLevel
+        FROM t_payment_issue_duty_roster_review
+        ORDER BY CASE WHEN review_status = 'PENDING_REVIEW' THEN 0 ELSE 1 END,
+                 created_at DESC,
+                 id DESC
+    </select>
+
+    <select id="findIssueDutyRosterReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity">
+        SELECT request_no AS requestNo,
+               roster_code AS rosterCode,
+               operation_type AS operationType,
+               issue_type AS issueType,
+               severity,
+               responsibility_group AS responsibilityGroup,
+               receiver,
+               notify_channels AS notifyChannels,
+               escalation_level AS escalationLevel,
+               escalation_receiver AS escalationReceiver,
+               escalation_policy AS escalationPolicy,
+               escalation_timeout_minutes AS escalationTimeoutMinutes,
+               schedule_tag AS scheduleTag,
+               effective_start_hour AS effectiveStartHour,
+               effective_end_hour AS effectiveEndHour,
+               weekday_scope AS weekdayScope,
+               holiday_strategy AS holidayStrategy,
+               base_fingerprint AS baseFingerprint,
+               candidate_status AS candidateStatus,
+               candidate_status_type AS candidateStatusType,
+               requester,
+               request_reason AS requestReason,
+               review_status AS reviewStatus,
+               review_status_type AS reviewStatusType,
+               reviewer,
+               review_comment AS reviewComment
+        FROM t_payment_issue_duty_roster_review
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findPendingIssueDutyRosterReviewForUpdate"
+            resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity">
+        SELECT request_no AS requestNo,
+               requester,
+               review_status AS reviewStatus
+        FROM t_payment_issue_duty_roster_review
+        WHERE pending_roster_code = #{pendingRosterCode}
+        LIMIT 1
+        FOR UPDATE
     </select>
 
     <select id="findControlPolicyBySourceAppId" resultType="com.abc123.hsp.dto.PaymentControlPolicyDTO">
@@ -1646,6 +1730,39 @@
         WHERE roster_code = #{rosterCode}
     </update>
 
+    <insert id="insertIssueDutyRosterReview">
+        INSERT INTO t_payment_issue_duty_roster_review (
+            request_no, roster_code, operation_type, issue_type, severity,
+            responsibility_group, receiver, notify_channels, escalation_level,
+            escalation_receiver, escalation_policy, escalation_timeout_minutes,
+            schedule_tag, effective_start_hour, effective_end_hour, weekday_scope,
+            holiday_strategy, pending_roster_code, base_fingerprint, candidate_status,
+            candidate_status_type, requester, request_reason, review_status,
+            review_status_type, created_at, updated_at
+        ) VALUES (
+            #{requestNo}, #{rosterCode}, #{operationType}, #{issueType}, #{severity},
+            #{responsibilityGroup}, #{receiver}, #{notifyChannels}, #{escalationLevel},
+            #{escalationReceiver}, #{escalationPolicy}, #{escalationTimeoutMinutes},
+            #{scheduleTag}, #{effectiveStartHour}, #{effectiveEndHour}, #{weekdayScope},
+            #{holidayStrategy}, #{pendingRosterCode}, #{baseFingerprint}, #{candidateStatus},
+            #{candidateStatusType}, #{requester}, #{requestReason}, #{reviewStatus},
+            #{reviewStatusType}, NOW(), NOW()
+        )
+    </insert>
+
+    <update id="completeIssueDutyRosterReview">
+        UPDATE t_payment_issue_duty_roster_review
+        SET pending_roster_code = NULL,
+            review_status = #{reviewStatus},
+            review_status_type = #{reviewStatusType},
+            reviewer = #{reviewer},
+            review_comment = #{reviewComment},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE request_no = #{requestNo}
+          AND review_status = 'PENDING_REVIEW'
+    </update>
+
     <update id="updateReturnCodeMappingStatus">
         UPDATE t_payment_channel_return_code_map
         SET status = #{status},
@@ -1893,14 +2010,6 @@
             status_type = #{statusType},
             updated_at = NOW()
         WHERE provider_code = #{providerCode}
-    </update>
-
-    <update id="updateIssueDutyRosterStatus">
-        UPDATE t_payment_issue_duty_roster
-        SET status = #{status},
-            status_type = #{statusType},
-            updated_at = NOW()
-        WHERE roster_code = #{rosterCode}
     </update>
 
     <update id="updateControlPolicySelfCheck">

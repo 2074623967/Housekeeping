@@ -15,6 +15,7 @@ DROP TABLE IF EXISTS t_payment_task_lease;
 DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log;
 DROP TABLE IF EXISTS t_payment_channel_query_rate_bucket;
 DROP TABLE IF EXISTS t_payment_task_run_log;
+DROP TABLE IF EXISTS t_payment_issue_duty_roster_review;
 DROP TABLE IF EXISTS t_payment_issue_duty_roster;
 DROP TABLE IF EXISTS t_payment_alert_provider_config;
 DROP TABLE IF EXISTS t_payment_issue_alert_log;
@@ -773,6 +774,45 @@ CREATE TABLE t_payment_issue_duty_roster (
     UNIQUE KEY uk_issue_duty_roster_code (roster_code),
     KEY idx_issue_duty_type_severity (issue_type, severity, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警值班路由表';
+
+CREATE TABLE t_payment_issue_duty_roster_review (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
+    roster_code VARCHAR(64) NOT NULL COMMENT '值班路由编码',
+    operation_type VARCHAR(32) NOT NULL COMMENT '操作类型：CREATE/UPDATE/STATUS_CHANGE',
+    issue_type VARCHAR(64) NOT NULL COMMENT '适用异常类型',
+    severity VARCHAR(32) NOT NULL COMMENT '适用严重等级',
+    responsibility_group VARCHAR(64) NOT NULL COMMENT '责任组',
+    receiver VARCHAR(64) NOT NULL COMMENT '默认值班接收人',
+    notify_channels VARCHAR(64) NOT NULL COMMENT '默认通知通道列表',
+    escalation_level VARCHAR(32) NOT NULL COMMENT '升级等级',
+    escalation_receiver VARCHAR(64) NOT NULL COMMENT '升级接收人',
+    escalation_policy VARCHAR(128) NOT NULL COMMENT '升级策略说明',
+    escalation_timeout_minutes INT NOT NULL COMMENT '升级超时分钟数',
+    schedule_tag VARCHAR(64) NOT NULL COMMENT '值班班次标签',
+    effective_start_hour TINYINT NOT NULL COMMENT '班次生效开始小时',
+    effective_end_hour TINYINT NOT NULL COMMENT '班次生效结束小时',
+    weekday_scope VARCHAR(32) NOT NULL COMMENT '适用星期范围',
+    holiday_strategy VARCHAR(32) NOT NULL COMMENT '日期策略',
+    pending_roster_code VARCHAR(64) DEFAULT NULL COMMENT '值班路由唯一待办占位，完成后置空',
+    base_fingerprint VARCHAR(64) DEFAULT NULL COMMENT '提交时完整运行配置指纹',
+    candidate_status VARCHAR(32) NOT NULL COMMENT '候选状态',
+    candidate_status_type VARCHAR(32) NOT NULL COMMENT '候选状态样式',
+    requester VARCHAR(64) NOT NULL COMMENT '申请人声明',
+    request_reason VARCHAR(255) NOT NULL COMMENT '申请原因',
+    review_status VARCHAR(32) NOT NULL COMMENT '复核状态',
+    review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
+    reviewer VARCHAR(64) DEFAULT NULL COMMENT '复核人声明',
+    review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见',
+    created_at DATETIME NOT NULL COMMENT '申请时间',
+    reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_issue_duty_roster_review_request (request_no),
+    UNIQUE KEY uk_issue_duty_roster_review_pending (pending_roster_code),
+    KEY idx_issue_duty_roster_review_status (review_status, created_at),
+    KEY idx_issue_duty_roster_review_code (roster_code, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='异常告警值班路由配置变更复核表';
 
 CREATE TABLE t_payment_alert_provider_config (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

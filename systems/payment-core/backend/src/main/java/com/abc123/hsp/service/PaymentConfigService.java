@@ -16,6 +16,9 @@ import com.abc123.hsp.dto.PaymentChannelReviewDTO;
 import com.abc123.hsp.dto.PaymentChannelReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
@@ -171,15 +174,24 @@ public interface PaymentConfigService {
     List<PaymentProtocolReviewDTO> submitProtocolRollbackReview(
             String protocolCode, PaymentProtocolRollbackRequestDTO request);
 
-    /**
-     * 新增异常告警值班路由配置。
-     */
-    PaymentConfigOverviewDTO createIssueDutyRoster(PaymentIssueDutyRosterUpsertRequestDTO request);
+    /** 提交异常告警值班路由新增候选，不改变运行态。 */
+    List<PaymentIssueDutyRosterReviewDTO> createIssueDutyRoster(
+            PaymentIssueDutyRosterUpsertRequestDTO request);
 
-    /**
-     * 编辑异常告警值班路由配置。
-     */
-    PaymentConfigOverviewDTO updateIssueDutyRoster(String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request);
+    /** 提交异常告警值班路由编辑候选，不改变运行态。 */
+    List<PaymentIssueDutyRosterReviewDTO> updateIssueDutyRoster(
+            String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request);
+
+    /** 查询异常告警值班路由配置变更复核申请。 */
+    List<PaymentIssueDutyRosterReviewDTO> listIssueDutyRosterReviews();
+
+    /** 通过复核并应用异常告警值班路由完整候选。 */
+    List<PaymentIssueDutyRosterReviewDTO> approveIssueDutyRosterReview(
+            String requestNo, PaymentIssueDutyRosterReviewActionRequestDTO request);
+
+    /** 驳回异常告警值班路由完整候选，不改变运行态。 */
+    List<PaymentIssueDutyRosterReviewDTO> rejectIssueDutyRosterReview(
+            String requestNo, PaymentIssueDutyRosterReviewActionRequestDTO request);
 
     /** 提交渠道返回码启停候选，不改变运行态配置。 */
     List<PaymentReturnCodeReviewDTO> submitReturnCodeStatusReview(
@@ -262,10 +274,9 @@ public interface PaymentConfigService {
      */
     PaymentConfigOverviewDTO runControlPolicySelfCheck(PaymentConfigToggleRequestDTO request);
 
-    /**
-     * 启停异常告警值班路由配置。
-     */
-    PaymentConfigOverviewDTO toggleIssueDutyRoster(PaymentConfigToggleRequestDTO request);
+    /** 提交异常告警值班路由启停候选，不改变运行态。 */
+    List<PaymentIssueDutyRosterReviewDTO> toggleIssueDutyRoster(
+            PaymentIssueDutyRosterStatusReviewRequestDTO request);
 
     /**
      * 批量执行启用中支付控制策略自检并回写准入结果。

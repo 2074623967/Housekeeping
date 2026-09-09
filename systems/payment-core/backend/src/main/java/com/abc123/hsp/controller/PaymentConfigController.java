@@ -16,6 +16,9 @@ import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
@@ -271,23 +274,41 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.submitProtocolRollbackReview(protocolCode, request));
     }
 
-    /**
-     * 新增异常告警值班路由配置。
-     */
+    /** 提交异常告警值班路由新增候选，不改变运行态。 */
     @PostMapping("/issue-duty-rosters")
-    public ApiResponse<PaymentConfigOverviewDTO> createIssueDutyRoster(
+    public ApiResponse<List<PaymentIssueDutyRosterReviewDTO>> createIssueDutyRoster(
             @RequestBody PaymentIssueDutyRosterUpsertRequestDTO request) {
         return ApiResponse.success(paymentConfigService.createIssueDutyRoster(request));
     }
 
-    /**
-     * 编辑异常告警值班路由配置。
-     */
+    /** 提交异常告警值班路由编辑候选，不改变运行态。 */
     @PutMapping("/issue-duty-rosters/{rosterCode}")
-    public ApiResponse<PaymentConfigOverviewDTO> updateIssueDutyRoster(
+    public ApiResponse<List<PaymentIssueDutyRosterReviewDTO>> updateIssueDutyRoster(
             @PathVariable("rosterCode") String rosterCode,
             @RequestBody PaymentIssueDutyRosterUpsertRequestDTO request) {
         return ApiResponse.success(paymentConfigService.updateIssueDutyRoster(rosterCode, request));
+    }
+
+    /** 查询异常告警值班路由配置变更复核申请。 */
+    @GetMapping("/issue-duty-rosters/reviews")
+    public ApiResponse<List<PaymentIssueDutyRosterReviewDTO>> listIssueDutyRosterReviews() {
+        return ApiResponse.success(paymentConfigService.listIssueDutyRosterReviews());
+    }
+
+    /** 通过复核并应用异常告警值班路由完整候选。 */
+    @PostMapping("/issue-duty-rosters/reviews/{requestNo}/approve")
+    public ApiResponse<List<PaymentIssueDutyRosterReviewDTO>> approveIssueDutyRosterReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentIssueDutyRosterReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.approveIssueDutyRosterReview(requestNo, request));
+    }
+
+    /** 驳回异常告警值班路由完整候选，不改变运行态。 */
+    @PostMapping("/issue-duty-rosters/reviews/{requestNo}/reject")
+    public ApiResponse<List<PaymentIssueDutyRosterReviewDTO>> rejectIssueDutyRosterReview(
+            @PathVariable("requestNo") String requestNo,
+            @RequestBody PaymentIssueDutyRosterReviewActionRequestDTO request) {
+        return ApiResponse.success(paymentConfigService.rejectIssueDutyRosterReview(requestNo, request));
     }
 
     /** 提交渠道返回码启停候选进入复核。 */
@@ -445,11 +466,10 @@ public class PaymentConfigController {
         return ApiResponse.success(paymentConfigService.runControlPolicySelfCheck(request));
     }
 
-    /**
-     * 启停异常告警值班路由配置。
-     */
+    /** 提交异常告警值班路由启停候选，不改变运行态。 */
     @PostMapping("/issue-duty-rosters/toggle")
-    public ApiResponse<PaymentConfigOverviewDTO> toggleIssueDutyRoster(@RequestBody PaymentConfigToggleRequestDTO request) {
+    public ApiResponse<List<PaymentIssueDutyRosterReviewDTO>> toggleIssueDutyRoster(
+            @RequestBody PaymentIssueDutyRosterStatusReviewRequestDTO request) {
         return ApiResponse.success(paymentConfigService.toggleIssueDutyRoster(request));
     }
 }

@@ -21,6 +21,9 @@ import com.abc123.hsp.dto.PaymentGatewayReviewDTO;
 import com.abc123.hsp.dto.PaymentGatewayReviewSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentGatewayStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentIssueDutyRosterUpsertRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewActionRequestDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
+import com.abc123.hsp.dto.PaymentIssueDutyRosterStatusReviewRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewActionRequestDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewDTO;
 import com.abc123.hsp.dto.PaymentProtocolReviewSubmitRequestDTO;
@@ -275,44 +278,75 @@ class PaymentConfigControllerTest {
 
     @Test
     void shouldCreateIssueDutyRoster() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.createIssueDutyRoster(any(PaymentIssueDutyRosterUpsertRequestDTO.class))).thenReturn(overview);
+        java.util.List<PaymentIssueDutyRosterReviewDTO> reviews =
+                Collections.singletonList(new PaymentIssueDutyRosterReviewDTO());
+        when(paymentConfigService.createIssueDutyRoster(any(PaymentIssueDutyRosterUpsertRequestDTO.class)))
+                .thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
         PaymentIssueDutyRosterUpsertRequestDTO request = new PaymentIssueDutyRosterUpsertRequestDTO();
         request.setRosterCode("ROSTER_CALLBACK_P1");
 
-        assertEquals(overview, controller.createIssueDutyRoster(request).getData());
+        assertEquals(reviews, controller.createIssueDutyRoster(request).getData());
         verify(paymentConfigService).createIssueDutyRoster(request);
     }
 
     @Test
     void shouldUpdateIssueDutyRoster() {
-        PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
-        when(paymentConfigService.updateIssueDutyRoster(any(String.class), any(PaymentIssueDutyRosterUpsertRequestDTO.class))).thenReturn(overview);
+        java.util.List<PaymentIssueDutyRosterReviewDTO> reviews =
+                Collections.singletonList(new PaymentIssueDutyRosterReviewDTO());
+        when(paymentConfigService.updateIssueDutyRoster(
+                any(String.class), any(PaymentIssueDutyRosterUpsertRequestDTO.class))).thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
         PaymentIssueDutyRosterUpsertRequestDTO request = new PaymentIssueDutyRosterUpsertRequestDTO();
         request.setReceiver("支付后端值班");
 
-        assertEquals(overview, controller.updateIssueDutyRoster("ROSTER_CALLBACK_P1", request).getData());
+        assertEquals(reviews, controller.updateIssueDutyRoster("ROSTER_CALLBACK_P1", request).getData());
         verify(paymentConfigService).updateIssueDutyRoster("ROSTER_CALLBACK_P1", request);
     }
 
     @Test
     void shouldToggleOtherGovernanceConfigs() {
         PaymentConfigOverviewDTO overview = new PaymentConfigOverviewDTO();
+        java.util.List<PaymentIssueDutyRosterReviewDTO> reviews =
+                Collections.singletonList(new PaymentIssueDutyRosterReviewDTO());
         when(paymentConfigService.toggleAlertProvider(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
-        when(paymentConfigService.toggleIssueDutyRoster(any(PaymentConfigToggleRequestDTO.class))).thenReturn(overview);
+        when(paymentConfigService.toggleIssueDutyRoster(any(PaymentIssueDutyRosterStatusReviewRequestDTO.class)))
+                .thenReturn(reviews);
         PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
 
         PaymentConfigToggleRequestDTO request = new PaymentConfigToggleRequestDTO();
         request.setConfigCode("WX_H5");
         request.setEnabled(Boolean.TRUE);
         assertEquals(overview, controller.toggleAlertProvider(request).getData());
-        assertEquals(overview, controller.toggleIssueDutyRoster(request).getData());
         verify(paymentConfigService).toggleAlertProvider(request);
-        verify(paymentConfigService).toggleIssueDutyRoster(request);
+
+        PaymentIssueDutyRosterStatusReviewRequestDTO rosterRequest =
+                new PaymentIssueDutyRosterStatusReviewRequestDTO();
+        rosterRequest.setRosterCode("ROSTER_CALLBACK_P1");
+        rosterRequest.setEnabled(Boolean.TRUE);
+        assertEquals(reviews, controller.toggleIssueDutyRoster(rosterRequest).getData());
+        verify(paymentConfigService).toggleIssueDutyRoster(rosterRequest);
+    }
+
+    @Test
+    void shouldExposeIssueDutyRosterReviewFlow() {
+        java.util.List<PaymentIssueDutyRosterReviewDTO> reviews =
+                Collections.singletonList(new PaymentIssueDutyRosterReviewDTO());
+        PaymentIssueDutyRosterReviewActionRequestDTO action =
+                new PaymentIssueDutyRosterReviewActionRequestDTO();
+        when(paymentConfigService.listIssueDutyRosterReviews()).thenReturn(reviews);
+        when(paymentConfigService.approveIssueDutyRosterReview("DRR-001", action)).thenReturn(reviews);
+        when(paymentConfigService.rejectIssueDutyRosterReview("DRR-001", action)).thenReturn(reviews);
+        PaymentConfigController controller = new PaymentConfigController(paymentConfigService);
+
+        assertEquals(reviews, controller.listIssueDutyRosterReviews().getData());
+        assertEquals(reviews, controller.approveIssueDutyRosterReview("DRR-001", action).getData());
+        assertEquals(reviews, controller.rejectIssueDutyRosterReview("DRR-001", action).getData());
+        verify(paymentConfigService).listIssueDutyRosterReviews();
+        verify(paymentConfigService).approveIssueDutyRosterReview("DRR-001", action);
+        verify(paymentConfigService).rejectIssueDutyRosterReview("DRR-001", action);
     }
 
     @Test
