@@ -238,4 +238,22 @@ class RefundServiceImplTest {
                 () -> new RefundServiceImpl(refundMapper, refundChannelSubmitService).markSuccess(request)
         );
     }
+
+    @Test
+    void shouldMaskRefundActionResponseWithoutChangingMapperDto() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-003");
+        RefundListItemDTO mapperItem = new RefundListItemDTO();
+        mapperItem.setRefundOrderId("REF-003");
+        mapperItem.setCustomerName("张女士");
+        when(refundMapper.updateRefundStatus("REF-003", "PROCESSING", "SUCCESS", "success", true))
+                .thenReturn(1);
+        when(refundMapper.findByRefundOrderId("REF-003")).thenReturn(mapperItem);
+
+        RefundListItemDTO result =
+                new RefundServiceImpl(refundMapper, refundChannelSubmitService).markSuccess(request);
+
+        assertEquals("张*", result.getCustomerName());
+        assertEquals("张女士", mapperItem.getCustomerName());
+    }
 }

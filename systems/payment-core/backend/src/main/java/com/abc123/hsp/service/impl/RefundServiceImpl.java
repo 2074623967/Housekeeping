@@ -148,7 +148,7 @@ public class RefundServiceImpl implements RefundService {
                 DEFAULT_OPERATOR,
                 StringUtils.hasText(request.getRefundReason()) ? request.getRefundReason().trim() : "发起退款申请"
         ));
-        return refundMapper.findByRefundOrderId(refundOrderId);
+        return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
     }
 
     @Override
@@ -227,7 +227,7 @@ public class RefundServiceImpl implements RefundService {
         if (STATUS_PROCESSING.equals(status)) {
             triggerChannelSubmit(refundOrderId);
         }
-        return refundMapper.findByRefundOrderId(refundOrderId);
+        return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
     }
 
     private void triggerChannelSubmit(String refundOrderId) {

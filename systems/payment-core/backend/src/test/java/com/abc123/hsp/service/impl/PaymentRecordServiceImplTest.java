@@ -46,6 +46,12 @@ class PaymentRecordServiceImplTest {
     void shouldAssembleRouteNotifyAndEventLogsForPaymentRecordDetail() {
         PaymentRecordDetailDTO detail = new PaymentRecordDetailDTO();
         detail.setPaymentOrderId("PAY-DETAIL-001");
+        detail.setUserId("user-张女士");
+        detail.setUserPaymentChannelId("channel-user-张女士");
+        detail.setLatestClientIp("10.20.30.40");
+        detail.setLatestIdempotencyKey("IDEMP-RECORD-001");
+        detail.setLatestRequestPayload("{\"payerPhone\":\"13800138000\"}");
+        detail.setLatestResponsePayload("{\"customerName\":\"李女士\",\"code\":\"SUCCESS\"}");
         detail.setLatestAttemptStatus("WAIT_CALLBACK");
         when(paymentRecordMapper.findDetail("PAY-DETAIL-001")).thenReturn(detail);
         when(paymentMapper.findRouteLogs("PAY-DETAIL-001"))
@@ -59,9 +65,20 @@ class PaymentRecordServiceImplTest {
                 new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).detail("PAY-DETAIL-001");
 
         assertEquals("PAY-DETAIL-001", result.getPaymentOrderId());
+        assertEquals("user-****", result.getUserId());
+        assertEquals("channel-****", result.getUserPaymentChannelId());
+        assertEquals("10.20.*.*", result.getLatestClientIp());
+        assertEquals("IDEMP-****-001", result.getLatestIdempotencyKey());
+        assertEquals("{\"payerPhone\":\"138****8000\"}", result.getLatestRequestPayload());
+        assertEquals("{\"customerName\":\"李*\",\"code\":\"SUCCESS\"}", result.getLatestResponsePayload());
         assertEquals(2, result.getRouteLogs().size());
         assertEquals(2, result.getNotifyLogs().size());
         assertEquals(2, result.getEventLogs().size());
+        assertEquals("user-张女士", detail.getUserId());
+        assertEquals("10.20.30.40", detail.getLatestClientIp());
+        assertEquals("IDEMP-RECORD-001", detail.getLatestIdempotencyKey());
+        assertEquals("{\"payerPhone\":\"13800138000\"}", detail.getLatestRequestPayload());
+        assertEquals(null, detail.getRouteLogs());
         verify(paymentMapper, times(1)).findRouteLogs("PAY-DETAIL-001");
         verify(paymentMapper, times(1)).findNotifyLogs("PAY-DETAIL-001");
         verify(paymentMapper, times(1)).findEventItems("PAY-DETAIL-001");

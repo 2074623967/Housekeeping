@@ -3,7 +3,9 @@ package com.abc123.hsp.service.impl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
+import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.PaymentRecordMapper;
 import java.util.Collections;
@@ -54,5 +56,25 @@ class PaymentRecordServiceListTest {
         assertEquals(100, query.getPageSize());
         verify(paymentRecordMapper).findAll(query);
         verify(paymentRecordMapper).count(query);
+    }
+
+    @Test
+    void shouldMaskUserReferencesWithoutChangingMapperDto() {
+        PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+        PaymentRecordRowDTO row = new PaymentRecordRowDTO();
+        row.setPaymentOrderId("PAY-001");
+        row.setUserId("user-张女士");
+        row.setUserPaymentChannelId("channel-user-张女士");
+        org.mockito.Mockito.when(paymentRecordMapper.findAll(query))
+                .thenReturn(Collections.singletonList(row));
+        org.mockito.Mockito.when(paymentRecordMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<PaymentRecordRowDTO> result =
+                new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).list(query);
+
+        assertEquals("user-****", result.getItems().get(0).getUserId());
+        assertEquals("channel-****", result.getItems().get(0).getUserPaymentChannelId());
+        assertEquals("user-张女士", row.getUserId());
+        assertEquals("channel-user-张女士", row.getUserPaymentChannelId());
     }
 }

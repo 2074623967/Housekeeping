@@ -68,6 +68,18 @@ public class PaymentSensitiveDataMasker {
         return normalized.length() <= 1 ? "*" : normalized.substring(0, 1) + "*";
     }
 
+    public String maskUserReference(String reference) {
+        if (!StringUtils.hasText(reference)) {
+            return reference;
+        }
+        String normalized = reference.trim();
+        int separatorIndex = normalized.indexOf('-');
+        if (separatorIndex > 0) {
+            return normalized.substring(0, separatorIndex + 1) + "****";
+        }
+        return "****";
+    }
+
     public String maskPayload(String payload) {
         if (!StringUtils.hasText(payload)) {
             return payload;

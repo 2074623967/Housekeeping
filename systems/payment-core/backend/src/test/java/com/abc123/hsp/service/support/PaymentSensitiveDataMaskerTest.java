@@ -64,4 +64,11 @@ class PaymentSensitiveDataMaskerTest {
         assertTrue(masked.contains("\"amount\":6800"));
         assertTrue(masked.contains("\"code\":\"SUCCESS\""));
     }
+
+    @Test
+    void shouldMaskUserReferenceWithoutRetainingNameSuffix() {
+        assertEquals("user-****", masker.maskUserReference(" user-张女士 "));
+        assertEquals("****", masker.maskUserReference("张女士"));
+        assertEquals(null, masker.maskUserReference(null));
+    }
 }

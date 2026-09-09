@@ -9,7 +9,13 @@ import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.PaymentRecordMapper;
 import com.abc123.hsp.service.PaymentRecordService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,10 +26,20 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
 
     private final PaymentRecordMapper paymentRecordMapper;
     private final PaymentMapper paymentMapper;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
-    public PaymentRecordServiceImpl(PaymentRecordMapper paymentRecordMapper, PaymentMapper paymentMapper) {
+    @Autowired
+    public PaymentRecordServiceImpl(PaymentRecordMapper paymentRecordMapper,
+                                    PaymentMapper paymentMapper,
+                                    PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentRecordMapper = paymentRecordMapper;
         this.paymentMapper = paymentMapper;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    PaymentRecordServiceImpl(PaymentRecordMapper paymentRecordMapper, PaymentMapper paymentMapper) {
+        this(paymentRecordMapper, paymentMapper,
+                new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     @Override
@@ -39,7 +55,7 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return new PageResultDTO<>(
-                paymentRecordMapper.findAll(query),
+                maskRows(paymentRecordMapper.findAll(query)),
                 paymentRecordMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -52,9 +68,40 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        detail.setRouteLogs(paymentMapper.findRouteLogs(paymentOrderId));
-        detail.setNotifyLogs(paymentMapper.findNotifyLogs(paymentOrderId));
-        detail.setEventLogs(paymentMapper.findEventItems(paymentOrderId));
-        return detail;
+        PaymentRecordDetailDTO outwardDetail = new PaymentRecordDetailDTO();
+        BeanUtils.copyProperties(detail, outwardDetail);
+        maskRecordFields(outwardDetail);
+        outwardDetail.setLatestClientIp(sensitiveDataMasker.maskClientIp(detail.getLatestClientIp()));
+        outwardDetail.setLatestIdempotencyKey(
+                sensitiveDataMasker.maskIdempotencyKey(detail.getLatestIdempotencyKey()));
+        outwardDetail.setLatestRequestPayload(sensitiveDataMasker.maskPayload(detail.getLatestRequestPayload()));
+        outwardDetail.setLatestResponsePayload(sensitiveDataMasker.maskPayload(detail.getLatestResponsePayload()));
+        outwardDetail.setRouteLogs(paymentMapper.findRouteLogs(paymentOrderId));
+        outwardDetail.setNotifyLogs(paymentMapper.findNotifyLogs(paymentOrderId));
+        outwardDetail.setEventLogs(paymentMapper.findEventItems(paymentOrderId));
+        return outwardDetail;
+    }
+
+    private List<PaymentRecordRowDTO> maskRows(List<PaymentRecordRowDTO> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return rows.stream().map(this::maskedRowCopy).collect(Collectors.toList());
+    }
+
+    private PaymentRecordRowDTO maskedRowCopy(PaymentRecordRowDTO row) {
+        if (row == null) {
+            return null;
+        }
+        PaymentRecordRowDTO outwardRow = new PaymentRecordRowDTO();
+        BeanUtils.copyProperties(row, outwardRow);
+        maskRecordFields(outwardRow);
+        return outwardRow;
+    }
+
+    private void maskRecordFields(PaymentRecordRowDTO row) {
+        row.setUserId(sensitiveDataMasker.maskUserReference(row.getUserId()));
+        row.setUserPaymentChannelId(
+                sensitiveDataMasker.maskUserReference(row.getUserPaymentChannelId()));
     }
 }
