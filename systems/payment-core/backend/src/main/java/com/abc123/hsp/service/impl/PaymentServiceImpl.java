@@ -332,6 +332,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         PrepayOrderDTO activePrepay = paymentMapper.findLatestActivePrepayByOrderNo(request.getOrderNo());
         if (activePrepay != null) {
+            validateActivePrepayRequest(activePrepay, request);
             // 同一订单在收银台有效期内重复拉起时，直接复用已有预付单，避免支付单和预付单被拆成多份。
             return activePrepay;
         }
@@ -1269,6 +1270,23 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (normalizedAmount.scale() > MONEY_MAX_SCALE || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
             throw invalidPaymentRequest("预付金额最多支持 16 位整数和 2 位小数");
+        }
+    }
+
+    private void validateActivePrepayRequest(PrepayOrderDTO activePrepay, PrepayRequestDTO request) {
+        String requestedCashierTitle = StringUtils.hasText(request.getCashierTitle())
+                ? request.getCashierTitle()
+                : "家政服务收银台";
+        boolean conflict = !request.getPayScene().equals(activePrepay.getPayScene())
+                || (request.getCustomerName() != null
+                    && !request.getCustomerName().equals(activePrepay.getCustomerName()))
+                || (request.getAmount() != null
+                    && request.getAmount().compareTo(parseAmount(activePrepay.getAmount())) != 0)
+                || !requestedCashierTitle.equals(activePrepay.getCashierTitle());
+        if (conflict) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                    "同一订单已有参数不一致的有效预付单");
         }
     }
 

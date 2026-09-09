@@ -541,12 +541,18 @@ class PaymentServiceImplTest {
         activePrepay.setPrepayOrderNo("PRE-001");
         activePrepay.setPaymentOrderId("PAY-001");
         activePrepay.setPaymentStatus("WAIT_CALLBACK");
+        activePrepay.setPayScene("HOME_CLEAN");
+        activePrepay.setCustomerName("张女士");
+        activePrepay.setAmount("¥168.00");
+        activePrepay.setCashierTitle("家政服务收银台");
         when(paymentMapper.lockPrepayCreation("ORD-001")).thenReturn("ORD-001");
         when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-001")).thenReturn(activePrepay);
 
         PrepayRequestDTO request = new PrepayRequestDTO();
         request.setOrderNo("ORD-001");
         request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("168.0"));
 
         PrepayOrderDTO result = new PaymentServiceImpl(
                 paymentMapper,
@@ -579,6 +585,48 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-001", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-001", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldRejectActivePrepayWhenRequestParametersConflict() {
+        PrepayOrderDTO activePrepay = new PrepayOrderDTO();
+        activePrepay.setPrepayOrderNo("PRE-CONFLICT");
+        activePrepay.setPaymentOrderId("PAY-CONFLICT");
+        activePrepay.setPaymentStatus("PREPAY_CREATED");
+        activePrepay.setPayScene("WALLET_RECHARGE_APP");
+        activePrepay.setCustomerName("张女士");
+        activePrepay.setAmount("¥99.00");
+        activePrepay.setCashierTitle("钱包充值收银台");
+        when(paymentMapper.lockPrepayCreation("WALLET-RECHARGE-CONFLICT"))
+                .thenReturn("WALLET-RECHARGE-CONFLICT");
+        when(paymentMapper.findLatestActivePrepayByOrderNo("WALLET-RECHARGE-CONFLICT"))
+                .thenReturn(activePrepay);
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("WALLET-RECHARGE-CONFLICT");
+        request.setPayScene("WALLET_RECHARGE_APP");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("100.00"));
+        request.setCashierTitle("钱包充值收银台");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT, exception.getCode());
+        verify(paymentMapper, never()).findOrderAmount(anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
+        verify(paymentMapper, never()).insertPrepayOrder(
+                anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString(), anyString(), anyString());
     }
 
     @Test

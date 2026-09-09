@@ -20,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -98,11 +99,50 @@ public class PaymentPrepayCreationConcurrencyIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRejectConflictingRequestAfterWaitingForSameOrderTransaction() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        try (SqlSession firstSession = sqlSessionFactory.openSession()) {
+            PaymentMapper firstMapper = firstSession.getMapper(PaymentMapper.class);
+            firstMapper.initPrepayCreationLock(ORDER_NO);
+            assertEquals(ORDER_NO, firstMapper.lockPrepayCreation(ORDER_NO));
+
+            PrepayRequestDTO conflictingRequest = prepayRequest();
+            conflictingRequest.setPayScene("HOME_REPAIR");
+            Future<PrepayOrderDTO> second = executor.submit(
+                    () -> createPrepayInSecondTransaction(secondStarted, conflictingRequest));
+            secondStarted.await(5, TimeUnit.SECONDS);
+            assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
+
+            createService(firstMapper).prepay(prepayRequest());
+            firstSession.commit();
+            ExecutionException exception = assertThrows(
+                    ExecutionException.class, () -> second.get(5, TimeUnit.SECONDS));
+
+            com.abc123.hsp.common.BusinessException conflict =
+                    (com.abc123.hsp.common.BusinessException) exception.getCause();
+            assertEquals(com.abc123.hsp.common.ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
+                    conflict.getCode());
+            assertEquals(1, countRows("t_payment_prepay_creation_lock"));
+            assertEquals(1, countRows("t_bill"));
+            assertEquals(1, countRows("t_payment_order"));
+            assertEquals(1, countRows("t_prepay_order"));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     private PrepayOrderDTO createPrepayInSecondTransaction(CountDownLatch started) throws Exception {
+        return createPrepayInSecondTransaction(started, prepayRequest());
+    }
+
+    private PrepayOrderDTO createPrepayInSecondTransaction(
+            CountDownLatch started, PrepayRequestDTO request) throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             started.countDown();
             PrepayOrderDTO result = createService(session.getMapper(PaymentMapper.class))
-                    .prepay(prepayRequest());
+                    .prepay(request);
             session.commit();
             return result;
         }

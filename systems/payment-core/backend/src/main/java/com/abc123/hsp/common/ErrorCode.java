@@ -48,4 +48,5 @@ public final class ErrorCode {
     public static final String PAYMENT_SUBMIT_REQUEST_INVALID = "PAYMENT-1035";
     public static final String PAYMENT_REQUEST_INVALID = "PAYMENT-1036";
     public static final String PAYMENT_ORDER_ALREADY_SETTLED = "PAYMENT-1037";
+    public static final String PAYMENT_PREPAY_REQUEST_CONFLICT = "PAYMENT-1038";
 }
