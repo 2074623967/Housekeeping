@@ -183,7 +183,7 @@
 
     <insert id="insertBill">
         INSERT INTO t_bill(bill_no, order_no, customer_name, bill_amount, paid_amount, bill_status, bill_status_type, due_at, created_at)
-        VALUES (#{billNo}, #{orderNo}, #{customerName}, #{orderAmount}, #{paidAmount}, #{billStatus}, #{billStatusType}, DATE_ADD(NOW(), INTERVAL 1 DAY), NOW())
+        VALUES (#{billNo}, #{orderNo}, #{customerName}, #{orderAmount}, #{paidAmount}, #{billStatus}, #{billStatusType}, TIMESTAMPADD(DAY, 1, NOW()), NOW())
     </insert>
 
     <insert id="insertPaymentOrder">
@@ -193,7 +193,7 @@
 
     <insert id="insertPrepayOrder">
         INSERT INTO t_prepay_order(prepay_order_no, bill_no, order_no, customer_name, amount, pay_scene, cashier_title, cashier_status, cashier_status_type, payment_order_id, created_at, expires_at)
-        VALUES (#{prepayOrderNo}, #{billNo}, #{orderNo}, #{customerName}, #{amount}, #{payScene}, #{cashierTitle}, '待支付', 'warn', #{paymentOrderId}, NOW(), DATE_ADD(NOW(), INTERVAL 1 HOUR))
+        VALUES (#{prepayOrderNo}, #{billNo}, #{orderNo}, #{customerName}, #{amount}, #{payScene}, #{cashierTitle}, '待支付', 'warn', #{paymentOrderId}, NOW(), TIMESTAMPADD(HOUR, 1, NOW()))
     </insert>
 
     <select id="findPrepay" resultType="com.abc123.hsp.dto.PrepayOrderDTO">
