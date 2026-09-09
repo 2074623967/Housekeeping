@@ -24,6 +24,7 @@ import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
 import com.abc123.hsp.dto.PaymentOpsConfigSnapshotDTO;
+import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.dto.PaymentRouteDecisionDTO;
@@ -1371,12 +1372,13 @@ class PaymentServiceImplTest {
     void shouldKeepLatestAttemptContextWhenLoadingPaymentDetail() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-DETAIL-100");
+        detail.setCustomerName("张女士");
         detail.setLatestTerminal("PC_WEB");
         detail.setLatestClientIp("10.10.1.8");
         detail.setLatestIdempotencyKey("IDEMP-DETAIL-100");
         detail.setLatestAttemptStatus("处理中");
         detail.setLatestAttemptStatusType("info");
-        detail.setLatestRequestPayload("{\"paymentOrderId\":\"PAY-DETAIL-100\"}");
+        detail.setLatestRequestPayload("{\"paymentOrderId\":\"PAY-DETAIL-100\",\"payerPhone\":\"13800138000\"}");
         detail.setLatestResponsePayload("{\"code\":\"SUCCESS\"}");
         when(paymentMapper.findDetail("PAY-DETAIL-100")).thenReturn(detail);
         when(paymentMapper.findRouteLogs("PAY-DETAIL-100")).thenReturn(Arrays.asList("ROUTE-1"));
@@ -1392,15 +1394,43 @@ class PaymentServiceImplTest {
                 .detail("PAY-DETAIL-100");
 
         org.junit.jupiter.api.Assertions.assertEquals("PC_WEB", result.getLatestTerminal());
-        org.junit.jupiter.api.Assertions.assertEquals("10.10.1.8", result.getLatestClientIp());
-        org.junit.jupiter.api.Assertions.assertEquals("IDEMP-DETAIL-100", result.getLatestIdempotencyKey());
+        org.junit.jupiter.api.Assertions.assertEquals("张*", result.getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals("10.10.*.*", result.getLatestClientIp());
+        org.junit.jupiter.api.Assertions.assertEquals("IDEMP-****-100", result.getLatestIdempotencyKey());
         org.junit.jupiter.api.Assertions.assertEquals("处理中", result.getLatestAttemptStatus());
         org.junit.jupiter.api.Assertions.assertEquals("info", result.getLatestAttemptStatusType());
-        org.junit.jupiter.api.Assertions.assertEquals("{\"paymentOrderId\":\"PAY-DETAIL-100\"}", result.getLatestRequestPayload());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getLatestRequestPayload().contains("138****8000"));
         org.junit.jupiter.api.Assertions.assertEquals("{\"code\":\"SUCCESS\"}", result.getLatestResponsePayload());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getRouteLogs().size());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getNotifyLogs().size());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getEventLogs().size());
+        org.junit.jupiter.api.Assertions.assertEquals("张女士", detail.getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals("10.10.1.8", detail.getLatestClientIp());
+        org.junit.jupiter.api.Assertions.assertEquals("IDEMP-DETAIL-100", detail.getLatestIdempotencyKey());
+        org.junit.jupiter.api.Assertions.assertTrue(detail.getLatestRequestPayload().contains("13800138000"));
+    }
+
+    @Test
+    void shouldMaskPaymentListWithoutChangingMapperDto() {
+        PaymentListQueryDTO query = new PaymentListQueryDTO();
+        query.setPageNo(1);
+        query.setPageSize(20);
+        PaymentListItemDTO item = new PaymentListItemDTO();
+        item.setPaymentOrderId("PAY-001");
+        item.setCustomerName("张女士");
+        when(paymentMapper.findAll(query)).thenReturn(Collections.singletonList(item));
+        when(paymentMapper.count(query)).thenReturn(1L);
+
+        PageResultDTO<PaymentListItemDTO> result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .list(query);
+
+        org.junit.jupiter.api.Assertions.assertEquals("张*", result.getItems().get(0).getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals("张女士", item.getCustomerName());
     }
 
     @Test
@@ -1435,7 +1465,9 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("微信支付", query.getPaymentMethod());
         org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", query.getStatus());
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("PAY-001"));
-        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("张女士"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"张*\""));
+        org.junit.jupiter.api.Assertions.assertFalse(csv.contains("张女士"));
+        org.junit.jupiter.api.Assertions.assertEquals("张女士", item.getCustomerName());
         verify(paymentMapper).findAllForExport(query);
     }
 

@@ -34,11 +34,16 @@ import com.abc123.hsp.service.PaymentChannelSubmitService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentOpsConfigService;
 import com.abc123.hsp.service.PaymentRiskControlService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,6 +63,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRiskControlService paymentRiskControlService;
     private final PaymentOpsConfigService paymentOpsConfigService;
     private final PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService;
+    private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
     @Autowired
     public PaymentServiceImpl(
@@ -69,7 +75,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentEventDispatchService paymentEventDispatchService,
             PaymentRiskControlService paymentRiskControlService,
             PaymentOpsConfigService paymentOpsConfigService,
-            PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService) {
+            PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService,
+            PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.paymentMapper = paymentMapper;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentChannelRoutingService = paymentChannelRoutingService;
@@ -79,6 +86,30 @@ public class PaymentServiceImpl implements PaymentService {
         this.paymentRiskControlService = paymentRiskControlService;
         this.paymentOpsConfigService = paymentOpsConfigService;
         this.paymentChannelQueryRateLimitService = paymentChannelQueryRateLimitService;
+        this.sensitiveDataMasker = sensitiveDataMasker;
+    }
+
+    PaymentServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentCallbackSignatureService paymentCallbackSignatureService,
+            PaymentChannelRoutingService paymentChannelRoutingService,
+            PaymentChannelQueryService paymentChannelQueryService,
+            PaymentChannelSubmitService paymentChannelSubmitService,
+            PaymentEventDispatchService paymentEventDispatchService,
+            PaymentRiskControlService paymentRiskControlService,
+            PaymentOpsConfigService paymentOpsConfigService,
+            PaymentChannelQueryRateLimitService paymentChannelQueryRateLimitService) {
+        this(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService,
+                paymentChannelQueryRateLimitService,
+                new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
     PaymentServiceImpl(
@@ -181,7 +212,7 @@ public class PaymentServiceImpl implements PaymentService {
     public PageResultDTO<PaymentListItemDTO> list(PaymentListQueryDTO query) {
         normalizeQuery(query);
         return new PageResultDTO<>(
-                paymentMapper.findAll(query),
+                maskPaymentItems(paymentMapper.findAll(query)),
                 paymentMapper.count(query),
                 query.getPageNo(),
                 query.getPageSize()
@@ -191,7 +222,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public String exportCsv(PaymentListQueryDTO query) {
         normalizeQuery(query);
-        List<PaymentListItemDTO> items = paymentMapper.findAllForExport(query);
+        List<PaymentListItemDTO> items = maskPaymentItems(paymentMapper.findAllForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("支付单号,订单号,客户名称,支付金额,支付方式,支付渠道,渠道交易号,支付状态,创建时间\n");
         for (PaymentListItemDTO item : items) {
@@ -210,7 +241,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentDetailDTO detail(String paymentOrderId) {
-        return enrichDetail(paymentMapper.findDetail(paymentOrderId));
+        return outwardDetail(paymentMapper.findDetail(paymentOrderId));
     }
 
     @Transactional
@@ -596,7 +627,7 @@ public class PaymentServiceImpl implements PaymentService {
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
-            return enrichDetail(detail);
+            return outwardDetail(detail);
         }
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
@@ -662,7 +693,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_SUCCESS");
         }
-        return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
     @Transactional(noRollbackFor = BusinessException.class)
@@ -700,7 +731,7 @@ public class PaymentServiceImpl implements PaymentService {
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || "CLOSED".equalsIgnoreCase(detail.getStatus())
                 || !"SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())) {
-            return enrichDetail(detail);
+            return outwardDetail(detail);
         }
         if (!StringUtils.hasText(channelTransactionNo)) {
             throw new BusinessException(
@@ -716,7 +747,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
             latestDetail.setQuerySource(queryResult.getQuerySource());
             applyReturnCodeStandardization(latestDetail, queryResult);
-            return enrichDetail(latestDetail);
+            return outwardDetail(latestDetail);
         }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
                 detail.getPaymentOrderId(), "成功", "success");
@@ -742,7 +773,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         latestDetail.setQuerySource(queryResult.getQuerySource());
         applyReturnCodeStandardization(latestDetail, queryResult);
-        return enrichDetail(latestDetail);
+        return outwardDetail(latestDetail);
     }
 
     private void recordChannelQuery(
@@ -858,7 +889,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus()) || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CLOSE_ALREADY_FINALIZED");
-            return enrichDetail(detail);
+            return outwardDetail(detail);
         }
         // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
         paymentMapper.updatePaymentStatus(request.getPaymentOrderId(), "CLOSED", "danger", detail.getChannelTransactionNo());
@@ -871,7 +902,7 @@ public class PaymentServiceImpl implements PaymentService {
         recordEventProcessLog(
                 eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo());
         paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "MANUAL_CLOSE");
-        return enrichDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
     private void recordNotifyProcessLog(
@@ -1257,6 +1288,41 @@ public class PaymentServiceImpl implements PaymentService {
         detail.setNotifyLogs(paymentMapper.findNotifyLogs(detail.getPaymentOrderId()));
         detail.setEventLogs(paymentMapper.findEventItems(detail.getPaymentOrderId()));
         return detail;
+    }
+
+    private List<PaymentListItemDTO> maskPaymentItems(List<PaymentListItemDTO> items) {
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return items.stream().map(this::maskedPaymentItemCopy).collect(Collectors.toList());
+    }
+
+    private PaymentListItemDTO maskedPaymentItemCopy(PaymentListItemDTO item) {
+        if (item == null) {
+            return null;
+        }
+        PaymentListItemDTO copy = new PaymentListItemDTO();
+        BeanUtils.copyProperties(item, copy);
+        copy.setCustomerName(sensitiveDataMasker.maskName(item.getCustomerName()));
+        return copy;
+    }
+
+    private PaymentDetailDTO outwardDetail(PaymentDetailDTO detail) {
+        return maskedDetailCopy(enrichDetail(detail));
+    }
+
+    private PaymentDetailDTO maskedDetailCopy(PaymentDetailDTO detail) {
+        if (detail == null) {
+            return null;
+        }
+        PaymentDetailDTO copy = new PaymentDetailDTO();
+        BeanUtils.copyProperties(detail, copy);
+        copy.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
+        copy.setLatestClientIp(sensitiveDataMasker.maskClientIp(detail.getLatestClientIp()));
+        copy.setLatestIdempotencyKey(sensitiveDataMasker.maskIdempotencyKey(detail.getLatestIdempotencyKey()));
+        copy.setLatestRequestPayload(sensitiveDataMasker.maskPayload(detail.getLatestRequestPayload()));
+        copy.setLatestResponsePayload(sensitiveDataMasker.maskPayload(detail.getLatestResponsePayload()));
+        return copy;
     }
 
     /**
