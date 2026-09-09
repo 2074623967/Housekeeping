@@ -22,6 +22,7 @@
 - `migrations/2026-09-09-add-payment-return-code-import-batch.sql`：幂等创建返回码 CSV 导入审计批次表，记录自声明操作人、原因、源文件摘要、应用前后指纹和差异数量
 - `migrations/2026-09-09-add-payment-return-code-import-review.sql`：幂等创建返回码 CSV 导入复核申请表，以可空唯一待办占位限制同时最多一条待复核导入候选
 - `migrations/2026-09-09-add-payment-return-code-review.sql`：幂等创建单条返回码状态变更复核表，以规范化映射键摘要和可空唯一待办占位限制同一映射最多一条待复核申请
+- `migrations/2026-09-09-add-payment-channel-review.sql`：幂等创建支付渠道状态变更复核表，以可空唯一渠道占位限制同一渠道最多一条待复核申请
 
 初始化方式：
 
@@ -42,7 +43,8 @@
 9. 执行 `migrations/2026-09-09-add-payment-return-code-import-batch.sql`，建立返回码批量导入审计批次表；脚本可重复执行
 10. 执行 `migrations/2026-09-09-add-payment-return-code-import-review.sql`，建立返回码导入候选复核表；脚本可重复执行
 11. 执行 `migrations/2026-09-09-add-payment-return-code-review.sql`，建立单条返回码状态变更复核表；脚本可重复执行
-12. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+12. 执行 `migrations/2026-09-09-add-payment-channel-review.sql`，建立支付渠道状态变更复核表；脚本可重复执行
+13. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -63,6 +65,8 @@
    - `SELECT pending_import_key, COUNT(*) FROM t_payment_return_code_import_review WHERE pending_import_key IS NOT NULL GROUP BY pending_import_key HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_import_key` 应为空
    - `SHOW TABLES LIKE 't_payment_return_code_review'` 返回一行
    - `SELECT pending_mapping_key, COUNT(*) FROM t_payment_return_code_review WHERE pending_mapping_key IS NOT NULL GROUP BY pending_mapping_key HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_mapping_key` 应为空
+   - `SHOW TABLES LIKE 't_payment_channel_review'` 返回一行
+   - `SELECT pending_channel_code, COUNT(*) FROM t_payment_channel_review WHERE pending_channel_code IS NOT NULL GROUP BY pending_channel_code HAVING COUNT(*) > 1` 返回空集；已完成申请的 `pending_channel_code` 应为空
    - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 

@@ -61,7 +61,10 @@
 | `/api/settlements/workers/export` | `GET` | 导出服务者结算单 CSV |
 | `/api/payment-config` | `GET` | 查询支付渠道、路由规则、支付协议与返回码映射配置 |
 | `/api/payment-config/export` | `GET` | 导出支付配置治理快照 CSV |
-| `/api/payment-config/channels/toggle` | `POST` | 启停支付渠道 |
+| `/api/payment-config/channels/toggle` | `POST` | 提交支付渠道启停候选，运行态不变 |
+| `/api/payment-config/channels/reviews` | `GET` | 查询支付渠道状态变更复核申请 |
+| `/api/payment-config/channels/reviews/{requestNo}/approve` | `POST` | 异人复核通过并应用渠道状态候选 |
+| `/api/payment-config/channels/reviews/{requestNo}/reject` | `POST` | 异人驳回渠道状态候选，运行态不变 |
 | `/api/payment-config/route-rules/validate` | `POST` | 校验路由表达式并模拟样例命中 |
 | `/api/payment-config/route-rules/conflicts` | `GET` | 检测当前启用路由规则的冲突、重复、遮蔽和待复核项 |
 | `/api/payment-config/route-rules/reviews` | `GET` | 查询路由规则复核申请 |
@@ -964,7 +967,25 @@ POST /api/refunds/retry
 
 ```http
 POST /api/payment-config/channels/toggle
+GET  /api/payment-config/channels/reviews
+POST /api/payment-config/channels/reviews/{requestNo}/approve
+POST /api/payment-config/channels/reviews/{requestNo}/reject
 ```
+
+提交请求示例：
+
+```json
+{
+  "channelCode": "wx_h5",
+  "enabled": false,
+  "requester": "maker-a",
+  "changeReason": "渠道维护期间暂停新支付承接"
+}
+```
+
+渠道编码按小写规范化。同一渠道同时最多一条 `PENDING_REVIEW`；渠道不存在、目标状态未变化或已有待办时拒绝。提交保存覆盖商户参数、密钥与公钥、证书、限额和路由权重等全部语义字段的基线指纹，但列表不返回密钥原文，提交也不修改运行态。
+
+批准或驳回请求使用 `reviewer / reviewComment`。批准先锁复核申请、再锁渠道并复验候选状态和完整基线；同人复核、重复处理或配置漂移时拒绝。只有异人声明批准才更新状态，状态写入与复核完成同事务提交；驳回不改运行态，完成后释放渠道待办占位。列表返回申请号、渠道快照、候选状态、基线摘要、申请与复核记录、时间及固定的 `identityTrustLevel=SELF_DECLARED`。
 
 路由规则启停申请：
 
@@ -1090,7 +1111,7 @@ POST /api/payment-config/control-policies/toggle
 POST /api/payment-config/control-policies/self-check
 ```
 
-请求示例：
+网关与控制策略直接启停请求示例：
 
 ```json
 {
@@ -1101,14 +1122,14 @@ POST /api/payment-config/control-policies/self-check
 
 说明：
 
-1. `enabled=true` 时状态更新为 `ENABLED`。
-2. `enabled=false` 时状态更新为 `DISABLED`。
+1. 渠道候选或其他直接启停请求的 `enabled=true` 表示目标状态 `ENABLED`。
+2. 渠道候选或其他直接启停请求的 `enabled=false` 表示目标状态 `DISABLED`。
 3. `GET /api/payment-config/export` 支持 `section` 参数，当前支持 `ALL / CHANNELS / ROUTE_RULES / PROTOCOLS / RETURN_CODES / GATEWAYS / CONTROL_POLICIES / ALERT_PROVIDERS / ISSUE_DUTY_ROSTERS`，用于页面按分区导出治理快照。
 3. 协议配置当前已支持运营查看、协议种类字典、协议模板编码/名称维护、签约要素配置、协议正文编辑、电子签章服务商维护、不可变版本和自声明 maker-checker；新增、编辑、启停与回滚都先提交完整候选，批准前运行态不变。该能力不等于可信审批、正式法律签署或电子签章联调。
 4. 返回码映射启停候选使用 `channelCode / channelReturnCode / enabled / requester / changeReason`，不再使用通用 `configCode / subCode` 直接写入请求。
 5. 返回码映射当前已支持运营查看、人工介入判断、映射版本和归档状态展示，并已进入渠道提交响应留痕与主动查单详情；CSV 批量导入具备 V1.4 复核与审计，单条启停具备 V1.5 独立唯一待办、完整基线指纹和自声明异人复核。后续继续补可信身份权限、真实渠道码表校验和受控自动归档。
 6. 支付网关启停时，`configCode` 传网关编码，例如 `GATEWAY_WX_ACQ`；当前已支持网关治理台账、启停、环境范围、证书状态、发布阶段、灰度策略、回调白名单和适配器编排展示，后续继续补证书轮换动作、真实灰度发布编排和渠道探活联调。
-7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示；后续继续补渠道密钥轮换、证书上传和多商户参数模板治理。
+7. 支付渠道当前已支持商户应用标识、证书档案、验签时间窗、退款时效和风控标签展示，启停已纳入 V1.2 独立候选复核；后续继续补渠道新增/编辑、可信身份权限、密钥轮换、证书上传、多商户参数模板和真实探活治理。
 8. 支付控制策略启停或执行自检时，`configCode` 传来源应用标识，例如 `housekeeping-app-web`；当前已支持来源应用支付方式权限、渠道权限、分钟级限流、自检状态、严格模式展示和人工触发自检回写。自检会读取当前渠道与网关接入状态，回写 `PASS/WARN/FAIL` 和自检提示，后续继续补运营编辑、自动巡检调度和更细粒度商户权限。
 9. 路由规则新增、编辑、启停和回滚均提交候选快照进入自声明 maker-checker；旧的直接运行态写入路径已关闭，复核通过前运行态不变。规则编码编辑时不可变，目标与兜底渠道必须存在且不能相同。
 
