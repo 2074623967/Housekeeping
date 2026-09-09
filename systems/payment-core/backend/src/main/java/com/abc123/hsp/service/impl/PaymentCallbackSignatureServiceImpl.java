@@ -7,10 +7,12 @@ import com.abc123.hsp.dto.PaymentCallbackSecurityProfileDTO;
 import com.abc123.hsp.mapper.PaymentCallbackSecurityMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.SignatureException;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.util.Base64;
@@ -175,15 +177,31 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         Signature signature = Signature.getInstance(RSA_SHA256);
         signature.initVerify(parsePublicKey(publicKeyText));
         signature.update(payload.getBytes(StandardCharsets.UTF_8));
-        byte[] decodedSignature = Base64.getDecoder().decode(actualSignature);
-        return signature.verify(decodedSignature);
+        byte[] decodedSignature;
+        try {
+            decodedSignature = Base64.getDecoder().decode(actualSignature);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
+                    "callback RSA signature encoding is invalid", exception);
+        }
+        try {
+            return signature.verify(decodedSignature);
+        } catch (SignatureException exception) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
+                    "callback RSA signature is invalid", exception);
+        }
     }
 
-    private PublicKey parsePublicKey(String publicKeyText) throws Exception {
+    private PublicKey parsePublicKey(String publicKeyText) {
         String normalizedKey = publicKeyText.replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")
                 .replaceAll("\\s+", "");
-        byte[] decodedKey = Base64.getDecoder().decode(normalizedKey);
-        return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decodedKey));
+        try {
+            byte[] decodedKey = Base64.getDecoder().decode(normalizedKey);
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decodedKey));
+        } catch (IllegalArgumentException | GeneralSecurityException exception) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_CREDENTIAL_INVALID,
+                    "callback RSA public key is invalid", exception);
+        }
     }
 }

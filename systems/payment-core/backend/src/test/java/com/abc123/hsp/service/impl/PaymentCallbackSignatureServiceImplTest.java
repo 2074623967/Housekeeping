@@ -176,9 +176,7 @@ class PaymentCallbackSignatureServiceImplTest {
 
     @Test
     void shouldVerifyRsa2SignedCallback() throws Exception {
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-        keyPairGenerator.initialize(2048);
-        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+        KeyPair keyPair = generateRsaKeyPair();
         String publicKey = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
         PaymentCallbackRequestDTO request = buildRsaRequest("alipay_h5", keyPair, "nonce-007", timestamp);
@@ -193,6 +191,59 @@ class PaymentCallbackSignatureServiceImplTest {
         );
 
         assertDoesNotThrow(() -> service.verify("alipay_h5", request));
+    }
+
+    @Test
+    void shouldRejectMalformedRsaSignatureAsBusinessError() throws Exception {
+        KeyPair keyPair = generateRsaKeyPair();
+        String publicKey = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        PaymentCallbackRequestDTO request = buildRsaRequest(
+                "alipay_h5",
+                keyPair,
+                "nonce-rsa-signature",
+                String.valueOf(Instant.now().getEpochSecond()));
+        request.setSignature("not-base64!");
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("alipay_h5"))
+                .thenReturn(buildRsaProfile("alipay_h5", publicKey));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                300,
+                600
+        );
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.verify("alipay_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("alipay_h5", "nonce-rsa-signature", "PAY-TEST-001", 600);
+    }
+
+    @Test
+    void shouldRejectMalformedRsaPublicKeyAsBusinessError() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest(
+                "alipay_h5",
+                "unused-secret",
+                "nonce-rsa-key",
+                String.valueOf(Instant.now().getEpochSecond()));
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("alipay_h5"))
+                .thenReturn(buildRsaProfile("alipay_h5", "not-a-public-key"));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                300,
+                600
+        );
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.verify("alipay_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_CREDENTIAL_INVALID, exception.getCode());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce();
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("alipay_h5", "nonce-rsa-key", "PAY-TEST-001", 600);
     }
 
     private PaymentCallbackSecurityProfileDTO buildHmacProfile(String channelCode, String secret) {
@@ -236,6 +287,12 @@ class PaymentCallbackSignatureServiceImplTest {
         signature.update(payload.getBytes(StandardCharsets.UTF_8));
         request.setSignature(Base64.getEncoder().encodeToString(signature.sign()));
         return request;
+    }
+
+    private KeyPair generateRsaKeyPair() throws Exception {
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        return keyPairGenerator.generateKeyPair();
     }
 
     private PaymentCallbackRequestDTO buildRequest(
