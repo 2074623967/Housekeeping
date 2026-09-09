@@ -836,7 +836,7 @@ public class PaymentServiceImpl implements PaymentService {
     private void recordChannelQueryFailure(PaymentDetailDTO detail, BusinessException exception) {
         String notifyNo = "QRY" + System.currentTimeMillis();
         String responsePayload = "{\"code\":\"" + escapeJson(exception.getCode())
-                + "\",\"message\":\"" + escapeJson(exception.getMessage()) + "\"}";
+                + "\",\"message\":\"channel query failed\"}";
         paymentMapper.insertNotifyLog(
                 notifyNo,
                 detail.getPaymentOrderId(),

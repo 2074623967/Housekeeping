@@ -1245,7 +1245,7 @@ class PaymentServiceImplTest {
         when(paymentMapper.findDetail("PAY-QUERY-FAIL")).thenReturn(detail);
         when(paymentChannelQueryService.query(detail)).thenThrow(new BusinessException(
                 ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
-                "gateway unavailable"));
+                "gateway unavailable: jdbc:mysql://internal-db/payment?password=query-secret"));
 
         com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
         request.setPaymentOrderId("PAY-QUERY-FAIL");
@@ -1262,7 +1262,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-FAIL"), eq("wx_h5"), eq("QUERY_FAILED"),
                 eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
-                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"gateway unavailable\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
                 eq("查单失败"), eq("danger"));
     }
 
