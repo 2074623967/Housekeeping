@@ -653,7 +653,7 @@
 }
 ```
 
-生产环境开启 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE=true` 后，签名原文为：
+回调验签默认开启；除显式 `demo` profile 的本地模拟环境外，签名原文为：
 
 `channel|paymentOrderId|tradeStatus|channelTransactionNo|timestamp|nonce`
 
@@ -2240,6 +2240,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 已有值不一致返回 `PAYMENT-1031`，不覆盖原交易号，也不更新支付状态、尝试、预付单、订单、账单、通知日志、事件或提交令牌。
 3. 支付单渠道交易号为空时，允许通过全部安全校验的同渠道回调首次写入交易号，以收口渠道受理但本地结果未知的场景。
 4. 调用方必须把渠道交易号作为不透明标识原样保存和回传；生产还需联合校验渠道商户订单号、商户/应用标识和对账文件。
+
+### 14.33 支付回调验签环境默认规则
+
+1. 基础配置 `payment.callback.require-signature` 默认值为 `true`，服务构造器兜底同样为 `true`；部署未提供 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE` 时仍执行签名、时间窗和 nonce 防重校验。
+2. 仅 `application-demo.yml` 显式配置为 `false`，用于本地页面模拟回调。测试、预发与生产不得设置 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE=false`，也不得在验签失败后自动降级重试。
+3. 默认开启不等于安全材料已经就绪。非 demo 环境必须按渠道配置 HMAC-SHA256 密钥或 RSA2 公钥；材料缺失返回 `PAYMENT-1006`，字段缺失或验签失败返回 `PAYMENT-1005`。
+4. 当前契约测试只锁定配置默认值，不替代真实渠道签名规范、商户应用绑定、证书轮换、密钥托管、网络来源限制及生产报文验收。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
