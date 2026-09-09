@@ -645,6 +645,9 @@ class PaymentServiceImplTest {
         PrepayRequestDTO request = new PrepayRequestDTO();
         request.setOrderNo("ORD-002");
         request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("168.0"));
+        request.setCashierTitle("订单 ORD-002 收银台");
 
         PrepayOrderDTO result = new PaymentServiceImpl(
                 paymentMapper,
@@ -668,10 +671,86 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("张女士"),
                 org.mockito.ArgumentMatchers.eq(new java.math.BigDecimal("168.00")),
                 org.mockito.ArgumentMatchers.eq("HOME_CLEAN"),
-                org.mockito.ArgumentMatchers.eq("家政服务收银台"),
+                org.mockito.ArgumentMatchers.eq("订单 ORD-002 收银台"),
                 org.mockito.ArgumentMatchers.anyString());
         org.junit.jupiter.api.Assertions.assertEquals("PRE-NEW", result.getPrepayOrderNo());
         org.junit.jupiter.api.Assertions.assertEquals("PAY-NEW", result.getPaymentOrderId());
+    }
+
+    @Test
+    void shouldRejectStandardPrepayWhenAmountConflictsWithOrderFacts() {
+        when(paymentMapper.lockPrepayCreation("ORD-STANDARD-CONFLICT"))
+                .thenReturn("ORD-STANDARD-CONFLICT");
+        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-STANDARD-CONFLICT"))
+                .thenReturn(null);
+        when(paymentMapper.findOrderAmount("ORD-STANDARD-CONFLICT"))
+                .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findPaidAmount("ORD-STANDARD-CONFLICT"))
+                .thenReturn(new BigDecimal("20.00"));
+        when(paymentMapper.findCustomerNameByOrderNo("ORD-STANDARD-CONFLICT"))
+                .thenReturn("张女士");
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORD-STANDARD-CONFLICT");
+        request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("张女士");
+        request.setAmount(new BigDecimal("149.00"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT, exception.getCode());
+        verify(paymentMapper, never()).findBillNoByOrderNo(anyString());
+        verify(paymentMapper, never()).insertBill(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                anyString(), anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
+    }
+
+    @Test
+    void shouldRejectStandardPrepayWhenCustomerConflictsWithOrderFacts() {
+        when(paymentMapper.lockPrepayCreation("ORD-CUSTOMER-CONFLICT"))
+                .thenReturn("ORD-CUSTOMER-CONFLICT");
+        when(paymentMapper.findLatestActivePrepayByOrderNo("ORD-CUSTOMER-CONFLICT"))
+                .thenReturn(null);
+        when(paymentMapper.findOrderAmount("ORD-CUSTOMER-CONFLICT"))
+                .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.findPaidAmount("ORD-CUSTOMER-CONFLICT"))
+                .thenReturn(new BigDecimal("20.00"));
+        when(paymentMapper.findCustomerNameByOrderNo("ORD-CUSTOMER-CONFLICT"))
+                .thenReturn("张女士");
+
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORD-CUSTOMER-CONFLICT");
+        request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("李女士");
+        request.setAmount(new BigDecimal("148.00"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).prepay(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT, exception.getCode());
+        verify(paymentMapper, never()).findBillNoByOrderNo(anyString());
+        verify(paymentMapper, never()).insertPaymentOrder(
+                anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.any(), anyString());
     }
 
     @Test

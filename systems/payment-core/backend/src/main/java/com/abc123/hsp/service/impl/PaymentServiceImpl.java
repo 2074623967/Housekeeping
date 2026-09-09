@@ -353,6 +353,7 @@ public class PaymentServiceImpl implements PaymentService {
                     "订单已结清或已超额支付，无需再次创建支付单");
         }
         String customerName = paymentMapper.findCustomerNameByOrderNo(request.getOrderNo());
+        validateStandardPrepayRequest(request, customerName, remainAmount);
         String billNo = paymentMapper.findBillNoByOrderNo(request.getOrderNo());
         if (billNo == null) {
             billNo = buildBusinessNo("BILL");
@@ -377,7 +378,7 @@ public class PaymentServiceImpl implements PaymentService {
                 customerName,
                 remainAmount,
                 request.getPayScene(),
-                "家政服务收银台",
+                resolveCashierTitle(request),
                 paymentOrderId
         );
         return paymentMapper.findPrepay(prepayOrderNo);
@@ -1274,20 +1275,36 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void validateActivePrepayRequest(PrepayOrderDTO activePrepay, PrepayRequestDTO request) {
-        String requestedCashierTitle = StringUtils.hasText(request.getCashierTitle())
-                ? request.getCashierTitle()
-                : "家政服务收银台";
         boolean conflict = !request.getPayScene().equals(activePrepay.getPayScene())
                 || (request.getCustomerName() != null
                     && !request.getCustomerName().equals(activePrepay.getCustomerName()))
                 || (request.getAmount() != null
                     && request.getAmount().compareTo(parseAmount(activePrepay.getAmount())) != 0)
-                || !requestedCashierTitle.equals(activePrepay.getCashierTitle());
+                || !resolveCashierTitle(request).equals(activePrepay.getCashierTitle());
         if (conflict) {
-            throw new BusinessException(
-                    ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT,
-                    "同一订单已有参数不一致的有效预付单");
+            throw prepayRequestConflict("同一订单已有参数不一致的有效预付单");
         }
+    }
+
+    private void validateStandardPrepayRequest(
+            PrepayRequestDTO request, String customerName, BigDecimal remainAmount) {
+        boolean conflict = (request.getCustomerName() != null
+                    && !request.getCustomerName().equals(customerName))
+                || (request.getAmount() != null
+                    && request.getAmount().compareTo(remainAmount) != 0);
+        if (conflict) {
+            throw prepayRequestConflict("预付请求与订单当前客户或剩余应付不一致");
+        }
+    }
+
+    private String resolveCashierTitle(PrepayRequestDTO request) {
+        return StringUtils.hasText(request.getCashierTitle())
+                ? request.getCashierTitle()
+                : "家政服务收银台";
+    }
+
+    private BusinessException prepayRequestConflict(String message) {
+        return new BusinessException(ErrorCode.PAYMENT_PREPAY_REQUEST_CONFLICT, message);
     }
 
     private String normalizeRequiredRequestField(String value, String fieldName, int maxLength) {
