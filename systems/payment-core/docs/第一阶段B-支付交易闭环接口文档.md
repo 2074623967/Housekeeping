@@ -2171,6 +2171,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 事件与通知编号继续作为对应处理日志的 `logNo / sourceNo`，不改变详情轨迹关联；告警任务日志使用独立 UUID 后缀编号。
 4. 随机后缀降低应用层并发碰撞概率，但不替代数据库唯一约束、幂等键、渠道交易号或生产冲突监控。
 
+### 14.23 异常 SLA 巡检任务结果规则
+
+1. `POST /api/payment-task-center/actions/escalate-overdue-issues` 继续返回 `PaymentTaskActionResultDTO`，`processedCount` 保持“逾期异常存量 + 未确认升级候选”的既有口径。
+2. 初次逾期告警和未确认升级告警逐条在独立 `REQUIRES_NEW` 事务中写入 outbox；单条写入失败计入 `failCount` 并继续后续候选，成功写入计入 `successCount`。
+3. `summaryComment` 最多列出 3 个失败引用，初次告警使用异常号，升级告警优先使用来源告警号；调用方以 `failCount` 判断完整失败规模。
+4. 自动任务租约不覆盖人工入口并发，当前 `NOT EXISTS` 候选过滤也不等同于数据库级唯一约束；接口暂不承诺人工并发触发 exactly-once。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
