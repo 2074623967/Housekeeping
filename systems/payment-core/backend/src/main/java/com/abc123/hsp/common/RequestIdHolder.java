@@ -1,17 +1,21 @@
 package com.abc123.hsp.common;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.concurrent.ThreadLocalRandom;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 public final class RequestIdHolder {
 
-    private static final SimpleDateFormat FORMATTER = new SimpleDateFormat("yyyyMMddHHmmssSSS");
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter
+            .ofPattern("yyyyMMddHHmmssSSS")
+            .withZone(ZoneId.systemDefault());
 
     private RequestIdHolder() {
     }
 
     public static String nextRequestId() {
-        return "REQ" + FORMATTER.format(new Date()) + ThreadLocalRandom.current().nextInt(100, 1000);
+        String uniqueSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        return "REQ" + FORMATTER.format(Instant.now()) + uniqueSuffix;
     }
 }
