@@ -2255,6 +2255,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `payment.callback.secret` 与 `HSP_PAYMENT_CALLBACK_SECRET` 已从有效配置契约移除。调用方不得以共享凭证兜底多个渠道，也不得在单渠道配置失败时切换其他渠道密钥重试。
 4. 当前渠道配置仍将密钥材料存于业务数据库；生产需要继续迁移到专用密钥托管并绑定密钥版本、商户应用和证书轮换事实。
 
+### 14.35 支付回调算法运行时白名单
+
+1. 回调验签读取渠道配置后，将 `callbackSignAlgorithm` 去除首尾空白并按大写规范化，只接受精确 `HMAC-SHA256` 或 `RSA2`。
+2. 算法为空或其他值返回 `PAYMENT-1032`；不再为空值默认 HMAC，也不接受 `RSA`、`RSA-SHA1` 等模糊名称。
+3. 算法校验失败发生在签名计算、nonce 清理/写入和支付单状态处理之前，不产生支付、资金、事件或防重事实副作用。
+4. 接入新算法必须先扩展明确的配置校验、运行时实现、错误处理和真实渠道测试，不能通过字符串包含关系或默认分支启用。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2281,6 +2288,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1029` | 支付已提交渠道或结果尚未确认，不能本地关闭，需先主动查单 |
 | `PAYMENT-1030` | 回调 URL 渠道与支付单实际路由渠道不一致或支付单尚未绑定渠道 |
 | `PAYMENT-1031` | 回调渠道交易号与支付单已绑定的渠道交易号不一致 |
+| `PAYMENT-1032` | 渠道回调签名算法缺失或不在运行时白名单 |
 
 联调说明：
 
