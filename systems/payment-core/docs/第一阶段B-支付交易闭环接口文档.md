@@ -2052,6 +2052,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 派发服务会再次截断第三方通知器返回消息中 `transportError=` 后的任意内容；通知器直接抛出异常时返回固定“通知器执行异常”摘要。
 3. 原始异常文本仅进入内部 `providerReceiptSnapshot`，对外查询仍按第 14.3、14.4 节失败闭合；本规则不提供生产原文查看授权。
 
+### 14.6 支付事件与死信任务出参最小化规则
+
+1. `GET /api/payment-events`、`GET /api/payment-events/export` 以及事件重发后的刷新结果返回 `eventPayload` 脱敏副本，不修改 Mapper DTO 或数据库事件载荷。
+2. 死信任务列表、待重放、人工结案和重放动作响应返回 `payloadSnapshot / headerSnapshot` 脱敏副本；实际重放消息继续使用数据库原始载荷，避免展示转换改变消费者输入。
+3. `Authorization`、访问令牌、API/访问密钥、密钥、签名、私钥及 Cookie 等凭据字段统一返回 `[REDACTED]`，字段名大小写、连字符和下划线差异不影响识别。
+4. 无法解析为对象或数组的载荷、消息头快照失败闭合为 `[REDACTED]`；重放发送失败的可见处置说明固定为 `重放发送失败：[REDACTED]`，不返回消息代理异常原文。
+5. 本规则只定义默认对外最小化，不提供生产敏感原文查看、可信身份、字段级授权或访问审计能力。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 

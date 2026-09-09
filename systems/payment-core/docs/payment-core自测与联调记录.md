@@ -5614,3 +5614,28 @@
 1. 底层传输异常不再通过告警明细、CSV 或异常中心聚合摘要扩散，运营仍可依据通道、HTTP 状态、超时和失败分类排障。
 2. 内部快照保留原始故障证据并不等于已具备可信授权；生产前仍需补字段级访问控制、审计、加密和保留期限治理。
 3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮测试通过替代正式放行治理事实。
+
+## 178. 2026-09-09 支付事件与死信任务出参最小化 V1.0 验证
+
+### 178.1 本轮补强
+
+1. 支付事件列表、CSV 和重发后的刷新列表在 Service 对外边界复制 DTO，并对 `eventPayload` 递归脱敏；Mapper DTO 与数据库原始事件保持不变。
+2. 死信任务列表、待重放、人工结案和重放动作响应复制实体，并对 `payloadSnapshot / headerSnapshot` 执行统一脱敏；重放消息仍从持久化原始任务构造，不把展示副本发送给消费者。
+3. 脱敏字段扩展到授权头、访问令牌、API/访问密钥、密钥、签名、私钥及 Cookie，并统一识别大小写、连字符和下划线命名；畸形载荷或消息头 JSON 继续失败闭合为 `[REDACTED]`。
+4. 消息代理重放异常不再写入可见 `resolutionNote`，统一记录 `重放发送失败：[REDACTED]`；原始异常没有通过本轮对外接口扩散。
+
+### 178.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 事件与死信脱敏定向测试 | `mvn -Dtest=PaymentSensitiveDataMaskerTest,PaymentEventServiceImplTest,PaymentDeadLetterTaskServiceImplTest test` | 通过 | `24` 个用例通过；覆盖凭据字段、事件列表/CSV、死信列表/动作响应、Mapper 原值保持、原始载荷重放和异常摘要遮蔽 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 文本报告汇总 `483` 个用例，`0` failures、`0` errors、`0` skipped |
+| 生产身份权限与隐私治理 | 统一认证、字段级授权、原文访问审计、加密、保留期限与真实消息代理故障样本 | 未执行 | 不记录生产 IAM、审计、隐私验收、渗透测试或现场核验通过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误；本轮未修改 Mapper XML、数据库结构、事件状态机或重放路由 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+
+### 178.3 当前判断
+
+1. 支付事件与死信处置的页面、下载和动作响应不再直接透传载荷或消息头中的凭据与个人信息，畸形结构按失败闭合处理。
+2. 重放路径仍使用数据库原始载荷，保证展示最小化不改变业务消息；原始事实保留不等于已具备生产敏感原文访问授权。
+3. `test -> master` 与 `release/*` 仍需以统一门禁复判为准，不以本轮自动化通过替代正式审批、生产迁移、真实消息代理联调或稳定观察结论。
