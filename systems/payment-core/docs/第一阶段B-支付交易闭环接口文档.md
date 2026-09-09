@@ -2373,6 +2373,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 完整服务双事务验证要求后到请求在同订单锁释放前不能完成；锁释放后必须重新查重并返回首请求创建的相同 `prepayOrderNo/paymentOrderId`。
 3. 验证结束时协调表、账单、支付单和预付单各只能存在一条对应记录。该契约的本地自动化证据不替代真实 MySQL 多实例、锁等待超时、死锁恢复和容量验收。
 
+### 14.52 创建预付单幂等参数一致性契约
+
+1. 同一 `orderNo` 存在有效预付单时，`payScene`、显式 `customerName`、显式 `amount` 与生效后的 `cashierTitle` 必须和原预付单一致；金额按数值比较，不受币种符号、千分位或尾随零影响。
+2. 参数一致时接口继续返回原 `prepayOrderNo/paymentOrderId`；任一参数冲突时返回 `PAYMENT-1038`，不得读取后续订单金额、覆盖旧单或创建第二组账单/支付单/预付单。
+3. 一致性校验在订单级事务锁内、查询有效预付单后执行，确保并发后到请求基于已提交事实判断。当前契约不包含上游订单版本号或跨系统请求摘要。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2405,6 +2411,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1035` | 支付提交请求为空，业务字段缺失、超长、含控制字符，或终端不在有限白名单 |
 | `PAYMENT-1036` | 支付通用入口或预付请求为空，标识/业务字段缺失、超长、含控制字符，或金额格式越界 |
 | `PAYMENT-1037` | 订单已结清或已超额支付，无需再次创建支付单 |
+| `PAYMENT-1038` | 同一订单已有有效预付单，但本次支付场景、客户、金额或收银台标题不一致 |
 
 联调说明：
 
