@@ -245,7 +245,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertChannelReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付渠道已有待复核申请", exception);
+            throw new IllegalArgumentException("该支付渠道已有待复核申请");
         }
         return paymentConfigMapper.findChannelReviews();
     }
@@ -561,7 +561,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertRouteRuleReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该路由规则已有待复核申请", exception);
+            throw new IllegalArgumentException("该路由规则已有待复核申请");
         }
         return paymentConfigMapper.findRouteRuleReviews();
     }
@@ -896,7 +896,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     : paymentConfigMapper.updateIssueDutyRoster(candidate);
         } catch (DuplicateKeyException exception) {
             if (createOperation) {
-                throw new IllegalArgumentException("异常告警值班路由已存在，复核申请基线已失效", exception);
+                throw new IllegalArgumentException("异常告警值班路由已存在，复核申请基线已失效");
             }
             throw exception;
         }
@@ -970,7 +970,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertReturnCodeReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该渠道返回码已有待复核申请", exception);
+            throw new IllegalArgumentException("该渠道返回码已有待复核申请");
         }
         return paymentConfigMapper.findReturnCodeReviews();
     }
@@ -1079,7 +1079,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertReturnCodeImportReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("已有待复核的返回码导入申请", exception);
+            throw new IllegalArgumentException("已有待复核的返回码导入申请");
         }
         return paymentConfigMapper.findReturnCodeImportReviews();
     }
@@ -1117,7 +1117,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 }
             }
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("返回码配置发生并发冲突，请重新预检后再应用", exception);
+            throw new IllegalArgumentException("返回码配置发生并发冲突，请重新预检后再应用");
         }
         List<PaymentChannelReturnCodeConfigDTO> resultingMappings = paymentConfigMapper.findReturnCodeMappings();
         String resultFingerprint = fingerprintReturnCodeMappings(resultingMappings);
@@ -1198,7 +1198,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertGatewayReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付网关已有待复核申请", exception);
+            throw new IllegalArgumentException("该支付网关已有待复核申请");
         }
         return paymentConfigMapper.findGatewayReviews();
     }
@@ -1287,7 +1287,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     : paymentConfigMapper.updateGateway(candidate);
         } catch (DuplicateKeyException exception) {
             if (createOperation) {
-                throw new IllegalArgumentException("支付网关已存在，复核申请基线已失效", exception);
+                throw new IllegalArgumentException("支付网关已存在，复核申请基线已失效");
             }
             throw exception;
         }
@@ -1501,7 +1501,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     : paymentConfigMapper.updateControlPolicy(candidate);
         } catch (DuplicateKeyException exception) {
             if (createOperation) {
-                throw new IllegalArgumentException("支付控制策略已存在，复核申请基线已失效", exception);
+                throw new IllegalArgumentException("支付控制策略已存在，复核申请基线已失效");
             }
             throw exception;
         }
@@ -1684,7 +1684,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     : paymentConfigMapper.updateAlertProvider(candidate);
         } catch (DuplicateKeyException exception) {
             if (createOperation) {
-                throw new IllegalArgumentException("告警通知供应商已存在，复核申请基线已失效", exception);
+                throw new IllegalArgumentException("告警通知供应商已存在，复核申请基线已失效");
             }
             throw exception;
         }
@@ -2311,7 +2311,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertProtocolReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付协议已有待复核申请", exception);
+            throw new IllegalArgumentException("该支付协议已有待复核申请");
         }
     }
 
@@ -2627,7 +2627,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertRouteRuleReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该路由规则已有待复核申请", exception);
+            throw new IllegalArgumentException("该路由规则已有待复核申请");
         }
         return paymentConfigMapper.findRouteRuleReviews();
     }
@@ -3019,7 +3019,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertAlertProviderReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该告警通知供应商已有待复核申请", exception);
+            throw new IllegalArgumentException("该告警通知供应商已有待复核申请");
         }
     }
 
@@ -3182,7 +3182,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertIssueDutyRosterReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该异常告警值班路由已有待复核申请", exception);
+            throw new IllegalArgumentException("该异常告警值班路由已有待复核申请");
         }
     }
 
@@ -3428,7 +3428,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertGatewayReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付网关已有待复核申请", exception);
+            throw new IllegalArgumentException("该支付网关已有待复核申请");
         }
     }
 
@@ -3685,7 +3685,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertControlPolicyReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付控制策略已有待复核申请", exception);
+            throw new IllegalArgumentException("该支付控制策略已有待复核申请");
         }
     }
 
@@ -3859,7 +3859,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         try {
             paymentConfigMapper.insertChannelReview(review);
         } catch (DuplicateKeyException exception) {
-            throw new IllegalArgumentException("该支付渠道已有待复核申请", exception);
+            throw new IllegalArgumentException("该支付渠道已有待复核申请");
         }
     }
 
@@ -3999,7 +3999,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 throw new IllegalArgumentException("回调通知地址必须是有效的 HTTPS 地址");
             }
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("回调通知地址必须是有效的 HTTPS 地址", exception);
+            throw new IllegalArgumentException("回调通知地址必须是有效的 HTTPS 地址");
         }
         return normalized;
     }
@@ -4012,7 +4012,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 throw new IllegalArgumentException("网关基础地址必须是有效的 HTTPS 地址");
             }
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("网关基础地址必须是有效的 HTTPS 地址", exception);
+            throw new IllegalArgumentException("网关基础地址必须是有效的 HTTPS 地址");
         }
         return normalized;
     }
@@ -4237,7 +4237,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                         record, currentByKey, importedKeys, availableChannels));
             }
         } catch (IOException exception) {
-            throw new IllegalArgumentException("CSV 解析失败，请检查引号、换行和 UTF-8 编码", exception);
+            throw new IllegalArgumentException("CSV 解析失败，请检查引号、换行和 UTF-8 编码");
         }
         PaymentReturnCodeImportResultDTO result = new PaymentReturnCodeImportResultDTO();
         result.setBaselineFingerprint(fingerprintReturnCodeMappings(safeCurrentMappings));

@@ -494,15 +494,20 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.countPendingRouteRuleReviews("RULE_HOME_APP")).thenReturn(0);
+        String sensitiveDetail = "jdbc:mysql://internal-db/payment?password=review-secret\n"
+                + "insert into t_payment_route_rule_review token=review-token";
         when(paymentConfigMapper.insertRouteRuleReview(
                 org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class)))
-                .thenThrow(new DuplicateKeyException("uk_route_rule_review_pending"));
+                .thenThrow(new DuplicateKeyException(sensitiveDetail,
+                        new IllegalStateException(sensitiveDetail)));
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper).submitRouteRuleReview(request));
 
         org.junit.jupiter.api.Assertions.assertEquals("该路由规则已有待复核申请", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveDetail));
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
     }
 
     @Test
