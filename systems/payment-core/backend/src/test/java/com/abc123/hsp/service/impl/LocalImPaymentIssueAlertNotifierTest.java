@@ -151,6 +151,51 @@ class LocalImPaymentIssueAlertNotifierTest {
     }
 
     @Test
+    void shouldFailWhenHttpSuccessHasNoBusinessAcceptanceEvidence() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(Mockito.anyString(), Mockito.any(), Mockito.eq(String.class)))
+                .thenReturn(new ResponseEntity<String>("{}", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate, "https://hooks.example.com/payment-alert").send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("normalizedStatus=FAILED"));
+    }
+
+    @Test
+    void shouldFailWhenSuccessCodeConfigurationIsIncomplete() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(Mockito.anyString(), Mockito.any(), Mockito.eq(String.class)))
+                .thenReturn(new ResponseEntity<String>("{\"code\":\"0\"}", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://hooks.example.com/payment-alert",
+                4500,
+                "/code",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("成功码校验配置不完整"));
+    }
+
+    @Test
     void shouldReturnFailedStatusWhenWebhookHttpStatusIsNot2xx() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.postForEntity(
@@ -253,6 +298,7 @@ class LocalImPaymentIssueAlertNotifierTest {
         ).send(buildDispatchItem());
 
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Read timed out"));
         Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());

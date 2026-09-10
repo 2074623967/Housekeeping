@@ -173,6 +173,40 @@ class LocalSmsPaymentIssueAlertNotifierTest {
     }
 
     @Test
+    void shouldFailWhenProviderReturnsUnknownDeliveryStatus() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(Mockito.anyString(), Mockito.any(), Mockito.eq(String.class)))
+                .thenReturn(new ResponseEntity<String>(
+                        "{\"code\":\"SUCCESS\",\"data\":{\"deliveryStatus\":\"MYSTERY\"}}",
+                        HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalSmsPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://sms.example.com/payment-alert",
+                3000,
+                "/code",
+                "SUCCESS",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/data/deliveryStatus",
+                "SENT",
+                "QUEUED",
+                "FAILED",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("providerStatus=MYSTERY"));
+    }
+
+    @Test
     void shouldReturnFailedStatusWhenSmsWebhookTransportFails() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.postForEntity(
@@ -203,6 +237,7 @@ class LocalSmsPaymentIssueAlertNotifierTest {
         ).send(buildDispatchItem());
 
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Connection reset"));
         Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());

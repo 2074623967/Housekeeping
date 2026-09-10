@@ -226,12 +226,16 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 successJsonPointer,
                 successExpectedValue
         );
+        boolean businessSuccessConfirmed = StringUtils.hasText(successJsonPointer)
+                && StringUtils.hasText(successExpectedValue)
+                && !StringUtils.hasText(businessFailureMessage);
         String rawDeliveryStatus = resolveWebhookPointerText(channelLabel, responseBody, deliveryStatusJsonPointer);
         boolean httpStatusFailed = statusCode < 200 || statusCode >= 300;
         String normalizedDeliveryStatus = resolveNormalizedDeliveryStatus(rawDeliveryStatus,
                 deliveredStatusValues,
                 acceptedStatusValues,
-                failedStatusValues);
+                failedStatusValues,
+                businessSuccessConfirmed);
         if (httpStatusFailed || StringUtils.hasText(businessFailureMessage)) {
             normalizedDeliveryStatus = "FAILED";
         }
@@ -241,7 +245,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 "HTTP_RESPONSE",
                 SENSITIVE_DATA_MASKER.maskPayload(responseBody)
         ));
-        result.setProviderReceiptNo(resolveWebhookReceiptNo(item, receiptPrefix, responseBody, receiptNoJsonPointer));
+        result.setProviderReceiptNo(resolveWebhookReceiptNo(receiptPrefix, responseBody, receiptNoJsonPointer));
         result.setProviderDeliveryStatus(normalizedDeliveryStatus);
         result.setProviderDeliveryMessage(buildWebhookDeliveryMessage(
                 channelLabel,
@@ -266,7 +270,6 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                                                     int timeoutMs) {
         PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
         result.setProviderReceiptSnapshot(buildSnapshot("HTTP_TRANSPORT_ERROR", "[REDACTED]"));
-        result.setProviderReceiptNo(buildWebhookReceiptNo(channelLabel + "-HTTP", item == null ? null : item.getAlertNo()));
         result.setProviderDeliveryStatus("FAILED");
         result.setProviderDeliveryMessage(new StringBuilder(channelLabel)
                 .append(" HTTP 网关请求失败，timeout=").append(timeoutMs).append("ms")
@@ -303,7 +306,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
 
     private String buildSnapshot(String source, String content) {
         if (!StringUtils.hasText(content)) {
-            return "";
+            return source + ":EMPTY";
         }
         String normalizedContent = content.trim();
         if (normalizedContent.length() > PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH) {
@@ -316,7 +319,12 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                                                         String responseBody,
                                                         String successJsonPointer,
                                                         String successExpectedValue) {
-        if (!StringUtils.hasText(successJsonPointer) || !StringUtils.hasText(successExpectedValue)) {
+        boolean hasSuccessPointer = StringUtils.hasText(successJsonPointer);
+        boolean hasSuccessExpectedValue = StringUtils.hasText(successExpectedValue);
+        if (hasSuccessPointer != hasSuccessExpectedValue) {
+            return "成功码校验配置不完整";
+        }
+        if (!hasSuccessPointer) {
             return "";
         }
         JsonNode node = readJsonNode(channelLabel, responseBody);
@@ -339,17 +347,16 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 : "[REDACTED]";
     }
 
-    private String resolveWebhookReceiptNo(PaymentIssueAlertDispatchItemDTO item,
-                                           String receiptPrefix,
+    private String resolveWebhookReceiptNo(String receiptPrefix,
                                            String responseBody,
                                            String receiptNoJsonPointer) {
         if (!StringUtils.hasText(receiptNoJsonPointer)) {
-            return buildWebhookReceiptNo(receiptPrefix, item.getAlertNo());
+            return null;
         }
         JsonNode node = readJsonNode(receiptPrefix, responseBody);
         JsonNode receiptNode = node.at(receiptNoJsonPointer);
         if (receiptNode.isMissingNode() || receiptNode.isNull() || !StringUtils.hasText(receiptNode.asText())) {
-            return buildWebhookReceiptNo(receiptPrefix, item.getAlertNo());
+            return null;
         }
         return receiptNode.asText().trim();
     }
@@ -371,9 +378,10 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
     private String resolveNormalizedDeliveryStatus(String rawDeliveryStatus,
                                                    String deliveredStatusValues,
                                                    String acceptedStatusValues,
-                                                   String failedStatusValues) {
+                                                   String failedStatusValues,
+                                                   boolean businessSuccessConfirmed) {
         if (!StringUtils.hasText(rawDeliveryStatus)) {
-            return "ACCEPTED";
+            return businessSuccessConfirmed ? "ACCEPTED" : "FAILED";
         }
         if (matchesConfiguredStatus(rawDeliveryStatus, deliveredStatusValues)
                 || "DELIVERED".equalsIgnoreCase(rawDeliveryStatus)
@@ -395,7 +403,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
                 || "PROCESSING".equalsIgnoreCase(rawDeliveryStatus)) {
             return "ACCEPTED";
         }
-        return "ACCEPTED";
+        return "FAILED";
     }
 
     private boolean matchesConfiguredStatus(String rawDeliveryStatus, String configuredValues) {
@@ -420,14 +428,6 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         } catch (Exception exception) {
             throw new IllegalStateException(channelLabel + " 网关响应体不是合法 JSON：" + exception.getMessage(), exception);
         }
-    }
-
-    protected String buildWebhookReceiptNo(String receiptPrefix, String alertNo) {
-        String normalizedAlertNo = StringUtils.hasText(alertNo) ? alertNo.replaceAll("[^A-Za-z0-9]", "") : "UNKNOWN";
-        if (normalizedAlertNo.length() > 20) {
-            normalizedAlertNo = normalizedAlertNo.substring(normalizedAlertNo.length() - 20);
-        }
-        return receiptPrefix + "-" + normalizedAlertNo;
     }
 
     private String buildReceiptNo(String channelLabel, String issueNo) {

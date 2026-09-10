@@ -173,6 +173,53 @@ class LocalEmailPaymentIssueAlertNotifierTest {
     }
 
     @Test
+    void shouldNotSynthesizeReceiptWhenProviderOmitsReceiptField() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(Mockito.anyString(), Mockito.any(), Mockito.eq(String.class)))
+                .thenReturn(new ResponseEntity<String>(
+                        "{\"status\":\"DELIVERED\",\"result\":{}}",
+                        HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
+                restTemplate,
+                "https://email.example.com/payment-alert",
+                3000,
+                "/status",
+                "DELIVERED",
+                "/result/mailNo",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "/status",
+                "DELIVERED",
+                "ACCEPTED",
+                "FAILED",
+                ""
+        ).send(buildDispatchItem());
+
+        Assertions.assertEquals("DELIVERED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
+    }
+
+    @Test
+    void shouldRecordStableSnapshotWhenProviderReturnsEmptyBody() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.postForEntity(Mockito.anyString(), Mockito.any(), Mockito.eq(String.class)))
+                .thenReturn(new ResponseEntity<String>("", HttpStatus.OK));
+
+        PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
+                restTemplate, "https://email.example.com/payment-alert").send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertEquals("HTTP_RESPONSE:EMPTY", result.getProviderReceiptSnapshot());
+        Assertions.assertNull(result.getProviderReceiptNo());
+    }
+
+    @Test
     void shouldReturnFailedStatusWhenEmailWebhookTransportFails() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.postForEntity(
@@ -203,6 +250,7 @@ class LocalEmailPaymentIssueAlertNotifierTest {
         ).send(buildDispatchItem());
 
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Connect timed out"));
         Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());
