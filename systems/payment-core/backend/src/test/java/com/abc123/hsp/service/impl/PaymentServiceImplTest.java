@@ -2215,6 +2215,102 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeUnexpectedChannelQueryFailureAndRecordAutomaticBackoff() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-RUNTIME-FAIL", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-RUNTIME-FAIL")).thenReturn(detail);
+        when(paymentChannelQueryService.query(detail)).thenThrow(new IllegalStateException("remote timeout detail"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-RUNTIME-FAIL");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof IllegalStateException);
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-RUNTIME-FAIL"), eq("wx_h5"), eq("QUERY_FAILED"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
+                eq("查单失败"), eq("danger"));
+    }
+
+    @Test
+    void shouldRejectSuccessfulChannelQueryWithoutTransactionBeforeRecordingSuccess() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-MISSING-TXN", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-QUERY-MISSING-TXN")).thenReturn(detail, detail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
+        when(paymentChannelQueryService.query(detail))
+                .thenReturn(queryResult("SUCCESS", null, "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-MISSING-TXN");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-MISSING-TXN"), eq("wx_h5"), eq("QUERY_FAILED"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
+                eq("查单失败"), eq("danger"));
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+    }
+
+    @Test
+    void shouldUseCallbackTransactionWhenCallbackWinsMissingTransactionQuery() {
+        PaymentDetailDTO querying = queryDetail("PAY-QUERY-CALLBACK-TXN", "WAIT_CALLBACK");
+        PaymentDetailDTO settled = queryDetail("PAY-QUERY-CALLBACK-TXN", "SUCCESS");
+        settled.setChannelTransactionNo("WX-CALLBACK-001");
+        when(paymentMapper.findDetail("PAY-QUERY-CALLBACK-TXN")).thenReturn(querying, settled);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
+        when(paymentChannelQueryService.query(querying))
+                .thenReturn(queryResult("SUCCESS", null, "GATEWAY_ACCESS_HTTP"));
+        when(paymentMapper.findRouteLogs("PAY-QUERY-CALLBACK-TXN")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-QUERY-CALLBACK-TXN")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-QUERY-CALLBACK-TXN")).thenReturn(Collections.emptyList());
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-CALLBACK-TXN");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request);
+
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("WX-CALLBACK-001", result.getChannelTransactionNo());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-CALLBACK-TXN"), eq("wx_h5"), eq("SUCCESS"),
+                eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\"}"),
+                org.mockito.ArgumentMatchers.contains("\"code\":\"SUCCESS\""),
+                eq("已查单"), eq("success"));
+    }
+
+    @Test
     void shouldRecordInvalidChannelQueryResultWithoutSettlementSideEffects() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-INVALID", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-QUERY-INVALID")).thenReturn(detail);

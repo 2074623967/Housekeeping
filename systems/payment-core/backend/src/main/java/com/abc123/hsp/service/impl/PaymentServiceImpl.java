@@ -956,18 +956,23 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
         paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
-        PaymentChannelQueryResultDTO queryResult;
-        try {
-            queryResult = PaymentChannelQueryResultValidator.validateAndNormalize(
-                    paymentChannelQueryService.query(detail));
-        } catch (BusinessException exception) {
-            recordChannelQueryFailure(detail, exception);
-            throw exception;
-        }
+        PaymentChannelQueryResultDTO queryResult = queryChannel(detail);
         boolean requiresSettlement = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())
                 && !"SUCCESS".equalsIgnoreCase(detail.getStatus());
         if (requiresSettlement) {
             detail = lockAndReloadPaymentForSettlement(detail);
+        }
+        String channelTransactionNo = StringUtils.hasText(queryResult.getChannelTransactionNo())
+                ? queryResult.getChannelTransactionNo().trim()
+                : detail.getChannelTransactionNo();
+        if ("SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())
+                && !"SUCCESS".equalsIgnoreCase(detail.getStatus())
+                && !StringUtils.hasText(channelTransactionNo)) {
+            BusinessException queryFailure = new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                    "channel transaction number is required to settle a successful query");
+            recordChannelQueryFailure(detail, queryFailure);
+            throw queryFailure;
         }
         applyReturnCodeStandardization(detail, queryResult);
         paymentMapper.updatePaymentReturnCodeSnapshot(
@@ -980,20 +985,12 @@ public class PaymentServiceImpl implements PaymentService {
                 queryResult.getManualInterventionRequired(),
                 queryResult.getMappingVersion(),
                 queryResult.getReturnCodeMappingMatched());
-        String channelTransactionNo = StringUtils.hasText(queryResult.getChannelTransactionNo())
-                ? queryResult.getChannelTransactionNo().trim()
-                : detail.getChannelTransactionNo();
         detail.setChannelTransactionNo(channelTransactionNo);
         detail.setQuerySource(queryResult.getQuerySource());
         recordChannelQuery(detail, queryResult);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || !"SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())) {
             return outwardDetail(detail);
-        }
-        if (!StringUtils.hasText(channelTransactionNo)) {
-            throw new BusinessException(
-                    ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
-                    "channel transaction number is required to settle a successful query");
         }
         int settledRows = paymentMapper.markPaymentSuccessFromChannelResult(
                 detail.getPaymentOrderId(), channelTransactionNo);
@@ -1031,6 +1028,23 @@ public class PaymentServiceImpl implements PaymentService {
         latestDetail.setQuerySource(queryResult.getQuerySource());
         applyReturnCodeStandardization(latestDetail, queryResult);
         return outwardDetail(latestDetail);
+    }
+
+    private PaymentChannelQueryResultDTO queryChannel(PaymentDetailDTO detail) {
+        try {
+            return PaymentChannelQueryResultValidator.validateAndNormalize(
+                    paymentChannelQueryService.query(detail));
+        } catch (BusinessException exception) {
+            recordChannelQueryFailure(detail, exception);
+            throw exception;
+        } catch (RuntimeException exception) {
+            BusinessException queryFailure = new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                    "payment channel query failed unexpectedly",
+                    exception);
+            recordChannelQueryFailure(detail, queryFailure);
+            throw queryFailure;
+        }
     }
 
     private PaymentDetailDTO lockAndReloadPaymentForSettlement(PaymentDetailDTO detail) {
