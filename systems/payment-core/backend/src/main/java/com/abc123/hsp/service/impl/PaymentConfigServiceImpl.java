@@ -2746,11 +2746,26 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String requireReviewIdentity(String identity, String message) {
+        if (containsIsoControl(identity)) {
+            throw new IllegalArgumentException("人员声明不能包含控制字符");
+        }
         String normalized = requireText(identity, message);
         if (normalized.length() > 64) {
             throw new IllegalArgumentException("人员声明不能超过64个字符");
         }
         return normalized;
+    }
+
+    private boolean containsIsoControl(String value) {
+        if (value == null) {
+            return false;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String requireReviewText(String text, String message) {

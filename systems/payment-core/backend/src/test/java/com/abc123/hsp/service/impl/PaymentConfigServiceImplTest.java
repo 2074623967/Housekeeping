@@ -409,6 +409,36 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldRejectControlCharactersInReviewIdentitiesBeforeWrites() {
+        PaymentRouteRuleReviewSubmitRequestDTO submitRequest = new PaymentRouteRuleReviewSubmitRequestDTO();
+        submitRequest.setCandidate(buildRouteRuleRequest());
+        submitRequest.getCandidate().setChangeReason("控制字符边界检查");
+        submitRequest.setRequester("maker-a\n");
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.submitRouteRuleReview(submitRequest));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleReview(org.mockito.ArgumentMatchers.any(PaymentRouteRuleReviewEntity.class));
+
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("maker-a\u0085");
+        action.setReviewComment("控制字符不可绕过异人复核");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.approveRouteRuleReview(review.getRequestNo(), action));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).completeRouteRuleReview(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void shouldRejectReviewWithoutChangingRuntimeRule() {
         PaymentRouteRuleReviewEntity review = buildPendingReview();
         PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
