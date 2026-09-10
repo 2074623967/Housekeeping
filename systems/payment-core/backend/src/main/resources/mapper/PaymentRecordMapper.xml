@@ -4,6 +4,17 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentRecordMapper">
 
+    <sql id="successRefundSummaryJoin">
+        LEFT JOIN (
+            SELECT payment_order_id,
+                   COUNT(1) AS refund_count,
+                   SUM(refund_amount) AS refunded_amount
+            FROM t_refund_order
+            WHERE status = 'SUCCESS'
+            GROUP BY payment_order_id
+        ) refund_summary ON refund_summary.payment_order_id = p.payment_order_id
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentRecordRowDTO">
         SELECT p.id AS serialNo,
                p.payment_order_id AS paymentOrderId,
@@ -48,14 +59,14 @@
                p.channel_transaction_no AS parameterValue,
                '1小时' AS validityPeriod,
                CONCAT('¥', FORMAT(p.amount, 2)) AS paymentAmount,
-               0 AS refundCount,
-               '¥0.00' AS refundedAmount,
+               COALESCE(refund_summary.refund_count, 0) AS refundCount,
+               CONCAT('¥', FORMAT(COALESCE(refund_summary.refunded_amount, 0), 2)) AS refundedAmount,
                CONCAT('家政服务-', p.order_no, '-订单支付') AS productName,
                CONCAT('user-', p.customer_name) AS userPaymentChannelId,
                '123' AS receivingAccount,
                'https://pay.housekeeping.local/callback' AS notifyUrl,
                'payment.payment-result' AS callbackMqTopic,
-               DATE_FORMAT(DATE_ADD(p.created_at, INTERVAL 1 HOUR), '%Y-%m-%d %H:%i:%s') AS expireTime,
+               DATE_FORMAT(TIMESTAMPADD(HOUR, 1, p.created_at), '%Y-%m-%d %H:%i:%s') AS expireTime,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS updatedAt,
                CASE WHEN p.status = 'SUCCESS'
@@ -65,6 +76,7 @@
                CONCAT('user-', p.customer_name) AS userId,
                p.status_type AS statusType
         FROM t_payment_order p
+        <include refid="successRefundSummaryJoin"/>
         <where>
             <if test="query.recordType == 'WECHAT'">
                 (p.channel_code LIKE 'wx%' OR p.payment_method = '微信'
@@ -202,14 +214,14 @@
                p.channel_transaction_no AS parameterValue,
                '1小时' AS validityPeriod,
                CONCAT('¥', FORMAT(p.amount, 2)) AS paymentAmount,
-               0 AS refundCount,
-               '¥0.00' AS refundedAmount,
+               COALESCE(refund_summary.refund_count, 0) AS refundCount,
+               CONCAT('¥', FORMAT(COALESCE(refund_summary.refunded_amount, 0), 2)) AS refundedAmount,
                CONCAT('家政服务-', p.order_no, '-订单支付') AS productName,
                CONCAT('user-', p.customer_name) AS userPaymentChannelId,
                '123' AS receivingAccount,
                'https://pay.housekeeping.local/callback' AS notifyUrl,
                'payment.payment-result' AS callbackMqTopic,
-               DATE_FORMAT(DATE_ADD(p.created_at, INTERVAL 1 HOUR), '%Y-%m-%d %H:%i:%s') AS expireTime,
+               DATE_FORMAT(TIMESTAMPADD(HOUR, 1, p.created_at), '%Y-%m-%d %H:%i:%s') AS expireTime,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS updatedAt,
                CASE WHEN p.status = 'SUCCESS'
@@ -226,6 +238,7 @@
                pa.request_payload AS latestRequestPayload,
                pa.response_payload AS latestResponsePayload
         FROM t_payment_order p
+        <include refid="successRefundSummaryJoin"/>
         LEFT JOIN t_payment_attempt pa
             ON pa.payment_order_id = p.payment_order_id
            AND pa.created_at = (

@@ -793,7 +793,8 @@ CREATE TABLE t_refund_order (
     applied_at DATETIME NOT NULL COMMENT '申请时间',
     success_at DATETIME DEFAULT NULL COMMENT '退款成功时间',
     PRIMARY KEY (id),
-    UNIQUE KEY uk_refund_order_id (refund_order_id)
+    UNIQUE KEY uk_refund_order_id (refund_order_id),
+    KEY idx_refund_payment_status (payment_order_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
 
 CREATE TABLE t_refund_operation_log (

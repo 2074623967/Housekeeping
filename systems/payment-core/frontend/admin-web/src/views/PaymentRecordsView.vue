@@ -27,11 +27,16 @@ const pageConfig = computed(() => ({
   recordType: route.meta.recordType || "ALL"
 }));
 
+function parseMoney(value) {
+  const amount = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 const metrics = computed(() => ({
   total: total.value,
   successTotal: rows.value.filter((item) => item.paymentStatus === "支付成功").length,
   closedTotal: rows.value.filter((item) => item.paymentStatus === "已关闭").length,
-  refundAmountTotal: rows.value.reduce((sum, item) => sum + Number(item.refundedAmount || 0), 0).toFixed(2)
+  refundAmountTotal: `¥${rows.value.reduce((sum, item) => sum + parseMoney(item.refundedAmount), 0).toFixed(2)}`
 }));
 
 const columns = [
@@ -152,7 +157,7 @@ onMounted(loadRows);
         <p class="card-value">{{ metrics.closedTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">已退金额合计</p>
+        <p class="card-title">本页已退金额</p>
         <p class="card-value">{{ metrics.refundAmountTotal }}</p>
       </article>
     </section>
