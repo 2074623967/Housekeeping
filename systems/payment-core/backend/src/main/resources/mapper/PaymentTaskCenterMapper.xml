@@ -467,20 +467,44 @@
         SELECT candidates.refund_order_id
         FROM (
             SELECT refund.refund_order_id,
-                   refund.channel_submitted_at,
+                   CASE
+                       WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                       ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                   END AS query_ready_at,
                    ROW_NUMBER() OVER (
                        PARTITION BY refund.channel_code
-                       ORDER BY refund.channel_submitted_at, refund.id
+                       ORDER BY CASE
+                                    WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                                    ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                                END,
+                                refund.id
                    ) AS channel_rank
             FROM t_refund_order refund
+                     LEFT JOIN t_payment_event refund_submit ON refund_submit.id = (
+                        SELECT event.id
+                        FROM t_payment_event event
+                        WHERE event.event_type = 'REFUND_SUBMIT'
+                          AND event.biz_no = refund.refund_order_id
+                        ORDER BY event.id DESC
+                        LIMIT 1
+                     )
             WHERE refund.status = 'PROCESSING'
               AND refund.channel_code IS NOT NULL
-              AND refund.channel_refund_no IS NOT NULL
-              AND refund.channel_submitted_at IS NOT NULL
-              AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+              AND (
+                (refund.channel_refund_no IS NOT NULL AND refund.channel_submitted_at IS NOT NULL)
+                OR (refund.channel_refund_no IS NULL AND refund_submit.publish_status = 'UNKNOWN')
+              )
+              AND TIMESTAMPDIFF(
+                    SECOND,
+                    CASE
+                        WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                        ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                    END,
+                    NOW()
+                  ) &gt;= #{minAgeSeconds}
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
-        ORDER BY candidates.channel_submitted_at, candidates.refund_order_id
+        ORDER BY candidates.query_ready_at, candidates.refund_order_id
         LIMIT #{batchSize}
     </select>
 
@@ -488,12 +512,27 @@
         SELECT candidates.refund_order_id
         FROM (
             SELECT refund.refund_order_id,
-                   refund.channel_submitted_at,
+                   CASE
+                       WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                       ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                   END AS query_ready_at,
                    ROW_NUMBER() OVER (
                        PARTITION BY refund.channel_code
-                       ORDER BY refund.channel_submitted_at, refund.id
+                       ORDER BY CASE
+                                    WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                                    ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                                END,
+                                refund.id
                    ) AS channel_rank
             FROM t_refund_order refund
+                     LEFT JOIN t_payment_event refund_submit ON refund_submit.id = (
+                        SELECT event.id
+                        FROM t_payment_event event
+                        WHERE event.event_type = 'REFUND_SUBMIT'
+                          AND event.biz_no = refund.refund_order_id
+                        ORDER BY event.id DESC
+                        LIMIT 1
+                     )
                      LEFT JOIN (
                         SELECT refund_order_id,
                                COUNT(1) AS query_count,
@@ -504,9 +543,18 @@
                      ) query_history ON query_history.refund_order_id = refund.refund_order_id
             WHERE refund.status = 'PROCESSING'
               AND refund.channel_code IS NOT NULL
-              AND refund.channel_refund_no IS NOT NULL
-              AND refund.channel_submitted_at IS NOT NULL
-              AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+              AND (
+                (refund.channel_refund_no IS NOT NULL AND refund.channel_submitted_at IS NOT NULL)
+                OR (refund.channel_refund_no IS NULL AND refund_submit.publish_status = 'UNKNOWN')
+              )
+              AND TIMESTAMPDIFF(
+                    SECOND,
+                    CASE
+                        WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                        ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                    END,
+                    NOW()
+                  ) &gt;= #{minAgeSeconds}
               AND (
                 query_history.latest_query_at IS NULL
                 OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
@@ -520,7 +568,7 @@
               )
         ) candidates
         WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
-        ORDER BY candidates.channel_submitted_at, candidates.refund_order_id
+        ORDER BY candidates.query_ready_at, candidates.refund_order_id
         LIMIT #{batchSize}
     </select>
 
@@ -576,16 +624,41 @@
     <select id="countPendingRefundQueryBacklog" resultType="int">
         SELECT COUNT(1)
         FROM t_refund_order refund
+                 LEFT JOIN t_payment_event refund_submit ON refund_submit.id = (
+                    SELECT event.id
+                    FROM t_payment_event event
+                    WHERE event.event_type = 'REFUND_SUBMIT'
+                      AND event.biz_no = refund.refund_order_id
+                    ORDER BY event.id DESC
+                    LIMIT 1
+                 )
         WHERE refund.status = 'PROCESSING'
           AND refund.channel_code IS NOT NULL
-          AND refund.channel_refund_no IS NOT NULL
-          AND refund.channel_submitted_at IS NOT NULL
-          AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+          AND (
+            (refund.channel_refund_no IS NOT NULL AND refund.channel_submitted_at IS NOT NULL)
+            OR (refund.channel_refund_no IS NULL AND refund_submit.publish_status = 'UNKNOWN')
+          )
+          AND TIMESTAMPDIFF(
+                SECOND,
+                CASE
+                    WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                    ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                END,
+                NOW()
+              ) &gt;= #{minAgeSeconds}
     </select>
 
     <select id="countDuePendingRefundQueries" resultType="int">
         SELECT COUNT(1)
         FROM t_refund_order refund
+                 LEFT JOIN t_payment_event refund_submit ON refund_submit.id = (
+                    SELECT event.id
+                    FROM t_payment_event event
+                    WHERE event.event_type = 'REFUND_SUBMIT'
+                      AND event.biz_no = refund.refund_order_id
+                    ORDER BY event.id DESC
+                    LIMIT 1
+                 )
                  LEFT JOIN (
                     SELECT refund_order_id,
                            COUNT(1) AS query_count,
@@ -596,9 +669,18 @@
                  ) query_history ON query_history.refund_order_id = refund.refund_order_id
         WHERE refund.status = 'PROCESSING'
           AND refund.channel_code IS NOT NULL
-          AND refund.channel_refund_no IS NOT NULL
-          AND refund.channel_submitted_at IS NOT NULL
-          AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+          AND (
+            (refund.channel_refund_no IS NOT NULL AND refund.channel_submitted_at IS NOT NULL)
+            OR (refund.channel_refund_no IS NULL AND refund_submit.publish_status = 'UNKNOWN')
+          )
+          AND TIMESTAMPDIFF(
+                SECOND,
+                CASE
+                    WHEN refund.channel_refund_no IS NOT NULL THEN refund.channel_submitted_at
+                    ELSE COALESCE(refund_submit.last_published_at, refund_submit.created_at)
+                END,
+                NOW()
+              ) &gt;= #{minAgeSeconds}
           AND (
             query_history.latest_query_at IS NULL
             OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
