@@ -51,6 +51,7 @@ class PaymentExpiryTaskServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getSuccessCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, result.getSkippedCount());
         org.junit.jupiter.api.Assertions.assertEquals(0, result.getFailCount());
         org.junit.jupiter.api.Assertions.assertTrue(result.getFailedPaymentOrderIds().isEmpty());
         verify(transactionManager).commit(transactionStatus);
@@ -93,6 +94,7 @@ class PaymentExpiryTaskServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(3, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(2, result.getSuccessCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, result.getSkippedCount());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getFailCount());
         org.junit.jupiter.api.Assertions.assertEquals(Collections.singletonList("PAY-FAIL"),
                 result.getFailedPaymentOrderIds());
@@ -124,7 +126,8 @@ class PaymentExpiryTaskServiceImplTest {
                 new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
-        org.junit.jupiter.api.Assertions.assertEquals(1, result.getSuccessCount());
+        org.junit.jupiter.api.Assertions.assertEquals(0, result.getSuccessCount());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getSkippedCount());
         org.junit.jupiter.api.Assertions.assertEquals(0, result.getFailCount());
         verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
                 org.mockito.ArgumentMatchers.anyString(),

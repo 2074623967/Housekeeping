@@ -441,6 +441,7 @@ class PaymentTaskCenterServiceImplTest {
         PaymentExpiryCloseResultDTO closeResult = new PaymentExpiryCloseResultDTO();
         closeResult.setProcessedCount(3);
         closeResult.setSuccessCount(2);
+        closeResult.setSkippedCount(1);
         closeResult.setFailCount(1);
         closeResult.setFailedPaymentOrderIds(Collections.singletonList("PAY-FAIL"));
         when(paymentExpiryTaskService.closeExpiredPayments()).thenReturn(closeResult);
@@ -461,8 +462,10 @@ class PaymentTaskCenterServiceImplTest {
                 entity -> "PAYMENT_EXPIRE_CLOSE".equals(entity.getTaskCode())
                         && entity.getProcessedCount() == 3
                         && entity.getSuccessCount() == 2
+                        && entity.getWarningCount() == 1
                         && entity.getFailCount() == 1
                         && "P2".equals(entity.getSeverityLevel())
+                        && entity.getSummaryComment().contains("并发跳过 1 笔")
                         && entity.getSummaryComment().contains("PAY-FAIL")
                         && entity.getSuggestedAction().contains("复跑任务")
         ));

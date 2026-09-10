@@ -12,6 +12,7 @@ public class PaymentExpiryCloseResultDTO {
 
     private int processedCount;
     private int successCount;
+    private int skippedCount;
     private int failCount;
     private List<String> failedPaymentOrderIds = new ArrayList<String>();
 }

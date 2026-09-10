@@ -1073,6 +1073,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         PaymentExpiryCloseResultDTO closeResult = paymentExpiryTaskService.closeExpiredPayments();
         int processedCount = closeResult.getProcessedCount();
         int successCount = closeResult.getSuccessCount();
+        int skippedCount = closeResult.getSkippedCount();
         int failCount = closeResult.getFailCount();
         String failedPaymentHint = closeResult.getFailedPaymentOrderIds().isEmpty()
                 ? ""
@@ -1084,12 +1085,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 triggeredBy,
                 processedCount,
                 successCount,
-                0,
+                skippedCount,
                 failCount,
                 processedCount == 0
                         ? "当前没有待关闭的超时支付单。"
-                        : String.format("%s处理 %d 笔超时支付单，成功关闭 %d 笔，失败 %d 笔%s。",
-                        modeLabel, processedCount, successCount, failCount, failedPaymentHint)
+                        : String.format("%s处理 %d 笔超时支付单，成功关闭 %d 笔，并发跳过 %d 笔，失败 %d 笔%s。",
+                        modeLabel, processedCount, successCount, skippedCount, failCount, failedPaymentHint)
         );
     }
 

@@ -35,11 +35,12 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         result.setProcessedCount(expiredPayments.size());
         for (ExpiredPaymentDTO payment : expiredPayments) {
             try {
-                transactionTemplate.execute(status -> {
-                    closeExpiredPayment(payment);
-                    return null;
-                });
-                result.setSuccessCount(result.getSuccessCount() + 1);
+                Boolean closed = transactionTemplate.execute(status -> closeExpiredPayment(payment));
+                if (Boolean.TRUE.equals(closed)) {
+                    result.setSuccessCount(result.getSuccessCount() + 1);
+                } else {
+                    result.setSkippedCount(result.getSkippedCount() + 1);
+                }
             } catch (RuntimeException exception) {
                 result.setFailCount(result.getFailCount() + 1);
                 if (result.getFailedPaymentOrderIds().size() < 3) {
@@ -50,10 +51,10 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         return result;
     }
 
-    private void closeExpiredPayment(ExpiredPaymentDTO payment) {
+    private boolean closeExpiredPayment(ExpiredPaymentDTO payment) {
         int closedRows = paymentMapper.markExpiredUnsubmittedPaymentClosed(payment.getPaymentOrderId());
         if (closedRows == 0) {
-            return;
+            return false;
         }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(payment.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(payment.getPaymentOrderId(), "已失效", "danger");
@@ -74,5 +75,6 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         processLog.setMessage("事件类型=PAYMENT_EXPIRED_CLOSED");
         processLog.setSource("payment-core");
         paymentMapper.insertPaymentProcessLog(processLog);
+        return true;
     }
 }
