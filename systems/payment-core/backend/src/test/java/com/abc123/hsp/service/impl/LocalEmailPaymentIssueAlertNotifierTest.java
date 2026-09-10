@@ -28,9 +28,20 @@ class LocalEmailPaymentIssueAlertNotifierTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Test
-    void shouldFallbackToLocalReceiptWhenWebhookNotConfigured() {
+    void shouldFailClosedWhenWebhookNotConfigured() {
         PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(Mockito.mock(RestTemplate.class), "")
                 .send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("Webhook 未配置"));
+        Assertions.assertEquals("CONFIGURATION_ERROR:WEBHOOK_URL_MISSING", result.getProviderReceiptSnapshot());
+    }
+
+    @Test
+    void shouldAllowLocalReceiptWhenDemoBehaviorExplicitlyEnabled() {
+        PaymentIssueAlertDeliveryResultDTO result = new LocalEmailPaymentIssueAlertNotifier(
+                Mockito.mock(RestTemplate.class), "", true).send(buildDispatchItem());
 
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("本地EMAIL通知器已受理"));

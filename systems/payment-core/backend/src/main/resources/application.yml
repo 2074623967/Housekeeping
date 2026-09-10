@@ -148,6 +148,8 @@ payment:
     dead-letter-task-enabled: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_ENABLED:false}
     dead-letter-task-queue: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_QUEUE:payment.compensation.dlq-intake}
   issue-alert:
+    # 默认失败闭合；只有 demo profile 显式开启后，空 Webhook 才生成本地模拟回执。
+    local-receipt-enabled: false
     auto-dispatch:
       # 默认关闭；确认通知供应商配置与接收人范围后再启用自动外发。
       enabled: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED:false}
@@ -158,7 +160,7 @@ payment:
       receipt-count-threshold: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_COUNT_THRESHOLD:10}
       receipt-timeout-minutes: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_TIMEOUT_MINUTES:30}
     im:
-      # 配置后 IM 告警会优先投递到外部 Webhook；为空时使用本地回执兜底，便于本地开发和自动化测试。
+      # 配置后 IM 告警投递到外部 Webhook；默认环境为空时记录配置失败。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_IM_WEBHOOK_URL:}
       timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_IM_TIMEOUT_MS:3000}
       success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_SUCCESS_CODE_JSON_POINTER:}
@@ -177,7 +179,7 @@ payment:
       failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_IM_FAILED_STATUS_VALUES:}
       failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_IM_FAILURE_CODE_JSON_POINTER:}
     sms:
-      # 配置后短信告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
+      # 配置后短信告警投递到外部 HTTP 网关；默认环境为空时记录配置失败。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_SMS_WEBHOOK_URL:}
       timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_SMS_TIMEOUT_MS:3000}
       success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_SUCCESS_CODE_JSON_POINTER:}
@@ -196,7 +198,7 @@ payment:
       failed-status-values: ${HSP_PAYMENT_ISSUE_ALERT_SMS_FAILED_STATUS_VALUES:}
       failure-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_SMS_FAILURE_CODE_JSON_POINTER:}
     email:
-      # 配置后邮件告警会优先投递到外部 HTTP 网关；为空时使用本地回执兜底。
+      # 配置后邮件告警投递到外部 HTTP 网关；默认环境为空时记录配置失败。
       webhook-url: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_WEBHOOK_URL:}
       timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_TIMEOUT_MS:3000}
       success-code-json-pointer: ${HSP_PAYMENT_ISSUE_ALERT_EMAIL_SUCCESS_CODE_JSON_POINTER:}

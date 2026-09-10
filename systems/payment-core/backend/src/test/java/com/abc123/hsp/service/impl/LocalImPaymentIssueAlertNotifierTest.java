@@ -32,9 +32,20 @@ class LocalImPaymentIssueAlertNotifierTest {
     private static final String RSA_PRIVATE_KEY = generateRsaPrivateKeyPem();
 
     @Test
-    void shouldFallbackToLocalReceiptWhenWebhookNotConfigured() {
+    void shouldFailClosedWhenWebhookNotConfigured() {
         PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(Mockito.mock(RestTemplate.class), "")
                 .send(buildDispatchItem());
+
+        Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
+        Assertions.assertNull(result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("Webhook 未配置"));
+        Assertions.assertEquals("CONFIGURATION_ERROR:WEBHOOK_URL_MISSING", result.getProviderReceiptSnapshot());
+    }
+
+    @Test
+    void shouldAllowLocalReceiptWhenDemoBehaviorExplicitlyEnabled() {
+        PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
+                Mockito.mock(RestTemplate.class), "", true).send(buildDispatchItem());
 
         Assertions.assertEquals("ACCEPTED", result.getProviderDeliveryStatus());
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("本地IM通知器已受理"));

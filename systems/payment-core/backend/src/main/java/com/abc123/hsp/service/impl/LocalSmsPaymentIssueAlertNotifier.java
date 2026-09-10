@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -14,7 +16,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * 短信告警通知器，支持外部 HTTP 网关优先、本地回执兜底。
+ * 短信告警通知器，支持外部 HTTP 网关和 demo 本地回执。
  */
 @Component
 public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssueAlertNotifier
@@ -38,6 +40,7 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
     private final String acceptedStatusValues;
     private final String failedStatusValues;
     private final String failureCodeJsonPointer;
+    private boolean localReceiptEnabled;
 
     @Autowired
     public LocalSmsPaymentIssueAlertNotifier(@Value("${payment.issue-alert.sms.webhook-url:}") String webhookUrl,
@@ -56,11 +59,14 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                                              @Value("${payment.issue-alert.sms.delivered-status-values:}") String deliveredStatusValues,
                                              @Value("${payment.issue-alert.sms.accepted-status-values:}") String acceptedStatusValues,
                                              @Value("${payment.issue-alert.sms.failed-status-values:}") String failedStatusValues,
-                                             @Value("${payment.issue-alert.sms.failure-code-json-pointer:}") String failureCodeJsonPointer) {
+                                             @Value("${payment.issue-alert.sms.failure-code-json-pointer:}") String failureCodeJsonPointer,
+                                             @Value("${payment.issue-alert.local-receipt-enabled:false}") boolean localReceiptEnabled,
+                                             Environment environment) {
         this(webhookUrl, timeoutMs, successJsonPointer, successExpectedValue, receiptNoJsonPointer,
                 authHeaderName, authHeaderValue, signatureHeaderName, signatureSecret, signatureAlgorithm,
                 timestampHeaderName, nonceHeaderName, deliveryStatusJsonPointer, deliveredStatusValues,
                 acceptedStatusValues, failedStatusValues, failureCodeJsonPointer, null);
+        this.localReceiptEnabled = localReceiptEnabled && environment.acceptsProfiles(Profiles.of("demo"));
     }
 
     LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl) {
@@ -84,6 +90,11 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
                 "",
                 restTemplate
         );
+    }
+
+    LocalSmsPaymentIssueAlertNotifier(RestTemplate restTemplate, String webhookUrl, boolean localReceiptEnabled) {
+        this(restTemplate, webhookUrl);
+        this.localReceiptEnabled = localReceiptEnabled;
     }
 
     LocalSmsPaymentIssueAlertNotifier(String webhookUrl,
@@ -173,7 +184,9 @@ public class LocalSmsPaymentIssueAlertNotifier extends AbstractLocalPaymentIssue
         if (StringUtils.hasText(webhookUrl)) {
             return sendWebhookAlert(item);
         }
-        return buildLocalDeliveryResult(item, "ACCEPTED", "SMS");
+        return localReceiptEnabled
+                ? buildLocalDeliveryResult(item, "ACCEPTED", "SMS")
+                : buildMissingWebhookConfigurationResult(item, "SMS");
     }
 
     private PaymentIssueAlertDeliveryResultDTO sendWebhookAlert(PaymentIssueAlertDispatchItemDTO item) {

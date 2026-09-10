@@ -11,3 +11,6 @@ payment:
   callback:
     # 仅本地演示允许模拟未签名回调，不得用于真实渠道环境。
     require-signature: false
+  issue-alert:
+    # 仅显式 demo 环境允许生成本地模拟通知回执。
+    local-receipt-enabled: true

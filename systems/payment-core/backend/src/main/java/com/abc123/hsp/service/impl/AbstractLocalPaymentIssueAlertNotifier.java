@@ -188,6 +188,22 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
     }
 
     /**
+     * 构造通知网关未配置结果，不生成任何供应商受理事实。
+     */
+    protected PaymentIssueAlertDeliveryResultDTO buildMissingWebhookConfigurationResult(
+            PaymentIssueAlertDispatchItemDTO item,
+            String channelLabel) {
+        PaymentIssueAlertDeliveryResultDTO result = new PaymentIssueAlertDeliveryResultDTO();
+        result.setProviderReceiptSnapshot("CONFIGURATION_ERROR:WEBHOOK_URL_MISSING");
+        result.setProviderDeliveryStatus("FAILED");
+        result.setProviderDeliveryMessage(channelLabel + " Webhook 未配置，未执行外部投递");
+        result.setRenderedContentSnapshot(item != null && StringUtils.hasText(item.getRenderedAlertContent())
+                ? item.getRenderedAlertContent()
+                : item == null ? "" : item.getAlertContent());
+        return result;
+    }
+
+    /**
      * 构造外部 HTTP/Webhook 网关投递结果，并按可选的业务成功码规则校验响应体。
      */
     protected PaymentIssueAlertDeliveryResultDTO buildWebhookDeliveryResult(PaymentIssueAlertDispatchItemDTO item,
