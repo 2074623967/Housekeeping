@@ -29,6 +29,7 @@ public class GatewayTransactionAccessService {
 
     static final String PAYMENT_SUBMIT = "PAYMENT_SUBMIT";
     static final String PAYMENT_QUERY = "PAYMENT_QUERY";
+    static final String REFUND_QUERY = "REFUND_QUERY";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GatewayTransactionAccessService.class);
     private static final String ENABLED = "ENABLED";
@@ -99,6 +100,10 @@ public class GatewayTransactionAccessService {
         if (PAYMENT_QUERY.equals(operationType)) {
             return requireText(channel.getPaymentQueryUrl(), "GATEWAY_UPSTREAM_NOT_CONFIGURED",
                     "payment query upstream is not configured");
+        }
+        if (REFUND_QUERY.equals(operationType)) {
+            return requireText(channel.getRefundQueryUrl(), "GATEWAY_UPSTREAM_NOT_CONFIGURED",
+                    "refund query upstream is not configured");
         }
         throw new GatewayAccessException("GATEWAY_OPERATION_NOT_SUPPORTED",
                 "gateway transaction operation is not supported");

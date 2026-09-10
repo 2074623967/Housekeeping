@@ -14,6 +14,10 @@ import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -28,6 +32,8 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
     private final boolean enabled;
     private final String queryUrl;
     private final Set<String> supportedChannels;
+    private final String appCode;
+    private final String accessKey;
     private final RestTemplate restTemplate;
 
     @Autowired
@@ -36,8 +42,10 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
             @Value("${payment.refund-query.gateway-access.query-url:}") String queryUrl,
             @Value("${payment.refund-query.gateway-access.supported-channels:wx_h5,alipay_h5,offline_bank}")
                     String supportedChannels,
+            @Value("${payment.refund-query.gateway-access.app-code:APP_PAY_CORE}") String appCode,
+            @Value("${payment.refund-query.gateway-access.access-key:}") String accessKey,
             @Value("${payment.refund-query.gateway-access.timeout-ms:2000}") int timeoutMs) {
-        this(enabled, queryUrl, supportedChannels,
+        this(enabled, queryUrl, supportedChannels, appCode, accessKey,
                 AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(timeoutMs));
     }
 
@@ -45,10 +53,14 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
             boolean enabled,
             String queryUrl,
             String supportedChannels,
+            String appCode,
+            String accessKey,
             RestTemplate restTemplate) {
         this.enabled = enabled;
         this.queryUrl = queryUrl;
         this.supportedChannels = parseChannels(supportedChannels);
+        this.appCode = appCode;
+        this.accessKey = accessKey;
         this.restTemplate = restTemplate;
     }
 
@@ -56,6 +68,8 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
     public boolean supports(String channelCode) {
         return enabled
                 && StringUtils.hasText(queryUrl)
+                && StringUtils.hasText(appCode)
+                && StringUtils.hasText(accessKey)
                 && StringUtils.hasText(channelCode)
                 && supportedChannels.contains(channelCode.trim().toLowerCase(Locale.ROOT));
     }
@@ -67,12 +81,17 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
         request.setChannelCode(refund.getChannelCode());
         request.setChannelRefundNo(refund.getChannelRefundNo());
         try {
-            GatewayRefundQueryResponse response = restTemplate.postForObject(
-                    queryUrl.trim(), request, GatewayRefundQueryResponse.class);
-            RefundChannelQueryResultDTO result = response == null ? null : response.getData();
-            if (result == null) {
-                throw queryFailed("gateway-access returned no refund query result");
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Gateway-App-Code", appCode);
+            headers.set("X-Gateway-Access-Key", accessKey);
+            ResponseEntity<GatewayRefundQueryResponse> responseEntity = restTemplate.exchange(
+                    queryUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers),
+                    GatewayRefundQueryResponse.class);
+            GatewayRefundQueryResponse response = responseEntity.getBody();
+            if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
+                throw queryFailed("gateway-access rejected refund query");
             }
+            RefundChannelQueryResultDTO result = response.getData();
             if (!StringUtils.hasText(result.getQuerySource())) {
                 result.setQuerySource("GATEWAY_ACCESS_HTTP");
             }

@@ -31,11 +31,14 @@ gateway:
         gateway-code: GW_WX
         payment-submit-url: ${HSP_GATEWAY_WX_PAYMENT_SUBMIT_URL:}
         payment-query-url: ${HSP_GATEWAY_WX_PAYMENT_QUERY_URL:}
+        refund-query-url: ${HSP_GATEWAY_WX_REFUND_QUERY_URL:}
       alipay_h5:
         gateway-code: GW_ALI
         payment-submit-url: ${HSP_GATEWAY_ALIPAY_PAYMENT_SUBMIT_URL:}
         payment-query-url: ${HSP_GATEWAY_ALIPAY_PAYMENT_QUERY_URL:}
+        refund-query-url: ${HSP_GATEWAY_ALIPAY_REFUND_QUERY_URL:}
       offline_bank:
         gateway-code: GW_BANK
         payment-submit-url: ${HSP_GATEWAY_BANK_PAYMENT_SUBMIT_URL:}
         payment-query-url: ${HSP_GATEWAY_BANK_PAYMENT_QUERY_URL:}
+        refund-query-url: ${HSP_GATEWAY_BANK_REFUND_QUERY_URL:}

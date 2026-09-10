@@ -61,8 +61,10 @@ payment:
     gateway-access:
       # 仅接入真实 gateway-access 退款查单实现后启用；本地兜底只回显现状。
       enabled: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_ENABLED:false}
-      query-url: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL:http://127.0.0.1:18150/api/gateway/refunds/query}
+      query-url: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/refunds/query}
       supported-channels: ${HSP_PAYMENT_REFUND_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
+      app-code: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_APP_CODE:APP_PAY_CORE}
+      access-key: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_ACCESS_KEY:}
       timeout-ms: ${HSP_PAYMENT_REFUND_QUERY_TIMEOUT_MS:2000}
     compensation:
       enabled: ${HSP_PAYMENT_REFUND_QUERY_COMPENSATION_ENABLED:false}
