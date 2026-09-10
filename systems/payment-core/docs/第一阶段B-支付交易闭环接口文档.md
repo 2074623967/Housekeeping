@@ -18,7 +18,7 @@
 | `/api/payments/prepay` | `POST` | 创建账单、支付单、预付单 |
 | `/api/payments/cashier/{prepayOrderNo}` | `GET` | 获取收银台数据 |
 | `/api/payments/submit` | `POST` | 提交支付 |
-| `/api/payments/callback/{channel}` | `POST` | 模拟渠道回调 |
+| `/api/payments/callback/{channel}` | `POST` | 接收真实渠道签名回调，产品页面不调用 |
 | `/api/payments/query` | `POST` | 主动查单 |
 | `/api/payments/close` | `POST` | 关闭支付单 |
 | `/api/payments` | `GET` | 查询支付单列表 |
@@ -2238,7 +2238,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 1. `POST /api/payments/callback/{channel}` 先按 `{channel}` 完成既有签名、时间窗和 nonce 防重校验，再校验 `{channel}` 与支付单持久化 `channel` 忽略大小写后一致。
 2. 支付单未绑定渠道或渠道不一致时返回 `PAYMENT-1030`；该请求不得更新支付单、支付尝试、预付单、订单、账单、通知日志、事件或提交令牌。
-3. 调用方必须使用实际路由渠道的独立回调入口与凭证，不得用一个渠道的签名收口另一渠道支付。后台模拟回调也必须读取支付详情渠道，不得硬编码默认渠道。
+3. 调用方必须使用实际路由渠道的独立回调入口与凭证，不得用一个渠道的签名收口另一渠道支付。产品页面不发起回调；本地受控测试工具也不得硬编码默认渠道。
 4. 当前绑定到平台渠道编码，尚未进一步绑定渠道商户号、应用标识、证书版本或网络来源；这些仍是生产真实渠道接入项。
 
 ### 14.32 支付回调渠道交易号绑定规则
@@ -2251,7 +2251,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 ### 14.33 支付回调验签环境默认规则
 
 1. 基础配置 `payment.callback.require-signature` 默认值为 `true`，服务构造器兜底同样为 `true`；部署未提供 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE` 时仍执行签名、时间窗和 nonce 防重校验。
-2. 仅 `application-demo.yml` 显式配置为 `false`，用于本地页面模拟回调。测试、预发与生产不得设置 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE=false`，也不得在验签失败后自动降级重试。
+2. 仅 `application-demo.yml` 显式配置为 `false`，用于本地受控工具联调；产品页面不暴露模拟回调。测试、预发与生产不得设置 `HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE=false`，也不得在验签失败后自动降级重试。
 3. 默认开启不等于安全材料已经就绪。非 demo 环境必须按渠道配置 HMAC-SHA256 密钥或 RSA2 公钥；材料缺失返回 `PAYMENT-1006`，字段缺失或验签失败返回 `PAYMENT-1005`。
 4. 当前契约测试只锁定配置默认值，不替代真实渠道签名规范、商户应用绑定、证书轮换、密钥托管、网络来源限制及生产报文验收。
 
@@ -2506,6 +2506,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 1. 支付查单适配器业务异常、非法响应和未预期运行时异常统一返回 `PAYMENT-1026` 并写 `查单失败` 通知事实；受控响应和通知日志不包含远端异常原文。
 2. 对当前非 `SUCCESS` 支付单，渠道查询返回 `SUCCESS` 时必须能从查询结果或锁后最新支付事实取得渠道流水号，否则返回 `PAYMENT-1026`，且不写返回码快照或“已查单”成功事实。
 3. 渠道成功结果触发订单协调锁和支付单重读。若回调已先写入 `SUCCESS + channelTransactionNo`，查单返回最新成功详情并记录普通查询，不再次更新支付、订单、账单或发布成功事件。
+
+### 14.68 支付回调前端调用边界契约
+
+1. `POST /api/payments/callback/{channel}` 继续作为真实渠道签名通知入口，服务端仍按渠道、签名、时间窗、nonce、支付单和渠道交易号执行可信校验；本次前端收口不改变该接口的服务端契约。
+2. App/H5/PC 和管理端不再封装或调用该接口，也不构造 `tradeStatus=SUCCESS`、模拟渠道交易号或提供模拟回调按钮；浏览器不能作为渠道通知发起方人工制造支付终态。
+3. 用户端和运营端对处理中支付只提供详情刷新、主动查单和轨迹排查；只有确认未提交渠道且无渠道流水/支付尝试的支付单保留受限本地关单能力。
+4. 删除前端调用面不代表真实渠道回调已联通或验收。测试、预发和生产仍必须配置渠道独立凭证，并以真实协议报文验证签名、关联键、幂等和资金事实。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
