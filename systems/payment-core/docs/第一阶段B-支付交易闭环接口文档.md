@@ -3087,6 +3087,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `REVIEW` 继续要求 `reviewNo`；当前策略直接 `REJECT` 路径可能不返回复核号、事件号或命中编码，本轮不将上述字段错误提升为拒绝决策的必填项。
 4. 本轮不改变接口字段、Mapper、schema 或迁移；该契约不证明风险事件真实存在、拦截真实发生或跨系统生产一致性，仍需联调与运行证据确认。
 
+### 14.138 风控决策与展示样式一致性契约
+
+1. 规范化后的 `data.decision / data.decisionType` 必须满足固定组合：`PASS / success`、`REVIEW / warn`、`INTERCEPT / danger`、`REJECT / danger`。
+2. 决策和样式即使分别属于各自有限集合，只要组合不匹配，仍统一返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`；不得把矛盾结果写入风险事件或继续发起渠道调用。
+3. 大小写与首尾空格继续按既有规则规范化，控制字符和 `32` 字符容量边界保持不变；本轮不改变决策状态机、固定平台说明及追踪键条件。
+4. 本轮不改变接口字段、前端、Mapper、schema 或迁移；固定映射不证明真实风险决策正确、处置完成或跨系统生产一致性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

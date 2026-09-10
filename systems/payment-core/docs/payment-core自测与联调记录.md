@@ -8766,3 +8766,25 @@
 
 1. payment-core 不再接受无法关联风险事件的 `INTERCEPT` 决策，外部结果在进入支付主流程前失败闭合。
 2. 本轮无前端、Mapper、schema 或迁移变化；静态核对和本地 mock 不证明风险事件真实存在、真实拦截、跨系统生产一致或稳定性，`release/v1.0.0` 继续冻结。
+
+## 311. 2026-09-11 风控决策与展示样式一致性 V1.0 验证
+
+### 311.1 本轮补强
+
+1. `PaymentRiskControlServiceImpl` 不再只分别接受决策和样式有限集合，而是校验规范化后的固定组合。
+2. `PASS` 仅接受 `success`，`REVIEW` 仅接受 `warn`，`INTERCEPT / REJECT` 仅接受 `danger`；矛盾组合统一按风控结果非法处理。
+3. 固定组合校验发生在风险字段交付支付主流程前，避免风险事件持久化与支付状态语义相反的展示样式。
+
+### 311.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 风控适配器与支付主流程定向测试 | `mvn -Dtest=PaymentRiskControlServiceImplTest,PaymentServiceImplTest test` | 通过 | `82` 个用例；覆盖四类矛盾组合固定拒绝、合法 `REJECT + danger` 及支付主流程回归 |
+| payment-core 全量测试 | `mvn test` | 通过 | `793` 个用例，`0` failures、`0` errors、`0` skipped |
+| 跨系统静态契约核对 | risk-control-system Service | 通过 | 当前 `PASS / REVIEW / INTERCEPT / REJECT` 返回路径分别使用 `success / warn / danger / danger` |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 311.3 当前判断
+
+1. payment-core 不再接受业务决策与展示严重度矛盾的风控响应，风险事件的两类字段保持同一语义。
+2. 本轮无前端、Mapper、schema 或迁移变化；静态核对和本地 mock 不证明真实策略、实际处置、跨系统生产一致或稳定性，`release/v1.0.0` 继续冻结。
