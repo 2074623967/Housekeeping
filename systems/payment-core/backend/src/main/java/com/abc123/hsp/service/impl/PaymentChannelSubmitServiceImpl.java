@@ -38,8 +38,10 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         for (PaymentChannelSubmitAdapter adapter : adapters) {
             if (adapter.supports(request.getResolvedChannelCode())) {
-                return returnCodeStandardizer.standardizeSubmit(
-                        request.getResolvedChannelCode(), adapter.submit(request));
+                PaymentChannelSubmitResultDTO result = PaymentChannelSubmitResultValidator.validateAndNormalize(
+                        adapter.submit(request));
+                return PaymentChannelSubmitResultValidator.validateAndNormalize(
+                        returnCodeStandardizer.standardizeSubmit(request.getResolvedChannelCode(), result));
             }
         }
         throw adapterMissing();

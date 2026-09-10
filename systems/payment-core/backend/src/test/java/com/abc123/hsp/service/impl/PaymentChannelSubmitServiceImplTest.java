@@ -2,6 +2,9 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
@@ -85,6 +88,73 @@ class PaymentChannelSubmitServiceImplTest {
         assertUniqueTransactionNumbers(new LocalPaymentChannelSubmitAdapter(), "unknown_channel", "CHN-");
     }
 
+    @Test
+    void shouldRejectEmptyAdapterResultBeforeStandardizationLookup() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.submit(any())).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service(adapter, mapper).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
+    void shouldRejectRawControlCharacterBeforeStandardizationLookup() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelSubmitResultDTO result = validResult();
+        result.setChannelReturnCode("USERPAYING\n");
+        when(adapter.submit(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service(adapter, mapper).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
+    void shouldRejectUnknownAttemptStatusTypeBeforeStandardizationLookup() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelSubmitResultDTO result = validResult();
+        result.setAttemptStatusType("REMOTE_PENDING");
+        when(adapter.submit(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service(adapter, mapper).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
+    void shouldRejectInvalidFieldAddedByReturnCodeStandardization() {
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        PaymentChannelSubmitRequestDTO request = request();
+        PaymentChannelSubmitResultDTO result = validResult();
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.submit(request)).thenReturn(result);
+        when(standardizer.standardizeSubmit("wx_h5", result)).thenAnswer(invocation -> {
+            result.setStandardizedMessage("invalid\nmessage");
+            return result;
+        });
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentChannelSubmitServiceImpl(
+                        Collections.singletonList(adapter), standardizer).submit(request));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+    }
+
     private PaymentChannelSubmitServiceImpl buildService() {
         PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         Mockito.when(mapper.findActiveReturnCodeMapping("wx_h5", "USERPAYING"))
@@ -95,6 +165,29 @@ class PaymentChannelSubmitServiceImplTest {
                 ordered(new OfflineBankPaymentChannelSubmitAdapter()),
                 ordered(new LocalPaymentChannelSubmitAdapter())
         ), new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()));
+    }
+
+    private PaymentChannelSubmitServiceImpl service(
+            PaymentChannelSubmitAdapter adapter, PaymentConfigMapper mapper) {
+        return new PaymentChannelSubmitServiceImpl(
+                Collections.singletonList(adapter),
+                new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()));
+    }
+
+    private PaymentChannelSubmitRequestDTO request() {
+        PaymentChannelSubmitRequestDTO request = new PaymentChannelSubmitRequestDTO();
+        request.setResolvedChannelCode("wx_h5");
+        return request;
+    }
+
+    private PaymentChannelSubmitResultDTO validResult() {
+        PaymentChannelSubmitResultDTO result = new PaymentChannelSubmitResultDTO();
+        result.setChannelTransactionNo("WX-1001");
+        result.setAttemptStatus("处理中");
+        result.setAttemptStatusType("info");
+        result.setResponsePayload("{\"code\":\"0\"}");
+        result.setChannelReturnCode("USERPAYING");
+        return result;
     }
 
     private PaymentChannelReturnCodeConfigDTO mapping() {

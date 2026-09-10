@@ -1671,6 +1671,69 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldKeepInvalidChannelSubmitResultUnknownWithoutBindingExternalFacts() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-INVALID-RESULT");
+        prepay.setPaymentOrderId("PAY-INVALID-RESULT");
+        prepay.setOrderNo("ORD-INVALID-RESULT");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("168.00");
+        prepay.setCustomerName("张女士");
+        when(paymentMapper.findPrepay("PRE-INVALID-RESULT")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-INVALID-RESULT");
+        detail.setOrderNo("ORD-INVALID-RESULT");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-INVALID-RESULT")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_WX");
+        routeDecision.setRouteResult("家政微信优先 -> wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-INVALID-RESULT"))
+                .thenReturn("ORD-INVALID-RESULT");
+        when(paymentMapper.updatePrepayToPaying("PRE-INVALID-RESULT")).thenReturn(1);
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new BusinessException(
+                        ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                        "payment channel submit result is invalid"));
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-INVALID-RESULT");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setIdempotencyKey("IDEMP-INVALID-RESULT");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        verify(paymentMapper).updatePaymentAttemptSubmitResult(
+                anyString(), org.mockito.ArgumentMatchers.isNull(),
+                eq("结果未知，待查单"), eq("danger"));
+        verify(paymentMapper).updatePrepayStatusByPaymentOrderId(
+                "PAY-INVALID-RESULT", "结果待确认", "danger");
+        verify(paymentMapper, never()).updatePaymentStatus(
+                eq("PAY-INVALID-RESULT"), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUBMIT"), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), eq("PAY-INVALID-RESULT"), anyString(), eq("SUBMIT"),
+                anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldRejectSubmitWhenSourceAppPaymentMethodNotAllowed() {
         PrepayOrderDTO prepay = new PrepayOrderDTO();
         prepay.setPrepayOrderNo("PRE-310");
