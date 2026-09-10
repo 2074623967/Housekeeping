@@ -7153,3 +7153,30 @@
 1. 基础环境现在宁可明确暴露“真实适配器缺失”，也不会生成看似可信的模拟渠道单号或查询来源；这是失败闭合，不是支付渠道已经可用。
 2. demo 仍可支持仓库本地演示和自动化适配器单测，但启用 demo 会同时引入样例数据初始化与未签名回调配置，必须与测试、预发和生产部署隔离。
 3. 下一步仍需由 gateway-access 或渠道专属实现提供真实提交和查询适配器，并补商户应用绑定、证书/密钥托管、网络来源控制、超时语义、真实报文和资金一致性验证。
+
+## 242. 2026-09-10 gateway-access 支付查单代理边界 V1.0 验证
+
+### 242.1 本轮补强
+
+1. `gateway-access` 新增 `POST /api/gateway/payment-orders/query`，使用独立交易 Controller 与稳定请求/响应 DTO，不把原有治理台接口或 H2 样例台账直接作为渠道查询结果。
+2. 调用前校验共享访问凭证、接入应用、权限归属、网关启用状态、有效证书和当前环境发布路由；渠道上游 URL 必须由部署环境显式配置，访问密钥和三个渠道 URL 默认均为空。
+3. 只有上游统一响应码为 `0` 且 `data.tradeStatus` 明确时才返回渠道事实；空响应、业务失败、超时和运行时异常均返回稳定错误，不向调用方暴露上游原始异常。
+4. 每次代理请求尽力写入最小 `PAYMENT_QUERY` 审计，不保存访问密钥或上游异常原文；`payment-core` 默认地址同步从错误的 reconciliation-system `18150` 修正为 gateway-access `8090`，并发送应用与访问凭证请求头。
+
+### 242.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway-access 定向测试 | `mvn -Dtest=GatewayTransactionControllerTest,PaymentOrderQueryServiceImplTest,GatewayAccessControllerTest,GatewayAccessServiceImplTest test` | 通过 | `30` 个用例，覆盖 Controller 委派、默认失败闭合、发布路由拒绝、明确上游状态与审计 |
+| gateway-access 全量测试 | `mvn test` | 通过 | `30` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 定向测试 | `mvn -Dtest=GatewayAccessPaymentChannelQueryAdapterTest test` | 通过 | `4` 个用例，覆盖配置启停、明确状态、空状态和网关业务失败 |
+| payment-core 全量测试 | `mvn test` | 通过 | `635` 个用例，`0` failures、`0` errors、`0` skipped |
+| 运行态冒烟 | 启动 gateway-access 后调用治理摘要与支付查单接口 | 通过 | Spring、H2、MyBatis XML 和配置绑定启动成功；默认未配密钥返回 `GATEWAY_ACCESS_NOT_CONFIGURED` |
+| 补丁检查 | `git diff --check` | 通过 | Java、XML、YAML、测试和文档无空白符错误 |
+| 真实环境验证 | 真实渠道协议、密钥托管、网络、渠道流水、资金与财务核验 | 未执行 | 不记录真实微信/支付宝/银行查单、生产部署、到账或现场验收通过 |
+
+### 242.3 当前判断
+
+1. 支付核心与 gateway-access 之间原有“配置指向不存在接口”的断点已闭合为可运行、可失败闭合的 HTTP 代理契约；默认配置不会访问样例 `gateway.local` 地址或制造渠道事实。
+2. 当前上游 URL 面向真实渠道集成服务的稳定契约，尚未实现微信、支付宝和银行各自的签名、验签、报文映射及密钥托管，不能称为真实渠道已接入。
+3. 来源 IP 白名单执行、发布窗口/灰度流量算法、生产密钥轮换、真实网络故障分布、资金到账与对账仍需后续独立交付和环境验收。

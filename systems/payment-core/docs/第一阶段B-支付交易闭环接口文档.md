@@ -1988,7 +1988,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 处理规则：
 
 1. `payment.channel-query.gateway-access.enabled=false` 时，非 demo 环境不使用微信、支付宝、线下银行或本地兜底模拟适配器；未找到其他真实适配器时返回 `PAYMENT-1004`。只有显式 demo profile 保留本地模拟查单。
-2. 启用 `gateway-access` 后，支付核心向配置的 `query-url` 发送 `paymentOrderId / orderNo / channelCode / channelTransactionNo`，并读取统一响应中的 `data.tradeStatus / data.channelTransactionNo / data.querySource / data.channelReturnCode`。
+2. 启用且配置完整的 `gateway-access` 后，支付核心携带 `X-Gateway-App-Code / X-Gateway-Access-Key` 请求头，向配置的 `query-url` 发送 `paymentOrderId / orderNo / channelCode / channelTransactionNo`，并读取统一响应中的 `data.tradeStatus / data.channelTransactionNo / data.querySource / data.channelReturnCode`。网关业务响应码非 `0` 时统一按查单失败处理。
 3. 每次有效渠道查询都会写入查询事实日志；`WAIT_CALLBACK / USERPAYING / FAIL / UNKNOWN` 等非成功状态只刷新返回快照，不修改支付、订单或账单状态。
 4. 渠道明确返回 `SUCCESS` 且存在渠道流水号时，通过条件更新原子抢占成功收口权；抢占成功后同步更新支付尝试、预付单、订单、账单，生成 `PAYMENT_SUCCESS` 事件，派发下游并释放提交并发令牌。
 5. 已为 `SUCCESS / CLOSED` 的支付单不会被主动查单重新打开；并发或重复查单未抢到收口权时不会重复记账、生成事件或派发下游。
@@ -1996,14 +1996,17 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 7. `gateway-access` 与共享限流开关同时启用时，所有直接、人工补跑和自动补偿查单在调用网关前统一占用渠道时间窗配额；配额耗尽返回 `PAYMENT-1027`，不调用外部渠道，也不计入单笔自动退避失败历史。
 8. 渠道提交与主动查单结果按 `channelCode + channelReturnCode` 查询启用且未归档映射，标准码、文案、处理建议、重试和人工介入口径进入支付尝试响应报文或查单通知日志，并刷新 `t_payment_order` 最近返回码快照，供后续详情稳定读取；映射读取失败采用未匹配降级，避免渠道已受理后因配置查询异常诱发重复下单。
 9. 返回码标准化只提供统一运营语义和审计事实，不改变 `tradeStatus`，也不根据 `retryable` 自动重试。未知码不得推断成成功；只有渠道交易状态明确为 `SUCCESS` 时才按既有幂等流程收口。
+10. `gateway-access` 当前已提供 `/api/gateway/payment-orders/query` 代理边界，并校验调用凭证、应用、权限、网关、有效证书和当前环境发布路由；访问密钥或渠道上游 URL 未配置时失败闭合，本地治理台账不作为支付状态来源。
 
 配置项：
 
 | 配置 | 默认值 | 说明 |
 | --- | --- | --- |
 | `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED` | `false` | 是否启用 gateway-access HTTP 查单 |
-| `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL` | `http://127.0.0.1:18150/api/gateway/payment-orders/query` | 统一查单地址 |
+| `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL` | `http://127.0.0.1:8090/api/gateway/payment-orders/query` | gateway-access 统一查单地址 |
 | `HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS` | `wx_h5,alipay_h5,offline_bank` | 允许交给外部网关查询的渠道编码 |
+| `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_APP_CODE` | `APP_PAY_CORE` | 发送到 gateway-access 的调用应用编码 |
+| `HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ACCESS_KEY` | 空 | 与 gateway-access 一致的访问凭证；空值时适配器不生效 |
 | `HSP_PAYMENT_CHANNEL_QUERY_TIMEOUT_MS` | `2000` | 连接与读取超时毫秒数 |
 | `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_ENABLED` | `false` | 是否启用数据库共享渠道查单限流；仅在真实网关同时启用时生效 |
 | `HSP_PAYMENT_CHANNEL_QUERY_RATE_LIMIT_WINDOW_SECONDS` | `60` | 渠道共享固定时间窗秒数，最小归一化为 `1` |
