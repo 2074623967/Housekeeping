@@ -89,6 +89,23 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExposeIssueAlertReceiptQueryQueueMetricsInOverview() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countDueIssueAlertReceipts(60, 10, 30)).thenReturn(7);
+        when(paymentTaskCenterMapper.countBackingOffIssueAlertReceipts(10, 30)).thenReturn(5);
+        when(paymentTaskCenterMapper.countQueryingIssueAlertReceipts(30)).thenReturn(2);
+        when(paymentTaskCenterMapper.countExhaustedIssueAlertReceipts(10, 30)).thenReturn(3);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(7, overview.getDueIssueAlertReceiptCount());
+        Assertions.assertEquals(5, overview.getBackingOffIssueAlertReceiptCount());
+        Assertions.assertEquals(2, overview.getQueryingIssueAlertReceiptCount());
+        Assertions.assertEquals(3, overview.getExhaustedIssueAlertReceiptCount());
+    }
+
+    @Test
     void shouldExposeUnknownRefundSubmitAsImmediateP1Alert() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countUnknownRefundSubmitEvents()).thenReturn(2);
@@ -995,6 +1012,9 @@ class PaymentTaskCenterServiceImplTest {
                 60,
                 10,
                 15,
+                10,
+                30,
+                60,
                 10,
                 30);
         service.setRefundQueryTaskService(refundQueryTaskService);

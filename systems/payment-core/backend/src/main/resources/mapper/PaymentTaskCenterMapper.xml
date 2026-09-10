@@ -787,6 +787,65 @@
           AND ack_status = '待确认'
     </select>
 
+    <select id="countDueIssueAlertReceipts" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
+          AND provider_delivery_status = 'ACCEPTED'
+          AND ack_status = '待确认'
+          AND created_at &lt;= TIMESTAMPADD(SECOND, -#{minAgeSeconds}, NOW())
+          AND receipt_query_count &lt; #{maxAttempts}
+          AND (next_receipt_query_at IS NULL OR next_receipt_query_at &lt;= NOW())
+          AND (
+            receipt_query_result IS NULL
+            OR receipt_query_result &lt;&gt; 'QUERYING'
+            OR last_receipt_query_at &lt;= TIMESTAMPADD(SECOND, -#{claimTimeoutSeconds}, NOW())
+          )
+    </select>
+
+    <select id="countBackingOffIssueAlertReceipts" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
+          AND provider_delivery_status = 'ACCEPTED'
+          AND ack_status = '待确认'
+          AND receipt_query_count &lt; #{maxAttempts}
+          AND next_receipt_query_at &gt; NOW()
+          AND (
+            receipt_query_result IS NULL
+            OR receipt_query_result &lt;&gt; 'QUERYING'
+            OR last_receipt_query_at &lt;= TIMESTAMPADD(SECOND, -#{claimTimeoutSeconds}, NOW())
+          )
+    </select>
+
+    <select id="countQueryingIssueAlertReceipts" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
+          AND provider_delivery_status = 'ACCEPTED'
+          AND ack_status = '待确认'
+          AND receipt_query_result = 'QUERYING'
+          AND last_receipt_query_at &gt; TIMESTAMPADD(SECOND, -#{claimTimeoutSeconds}, NOW())
+    </select>
+
+    <select id="countExhaustedIssueAlertReceipts" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log
+        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
+          AND provider_delivery_status = 'ACCEPTED'
+          AND ack_status = '待确认'
+          AND receipt_query_count &gt;= #{maxAttempts}
+          AND (
+            receipt_query_result IS NULL
+            OR receipt_query_result &lt;&gt; 'QUERYING'
+            OR last_receipt_query_at &lt;= TIMESTAMPADD(SECOND, -#{claimTimeoutSeconds}, NOW())
+          )
+    </select>
+
     <select id="findOldestPendingIssueAlertReceiptMinutes" resultType="int">
         SELECT COALESCE(MAX(TIMESTAMPDIFF(MINUTE, created_at, NOW())), 0)
         FROM t_payment_issue_alert_log

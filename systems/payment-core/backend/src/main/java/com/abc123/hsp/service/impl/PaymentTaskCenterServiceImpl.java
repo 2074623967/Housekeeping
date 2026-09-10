@@ -94,6 +94,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final int issueAlertDispatchTimeoutMinutes;
     private final int issueAlertReceiptCountThreshold;
     private final int issueAlertReceiptTimeoutMinutes;
+    private final int issueAlertReceiptQueryMinAgeSeconds;
+    private final int issueAlertReceiptQueryMaxAttempts;
+    private final int issueAlertReceiptQueryClaimTimeoutSeconds;
 
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -135,7 +138,16 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                         @Value("${payment.issue-alert.monitor.receipt-count-threshold:10}")
                                                 int issueAlertReceiptCountThreshold,
                                         @Value("${payment.issue-alert.monitor.receipt-timeout-minutes:30}")
-                                                int issueAlertReceiptTimeoutMinutes) {
+                                                int issueAlertReceiptTimeoutMinutes,
+                                        @Value(
+                                                "${payment.issue-alert.receipt-query.compensation.min-age-seconds:60}")
+                                                int issueAlertReceiptQueryMinAgeSeconds,
+                                        @Value(
+                                                "${payment.issue-alert.receipt-query.compensation.max-attempts:10}")
+                                                int issueAlertReceiptQueryMaxAttempts,
+                                        @Value(
+                                                "${payment.issue-alert.receipt-query.compensation.claim-timeout-seconds:30}")
+                                                int issueAlertReceiptQueryClaimTimeoutSeconds) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.paymentExpiryTaskService = paymentExpiryTaskService;
@@ -169,6 +181,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.issueAlertDispatchTimeoutMinutes = Math.max(issueAlertDispatchTimeoutMinutes, 1);
         this.issueAlertReceiptCountThreshold = Math.max(issueAlertReceiptCountThreshold, 1);
         this.issueAlertReceiptTimeoutMinutes = Math.max(issueAlertReceiptTimeoutMinutes, 1);
+        this.issueAlertReceiptQueryMinAgeSeconds = Math.max(issueAlertReceiptQueryMinAgeSeconds, 1);
+        this.issueAlertReceiptQueryMaxAttempts = Math.max(issueAlertReceiptQueryMaxAttempts, 1);
+        this.issueAlertReceiptQueryClaimTimeoutSeconds = Math.max(
+                issueAlertReceiptQueryClaimTimeoutSeconds, 1);
     }
 
     @Autowired
@@ -210,6 +226,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 10,
                 15,
                 10,
+                30,
+                60,
+                10,
                 30);
     }
 
@@ -242,6 +261,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 60,
                 10,
                 15,
+                10,
+                30,
+                60,
                 10,
                 30);
     }
@@ -290,6 +312,18 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setIssueAlertDispatchCountThreshold(issueAlertDispatchCountThreshold);
         overview.setIssueAlertDispatchTimeoutMinutes(issueAlertDispatchTimeoutMinutes);
         overview.setPendingIssueAlertReceiptCount(paymentTaskCenterMapper.countPendingIssueAlertReceipts());
+        overview.setDueIssueAlertReceiptCount(paymentTaskCenterMapper.countDueIssueAlertReceipts(
+                issueAlertReceiptQueryMinAgeSeconds,
+                issueAlertReceiptQueryMaxAttempts,
+                issueAlertReceiptQueryClaimTimeoutSeconds));
+        overview.setBackingOffIssueAlertReceiptCount(paymentTaskCenterMapper.countBackingOffIssueAlertReceipts(
+                issueAlertReceiptQueryMaxAttempts,
+                issueAlertReceiptQueryClaimTimeoutSeconds));
+        overview.setQueryingIssueAlertReceiptCount(paymentTaskCenterMapper.countQueryingIssueAlertReceipts(
+                issueAlertReceiptQueryClaimTimeoutSeconds));
+        overview.setExhaustedIssueAlertReceiptCount(paymentTaskCenterMapper.countExhaustedIssueAlertReceipts(
+                issueAlertReceiptQueryMaxAttempts,
+                issueAlertReceiptQueryClaimTimeoutSeconds));
         overview.setOldestPendingIssueAlertReceiptMinutes(
                 paymentTaskCenterMapper.findOldestPendingIssueAlertReceiptMinutes());
         overview.setIssueAlertReceiptCountThreshold(issueAlertReceiptCountThreshold);

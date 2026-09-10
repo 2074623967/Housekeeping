@@ -174,14 +174,39 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
-    void shouldCountOnlyActionableIssueAlertDeliveryBacklogs() {
+    void shouldCountOnlyActionableIssueAlertDeliveryBacklogs() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, source_alert_no, issue_type, alert_channel, ack_status, alert_status, "
+                        + "provider_delivery_status, receipt_query_count, last_receipt_query_at, "
+                        + "next_receipt_query_at, receipt_query_result, created_at) VALUES "
+                        + "('PIA-METRIC-DUE', 'SOURCE-METRIC-DUE', '异常告警派发', 'SMS', '待确认', "
+                        + "'已派发', 'ACCEPTED', 0, NULL, NULL, NULL, TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "('PIA-METRIC-BACKOFF', 'SOURCE-METRIC-BACKOFF', '异常告警派发', 'EMAIL', "
+                        + "'待确认', '已派发', 'ACCEPTED', 1, NOW(), TIMESTAMPADD(MINUTE, 10, NOW()), "
+                        + "'ACCEPTED', TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "('PIA-METRIC-QUERYING', 'SOURCE-METRIC-QUERYING', '异常告警派发', 'IM', "
+                        + "'待确认', '已派发', 'ACCEPTED', 1, NOW(), TIMESTAMPADD(SECOND, 30, NOW()), "
+                        + "'QUERYING', TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "('PIA-METRIC-EXHAUSTED', 'SOURCE-METRIC-EXHAUSTED', '异常告警派发', 'SMS', "
+                        + "'待确认', '已派发', 'ACCEPTED', 10, NOW(), NULL, 'FAILED', "
+                        + "TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "('PIA-METRIC-STALE', 'SOURCE-METRIC-STALE', '异常告警派发', 'EMAIL', "
+                        + "'待确认', '已派发', 'ACCEPTED', 2, TIMESTAMPADD(MINUTE, -2, NOW()), "
+                        + "TIMESTAMPADD(MINUTE, -1, NOW()), 'QUERYING', "
+                        + "TIMESTAMPADD(MINUTE, -10, NOW()))");
+            }
 
             assertEquals(2, mapper.countPendingIssueAlertDispatches());
             assertEquals(1, mapper.countFailedIssueAlertDispatches());
             assertEquals(45, mapper.findOldestPendingIssueAlertDispatchMinutes());
-            assertEquals(1, mapper.countPendingIssueAlertReceipts());
+            assertEquals(6, mapper.countPendingIssueAlertReceipts());
+            assertEquals(2, mapper.countDueIssueAlertReceipts(60, 10, 30));
+            assertEquals(1, mapper.countBackingOffIssueAlertReceipts(10, 30));
+            assertEquals(1, mapper.countQueryingIssueAlertReceipts(30));
+            assertEquals(1, mapper.countExhaustedIssueAlertReceipts(10, 30));
             assertEquals(65, mapper.findOldestPendingIssueAlertReceiptMinutes());
         }
     }

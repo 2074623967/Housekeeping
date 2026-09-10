@@ -34,9 +34,12 @@ class PaymentTaskCenterControllerTest {
         PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
         PaymentTaskCenterOverviewDTO overviewDTO = new PaymentTaskCenterOverviewDTO();
         overviewDTO.setExpiredPaymentCount(3);
+        overviewDTO.setDueIssueAlertReceiptCount(7);
         when(paymentTaskCenterService.overview()).thenReturn(overviewDTO);
 
-        assertEquals(3, controller.overview().getData().getExpiredPaymentCount());
+        PaymentTaskCenterOverviewDTO actual = controller.overview().getData();
+        assertEquals(3, actual.getExpiredPaymentCount());
+        assertEquals(7, actual.getDueIssueAlertReceiptCount());
         verify(paymentTaskCenterService).overview();
     }
 

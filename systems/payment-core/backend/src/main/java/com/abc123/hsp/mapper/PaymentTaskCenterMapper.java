@@ -147,6 +147,30 @@ public interface PaymentTaskCenterMapper {
     int countPendingIssueAlertReceipts();
 
     /**
+     * 统计当前已达到自动回查时间的外发告警。
+     */
+    int countDueIssueAlertReceipts(@Param("minAgeSeconds") int minAgeSeconds,
+                                   @Param("maxAttempts") int maxAttempts,
+                                   @Param("claimTimeoutSeconds") int claimTimeoutSeconds);
+
+    /**
+     * 统计当前处于自动回查退避窗口的外发告警。
+     */
+    int countBackingOffIssueAlertReceipts(@Param("maxAttempts") int maxAttempts,
+                                          @Param("claimTimeoutSeconds") int claimTimeoutSeconds);
+
+    /**
+     * 统计当前已被回查任务有效占用的外发告警。
+     */
+    int countQueryingIssueAlertReceipts(@Param("claimTimeoutSeconds") int claimTimeoutSeconds);
+
+    /**
+     * 统计已耗尽自动回查次数的外发告警。
+     */
+    int countExhaustedIssueAlertReceipts(@Param("maxAttempts") int maxAttempts,
+                                         @Param("claimTimeoutSeconds") int claimTimeoutSeconds);
+
+    /**
      * 查询最老待回查外发告警的等待分钟数。
      */
     int findOldestPendingIssueAlertReceiptMinutes();

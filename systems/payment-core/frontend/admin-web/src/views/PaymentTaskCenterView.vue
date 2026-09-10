@@ -22,6 +22,10 @@ const overview = ref({
   issueAlertDispatchCountThreshold: 10,
   issueAlertDispatchTimeoutMinutes: 15,
   pendingIssueAlertReceiptCount: 0,
+  dueIssueAlertReceiptCount: 0,
+  backingOffIssueAlertReceiptCount: 0,
+  queryingIssueAlertReceiptCount: 0,
+  exhaustedIssueAlertReceiptCount: 0,
   oldestPendingIssueAlertReceiptMinutes: 0,
   issueAlertReceiptCountThreshold: 10,
   issueAlertReceiptTimeoutMinutes: 30,
@@ -229,6 +233,8 @@ onMounted(loadOverview);
             <div class="detail-label">异常告警待回查</div>
             <div class="detail-value">{{ overview.pendingIssueAlertReceiptCount }}</div>
             <div class="meta">最老等待 {{ overview.oldestPendingIssueAlertReceiptMinutes }} 分钟</div>
+            <div class="meta">可执行 {{ overview.dueIssueAlertReceiptCount }} · 退避中 {{ overview.backingOffIssueAlertReceiptCount }}</div>
+            <div class="meta">查询中 {{ overview.queryingIssueAlertReceiptCount }} · 自动次数耗尽 {{ overview.exhaustedIssueAlertReceiptCount }}</div>
             <div class="meta">P1：数量 ≥ {{ overview.issueAlertReceiptCountThreshold }} 或等待 ≥ {{ overview.issueAlertReceiptTimeoutMinutes }} 分钟</div>
           </div>
         </div>
