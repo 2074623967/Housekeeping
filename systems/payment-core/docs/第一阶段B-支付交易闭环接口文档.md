@@ -3059,6 +3059,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 永久错误不得创建无合法目标的死信任务；合法任务的人工复核、定向重放和重放失败状态契约不变。
 4. `requeue=false` 仅描述当前消费者动作，不证明 broker 已隔离或保留消息；真实去向取决于队列 DLX/过期/丢弃配置。
 
+### 14.134 死信消息头持久化脱敏契约
+
+1. 合法死信任务在调用 Mapper 前必须对序列化后的 `header_snapshot` 执行统一敏感数据脱敏；授权头、令牌、密钥、签名、私钥和 Cookie 等凭据不得以原文写入新记录。
+2. `x-retry-count` 等非敏感诊断头继续保留；历史行继续由列表、待重放、人工结案和重放动作的既有出参脱敏兼容，本契约不代表历史数据已清理。
+3. 定向重放只使用持久化的原始 `payload_snapshot` 作为消息体，并重建 `compensationTaskNo`、`compensationReplay` 等受控消息头，不恢复或转发原始入站消息头。
+4. 本轮不改变接口字段、Mapper、schema、迁移、人工复核和任务状态机；本地测试不证明真实 RabbitMQ 消息或生产凭据保护效果。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

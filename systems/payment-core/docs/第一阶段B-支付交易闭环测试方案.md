@@ -1142,6 +1142,14 @@
 4. 死信服务与监听器定向测试应不少于 `14` 个，payment-core 全量不少于 `787` 个；补丁检查必须通过。本轮无前端、Mapper 或 schema 变化。
 5. 本地 Mockito 不证明真实 RabbitMQ DLX、消息隔离与保留、生产网络故障或稳定性。
 
+### 4.151 死信消息头持久化脱敏
+
+1. 构造同时包含 `Authorization: Bearer secret-token` 与 `x-retry-count` 的合法死信消息，验证 Mapper 入参中的授权头为 `[REDACTED]`，快照不包含 `secret-token`，非敏感重试次数仍保留。
+2. 回归列表和处置动作对历史原始快照的既有出参脱敏，验证本轮入库前脱敏不削弱兼容边界。
+3. 回归定向重放只发送原始 `payload_snapshot` 并重建 `compensationTaskNo`、`compensationReplay` 等受控消息头，不从 `header_snapshot` 恢复入站消息头。
+4. 敏感数据与死信服务定向测试应不少于 `20` 个，payment-core 全量不少于 `787` 个；补丁检查必须通过。本轮无前端、Mapper、schema 或迁移变化。
+5. 本地 Mockito 不证明真实 RabbitMQ 消息、生产凭据保护、历史数据库清理或生产稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

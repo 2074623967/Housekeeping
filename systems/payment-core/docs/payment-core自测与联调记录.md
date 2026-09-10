@@ -8680,3 +8680,24 @@
 
 1. 死信接入已区分永久路由错误和可恢复运行时失败，避免当前接入队列对确定性错误无限重试。
 2. 本地 Mockito 不证明 `requeue=false` 后消息进入隔离队列、生产 RabbitMQ 拓扑正确、消息绝不丢失或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 307. 2026-09-11 死信消息头持久化脱敏 V1.0 验证
+
+### 307.1 本轮补强
+
+1. `PaymentDeadLetterTaskServiceImpl` 在调用 Mapper 前对序列化后的消息头快照执行统一敏感数据脱敏，避免新任务把授权头等凭据原文写入数据库。
+2. 非敏感 `x-retry-count` 等诊断头继续保留；既有历史行仍由查询和处置响应的出参脱敏兜底，本轮不声称已清理历史数据。
+3. 定向重放继续只读取原始消息体，并重建 `compensationTaskNo`、`compensationReplay` 等受控消息头，不依赖数据库中的原始入站消息头。
+
+### 307.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 敏感数据与死信服务定向测试 | `mvn -Dtest=PaymentSensitiveDataMaskerTest,PaymentDeadLetterTaskServiceImplTest test` | 通过 | `20` 个用例；验证 `Authorization` 在 Mapper 入参中为 `[REDACTED]`、令牌原文不可恢复，且 `x-retry-count` 保留 |
+| payment-core 全量测试 | `mvn test` | 通过 | `787` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 307.3 当前判断
+
+1. 新入账死信任务的凭据类消息头已在持久化边界最小化，同时保持诊断信息和既有定向重放契约。
+2. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明真实 RabbitMQ 消息、生产凭据保护、历史数据库已清理或生产稳定性，`release/v1.0.0` 继续冻结。
