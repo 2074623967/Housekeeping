@@ -18,9 +18,10 @@ public class PaymentCompensationScheduler {
     private final boolean pendingPaymentQueryEnabled;
     private final boolean pendingRefundQueryEnabled;
     private final boolean issueAlertAutoDispatchEnabled;
+    private final boolean issueAlertReceiptReconcileEnabled;
 
     public PaymentCompensationScheduler(PaymentTaskCenterService paymentTaskCenterService) {
-        this(paymentTaskCenterService, false, false, false, false, false);
+        this(paymentTaskCenterService, false, false, false, false, false, false);
     }
 
     PaymentCompensationScheduler(
@@ -40,7 +41,8 @@ public class PaymentCompensationScheduler {
                 gatewayQueryEnabled,
                 false,
                 false,
-                issueAlertAutoDispatchEnabled);
+                issueAlertAutoDispatchEnabled,
+                false);
     }
 
     @Autowired
@@ -50,11 +52,24 @@ public class PaymentCompensationScheduler {
             @Value("${payment.channel-query.gateway-access.enabled:false}") boolean gatewayQueryEnabled,
             @Value("${payment.refund-query.compensation.enabled:false}") boolean pendingRefundQueryEnabled,
             @Value("${payment.refund-query.gateway-access.enabled:false}") boolean gatewayRefundQueryEnabled,
-            @Value("${payment.issue-alert.auto-dispatch.enabled:false}") boolean issueAlertAutoDispatchEnabled) {
+            @Value("${payment.issue-alert.auto-dispatch.enabled:false}") boolean issueAlertAutoDispatchEnabled,
+            @Value("${payment.issue-alert.receipt-reconcile.enabled:false}") boolean issueAlertReceiptReconcileEnabled) {
         this.paymentTaskCenterService = paymentTaskCenterService;
         this.pendingPaymentQueryEnabled = pendingPaymentQueryEnabled && gatewayQueryEnabled;
         this.pendingRefundQueryEnabled = pendingRefundQueryEnabled && gatewayRefundQueryEnabled;
         this.issueAlertAutoDispatchEnabled = issueAlertAutoDispatchEnabled;
+        this.issueAlertReceiptReconcileEnabled = issueAlertReceiptReconcileEnabled;
+    }
+
+    PaymentCompensationScheduler(
+            PaymentTaskCenterService paymentTaskCenterService,
+            boolean pendingPaymentQueryEnabled,
+            boolean gatewayQueryEnabled,
+            boolean pendingRefundQueryEnabled,
+            boolean gatewayRefundQueryEnabled,
+            boolean issueAlertAutoDispatchEnabled) {
+        this(paymentTaskCenterService, pendingPaymentQueryEnabled, gatewayQueryEnabled,
+                pendingRefundQueryEnabled, gatewayRefundQueryEnabled, issueAlertAutoDispatchEnabled, false);
     }
 
     PaymentCompensationScheduler(
@@ -130,7 +145,9 @@ public class PaymentCompensationScheduler {
      */
     @Scheduled(fixedDelayString = "${payment.issue-alert-receipt-reconcile.fixed-delay-ms:600000}")
     public void reconcileIssueAlertReceipts() {
-        paymentTaskCenterService.runAutoReconcileIssueAlertReceipts();
+        if (issueAlertReceiptReconcileEnabled) {
+            paymentTaskCenterService.runAutoReconcileIssueAlertReceipts();
+        }
     }
 
     /**

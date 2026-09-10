@@ -81,6 +81,22 @@ class PaymentCompensationSchedulerTest {
     }
 
     @Test
+    void shouldReconcileIssueAlertReceiptsWhenExplicitlyEnabled() {
+        new PaymentCompensationScheduler(
+                paymentTaskCenterService, false, false, false, false, false, true)
+                .reconcileIssueAlertReceipts();
+
+        verify(paymentTaskCenterService).runAutoReconcileIssueAlertReceipts();
+    }
+
+    @Test
+    void shouldSkipIssueAlertReceiptReconcileByDefault() {
+        new PaymentCompensationScheduler(paymentTaskCenterService).reconcileIssueAlertReceipts();
+
+        verify(paymentTaskCenterService, never()).runAutoReconcileIssueAlertReceipts();
+    }
+
+    @Test
     void shouldDelegateToAutoRetryFailedRefunds() {
         new PaymentCompensationScheduler(paymentTaskCenterService).retryFailedRefunds();
 

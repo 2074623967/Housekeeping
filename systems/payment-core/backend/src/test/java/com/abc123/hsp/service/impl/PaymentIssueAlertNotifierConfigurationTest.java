@@ -30,6 +30,10 @@ class PaymentIssueAlertNotifierConfigurationTest {
                 Boolean.FALSE,
                 resolver.getProperty("payment.issue-alert.local-receipt-enabled", Boolean.class)
         );
+        Assertions.assertEquals(
+                Boolean.FALSE,
+                resolver.getProperty("payment.issue-alert.receipt-reconcile.enabled", Boolean.class)
+        );
     }
 
     @Test

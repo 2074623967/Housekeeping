@@ -239,6 +239,46 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldPersistConfirmedProviderReceiptEvidence() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity accepted = buildIssueAlertLog("PIA-RECEIPT-UPDATE");
+            accepted.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-UPDATE");
+            accepted.setAlertChannel("IM");
+            accepted.setAlertStatus("已派发");
+            accepted.setProviderReceiptSnapshot("HTTP_RESPONSE:{\"status\":\"ACCEPTED\"}");
+            accepted.setProviderReceiptNo("PROVIDER-RECEIPT-001");
+            accepted.setProviderDeliveryStatus("ACCEPTED");
+            accepted.setProviderDeliveryMessage("供应商已受理");
+            assertEquals(1, mapper.insertIssueAlertLog(accepted));
+
+            PaymentIssueAlertLogEntity update = new PaymentIssueAlertLogEntity();
+            update.setAlertNo(accepted.getAlertNo());
+            update.setProviderReceiptSnapshot("HTTP_RESPONSE:{\"status\":\"DELIVERED\"}");
+            update.setProviderReceiptNo("PROVIDER-RECEIPT-001");
+            update.setProviderDeliveryStatus("DELIVERED");
+            update.setProviderDeliveryMessage("供应商查询确认送达");
+            update.setAckStatus("已确认");
+            update.setAckStatusType("success");
+            update.setAckOperator("payment-core-admin");
+            update.setTriggeredBy("integration-test");
+
+            assertEquals(1, mapper.updateIssueAlertProviderReceipt(update));
+            PaymentIssueAlertLogEntity persisted = findIssueAlertReceipt(
+                    session.getConnection(), accepted.getAlertNo());
+            assertEquals("HTTP_RESPONSE:{\"status\":\"DELIVERED\"}",
+                    persisted.getProviderReceiptSnapshot());
+            assertEquals("PROVIDER-RECEIPT-001", persisted.getProviderReceiptNo());
+            assertEquals("DELIVERED", persisted.getProviderDeliveryStatus());
+            assertEquals("供应商查询确认送达", persisted.getProviderDeliveryMessage());
+            assertEquals("已确认", persisted.getAckStatus());
+            assertEquals("success", persisted.getAckStatusType());
+            assertEquals("payment-core-admin", persisted.getAckOperator());
+            assertEquals("integration-test", persisted.getTriggeredBy());
+        }
+    }
+
+    @Test
     void shouldFenceTaskLeaseOwnersAcrossExpiry() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -487,6 +527,28 @@ public class PaymentTaskCenterMapperIntegrationTest {
             try (java.sql.ResultSet resultSet = statement.executeQuery()) {
                 resultSet.next();
                 return resultSet.getString(1);
+            }
+        }
+    }
+
+    private PaymentIssueAlertLogEntity findIssueAlertReceipt(Connection connection, String alertNo) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT provider_receipt_snapshot, provider_receipt_no, provider_delivery_status, "
+                        + "provider_delivery_message, ack_status, ack_status_type, ack_operator, triggered_by "
+                        + "FROM t_payment_issue_alert_log WHERE alert_no = ?")) {
+            statement.setString(1, alertNo);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                resultSet.next();
+                PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
+                entity.setProviderReceiptSnapshot(resultSet.getString("provider_receipt_snapshot"));
+                entity.setProviderReceiptNo(resultSet.getString("provider_receipt_no"));
+                entity.setProviderDeliveryStatus(resultSet.getString("provider_delivery_status"));
+                entity.setProviderDeliveryMessage(resultSet.getString("provider_delivery_message"));
+                entity.setAckStatus(resultSet.getString("ack_status"));
+                entity.setAckStatusType(resultSet.getString("ack_status_type"));
+                entity.setAckOperator(resultSet.getString("ack_operator"));
+                entity.setTriggeredBy(resultSet.getString("triggered_by"));
+                return entity;
             }
         }
     }

@@ -150,6 +150,9 @@ payment:
   issue-alert:
     # 默认失败闭合；只有 demo profile 显式开启后，空 Webhook 才生成本地模拟回执。
     local-receipt-enabled: false
+    receipt-reconcile:
+      # 默认关闭；只有配置真实供应商回执查询适配器后才允许自动回查。
+      enabled: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE_ENABLED:false}
     auto-dispatch:
       # 默认关闭；确认通知供应商配置与接收人范围后再启用自动外发。
       enabled: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED:false}

@@ -9,6 +9,7 @@ import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
+import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -66,16 +67,19 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private PaymentTaskLeaseService paymentTaskLeaseService;
     private final List<PaymentIssueAlertNotifier> notifiers;
+    private final List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters;
     private final TransactionTemplate itemTransactionTemplate;
     private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
 
     @Autowired
     public PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                                 List<PaymentIssueAlertNotifier> notifiers,
+                                                List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
                                                 PlatformTransactionManager transactionManager) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
+        this.receiptQueryAdapters = receiptQueryAdapters;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
         this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -87,10 +91,24 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                          List<PaymentIssueAlertNotifier> notifiers) {
+        this(paymentTaskCenterMapper, notifiers, new ArrayList<PaymentIssueAlertReceiptQueryAdapter>());
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                         List<PaymentIssueAlertNotifier> notifiers,
+                                         List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
+        this.receiptQueryAdapters = receiptQueryAdapters;
         this.itemTransactionTemplate = null;
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                         List<PaymentIssueAlertNotifier> notifiers,
+                                         PlatformTransactionManager transactionManager) {
+        this(paymentTaskCenterMapper, notifiers,
+                new ArrayList<PaymentIssueAlertReceiptQueryAdapter>(), transactionManager);
     }
 
     @Override
@@ -963,7 +981,15 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     private boolean reconcileDeliveryReceipt(PaymentIssueAlertLogEntity acceptedLog, String triggeredBy) {
-        PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, triggeredBy);
+        PaymentIssueAlertReceiptQueryAdapter adapter = findReceiptQueryAdapter(acceptedLog);
+        if (adapter == null) {
+            return false;
+        }
+        PaymentIssueAlertDeliveryResultDTO queryResult = adapter.query(acceptedLog);
+        if (!isConfirmedDeliveredResult(acceptedLog, queryResult)) {
+            return false;
+        }
+        PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, queryResult, triggeredBy);
         int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
         if (affectedRows <= 0) {
             return false;
@@ -972,11 +998,50 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         return true;
     }
 
-    private PaymentIssueAlertLogEntity buildReceiptUpdate(PaymentIssueAlertLogEntity acceptedLog, String triggeredBy) {
+    private PaymentIssueAlertReceiptQueryAdapter findReceiptQueryAdapter(PaymentIssueAlertLogEntity acceptedLog) {
+        if (acceptedLog == null || !StringUtils.hasText(acceptedLog.getAlertChannel())) {
+            return null;
+        }
+        for (PaymentIssueAlertReceiptQueryAdapter adapter : receiptQueryAdapters) {
+            if (adapter.supports(acceptedLog.getAlertChannel().trim())) {
+                return adapter;
+            }
+        }
+        return null;
+    }
+
+    private boolean isConfirmedDeliveredResult(PaymentIssueAlertLogEntity acceptedLog,
+                                               PaymentIssueAlertDeliveryResultDTO queryResult) {
+        if (queryResult == null
+                || !"DELIVERED".equalsIgnoreCase(queryResult.getProviderDeliveryStatus())) {
+            return false;
+        }
+        return !StringUtils.hasText(queryResult.getProviderReceiptNo())
+                || !StringUtils.hasText(acceptedLog.getProviderReceiptNo())
+                || acceptedLog.getProviderReceiptNo().trim().equals(queryResult.getProviderReceiptNo().trim());
+    }
+
+    private PaymentIssueAlertLogEntity buildReceiptUpdate(PaymentIssueAlertLogEntity acceptedLog,
+                                                           PaymentIssueAlertDeliveryResultDTO queryResult,
+                                                           String triggeredBy) {
         PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
         entity.setAlertNo(acceptedLog.getAlertNo());
+        entity.setProviderReceiptSnapshot(truncate(
+                StringUtils.hasText(queryResult.getProviderReceiptSnapshot())
+                        ? queryResult.getProviderReceiptSnapshot()
+                        : acceptedLog.getProviderReceiptSnapshot(),
+                PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH));
+        entity.setProviderReceiptNo(truncate(
+                StringUtils.hasText(queryResult.getProviderReceiptNo())
+                        ? queryResult.getProviderReceiptNo().trim()
+                        : acceptedLog.getProviderReceiptNo(),
+                PROVIDER_RECEIPT_NO_MAX_LENGTH));
         entity.setProviderDeliveryStatus("DELIVERED");
-        entity.setProviderDeliveryMessage("供应商回执回查成功，消息已送达");
+        entity.setProviderDeliveryMessage(truncate(
+                StringUtils.hasText(queryResult.getProviderDeliveryMessage())
+                        ? sanitizeProviderDeliveryMessage(queryResult.getProviderDeliveryMessage())
+                        : "供应商回执查询确认已送达",
+                PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH));
         entity.setAckStatus("已确认");
         entity.setAckStatusType("success");
         entity.setAckOperator(triggeredBy);

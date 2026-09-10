@@ -1109,6 +1109,7 @@
     <update id="updateIssueAlertProviderReceipt" parameterType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">
         UPDATE t_payment_issue_alert_log
         SET provider_receipt_snapshot = #{providerReceiptSnapshot},
+            provider_receipt_no = #{providerReceiptNo},
             provider_delivery_status = #{providerDeliveryStatus},
             provider_delivery_message = #{providerDeliveryMessage},
             ack_status = #{ackStatus},
