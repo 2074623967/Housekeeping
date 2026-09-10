@@ -34,6 +34,7 @@
 10. `t_payment_issue_alert_log`
 11. `t_payment_channel_query_rate_bucket`
 12. `t_payment_channel_query_rate_limit_log`
+13. `t_refund_order`
 
 ## 3. 对象关系
 
@@ -48,6 +49,7 @@ t_order
         -> t_payment_event
         -> t_payment_issue_action_log
         -> t_payment_issue_alert_log
+        -> t_refund_order
 ```
 
 关系说明：
@@ -58,6 +60,7 @@ t_order
 4. 一个支付单可有多次尝试、多条回调、多条事件。
 5. 异常处理动作和告警通知日志不改变支付单状态，只沉淀运营排障、告警通知和确认回执证据。
 6. 渠道查单限流桶是按渠道共享的运行控制对象，不与单笔支付单建立外键关系；所有实例通过渠道唯一键竞争同一固定时间窗配额。
+7. 一个成功支付单可关联多笔退款单；退款单独立保存退款金额、状态和渠道受理事实，不改写原支付成功事实。
 
 ## 4. 核心表设计
 
@@ -343,6 +346,23 @@ t_order
 
 索引规则：`uk_issue_alert_generation(generation_key)` 为可空唯一索引。既有运行库通过 `database/migrations/2026-09-10-add-issue-alert-generation-key.sql` 一次性加列、为每组存量记录的最早一条回填键后建索引；脚本不删除其余历史重复记录。生产执行前必须在备份库验证重复分布、DDL 锁影响、回填耗时与回滚方案。
 
+### 4.16 退款单表 `t_refund_order`
+
+作用：保存退款申请、额度占用状态、渠道受理关联键和最终退款结果；退款事实与原支付成功事实并列保留。
+
+| 字段 | 说明 |
+| --- | --- |
+| `refund_order_id` | 平台退款单号，唯一索引，也是渠道请求幂等键 |
+| `payment_order_id / order_no` | 原支付单号与业务订单号 |
+| `refund_amount / refund_method / refund_reason` | 退款金额、方式与原因 |
+| `channel_code` | 实际受理退款的渠道编码，受理前为空 |
+| `channel_refund_no` | 渠道侧退款单号，受理后首次绑定且不可覆盖 |
+| `channel_submitted_at` | 首次获得有效渠道退款号的数据库时间 |
+| `status / status_type` | `REVIEWING/PROCESSING/SUCCESS/FAIL` 及页面样式 |
+| `applied_at / success_at` | 申请时间与可信退款成功时间 |
+
+索引规则：`uk_refund_order_id(refund_order_id)` 保证平台退款单唯一；`uk_refund_channel_no(channel_code, channel_refund_no)` 防止同一渠道退款号绑定多笔退款；`idx_refund_payment_status(payment_order_id, status)` 支撑原支付单活动额度和成功退款聚合。既有运行库通过 `database/migrations/2026-09-10-add-refund-channel-trace.sql` 增量加列和唯一键；生产执行前必须核对历史重复、DDL 锁、回滚和渠道退款号实际唯一性。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
@@ -352,6 +372,7 @@ t_order
 | 账单 | `待支付` / `已结清` |
 | 预付单 | `待支付` / `支付中` |
 | 支付单 | `PREPAY_CREATED` / `WAIT_CALLBACK` / `SUCCESS` / `CLOSED` |
+| 退款单 | `REVIEWING` / `PROCESSING` / `SUCCESS` / `FAIL` |
 | 回调日志 | `待回调` / `已收口` |
 
 ### 5.2 后续增强建议

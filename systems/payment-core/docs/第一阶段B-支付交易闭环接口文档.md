@@ -2428,6 +2428,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 渠道异常或未返回有效渠道退款号属于结果未知，退款继续保持 `PROCESSING` 并占用额度，事件进入重试或死信；不得据此返回退款失败、释放额度或生成新的退款幂等键。
 5. 本契约不证明真实渠道已实现幂等查询/重放，也不代表真实 MySQL 多实例、渠道退款到账、生产恢复和人工核验已经验收。
 
+### 14.60 退款渠道受理事实字段契约
+
+1. `GET /api/refunds/{refundOrderId}` 新增 `channelCode/channelRefundNo/channelSubmittedAt`：分别表示实际受理渠道、渠道侧退款单号和首次获得受理号时间；尚未受理时返回空值或 `-`，不得推断为失败。
+2. 渠道返回的退款号必须非空、最长 `128` 字符且不含 ISO 控制字符；只允许在退款仍为 `PROCESSING` 且尚未绑定渠道退款号时首次写入，之后不得由补偿覆盖。
+3. `(channelCode, channelRefundNo)` 在退款单表内唯一。事件补偿读取到既有受理号时，只有已绑定渠道与原支付渠道一致才可直接收口事件；不一致时不得再次调用渠道。
+4. `channelSubmittedAt` 和 `channelRefundNo` 只表达渠道受理事实，退款是否成功仍由后续可信退款回调或主动查单确认；接口不得将受理时间作为 `successAt` 返回。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
