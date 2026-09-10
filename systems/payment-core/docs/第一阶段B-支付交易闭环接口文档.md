@@ -2613,6 +2613,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1048` | gateway-access 支付提交失败或未返回可确认的渠道受理事实；必须先查单，禁止自动重提 |
 | `PAYMENT-1049` | gateway-access 退款提交未配置、调用失败或未返回可确认的渠道受理事实；保持处理中并先查单核验 |
 | `PAYMENT-1050` | 退款提交受理结果未知，必须先向渠道查单或人工核查，禁止直接重发 |
+| `PAYMENT-1051` | 告警供应商回执查询的目标通道共享固定窗口额度已耗尽，本条不调用通知集成网关 |
 
 ### 14.75 退款提交未知结果按平台退款单号核查契约
 
@@ -2670,6 +2671,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 返回的供应商回执快照在保存前经 `PaymentSensitiveDataMasker` 脱敏；客户端强制清空 `renderedContentSnapshot`，回执查询不得覆盖原告警正文。回执号仍由回查服务执行既有关联一致性校验。
 5. 自动回查必须同时开启 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE_ENABLED` 与 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_GATEWAY_ENABLED`。查询 URL、应用编码、访问密钥或通道配置任一缺失时不生效，默认两项开关均关闭。
 6. 当前仓库没有该“通知集成网关”的服务端实现，也没有任何 IM、SMS 或 EMAIL 真实供应商回执查询实现。本契约及本地固定响应测试不证明真实供应商最终送达、人员响应、生产网络或稳定性验收完成。
+
+### 14.82 告警供应商回执查询共享限流契约
+
+1. `PaymentIssueAlertReceiptQueryRateLimitService` 在已找到支持目标通道的查询适配器后、发起 HTTP 前占用共享额度；无适配器时不消耗额度，限流拒绝时不调用通知集成网关。
+2. 限流桶按规范化后的 `IM / SMS / EMAIL` 通道区分，所有 payment-core 实例通过数据库通道唯一键共享固定窗口。配置为 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMIT_ENABLED / WINDOW_SECONDS / MAX_QUERIES_PER_CHANNEL`，默认关闭、默认 `60` 秒 `100` 次。
+3. 限流只有在自身开关与 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_GATEWAY_ENABLED` 同时开启时生效；窗口和额度配置小于 `1` 时收敛为 `1`，防止非法配置绕过保护。
+4. 当前窗口额度耗尽时返回内部业务错误 `PAYMENT-1051`，本条回查计为失败且不更新投递日志或来源告警；批次继续处理后续项目。拒绝事实以独立新事务保存通道、告警号和窗口配置，不写供应商报文、凭证或异常原文。
+5. 数据库固定窗口实现只提供跨实例原子占额基线，存在窗口边界突发特性。本地 H2/MySQL 兼容测试不证明生产 MySQL 锁竞争、真实网关容量、供应商配额或稳定性已经验证。
 
 联调说明：
 

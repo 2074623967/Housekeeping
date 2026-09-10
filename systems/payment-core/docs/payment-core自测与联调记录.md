@@ -7480,3 +7480,27 @@
 1. payment-core 已从“只有查询扩展点”推进到具备稳定、默认关闭、失败闭合的通知集成网关客户端，且不会用未知响应或本地数据库事实推导最终送达。
 2. 客户端配置、数据校验和脱敏边界已由本地自动化覆盖；网关服务端、具体供应商协议、认证签名、查询限流与生产部署仍不在当前仓库内。
 3. 本轮测试证据只能证明客户端契约和内部状态保护，不证明任何真实供应商最终送达、值班人员响应或生产稳定性。
+
+## 255. 2026-09-10 告警供应商回执查询共享限流 V1.0 验证
+
+### 255.1 本轮补强
+
+1. 新增 `PaymentIssueAlertReceiptQueryRateLimitService` 及数据库 Mapper，在已选择支持通道的查询适配器后、发起通知集成网关 HTTP 请求前占用共享额度。
+2. 限流按规范化告警通道使用数据库唯一桶和固定窗口原子更新；额度耗尽写独立最小拒绝日志并返回 `PAYMENT-1051`，不更新投递日志或来源告警。
+3. 限流开关与网关查询开关形成双门禁并默认关闭；窗口和单通道额度默认分别为 `60` 秒和 `100` 次，非正配置收敛为 `1`。
+4. 新增幂等迁移并同步 backend/database 两份运行 schema。拒绝事务采用 `REQUIRES_NEW + noRollbackFor BusinessException`，保证外层逐条失败隔离时仍保留容量事实。
+
+### 255.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentIssueAlertReceiptQueryRateLimitServiceImplTest,PaymentIssueAlertReceiptQueryRateLimitMapperIntegrationTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentIssueAlertNotifierConfigurationTest test` | 通过 | `41` 个用例，`0` failures、`0` errors、`0` skipped；覆盖双开关、配置下限、真实 SQL 占额/拒绝/重置、调用前限流与状态不更新 |
+| payment-core 全量测试 | `mvn test` | 通过 | `686` 个用例，`0` failures、`0` errors、`0` skipped |
+| XML 与补丁检查 | `xmllint --noout ... && git diff --check` | 通过 | 新增 Mapper XML 合法，代码、SQL、测试和文档无空白符错误 |
+| 真实环境验证 | 通知集成网关容量、供应商配额、生产 MySQL 并发、最终送达和人员响应 | 未执行 | 不记录生产参数校准、真实送达、人员响应或稳定性通过 |
+
+### 255.3 当前判断
+
+1. 告警回执查询已具备跨实例共享容量保护，人工和自动入口不能绕过，额度耗尽不会向外部网关发请求或制造送达事实。
+2. 固定窗口和拒绝日志的本地代码、SQL及事务语义已有自动化证据，但生产 MySQL 锁等待、窗口边界突发和真实网关容量仍需压测校准。
+3. 当前仓库仍没有通知集成网关服务端或 IM/SMS/EMAIL 真实供应商实现，本轮不改变真实送达、人员响应与生产稳定性的未完成结论。

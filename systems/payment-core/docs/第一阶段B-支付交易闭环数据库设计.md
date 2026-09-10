@@ -37,6 +37,8 @@
 13. `t_refund_order`
 14. `t_refund_channel_query_rate_bucket`
 15. `t_refund_channel_query_rate_limit_log`
+16. `t_payment_issue_alert_receipt_query_rate_bucket`
+17. `t_payment_issue_alert_receipt_query_rate_limit_log`
 
 ## 3. 对象关系
 
@@ -63,6 +65,7 @@ t_order
 5. 异常处理动作和告警通知日志不改变支付单状态，只沉淀运营排障、告警通知和确认回执证据。
 6. 渠道查单限流桶是按渠道共享的运行控制对象，不与单笔支付单建立外键关系；所有实例通过渠道唯一键竞争同一固定时间窗配额。
 7. 一个成功支付单可关联多笔退款单；退款单独立保存退款金额、状态和渠道受理事实，不改写原支付成功事实。
+8. 告警回执查询限流桶按通知通道共享，不与单条告警建立外键；拒绝日志仅用告警号关联内部回查任务，不保存供应商响应。
 
 ## 4. 核心表设计
 
@@ -402,6 +405,31 @@ t_order
 | `rejected_at` | 数据库拒绝时间 |
 
 事务规则：拒绝日志在 `REQUIRES_NEW` 事务提交并返回 `PAYMENT-1047`，不写退款 `CHANNEL_QUERY_FAILED` 操作日志。任务中心通过支付和退款拒绝日志计数求和形成统一监控；该聚合不表示两类业务共用同一渠道容量桶。
+
+### 4.20 告警供应商回执查询共享限流桶 `t_payment_issue_alert_receipt_query_rate_bucket`
+
+作用：在调用通知集成网关查询供应商最终送达回执前，按告警通道提供跨 payment-core 实例共享的固定窗口容量保护。
+
+| 字段 | 说明 |
+| --- | --- |
+| `channel_code` | 规范化为大写的告警通道编码，唯一索引保证每个通道一个共享桶 |
+| `window_started_at` | 当前固定窗口开始时间，使用数据库时钟 |
+| `used_count` | 当前窗口已成功占用的回执查询次数 |
+| `updated_at` | 最近占额或窗口重置时间 |
+
+并发规则：初始化使用幂等插入，占额通过带窗口过期和上限条件的单条 `UPDATE` 完成；更新 `0` 行表示额度耗尽。该桶与支付、退款渠道查单桶相互独立，既有运行库通过 `database/migrations/2026-09-10-add-issue-alert-receipt-query-rate-limit.sql` 增量建表。
+
+### 4.21 告警供应商回执查询限流拒绝日志 `t_payment_issue_alert_receipt_query_rate_limit_log`
+
+| 字段 | 说明 |
+| --- | --- |
+| `rejection_no` | `IARQRL` 前缀拒绝流水号，唯一索引 |
+| `channel_code` | 被限流的告警通道编码 |
+| `alert_no` | 被拒绝查询的告警投递日志编号 |
+| `window_seconds / max_queries` | 拒绝发生时的窗口和单通道额度配置快照 |
+| `rejected_at` | 数据库拒绝时间 |
+
+事务规则：拒绝日志在 `REQUIRES_NEW` 事务中提交，并对 `BusinessException` 不回滚，确保外层将本条计为失败时仍保留容量拒绝事实。表中不保存通知网关请求、供应商响应、凭证或异常原文。
 
 ## 5. 状态建议
 
