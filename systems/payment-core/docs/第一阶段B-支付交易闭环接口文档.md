@@ -2473,7 +2473,20 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 自动任务使用相同状态与首次等待边界，并仅根据退款操作日志中的 `CHANNEL_QUERY/CHANNEL_QUERY_FAILED` 计算指数退避；其他退款操作不得增加查单退避次数。
 3. 自动调度必须同时开启 `payment.refund-query.compensation.enabled` 与 `payment.refund-query.gateway-access.enabled`。两者默认关闭，禁止使用只回显本地状态的兜底适配器制造自动查单事实。
 4. 返回沿用任务中心 `PaymentTaskActionResultDTO`，记录处理数、成功收口数、仍待跟进数、查询失败数和最多三个失败退款单号；逐笔失败隔离并统一写 `REFUND_PENDING_QUERY` 任务日志。
-5. 当前仅有指数退避、总批次和单渠道批次配额，没有退款查单共享固定窗口限流；接口存在不代表真实 `gateway-access` 退款查询、渠道到账或生产运行已经完成。
+5. 退款共享固定窗口限流按 14.64 节执行；接口存在不代表真实 `gateway-access` 退款查询、渠道到账或生产运行已经完成。
+
+### 14.64 退款渠道查单共享固定窗口限流契约
+
+1. `payment.refund-query.rate-limit.enabled` 与 `payment.refund-query.gateway-access.enabled` 必须同时为 `true` 才启用；任一关闭时不占用数据库桶，默认配置不会限制本地兜底回显。
+2. 每次退款渠道调用前按规范化 `channelCode` 原子占用 `t_refund_channel_query_rate_bucket`；支付与退款使用独立桶，不在缺少真实渠道总额度依据时互相挤占。
+3. 当前窗口额度耗尽返回 `PAYMENT-1047`，并向 `t_refund_channel_query_rate_limit_log` 写入拒绝流水号、渠道、退款单号、窗口秒数、最大次数和数据库拒绝时间。
+4. 拒绝发生在渠道调用及 `CHANNEL_QUERY/CHANNEL_QUERY_FAILED` 前，不计入退款自动退避历史；任务中心将支付与退款拒绝合并统计并沿用主动查单限流告警阈值。
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_ENABLED` | `false` | 退款渠道查单共享限流开关 |
+| `HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_WINDOW_SECONDS` | `60` | 固定时间窗秒数，最小归一化为 `1` |
+| `HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL` | `100` | 单渠道每窗最大退款查单次数，最小归一化为 `1` |
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
@@ -2516,6 +2529,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1044` | 退款单不存在 |
 | `PAYMENT-1045` | 未找到可用退款渠道查单适配器 |
 | `PAYMENT-1046` | 退款渠道查单失败、结果非法/不完整、关联键不一致或退款尚未具备查单条件 |
+| `PAYMENT-1047` | 当前退款渠道共享查单固定窗口配额已耗尽 |
 
 联调说明：
 

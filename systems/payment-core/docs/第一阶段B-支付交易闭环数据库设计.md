@@ -35,6 +35,8 @@
 11. `t_payment_channel_query_rate_bucket`
 12. `t_payment_channel_query_rate_limit_log`
 13. `t_refund_order`
+14. `t_refund_channel_query_rate_bucket`
+15. `t_refund_channel_query_rate_limit_log`
 
 ## 3. 对象关系
 
@@ -375,6 +377,31 @@ t_order
 | `expires_at / created_at` | nonce 过期时间与创建时间，均使用数据库时钟 |
 
 索引规则：`uk_channel_nonce(channel_code, nonce)` 在同一渠道内跨支付和退款共同防重；`idx_callback_nonce_biz(biz_type, biz_no)` 支撑业务排查；`idx_nonce_expires_at(expires_at)` 支撑限量清理。既有运行库通过 `database/migrations/2026-09-10-generalize-callback-nonce.sql` 将 `payment_order_id` 重命名为 `biz_no`，新增 `biz_type` 并把存量行默认标记为 `PAYMENT`。生产执行前必须验证 MySQL 在线 DDL、锁影响、备份与回滚，不得因业务类型不同放宽同渠道 nonce 唯一约束。
+
+### 4.18 退款渠道查单共享限流桶 `t_refund_channel_query_rate_bucket`
+
+作用：在真实退款网关查询前按渠道原子占用独立固定窗口配额，使单笔人工查单、任务中心人工批次和自动补偿在多实例下使用同一退款容量口径。
+
+| 字段 | 说明 |
+| --- | --- |
+| `channel_code` | 规范化渠道编码，唯一索引保证每个渠道一个退款查询桶 |
+| `window_started_at` | 当前固定窗口开始时间，使用数据库时钟 |
+| `used_count` | 当前窗口已成功占用的退款查单次数 |
+| `updated_at` | 最近占额或窗口重置时间 |
+
+并发规则与支付查单桶一致，但两张表不共享额度；额度为 `1` 的 H2 双连接测试只允许一条事务更新成功。既有运行库通过 `database/migrations/2026-09-10-add-refund-channel-query-rate-limit.sql` 增量建表。
+
+### 4.19 退款渠道查单限流拒绝日志 `t_refund_channel_query_rate_limit_log`
+
+| 字段 | 说明 |
+| --- | --- |
+| `rejection_no` | `RQRL` 前缀拒绝流水号，唯一索引 |
+| `channel_code` | 规范化渠道编码 |
+| `refund_order_id` | 被拒绝查询的退款单号 |
+| `window_seconds / max_queries` | 拒绝发生时的限流配置快照 |
+| `rejected_at` | 数据库拒绝时间 |
+
+事务规则：拒绝日志在 `REQUIRES_NEW` 事务提交并返回 `PAYMENT-1047`，不写退款 `CHANNEL_QUERY_FAILED` 操作日志。任务中心通过支付和退款拒绝日志计数求和形成统一监控；该聚合不表示两类业务共用同一渠道容量桶。
 
 ## 5. 状态建议
 
