@@ -664,7 +664,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
                 .thenReturn(buildDeliveryResult(
                         repeated("R", 256),
-                        "FAILED-" + repeated("S", 128),
+                        " failed ",
                         repeated("M", 512),
                         repeated("C", 2048),
                         repeated("P", 4096)
@@ -681,7 +681,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertLogEntity primaryLog = logCaptor.getAllValues().get(0);
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(128, primaryLog.getProviderReceiptNo().length());
-        Assertions.assertEquals(64, primaryLog.getProviderDeliveryStatus().length());
+        Assertions.assertEquals("FAILED", primaryLog.getProviderDeliveryStatus());
         Assertions.assertEquals(255, primaryLog.getProviderDeliveryMessage().length());
         Assertions.assertEquals(1024, primaryLog.getRenderedContentSnapshot().length());
         Assertions.assertEquals(2048, primaryLog.getProviderReceiptSnapshot().length());
@@ -702,15 +702,19 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                         "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
                 buildProvider("ALERT_IM_SECONDARY", "企业微信告警机器人-次", "wecom-bot-secondary",
                         "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20),
+                buildProvider("ALERT_IM_TERTIARY", "企业微信告警机器人-三", "wecom-bot-tertiary",
+                        "TPL_PAYMENT_ISSUE_IM_V3", "DEFAULT", 30),
                 buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup",
-                        "TPL_PAYMENT_ISSUE_IM_V3", "DEFAULT", 30)
+                        "TPL_PAYMENT_ISSUE_IM_V4", "DEFAULT", 40)
         ));
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
                 .thenReturn(null)
                 .thenReturn(buildDeliveryResult(
                         "IM-SECONDARY-001", "\n", "非法状态不应被默认受理", "[IM-SECONDARY] ISSUE-001"))
                 .thenReturn(buildDeliveryResult(
-                        "IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+                        "IM-TERTIARY-001", "UNKNOWN_REMOTE", "未知状态不应落库", "[IM-TERTIARY] ISSUE-001"))
+                .thenReturn(buildDeliveryResult(
+                        "IM-BACKUP-001", " accepted ", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -719,15 +723,19 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor =
                 ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
-        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(3)).insertIssueAlertLog(logCaptor.capture());
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(4)).insertIssueAlertLog(logCaptor.capture());
         PaymentIssueAlertLogEntity primaryLog = logCaptor.getAllValues().get(0);
         PaymentIssueAlertLogEntity secondaryLog = logCaptor.getAllValues().get(1);
+        PaymentIssueAlertLogEntity tertiaryLog = logCaptor.getAllValues().get(2);
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals("派发失败", primaryLog.getAlertStatus());
         Assertions.assertEquals("SEND_EXCEPTION", primaryLog.getProviderDeliveryStatus());
         Assertions.assertEquals("派发失败", secondaryLog.getAlertStatus());
         Assertions.assertEquals("SEND_EXCEPTION", secondaryLog.getProviderDeliveryStatus());
         Assertions.assertFalse(secondaryLog.getProviderDeliveryMessage().contains("非法状态"));
+        Assertions.assertEquals("派发失败", tertiaryLog.getAlertStatus());
+        Assertions.assertEquals("SEND_EXCEPTION", tertiaryLog.getProviderDeliveryStatus());
+        Assertions.assertFalse(tertiaryLog.getProviderDeliveryMessage().contains("未知状态"));
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-备".equals(log.getProviderName())
                         && "已派发".equals(log.getAlertStatus())

@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -63,7 +64,6 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
     private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
     private static final int PROVIDER_RECEIPT_NO_MAX_LENGTH = 128;
-    private static final int PROVIDER_DELIVERY_STATUS_MAX_LENGTH = 64;
     private static final int PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH = 255;
     private static final int RENDERED_CONTENT_SNAPSHOT_MAX_LENGTH = 1024;
     private static final String TRANSPORT_ERROR_MARKER = "transportError=";
@@ -73,6 +73,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RECEIPT_QUERY_RESULT_EMPTY = "EMPTY";
     private static final String RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT = "RECEIPT_CONFLICT";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
+    private static final List<String> PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED", "FAILED");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private PaymentTaskLeaseService paymentTaskLeaseService;
@@ -693,10 +694,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryStatus())) {
             throw new IllegalArgumentException("通知器未返回明确投递状态");
         }
-        normalizedResult.setProviderDeliveryStatus(truncate(
-                normalizedResult.getProviderDeliveryStatus(),
-                PROVIDER_DELIVERY_STATUS_MAX_LENGTH
-        ));
+        String deliveryStatus = normalizedResult.getProviderDeliveryStatus().trim().toUpperCase(Locale.ROOT);
+        if (!PROVIDER_DELIVERY_STATUSES.contains(deliveryStatus)) {
+            throw new IllegalArgumentException("通知器返回了不支持的投递状态");
+        }
+        normalizedResult.setProviderDeliveryStatus(deliveryStatus);
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryMessage())) {
             normalizedResult.setProviderDeliveryMessage(defaultMessage);
         } else {
