@@ -7577,3 +7577,28 @@
 1. 运营已可从任务中心的耗尽告警直接定位到回查明细，并查看与导出足以支持人工核查的内部调度证据；筛选与展示状态不再在首次等待/退避边界漂移。
 2. 本轮本地测试和构建证据完整，但没有可用后端支撑浏览器业务 API 联调，也没有真实通知网关或供应商环境，因此不扩大外部事实结论。
 3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断保持不变，`release/v1.0.0` 继续冻结。
+
+## 259. 2026-09-10 单条告警回执人工回查 V1.0 验证
+
+### 259.1 本轮补强
+
+1. 新增 `POST /api/payment-task-center/reconcile-issue-alert-receipts/{alertNo}`，从告警明细对指定待确认、已派发、`ACCEPTED` 外部通道记录执行人工回查，并复用任务日志与 overview 刷新。
+2. 单条入口使用数据库返回的历史回查次数执行 CAS claim；人工模式仅绕过自动退避与次数上限，不绕过共享限流、真实适配器、有效占用和回执号一致性检查。
+3. 修复人工批量候选未返回 `receipt_query_count` 的问题，并在人工/自动候选、claim、失败完成和明确送达回写增加待确认围栏，防止已确认记录被重复查询或覆盖。
+4. admin-web 明细行新增人工回查操作，与人工确认互斥；执行后重新加载当前筛选，并按服务端结果展示成功或有限失败摘要。
+
+### 259.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterMapperIntegrationTest,PaymentTaskCenterServiceImplTest,PaymentTaskCenterControllerTest test` | 通过 | `85` 个用例，`0` failures、`0` errors、`0` skipped；覆盖单条入口、历史次数、共享限流复用与确认并发围栏 |
+| payment-core 全量测试 | `mvn test` | 通过 | `695` 个用例，`0` failures、`0` errors、`0` skipped |
+| admin-web 生产构建 | `npm run build` | 通过 | Vite 转换 `68` 个模块；仅有既有大于 `500 kB` 的 chunk 警告 |
+| XML 与补丁检查 | `xmllint --noout ... && git diff --check` | 通过 | `PaymentTaskCenterMapper.xml` 合法，代码、测试和文档无空白符错误 |
+| 真实环境验证 | 通知集成网关、供应商协议、生产 MySQL 与人员响应 | 未执行 | 不记录真实查询、送达、响应或稳定性通过 |
+
+### 259.3 当前判断
+
+1. 运营已可在定位具体告警后执行受控单条回查，自动次数耗尽不再只能启动整批任务或直接人工确认；并发确认的数据库保护也已补齐。
+2. 本地自动化证明内部接口、状态围栏和页面构建成立，但没有可用真实通知网关或供应商环境，不能据此认定查询或送达成功。
+3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断保持不变，`release/v1.0.0` 继续冻结。

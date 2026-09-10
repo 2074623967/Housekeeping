@@ -2699,11 +2699,19 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.85 告警明细回执回查钻取契约
 
-1. `GET /api/payment-issues/alert-logs` 与 `GET /api/payment-issues/alert-logs/export` 新增可选参数 `receiptQueryState`；允许值为 `全部 / INITIAL_WAIT / DUE / BACKING_OFF / QUERYING / EXHAUSTED`，英文值忽略大小写，未知值返回参数错误，不能静默退化为全量查询。
+1. `GET /api/payment-issues/alerts` 与 `GET /api/payment-issues/alerts/export` 新增可选参数 `receiptQueryState`；允许值为 `全部 / INITIAL_WAIT / DUE / BACKING_OFF / QUERYING / EXHAUSTED`，英文值忽略大小写，未知值返回参数错误，不能静默退化为全量查询。
 2. 五类状态由服务端使用与补偿任务同源的首次等待、最大次数和 claim 超时配置计算。有效 claim 优先归为 `QUERYING`，其后依次判定 `EXHAUSTED`、`INITIAL_WAIT`、`BACKING_OFF` 和 `DUE`；筛选谓词与返回状态保持互斥，首次等待且 next time 在未来的记录仍只归为 `INITIAL_WAIT`。
 3. 列表行新增 `receiptQueryState / receiptQueryCount / lastReceiptQueryAt / nextReceiptQueryAt / receiptQueryResult`；CSV 在供应商回执号后按同一顺序输出回查队列状态、次数、最近时间、下次时间和有限结果，不导出异常原文或访问凭证。
 4. 任务中心发现 `exhaustedIssueAlertReceiptCount > 0` 时，“异常告警待回查”强制提升为 `P1/danger`，并跳转 `/payment-issue-alerts?receiptQueryState=EXHAUSTED`；无耗尽记录时跳转已受理且待确认列表。该升级只表示自动尝试耗尽，不表示供应商失败或最终送达。
 5. 人工确认回执后，前端必须使用当前筛选重新加载列表，避免已不满足待确认或耗尽条件的记录残留。接口与本地测试不证明真实供应商查询、通知送达、人员响应或生产稳定性。
+
+### 14.86 单条告警回执人工回查契约
+
+1. `POST /api/payment-task-center/reconcile-issue-alert-receipts/{alertNo}` 对指定外部通道告警执行一次人工回执回查；路径参数按 URL 组件编码，服务端去除首尾空白，空编号或不存在、不再待确认、非已派发、非 `ACCEPTED` 的记录返回参数错误且不得外呼。
+2. 单条入口复用批量人工回查的同一执行链路和任务码，可越过自动首次等待、退避时间与最大次数，但不能绕过基于历史 `receiptQueryCount` 的 CAS claim、有效 `QUERYING` 占用、共享通道限流、适配器能力判断、回执号一致性校验或有限失败结果。
+3. 人工与自动候选、claim、失败完成和明确送达回写均要求 `ack_status='待确认'`。回查在途时若运营已人工确认，过期执行者不能再写失败分类、改成 `DELIVERED` 或覆盖确认审计。
+4. 返回继续使用 `PaymentTaskActionResultDTO`：明确送达计成功，未送达、限流、适配器缺失、查询异常、空结果或回执号冲突计失败并返回有限摘要；同时记录任务运行日志并刷新 overview，推荐路由为 `/payment-issue-alerts`。
+5. 本地接口、Mapper 和服务测试只证明受控编排与并发围栏，不证明真实查询适配器已配置、供应商已送达、人员已响应、生产网络或稳定性已验证。
 
 联调说明：
 
