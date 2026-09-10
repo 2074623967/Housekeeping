@@ -1038,6 +1038,14 @@
 4. 回归获取成功提交、续期失败回滚、续期返回 `0` 后停止调度、幂等关闭和 owner 条件释放。定向测试应不少于 `5` 个，payment-core 全量不少于 `781` 个。
 5. 本地测试不模拟真实网络分区、JVM 长暂停或任务体 fencing，不得据此宣称生产多实例绝不重复执行或租约稳定性已经验收。
 
+### 4.138 任务中心告警写入异常详情脱敏
+
+1. 构造三笔告警候选，让中间一笔 Mapper 抛出包含模拟 JDBC 地址、密码、SQL 和换行的异常，验证该笔回滚、前后两笔提交且后续候选继续处理。
+2. 捕获 `TransactionTemplate` DEBUG 事件，验证 throwable 只包含 `PAYMENT_ISSUE_ALERT_WRITE_FAILED:<异常简单类名>`，cause 为空、堆栈长度为 `0`，格式化消息和 throwable message 均不含模拟密文。
+3. 让 Mapper 抛出 `DuplicateKeyException`，验证仍计 `warningCount=1`、`failCount=0`，不得因统一脱敏包装退化为普通失败。
+4. 任务中心定向测试应不少于 `36` 个，payment-core 全量不少于 `781` 个；补丁检查必须通过。本轮无前端、Mapper 或 schema 变化。
+5. 本地 Mockito 不证明生产 MySQL 唯一键竞争、隔离级别、多实例告警生成、真实送达或生产稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

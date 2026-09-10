@@ -8387,3 +8387,26 @@
 
 1. payment-core 共用租约组件不再通过普通 WARN 或 Spring 事务 DEBUG 路径传播任意底层数据库异常详情，且未改变现有租约控制流。
 2. 当前租约仍不是强 fencing token；本地测试不证明生产日志配置、数据库网络分区、JVM 长暂停、多实例失约后的业务中止或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 294. 2026-09-11 任务中心告警写入异常脱敏 V1.0 验证
+
+### 294.1 本轮补强
+
+1. `PaymentTaskCenterServiceImpl` 的逐候选告警写入事务在回调内部捕获运行时异常，并转换为固定 `PAYMENT_ISSUE_ALERT_WRITE_FAILED:<异常简单类名>` 分类。
+2. 内部异常不保留原始 cause 或调用栈，避免 Mapper 与驱动异常详情进入 Spring 事务 DEBUG 日志；失败候选摘要仍只记录最多三笔业务异常编号。
+3. 内部异常单独保存重复键布尔分类，`DuplicateKeyException` 继续作为幂等竞争跳过，而非普通写入失败。
+
+### 294.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 任务中心定向测试 | `mvn -Dtest=PaymentTaskCenterServiceImplTest test` | 通过 | `36` 个用例；覆盖普通失败回滚继续、最多三笔失败摘要、重复键跳过和既有任务编排 |
+| payment-core 全量测试 | `mvn test` | 通过 | `781` 个用例，`0` failures、`0` errors、`0` skipped |
+| 敏感异常注入 | Logback 事务事件断言 | 通过 | 模拟 JDBC 地址、密码、SQL 和换行未进入事务日志；throwable 仅保留固定分类且无 cause、无堆栈 |
+| 幂等竞争回归 | `DuplicateKeyException` 单元测试 | 通过 | 并发重复仍计 `warningCount=1`、`failCount=0`，摘要显示并发重复跳过 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+
+### 294.3 当前判断
+
+1. 任务中心逐笔生成告警的数据库异常已不再通过事务 DEBUG 路径传播原始详情，同时保留候选级失败隔离和重复键幂等语义。
+2. 本地 Mockito 不证明生产 MySQL 唯一键竞争、日志采集配置、多实例告警生成、人员响应或生产稳定性，`release/v1.0.0` 继续冻结。
