@@ -126,7 +126,7 @@ public class RefundServiceImpl implements RefundService {
     @Transactional
     public RefundListItemDTO apply(RefundApplyRequestDTO request) {
         validateApplyRequest(request);
-        RefundPaymentSourceDTO source = refundMapper.findPaymentSource(request.getPaymentOrderId().trim());
+        RefundPaymentSourceDTO source = refundMapper.findPaymentSourceForUpdate(request.getPaymentOrderId().trim());
         if (source == null) {
             throw new IllegalArgumentException("原支付单不存在");
         }

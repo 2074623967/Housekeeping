@@ -119,7 +119,7 @@ class RefundServiceImplTest {
         source.setCustomerName("张女士");
         source.setPaidAmount(new BigDecimal("100.00"));
         source.setStatus("SUCCESS");
-        when(refundMapper.findPaymentSource("PAY-001")).thenReturn(source);
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(new BigDecimal("30.00"));
 
         new RefundServiceImpl(refundMapper, refundChannelSubmitService).apply(request);
@@ -145,7 +145,7 @@ class RefundServiceImplTest {
         source.setPaymentOrderId("PAY-001");
         source.setPaidAmount(new BigDecimal("100.00"));
         source.setStatus("SUCCESS");
-        when(refundMapper.findPaymentSource("PAY-001")).thenReturn(source);
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(new BigDecimal("30.00"));
 
         org.junit.jupiter.api.Assertions.assertThrows(

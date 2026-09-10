@@ -152,7 +152,7 @@
         ORDER BY created_at DESC, id DESC
     </select>
 
-    <select id="findPaymentSource" resultType="com.abc123.hsp.dto.RefundPaymentSourceDTO">
+    <select id="findPaymentSourceForUpdate" resultType="com.abc123.hsp.dto.RefundPaymentSourceDTO">
         SELECT payment_order_id AS paymentOrderId,
                order_no AS orderNo,
                customer_name AS customerName,
@@ -162,6 +162,7 @@
                channel_code AS channelCode
         FROM t_payment_order
         WHERE payment_order_id = #{paymentOrderId}
+        FOR UPDATE
     </select>
 
     <select id="findChannelSubmitRequestByRefundOrderId" resultType="com.abc123.hsp.dto.RefundChannelSubmitRequestDTO">

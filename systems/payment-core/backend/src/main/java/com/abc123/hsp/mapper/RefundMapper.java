@@ -50,9 +50,9 @@ public interface RefundMapper {
     List<RefundOperationLogItemDTO> findOperationLogs(@Param("refundOrderId") String refundOrderId);
 
     /**
-     * 查询可退款的原支付单快照。
+     * 查询并锁定可退款的原支付单快照。
      */
-    RefundPaymentSourceDTO findPaymentSource(String paymentOrderId);
+    RefundPaymentSourceDTO findPaymentSourceForUpdate(String paymentOrderId);
 
     /**
      * 查询退款渠道下发请求快照。
