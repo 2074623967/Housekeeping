@@ -2961,6 +2961,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `processedCount / successCount / warningCount / failCount`、最多三笔失败支付单号、退避配置和总览字段均不改变，本轮不新增或删除外部 API 字段。
 4. 本契约只约束本版本新产生的数据与该服务日志路径，不承诺清理历史异常原文，也不证明生产日志配置、诊断权限或生产稳定性。
 
+### 14.120 自动任务租约异常脱敏契约
+
+1. `PaymentTaskLeaseService` 的初始化、获取、续期和释放异常统一转换为 `PAYMENT_TASK_LEASE_OPERATION_FAILED:<异常简单类名>`；原始 message、cause 和调用栈不是任务接口、业务日志或事务日志契约。
+2. 续期线程捕获异常后仅记录任务码、内部 owner 与原异常类型，并保持既有下一周期重试行为；续期返回 `0` 时仍关闭句柄并按 owner 条件释放。
+3. 本轮不新增 HTTP 字段，不改变任务中心成功、警告、失败或租约占用跳过响应，也不将稳定异常分类暴露为生产故障根因。
+4. 该契约不是 fencing token 或任务中止协议，不承诺数据库网络分区、JVM 长暂停、续期线程阻塞时无重复执行；生产仍需业务幂等、失约监控与多实例故障测试。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

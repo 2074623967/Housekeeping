@@ -8364,3 +8364,26 @@
 
 1. 新产生的超时关单失败记录和本服务相关事务日志已不再传播任意异常原文，仅保留定位所需的稳定失败类别与异常类型。
 2. 本轮不回填或清理历史失败摘要，也不证明生产日志级别、采集链路、受控诊断设施、历史数据或生产稳定性已满足要求，`release/v1.0.0` 继续冻结。
+
+## 293. 2026-09-11 自动任务租约异常详情脱敏 V1.0 验证
+
+### 293.1 本轮补强
+
+1. `PaymentTaskLeaseService` 的初始化、获取、续期和释放统一通过安全操作边界执行；运行时异常在离开 `TransactionTemplate` 回调前转换为固定分类异常。
+2. 固定异常消息为 `PAYMENT_TASK_LEASE_OPERATION_FAILED:<异常简单类名>`，不保留原始 cause 或调用栈；后台续期 WARN 仅保留任务码、owner 与原异常类型。
+3. 无 `TransactionTemplate` 的单元测试兼容构造路径也执行相同脱敏，避免测试或非 Spring 直接调用形成不同异常契约。
+
+### 293.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 租约异常脱敏定向测试 | `mvn -Dtest=PaymentTaskLeaseServiceTest test` | 通过 | `5` 个用例；覆盖独立事务、周期续期、owner 丢失、事务日志与无事务模板兼容路径 |
+| payment-core 全量测试 | `mvn test` | 通过 | `781` 个用例，`0` failures、`0` errors、`0` skipped |
+| 敏感异常注入 | Logback 事件与 throwable 断言 | 通过 | 模拟 JDBC 地址、密码、SQL 和换行未进入服务 WARN 或 Spring 事务 DEBUG throwable，分类异常无 cause、无堆栈 |
+| 租约事务回归 | Mockito 事务管理器与 Mapper 断言 | 通过 | 获取提交、续期失败回滚、owner 条件和释放调用语义保持不变 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+
+### 293.3 当前判断
+
+1. payment-core 共用租约组件不再通过普通 WARN 或 Spring 事务 DEBUG 路径传播任意底层数据库异常详情，且未改变现有租约控制流。
+2. 当前租约仍不是强 fencing token；本地测试不证明生产日志配置、数据库网络分区、JVM 长暂停、多实例失约后的业务中止或生产稳定性，`release/v1.0.0` 继续冻结。

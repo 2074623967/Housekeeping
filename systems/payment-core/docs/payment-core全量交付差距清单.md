@@ -1198,6 +1198,13 @@
 3. 失败计数、原事务回滚、独立失败登记、后续候选继续和重试退避语义不变。定向 `8` 个测试及 payment-core 全量 `779` 个测试通过，补丁检查通过。
 4. 本轮不清理历史 `last_error_message`，不修改前端、Mapper、schema 或迁移；本地日志断言不证明生产日志配置、受控诊断设施、生产数据已脱敏或生产稳定性，release 四项治理阻断不变。
 
+### 8.125 2026-09-11 自动任务租约异常详情脱敏进展
+
+1. 统一 `PaymentTaskLeaseService` 在租约初始化、获取、续期和释放操作离开事务回调前，将任意运行时异常转换为 `PAYMENT_TASK_LEASE_OPERATION_FAILED:<异常简单类名>` 稳定分类。
+2. 内部脱敏异常不保留原始 message、cause 或可写堆栈，避免 Spring 事务 DEBUG 日志输出模拟 JDBC 地址、密码、SQL 与换行内容；后台续期 WARN 仅记录任务码、owner 和原异常类型，不再附带 throwable。
+3. 获取、续期、释放的 `REQUIRES_NEW` 边界、续期间隔、owner 校验、续期失败后等待下一轮重试及任务 finally 释放语义不变。租约定向 `5` 个测试及 payment-core 全量 `781` 个测试通过。
+4. 本轮无前端、Mapper、schema 或迁移变化，也不补强 fencing token；本地测试不证明生产日志配置、数据库网络分区、JVM 长暂停、多实例失约处理或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
