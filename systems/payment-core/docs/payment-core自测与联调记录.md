@@ -8249,3 +8249,26 @@
 
 1. 本地派发已形成“配置完整 + HTTP 成功 + 业务成功 + 有效数据”的确认边界，但顺序 HTTP 调用不具备 exactly-once：清分成功、账务失败后的重试可能重放清分，仍依赖下游以支付单号等稳定业务标识幂等。
 2. 本地 mock 与自动化不证明真实 HTTP/MQ 送达、清分完成、账务入账、资金到账或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 288. 2026-09-11 超时关单并发跳过统计 V1.0 验证
+
+### 288.1 本轮补强
+
+1. `PaymentExpiryTaskServiceImpl` 将条件更新返回 `0` 的候选从成功数中剥离，记录为 `skippedCount`；只有实际更新支付单并完成关联状态、事件和处理日志写入时才累计成功数。
+2. `PaymentTaskCenterServiceImpl` 将跳过数映射为现有 `warningCount`，任务日志与接口摘要显示“并发跳过 N 笔”，不再对运营人员宣称这类候选已成功关闭。
+3. 逐笔 `REQUIRES_NEW` 事务、失败支付单摘要上限、资格复验 SQL 和后续候选继续执行语义保持不变。
+
+### 288.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 超时关单与任务中心定向测试 | `mvn -Dtest=PaymentExpiryTaskServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentExpirySchedulerTest test` | 通过 | `39` 个用例；覆盖实际关闭、事务失败后继续、资格竞争跳过、手工与自动任务中心编排 |
+| payment-core 全量测试 | `mvn test` | 通过 | `767` 个用例，`0` failures、`0` errors、`0` skipped |
+| 竞争副作用复核 | Service 单元测试与既有 Mapper 状态迁移测试 | 通过 | 条件更新为 `0` 时不更新尝试和预付单，不写关闭事件；成功数为 `0`、跳过数为 `1` |
+| 补丁检查 | `git diff --check` | 通过 | Java 与测试无空白符错误 |
+| Mapper、数据库与前端 | 变更范围检查 | 未重复执行 | 本轮未修改 SQL、schema、迁移或前端代码 |
+
+### 288.3 当前判断
+
+1. 超时关单任务的计数已与持久化事实对齐：扫描候选、实际关闭、资格变化跳过和事务失败不再混为一类，任务中心 warning 也能暴露竞争跳过。
+2. 本地 mock 与 H2/MyBatis 既有测试不证明生产 MySQL 锁竞争、多实例调度、真实渠道关单或资金状态，`release/v1.0.0` 继续冻结。

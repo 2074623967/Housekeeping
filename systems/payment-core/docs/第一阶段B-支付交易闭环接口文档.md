@@ -2925,6 +2925,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. AMQP 模式要求 RabbitTemplate、序列化器、exchange、routing key 和账务账号完整，目的字段最长 `255`、账号最长 `64` 个字符。消息投递确认仍不等于下游业务处理完成。
 5. HTTP 顺序重试可能在“清分成功、账务失败”后重放清分，接口消费者必须以支付单号、事件号等稳定业务标识实现幂等。本地测试不证明真实送达、清分完成、账务入账或资金到账。
 
+### 14.115 超时关单任务计数契约
+
+1. `POST /api/payment-task-center/actions/close-expired-payments` 继续返回 `PaymentTaskActionResultDTO`；`processedCount` 为候选扫描数，`successCount` 仅为条件更新成功且整笔事务提交的实际关闭数。
+2. 候选查询后支付单因并发提交等原因不再满足关闭条件时，条件更新返回 `0`，计入 `warningCount` 并在摘要中显示“并发跳过”；该结果不属于成功或失败，不产生关闭事件。
+3. 单笔事务抛出运行时异常计入 `failCount`，并最多附带前三个失败支付单号；其他候选继续执行。非空正常批次满足 `processedCount = successCount + warningCount + failCount`。
+4. 自动调度与人工触发共享该统计语义。warning 表示执行期资格变化，不表示渠道处理、关闭成功或资金事实；接口消费者应刷新支付详情读取最终状态。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
