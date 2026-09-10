@@ -2861,6 +2861,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 合法首尾空格继续由结果校验器归一化，合法缺省来源和状态映射不变；非法结果不得进入返回码映射、业务状态收口或持久化路径。
 4. 本地适配器测试不证明真实 gateway-access 协议、签名验签、生产网络、渠道查询事实、资金到账或稳定性。
 
+### 14.106 告警通知器结果契约
+
+1. `PaymentIssueAlertNotifier.send` 必须返回非空结果并提供明确 `providerDeliveryStatus`；`null`、空状态或纯空白状态不得由派发 Service 推导为 `ACCEPTED`。
+2. `providerDeliveryStatus / providerDeliveryMessage / providerReceiptSnapshot / providerReceiptNo / renderedContentSnapshot` 在默认值和长度截断前拒绝任意 ISO 控制字符，非法原值不得落库或返回页面。
+3. 结果不满足契约时，当前候选供应商保存固定脱敏 `SEND_EXCEPTION` 失败记录并继续 provider fallback；只有明确 `ACCEPTED / DELIVERED` 才计为派发成功。
+4. 本地测试不证明真实 IM、短信或邮件供应商受理、最终送达、人员响应、生产网络或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
