@@ -51,8 +51,13 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
 
     @Override
     public PaymentRiskDecisionResultDTO evaluateSubmitRisk(PaymentRiskDecisionRequestDTO request) {
-        if (!enabled || !StringUtils.hasText(evaluateUrl)) {
+        if (!enabled) {
             return passResult("未启用独立风控中心联动，当前按本地放行口径继续处理");
+        }
+        if (!StringUtils.hasText(evaluateUrl)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE,
+                    "风控中心评估地址未配置，请联系资金风控团队");
         }
         try {
             RiskApiResponse response = restTemplate.postForObject(

@@ -33,6 +33,20 @@ class PaymentRiskControlServiceImplTest {
     }
 
     @Test
+    void shouldFailClosedWhenEnabledRiskControlHasNoEvaluateUrl() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentRiskControlServiceImpl(true, "   ", restTemplate)
+                        .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+
+        assertEquals(ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, exception.getCode());
+        assertEquals("风控中心评估地址未配置，请联系资金风控团队", exception.getMessage());
+        verify(restTemplate, never()).postForObject(any(String.class), any(), any());
+    }
+
+    @Test
     void shouldNormalizeSuccessfulRiskDecision() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentRiskDecisionResultDTO data = decision(" pass ", " SUCCESS ");
