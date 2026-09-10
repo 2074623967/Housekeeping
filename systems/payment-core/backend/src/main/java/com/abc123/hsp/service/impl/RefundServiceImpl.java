@@ -8,15 +8,18 @@ import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
+import com.abc123.hsp.dto.RefundChannelQueryResultDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundRetrySourceDTO;
+import com.abc123.hsp.dto.RefundStatusQueryRequestDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.RefundChannelQueryService;
 import com.abc123.hsp.service.RefundService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -51,6 +54,7 @@ public class RefundServiceImpl implements RefundService {
     private static final DateTimeFormatter REFUND_NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final String DEFAULT_OPERATOR = "payment-core-admin";
     private static final String CALLBACK_OPERATOR = "channel-callback";
+    private static final String QUERY_OPERATOR = "channel-query";
     private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
     private static final int CALLBACK_REFUND_ORDER_ID_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH = 128;
@@ -59,23 +63,28 @@ public class RefundServiceImpl implements RefundService {
     private final RefundMapper refundMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
+    private final RefundChannelQueryService refundChannelQueryService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
     @Autowired
     public RefundServiceImpl(RefundMapper refundMapper,
                              PaymentEventDispatchService paymentEventDispatchService,
                              PaymentCallbackSignatureService paymentCallbackSignatureService,
+                             RefundChannelQueryService refundChannelQueryService,
                              PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.refundMapper = refundMapper;
         this.paymentEventDispatchService = paymentEventDispatchService;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
+        this.refundChannelQueryService = refundChannelQueryService;
         this.sensitiveDataMasker = sensitiveDataMasker;
     }
 
     RefundServiceImpl(RefundMapper refundMapper,
                       PaymentEventDispatchService paymentEventDispatchService,
-                      PaymentCallbackSignatureService paymentCallbackSignatureService) {
+                      PaymentCallbackSignatureService paymentCallbackSignatureService,
+                      RefundChannelQueryService refundChannelQueryService) {
         this(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
+                refundChannelQueryService,
                 new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
@@ -183,23 +192,91 @@ public class RefundServiceImpl implements RefundService {
     public RefundListItemDTO callback(String channel, RefundCallbackRequestDTO request) {
         String normalizedChannel = normalizeRefundCallback(channel, request);
         paymentCallbackSignatureService.verifyRefund(normalizedChannel, request);
-        RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate(request.getRefundOrderId());
+        return applyChannelResult(
+                request.getRefundOrderId(),
+                normalizedChannel,
+                request.getChannelRefundNo(),
+                request.getRefundStatus(),
+                CALLBACK_OPERATOR,
+                false);
+    }
+
+    @Override
+    @Transactional(noRollbackFor = BusinessException.class)
+    public RefundListItemDTO query(RefundStatusQueryRequestDTO request) {
+        String refundOrderId = requireRefundOrderId(request == null ? null : request.getRefundOrderId());
+        RefundCallbackSourceDTO snapshot = refundMapper.findCallbackSourceByRefundOrderId(refundOrderId);
+        if (snapshot == null) {
+            throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
+        }
+        if (STATUS_SUCCESS.equals(snapshot.getStatus()) || STATUS_FAIL.equals(snapshot.getStatus())) {
+            return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
+        }
+        validateQueryableRefund(snapshot);
+        RefundChannelQueryResultDTO result;
+        try {
+            result = RefundChannelQueryResultValidator.validateAndNormalize(
+                    refundChannelQueryService.query(snapshot));
+        } catch (BusinessException exception) {
+            refundMapper.insertOperationLog(buildOperationLog(
+                    refundOrderId,
+                    "CHANNEL_QUERY_FAILED",
+                    "退款渠道查单失败",
+                    snapshot.getStatus(),
+                    snapshot.getStatus(),
+                    QUERY_OPERATOR,
+                    "退款渠道查单未获得可信结果"));
+            throw exception;
+        }
+        if (!snapshot.getChannelRefundNo().equals(result.getChannelRefundNo())) {
+            throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                    "refund query transaction does not match accepted refund transaction");
+        }
+        return applyChannelResult(
+                refundOrderId,
+                snapshot.getChannelCode().trim().toLowerCase(Locale.ROOT),
+                result.getChannelRefundNo(),
+                result.getRefundStatus(),
+                QUERY_OPERATOR,
+                true);
+    }
+
+    private RefundListItemDTO applyChannelResult(String refundOrderId,
+                                                 String channel,
+                                                 String channelRefundNo,
+                                                 String targetStatus,
+                                                 String operator,
+                                                 boolean recordSameStatus) {
+        RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate(refundOrderId);
         if (source == null) {
             throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
         }
         if (!StringUtils.hasText(source.getChannelCode())
-                || !normalizedChannel.equalsIgnoreCase(source.getChannelCode().trim())) {
+                || !channel.equalsIgnoreCase(source.getChannelCode().trim())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH,
                     "callback channel does not match refund channel");
         }
         if (!StringUtils.hasText(source.getChannelRefundNo())
-                || !source.getChannelRefundNo().equals(request.getChannelRefundNo())) {
+                || !source.getChannelRefundNo().equals(channelRefundNo)) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
                     "callback transaction does not match refund transaction");
         }
-        String targetStatus = request.getRefundStatus();
         if (targetStatus.equals(source.getStatus())) {
-            return maskedCopy(refundMapper.findByRefundOrderId(request.getRefundOrderId()));
+            if (recordSameStatus) {
+                refundMapper.insertOperationLog(buildOperationLog(
+                        refundOrderId,
+                        "CHANNEL_QUERY",
+                        "退款渠道主动查单",
+                        source.getStatus(),
+                        source.getStatus(),
+                        operator,
+                        "渠道查询结果为" + targetStatus));
+            }
+            return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
+        }
+        if (recordSameStatus && STATUS_PROCESSING.equals(targetStatus)
+                && (STATUS_SUCCESS.equals(source.getStatus()) || STATUS_FAIL.equals(source.getStatus()))) {
+            return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
         }
         if (STATUS_SUCCESS.equals(source.getStatus()) || STATUS_FAIL.equals(source.getStatus())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_FINAL_STATUS_CONFLICT,
@@ -212,20 +289,30 @@ public class RefundServiceImpl implements RefundService {
         boolean success = STATUS_SUCCESS.equals(targetStatus);
         String statusType = success ? "success" : "danger";
         int affectedRows = refundMapper.updateRefundStatus(
-                request.getRefundOrderId(), STATUS_PROCESSING, targetStatus, statusType, success);
+                refundOrderId, STATUS_PROCESSING, targetStatus, statusType, success);
         if (affectedRows == 0) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
                     "refund status does not allow callback finalization");
         }
         refundMapper.insertOperationLog(buildOperationLog(
-                request.getRefundOrderId(),
-                targetStatus,
-                success ? "退款成功回调" : "退款失败回调",
+                refundOrderId,
+                recordSameStatus ? "CHANNEL_QUERY_" + targetStatus : targetStatus,
+                recordSameStatus ? "退款渠道查单收口" : success ? "退款成功回调" : "退款失败回调",
                 STATUS_PROCESSING,
                 targetStatus,
-                CALLBACK_OPERATOR,
-                success ? "渠道确认退款成功" : "渠道确认退款失败"));
-        return maskedCopy(refundMapper.findByRefundOrderId(request.getRefundOrderId()));
+                operator,
+                recordSameStatus ? "渠道查单确认退款" + (success ? "成功" : "失败")
+                        : success ? "渠道确认退款成功" : "渠道确认退款失败"));
+        return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
+    }
+
+    private void validateQueryableRefund(RefundCallbackSourceDTO source) {
+        if (!STATUS_PROCESSING.equals(source.getStatus())
+                || !StringUtils.hasText(source.getChannelCode())
+                || !StringUtils.hasText(source.getChannelRefundNo())) {
+            throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                    "refund is not ready for channel query");
+        }
     }
 
     @Override

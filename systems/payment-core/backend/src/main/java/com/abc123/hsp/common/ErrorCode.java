@@ -55,4 +55,6 @@ public final class ErrorCode {
     public static final String REFUND_CALLBACK_STATUS_INVALID = "PAYMENT-1042";
     public static final String REFUND_CALLBACK_FINAL_STATUS_CONFLICT = "PAYMENT-1043";
     public static final String REFUND_ORDER_NOT_FOUND = "PAYMENT-1044";
+    public static final String REFUND_CHANNEL_QUERY_ADAPTER_MISSING = "PAYMENT-1045";
+    public static final String REFUND_CHANNEL_QUERY_FAILED = "PAYMENT-1046";
 }

@@ -287,6 +287,13 @@ onMounted(loadRefunds);
                     <RouterLink class="link-button" :to="`/refunds/${item.refundOrderId}`">详情</RouterLink>
                     <button
                       class="link-button"
+                      :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'PROCESSING'"
+                      @click="runRefundAction(item.refundOrderId, 'query', '完成主动查单', refundApi.query)"
+                    >
+                      {{ isActionRunning(item.refundOrderId, "query") ? "查询中..." : "主动查单" }}
+                    </button>
+                    <button
+                      class="link-button"
                       :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'REVIEWING'"
                       @click="runRefundAction(item.refundOrderId, 'approve', '审核通过', refundApi.approve)"
                     >
@@ -324,7 +331,7 @@ onMounted(loadRefunds);
             </div>
             <div class="ops-card">
               <div class="ops-title">处理建议</div>
-              <div class="ops-row"><span>优先动作</span><span>审核、关注渠道回调、失败重试</span></div>
+              <div class="ops-row"><span>优先动作</span><span>审核、主动查单、失败重试</span></div>
               <div class="ops-row"><span>重点核对</span><span>退款状态、退款方式、退款金额</span></div>
               <div class="ops-row"><span>典型场景</span><span>部分退款、原路退款失败、自动重试承接</span></div>
             </div>

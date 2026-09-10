@@ -106,13 +106,18 @@ class RefundSubmitOutboxMapperIntegrationTest {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
             refundMapper.bindRefundChannelAccepted("REF-TRACE", "wx_h5", "RCH-TRACE");
 
+            RefundCallbackSourceDTO snapshot =
+                    refundMapper.findCallbackSourceByRefundOrderId("REF-TRACE");
             RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate("REF-TRACE");
             int finalized = refundMapper.updateRefundStatus(
                     "REF-TRACE", "PROCESSING", "SUCCESS", "success", true);
             int repeated = refundMapper.updateRefundStatus(
                     "REF-TRACE", "PROCESSING", "FAIL", "danger", false);
 
-            assertEquals("PROCESSING", source.getStatus());
+            assertEquals("PROCESSING", snapshot.getStatus());
+            assertEquals("wx_h5", snapshot.getChannelCode());
+            assertEquals("RCH-TRACE", snapshot.getChannelRefundNo());
+            assertEquals(snapshot.getStatus(), source.getStatus());
             assertEquals("wx_h5", source.getChannelCode());
             assertEquals("RCH-TRACE", source.getChannelRefundNo());
             assertEquals(1, finalized);

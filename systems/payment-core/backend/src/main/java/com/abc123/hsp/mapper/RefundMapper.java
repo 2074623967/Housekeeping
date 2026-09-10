@@ -72,6 +72,11 @@ public interface RefundMapper {
     RefundCallbackSourceDTO findCallbackSourceForUpdate(@Param("refundOrderId") String refundOrderId);
 
     /**
+     * 查询退款主动查单快照，不持有行锁跨越渠道调用。
+     */
+    RefundCallbackSourceDTO findCallbackSourceByRefundOrderId(@Param("refundOrderId") String refundOrderId);
+
+    /**
      * 以稳定事件号写入或重新激活退款渠道下发 outbox。
      */
     int upsertRefundSubmitEvent(@Param("eventNo") String eventNo,

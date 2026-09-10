@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
+import com.abc123.hsp.dto.RefundStatusQueryRequestDTO;
 import com.abc123.hsp.service.RefundService;
 import java.nio.charset.StandardCharsets;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -102,6 +103,14 @@ public class RefundController {
             @PathVariable String channel,
             @RequestBody RefundCallbackRequestDTO request) {
         return ApiResponse.success(refundService.callback(channel, request));
+    }
+
+    /**
+     * 主动查询渠道退款状态。
+     */
+    @PostMapping("/query")
+    public ApiResponse<RefundListItemDTO> query(@RequestBody RefundStatusQueryRequestDTO request) {
+        return ApiResponse.success(refundService.query(request));
     }
 
     /**

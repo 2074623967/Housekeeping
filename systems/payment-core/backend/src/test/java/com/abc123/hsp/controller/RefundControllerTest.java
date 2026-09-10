@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundCallbackRequestDTO;
+import com.abc123.hsp.dto.RefundStatusQueryRequestDTO;
 import com.abc123.hsp.service.RefundService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
@@ -64,5 +65,15 @@ class RefundControllerTest {
         controller.callback("wx_h5", request);
 
         verify(refundService).callback("wx_h5", request);
+    }
+
+    @Test
+    void shouldDelegateRefundChannelQuery() {
+        RefundController controller = new RefundController(refundService);
+        RefundStatusQueryRequestDTO request = new RefundStatusQueryRequestDTO();
+
+        controller.query(request);
+
+        verify(refundService).query(request);
     }
 }

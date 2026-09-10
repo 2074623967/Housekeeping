@@ -242,6 +242,7 @@ onMounted(loadDetail);
             </div>
             <div class="toolbar-actions">
               <button class="button primary" :disabled="activeAction === 'approve' || detail.status !== 'REVIEWING'" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
+              <button class="button primary" :disabled="activeAction === 'query' || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', refundApi.query)">主动查单</button>
               <button class="button secondary" :disabled="activeAction === 'retry' || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
           </div>

@@ -49,6 +49,13 @@ payment:
     fixed-delay-ms: ${HSP_PAYMENT_EVENT_RETRY_DELAY_MS:300000}
   refund-retry:
     fixed-delay-ms: ${HSP_PAYMENT_REFUND_RETRY_DELAY_MS:300000}
+  refund-query:
+    gateway-access:
+      # 仅接入真实 gateway-access 退款查单实现后启用；本地兜底只回显现状。
+      enabled: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_ENABLED:false}
+      query-url: ${HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL:http://127.0.0.1:18150/api/gateway/refunds/query}
+      supported-channels: ${HSP_PAYMENT_REFUND_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
+      timeout-ms: ${HSP_PAYMENT_REFUND_QUERY_TIMEOUT_MS:2000}
   downstream:
     clearing:
       payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_CLEARING_PAYMENT_SUCCESS_URL:http://127.0.0.1:18120/api/clearing/events/payments/success}
