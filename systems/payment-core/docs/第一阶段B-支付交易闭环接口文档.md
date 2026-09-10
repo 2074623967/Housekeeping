@@ -3109,6 +3109,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. risk-control-system 的事件型终态说明必须与决策一致：`INTERCEPT` 表达直接拦截，`REJECT` 表达直接拒绝，不得用拦截文案描述拒绝结果。
 5. 本轮不新增接口字段、错误码或对外支付接口结构；本地测试与静态核对不证明真实风险事件、策略命中、人工处置、跨系统生产一致或稳定性。
 
+### 14.141 风控启用态端点配置失败闭合契约
+
+1. `payment.risk-control.enabled=false` 时，支付核心继续返回本地 `PASS / success` 结果，不调用独立风控中心。
+2. `payment.risk-control.enabled=true` 时，`payment.risk-control.evaluate-url` 必须包含非空白地址；缺失或全空白固定抛出 `PAYMENT_RISK_SERVICE_UNAVAILABLE`，提示“风控中心评估地址未配置，请联系资金风控团队”。
+3. 启用态配置校验发生在 HTTP 请求之前；支付提交编排继续保证风控异常先于支付尝试、风险事件、支付状态更新和渠道调用。
+4. 地址存在时继续去除首尾空格，并沿用超时、调用异常、业务码、决策样式和追踪字段的既有失败闭合契约。
+5. 本轮不新增接口字段或错误码；本地测试不证明生产配置正确、真实风控连通、策略有效性、资金结果或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
