@@ -3073,6 +3073,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `decision / decisionType / hitCode / riskTag / reviewNo / eventNo` 的既有必填、白名单、容量和规范化契约不变，固定说明不得改变支付状态机或放宽渠道调用准入。
 4. 本轮不改变接口字段、Mapper、schema 或迁移；固定说明仅证明代码内数据最小化，不证明真实风控策略、人工复核或生产可用性。
 
+### 14.136 风控人工复核关联完整性契约
+
+1. 当规范化 `data.decision=REVIEW` 时，`data.reviewNo` 由可选字段提升为条件必填字段；去除首尾空格后必须非空、最长 `64` 个字符且原文不得包含 ISO 控制字符。
+2. 缺失或非法复核号统一返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`，并在支付状态、预付单状态、风险事件、支付尝试和渠道调用前失败，不得形成无法追踪的待复核事实。
+3. 普通 `PASS` 可不携带复核号，人工复核通过后的 `PASS` 可返回原复核号；复用既有待审单时 `eventNo` 仍可为空，不要求风控系统为同一审核单重复创建事件。
+4. 本轮不改变接口字段、Mapper、schema 或迁移；该契约不证明复核单真实存在、审核完成或跨系统生产一致性，仍需联调与运行证据确认。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
