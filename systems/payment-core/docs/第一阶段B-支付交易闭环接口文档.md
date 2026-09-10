@@ -2939,6 +2939,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `processedCount` 仅表示本轮有界候选数。返回结果中的 `overview.expiredPaymentCount` 为执行后重新查询的当前积压，两者不能互相替代，也不能据单轮成功数推导全量收口。
 4. 超出批次的候选留待后续轮次，按最早过期优先；本地契约不承诺生产单轮耗时、积压清零 SLA、持续失败候选公平性或真实渠道关单。
 
+### 14.117 超时关单失败退避与总览计数契约
+
+1. 超时关单失败后登记技术重试标记，默认首次间隔 `60` 秒、增长因子 `2`、最大间隔 `3600` 秒；对应配置可分别由 `HSP_PAYMENT_EXPIRY_CLOSE_RETRY_INTERVAL_SECONDS`、`HSP_PAYMENT_EXPIRY_CLOSE_RETRY_BACKOFF_FACTOR` 和 `HSP_PAYMENT_EXPIRY_CLOSE_MAX_RETRY_INTERVAL_SECONDS` 覆盖，服务端确保各值至少为 `1` 且最大间隔不小于首次间隔。
+2. 失败登记在原关单事务回滚后使用独立新事务；登记失败不改变本轮 `failCount`，也不阻断后续候选。失败摘要最长 `512` 个字符，不作为外部异常原文契约。
+3. `GET /api/payment-task-center/overview` 新增 `dueExpiredPaymentCount` 和 `backingOffExpiredPaymentCount`。`expiredPaymentCount` 仍为全部合格超时支付单去重总数并包含退避数据，前两个字段分别表示当前可执行和当前尚在失败退避窗口的数据。
+4. 候选查询忽略 `next_retry_at > NOW()` 的支付单；到期后自然重入。实际关闭或执行期失去关单资格时清除标记。未提交渠道流水同时接受 `NULL` 和历史空字符串，但非空渠道流水始终不得进入关单候选。
+5. 本地接口与 H2 测试不承诺生产 MySQL 时间精度、并发更新、执行计划、多实例吞吐、积压 SLA 或真实渠道关单。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

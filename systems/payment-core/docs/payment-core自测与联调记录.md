@@ -8295,3 +8295,27 @@
 
 1. 超时关单单轮工作量和内存输入已经有界，默认按最早过期的 `100` 笔逐轮收敛；配置错误不能绕过 `1000` 笔硬上限。
 2. 本地测试不证明生产 MySQL 执行计划、索引效率、租约周期内完成、持续失败候选不会积压或多实例吞吐，`release/v1.0.0` 继续冻结。
+
+## 290. 2026-09-11 超时关单失败退避与积压可见性 V1.0 验证
+
+### 290.1 本轮补强
+
+1. 新增 `t_payment_expiry_close_retry`，按支付单唯一登记连续失败次数、当前退避秒数、下次允许重试时间和最长 `512` 字符的最近失败摘要；默认参数为 `60 / 2 / 3600`。
+2. 关单事务失败后以独立 `REQUIRES_NEW` 事务登记退避；登记失败只输出 WARN 并继续后续候选。成功关闭或条件更新为 `0` 时清除旧标记，候选查询跳过尚未到期的数据。
+3. 新建支付单将未产生的渠道流水保存为 `NULL`，资格查询和条件更新使用 `NULLIF(TRIM(channel_transaction_no), '') IS NULL`，同时兼容历史空字符串。
+4. 任务中心总积压使用支付单去重统计并继续包含退避数据，新增当前可执行与退避中数量；管理端卡片和焦点告警同步展示两个口径。
+
+### 290.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 超时关单联合定向测试 | `mvn -Dtest=PaymentExpiryTaskServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentExpirySchedulerTest,PaymentMapperStateTransitionIntegrationTest,PaymentTaskCenterMapperIntegrationTest,PaymentExpiryConfigurationTest test` | 通过 | `61` 个用例；覆盖策略夹取、独立失败登记、登记失败降级、消息截断、候选跳过、成功清理、历史空字符串与运营计数 |
+| payment-core 全量测试 | `mvn test` | 通过 | `775` 个用例，`0` failures、`0` errors、`0` skipped |
+| admin-web 生产构建 | `npm run build` | 通过 | 仅保留项目既有的 Vite chunk 超过 `500 kB` 提示 |
+| 响应式页面检查 | Playwright，`1440x1000`、`390x844` | 通过 | 页面与新增元信息均无横向溢出 |
+| 补丁检查 | `git diff --check` | 通过 | Java、YAML、Mapper XML、schema、Vue 与测试无空白符错误 |
+
+### 290.3 当前判断
+
+1. 超时关单已形成“有界批次 + 逐笔事务 + 失败退避 + 到期重入 + 运营拆分计数”的本地闭环，持续失败候选不会在退避窗口内反复占用最早批次。
+2. 本地 H2、Mockito、构建和浏览器检查不证明生产 MySQL `ON DUPLICATE KEY UPDATE` 执行计划、锁竞争、多实例吞吐、积压清零 SLA、真实渠道关单或生产稳定性，`release/v1.0.0` 继续冻结。

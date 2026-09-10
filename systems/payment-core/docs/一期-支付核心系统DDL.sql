@@ -58,6 +58,21 @@ CREATE TABLE t_payment_order (
     KEY idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
 
+CREATE TABLE t_payment_expiry_close_retry (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
+    retry_count INT NOT NULL DEFAULT 0 COMMENT '连续关单失败次数',
+    retry_interval_seconds INT NOT NULL COMMENT '当前退避秒数',
+    next_retry_at DATETIME NOT NULL COMMENT '下次允许重试时间',
+    last_error_message VARCHAR(512) NOT NULL COMMENT '最近失败摘要',
+    last_failed_at DATETIME NOT NULL COMMENT '最近失败时间',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_expiry_close_retry_payment (payment_order_id),
+    KEY idx_expiry_close_retry_due (next_retry_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付超时关单失败退避表';
+
 CREATE TABLE t_refund_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
     refund_order_id VARCHAR(64) NOT NULL COMMENT '退款单号',

@@ -633,6 +633,14 @@ t_order
 3. 本轮不新增游标或扫描检查点，未入选候选仍保留原状态并由后续轮次重新参与排序；持续失败的早期候选可能影响后续积压吞吐，需通过任务监控和生产容量校准识别。
 4. 本轮不修改表、字段、索引、schema 或迁移；H2 兼容测试不证明生产 MySQL 执行计划、索引效率、锁竞争或多实例吞吐。
 
+### 4.48 超时关单失败退避与空值兼容边界
+
+1. 新增 `t_payment_expiry_close_retry` 技术表，以 `payment_order_id` 唯一约束保证单支付单单行；保存 `retry_count / retry_interval_seconds / next_retry_at / last_error_message / last_failed_at` 及创建、更新时间。
+2. `idx_expiry_close_retry_due(next_retry_at)` 支持按到期时间识别退避状态；候选查询仍由支付单和预付单资格驱动，左连接重试表排除未来到期记录，不把重试表扩张为业务状态源。
+3. MySQL `ON DUPLICATE KEY UPDATE` 按左到右赋值语义，必须先基于旧 `retry_interval_seconds` 计算 `next_retry_at`，再更新当前间隔，避免一次失败重复乘以增长因子；最大间隔由服务参数传入并使用 `LEAST` 封顶。
+4. `t_payment_order.channel_transaction_no` 允许 `NULL`，新建未提交支付单写 `NULL`；候选查询和条件更新使用 `NULLIF(TRIM(channel_transaction_no), '') IS NULL` 兼容历史空字符串，非空值仍被拒绝。
+5. 总积压查询按 `COUNT(DISTINCT payment_order_id)` 统计，避免多条预付单导致重复计数；当前可执行和退避中分别依据 `next_retry_at` 拆分。本地 H2 测试不证明生产 MySQL 执行计划、锁竞争或迁移效果。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
