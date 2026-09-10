@@ -118,6 +118,43 @@ class PaymentRiskControlServiceImplTest {
     }
 
     @Test
+    void shouldRejectDecisionTypeThatContradictsDecision() {
+        String[][] invalidPairs = {
+                {"PASS", "danger"},
+                {"REVIEW", "success"},
+                {"INTERCEPT", "warn"},
+                {"REJECT", "info"}
+        };
+
+        for (String[] invalidPair : invalidPairs) {
+            RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+            stubResponse(restTemplate, "0", decision(invalidPair[0], invalidPair[1]));
+
+            BusinessException exception = assertThrows(
+                    BusinessException.class,
+                    () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+
+            assertInvalidRiskResult(exception);
+        }
+    }
+
+    @Test
+    void shouldNormalizeRejectDecisionWithDangerType() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision(" reject ", " DANGER ");
+        data.setReviewNo(" REVIEW-REJECTED-001 ");
+        stubResponse(restTemplate, "0", data);
+
+        PaymentRiskDecisionResultDTO result = service(restTemplate)
+                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+
+        assertEquals("REJECT", result.getDecision());
+        assertEquals("danger", result.getDecisionType());
+        assertEquals("REVIEW-REJECTED-001", result.getReviewNo());
+        assertEquals("支付被风控拒绝", result.getMessage());
+    }
+
+    @Test
     void shouldRejectBusinessFailureEvenWhenResponseCarriesPassData() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         stubResponse(restTemplate, "RISK-FAILED", decision("PASS", "success"));

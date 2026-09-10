@@ -30,8 +30,6 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
     private static final int MESSAGE_MAX_LENGTH = 255;
     private static final List<String> DECISIONS = Arrays.asList(
             "PASS", "REVIEW", "INTERCEPT", "REJECT");
-    private static final List<String> DECISION_TYPES = Arrays.asList(
-            "info", "warn", "danger", "success");
 
     private final boolean enabled;
     private final String evaluateUrl;
@@ -93,7 +91,7 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         }
         String decisionType = normalizeRequired(result.getDecisionType(), DECISION_TYPE_MAX_LENGTH)
                 .toLowerCase(Locale.ROOT);
-        if (!DECISION_TYPES.contains(decisionType)) {
+        if (!decisionType(decision).equals(decisionType)) {
             throw invalidResult();
         }
         result.setDecision(decision);
@@ -113,6 +111,16 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         normalizeOptional(result.getMessage(), MESSAGE_MAX_LENGTH);
         result.setMessage(decisionMessage(decision));
         return result;
+    }
+
+    private String decisionType(String decision) {
+        if ("PASS".equals(decision)) {
+            return "success";
+        }
+        if ("REVIEW".equals(decision)) {
+            return "warn";
+        }
+        return "danger";
     }
 
     private String decisionMessage(String decision) {
