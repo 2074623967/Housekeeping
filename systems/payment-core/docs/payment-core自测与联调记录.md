@@ -7362,3 +7362,27 @@
 1. 未知退款从单笔人工核查扩展到受控批量补查，且不重新开放高风险退款提交重发路径。
 2. 首次等待、退避、渠道批次和固定窗口限流复用已有事实，避免维护第二套调度状态和节流口径。
 3. 真实渠道能力、生产 SQL 执行计划、配额校准、网络故障、到账和财务处置仍是外部验证边界。
+
+## 250. 2026-09-10 本地退款查单适配器环境隔离 V1.0 验证
+
+### 250.1 本轮补强
+
+1. 为 `LocalRefundChannelQueryAdapter` 增加 `demo` profile，与支付本地提交/查单和退款本地提交的环境边界保持一致。
+2. 非 demo 环境不再把数据库退款状态与渠道退款号回显成 `LOCAL_SIMULATION_FALLBACK`；没有配置真实 gateway-access 查询能力时明确返回 `PAYMENT-1045`。
+3. 能力缺失只进入既有最小查询失败日志、任务失败样例和自动退避，不修改退款状态、渠道退款号或 `REFUND_SUBMIT/UNKNOWN` 事件。
+4. demo profile 仍保留本地回显，供显式演示环境使用，不作为真实渠道或资金事实。
+
+### 250.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentLocalAdapterProfileConfigurationTest,RefundChannelQueryServiceImplTest,RefundServiceImplTest,GatewayAccessRefundChannelQueryAdapterTest,PaymentCompensationSchedulerTest test` | 通过 | `48` 个用例，`0` failures、`0` errors、`0` skipped；覆盖 profile 装配、缺少适配器、可信查询、恢复和调度双开关 |
+| payment-core 全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `656` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和文档无空白符错误 |
+| 真实环境验证 | gateway-access 真实渠道配置、凭证、签名、网络、到账和对账 | 未执行 | 不记录真实渠道查询、生产部署、退款到账、对账或财务验收通过 |
+
+### 250.3 当前判断
+
+1. payment-core 的四类本地支付/退款模拟实现已采用一致的显式 demo 环境边界，非 demo 不再静默使用退款库状态自证外部查询结果。
+2. 缺少真实查询能力现在以业务错误和失败历史暴露，自动补偿不会因本地兜底产生伪成功或错误恢复受理事实。
+3. 真实渠道接入、生产配置发布、网络故障验证、资金到账和财务核验仍需外部环境完成。

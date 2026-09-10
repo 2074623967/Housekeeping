@@ -2630,6 +2630,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 未知退款与普通退款按 `channelCode` 共用 `per-channel-batch-size`，并在逐笔查询时继续进入数据库共享固定窗口限流；总批次仍受 `batch-size` 限制，不因缺少渠道退款号扩大单轮渠道压力。
 5. 自动调度仍只有在 `payment.refund-query.compensation.enabled` 与 `payment.refund-query.gateway-access.enabled` 同时开启时执行，默认均为关闭。开关只代表允许调用已配置代理，不证明真实渠道支持平台退款单号查询；不支持的渠道必须失败闭合并转人工核查。
 
+### 14.77 本地退款查单适配器环境隔离契约
+
+1. `LocalRefundChannelQueryAdapter` 只在 Spring `demo` profile 注册，可用于本地演示回显；默认、测试、预发和生产环境不再把数据库中的退款状态与渠道退款号包装成外部查询结果。
+2. 非 demo 环境仅由明确启用、配置完整且支持目标渠道的 gateway-access 适配器承接退款查单。没有可用适配器时返回 `PAYMENT-1045`，不得降级为 `LOCAL_SIMULATION_FALLBACK`。
+3. `PAYMENT-1045` 仍进入既有最小化 `CHANNEL_QUERY_FAILED` 记录、任务失败样例和自动退避；它只表示没有可信查询能力，不改变退款状态、渠道退款号或未知提交事件。
+4. 自动补偿继续要求补偿与 gateway-access 查询双开关同时开启；即使错误开启补偿但真实适配器不支持某渠道，也只能失败闭合，不能由本地适配器制造查询成功。
+5. profile 隔离不证明 gateway-access 已配置真实渠道协议、凭证、签名或生产网络，也不构成退款到账、对账或财务验收结论。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。
