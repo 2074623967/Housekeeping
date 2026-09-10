@@ -3024,6 +3024,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 支付与退款共用该验签边界；失败时不得清理/写入 nonce，不得读取并更新支付或退款业务状态，也不得生成资金、事件或操作日志副作用。
 4. 该契约不证明真实渠道签名向量、证书链、公钥轮换、密钥托管或网络来源可信；生产接入仍需渠道协议、网关安全与环境证据验收。
 
+### 14.129 支付与退款主动查单异常脱敏契约
+
+1. 支付主动查单未知运行时异常统一返回 `PAYMENT-1026` 和 `payment channel query failed unexpectedly`；退款主动查单统一返回 `PAYMENT-1046` 和 `refund channel query failed unexpectedly`，不得拼接或挂载底层异常详情。
+2. 两类业务异常均关闭 cause、suppressed 和可写堆栈；已知 `BusinessException` 原样传播，查询限流、非法可信结果和关联流水不一致继续使用既有错误码与安全文案。
+3. 抛错前仍分别写固定 `QUERY_FAILED` 通知快照或 `CHANNEL_QUERY_FAILED` 操作日志，保证自动退避、失败统计和后续补偿可用；不得更新返回码快照、支付/退款终态或生成成功事件。
+4. 该契约不证明真实渠道查单协议、生产日志配置、补偿成功、资金到账或最终一致性；最终状态仍需可信回调、可信查询结果与对账证据确认。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
