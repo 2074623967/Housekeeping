@@ -845,11 +845,18 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 Collections.singletonList(receiptQueryAdapter),
                 receiptQueryRateLimitService
-        ).reconcileDeliveryReceipt(" PIA-IM-SINGLE ");
+        ).reconcileDeliveryReceipt(" PIA-IM-SINGLE ", " 支付运营 ");
 
         verify(paymentTaskCenterMapper).claimIssueAlertReceiptQuery("PIA-IM-SINGLE", 4, true, 10, 30);
         verify(receiptQueryRateLimitService).acquire("IM", "PIA-IM-SINGLE");
-        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        ArgumentCaptor<PaymentTaskRunLogEntity> taskLogCaptor =
+                ArgumentCaptor.forClass(PaymentTaskRunLogEntity.class);
+        verify(paymentTaskCenterMapper).insertTaskRunLog(taskLogCaptor.capture());
+        Assertions.assertEquals("支付运营", taskLogCaptor.getValue().getTriggeredBy());
+        ArgumentCaptor<PaymentIssueAlertLogEntity> receiptCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).updateIssueAlertProviderReceipt(receiptCaptor.capture());
+        Assertions.assertEquals("支付运营", receiptCaptor.getValue().getAckOperator());
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
     }
@@ -865,7 +872,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         IllegalArgumentException exception = Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> service.reconcileDeliveryReceipt("PIA-ACKED"));
+                () -> service.reconcileDeliveryReceipt("PIA-ACKED", "支付运营"));
 
         Assertions.assertTrue(exception.getMessage().contains("当前状态不允许"));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).claimIssueAlertReceiptQuery(
@@ -874,6 +881,39 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 org.mockito.ArgumentMatchers.anyBoolean(),
                 org.mockito.ArgumentMatchers.anyInt(),
                 org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void shouldRejectSpecifiedReceiptWithoutOperatorBeforeQueryingCandidate() {
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        IllegalArgumentException exception = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt("PIA-IM-SINGLE", " "));
+
+        Assertions.assertTrue(exception.getMessage().contains("回查操作人不能为空"));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .findAcceptedIssueAlertDeliveryLogByAlertNo(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldRejectSpecifiedReceiptWithOversizedOperatorBeforeQueryingCandidate() {
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        IllegalArgumentException exception = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt(
+                        "PIA-IM-SINGLE", String.join("", Collections.nCopies(65, "A"))));
+
+        Assertions.assertTrue(exception.getMessage().contains("不能超过64个字符"));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .findAcceptedIssueAlertDeliveryLogByAlertNo(org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test

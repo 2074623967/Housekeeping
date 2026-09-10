@@ -114,7 +114,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行指定异常告警的供应商回执回查。
      */
-    PaymentTaskActionResultDTO runReconcileIssueAlertReceipt(String alertNo);
+    PaymentTaskActionResultDTO runReconcileIssueAlertReceipt(String alertNo, String operator);
 
     /**
      * 自动执行异常告警供应商回执回查。

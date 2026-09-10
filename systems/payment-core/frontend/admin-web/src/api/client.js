@@ -145,9 +145,9 @@ export const paymentIssueApi = {
     return `/api/payment-issues/alerts/export?${params.toString()}`;
   },
   acknowledgeAlert: (alertNo, payload) => postJson(`/api/payment-issues/alerts/${alertNo}/acknowledge`, payload),
-  reconcileAlertReceipt: (alertNo) => postJson(
+  reconcileAlertReceipt: (alertNo, payload) => postJson(
     `/api/payment-task-center/reconcile-issue-alert-receipts/${encodeURIComponent(alertNo)}`,
-    {}
+    payload
   ),
   batchAction: (payload) => postJson("/api/payment-issues/actions", payload)
 };

@@ -2,6 +2,7 @@ package com.abc123.hsp.controller;
 
 import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertReceiptQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -158,8 +160,10 @@ public class PaymentTaskCenterController {
      */
     @PostMapping("/reconcile-issue-alert-receipts/{alertNo}")
     public ApiResponse<PaymentTaskActionResultDTO> runReconcileIssueAlertReceipt(
-            @PathVariable String alertNo) {
-        return ApiResponse.success(paymentTaskCenterService.runReconcileIssueAlertReceipt(alertNo));
+            @PathVariable String alertNo,
+            @RequestBody PaymentIssueAlertReceiptQueryRequestDTO request) {
+        return ApiResponse.success(paymentTaskCenterService.runReconcileIssueAlertReceipt(
+                alertNo, request == null ? null : request.getOperator()));
     }
 
     /**

@@ -109,15 +109,15 @@ class PaymentTaskCenterServiceImplTest {
     void shouldRunSpecifiedIssueAlertReceiptQueryAndRefreshOverview() {
         PaymentTaskActionResultDTO actionResult = new PaymentTaskActionResultDTO();
         actionResult.setProcessedCount(1);
-        when(paymentIssueAlertDeliveryService.reconcileDeliveryReceipt("PIA-IM-001"))
+        when(paymentIssueAlertDeliveryService.reconcileDeliveryReceipt("PIA-IM-001", "支付运营"))
                 .thenReturn(actionResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
         PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
-                .runReconcileIssueAlertReceipt("PIA-IM-001");
+                .runReconcileIssueAlertReceipt("PIA-IM-001", "支付运营");
 
-        verify(paymentIssueAlertDeliveryService).reconcileDeliveryReceipt("PIA-IM-001");
+        verify(paymentIssueAlertDeliveryService).reconcileDeliveryReceipt("PIA-IM-001", "支付运营");
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertNotNull(result.getOverview());
     }

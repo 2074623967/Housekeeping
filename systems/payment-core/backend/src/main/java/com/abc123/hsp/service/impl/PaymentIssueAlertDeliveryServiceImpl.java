@@ -245,10 +245,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO reconcileDeliveryReceipt(String alertNo) {
+    public PaymentTaskActionResultDTO reconcileDeliveryReceipt(String alertNo, String operator) {
         if (!StringUtils.hasText(alertNo)) {
             throw new IllegalArgumentException("告警编号不能为空");
         }
+        String normalizedOperator = normalizeReceiptQueryOperator(operator);
         String normalizedAlertNo = alertNo.trim();
         PaymentIssueAlertLogEntity acceptedLog =
                 paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogByAlertNo(normalizedAlertNo);
@@ -256,7 +257,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             throw new IllegalArgumentException("告警不存在或当前状态不允许回执回查");
         }
         return reconcileDeliveryReceipts(
-                Collections.singletonList(acceptedLog), RUN_MODE_MANUAL, "payment-core-admin");
+                Collections.singletonList(acceptedLog), RUN_MODE_MANUAL, normalizedOperator);
     }
 
     @Override
@@ -1194,6 +1195,17 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private int normalizeReceiptQueryCount(Integer attemptCount) {
         return Math.max(attemptCount == null ? 0 : attemptCount, 0);
+    }
+
+    private String normalizeReceiptQueryOperator(String operator) {
+        if (!StringUtils.hasText(operator)) {
+            throw new IllegalArgumentException("回查操作人不能为空");
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException("回查操作人不能超过64个字符");
+        }
+        return normalized;
     }
 
     private int calculateReceiptQueryRetryDelaySeconds(Integer previousAttemptCount) {

@@ -562,8 +562,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runReconcileIssueAlertReceipt(String alertNo) {
-        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipt(alertNo);
+    public PaymentTaskActionResultDTO runReconcileIssueAlertReceipt(String alertNo, String operator) {
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipt(
+                alertNo, operator);
         result.setOverview(overview());
         return result;
     }

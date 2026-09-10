@@ -160,11 +160,17 @@ async function acknowledgeAlert(alertNo) {
 }
 
 async function reconcileAlertReceipt(alertNo) {
+  if (!ackOperator.value.trim()) {
+    errorMessage.value = "请先输入操作人";
+    return;
+  }
   activeReceiptQueryAlertNo.value = alertNo;
   errorMessage.value = "";
   successMessage.value = "";
   try {
-    const result = await paymentIssueApi.reconcileAlertReceipt(alertNo);
+    const result = await paymentIssueApi.reconcileAlertReceipt(alertNo, {
+      operator: ackOperator.value.trim()
+    });
     const summary = result.summaryComment || `告警 ${alertNo} 回执回查已执行`;
     await loadAlertLogs();
     if (result.failCount > 0) {
@@ -296,8 +302,8 @@ onMounted(loadAlertLogs);
           </select>
         </div>
         <div class="field">
-          <label>默认确认人</label>
-          <input v-model="ackOperator" placeholder="请输入确认人" />
+          <label>默认操作人</label>
+          <input v-model="ackOperator" placeholder="请输入操作人" />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

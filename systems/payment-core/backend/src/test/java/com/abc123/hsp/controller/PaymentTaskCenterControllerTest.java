@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertReceiptQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
@@ -83,7 +84,8 @@ class PaymentTaskCenterControllerTest {
         when(paymentTaskCenterService.runEscalateOverdueIssues()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runDispatchIssueAlerts()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runReconcileIssueAlertReceipts()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runReconcileIssueAlertReceipt("PIA-001")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runReconcileIssueAlertReceipt("PIA-001", "支付运营"))
+                .thenReturn(resultDTO);
         when(paymentTaskCenterService.runControlPolicySelfChecks()).thenReturn(resultDTO);
 
         assertEquals(4, controller.runCloseExpiredPayments().getData().getProcessedCount());
@@ -95,7 +97,11 @@ class PaymentTaskCenterControllerTest {
         assertEquals(4, controller.runEscalateOverdueIssues().getData().getProcessedCount());
         assertEquals(4, controller.runDispatchIssueAlerts().getData().getProcessedCount());
         assertEquals(4, controller.runReconcileIssueAlertReceipts().getData().getProcessedCount());
-        assertEquals(4, controller.runReconcileIssueAlertReceipt("PIA-001").getData().getProcessedCount());
+        PaymentIssueAlertReceiptQueryRequestDTO receiptQueryRequest =
+                new PaymentIssueAlertReceiptQueryRequestDTO();
+        receiptQueryRequest.setOperator("支付运营");
+        assertEquals(4, controller.runReconcileIssueAlertReceipt(
+                "PIA-001", receiptQueryRequest).getData().getProcessedCount());
         assertEquals(4, controller.runControlPolicySelfChecks().getData().getProcessedCount());
 
         verify(paymentTaskCenterService).runCloseExpiredPayments();
@@ -107,7 +113,7 @@ class PaymentTaskCenterControllerTest {
         verify(paymentTaskCenterService).runEscalateOverdueIssues();
         verify(paymentTaskCenterService).runDispatchIssueAlerts();
         verify(paymentTaskCenterService).runReconcileIssueAlertReceipts();
-        verify(paymentTaskCenterService).runReconcileIssueAlertReceipt("PIA-001");
+        verify(paymentTaskCenterService).runReconcileIssueAlertReceipt("PIA-001", "支付运营");
         verify(paymentTaskCenterService).runControlPolicySelfChecks();
     }
 
