@@ -230,25 +230,7 @@ public class RefundServiceImpl implements RefundService {
         }
         validateQueryableRefund(snapshot);
         refundChannelQueryRateLimitService.acquire(snapshot.getChannelCode(), refundOrderId);
-        RefundChannelQueryResultDTO result;
-        try {
-            result = RefundChannelQueryResultValidator.validateAndNormalize(
-                    refundChannelQueryService.query(snapshot));
-        } catch (BusinessException exception) {
-            refundMapper.insertOperationLog(buildOperationLog(
-                    refundOrderId,
-                    "CHANNEL_QUERY_FAILED",
-                    "退款渠道查单失败",
-                    snapshot.getStatus(),
-                    snapshot.getStatus(),
-                    QUERY_OPERATOR,
-                    "退款渠道查单未获得可信结果"));
-            throw exception;
-        }
-        if (!snapshot.getChannelRefundNo().equals(result.getChannelRefundNo())) {
-            throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
-                    "refund query transaction does not match accepted refund transaction");
-        }
+        RefundChannelQueryResultDTO result = queryChannel(snapshot);
         return applyChannelResult(
                 refundOrderId,
                 snapshot.getChannelCode().trim().toLowerCase(Locale.ROOT),
@@ -256,6 +238,36 @@ public class RefundServiceImpl implements RefundService {
                 result.getRefundStatus(),
                 QUERY_OPERATOR,
                 true);
+    }
+
+    private RefundChannelQueryResultDTO queryChannel(RefundCallbackSourceDTO snapshot) {
+        try {
+            RefundChannelQueryResultDTO result = RefundChannelQueryResultValidator.validateAndNormalize(
+                    refundChannelQueryService.query(snapshot));
+            if (!snapshot.getChannelRefundNo().equals(result.getChannelRefundNo())) {
+                throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                        "refund query transaction does not match accepted refund transaction");
+            }
+            return result;
+        } catch (BusinessException exception) {
+            recordChannelQueryFailure(snapshot);
+            throw exception;
+        } catch (RuntimeException exception) {
+            recordChannelQueryFailure(snapshot);
+            throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                    "refund channel query failed unexpectedly", exception);
+        }
+    }
+
+    private void recordChannelQueryFailure(RefundCallbackSourceDTO snapshot) {
+        refundMapper.insertOperationLog(buildOperationLog(
+                snapshot.getRefundOrderId(),
+                "CHANNEL_QUERY_FAILED",
+                "退款渠道查单失败",
+                snapshot.getStatus(),
+                snapshot.getStatus(),
+                QUERY_OPERATOR,
+                "退款渠道查单未获得可信结果"));
     }
 
     private RefundListItemDTO applyChannelResult(String refundOrderId,

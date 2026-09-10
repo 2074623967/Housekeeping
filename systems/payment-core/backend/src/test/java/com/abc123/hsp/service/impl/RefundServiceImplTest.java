@@ -482,6 +482,9 @@ class RefundServiceImplTest {
                 BusinessException.class, () -> createService().query(queryRequest()));
 
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
+                        && "退款渠道查单未获得可信结果".equals(log.getOperationRemark())));
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
                 .findCallbackSourceForUpdate(org.mockito.ArgumentMatchers.anyString());
     }
@@ -499,6 +502,23 @@ class RefundServiceImplTest {
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
                         && "退款渠道查单未获得可信结果".equals(log.getOperationRemark())));
+    }
+
+    @Test
+    void shouldNormalizeUnexpectedRefundChannelQueryFailureAndRecordBackoffHistory() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+        when(refundChannelQueryService.query(source)).thenThrow(new IllegalStateException("remote timeout detail"));
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().query(queryRequest()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("refund channel query failed unexpectedly", exception.getMessage());
+        assertTrue(exception.getCause() instanceof IllegalStateException);
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
+                        && !log.getOperationRemark().contains("remote timeout detail")));
     }
 
     @Test
