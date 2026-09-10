@@ -1010,6 +1010,37 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldCompleteReceiptAttemptWhenAdapterSelectionFails() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-SELECT-ERROR", "PIA-OUTBOX-001");
+        acceptedLog.setReceiptQueryCount(2);
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))
+                .thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
+                "PIA-IM-SELECT-ERROR", 2, true, 10, 30)).thenReturn(1);
+        when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-SELECT-ERROR", 3, "QUERY_ERROR", 240, 10)).thenReturn(1);
+        when(receiptQueryAdapter.supports("IM"))
+                .thenThrow(new IllegalStateException("adapter selection failed"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter),
+                receiptQueryRateLimitService
+        ).reconcileDeliveryReceipts("payment-core-admin");
+
+        verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-SELECT-ERROR", 3, "QUERY_ERROR", 240, 10);
+        verify(receiptQueryAdapter, org.mockito.Mockito.never())
+                .query(any(PaymentIssueAlertLogEntity.class));
+        verify(receiptQueryRateLimitService, org.mockito.Mockito.never())
+                .acquire(any(String.class), any(String.class));
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
     void shouldRejectReceiptQueryResultForDifferentProviderReceipt() {
         PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
         acceptedLog.setProviderReceiptNo("IM-RECEIPT-001");

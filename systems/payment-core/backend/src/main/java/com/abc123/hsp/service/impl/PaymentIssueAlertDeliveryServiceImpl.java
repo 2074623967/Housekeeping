@@ -1156,7 +1156,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (claimed <= 0) {
             return false;
         }
-        PaymentIssueAlertReceiptQueryAdapter adapter = findReceiptQueryAdapter(acceptedLog);
+        PaymentIssueAlertReceiptQueryAdapter adapter;
+        try {
+            adapter = findReceiptQueryAdapter(acceptedLog);
+        } catch (RuntimeException exception) {
+            completeReceiptQueryAttempt(acceptedLog, previousAttemptCount, RECEIPT_QUERY_RESULT_QUERY_ERROR);
+            return false;
+        }
         if (adapter == null) {
             completeReceiptQueryAttempt(acceptedLog, previousAttemptCount, RECEIPT_QUERY_RESULT_ADAPTER_MISSING);
             return false;
