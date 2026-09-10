@@ -2638,6 +2638,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 自动补偿继续要求补偿与 gateway-access 查询双开关同时开启；即使错误开启补偿但真实适配器不支持某渠道，也只能失败闭合，不能由本地适配器制造查询成功。
 5. profile 隔离不证明 gateway-access 已配置真实渠道协议、凭证、签名或生产网络，也不构成退款到账、对账或财务验收结论。
 
+### 14.78 告警通知器空网关失败闭合契约
+
+1. IM、SMS、EMAIL 三类通知器在 Webhook URL 为空时默认返回 `providerDeliveryStatus=FAILED`，`providerReceiptSnapshot=CONFIGURATION_ERROR:WEBHOOK_URL_MISSING`，且 `providerReceiptNo` 为空；不得把配置缺失记录为供应商已受理。
+2. 派发服务沿用现有失败判定，将上述结果写为“派发失败”并继续既有候选供应商处理，不更新为“已派发”，也不生成任何外部供应商回执号。
+3. 本地模拟回执必须同时满足 Spring `demo` profile 已激活以及 `payment.issue-alert.local-receipt-enabled=true`；默认配置固定为 `false`，demo 配置显式设为 `true`。仅设置属性但未激活 demo 仍失败闭合。
+4. Webhook URL 已配置时继续执行既有认证、签名、超时、业务成功码、回执号、投递状态、失败码解析与敏感字段脱敏，不因 demo 门禁改变真实 HTTP 调用路径。
+5. demo 返回的 `LOCAL:<CHANNEL>:ACCEPTED` 只用于页面和流程演示，不构成真实 IM、短信或邮件供应商受理、送达、人员响应或生产稳定性证据。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。

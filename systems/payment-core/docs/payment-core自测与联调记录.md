@@ -7386,3 +7386,26 @@
 1. payment-core 的四类本地支付/退款模拟实现已采用一致的显式 demo 环境边界，非 demo 不再静默使用退款库状态自证外部查询结果。
 2. 缺少真实查询能力现在以业务错误和失败历史暴露，自动补偿不会因本地兜底产生伪成功或错误恢复受理事实。
 3. 真实渠道接入、生产配置发布、网络故障验证、资金到账和财务核验仍需外部环境完成。
+
+## 251. 2026-09-10 告警通知器本地回执隔离 V1.0 验证
+
+### 251.1 本轮补强
+
+1. IM、SMS、EMAIL 通知器在 Webhook URL 为空时默认返回 `FAILED` 和 `CONFIGURATION_ERROR:WEBHOOK_URL_MISSING`，不生成供应商回执号，不再把配置缺失写成外部受理。
+2. 本地 `LOCAL:*:ACCEPTED` 回执改为同时要求 `demo` profile 与 `payment.issue-alert.local-receipt-enabled=true`；默认配置关闭，demo 配置显式开启，非 demo 属性误配仍被代码门禁拒绝。
+3. 已配置 Webhook 的真实 HTTP、认证签名、超时、响应状态归一化、回执提取和脱敏路径保持不变；派发服务继续只将 `ACCEPTED/DELIVERED` 视为成功。
+
+### 251.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertNotifierConfigurationTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `53` 个用例；覆盖三通道默认失败、demo 回执、默认/demo Spring 装配、真实 Webhook 与派发失败/主备路径 |
+| payment-core 全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `663` 个用例，`0` failures、`0` errors、`0` skipped |
+| 配置与补丁检查 | YAML 配置契约测试、`git diff --check` | 通过 | 默认本地回执关闭，demo 配置开启，代码和文档无空白符错误 |
+| 真实环境验证 | 真实 IM/短信/邮件供应商、生产凭证、网络、最终送达与值班响应 | 未执行 | 不记录真实供应商受理、通知送达、人工响应或生产稳定性通过 |
+
+### 251.3 当前判断
+
+1. 默认及非 demo 环境不再用本地回执掩盖通知网关缺失，人工与自动派发共享同一失败闭合结果。
+2. demo 能力仍可用于显式演示，但需要 profile 与配置双重开启，且其回执不得作为真实供应商证据。
+3. 真实通知供应商接入、凭证托管与轮换、生产网络、送达回执查询、升级响应和稳定性验收仍需外部环境完成。
