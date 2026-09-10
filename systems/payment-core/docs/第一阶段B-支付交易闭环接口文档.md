@@ -2903,6 +2903,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 共享 Service 在返回码映射前校验原始结果，并在映射后再次校验新增字段与响应快照；任一阶段失败均返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，原始非法结果不得触发返回码 Mapper 查询。
 4. 渠道调用后的校验失败不能证明渠道未受理，支付主流程保持结果未知并等待主动查单，不绑定非法渠道流水或形成提交成功事实。本地测试不证明真实渠道受理、资金到账、生产网络或稳定性。
 
+### 14.112 风控准入响应契约
+
+1. `POST /api/risk-control/decisions/evaluate` 只有统一响应 `code` 去除首尾空格后严格等于字符串 `0` 且 `data` 非空时才视为业务成功；失败码携带的数据必须忽略。
+2. `data.decision` 必填并规范化为 `PASS / REVIEW / INTERCEPT / REJECT`，`decisionType` 必填并规范化为 `info / warn / danger / success`；其他值统一返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`。
+3. 决策最长 `32`、样式最长 `32`、命中编码最长 `64`、风险标签最长 `128`、复核单号和事件号最长 `64`、说明最长 `255` 个字符。所有字符串在去空格前拒绝 ISO 控制字符，可选纯空白字段归一化为 `null`。
+4. 风控空结果、非法结果和 HTTP 运行时异常均返回固定脱敏错误，不进入支付尝试创建或渠道调用。本地契约测试不证明真实风控服务连通、规则正确性、人工复核或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

@@ -8180,3 +8180,26 @@
 
 1. 支付提交已形成“具体适配器校验 + 共享 Service 首层校验 + 返回码标准化后二次校验 + 主流程结果未知保护”的防御链。
 2. 本地 mock 与自动化不证明真实 gateway-access、渠道受理、资金到账、生产网络或稳定性，`release/v1.0.0` 继续冻结。
+
+## 285. 2026-09-11 风控准入响应可信边界 V1.0 验证
+
+### 285.1 本轮补强
+
+1. `PaymentRiskControlServiceImpl` 同时校验统一响应业务码和数据体，不再把“HTTP 返回且 data 非空”等同于风控业务成功。
+2. `decision` 只接受 `PASS / REVIEW / INTERCEPT / REJECT`，`decisionType` 只接受 `info / warn / danger / success`；合法值统一大小写，所有字符串在清洗前检查控制字符并执行容量约束。
+3. 空结果、业务失败码、未知决策、非法样式、污染或超容量字段统一转为固定 `PAYMENT_RISK_SERVICE_UNAVAILABLE`，不透出 HTTP 运行时异常原文。
+
+### 285.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 风控边界与支付提交定向测试 | `mvn -Dtest=PaymentRiskControlServiceImplTest,PaymentServiceImplTest test` | 通过 | `76` 个用例；覆盖禁用放行、合法规范化、失败码夹带 PASS、未知枚举、控制字符、超容量和 HTTP 异常 |
+| payment-core 全量测试 | `mvn test` | 通过 | `755` 个用例，`0` failures、`0` errors、`0` skipped |
+| 支付副作用隔离 | Mockito 调用验证 | 通过 | 风控结果失败时不创建支付尝试、风险事件，不检查或调用渠道适配器 |
+| 补丁检查 | `git diff --check` | 通过 | Java 与测试无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 285.3 当前判断
+
+1. 风控响应已形成“业务成功码 + 决策有限集合 + 字段可信边界 + 支付写入前隔离”的准入链，不可信响应不能推动支付状态机或渠道调用。
+2. 本地 mock 与自动化不证明真实风控中心连通、规则有效性、人工复核质量、生产网络或稳定性，`release/v1.0.0` 继续冻结。
