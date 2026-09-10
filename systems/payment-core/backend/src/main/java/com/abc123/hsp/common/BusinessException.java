@@ -21,8 +21,8 @@ public class BusinessException extends RuntimeException {
         return new BusinessException(code, message, null, false, false);
     }
 
-    private BusinessException(String code, String message, Throwable cause,
-                              boolean enableSuppression, boolean writableStackTrace) {
+    protected BusinessException(String code, String message, Throwable cause,
+                                boolean enableSuppression, boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
         this.code = code;
     }

@@ -15,8 +15,14 @@ public class RefundChannelSubmitException extends BusinessException {
         this.resultUnknown = resultUnknown;
     }
 
-    public RefundChannelSubmitException(String message, boolean resultUnknown, Throwable cause) {
-        super(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, message, cause);
+    public static RefundChannelSubmitException sanitized(String message, boolean resultUnknown) {
+        return new RefundChannelSubmitException(message, resultUnknown, null, false, false);
+    }
+
+    private RefundChannelSubmitException(String message, boolean resultUnknown, Throwable cause,
+                                         boolean enableSuppression, boolean writableStackTrace) {
+        super(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, message, cause,
+                enableSuppression, writableStackTrace);
         this.resultUnknown = resultUnknown;
     }
 

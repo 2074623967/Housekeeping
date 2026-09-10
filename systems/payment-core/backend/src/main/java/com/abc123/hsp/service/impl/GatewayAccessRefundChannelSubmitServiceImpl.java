@@ -100,8 +100,8 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         } catch (RefundChannelSubmitException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw new RefundChannelSubmitException(
-                    "gateway-access refund submit failed; query before retrying", true, exception);
+            throw RefundChannelSubmitException.sanitized(
+                    "gateway-access refund submit failed; query before retrying", true);
         }
     }
 

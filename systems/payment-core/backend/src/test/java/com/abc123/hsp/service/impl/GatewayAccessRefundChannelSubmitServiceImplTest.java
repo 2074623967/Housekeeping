@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,14 +79,23 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
     @Test
     void shouldClassifyUpstreamFailureAsUnknown() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        String sensitiveDetail = "jdbc:mysql://internal-db/refund?password=submit-secret\n"
+                + "POST /refunds token=submit-token response={sensitive-body}";
         when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class),
                 eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
-                .thenThrow(new IllegalStateException("timeout"));
+                .thenThrow(new IllegalStateException(sensitiveDetail));
 
         RefundChannelSubmitException exception = assertThrows(RefundChannelSubmitException.class,
                 () -> adapter(restTemplate).submit(request()));
 
+        assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertEquals("gateway-access refund submit failed; query before retrying", exception.getMessage());
+        assertFalse(exception.getMessage().contains(sensitiveDetail));
         assertTrue(exception.isResultUnknown());
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        exception.addSuppressed(new IllegalStateException(sensitiveDetail));
+        assertEquals(0, exception.getSuppressed().length);
     }
 
     @Test
