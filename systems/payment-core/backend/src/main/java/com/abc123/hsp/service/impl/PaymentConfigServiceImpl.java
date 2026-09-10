@@ -92,6 +92,7 @@ import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
 import com.abc123.hsp.entity.PaymentReturnCodeReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import java.io.IOException;
 import java.io.StringReader;
@@ -167,17 +168,40 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Override
     public String exportGovernanceSnapshotCsv(String section) {
         String normalizedSection = normalizeExportSection(section);
-        PaymentConfigOverviewDTO overview = overview();
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("配置域,主键编码,次级编码,配置名称,状态,治理摘要,适用范围,风控/限制,运维建议,更新时间\n");
-        appendChannelRows(builder, normalizedSection, overview.getChannels());
-        appendRouteRuleRows(builder, normalizedSection, overview.getRouteRules());
-        appendProtocolRows(builder, normalizedSection, overview.getProtocols());
-        appendReturnCodeRows(builder, normalizedSection, overview.getReturnCodeMappings());
-        appendGatewayRows(builder, normalizedSection, overview.getGateways());
-        appendControlPolicyRows(builder, normalizedSection, overview.getControlPolicies());
-        appendAlertProviderRows(builder, normalizedSection, overview.getAlertProviders());
-        appendIssueDutyRosterRows(builder, normalizedSection, overview.getIssueDutyRosters());
+        if (shouldExportSection(normalizedSection, "CHANNELS")) {
+            appendChannelRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findChannels()));
+        }
+        if (shouldExportSection(normalizedSection, "ROUTE_RULES")) {
+            appendRouteRuleRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findRouteRules()));
+        }
+        if (shouldExportSection(normalizedSection, "PROTOCOLS")) {
+            appendProtocolRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findProtocols()));
+        }
+        if (shouldExportSection(normalizedSection, "RETURN_CODES")) {
+            appendReturnCodeRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findReturnCodeMappings()));
+        }
+        if (shouldExportSection(normalizedSection, "GATEWAYS")) {
+            appendGatewayRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findGateways()));
+        }
+        if (shouldExportSection(normalizedSection, "CONTROL_POLICIES")) {
+            appendControlPolicyRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findControlPolicies()));
+        }
+        if (shouldExportSection(normalizedSection, "ALERT_PROVIDERS")) {
+            appendAlertProviderRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findAlertProviders()));
+        }
+        if (shouldExportSection(normalizedSection, "ISSUE_DUTY_ROSTERS")) {
+            appendIssueDutyRosterRows(builder, normalizedSection,
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findIssueDutyRosters()));
+        }
         return builder.toString();
     }
 
