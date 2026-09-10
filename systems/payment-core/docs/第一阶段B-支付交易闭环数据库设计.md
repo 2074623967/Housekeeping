@@ -455,6 +455,15 @@ t_order
 
 一致性规则：重发事务先使用 `event_no` 唯一索引锁定事件行，既有派发成功后再更新两项审计字段；审计更新不为一行时整体失败，避免发布状态与来源分离提交。运行库通过 `database/migrations/2026-09-10-add-payment-event-republish-audit.sql` 以 `information_schema` 幂等补列。当前只完成 H2/MySQL 兼容 SQL 测试，生产执行仍需评估在线 DDL、锁等待、备份与回滚。
 
+### 4.24 支付查单与关单来源复用字段
+
+本轮不新增表和字段，复用既有审计载体：
+
+1. `t_payment_notify_log.request_payload`：主动查单保存渠道查询技术来源 `querySource` 与发起来源 `initiatedBy`；成功、非终态、失败和限流拒绝使用同一结构。
+2. `t_payment_process_log.source`：主动查单使用独立 `process_stage=主动查单`，`source` 保存 `customer-self-service`、后台规范化操作人或 `payment-query-scheduler`。
+3. `t_payment_event.event_payload`：查单收口生成的 `PAYMENT_SUCCESS` 与实际关单生成的 `PAYMENT_CLOSED` 增加 `initiatedBy`，事件处理日志对实际关单使用同一来源。
+4. 上述字段容量可容纳最长 `64` 字符来源，无需迁移。历史记录不会回填或推导操作人，避免制造不存在的审计事实。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

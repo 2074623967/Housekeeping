@@ -1009,6 +1009,13 @@
 3. 重发入口改为事件行加锁，同事件并发投递串行化；只有派发成功且审计更新命中一行才提交。定向 `71` 个测试、payment-core 全量 `707` 个测试和 admin-web `68` 个模块构建通过，`0` failures、`0` errors、`0` skipped。
 4. 当前操作人仍是请求方自声明，真实 MySQL 迁移、生产锁影响、账务/清分/结算消费、退款渠道受理及稳定性均未验证。release 候选说明、正式签字、发布后现场核验和稳定观察四项阻断不变。
 
+### 8.98 2026-09-10 支付查单与关单发起来源审计进展
+
+1. 消费者自助 `POST /api/payments/query|close` 保持原契约，由服务端固定标记为 `customer-self-service`，不采信请求体伪造的操作人；管理端改用 `POST /api/payments/admin/query|close`，显式提交去空格、必填且最长 `64` 个字符的 `operator`。
+2. 查单成功、非终态结果、渠道异常和共享限流拒绝均把发起来源写入通知请求快照及支付处理日志；查单确认成功生成的支付成功事件、实际关单生成的 `PAYMENT_CLOSED` 事件也携带 `initiatedBy`。任务中心逐笔下传人工 `triggeredBy` 或 `payment-query-scheduler`。
+3. 管理端支付列表、支付单详情和支付记录详情增加默认留空的操作人输入；用户端继续使用自助接口。定向 `112` 个测试、payment-core 全量 `709` 个测试和 admin-web `68` 个模块生产构建通过，`0` failures、`0` errors、`0` skipped；admin-web 当前没有测试脚本。
+4. 本轮复用 `t_payment_notify_log.request_payload`、`t_payment_process_log.source` 和 `t_payment_event.event_payload`，无需数据库迁移。来源仍是应用分类或请求方自声明，不构成可信客户身份、认证、授权或不可抵赖审计，也不证明真实渠道查询、生产环境或稳定性；release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

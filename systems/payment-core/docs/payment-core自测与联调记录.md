@@ -7746,3 +7746,26 @@
 1. 支付事件重发已从“只有次数与状态”补齐到“人工/自动来源逐事件可见”，并为同事件重发增加数据库并发串行化。
 2. 最近重发审计只证明 payment-core 成功执行既有派发链路并更新内部状态，不能替代下游幂等消费、账务入账、退款受理或生产稳定性证据。
 3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断未解除，`release/v1.0.0` 继续冻结。
+
+## 266. 2026-09-10 支付查单与关单发起来源审计 V1.0 验证
+
+### 266.1 本轮补强
+
+1. 保留消费者自助 `POST /api/payments/query|close`，服务端固定使用 `customer-self-service` 并忽略请求体中的操作人；新增管理端 `POST /api/payments/admin/query|close`，显式操作人去空格、必填且最长 `64` 个字符，非法值先于 Mapper、共享限流和渠道查询失败。
+2. 查单通知请求快照增加 `initiatedBy`，处理日志使用独立“主动查单”阶段并把 `source` 记录为实际发起来源；渠道异常、非法可信结果和限流拒绝也保留同一来源。查单成功收口及实际关单事件 payload 同步增加 `initiatedBy`。
+3. 任务中心人工与自动待回调查单分别逐笔下传规范化 `triggeredBy` 和 `payment-query-scheduler`。admin-web 三个支付操作页面增加默认留空、最长 `64` 字符的操作人输入并切换后台接口，app-web 自助调用保持不变。
+
+### 266.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentControllerTest,PaymentServiceImplTest,PaymentTaskCenterServiceImplTest test` | 通过 | `112` 个用例，`0` failures、`0` errors、`0` skipped；覆盖公共入口隔离、后台校验、人工/自动来源及成功/失败审计 |
+| payment-core 全量测试 | `mvn test` | 通过 | `709` 个用例，`0` failures、`0` errors、`0` skipped |
+| admin-web 生产构建 | `npm run build` | 通过 | `68` 个模块完成转换；仅有既有的大 chunk 警告 |
+| admin-web 自动测试 | `npm test -- --run` | 不适用 | 当前 `package.json` 未定义 `test` 脚本，命令明确报 `Missing script: "test"` |
+| 补丁与入口检查 | `git diff --check`、前后端源码检索 | 通过 | 管理端只调用后台入口，app-web 仍调用公共自助入口；无需数据库迁移 |
+
+### 266.3 当前判断
+
+1. 当前代码已区分消费者自助类别、后台自声明操作人和内部调度身份，并在本地日志及事件中形成可查询来源；主动查单调用成功不等同于渠道支付成功，只有可信查询结果满足既有状态机才收口支付状态。
+2. `customer-self-service` 只是应用内来源类别，后台 `operator` 也是请求方自声明；新增 `/admin/*` 路径不构成认证或授权边界。真实渠道、统一身份、角色权限、生产环境、现场核验与稳定观察均未由本轮证明。
