@@ -95,9 +95,9 @@ class PaymentTaskCenterServiceImplTest {
         trend.setQueryCount(3);
         trend.setFailureCount(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
-        when(paymentTaskCenterMapper.countRecentPaymentQueries(24)).thenReturn(12);
-        when(paymentTaskCenterMapper.countRecentPaymentQueryFailures(24)).thenReturn(4);
-        when(paymentTaskCenterMapper.findRecentPaymentQueryTrends(24))
+        when(paymentTaskCenterMapper.countRecentChannelQueries(24)).thenReturn(12);
+        when(paymentTaskCenterMapper.countRecentChannelQueryFailures(24)).thenReturn(4);
+        when(paymentTaskCenterMapper.findRecentChannelQueryTrends(24))
                 .thenReturn(Collections.singletonList(trend));
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -111,7 +111,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_QUERY_FAILURE_TREND".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
-                        && alert.getAlertMessage().contains("近 24 小时查单 12 次")));
+                        && alert.getAlertMessage().contains("近 24 小时支付与退款查单 12 次")));
     }
 
     @Test
@@ -288,8 +288,8 @@ class PaymentTaskCenterServiceImplTest {
     void shouldGenerateQueryMonitorOutboxAndSuppressRecentDuplicate() {
         when(paymentTaskCenterMapper.acquireTaskLease(
                 eq("PAYMENT_QUERY_MONITOR_ALERT"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
-        when(paymentTaskCenterMapper.countRecentPaymentQueries(24)).thenReturn(12);
-        when(paymentTaskCenterMapper.countRecentPaymentQueryFailures(24)).thenReturn(4);
+        when(paymentTaskCenterMapper.countRecentChannelQueries(24)).thenReturn(12);
+        when(paymentTaskCenterMapper.countRecentChannelQueryFailures(24)).thenReturn(4);
         when(paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(24)).thenReturn(10);
         when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
                 "主动查单失败趋势", 60)).thenReturn(0);

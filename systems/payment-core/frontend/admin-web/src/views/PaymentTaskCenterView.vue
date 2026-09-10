@@ -183,11 +183,11 @@ onMounted(loadOverview);
             <div class="detail-value">{{ overview.duePendingRefundQueryCount }}</div>
           </div>
           <div class="detail-card">
-            <div class="detail-label">近 {{ overview.queryMonitorWindowHours }} 小时查单</div>
+            <div class="detail-label">近 {{ overview.queryMonitorWindowHours }} 小时支付/退款查单</div>
             <div class="detail-value">{{ overview.recentQueryCount }}</div>
           </div>
           <div class="detail-card">
-            <div class="detail-label">窗口内查单失败</div>
+            <div class="detail-label">窗口内支付/退款查询失败</div>
             <div class="detail-value">{{ overview.recentQueryFailureCount }}</div>
             <div class="meta">失败率 {{ overview.recentQueryFailureRate }}</div>
           </div>

@@ -3,7 +3,7 @@ package com.abc123.hsp.dto;
 import lombok.Data;
 
 /**
- * 支付渠道查单小时趋势点位。
+ * 支付与退款渠道查单小时趋势点位。
  */
 @Data
 public class PaymentQueryTrendPointDTO {

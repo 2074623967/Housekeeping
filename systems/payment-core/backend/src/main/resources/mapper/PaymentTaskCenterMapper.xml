@@ -577,18 +577,39 @@
           )
     </select>
 
-    <select id="countRecentPaymentQueries" resultType="int">
-        SELECT COUNT(1)
-        FROM t_payment_notify_log
-        WHERE notify_status IN ('已查单', '查单失败')
-          AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+    <select id="countRecentChannelQueries" resultType="int">
+        SELECT SUM(query_count)
+        FROM (
+            SELECT COUNT(1) AS query_count
+            FROM t_payment_notify_log
+            WHERE notify_status IN ('已查单', '查单失败')
+              AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+            UNION ALL
+            SELECT COUNT(1) AS query_count
+            FROM t_refund_operation_log
+            WHERE action_code IN (
+                'CHANNEL_QUERY',
+                'CHANNEL_QUERY_SUCCESS',
+                'CHANNEL_QUERY_FAIL',
+                'CHANNEL_QUERY_FAILED'
+            )
+              AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+        ) query_counts
     </select>
 
-    <select id="countRecentPaymentQueryFailures" resultType="int">
-        SELECT COUNT(1)
-        FROM t_payment_notify_log
-        WHERE notify_status = '查单失败'
-          AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+    <select id="countRecentChannelQueryFailures" resultType="int">
+        SELECT SUM(failure_count)
+        FROM (
+            SELECT COUNT(1) AS failure_count
+            FROM t_payment_notify_log
+            WHERE notify_status = '查单失败'
+              AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+            UNION ALL
+            SELECT COUNT(1) AS failure_count
+            FROM t_refund_operation_log
+            WHERE action_code = 'CHANNEL_QUERY_FAILED'
+              AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+        ) failure_counts
     </select>
 
     <select id="countRecentChannelQueryRateLimitRejections" resultType="int">
@@ -657,11 +678,11 @@
           AND ack_status = '待确认'
     </select>
 
-    <select id="findRecentPaymentQueryTrends"
+    <select id="findRecentChannelQueryTrends"
             resultType="com.abc123.hsp.dto.PaymentQueryTrendPointDTO">
         SELECT query_bucket.time_bucket AS timeBucket,
                COUNT(1) AS queryCount,
-               SUM(CASE WHEN query_bucket.notify_status = '查单失败' THEN 1 ELSE 0 END) AS failureCount
+               SUM(query_bucket.is_failure) AS failureCount
         FROM (
             SELECT CONCAT(
                        YEAR(created_at), '-',
@@ -669,9 +690,25 @@
                        LPAD(DAYOFMONTH(created_at), 2, '0'), ' ',
                        LPAD(HOUR(created_at), 2, '0'), ':00'
                    ) AS time_bucket,
-                   notify_status
+                   CASE WHEN notify_status = '查单失败' THEN 1 ELSE 0 END AS is_failure
             FROM t_payment_notify_log
             WHERE notify_status IN ('已查单', '查单失败')
+              AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+            UNION ALL
+            SELECT CONCAT(
+                       YEAR(created_at), '-',
+                       LPAD(MONTH(created_at), 2, '0'), '-',
+                       LPAD(DAYOFMONTH(created_at), 2, '0'), ' ',
+                       LPAD(HOUR(created_at), 2, '0'), ':00'
+                   ) AS time_bucket,
+                   CASE WHEN action_code = 'CHANNEL_QUERY_FAILED' THEN 1 ELSE 0 END AS is_failure
+            FROM t_refund_operation_log
+            WHERE action_code IN (
+                'CHANNEL_QUERY',
+                'CHANNEL_QUERY_SUCCESS',
+                'CHANNEL_QUERY_FAIL',
+                'CHANNEL_QUERY_FAILED'
+            )
               AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
         ) query_bucket
         GROUP BY query_bucket.time_bucket

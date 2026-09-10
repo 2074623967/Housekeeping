@@ -103,12 +103,12 @@ public interface PaymentTaskCenterMapper {
     /**
      * 统计最近窗口内的渠道查单次数。
      */
-    int countRecentPaymentQueries(@Param("lookbackHours") int lookbackHours);
+    int countRecentChannelQueries(@Param("lookbackHours") int lookbackHours);
 
     /**
      * 统计最近窗口内的渠道查单失败次数。
      */
-    int countRecentPaymentQueryFailures(@Param("lookbackHours") int lookbackHours);
+    int countRecentChannelQueryFailures(@Param("lookbackHours") int lookbackHours);
 
     /**
      * 统计最近窗口内的渠道查单限流拒绝次数。
@@ -149,7 +149,7 @@ public interface PaymentTaskCenterMapper {
     /**
      * 查询最近窗口内的渠道查单小时趋势。
      */
-    List<PaymentQueryTrendPointDTO> findRecentPaymentQueryTrends(
+    List<PaymentQueryTrendPointDTO> findRecentChannelQueryTrends(
             @Param("lookbackHours") int lookbackHours);
 
     /**

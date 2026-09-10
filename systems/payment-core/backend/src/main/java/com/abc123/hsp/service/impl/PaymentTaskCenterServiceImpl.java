@@ -260,12 +260,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 refundQueryTaskService == null ? 0 : refundQueryTaskService.countPendingRefunds());
         overview.setDuePendingRefundQueryCount(
                 refundQueryTaskService == null ? 0 : refundQueryTaskService.countDueRefunds());
-        int recentQueryCount = paymentTaskCenterMapper.countRecentPaymentQueries(queryMonitorLookbackHours);
-        int recentQueryFailureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(
+        int recentQueryCount = paymentTaskCenterMapper.countRecentChannelQueries(queryMonitorLookbackHours);
+        int recentQueryFailureCount = paymentTaskCenterMapper.countRecentChannelQueryFailures(
                 queryMonitorLookbackHours);
         int recentQueryRateLimitRejectionCount =
                 paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(queryMonitorLookbackHours);
-        List<PaymentQueryTrendPointDTO> queryTrends = paymentTaskCenterMapper.findRecentPaymentQueryTrends(
+        List<PaymentQueryTrendPointDTO> queryTrends = paymentTaskCenterMapper.findRecentChannelQueryTrends(
                 queryMonitorLookbackHours);
         for (PaymentQueryTrendPointDTO trend : queryTrends) {
             trend.setFailureRate(formatPercentage(
@@ -579,8 +579,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private PaymentTaskActionResultDTO runGenerateQueryMonitorAlertsByMode(String runMode, String triggeredBy) {
-        int queryCount = paymentTaskCenterMapper.countRecentPaymentQueries(queryMonitorLookbackHours);
-        int failureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(queryMonitorLookbackHours);
+        int queryCount = paymentTaskCenterMapper.countRecentChannelQueries(queryMonitorLookbackHours);
+        int failureCount = paymentTaskCenterMapper.countRecentChannelQueryFailures(queryMonitorLookbackHours);
         int rejectionCount = paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(
                 queryMonitorLookbackHours);
         boolean failureThresholdReached = failureCount >= queryFailureCountThreshold
@@ -596,7 +596,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     QUERY_FAILURE_ISSUE_TYPE,
                     "QUERY-MONITOR-FAILURE",
                     String.format(
-                            "近 %d 小时主动查单 %d 次，失败 %d 次，失败率 %s；告警阈值为失败 %d 次，或样本不少于 %d 次且失败率达到 %d%%。",
+                            "近 %d 小时支付与退款主动查单 %d 次，查询失败 %d 次，失败率 %s；告警阈值为失败 %d 次，或样本不少于 %d 次且失败率达到 %d%%。",
                             queryMonitorLookbackHours,
                             queryCount,
                             failureCount,
@@ -629,7 +629,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 0,
                 0,
                 matchedCount == 0
-                        ? "主动查单失败和限流拒绝指标均未达到告警阈值。"
+                        ? "支付与退款主动查单失败和限流拒绝指标均未达到告警阈值。"
                         : String.format("命中 %d 类主动查单监控阈值，生成 %d 条 outbox 告警，冷却窗口抑制 %d 条重复告警。",
                         matchedCount, generatedCount, suppressedCount)
         );
@@ -1149,7 +1149,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "PAYMENT_QUERY_FAILURE_TREND",
                 "主动查单失败趋势",
                 recentQueryFailureCount,
-                String.format("近 %d 小时查单 %d 次，失败 %d 次（%s）",
+                String.format("近 %d 小时支付与退款查单 %d 次，查询失败 %d 次（%s）",
                         queryMonitorLookbackHours,
                         recentQueryCount,
                         recentQueryFailureCount,

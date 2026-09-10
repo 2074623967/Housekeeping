@@ -135,17 +135,17 @@ class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
-    void shouldSummarizeRecentPaymentQueryTrendWithinLookbackWindow() {
+    void shouldSummarizeRecentPaymentAndRefundQueryTrendWithinLookbackWindow() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
 
-            assertEquals(15, mapper.countRecentPaymentQueries(24));
-            assertEquals(1, mapper.countRecentPaymentQueryFailures(24));
+            assertEquals(34, mapper.countRecentChannelQueries(24));
+            assertEquals(2, mapper.countRecentChannelQueryFailures(24));
             assertEquals(5, mapper.countRecentChannelQueryRateLimitRejections(24));
-            List<PaymentQueryTrendPointDTO> trends = mapper.findRecentPaymentQueryTrends(24);
+            List<PaymentQueryTrendPointDTO> trends = mapper.findRecentChannelQueryTrends(24);
 
-            assertEquals(15, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
-            assertEquals(1, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getFailureCount).sum());
+            assertEquals(34, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
+            assertEquals(2, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getFailureCount).sum());
         }
     }
 
@@ -323,6 +323,7 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertRefundQueryHistory(connection, "REF-BACKOFF-DUE", now, 300, 130);
             insertRefundQueryHistory(connection, "REF-MAX-WAIT", now, 2100, 1800, 1500, 1200, 800);
             insertRefundQueryHistory(connection, "REF-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
+            insertRefundQueryMonitorFixtures(connection, now);
             statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
                     + "source_alert_no, issue_type, alert_channel, ack_status, alert_status, "
                     + "provider_delivery_status, created_at) VALUES "
@@ -554,6 +555,28 @@ class PaymentTaskCenterMapperIntegrationTest {
                 statement.setString(1, refundOrderId);
                 statement.setString(2, "CHANNEL_QUERY");
                 statement.setTimestamp(3, Timestamp.valueOf(now.minusSeconds(seconds)));
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private void insertRefundQueryMonitorFixtures(Connection connection, LocalDateTime now) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO t_refund_operation_log(refund_order_id, action_code, created_at) VALUES (?, ?, ?)")) {
+            String[] actionCodes = {
+                    "CHANNEL_QUERY",
+                    "CHANNEL_QUERY_SUCCESS",
+                    "CHANNEL_QUERY_FAIL",
+                    "CHANNEL_QUERY_FAILED",
+                    "RETRY",
+                    "CHANNEL_QUERY_FAILED"
+            };
+            int[] secondsAgo = {60, 120, 180, 240, 300, 90000};
+            for (int index = 0; index < actionCodes.length; index++) {
+                statement.setString(1, "REF-MONITOR");
+                statement.setString(2, actionCodes[index]);
+                statement.setTimestamp(3, Timestamp.valueOf(now.minusSeconds(secondsAgo[index])));
                 statement.addBatch();
             }
             statement.executeBatch();
