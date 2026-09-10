@@ -2770,6 +2770,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 任务中心不经 HTTP 管理入口，直接把人工任务的规范化 `triggeredBy` 或自动身份 `payment-query-scheduler` 传入逐笔查单。实际关单和查单成功收口事件在原 payload 增加 `initiatedBy`。
 5. `/admin/*` 仅表达接口用途，不代表已实现认证授权。生产接入必须由可信身份上下文覆盖客户端自声明值，并限制管理入口访问范围。
 
+### 14.94 退款渠道下发来源传递契约
+
+1. 内部 `PaymentEventDispatchService.publishRefundSubmit(eventNo, refundOrderId, operator)` 与 `republish(eventNo, operator)` 必须显式接收派发来源；来源去除首尾空白后必填、最长 `64` 个字符且不能包含控制字符。
+2. 退款审核、人工失败重试和任务重试使用各自已规范化的操作人或 `triggeredBy`；单笔事件人工重发使用请求操作人，自动事件重发使用 `payment-event-scheduler`。内部调用方不得在派发层回退固定人工身份。
+3. 渠道返回受理号时，`CHANNEL_SUBMIT` 日志记录该来源；调用渠道前的可重试失败写入 `CHANNEL_SUBMIT_FAILED`，渠道可能受理的未知结果写入 `CHANNEL_SUBMIT_UNKNOWN`，三类日志使用同一来源语义。
+4. 来源参数不改变退款提交幂等与安全边界：已存在受理事实时不得重复外呼，`UNKNOWN` 仍禁止直接重发，受理号冲突、事件状态和重试次数仍按既有规则处理。
+5. 该接口是 payment-core 内部契约，不新增外部 HTTP 字段；来源也不构成可信认证、渠道审批、渠道受理或到账证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

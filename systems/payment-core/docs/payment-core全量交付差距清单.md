@@ -1016,6 +1016,13 @@
 3. 管理端支付列表、支付单详情和支付记录详情增加默认留空的操作人输入；用户端继续使用自助接口。定向 `112` 个测试、payment-core 全量 `709` 个测试和 admin-web `68` 个模块生产构建通过，`0` failures、`0` errors、`0` skipped；admin-web 当前没有测试脚本。
 4. 本轮复用 `t_payment_notify_log.request_payload`、`t_payment_process_log.source` 和 `t_payment_event.event_payload`，无需数据库迁移。来源仍是应用分类或请求方自声明，不构成可信客户身份、认证、授权或不可抵赖审计，也不证明真实渠道查询、生产环境或稳定性；release 四项治理阻断不变。
 
+### 8.99 2026-09-10 退款渠道下发发起来源贯穿进展
+
+1. 退款审核、人工失败重试和任务重试将已经规范化的操作人或 `triggeredBy` 贯穿事件入队、事务提交后即时派发及退款渠道提交；事件人工重发与自动重发分别传递实际操作人和 `payment-event-scheduler`。
+2. `CHANNEL_SUBMIT / CHANNEL_SUBMIT_FAILED / CHANNEL_SUBMIT_UNKNOWN` 三类退款操作日志不再写死 `payment-core-admin`，统一记录本次派发来源。派发边界再次校验来源去空格后必填、最长 `64` 个字符且不含控制字符，非法值不读取事件、不调用 Mapper 或渠道。
+3. 保持既有事件行锁、渠道受理号绑定、`FAILED / DEAD_LETTER` 重试计数和 `UNKNOWN` 禁止直接重试规则。联合定向 `97` 个测试及 payment-core 全量 `711` 个测试通过，`0` failures、`0` errors、`0` skipped，补丁检查通过；本轮无前端改动。
+4. 本轮复用退款操作日志字段，无数据库迁移。操作人仍可能是请求方自声明或内部调度类别，不证明真实渠道受理、退款到账、生产环境或稳定性；release 候选说明、正式签字、发布后现场核验和稳定观察四项阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

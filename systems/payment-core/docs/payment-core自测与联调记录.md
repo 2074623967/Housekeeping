@@ -7769,3 +7769,26 @@
 
 1. 当前代码已区分消费者自助类别、后台自声明操作人和内部调度身份，并在本地日志及事件中形成可查询来源；主动查单调用成功不等同于渠道支付成功，只有可信查询结果满足既有状态机才收口支付状态。
 2. `customer-self-service` 只是应用内来源类别，后台 `operator` 也是请求方自声明；新增 `/admin/*` 路径不构成认证或授权边界。真实渠道、统一身份、角色权限、生产环境、现场核验与稳定观察均未由本轮证明。
+
+## 267. 2026-09-10 退款渠道下发发起来源贯穿 V1.0 验证
+
+### 267.1 本轮补强
+
+1. 退款审核、人工失败重试和任务重试将规范化操作人或 `triggeredBy` 传入提交后派发；事件人工重发与自动重发分别传入本次操作人和 `payment-event-scheduler`。
+2. 退款渠道提交成功、调用前失败和结果未知日志分别以 `CHANNEL_SUBMIT / CHANNEL_SUBMIT_FAILED / CHANNEL_SUBMIT_UNKNOWN` 保留实际派发来源，不再写死 `payment-core-admin`。
+3. 派发服务统一拒绝空白、超过 `64` 字符或包含控制字符的来源，并保持受理号绑定、事件行锁、重试次数、死信和未知结果人工核查边界不变。
+
+### 267.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=RefundServiceImplTest,PaymentEventDispatchServiceImplTest,PaymentEventServiceImplTest,PaymentEventRetryTaskServiceImplTest,PaymentTaskCenterServiceImplTest test` | 通过 | `97` 个用例，`0` failures、`0` errors、`0` skipped；覆盖审核、人工/任务重试、人工/自动事件重发、三类渠道日志、非法来源零副作用及单条异常隔离 |
+| payment-core 全量测试 | `mvn test` | 通过 | `711` 个用例，`0` failures、`0` errors、`0` skipped |
+| 固定身份与补丁检查 | 运行代码检索、`git diff --check` | 通过 | Java 运行代码不再以 `payment-core-admin` 写退款渠道下发日志，补丁无空白符错误 |
+| admin-web | 变更范围检查 | 未重复执行 | 本轮没有前端代码变化，沿用既有操作人输入与事件重发交互契约 |
+| 外部与生产事实 | 真实退款渠道、到账核验、生产环境和稳定观察 | 未执行 | 不记录真实渠道受理、到账、生产验证或正式放行通过 |
+
+### 267.3 当前判断
+
+1. 退款人工动作、任务重试和事件重发的发起来源已能落到实际渠道下发日志，失败与结果未知路径也不再丢失来源。
+2. 当前证据只覆盖本地参数、事务和模拟适配器测试，不证明操作人可信、真实渠道已受理或退款已到账；release 四项治理阻断未解除，`release/v1.0.0` 继续冻结。
