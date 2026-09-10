@@ -5,6 +5,9 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.service.PaymentRiskControlService;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,19 @@ import org.springframework.web.client.RestTemplate;
  */
 @Service
 public class PaymentRiskControlServiceImpl implements PaymentRiskControlService {
+
+    private static final int RESPONSE_CODE_MAX_LENGTH = 32;
+    private static final int DECISION_MAX_LENGTH = 32;
+    private static final int DECISION_TYPE_MAX_LENGTH = 32;
+    private static final int HIT_CODE_MAX_LENGTH = 64;
+    private static final int RISK_TAG_MAX_LENGTH = 128;
+    private static final int REVIEW_NO_MAX_LENGTH = 64;
+    private static final int EVENT_NO_MAX_LENGTH = 64;
+    private static final int MESSAGE_MAX_LENGTH = 255;
+    private static final List<String> DECISIONS = Arrays.asList(
+            "PASS", "REVIEW", "INTERCEPT", "REJECT");
+    private static final List<String> DECISION_TYPES = Arrays.asList(
+            "info", "warn", "danger", "success");
 
     private final boolean enabled;
     private final String evaluateUrl;
@@ -45,10 +61,7 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
                     evaluateUrl.trim(),
                     request,
                     RiskApiResponse.class);
-            if (response == null || response.getData() == null) {
-                throw new BusinessException(ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, "风控中心返回空结果，无法确认支付准入状态");
-            }
-            return response.getData();
+            return validateAndNormalize(response);
         } catch (BusinessException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -62,6 +75,68 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         result.setDecisionType("success");
         result.setMessage(message);
         return result;
+    }
+
+    private PaymentRiskDecisionResultDTO validateAndNormalize(RiskApiResponse response) {
+        if (response == null || response.getData() == null) {
+            throw invalidResult();
+        }
+        String responseCode = normalizeRequired(response.getCode(), RESPONSE_CODE_MAX_LENGTH);
+        if (!"0".equals(responseCode)) {
+            throw invalidResult();
+        }
+        PaymentRiskDecisionResultDTO result = response.getData();
+        String decision = normalizeRequired(result.getDecision(), DECISION_MAX_LENGTH)
+                .toUpperCase(Locale.ROOT);
+        if (!DECISIONS.contains(decision)) {
+            throw invalidResult();
+        }
+        String decisionType = normalizeRequired(result.getDecisionType(), DECISION_TYPE_MAX_LENGTH)
+                .toLowerCase(Locale.ROOT);
+        if (!DECISION_TYPES.contains(decisionType)) {
+            throw invalidResult();
+        }
+        result.setDecision(decision);
+        result.setDecisionType(decisionType);
+        result.setHitCode(normalizeOptional(result.getHitCode(), HIT_CODE_MAX_LENGTH));
+        result.setRiskTag(normalizeOptional(result.getRiskTag(), RISK_TAG_MAX_LENGTH));
+        result.setReviewNo(normalizeOptional(result.getReviewNo(), REVIEW_NO_MAX_LENGTH));
+        result.setEventNo(normalizeOptional(result.getEventNo(), EVENT_NO_MAX_LENGTH));
+        result.setMessage(normalizeOptional(result.getMessage(), MESSAGE_MAX_LENGTH));
+        return result;
+    }
+
+    private String normalizeRequired(String value, int maxLength) {
+        String normalized = normalizeOptional(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw invalidResult();
+        }
+        return normalized;
+    }
+
+    private String normalizeOptional(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidResult();
+            }
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidResult();
+        }
+        return normalized;
+    }
+
+    private BusinessException invalidResult() {
+        return new BusinessException(
+                ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE,
+                "风控中心返回结果非法，无法确认支付准入状态");
     }
 
     /**

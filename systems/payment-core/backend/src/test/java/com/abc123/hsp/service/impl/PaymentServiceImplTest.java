@@ -2774,6 +2774,64 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldStopBeforePaymentWritesWhenRiskServiceRejectsItsResponse() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-RISK-INVALID-001");
+        prepayOrder.setPaymentOrderId("PAY-RISK-INVALID-001");
+        prepayOrder.setOrderNo("ORD-RISK-INVALID-001");
+        prepayOrder.setAmount("168.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO paymentDetail = new PaymentDetailDTO();
+        paymentDetail.setPaymentOrderId("PAY-RISK-INVALID-001");
+        paymentDetail.setOrderNo("ORD-RISK-INVALID-001");
+        paymentDetail.setStatus("PREPAY_CREATED");
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        when(paymentMapper.findPrepay("PRE-RISK-INVALID-001")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-RISK-INVALID-001")).thenReturn(paymentDetail);
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        when(paymentRiskControlService.evaluateSubmitRisk(
+                org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenThrow(new BusinessException(
+                        ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE,
+                        "风控中心返回结果非法，无法确认支付准入状态"));
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-RISK-INVALID-001");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setMerchantNo("MCH_HOME_001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService,
+                        paymentEventDispatchService,
+                        paymentRiskControlService,
+                        paymentOpsConfigService)
+                        .submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, exception.getCode());
+        verify(paymentMapper, never()).updatePrepayToPaying(anyString());
+        verify(paymentMapper, never()).insertPaymentAttempt(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentChannelSubmitService, never()).ensureAdapterAvailable(anyString());
+        verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldContinueSubmitAfterRiskReviewApproved() {
         PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
         prepayOrder.setPrepayOrderNo("PRE-RISK-APPROVED-001");
