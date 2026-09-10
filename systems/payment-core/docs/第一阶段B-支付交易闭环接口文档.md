@@ -2406,6 +2406,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 日终成功差异按支付单 `id` 顺序累计同订单成功金额；当前支付单纳入累计后超过应收时，该支付单计入差异单量，其整笔 `amount` 计入差异金额。因此 `80 + 30 > 100` 的差异金额为 `30.00`，实际净超额仍为 `10.00`。
 4. 退款、调账和差错处理是后续独立事实，不从毛成功聚合中删除原异常。接口结果用于运营定位和日终阻断，不代表真实渠道流水已核对或退款已经审批执行。
 
+### 14.57 统一支付记录成功退款字段契约
+
+1. `GET /api/payment-records` 与 `GET /api/payment-records/{paymentOrderId}` 的 `refundCount/refundedAmount` 采用同一口径：按支付单统计状态为 `SUCCESS` 的退款单数量与金额合计。
+2. `REVIEWING/PROCESSING/FAIL` 退款不计入已退次数和金额；没有成功退款时返回 `refundCount=0`、`refundedAmount=¥0.00`，不得用申请金额或处理中金额替代实际已退事实。
+3. 支付记录仍保留原支付金额和成功状态，退款作为独立事实叠加展示，不回写或净额化原支付金额。列表聚合依赖 `(payment_order_id, status)` 索引，部署前必须应用对应增量迁移。
+4. 管理端“本页已退金额”仅汇总当前接口页的 `refundedAmount`，不代表所有匹配记录的全量退款合计；真实全量指标需后续独立总览接口提供。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
