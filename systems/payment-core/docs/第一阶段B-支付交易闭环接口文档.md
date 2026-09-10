@@ -2622,6 +2622,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 绑定或未知事件收敛任一步未准确影响一行时按内部一致性失败回滚，不把部分恢复结果留在数据库。失败日志和审计不保存渠道原始报文、访问凭证或异常原文。
 5. 本契约只证明内部系统允许按稳定平台退款单号代理核查；真实微信、支付宝或银行是否支持该查询键、返回字段含义、签名验签、资金到账和对账结果仍需渠道联调验证。
 
+### 14.76 退款提交未知结果批量补查契约
+
+1. `POST /api/payment-task-center/query-pending-refunds` 的人工候选，以及 `REFUND_PENDING_QUERY` 自动任务的到期候选，均允许选择 `PROCESSING + 已绑定渠道 + channelRefundNo 为空 + 最新 REFUND_SUBMIT/UNKNOWN` 的退款；无未知事件、事件已收敛或未绑定渠道的退款不入选。
+2. 未知退款以 `COALESCE(lastPublishedAt, createdAt)` 作为首次等待基线，达到 `payment.refund-query.compensation.min-age-seconds` 后才允许批量查询；已有渠道退款号的退款继续以 `channelSubmittedAt` 为基线。
+3. 未知退款查询失败会写既有 `CHANNEL_QUERY_FAILED` 最小日志，后续自动候选与普通退款共用 `retry-interval-seconds / retry-backoff-factor / max-retry-interval-seconds` 指数退避；人工候选不绕过首次等待，但不受自动退避间隔限制。
+4. 未知退款与普通退款按 `channelCode` 共用 `per-channel-batch-size`，并在逐笔查询时继续进入数据库共享固定窗口限流；总批次仍受 `batch-size` 限制，不因缺少渠道退款号扩大单轮渠道压力。
+5. 自动调度仍只有在 `payment.refund-query.compensation.enabled` 与 `payment.refund-query.gateway-access.enabled` 同时开启时执行，默认均为关闭。开关只代表允许调用已配置代理，不证明真实渠道支持平台退款单号查询；不支持的渠道必须失败闭合并转人工核查。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。
