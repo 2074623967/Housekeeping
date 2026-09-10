@@ -59,6 +59,7 @@ class PaymentRiskControlServiceImplTest {
     void shouldReplaceExternalDecisionMessageWithPlatformText() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentRiskDecisionResultDTO data = decision("REVIEW", "warn");
+        data.setReviewNo("REVIEW-001");
         data.setMessage("jdbc:mysql://risk.internal/payment password=risk-secret-token");
         stubResponse(restTemplate, "0", data);
 
@@ -68,6 +69,20 @@ class PaymentRiskControlServiceImplTest {
         assertEquals("支付需要人工风控复核", result.getMessage());
         org.junit.jupiter.api.Assertions.assertFalse(result.getMessage().contains("risk-secret-token"));
         org.junit.jupiter.api.Assertions.assertFalse(result.getMessage().contains("jdbc:mysql"));
+    }
+
+    @Test
+    void shouldRejectReviewDecisionWithoutReviewOrderReference() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision("REVIEW", "warn");
+        data.setEventNo("RISK-EVT-001");
+        stubResponse(restTemplate, "0", data);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+
+        assertInvalidRiskResult(exception);
     }
 
     @Test
