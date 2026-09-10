@@ -568,8 +568,8 @@ public class RefundServiceImpl implements RefundService {
         try {
             paymentEventDispatchService.publishRefundSubmit(eventNo, refundOrderId, operator);
         } catch (RuntimeException exception) {
-            LOGGER.warn("退款渠道事件即时派发失败 eventNo={}, refundOrderId={}",
-                    eventNo, refundOrderId, exception);
+            LOGGER.warn("退款渠道事件即时派发失败 eventNo={}, exceptionType={}",
+                    eventNo, exception.getClass().getName());
         }
     }
 

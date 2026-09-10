@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
@@ -213,6 +216,55 @@ class RefundServiceImplTest {
                 "APPROVE".equals(log.getActionCode())
                         && "refund-approver".equals(log.getOperatorName())));
         verify(refundMapper).findByRefundOrderId("REF-001");
+    }
+
+    @Test
+    void shouldNotLogRefundDispatchFailureDetailsAfterCommit() {
+        String sensitiveMessage = "jdbc:mysql://internal/payment password=refund-dispatch-secret\ninvalid SQL";
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-DISPATCH-FAIL");
+        request.setOperator("refund-approver");
+        when(refundMapper.updateRefundStatus(
+                "REF-DISPATCH-FAIL", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
+        RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
+        submitRequest.setRefundOrderId("REF-DISPATCH-FAIL");
+        submitRequest.setPaymentOrderId("PAY-DISPATCH-FAIL");
+        submitRequest.setChannelCode("wx_h5");
+        submitRequest.setRefundAmount(new BigDecimal("20.00"));
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-DISPATCH-FAIL"))
+                .thenReturn(submitRequest);
+        org.mockito.Mockito.doThrow(new IllegalStateException(sensitiveMessage))
+                .when(paymentEventDispatchService).publishRefundSubmit(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.eq("REF-DISPATCH-FAIL"),
+                        org.mockito.ArgumentMatchers.eq("refund-approver"));
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(RefundServiceImpl.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            createService().approve(request);
+            java.util.List<org.springframework.transaction.support.TransactionSynchronization> synchronizations =
+                    org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations();
+            assertEquals(1, synchronizations.size());
+            synchronizations.get(0).afterCommit();
+
+            assertEquals(1, appender.list.size());
+            ILoggingEvent event = appender.list.get(0);
+            assertTrue(event.getFormattedMessage().contains(IllegalStateException.class.getName()));
+            assertFalse(event.getFormattedMessage().contains("refund-dispatch-secret"));
+            assertFalse(event.getFormattedMessage().contains("REF-DISPATCH-FAIL"));
+            org.junit.jupiter.api.Assertions.assertNull(event.getThrowableProxy());
+            verify(refundMapper).upsertRefundSubmitEvent(
+                    org.mockito.ArgumentMatchers.startsWith("EVTR"),
+                    org.mockito.ArgumentMatchers.eq("REF-DISPATCH-FAIL"),
+                    org.mockito.ArgumentMatchers.eq("PAY-DISPATCH-FAIL"));
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 
     @Test
