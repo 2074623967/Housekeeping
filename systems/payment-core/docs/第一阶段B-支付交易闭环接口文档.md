@@ -2465,6 +2465,16 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `PROCESSING` 只写 `CHANNEL_QUERY` 操作日志并保持状态；明确 `SUCCESS/FAIL` 在锁内复核关联键后通过 CAS 收口并写 `CHANNEL_QUERY_SUCCESS/FAIL`。
 4. 未找到可用适配器返回 `PAYMENT-1045`。默认本地兜底只回显现状，`gateway-access` HTTP 适配器默认关闭；当前契约不代表真实网关退款查询已实现。
 
+### 14.63 退款批量主动查单任务接口契约
+
+`POST /api/payment-task-center/query-pending-refunds`
+
+1. 人工任务只选择已绑定 `channelCode/channelRefundNo/channelSubmittedAt`、状态为 `PROCESSING` 且达到首次等待阈值的退款；候选受总批次与单渠道批次限制，但人工执行不受自动重试退避阻断。
+2. 自动任务使用相同状态与首次等待边界，并仅根据退款操作日志中的 `CHANNEL_QUERY/CHANNEL_QUERY_FAILED` 计算指数退避；其他退款操作不得增加查单退避次数。
+3. 自动调度必须同时开启 `payment.refund-query.compensation.enabled` 与 `payment.refund-query.gateway-access.enabled`。两者默认关闭，禁止使用只回显本地状态的兜底适配器制造自动查单事实。
+4. 返回沿用任务中心 `PaymentTaskActionResultDTO`，记录处理数、成功收口数、仍待跟进数、查询失败数和最多三个失败退款单号；逐笔失败隔离并统一写 `REFUND_PENDING_QUERY` 任务日志。
+5. 当前仅有指数退避、总批次和单渠道批次配额，没有退款查单共享固定窗口限流；接口存在不代表真实 `gateway-access` 退款查询、渠道到账或生产运行已经完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
