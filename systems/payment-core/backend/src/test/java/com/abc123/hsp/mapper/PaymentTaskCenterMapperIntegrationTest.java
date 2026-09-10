@@ -141,7 +141,7 @@ class PaymentTaskCenterMapperIntegrationTest {
 
             assertEquals(15, mapper.countRecentPaymentQueries(24));
             assertEquals(1, mapper.countRecentPaymentQueryFailures(24));
-            assertEquals(3, mapper.countRecentPaymentQueryRateLimitRejections(24));
+            assertEquals(5, mapper.countRecentChannelQueryRateLimitRejections(24));
             List<PaymentQueryTrendPointDTO> trends = mapper.findRecentPaymentQueryTrends(24);
 
             assertEquals(15, trends.stream().mapToInt(PaymentQueryTrendPointDTO::getQueryCount).sum());
@@ -236,6 +236,7 @@ class PaymentTaskCenterMapperIntegrationTest {
              Statement statement = session.getConnection().createStatement()) {
             Connection connection = session.getConnection();
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
+            statement.execute("DROP TABLE IF EXISTS t_refund_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
@@ -265,6 +266,10 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_channel_query_rate_limit_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
+                    + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
+            statement.execute("CREATE TABLE t_refund_channel_query_rate_limit_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
+                    + "channel_code VARCHAR(64), refund_order_id VARCHAR(64), "
                     + "window_seconds INT, max_queries INT, rejected_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_task_lease ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_code VARCHAR(64) NOT NULL UNIQUE, "
@@ -303,6 +308,7 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertQueryHistory(connection, "PAY-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
             insertQueryHistory(connection, "PAY-OUTSIDE-MONITOR-WINDOW", now, 90000);
             insertRateLimitRejections(connection, now, 30, 3600, 7200, 90000);
+            insertRefundRateLimitRejections(connection, now, 60, 1800, 90000);
             insertRefund(connection, "REF-NO-HISTORY", "wx_h5", "PROCESSING", now.minusMinutes(10), true);
             insertRefund(connection, "REF-BASE-WAIT", "wx_h5", "PROCESSING", now.minusMinutes(9), true);
             insertRefund(connection, "REF-BACKOFF-WAIT", "wx_h5", "PROCESSING", now.minusMinutes(8), true);
@@ -487,6 +493,27 @@ class PaymentTaskCenterMapperIntegrationTest {
                 statement.setString(1, "QRL-" + index);
                 statement.setString(2, "wx_h5");
                 statement.setString(3, "PAY-LIMITED-" + index);
+                statement.setInt(4, 60);
+                statement.setInt(5, 100);
+                statement.setTimestamp(6, Timestamp.valueOf(now.minusSeconds(secondsAgo[index])));
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private void insertRefundRateLimitRejections(
+            Connection connection,
+            LocalDateTime now,
+            int... secondsAgo) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO t_refund_channel_query_rate_limit_log("
+                        + "rejection_no, channel_code, refund_order_id, window_seconds, max_queries, rejected_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?)")) {
+            for (int index = 0; index < secondsAgo.length; index++) {
+                statement.setString(1, "RQRL-" + index);
+                statement.setString(2, "wx_h5");
+                statement.setString(3, "REF-LIMITED-" + index);
                 statement.setInt(4, 60);
                 statement.setInt(5, 100);
                 statement.setTimestamp(6, Timestamp.valueOf(now.minusSeconds(secondsAgo[index])));

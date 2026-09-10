@@ -192,7 +192,7 @@ onMounted(loadOverview);
             <div class="meta">失败率 {{ overview.recentQueryFailureRate }}</div>
           </div>
           <div class="detail-card">
-            <div class="detail-label">窗口内限流拒绝</div>
+            <div class="detail-label">支付/退款限流拒绝</div>
             <div class="detail-value">{{ overview.recentQueryRateLimitRejectionCount }}</div>
             <div class="meta">独立于渠道失败率统计</div>
           </div>

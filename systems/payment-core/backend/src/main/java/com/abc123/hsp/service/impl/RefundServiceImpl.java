@@ -19,6 +19,7 @@ import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.RefundChannelQueryRateLimitService;
 import com.abc123.hsp.service.RefundChannelQueryService;
 import com.abc123.hsp.service.RefundService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
@@ -64,6 +65,7 @@ public class RefundServiceImpl implements RefundService {
     private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
     private final RefundChannelQueryService refundChannelQueryService;
+    private final RefundChannelQueryRateLimitService refundChannelQueryRateLimitService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
     @Autowired
@@ -71,11 +73,13 @@ public class RefundServiceImpl implements RefundService {
                              PaymentEventDispatchService paymentEventDispatchService,
                              PaymentCallbackSignatureService paymentCallbackSignatureService,
                              RefundChannelQueryService refundChannelQueryService,
+                             RefundChannelQueryRateLimitService refundChannelQueryRateLimitService,
                              PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.refundMapper = refundMapper;
         this.paymentEventDispatchService = paymentEventDispatchService;
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.refundChannelQueryService = refundChannelQueryService;
+        this.refundChannelQueryRateLimitService = refundChannelQueryRateLimitService;
         this.sensitiveDataMasker = sensitiveDataMasker;
     }
 
@@ -85,6 +89,18 @@ public class RefundServiceImpl implements RefundService {
                       RefundChannelQueryService refundChannelQueryService) {
         this(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
                 refundChannelQueryService,
+                (channelCode, refundOrderId) -> { },
+                new PaymentSensitiveDataMasker(new ObjectMapper()));
+    }
+
+    RefundServiceImpl(RefundMapper refundMapper,
+                      PaymentEventDispatchService paymentEventDispatchService,
+                      PaymentCallbackSignatureService paymentCallbackSignatureService,
+                      RefundChannelQueryService refundChannelQueryService,
+                      RefundChannelQueryRateLimitService refundChannelQueryRateLimitService) {
+        this(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
+                refundChannelQueryService,
+                refundChannelQueryRateLimitService,
                 new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
@@ -213,6 +229,7 @@ public class RefundServiceImpl implements RefundService {
             return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
         }
         validateQueryableRefund(snapshot);
+        refundChannelQueryRateLimitService.acquire(snapshot.getChannelCode(), refundOrderId);
         RefundChannelQueryResultDTO result;
         try {
             result = RefundChannelQueryResultValidator.validateAndNormalize(

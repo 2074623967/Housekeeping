@@ -25,6 +25,7 @@ import com.abc123.hsp.dto.RefundStatusQueryRequestDTO;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.RefundChannelQueryRateLimitService;
 import com.abc123.hsp.service.RefundChannelQueryService;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -51,6 +52,9 @@ class RefundServiceImplTest {
 
     @Mock
     private RefundChannelQueryService refundChannelQueryService;
+
+    @Mock
+    private RefundChannelQueryRateLimitService refundChannelQueryRateLimitService;
 
     @Test
     void shouldForwardRefundQueryToMapper() {
@@ -422,6 +426,7 @@ class RefundServiceImplTest {
         RefundListItemDTO result = createService().query(queryRequest());
 
         assertEquals("REF-001", result.getRefundOrderId());
+        verify(refundChannelQueryRateLimitService).acquire("wx_h5", "REF-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY".equals(log.getActionCode())
                         && "channel-query".equals(log.getOperatorName())
@@ -497,6 +502,23 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRateLimitedRefundBeforeChannelQueryWithoutFailureHistory() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+        org.mockito.Mockito.doThrow(new BusinessException(
+                ErrorCode.REFUND_CHANNEL_QUERY_RATE_LIMITED, "refund query rate limited"))
+                .when(refundChannelQueryRateLimitService).acquire("wx_h5", "REF-001");
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().query(queryRequest()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_RATE_LIMITED, exception.getCode());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .insertOperationLog(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void shouldSkipChannelQueryForFinalizedRefund() {
         RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001");
         RefundListItemDTO mapperItem = new RefundListItemDTO();
@@ -566,7 +588,7 @@ class RefundServiceImplTest {
     private RefundServiceImpl createService() {
         return new RefundServiceImpl(
                 refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
-                refundChannelQueryService);
+                refundChannelQueryService, refundChannelQueryRateLimitService);
     }
 
     private void stubRetryCapacity(String refundOrderId,

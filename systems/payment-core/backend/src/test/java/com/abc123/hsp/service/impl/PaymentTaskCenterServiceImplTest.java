@@ -117,7 +117,7 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldExposeRateLimitRejectionsAndRaiseIndependentThresholdAlert() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
-        when(paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(24)).thenReturn(10);
+        when(paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(24)).thenReturn(10);
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
         PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
@@ -127,7 +127,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_QUERY_RATE_LIMIT_REJECTION".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
-                        && alert.getAlertMessage().contains("共有 10 次查单")));
+                        && alert.getAlertMessage().contains("共有 10 次支付或退款查单")));
     }
 
     @Test
@@ -290,7 +290,7 @@ class PaymentTaskCenterServiceImplTest {
                 eq("PAYMENT_QUERY_MONITOR_ALERT"), leaseOwner("payment-core-admin"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.countRecentPaymentQueries(24)).thenReturn(12);
         when(paymentTaskCenterMapper.countRecentPaymentQueryFailures(24)).thenReturn(4);
-        when(paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(24)).thenReturn(10);
+        when(paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(24)).thenReturn(10);
         when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
                 "主动查单失败趋势", 60)).thenReturn(0);
         when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(

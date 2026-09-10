@@ -65,6 +65,11 @@ payment:
       max-retry-interval-seconds: ${HSP_PAYMENT_REFUND_QUERY_COMPENSATION_MAX_RETRY_INTERVAL_SECONDS:900}
       per-channel-batch-size: ${HSP_PAYMENT_REFUND_QUERY_COMPENSATION_PER_CHANNEL_BATCH_SIZE:20}
       batch-size: ${HSP_PAYMENT_REFUND_QUERY_COMPENSATION_BATCH_SIZE:100}
+    rate-limit:
+      # 仅真实退款网关环境启用，所有实例共享数据库固定时间窗配额。
+      enabled: ${HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_ENABLED:false}
+      window-seconds: ${HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_WINDOW_SECONDS:60}
+      max-queries-per-channel: ${HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL:100}
   downstream:
     clearing:
       payment-success-url: ${HSP_PAYMENT_DOWNSTREAM_CLEARING_PAYMENT_SUCCESS_URL:http://127.0.0.1:18120/api/clearing/events/payments/success}

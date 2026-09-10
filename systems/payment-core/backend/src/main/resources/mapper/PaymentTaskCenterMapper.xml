@@ -591,10 +591,17 @@
           AND created_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
     </select>
 
-    <select id="countRecentPaymentQueryRateLimitRejections" resultType="int">
-        SELECT COUNT(1)
-        FROM t_payment_channel_query_rate_limit_log
-        WHERE rejected_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+    <select id="countRecentChannelQueryRateLimitRejections" resultType="int">
+        SELECT SUM(rejection_count)
+        FROM (
+            SELECT COUNT(1) AS rejection_count
+            FROM t_payment_channel_query_rate_limit_log
+            WHERE rejected_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+            UNION ALL
+            SELECT COUNT(1) AS rejection_count
+            FROM t_refund_channel_query_rate_limit_log
+            WHERE rejected_at &gt;= TIMESTAMPADD(HOUR, -#{lookbackHours}, NOW())
+        ) rejection_counts
     </select>
 
     <select id="countRecentUnacknowledgedQueryMonitorAlerts" resultType="int">

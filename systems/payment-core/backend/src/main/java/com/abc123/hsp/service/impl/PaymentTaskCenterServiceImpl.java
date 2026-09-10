@@ -264,7 +264,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int recentQueryFailureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(
                 queryMonitorLookbackHours);
         int recentQueryRateLimitRejectionCount =
-                paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(queryMonitorLookbackHours);
+                paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(queryMonitorLookbackHours);
         List<PaymentQueryTrendPointDTO> queryTrends = paymentTaskCenterMapper.findRecentPaymentQueryTrends(
                 queryMonitorLookbackHours);
         for (PaymentQueryTrendPointDTO trend : queryTrends) {
@@ -581,7 +581,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private PaymentTaskActionResultDTO runGenerateQueryMonitorAlertsByMode(String runMode, String triggeredBy) {
         int queryCount = paymentTaskCenterMapper.countRecentPaymentQueries(queryMonitorLookbackHours);
         int failureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(queryMonitorLookbackHours);
-        int rejectionCount = paymentTaskCenterMapper.countRecentPaymentQueryRateLimitRejections(
+        int rejectionCount = paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(
                 queryMonitorLookbackHours);
         boolean failureThresholdReached = failureCount >= queryFailureCountThreshold
                 || (queryCount >= queryFailureRateMinimumSampleCount
@@ -612,7 +612,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     QUERY_RATE_LIMIT_ISSUE_TYPE,
                     "QUERY-MONITOR-RATE-LIMIT",
                     String.format(
-                            "近 %d 小时主动查单限流拒绝 %d 次，已达到 %d 次告警阈值；拒绝事实独立统计，不计入渠道查询失败率。",
+                            "近 %d 小时支付与退款主动查单限流拒绝 %d 次，已达到 %d 次告警阈值；拒绝事实独立统计，不计入渠道查询失败率。",
                             queryMonitorLookbackHours,
                             rejectionCount,
                             queryRateLimitRejectionCountThreshold),
@@ -1162,7 +1162,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "PAYMENT_QUERY_RATE_LIMIT_REJECTION",
                 "主动查单限流拒绝",
                 recentQueryRateLimitRejectionCount,
-                String.format("近 %d 小时共有 %d 次查单因共享渠道配额耗尽被拒绝",
+                String.format("近 %d 小时共有 %d 次支付或退款查单因共享渠道配额耗尽被拒绝",
                         queryMonitorLookbackHours,
                         recentQueryRateLimitRejectionCount),
                 "/payment-task-center",
