@@ -165,7 +165,9 @@
 }
 ```
 
-成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo / querySource`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`，返回的 `channelRefundNo` 必须与请求完全一致；缺失、超长、含 ISO 控制字符、状态非法或关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
+`refundOrderId / channelCode` 必填。已有渠道受理事实时必须传 `channelRefundNo`；退款提交结果未知且尚未取得渠道退款号时允许省略该字段，由上游按平台退款单号核查。显式传入的可选字段仍执行长度和 ISO 控制字符校验。
+
+成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo / querySource`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`；请求已携带 `channelRefundNo` 时，响应必须与其完全一致；请求未携带时，响应仍必须返回非空渠道退款号，供支付核心首次绑定可信受理事实。缺失、超长、含 ISO 控制字符、状态非法或已有关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
 
 退款查单复用支付交易代理的应用、访问凭证、权限、网关、有效证书和当前环境发布路由门禁，并写入 `REFUND_QUERY` 最小审计。访问密钥、请求报文、上游原始响应和异常原文不进入审计日志。
 
@@ -177,7 +179,7 @@
 | `HSP_GATEWAY_ALIPAY_REFUND_QUERY_URL` | 支付宝 H5 |
 | `HSP_GATEWAY_BANK_REFUND_QUERY_URL` | 线下银行 |
 
-当前接口只闭合稳定 HTTP 代理契约，不代表微信、支付宝或银行真实退款协议、签名验签、生产凭证、网络白名单、退款到账、对账或财务验收已经完成。
+当前接口只闭合“平台退款单号可查、已有渠道退款号严格匹配”的稳定 HTTP 代理契约；是否支持按平台退款单号查询仍取决于具体渠道协议与集成服务实现，不代表微信、支付宝或银行真实退款协议、签名验签、生产凭证、网络白名单、退款到账、对账或财务验收已经完成。
 
 ## 11. 退款订单提交代理
 

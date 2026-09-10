@@ -2536,9 +2536,9 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 ### 14.71 gateway-access 退款查单代理契约
 
 1. `payment.refund-query.gateway-access.enabled=false` 为默认值；查询 URL、应用编码、访问密钥或目标渠道配置不完整时，适配器不声明支持，退款查单返回既有 `PAYMENT-1045`，不降级为本地状态回显。
-2. 配置完整后，payment-core 携带 `X-Gateway-App-Code / X-Gateway-Access-Key`，向 `POST /api/gateway/refunds/query` 发送 `refundOrderId / channelCode / channelRefundNo`。默认地址为 `http://127.0.0.1:8090/api/gateway/refunds/query`，不再指向 reconciliation-system 的 `18150`。
+2. 配置完整后，payment-core 携带 `X-Gateway-App-Code / X-Gateway-Access-Key`，向 `POST /api/gateway/refunds/query` 发送 `refundOrderId / channelCode`；已有受理事实时同时发送 `channelRefundNo`，提交事件为 `UNKNOWN` 且尚无受理号时允许省略。默认地址为 `http://127.0.0.1:8090/api/gateway/refunds/query`，不再指向 reconciliation-system 的 `18150`。
 3. gateway-access 在转发前复用应用、凭证、权限、网关、有效证书和发布路由门禁；微信、支付宝和银行退款查单上游 URL 默认均为空，未显式配置时失败闭合。
-4. 只有网关业务码为 `0`，且结果包含 `refundStatus / channelRefundNo / querySource` 时才接受；状态只允许 `PROCESSING / SUCCESS / FAIL`，渠道退款号必须与已受理事实一致。失败统一沿用 `PAYMENT-1046` 并写最小失败历史。
+4. 只有网关业务码为 `0`，且结果包含 `refundStatus / channelRefundNo / querySource` 时才接受；状态只允许 `PROCESSING / SUCCESS / FAIL`。已有受理号时必须完全一致；未知提交无受理号时，返回号只允许在对应事件仍为 `UNKNOWN` 时首次绑定。失败统一沿用 `PAYMENT-1046` 并写最小失败历史。
 5. payment-core 配置项为 `HSP_PAYMENT_REFUND_QUERY_GATEWAY_ENABLED / HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL / HSP_PAYMENT_REFUND_QUERY_SUPPORTED_CHANNELS / HSP_PAYMENT_REFUND_QUERY_GATEWAY_APP_CODE / HSP_PAYMENT_REFUND_QUERY_GATEWAY_ACCESS_KEY / HSP_PAYMENT_REFUND_QUERY_TIMEOUT_MS`；gateway-access 上游配置为 `HSP_GATEWAY_WX_REFUND_QUERY_URL / HSP_GATEWAY_ALIPAY_REFUND_QUERY_URL / HSP_GATEWAY_BANK_REFUND_QUERY_URL`。
 6. 本地受控上游冒烟只证明稳定 HTTP 转发、凭证拒绝和退款号关联校验，不代表真实退款渠道协议、签名验签、生产密钥托管、来源 IP 白名单、退款到账、对账或财务验收完成。
 
@@ -2613,6 +2613,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1048` | gateway-access 支付提交失败或未返回可确认的渠道受理事实；必须先查单，禁止自动重提 |
 | `PAYMENT-1049` | gateway-access 退款提交未配置、调用失败或未返回可确认的渠道受理事实；保持处理中并先查单核验 |
 | `PAYMENT-1050` | 退款提交受理结果未知，必须先向渠道查单或人工核查，禁止直接重发 |
+
+### 14.75 退款提交未知结果按平台退款单号核查契约
+
+1. 退款为 `PROCESSING`、已绑定渠道且存在对应 `REFUND_SUBMIT/UNKNOWN` 事件时，即使尚无 `channelRefundNo`，`POST /api/refunds/query` 也允许进入既有共享限流后按平台 `refundOrderId` 查询；普通待下发或缺少未知事件的退款仍返回 `PAYMENT-1046`，不调用渠道。
+2. gateway-access 的 `channelRefundNo` 请求字段在此场景可省略，但成功响应仍必须包含规范化后的渠道退款号和有限退款状态。若本地已有受理号，响应必须严格一致；未知场景只允许首次绑定，不能覆盖既有事实。
+3. 可信查单结果或通过既有验签的退款回调均可恢复未知受理事实。服务在锁定退款行后再次确认事件为 `UNKNOWN`，条件绑定渠道、收敛事件为 `SUCCESS` 并写固定最小操作日志，再沿用既有退款状态机处理 `PROCESSING / SUCCESS / FAIL`。
+4. 绑定或未知事件收敛任一步未准确影响一行时按内部一致性失败回滚，不把部分恢复结果留在数据库。失败日志和审计不保存渠道原始报文、访问凭证或异常原文。
+5. 本契约只证明内部系统允许按稳定平台退款单号代理核查；真实微信、支付宝或银行是否支持该查询键、返回字段含义、签名验签、资金到账和对账结果仍需渠道联调验证。
 
 联调说明：
 
