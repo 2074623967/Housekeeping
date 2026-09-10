@@ -8022,3 +8022,25 @@
 
 1. 外部渠道结果不能再通过尾部控制字符绕过 payment-core 的字段边界，支付和退款既有成功、待处理与未知结果状态机保持不变。
 2. 本地测试不证明真实渠道报文、生产网络、渠道受理、资金到账或稳定性，`release/v1.0.0` 继续冻结。
+
+## 278. 2026-09-11 gateway-access 查单原始结果校验 V1.1 验证
+
+### 278.1 本轮补强
+
+1. `GatewayAccessPaymentChannelQueryAdapter` 移除外部字段的前置 `trim`，补默认来源后立即复用 `PaymentChannelQueryResultValidator`，Service 保留返回码映射前后的双重校验。
+2. `GatewayAccessRefundChannelQueryAdapter` 不再用 `hasText` 覆盖含控制字符的来源，仅在来源为 `null` 或空串时补 `GATEWAY_ACCESS_HTTP`，随后交由退款结果校验器处理。
+3. 合法结果和缺省来源继续按原契约返回；交易状态或来源含尾部换行时统一失败闭合，不进入后续业务写入。
+
+### 278.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 四类联合定向测试 | `mvn -Dtest=GatewayAccessPaymentChannelQueryAdapterTest,GatewayAccessRefundChannelQueryAdapterTest,PaymentChannelQueryServiceImplTest,RefundChannelQueryServiceImplTest test` | 通过 | `22` 个用例；覆盖支付状态、支付来源和退款来源尾部换行 |
+| payment-core 全量测试 | `mvn test` | 通过 | `737` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 278.3 当前判断
+
+1. gateway-access 支付与退款查单不再通过适配器默认值或预清洗掩盖原始控制字符，共享 Service 校验继续作为后续防御。
+2. 本地测试不证明真实 gateway-access 服务、渠道响应、生产网络、资金到账或稳定性，`release/v1.0.0` 继续冻结。

@@ -2854,6 +2854,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 支付提交非法结果返回 `PAYMENT-1048`。退款提交非法受理结果标记为结果未知，退款保持 `PROCESSING`，不得绑定渠道退款号、释放额度或推导 `FAIL`。
 4. 本地自动化不证明真实渠道协议、报文签名、网络调用、资金到账、对账或稳定性。
 
+### 14.105 gateway-access 查单原始响应契约
+
+1. gateway-access 支付查单响应的 `tradeStatus / channelTransactionNo / querySource / channelReturnCode` 必须在适配器内按原始字符校验后才能归一化；适配器不得先 `trim` 再把结果交给 Service。
+2. 支付与退款查单仅在 `querySource` 为 `null` 或空串时补 `GATEWAY_ACCESS_HTTP`；含换行等 ISO 控制字符的显式来源必须分别返回 `PAYMENT-1026` 或退款查单失败，不得被默认值覆盖。
+3. 合法首尾空格继续由结果校验器归一化，合法缺省来源和状态映射不变；非法结果不得进入返回码映射、业务状态收口或持久化路径。
+4. 本地适配器测试不证明真实 gateway-access 协议、签名验签、生产网络、渠道查询事实、资金到账或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
