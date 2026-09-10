@@ -86,6 +86,38 @@ class PaymentRiskControlServiceImplTest {
     }
 
     @Test
+    void shouldRejectInterceptDecisionWithoutRiskEventReference() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision("INTERCEPT", "danger");
+        data.setHitCode("DEVICE_BLOCKLIST");
+        stubResponse(restTemplate, "0", data);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+
+        assertInvalidRiskResult(exception);
+    }
+
+    @Test
+    void shouldNormalizeInterceptDecisionWithRiskEventReference() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision(" intercept ", " DANGER ");
+        data.setHitCode(" DEVICE_BLOCKLIST ");
+        data.setEventNo(" RISK-EVT-002 ");
+        stubResponse(restTemplate, "0", data);
+
+        PaymentRiskDecisionResultDTO result = service(restTemplate)
+                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+
+        assertEquals("INTERCEPT", result.getDecision());
+        assertEquals("danger", result.getDecisionType());
+        assertEquals("DEVICE_BLOCKLIST", result.getHitCode());
+        assertEquals("RISK-EVT-002", result.getEventNo());
+        assertEquals("支付被风控拦截", result.getMessage());
+    }
+
+    @Test
     void shouldRejectBusinessFailureEvenWhenResponseCarriesPassData() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         stubResponse(restTemplate, "RISK-FAILED", decision("PASS", "success"));

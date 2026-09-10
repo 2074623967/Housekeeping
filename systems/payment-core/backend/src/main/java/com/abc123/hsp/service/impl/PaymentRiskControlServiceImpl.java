@@ -105,7 +105,11 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
             throw invalidResult();
         }
         result.setReviewNo(reviewNo);
-        result.setEventNo(normalizeOptional(result.getEventNo(), EVENT_NO_MAX_LENGTH));
+        String eventNo = normalizeOptional(result.getEventNo(), EVENT_NO_MAX_LENGTH);
+        if ("INTERCEPT".equals(decision) && !StringUtils.hasText(eventNo)) {
+            throw invalidResult();
+        }
+        result.setEventNo(eventNo);
         normalizeOptional(result.getMessage(), MESSAGE_MAX_LENGTH);
         result.setMessage(decisionMessage(decision));
         return result;
