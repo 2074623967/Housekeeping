@@ -24,6 +24,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
     private static final Logger LOGGER = LoggerFactory.getLogger(PaymentExpiryTaskServiceImpl.class);
     private static final int MAX_BATCH_SIZE = 1000;
     private static final int MAX_FAILURE_MESSAGE_LENGTH = 512;
+    private static final String FAILURE_CODE = "EXPIRY_CLOSE_FAILED";
 
     private final PaymentMapper paymentMapper;
     private final TransactionTemplate transactionTemplate;
@@ -58,7 +59,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         result.setProcessedCount(expiredPayments.size());
         for (ExpiredPaymentDTO payment : expiredPayments) {
             try {
-                Boolean closed = transactionTemplate.execute(status -> closeExpiredPayment(payment));
+                Boolean closed = transactionTemplate.execute(status -> closeExpiredPaymentSafely(payment));
                 if (Boolean.TRUE.equals(closed)) {
                     result.setSuccessCount(result.getSuccessCount() + 1);
                 } else {
@@ -79,7 +80,8 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         try {
             paymentMapper.deleteStaleExpiryCloseRetries(batchSize);
         } catch (RuntimeException exception) {
-            LOGGER.warn("Failed to clean stale expiry close retry markers", exception);
+            LOGGER.warn("Failed to clean stale expiry close retry markers, exceptionType={}",
+                    exception.getClass().getName());
         }
     }
 
@@ -112,27 +114,74 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         return true;
     }
 
+    private boolean closeExpiredPaymentSafely(ExpiredPaymentDTO payment) {
+        try {
+            return closeExpiredPayment(payment);
+        } catch (RuntimeException exception) {
+            throw sanitizeException(exception);
+        }
+    }
+
     private void recordFailure(String paymentOrderId, RuntimeException exception) {
         try {
-            transactionTemplate.executeWithoutResult(status -> paymentMapper.recordExpiryCloseFailure(
-                    paymentOrderId,
-                    failureMessage(exception),
-                    retryIntervalSeconds,
-                    retryBackoffFactor,
-                    maxRetryIntervalSeconds));
+            transactionTemplate.executeWithoutResult(status -> {
+                try {
+                    paymentMapper.recordExpiryCloseFailure(
+                            paymentOrderId,
+                            failureMessage(exception),
+                            retryIntervalSeconds,
+                            retryBackoffFactor,
+                            maxRetryIntervalSeconds);
+                } catch (RuntimeException markerException) {
+                    throw sanitizeException(markerException);
+                }
+            });
         } catch (RuntimeException markerException) {
-            LOGGER.warn("Failed to persist expiry close retry marker, paymentOrderId={}",
-                    paymentOrderId, markerException);
+            LOGGER.warn("Failed to persist expiry close retry marker, paymentOrderId={}, exceptionType={}",
+                    paymentOrderId, exceptionType(markerException));
         }
     }
 
     private String failureMessage(RuntimeException exception) {
-        String message = exception.getClass().getSimpleName();
-        if (exception.getMessage() != null && !exception.getMessage().trim().isEmpty()) {
-            message += ": " + exception.getMessage().trim();
+        if (exception instanceof SanitizedExpiryCloseException) {
+            return exception.getMessage();
         }
+        return buildFailureMessage(exception);
+    }
+
+    private RuntimeException sanitizeException(RuntimeException exception) {
+        return exception instanceof SanitizedExpiryCloseException
+                ? exception
+                : new SanitizedExpiryCloseException(exception);
+    }
+
+    private String exceptionType(RuntimeException exception) {
+        return exception instanceof SanitizedExpiryCloseException
+                ? ((SanitizedExpiryCloseException) exception).getOriginalExceptionType()
+                : exception.getClass().getName();
+    }
+
+    private static String buildFailureMessage(RuntimeException exception) {
+        String exceptionType = exception.getClass().getSimpleName();
+        String message = FAILURE_CODE + ":"
+                + (exceptionType.isEmpty() ? RuntimeException.class.getSimpleName() : exceptionType);
         return message.length() <= MAX_FAILURE_MESSAGE_LENGTH
                 ? message
                 : message.substring(0, MAX_FAILURE_MESSAGE_LENGTH);
+    }
+
+    private static final class SanitizedExpiryCloseException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+        private final String originalExceptionType;
+
+        private SanitizedExpiryCloseException(RuntimeException exception) {
+            super(buildFailureMessage(exception), null, false, false);
+            this.originalExceptionType = exception.getClass().getName();
+        }
+
+        private String getOriginalExceptionType() {
+            return originalExceptionType;
+        }
     }
 }

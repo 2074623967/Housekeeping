@@ -5,6 +5,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.dto.ExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
@@ -103,7 +106,7 @@ class PaymentExpiryTaskServiceImplTest {
         verify(paymentMapper).markExpiredUnsubmittedPaymentClosed("PAY-LAST");
         verify(paymentMapper).recordExpiryCloseFailure(
                 org.mockito.ArgumentMatchers.eq("PAY-FAIL"),
-                org.mockito.ArgumentMatchers.contains("database write failed"),
+                org.mockito.ArgumentMatchers.eq("EXPIRY_CLOSE_FAILED:IllegalStateException"),
                 org.mockito.ArgumentMatchers.eq(60),
                 org.mockito.ArgumentMatchers.eq(2),
                 org.mockito.ArgumentMatchers.eq(3600));
@@ -204,7 +207,7 @@ class PaymentExpiryTaskServiceImplTest {
                 Collections.singletonList("PAY-FAIL"), result.getFailedPaymentOrderIds());
         verify(paymentMapper).recordExpiryCloseFailure(
                 org.mockito.ArgumentMatchers.eq("PAY-FAIL"),
-                org.mockito.ArgumentMatchers.contains("database write failed"),
+                org.mockito.ArgumentMatchers.eq("EXPIRY_CLOSE_FAILED:IllegalStateException"),
                 org.mockito.ArgumentMatchers.eq(1),
                 org.mockito.ArgumentMatchers.eq(1),
                 org.mockito.ArgumentMatchers.eq(1));
@@ -212,17 +215,14 @@ class PaymentExpiryTaskServiceImplTest {
     }
 
     @Test
-    void shouldBoundPersistedFailureMessage() {
+    void shouldPersistStableFailureClassificationWithoutExceptionMessage() {
         ExpiredPaymentDTO payment = buildPayment("PAY-LONG-ERROR", "ORD-LONG-ERROR");
-        StringBuilder longMessage = new StringBuilder();
-        for (int index = 0; index < 600; index++) {
-            longMessage.append('x');
-        }
+        String sensitiveMessage = "jdbc:mysql://internal/payment password=secret-value\ninvalid SQL";
         when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
         when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-LONG-ERROR"))
-                .thenThrow(new IllegalStateException(longMessage.toString()));
+                .thenThrow(new IllegalStateException(sensitiveMessage));
 
         service(100, 60, 2, 3600).closeExpiredPayments();
 
@@ -233,9 +233,67 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.eq(60),
                 org.mockito.ArgumentMatchers.eq(2),
                 org.mockito.ArgumentMatchers.eq(3600));
-        org.junit.jupiter.api.Assertions.assertEquals(512, failureMessageCaptor.getValue().length());
-        org.junit.jupiter.api.Assertions.assertTrue(
-                failureMessageCaptor.getValue().startsWith("IllegalStateException: "));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "EXPIRY_CLOSE_FAILED:IllegalStateException", failureMessageCaptor.getValue());
+        org.junit.jupiter.api.Assertions.assertFalse(failureMessageCaptor.getValue().contains("secret-value"));
+        org.junit.jupiter.api.Assertions.assertFalse(failureMessageCaptor.getValue().contains("\n"));
+    }
+
+    @Test
+    void shouldNotLogAuxiliaryFailureMessagesOrStackTraces() {
+        ExpiredPaymentDTO payment = buildPayment("PAY-SECRET", "ORD-SECRET");
+        when(paymentMapper.deleteStaleExpiryCloseRetries(100))
+                .thenThrow(new IllegalStateException("cleanup-token=cleanup-secret"));
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-SECRET"))
+                .thenThrow(new IllegalStateException("jdbc:mysql://internal password=close-secret"));
+        when(paymentMapper.recordExpiryCloseFailure(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(new IllegalStateException("marker-token=marker-secret"));
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(PaymentExpiryTaskServiceImpl.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        Logger transactionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(
+                org.springframework.transaction.support.TransactionTemplate.class);
+        ListAppender<ILoggingEvent> transactionAppender = new ListAppender<>();
+        transactionAppender.start();
+        transactionLogger.addAppender(transactionAppender);
+        try {
+            PaymentExpiryCloseResultDTO result = service(100, 60, 2, 3600).closeExpiredPayments();
+
+            org.junit.jupiter.api.Assertions.assertEquals(1, result.getFailCount());
+            org.junit.jupiter.api.Assertions.assertEquals(2, appender.list.size());
+            java.util.List<ILoggingEvent> events = new java.util.ArrayList<>(appender.list);
+            events.addAll(transactionAppender.list);
+            for (ILoggingEvent event : events) {
+                String formattedMessage = event.getFormattedMessage();
+                org.junit.jupiter.api.Assertions.assertFalse(formattedMessage.contains("cleanup-secret"));
+                org.junit.jupiter.api.Assertions.assertFalse(formattedMessage.contains("close-secret"));
+                org.junit.jupiter.api.Assertions.assertFalse(formattedMessage.contains("marker-secret"));
+                if (event.getThrowableProxy() != null) {
+                    org.junit.jupiter.api.Assertions.assertFalse(
+                            String.valueOf(event.getThrowableProxy().getMessage()).contains("secret"));
+                    org.junit.jupiter.api.Assertions.assertNull(event.getThrowableProxy().getCause());
+                }
+            }
+            for (ILoggingEvent event : appender.list) {
+                org.junit.jupiter.api.Assertions.assertTrue(
+                        event.getFormattedMessage().contains(IllegalStateException.class.getName()));
+                org.junit.jupiter.api.Assertions.assertNull(event.getThrowableProxy());
+            }
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+            transactionLogger.detachAppender(transactionAppender);
+            transactionAppender.stop();
+        }
     }
 
     private PaymentExpiryTaskServiceImpl service(int batchSize,
