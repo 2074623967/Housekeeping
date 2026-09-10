@@ -17,6 +17,7 @@ import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
+import com.abc123.hsp.dto.RefundRetrySourceDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundChannelSubmitService;
@@ -197,6 +198,8 @@ class RefundServiceImplTest {
         submitRequest.setRefundMethod("原路退款");
         submitRequest.setRefundReason("服务取消");
         submitRequest.setChannelCode("alipay_h5");
+        stubRetryCapacity("REF-002", "PAY-002", new BigDecimal("80.00"),
+                new BigDecimal("20.00"), new BigDecimal("100.00"));
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-002")).thenReturn(submitRequest);
         RefundChannelSubmitResultDTO submitResult = new RefundChannelSubmitResultDTO();
         submitResult.setChannelRefundNo("RCH-002");
@@ -218,6 +221,9 @@ class RefundServiceImplTest {
         submitRequest.setRefundOrderId("REF-TASK");
         submitRequest.setPaymentOrderId("PAY-TASK");
         submitRequest.setChannelCode("wx_h5");
+        submitRequest.setRefundAmount(new BigDecimal("20.00"));
+        stubRetryCapacity("REF-TASK", "PAY-TASK", new BigDecimal("20.00"),
+                BigDecimal.ZERO, new BigDecimal("100.00"));
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-TASK")).thenReturn(submitRequest);
         when(refundChannelSubmitService.submit(submitRequest)).thenReturn(new RefundChannelSubmitResultDTO());
 
@@ -237,6 +243,51 @@ class RefundServiceImplTest {
         Set<String> logNos = new HashSet<String>(Arrays.asList(
                 logs.get(0).getLogNo(), logs.get(1).getLogNo()));
         assertEquals(2, logNos.size());
+    }
+
+    @Test
+    void shouldRejectFailedRefundRetryWhenReplacementConsumesCapacity() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-FAILED");
+        stubRetryCapacity("REF-FAILED", "PAY-001", new BigDecimal("60.00"),
+                new BigDecimal("60.00"), new BigDecimal("100.00"));
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new RefundServiceImpl(refundMapper, refundChannelSubmitService).retry(request));
+
+        assertEquals("累计退款金额不能超过原支付金额", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelSubmitService);
+    }
+
+    @Test
+    void shouldRejectFailedRefundRetryWhenCapacitySnapshotIsInvalid() {
+        RefundActionRequestDTO request = new RefundActionRequestDTO();
+        request.setRefundOrderId("REF-INVALID");
+        RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
+        retrySource.setRefundOrderId("REF-INVALID");
+        retrySource.setPaymentOrderId("PAY-001");
+        retrySource.setStatus("FAIL");
+        when(refundMapper.findRetrySourceForUpdate("REF-INVALID")).thenReturn(retrySource);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new RefundServiceImpl(refundMapper, refundChannelSubmitService).retry(request));
+
+        assertEquals("退款额度数据异常", exception.getMessage());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelSubmitService);
     }
 
     @Test
@@ -288,5 +339,24 @@ class RefundServiceImplTest {
 
         assertEquals("张*", result.getCustomerName());
         assertEquals("张女士", mapperItem.getCustomerName());
+    }
+
+    private void stubRetryCapacity(String refundOrderId,
+                                   String paymentOrderId,
+                                   BigDecimal refundAmount,
+                                   BigDecimal activeRefundAmount,
+                                   BigDecimal paidAmount) {
+        RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
+        retrySource.setRefundOrderId(refundOrderId);
+        retrySource.setPaymentOrderId(paymentOrderId);
+        retrySource.setRefundAmount(refundAmount);
+        retrySource.setStatus("FAIL");
+        RefundPaymentSourceDTO paymentSource = new RefundPaymentSourceDTO();
+        paymentSource.setPaymentOrderId(paymentOrderId);
+        paymentSource.setPaidAmount(paidAmount);
+        paymentSource.setStatus("SUCCESS");
+        when(refundMapper.findRetrySourceForUpdate(refundOrderId)).thenReturn(retrySource);
+        when(refundMapper.findPaymentSourceForUpdate(paymentOrderId)).thenReturn(paymentSource);
+        when(refundMapper.sumActiveRefundAmount(paymentOrderId)).thenReturn(activeRefundAmount);
     }
 }

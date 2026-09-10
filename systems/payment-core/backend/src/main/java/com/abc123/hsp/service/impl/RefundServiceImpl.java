@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
+import com.abc123.hsp.dto.RefundRetrySourceDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundChannelSubmitService;
@@ -173,6 +174,7 @@ public class RefundServiceImpl implements RefundService {
     @Override
     @Transactional
     public RefundListItemDTO retry(RefundActionRequestDTO request) {
+        validateRetryCapacity(requireRefundOrderId(request));
         return changeStatus(request, STATUS_FAIL, STATUS_PROCESSING, "warn", false);
     }
 
@@ -182,6 +184,7 @@ public class RefundServiceImpl implements RefundService {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId(refundOrderId);
         request.setRemark("任务中心批量重试失败退款");
+        validateRetryCapacity(requireRefundOrderId(refundOrderId));
         changeStatus(request,
                 STATUS_FAIL,
                 STATUS_PROCESSING,
@@ -190,6 +193,32 @@ public class RefundServiceImpl implements RefundService {
                 StringUtils.hasText(triggeredBy) ? triggeredBy.trim() : DEFAULT_OPERATOR,
                 "TASK_RETRY",
                 "任务中心失败退款重试");
+    }
+
+    private void validateRetryCapacity(String refundOrderId) {
+        RefundRetrySourceDTO retrySource = refundMapper.findRetrySourceForUpdate(refundOrderId);
+        if (retrySource == null || !STATUS_FAIL.equals(retrySource.getStatus())) {
+            throw new IllegalArgumentException("退款单状态不允许执行当前操作");
+        }
+        if (!StringUtils.hasText(retrySource.getPaymentOrderId())
+                || retrySource.getRefundAmount() == null
+                || retrySource.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("退款额度数据异常");
+        }
+        RefundPaymentSourceDTO paymentSource =
+                refundMapper.findPaymentSourceForUpdate(retrySource.getPaymentOrderId());
+        if (paymentSource == null) {
+            throw new IllegalArgumentException("原支付单不存在");
+        }
+        if (paymentSource.getPaidAmount() == null
+                || paymentSource.getPaidAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("退款额度数据异常");
+        }
+        BigDecimal activeRefundAmount = refundMapper.sumActiveRefundAmount(retrySource.getPaymentOrderId());
+        BigDecimal reservedAmount = activeRefundAmount == null ? BigDecimal.ZERO : activeRefundAmount;
+        if (reservedAmount.add(retrySource.getRefundAmount()).compareTo(paymentSource.getPaidAmount()) > 0) {
+            throw new IllegalArgumentException("累计退款金额不能超过原支付金额");
+        }
     }
 
     /**

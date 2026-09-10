@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
+import com.abc123.hsp.dto.RefundRetrySourceDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import java.math.BigDecimal;
 import java.util.List;
@@ -53,6 +54,11 @@ public interface RefundMapper {
      * 查询并锁定可退款的原支付单快照。
      */
     RefundPaymentSourceDTO findPaymentSourceForUpdate(String paymentOrderId);
+
+    /**
+     * 查询并锁定失败退款重试额度快照。
+     */
+    RefundRetrySourceDTO findRetrySourceForUpdate(@Param("refundOrderId") String refundOrderId);
 
     /**
      * 查询退款渠道下发请求快照。

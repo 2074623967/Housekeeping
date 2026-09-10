@@ -165,6 +165,16 @@
         FOR UPDATE
     </select>
 
+    <select id="findRetrySourceForUpdate" resultType="com.abc123.hsp.dto.RefundRetrySourceDTO">
+        SELECT refund_order_id AS refundOrderId,
+               payment_order_id AS paymentOrderId,
+               refund_amount AS refundAmount,
+               status
+        FROM t_refund_order
+        WHERE refund_order_id = #{refundOrderId}
+        FOR UPDATE
+    </select>
+
     <select id="findChannelSubmitRequestByRefundOrderId" resultType="com.abc123.hsp.dto.RefundChannelSubmitRequestDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.payment_order_id AS paymentOrderId,

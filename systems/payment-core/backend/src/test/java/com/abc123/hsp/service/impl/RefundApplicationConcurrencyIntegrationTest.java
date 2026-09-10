@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
+import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.mapper.RefundMapper;
@@ -93,12 +94,54 @@ public class RefundApplicationConcurrencyIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRejectFailedRefundRetryAfterConcurrentReplacementCommit() throws Exception {
+        insertFailedRefund("REF-FAILED", "60.00");
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch retryStarted = new CountDownLatch(1);
+        try (SqlSession replacementSession = sqlSessionFactory.openSession()) {
+            createService(replacementSession.getMapper(RefundMapper.class)).apply(refundRequest("60.00"));
+
+            Future<RefundListItemDTO> retry = executor.submit(
+                    () -> retryInSecondTransaction(retryStarted, "REF-FAILED"));
+            retryStarted.await(5, TimeUnit.SECONDS);
+            assertThrows(TimeoutException.class, () -> retry.get(200, TimeUnit.MILLISECONDS));
+
+            replacementSession.commit();
+            ExecutionException exception = assertThrows(
+                    ExecutionException.class, () -> retry.get(5, TimeUnit.SECONDS));
+
+            assertEquals("累计退款金额不能超过原支付金额", exception.getCause().getMessage());
+            assertEquals(2, countRefundRows());
+            assertEquals(0, sumActiveRefundAmount().compareTo(new BigDecimal("60.00")));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     private RefundListItemDTO applyInSecondTransaction(CountDownLatch started) throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             started.countDown();
             try {
                 RefundListItemDTO result = createService(session.getMapper(RefundMapper.class))
                         .apply(refundRequest("60.00"));
+                session.commit();
+                return result;
+            } catch (RuntimeException exception) {
+                session.rollback();
+                throw exception;
+            }
+        }
+    }
+
+    private RefundListItemDTO retryInSecondTransaction(CountDownLatch started, String refundOrderId)
+            throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            started.countDown();
+            try {
+                RefundActionRequestDTO request = new RefundActionRequestDTO();
+                request.setRefundOrderId(refundOrderId);
+                RefundListItemDTO result = createService(session.getMapper(RefundMapper.class)).retry(request);
                 session.commit();
                 return result;
             } catch (RuntimeException exception) {
@@ -137,6 +180,30 @@ public class RefundApplicationConcurrencyIntegrationTest {
                      "SELECT COALESCE(SUM(refund_amount), 0) FROM t_refund_order")) {
             resultSet.next();
             return resultSet.getBigDecimal(1);
+        }
+    }
+
+    private BigDecimal sumActiveRefundAmount() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement();
+             ResultSet resultSet = statement.executeQuery(
+                     "SELECT COALESCE(SUM(refund_amount), 0) FROM t_refund_order "
+                             + "WHERE status IN ('REVIEWING', 'PROCESSING', 'SUCCESS')")) {
+            resultSet.next();
+            return resultSet.getBigDecimal(1);
+        }
+    }
+
+    private void insertFailedRefund(String refundOrderId, String amount) throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order("
+                    + "refund_order_id, payment_order_id, order_no, customer_name, refund_amount, "
+                    + "refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES ('"
+                    + refundOrderId + "', '" + PAYMENT_ORDER_ID + "', 'ORD-REFUND-CONCURRENT', "
+                    + "'张女士', " + amount + ", '原路退款', '首次退款失败', "
+                    + "'FAIL', 'danger', NOW(), NULL)");
+            session.commit();
         }
     }
 
