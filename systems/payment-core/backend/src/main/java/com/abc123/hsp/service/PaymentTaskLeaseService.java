@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class PaymentTaskLeaseService implements DisposableBean {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PaymentTaskLeaseService.class);
+    private static final String OPERATION_FAILURE_CODE = "PAYMENT_TASK_LEASE_OPERATION_FAILED";
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final TransactionTemplate leaseTransactionTemplate;
@@ -84,10 +85,30 @@ public class PaymentTaskLeaseService implements DisposableBean {
 
     private int executeInLeaseTransaction(LeaseOperation operation) {
         if (leaseTransactionTemplate == null) {
-            return operation.execute();
+            return executeSafely(operation);
         }
-        Integer result = leaseTransactionTemplate.execute(status -> operation.execute());
+        Integer result = leaseTransactionTemplate.execute(status -> executeSafely(operation));
         return result == null ? 0 : result;
+    }
+
+    private int executeSafely(LeaseOperation operation) {
+        try {
+            return operation.execute();
+        } catch (RuntimeException exception) {
+            throw sanitizeException(exception);
+        }
+    }
+
+    private RuntimeException sanitizeException(RuntimeException exception) {
+        return exception instanceof SanitizedTaskLeaseException
+                ? exception
+                : new SanitizedTaskLeaseException(exception);
+    }
+
+    private String exceptionType(RuntimeException exception) {
+        return exception instanceof SanitizedTaskLeaseException
+                ? ((SanitizedTaskLeaseException) exception).getOriginalExceptionType()
+                : exception.getClass().getName();
     }
 
     private static TransactionTemplate buildTransactionTemplate(PlatformTransactionManager transactionManager) {
@@ -136,8 +157,8 @@ public class PaymentTaskLeaseService implements DisposableBean {
                     close();
                 }
             } catch (RuntimeException exception) {
-                LOGGER.warn("支付任务租约续期失败, taskCode={}, lockOwner={}",
-                        taskCode, lockOwner, exception);
+                LOGGER.warn("支付任务租约续期失败, taskCode={}, lockOwner={}, exceptionType={}",
+                        taskCode, lockOwner, exceptionType(exception));
             }
         }
 
@@ -160,6 +181,26 @@ public class PaymentTaskLeaseService implements DisposableBean {
             Thread thread = new Thread(runnable, "payment-task-lease-renewal");
             thread.setDaemon(true);
             return thread;
+        }
+    }
+
+    private static final class SanitizedTaskLeaseException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+        private final String originalExceptionType;
+
+        private SanitizedTaskLeaseException(RuntimeException exception) {
+            super(OPERATION_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+            this.originalExceptionType = exception.getClass().getName();
+        }
+
+        private String getOriginalExceptionType() {
+            return originalExceptionType;
+        }
+
+        private static String exceptionName(RuntimeException exception) {
+            String simpleName = exception.getClass().getSimpleName();
+            return simpleName.isEmpty() ? RuntimeException.class.getSimpleName() : simpleName;
         }
     }
 }
