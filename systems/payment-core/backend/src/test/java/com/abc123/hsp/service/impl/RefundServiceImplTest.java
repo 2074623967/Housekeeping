@@ -124,6 +124,7 @@ class RefundServiceImplTest {
         request.setPaymentOrderId("PAY-001");
         request.setRefundAmount(new BigDecimal("20.00"));
         request.setRefundMethod("原路退款");
+        request.setOperator(" refund-applicant ");
 
         RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
         source.setPaymentOrderId("PAY-001");
@@ -143,7 +144,9 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("REVIEWING"),
                 org.mockito.ArgumentMatchers.eq("warn")
         );
-        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.any());
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "APPLY".equals(log.getActionCode())
+                        && "refund-applicant".equals(log.getOperatorName())));
     }
 
     @Test
@@ -152,6 +155,7 @@ class RefundServiceImplTest {
         request.setPaymentOrderId("PAY-001");
         request.setRefundAmount(new BigDecimal("80.00"));
         request.setRefundMethod("原路退款");
+        request.setOperator("refund-applicant");
 
         RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
         source.setPaymentOrderId("PAY-001");
@@ -170,6 +174,7 @@ class RefundServiceImplTest {
     void shouldApproveReviewingRefund() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-001");
+        request.setOperator(" refund-approver ");
         when(refundMapper.updateRefundStatus("REF-001", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
         RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
         submitRequest.setRefundOrderId("REF-001");
@@ -202,7 +207,9 @@ class RefundServiceImplTest {
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
                 org.mockito.ArgumentMatchers.eq("REF-001"));
-        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.any());
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "APPROVE".equals(log.getActionCode())
+                        && "refund-approver".equals(log.getOperatorName())));
         verify(refundMapper).findByRefundOrderId("REF-001");
     }
 
@@ -210,6 +217,7 @@ class RefundServiceImplTest {
     void shouldResubmitChannelWhenRetryFailedRefund() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-002");
+        request.setOperator(" refund-retry-operator ");
         when(refundMapper.updateRefundStatus("REF-002", "FAIL", "PROCESSING", "warn", false)).thenReturn(1);
         RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
         submitRequest.setRefundOrderId("REF-002");
@@ -232,6 +240,9 @@ class RefundServiceImplTest {
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
                 org.mockito.ArgumentMatchers.eq("REF-002"));
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "RETRY".equals(log.getActionCode())
+                        && "refund-retry-operator".equals(log.getOperatorName())));
         verify(refundMapper).findByRefundOrderId("REF-002");
     }
 
@@ -264,6 +275,7 @@ class RefundServiceImplTest {
     void shouldRejectFailedRefundRetryWhenReplacementConsumesCapacity() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-FAILED");
+        request.setOperator("refund-retry-operator");
         stubRetryCapacity("REF-FAILED", "PAY-001", new BigDecimal("60.00"),
                 new BigDecimal("60.00"), new BigDecimal("100.00"));
 
@@ -285,6 +297,7 @@ class RefundServiceImplTest {
     void shouldRejectFailedRefundRetryWhenCapacitySnapshotIsInvalid() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-INVALID");
+        request.setOperator("refund-retry-operator");
         RefundRetrySourceDTO retrySource = new RefundRetrySourceDTO();
         retrySource.setRefundOrderId("REF-INVALID");
         retrySource.setPaymentOrderId("PAY-001");
@@ -451,7 +464,7 @@ class RefundServiceImplTest {
         verify(refundChannelQueryRateLimitService).acquire("wx_h5", "REF-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY".equals(log.getActionCode())
-                        && "channel-query".equals(log.getOperatorName())
+                        && "refund-query-operator".equals(log.getOperatorName())
                         && "PROCESSING".equals(log.getToStatus())));
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
@@ -475,7 +488,8 @@ class RefundServiceImplTest {
 
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_SUCCESS".equals(log.getActionCode())
-                        && "SUCCESS".equals(log.getToStatus())));
+                        && "SUCCESS".equals(log.getToStatus())
+                        && "refund-query-operator".equals(log.getOperatorName())));
     }
 
     @Test
@@ -499,7 +513,7 @@ class RefundServiceImplTest {
         assertEquals("PROCESSING", result.getStatus());
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_ACCEPTANCE_RECOVERED".equals(log.getActionCode())
-                        && "channel-query".equals(log.getOperatorName())
+                        && "refund-query-operator".equals(log.getOperatorName())
                         && !log.getOperationRemark().contains("CHANNEL-REF-RECOVERED")));
         verify(refundMapper).markUnknownRefundSubmitEventConfirmed("REF-001");
     }
@@ -549,7 +563,8 @@ class RefundServiceImplTest {
 
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAIL".equals(log.getActionCode())
-                        && "FAIL".equals(log.getToStatus())));
+                        && "FAIL".equals(log.getToStatus())
+                        && "refund-query-operator".equals(log.getOperatorName())));
     }
 
     @Test
@@ -564,6 +579,7 @@ class RefundServiceImplTest {
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
+                        && "refund-query-operator".equals(log.getOperatorName())
                         && "退款渠道查单未获得可信结果".equals(log.getOperationRemark())));
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
                 .findCallbackSourceForUpdate(org.mockito.ArgumentMatchers.anyString());
@@ -581,6 +597,7 @@ class RefundServiceImplTest {
 
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
+                        && "refund-query-operator".equals(log.getOperatorName())
                         && "退款渠道查单未获得可信结果".equals(log.getOperationRemark())));
     }
 
@@ -598,6 +615,7 @@ class RefundServiceImplTest {
         assertTrue(exception.getCause() instanceof IllegalStateException);
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
+                        && "refund-query-operator".equals(log.getOperatorName())
                         && !log.getOperationRemark().contains("remote timeout detail")));
     }
 
@@ -651,6 +669,44 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.anyBoolean());
     }
 
+    @Test
+    void shouldRejectMissingOrOversizedManualRefundOperatorBeforeMapperAccess() {
+        RefundServiceImpl service = createService();
+        String oversizedOperator = String.join("", Collections.nCopies(65, "A"));
+
+        RefundApplyRequestDTO blankApply = new RefundApplyRequestDTO();
+        blankApply.setOperator("   ");
+        RefundApplyRequestDTO oversizedApply = new RefundApplyRequestDTO();
+        oversizedApply.setOperator(oversizedOperator);
+        RefundActionRequestDTO blankAction = new RefundActionRequestDTO();
+        blankAction.setOperator("   ");
+        RefundActionRequestDTO oversizedAction = new RefundActionRequestDTO();
+        oversizedAction.setOperator(oversizedOperator);
+        RefundStatusQueryRequestDTO blankQuery = new RefundStatusQueryRequestDTO();
+        blankQuery.setOperator("   ");
+        RefundStatusQueryRequestDTO oversizedQuery = new RefundStatusQueryRequestDTO();
+        oversizedQuery.setOperator(oversizedOperator);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.apply(blankApply));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.apply(oversizedApply));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.approve(blankAction));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.approve(oversizedAction));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.retry(blankAction));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.retry(oversizedAction));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.query(blankQuery));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.query(oversizedQuery));
+
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
     private RefundCallbackRequestDTO buildCallbackRequest(String status) {
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
         request.setRefundOrderId(" REF-001 ");
@@ -674,6 +730,7 @@ class RefundServiceImplTest {
     private RefundStatusQueryRequestDTO queryRequest() {
         RefundStatusQueryRequestDTO request = new RefundStatusQueryRequestDTO();
         request.setRefundOrderId(" REF-001 ");
+        request.setOperator(" refund-query-operator ");
         return request;
     }
 

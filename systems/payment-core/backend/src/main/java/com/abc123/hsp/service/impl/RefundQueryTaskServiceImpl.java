@@ -45,20 +45,20 @@ public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
     }
 
     @Override
-    public RefundQueryTaskResultDTO queryPendingRefunds() {
+    public RefundQueryTaskResultDTO queryPendingRefunds(String triggeredBy) {
         return query(paymentTaskCenterMapper.findPendingRefundOrderIdsForManualQuery(
-                minAgeSeconds, perChannelBatchSize, batchSize));
+                minAgeSeconds, perChannelBatchSize, batchSize), triggeredBy);
     }
 
     @Override
-    public RefundQueryTaskResultDTO queryDueRefunds() {
+    public RefundQueryTaskResultDTO queryDueRefunds(String triggeredBy) {
         return query(paymentTaskCenterMapper.findDuePendingRefundOrderIdsForQuery(
                 minAgeSeconds,
                 retryIntervalSeconds,
                 retryBackoffFactor,
                 maxRetryIntervalSeconds,
                 perChannelBatchSize,
-                batchSize));
+                batchSize), triggeredBy);
     }
 
     @Override
@@ -72,12 +72,13 @@ public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
                 minAgeSeconds, retryIntervalSeconds, retryBackoffFactor, maxRetryIntervalSeconds);
     }
 
-    private RefundQueryTaskResultDTO query(List<String> refundOrderIds) {
+    private RefundQueryTaskResultDTO query(List<String> refundOrderIds, String triggeredBy) {
         RefundQueryTaskResultDTO result = new RefundQueryTaskResultDTO();
         result.setProcessedCount(refundOrderIds.size());
         for (String refundOrderId : refundOrderIds) {
             RefundStatusQueryRequestDTO request = new RefundStatusQueryRequestDTO();
             request.setRefundOrderId(refundOrderId);
+            request.setOperator(triggeredBy);
             try {
                 RefundListItemDTO refund = refundService.query(request);
                 if (refund != null && "SUCCESS".equals(refund.getStatus())) {

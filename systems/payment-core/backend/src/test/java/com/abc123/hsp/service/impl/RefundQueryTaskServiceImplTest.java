@@ -7,12 +7,14 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryTaskResultDTO;
+import com.abc123.hsp.dto.RefundStatusQueryRequestDTO;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.RefundService;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,13 +41,18 @@ class RefundQueryTaskServiceImplTest {
             return refund;
         });
 
-        RefundQueryTaskResultDTO result = service().queryPendingRefunds();
+        RefundQueryTaskResultDTO result = service().queryPendingRefunds("payment-core-admin");
 
         assertEquals(3, result.getProcessedCount());
         assertEquals(1, result.getSuccessCount());
         assertEquals(1, result.getWarningCount());
         assertEquals(1, result.getFailCount());
         assertEquals(Collections.singletonList("REF-FAILED"), result.getFailedRefundOrderIds());
+        ArgumentCaptor<RefundStatusQueryRequestDTO> requestCaptor =
+                ArgumentCaptor.forClass(RefundStatusQueryRequestDTO.class);
+        verify(refundService, org.mockito.Mockito.times(3)).query(requestCaptor.capture());
+        requestCaptor.getAllValues().forEach(request ->
+                assertEquals("payment-core-admin", request.getOperator()));
     }
 
     @Test
@@ -57,7 +64,7 @@ class RefundQueryTaskServiceImplTest {
 
         RefundQueryTaskServiceImpl service = service();
 
-        assertEquals(0, service.queryDueRefunds().getProcessedCount());
+        assertEquals(0, service.queryDueRefunds("refund-query-scheduler").getProcessedCount());
         assertEquals(8, service.countPendingRefunds());
         assertEquals(3, service.countDueRefunds());
         verify(paymentTaskCenterMapper).findDuePendingRefundOrderIdsForQuery(30, 60, 2, 900, 20, 100);

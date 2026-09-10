@@ -7,9 +7,9 @@ import com.abc123.hsp.dto.RefundQueryTaskResultDTO;
  */
 public interface RefundQueryTaskService {
 
-    RefundQueryTaskResultDTO queryPendingRefunds();
+    RefundQueryTaskResultDTO queryPendingRefunds(String triggeredBy);
 
-    RefundQueryTaskResultDTO queryDueRefunds();
+    RefundQueryTaskResultDTO queryDueRefunds(String triggeredBy);
 
     int countPendingRefunds();
 

@@ -975,8 +975,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             throw new IllegalStateException("refund query task service is required for pending refund queries");
         }
         RefundQueryTaskResultDTO queryResult = RUN_MODE_MANUAL.equals(runMode)
-                ? refundQueryTaskService.queryPendingRefunds()
-                : refundQueryTaskService.queryDueRefunds();
+                ? refundQueryTaskService.queryPendingRefunds(triggeredBy)
+                : refundQueryTaskService.queryDueRefunds(triggeredBy);
         String failedRefundHint = queryResult.getFailedRefundOrderIds().isEmpty()
                 ? ""
                 : "，查询失败退款单：" + String.join("/", queryResult.getFailedRefundOrderIds());

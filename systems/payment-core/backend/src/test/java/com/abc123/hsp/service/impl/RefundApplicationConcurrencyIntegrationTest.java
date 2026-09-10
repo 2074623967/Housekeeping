@@ -141,6 +141,7 @@ public class RefundApplicationConcurrencyIntegrationTest {
             try {
                 RefundActionRequestDTO request = new RefundActionRequestDTO();
                 request.setRefundOrderId(refundOrderId);
+                request.setOperator("refund-concurrency-test");
                 RefundListItemDTO result = createService(session.getMapper(RefundMapper.class)).retry(request);
                 session.commit();
                 return result;
@@ -165,6 +166,7 @@ public class RefundApplicationConcurrencyIntegrationTest {
         request.setRefundAmount(new BigDecimal(amount));
         request.setRefundMethod("原路退款");
         request.setRefundReason("并发退款金额保护测试");
+        request.setOperator("refund-concurrency-test");
         return request;
     }
 

@@ -10,6 +10,7 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const actionRemark = ref("");
+const actionOperator = ref("");
 const activeAction = ref("");
 
 const paymentDetailRoute = computed(() => {
@@ -97,10 +98,15 @@ async function loadDetail() {
 }
 
 async function runAction(actionName, actionLabel, actionRunner) {
+  const operator = actionOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activeAction.value = actionName;
   actionMessage.value = "";
   try {
-    await actionRunner(route.params.refundOrderId, actionRemark.value);
+    await actionRunner(route.params.refundOrderId, operator, actionRemark.value);
     await loadDetail();
     actionMessage.value = `退款单 ${route.params.refundOrderId} 已${actionLabel}。`;
     actionRemark.value = "";
@@ -236,13 +242,17 @@ onMounted(loadDetail);
           <h3>退款动作</h3>
           <p>操作备注会进入退款操作日志，便于财务、测试和研发统一复盘。</p>
           <div class="toolbar compact-toolbar">
+            <div class="field">
+              <label>操作人</label>
+              <input v-model="actionOperator" maxlength="64" placeholder="请输入操作人" />
+            </div>
             <div class="field wide-field">
               <label>操作备注</label>
               <input v-model="actionRemark" placeholder="请输入审核意见、失败原因或重试说明" />
             </div>
             <div class="toolbar-actions">
               <button class="button primary" :disabled="activeAction === 'approve' || detail.status !== 'REVIEWING'" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
-              <button class="button primary" :disabled="activeAction === 'query' || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', refundApi.query)">主动查单</button>
+              <button class="button primary" :disabled="activeAction === 'query' || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
               <button class="button secondary" :disabled="activeAction === 'retry' || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
           </div>

@@ -9,6 +9,7 @@ const errorMessage = ref("");
 const actionMessage = ref("");
 const activeRefundOrderId = ref("");
 const activeAction = ref("");
+const refundOperator = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
@@ -89,6 +90,11 @@ function exportRefunds() {
 }
 
 async function handleApply() {
+  const operator = refundOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activeAction.value = "apply";
   actionMessage.value = "";
   try {
@@ -96,7 +102,8 @@ async function handleApply() {
       paymentOrderId: applyForm.value.paymentOrderId,
       refundAmount: Number(applyForm.value.refundAmount),
       refundMethod: applyForm.value.refundMethod,
-      refundReason: applyForm.value.refundReason
+      refundReason: applyForm.value.refundReason,
+      operator
     });
     actionMessage.value = `退款单 ${refund.refundOrderId} 已创建，等待审核。`;
     applyForm.value = {
@@ -115,11 +122,16 @@ async function handleApply() {
 }
 
 async function runRefundAction(refundOrderId, actionName, actionLabel, actionRunner) {
+  const operator = refundOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activeRefundOrderId.value = refundOrderId;
   activeAction.value = actionName;
   actionMessage.value = "";
   try {
-    const refund = await actionRunner(refundOrderId);
+    const refund = await actionRunner(refundOrderId, operator);
     actionMessage.value = `退款单 ${refund.refundOrderId} 已${actionLabel}，当前状态为 ${refund.status}。`;
     await loadRefunds();
   } catch (error) {
@@ -206,6 +218,10 @@ onMounted(loadRefunds);
           <div class="field wide-field">
             <label>退款原因</label>
             <input v-model="applyForm.refundReason" placeholder="客户取消服务、服务未履约等" />
+          </div>
+          <div class="field">
+            <label>操作人</label>
+            <input v-model="refundOperator" maxlength="64" placeholder="请输入操作人" />
           </div>
           <div class="toolbar-actions">
             <button class="button primary" :disabled="activeAction === 'apply'" @click="handleApply">

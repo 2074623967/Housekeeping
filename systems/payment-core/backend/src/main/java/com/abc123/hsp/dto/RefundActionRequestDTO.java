@@ -12,4 +12,6 @@ public class RefundActionRequestDTO {
     private String refundOrderId;
     /** 操作备注，例如审核意见、失败原因或重试原因。 */
     private String remark;
+    /** 操作人。 */
+    private String operator;
 }

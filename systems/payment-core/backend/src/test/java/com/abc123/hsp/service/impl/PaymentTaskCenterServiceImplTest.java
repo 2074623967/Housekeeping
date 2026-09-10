@@ -338,7 +338,7 @@ class PaymentTaskCenterServiceImplTest {
         queryResult.setWarningCount(1);
         queryResult.setFailCount(1);
         queryResult.getFailedRefundOrderIds().add("REF-QUERY-3");
-        when(refundQueryTaskService.queryPendingRefunds()).thenReturn(queryResult);
+        when(refundQueryTaskService.queryPendingRefunds("payment-core-admin")).thenReturn(queryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -349,6 +349,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(1, result.getWarningCount());
         Assertions.assertEquals(1, result.getFailCount());
+        verify(refundQueryTaskService).queryPendingRefunds("payment-core-admin");
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "REFUND_PENDING_QUERY".equals(entity.getTaskCode())
                         && "P2".equals(entity.getSeverityLevel())
@@ -360,14 +361,15 @@ class PaymentTaskCenterServiceImplTest {
     void shouldUseLeaseForAutomaticPendingRefundQueries() {
         when(paymentTaskCenterMapper.acquireTaskLease(
                 eq("REFUND_PENDING_QUERY"), leaseOwner("refund-query-scheduler"), eq(120))).thenReturn(1);
-        when(refundQueryTaskService.queryDueRefunds()).thenReturn(new RefundQueryTaskResultDTO());
+        when(refundQueryTaskService.queryDueRefunds("refund-query-scheduler"))
+                .thenReturn(new RefundQueryTaskResultDTO());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
         buildQueryTaskCenterService().runAutoPendingRefundQueries();
 
         verify(paymentTaskCenterMapper).initTaskLease("REFUND_PENDING_QUERY");
-        verify(refundQueryTaskService).queryDueRefunds();
+        verify(refundQueryTaskService).queryDueRefunds("refund-query-scheduler");
         ArgumentCaptor<String> leaseOwnerCaptor = ArgumentCaptor.forClass(String.class);
         verify(paymentTaskCenterMapper).acquireTaskLease(
                 eq("REFUND_PENDING_QUERY"), leaseOwnerCaptor.capture(), eq(120));

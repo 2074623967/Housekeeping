@@ -71,6 +71,7 @@ class RefundControllerTest {
     void shouldDelegateRefundChannelQuery() {
         RefundController controller = new RefundController(refundService);
         RefundStatusQueryRequestDTO request = new RefundStatusQueryRequestDTO();
+        request.setOperator("refund-controller-test");
 
         controller.query(request);
 

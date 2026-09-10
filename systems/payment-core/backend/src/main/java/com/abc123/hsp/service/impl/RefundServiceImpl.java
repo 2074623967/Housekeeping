@@ -53,9 +53,8 @@ public class RefundServiceImpl implements RefundService {
     private static final String STATUS_FAIL = "FAIL";
     private static final String PAYMENT_STATUS_SUCCESS = "SUCCESS";
     private static final DateTimeFormatter REFUND_NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
-    private static final String DEFAULT_OPERATOR = "payment-core-admin";
     private static final String CALLBACK_OPERATOR = "channel-callback";
-    private static final String QUERY_OPERATOR = "channel-query";
+    private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
     private static final int CALLBACK_REFUND_ORDER_ID_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH = 128;
@@ -170,6 +169,7 @@ public class RefundServiceImpl implements RefundService {
     @Override
     @Transactional
     public RefundListItemDTO apply(RefundApplyRequestDTO request) {
+        String operator = normalizeOperator(request == null ? null : request.getOperator());
         validateApplyRequest(request);
         RefundPaymentSourceDTO source = refundMapper.findPaymentSourceForUpdate(request.getPaymentOrderId().trim());
         if (source == null) {
@@ -191,7 +191,7 @@ public class RefundServiceImpl implements RefundService {
                 "发起退款申请",
                 "INIT",
                 STATUS_REVIEWING,
-                DEFAULT_OPERATOR,
+                operator,
                 StringUtils.hasText(request.getRefundReason()) ? request.getRefundReason().trim() : "发起退款申请"
         ));
         return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
@@ -220,6 +220,7 @@ public class RefundServiceImpl implements RefundService {
     @Override
     @Transactional(noRollbackFor = BusinessException.class)
     public RefundListItemDTO query(RefundStatusQueryRequestDTO request) {
+        String operator = normalizeOperator(request == null ? null : request.getOperator());
         String refundOrderId = requireRefundOrderId(request == null ? null : request.getRefundOrderId());
         RefundCallbackSourceDTO snapshot = refundMapper.findCallbackSourceByRefundOrderId(refundOrderId);
         if (snapshot == null) {
@@ -230,17 +231,17 @@ public class RefundServiceImpl implements RefundService {
         }
         validateQueryableRefund(snapshot);
         refundChannelQueryRateLimitService.acquire(snapshot.getChannelCode(), refundOrderId);
-        RefundChannelQueryResultDTO result = queryChannel(snapshot);
+        RefundChannelQueryResultDTO result = queryChannel(snapshot, operator);
         return applyChannelResult(
                 refundOrderId,
                 snapshot.getChannelCode().trim().toLowerCase(Locale.ROOT),
                 result.getChannelRefundNo(),
                 result.getRefundStatus(),
-                QUERY_OPERATOR,
+                operator,
                 true);
     }
 
-    private RefundChannelQueryResultDTO queryChannel(RefundCallbackSourceDTO snapshot) {
+    private RefundChannelQueryResultDTO queryChannel(RefundCallbackSourceDTO snapshot, String operator) {
         try {
             RefundChannelQueryResultDTO result = RefundChannelQueryResultValidator.validateAndNormalize(
                     refundChannelQueryService.query(snapshot));
@@ -251,23 +252,23 @@ public class RefundServiceImpl implements RefundService {
             }
             return result;
         } catch (BusinessException exception) {
-            recordChannelQueryFailure(snapshot);
+            recordChannelQueryFailure(snapshot, operator);
             throw exception;
         } catch (RuntimeException exception) {
-            recordChannelQueryFailure(snapshot);
+            recordChannelQueryFailure(snapshot, operator);
             throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
                     "refund channel query failed unexpectedly", exception);
         }
     }
 
-    private void recordChannelQueryFailure(RefundCallbackSourceDTO snapshot) {
+    private void recordChannelQueryFailure(RefundCallbackSourceDTO snapshot, String operator) {
         refundMapper.insertOperationLog(buildOperationLog(
                 snapshot.getRefundOrderId(),
                 "CHANNEL_QUERY_FAILED",
                 "退款渠道查单失败",
                 snapshot.getStatus(),
                 snapshot.getStatus(),
-                QUERY_OPERATOR,
+                operator,
                 "退款渠道查单未获得可信结果"));
     }
 
@@ -379,13 +380,16 @@ public class RefundServiceImpl implements RefundService {
     @Override
     @Transactional
     public RefundListItemDTO retry(RefundActionRequestDTO request) {
+        String operator = normalizeOperator(request == null ? null : request.getOperator());
         validateRetryCapacity(requireRefundOrderId(request));
-        return changeStatus(request, STATUS_FAIL, STATUS_PROCESSING, "warn", false);
+        return changeStatus(request, STATUS_FAIL, STATUS_PROCESSING, "warn", false,
+                operator, "RETRY", "退款失败重试");
     }
 
     @Override
     @Transactional
     public void retryForTask(String refundOrderId, String triggeredBy) {
+        String operator = normalizeOperator(triggeredBy);
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId(refundOrderId);
         request.setRemark("任务中心批量重试失败退款");
@@ -395,7 +399,7 @@ public class RefundServiceImpl implements RefundService {
                 STATUS_PROCESSING,
                 "warn",
                 false,
-                StringUtils.hasText(triggeredBy) ? triggeredBy.trim() : DEFAULT_OPERATOR,
+                operator,
                 "TASK_RETRY",
                 "任务中心失败退款重试");
     }
@@ -502,7 +506,8 @@ public class RefundServiceImpl implements RefundService {
                                            String statusType,
                                            boolean success) {
         return changeStatus(request, fromStatus, status, statusType, success,
-                resolveOperator(status), resolveActionCode(fromStatus, status), resolveActionName(fromStatus, status));
+                normalizeOperator(request == null ? null : request.getOperator()),
+                resolveActionCode(fromStatus, status), resolveActionName(fromStatus, status));
     }
 
     private RefundListItemDTO changeStatus(RefundActionRequestDTO request,
@@ -611,6 +616,17 @@ public class RefundServiceImpl implements RefundService {
         return refundOrderId.trim();
     }
 
+    private String normalizeOperator(String operator) {
+        if (!StringUtils.hasText(operator)) {
+            throw new IllegalArgumentException("操作人不能为空");
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("操作人长度不能超过64字符");
+        }
+        return normalized;
+    }
+
     private String resolveActionCode(String fromStatus, String toStatus) {
         if (STATUS_REVIEWING.equals(fromStatus) && STATUS_PROCESSING.equals(toStatus)) {
             return "APPROVE";
@@ -641,13 +657,6 @@ public class RefundServiceImpl implements RefundService {
             return "退款失败重试";
         }
         return "退款状态更新";
-    }
-
-    private String resolveOperator(String toStatus) {
-        if (STATUS_SUCCESS.equals(toStatus) || STATUS_FAIL.equals(toStatus)) {
-            return CALLBACK_OPERATOR;
-        }
-        return DEFAULT_OPERATOR;
     }
 
     private String resolveDefaultRemark(String fromStatus, String toStatus) {

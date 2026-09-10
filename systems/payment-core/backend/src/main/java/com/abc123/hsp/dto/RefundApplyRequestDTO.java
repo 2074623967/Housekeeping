@@ -17,4 +17,6 @@ public class RefundApplyRequestDTO {
     private String refundMethod;
     /** 退款原因，便于财务和运营复核。 */
     private String refundReason;
+    /** 发起操作人。 */
+    private String operator;
 }
