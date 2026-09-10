@@ -78,7 +78,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     public void intake(Message message, String deadLetterRoutingKey) {
         ReplayRoute replayRoute = ReplayRoute.fromDeadLetterRoutingKey(deadLetterRoutingKey);
         if (replayRoute == null) {
-            throw new IllegalArgumentException("不支持的死信路由: " + deadLetterRoutingKey);
+            throw new PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException();
         }
         MessageProperties properties = message.getMessageProperties();
         PaymentDeadLetterTaskEntity entity = new PaymentDeadLetterTaskEntity();

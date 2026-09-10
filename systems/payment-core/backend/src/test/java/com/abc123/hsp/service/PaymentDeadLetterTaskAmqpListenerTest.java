@@ -41,4 +41,16 @@ class PaymentDeadLetterTaskAmqpListenerTest {
 
         verify(channel).basicNack(12L, false, true);
     }
+
+    @Test
+    void shouldNotRequeueUnsupportedDeadLetterRoute() throws Exception {
+        Message message = new Message(new byte[0], new MessageProperties());
+        org.mockito.Mockito.doThrow(new PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException())
+                .when(paymentDeadLetterTaskService).intake(message, "unknown.dlq.v1");
+
+        new PaymentDeadLetterTaskAmqpListener(paymentDeadLetterTaskService)
+                .consume(message, channel, 13L, "unknown.dlq.v1");
+
+        verify(channel).basicNack(13L, false, false);
+    }
 }

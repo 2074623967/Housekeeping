@@ -13,6 +13,7 @@ import com.abc123.hsp.dto.PaymentDeadLetterTaskActionRequestDTO;
 import com.abc123.hsp.dto.PaymentDeadLetterTaskQueryDTO;
 import com.abc123.hsp.entity.PaymentDeadLetterTaskEntity;
 import com.abc123.hsp.mapper.PaymentDeadLetterTaskMapper;
+import com.abc123.hsp.service.PaymentDeadLetterTaskService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -78,8 +79,16 @@ class PaymentDeadLetterTaskServiceImplTest {
 
     @Test
     void shouldRejectUnsupportedDeadLetterRoute() {
-        assertThrows(IllegalArgumentException.class,
-                () -> service().intake(new Message(new byte[0], new MessageProperties()), "unknown.dlq.v1"));
+        String sensitiveRoutingKey = "unknown.dlq.password=secret-token\nforged.v1";
+
+        PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException exception = assertThrows(
+                PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException.class,
+                () -> service().intake(
+                        new Message(new byte[0], new MessageProperties()), sensitiveRoutingKey));
+
+        assertEquals("不支持的死信路由", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveRoutingKey));
+        verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
     }
 
     @Test
