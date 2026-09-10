@@ -7180,3 +7180,30 @@
 1. 支付核心与 gateway-access 之间原有“配置指向不存在接口”的断点已闭合为可运行、可失败闭合的 HTTP 代理契约；默认配置不会访问样例 `gateway.local` 地址或制造渠道事实。
 2. 当前上游 URL 面向真实渠道集成服务的稳定契约，尚未实现微信、支付宝和银行各自的签名、验签、报文映射及密钥托管，不能称为真实渠道已接入。
 3. 来源 IP 白名单执行、发布窗口/灰度流量算法、生产密钥轮换、真实网络故障分布、资金到账与对账仍需后续独立交付和环境验收。
+
+## 243. 2026-09-10 gateway-access 支付提交代理边界 V1.0 验证
+
+### 243.1 本轮补强
+
+1. `gateway-access` 新增 `POST /api/gateway/payment-orders/submit`，与支付查单复用调用凭证、接入应用、权限归属、网关状态、有效证书和发布路由门禁；三个渠道提交 URL 默认留空并失败闭合。
+2. `payment-core` 新增默认关闭的 gateway-access 提交适配器。开关、URL、渠道列表、应用编码或访问密钥不完整时不声明支持，保持 `PAYMENT-1012`；调用失败或响应不确定时返回 `PAYMENT-1048`，既有主链路按“结果未知，待查单”收口，禁止自动重提。
+3. 提交响应必须同时具备渠道交易号、尝试状态、状态类型和渠道返回码。gateway-access 审计与 payment-core 响应留痕均保持最小化，不保存访问密钥、上游原始报文或异常原文。
+4. 运行态发现默认 H2 不支持 Mapper 中的 MySQL `DATE_FORMAT`，已改为读取原始日期列并新增默认 Spring/H2/MyBatis 集成测试，覆盖治理读取和交易审计写入。
+
+### 243.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway-access 定向测试 | `mvn -Dtest=GatewayAccessMapperIntegrationTest,PaymentOrderSubmitServiceImplTest,PaymentOrderQueryServiceImplTest test` | 通过 | `9` 个用例，覆盖默认 H2 Mapper、共享门禁、提交成功和失败闭合 |
+| gateway-access 全量测试 | `mvn test` | 通过 | `36` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 定向测试 | `GatewayAccessPaymentChannelSubmitAdapterTest` 与相关提交链路测试 | 通过 | 覆盖配置完整性、最小成功留痕和网关业务失败 |
+| payment-core 全量测试 | `mvn test` | 通过 | `638` 个用例，`0` failures、`0` errors、`0` skipped |
+| 本地受控上游冒烟 | gateway-access `8090` 转发到固定响应 stub `19090` | 通过 | 正确凭证返回 `STUB-WX-1001 / USERPAYING`；错误凭证返回 `GATEWAY_ACCESS_DENIED` |
+| 补丁检查 | `git diff --check` | 通过 | Java、XML、YAML、测试和文档无空白符错误 |
+| 真实环境验证 | 微信/支付宝/银行协议、生产凭证、网络、资金和对账 | 未执行 | 不记录真实渠道受理、生产部署、到账、对账或财务验收通过 |
+
+### 243.3 当前判断
+
+1. 支付核心到 gateway-access 的支付提交调用边界已可运行，并与主动查单共享失败闭合的治理门禁；本地受控 stub 只验证 HTTP 转发和响应校验，不是任何真实渠道联调。
+2. 当前尚未实现微信、支付宝和银行各自的请求映射、签名验签、商户/应用绑定、生产密钥托管与轮换、来源 IP 白名单执行和真实网络故障语义。
+3. 发布路由目前只做启用及正流量门禁，不执行实际百分比灰度算法；渠道资金到账、回调、主动查单、对账、结算和财务核验仍需真实环境独立验证。

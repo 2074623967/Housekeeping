@@ -59,7 +59,47 @@
 
 - 灰度路由归属网关未启用时，不允许启用路由
 
-## 8. 支付订单主动查单代理
+## 8. 支付订单提交代理
+
+### `POST /api/gateway/payment-orders/submit`
+
+请求头与主动查单接口一致，必须提供 `X-Gateway-App-Code` 和 `X-Gateway-Access-Key`。
+
+请求体：
+
+```json
+{
+  "paymentOrderId": "PAY202609100001",
+  "prepayOrderNo": "PRE202609100001",
+  "orderNo": "ORD202609100001",
+  "payScene": "HOME_SERVICE",
+  "customerName": "客户姓名",
+  "amount": 168.00,
+  "paymentMethod": "wechat",
+  "sourceAppId": "APP-H5",
+  "requestedChannelCode": "wx_h5",
+  "resolvedChannelCode": "wx_h5",
+  "terminal": "H5",
+  "clientIp": "127.0.0.1",
+  "idempotencyKey": "stable-submit-key"
+}
+```
+
+成功响应必须同时包含 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode`。金额必须为正数，最多 `16` 位整数和 `2` 位小数；文本字段执行必填、长度和 ISO 控制字符校验。空响应、业务失败或必要字段缺失均不视为已明确受理。
+
+提交与查单复用相同的应用、凭证、权限、网关、有效证书和当前环境发布路由门禁。上游异常只记录请求号和异常类型，并返回 `GATEWAY_UPSTREAM_UNAVAILABLE`；调用方必须先查单再决定后续动作，禁止因超时或未知结果自动重提。
+
+提交上游由以下环境变量显式配置，默认均为空：
+
+| 环境变量 | 渠道 |
+| --- | --- |
+| `HSP_GATEWAY_WX_PAYMENT_SUBMIT_URL` | 微信 H5 |
+| `HSP_GATEWAY_ALIPAY_PAYMENT_SUBMIT_URL` | 支付宝 H5 |
+| `HSP_GATEWAY_BANK_PAYMENT_SUBMIT_URL` | 线下银行 |
+
+每次请求尽力写入 `PAYMENT_SUBMIT` 最小审计，不保存访问密钥、请求报文或上游原始响应。当前接口是面向渠道集成服务的稳定代理边界，不代表微信、支付宝或银行真实协议、签名验签、生产密钥托管、来源 IP 白名单、灰度算法、资金到账或对账已经完成。
+
+## 9. 支付订单主动查单代理
 
 ### `POST /api/gateway/payment-orders/query`
 

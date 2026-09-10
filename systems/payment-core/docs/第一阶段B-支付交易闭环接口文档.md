@@ -2524,6 +2524,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 已有相同幂等键的支付尝试仍直接复用当前预付结果，不因当前适配器配置变化重复下单；风控非 `PASS` 仍优先按风控状态收口，不进入渠道适配器预检。
 4. 非 demo 主动查单只有已启用且支持目标渠道的真实查询适配器可执行；缺少适配器返回 `PAYMENT-1004`，不得降级为数据库状态回显。当前默认配置尚不代表真实 gateway-access 已实现或联通。
 
+### 14.70 gateway-access 支付提交代理契约
+
+1. `payment.submit.gateway-access.enabled=false` 为默认值；访问密钥为空、提交 URL 为空或目标渠道不在允许列表时，适配器不声明支持，主链路沿用 `PAYMENT-1012` 失败闭合且不写渠道提交事实。
+2. 显式启用并配置完整后，支付核心携带 `X-Gateway-App-Code / X-Gateway-Access-Key` 请求头，将稳定支付单、预付单、订单、金额、路由渠道、终端、客户端 IP 和幂等键提交到 `POST /api/gateway/payment-orders/submit`。
+3. 只有网关业务码为 `0`，且响应同时包含 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode` 时才接受结果；支付核心只保存渠道编码、渠道交易号和返回码组成的最小响应留痕，不保存共享访问密钥或网关原始报文。
+4. 网关拒绝、超时、空响应和字段非法统一返回 `PAYMENT-1048`。由于外部渠道可能已经受理，既有主流程会把已准备提交的支付尝试标记为“结果未知，待查单”，禁止自动重复下单。
+5. 关键配置为 `HSP_PAYMENT_SUBMIT_GATEWAY_ENABLED / HSP_PAYMENT_SUBMIT_GATEWAY_URL / HSP_PAYMENT_SUBMIT_GATEWAY_SUPPORTED_CHANNELS / HSP_PAYMENT_SUBMIT_GATEWAY_APP_CODE / HSP_PAYMENT_SUBMIT_GATEWAY_ACCESS_KEY / HSP_PAYMENT_SUBMIT_GATEWAY_TIMEOUT_MS`；开关默认关闭，访问密钥默认空。
+6. 当前本地受控上游验证只证明 payment-core 与 gateway-access 的稳定 HTTP 代理契约，不代表微信、支付宝或银行真实协议、签名验签、生产密钥托管、来源 IP 白名单、灰度发布、资金到账、对账或财务验收已经完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2566,6 +2575,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1045` | 未找到可用退款渠道查单适配器 |
 | `PAYMENT-1046` | 退款渠道查单失败、结果非法/不完整、关联键不一致或退款尚未具备查单条件 |
 | `PAYMENT-1047` | 当前退款渠道共享查单固定窗口配额已耗尽 |
+| `PAYMENT-1048` | gateway-access 支付提交失败或未返回可确认的渠道受理事实；必须先查单，禁止自动重提 |
 
 联调说明：
 
