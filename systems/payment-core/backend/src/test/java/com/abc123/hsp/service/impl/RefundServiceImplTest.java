@@ -395,6 +395,28 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRecoverUnknownRefundAcceptanceFromVerifiedCallback() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", null);
+        source.setSubmitEventStatus("UNKNOWN");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+        when(refundMapper.bindUnknownRefundChannelAccepted(
+                "REF-001", "wx_h5", "CHANNEL-REF-001")).thenReturn(1);
+        when(refundMapper.markUnknownRefundSubmitEventConfirmed("REF-001")).thenReturn(1);
+        when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "SUCCESS", "success", true))
+                .thenReturn(1);
+
+        new RefundServiceImpl(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
+                refundChannelQueryService).callback("wx_h5", request);
+
+        verify(paymentCallbackSignatureService).verifyRefund("wx_h5", request);
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_ACCEPTANCE_RECOVERED".equals(log.getActionCode())
+                        && "channel-callback".equals(log.getOperatorName())));
+        verify(refundMapper).markUnknownRefundSubmitEventConfirmed("REF-001");
+    }
+
+    @Test
     void shouldRejectConflictingOrUnsupportedRefundCallbackStatus() {
         RefundCallbackRequestDTO request = buildCallbackRequest("FAIL");
         when(refundMapper.findCallbackSourceForUpdate("REF-001"))
@@ -454,6 +476,64 @@ class RefundServiceImplTest {
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_SUCCESS".equals(log.getActionCode())
                         && "SUCCESS".equals(log.getToStatus())));
+    }
+
+    @Test
+    void shouldRecoverUnknownRefundAcceptanceFromTrustedChannelQuery() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", null);
+        source.setSubmitEventStatus("UNKNOWN");
+        RefundListItemDTO mapperItem = new RefundListItemDTO();
+        mapperItem.setRefundOrderId("REF-001");
+        mapperItem.setStatus("PROCESSING");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+        when(refundChannelQueryService.query(source))
+                .thenReturn(buildQueryResult("PROCESSING", "CHANNEL-REF-RECOVERED"));
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+        when(refundMapper.bindUnknownRefundChannelAccepted(
+                "REF-001", "wx_h5", "CHANNEL-REF-RECOVERED")).thenReturn(1);
+        when(refundMapper.markUnknownRefundSubmitEventConfirmed("REF-001")).thenReturn(1);
+        when(refundMapper.findByRefundOrderId("REF-001")).thenReturn(mapperItem);
+
+        RefundListItemDTO result = createService().query(queryRequest());
+
+        assertEquals("PROCESSING", result.getStatus());
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_ACCEPTANCE_RECOVERED".equals(log.getActionCode())
+                        && "channel-query".equals(log.getOperatorName())
+                        && !log.getOperationRemark().contains("CHANNEL-REF-RECOVERED")));
+        verify(refundMapper).markUnknownRefundSubmitEventConfirmed("REF-001");
+    }
+
+    @Test
+    void shouldForceRollbackWhenFinalStatusUpdateFailsAfterUnknownAcceptanceRecovery() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", null);
+        source.setSubmitEventStatus("UNKNOWN");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+        when(refundChannelQueryService.query(source))
+                .thenReturn(buildQueryResult("SUCCESS", "CHANNEL-REF-RECOVERED"));
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+        when(refundMapper.bindUnknownRefundChannelAccepted(
+                "REF-001", "wx_h5", "CHANNEL-REF-RECOVERED")).thenReturn(1);
+        when(refundMapper.markUnknownRefundSubmitEventConfirmed("REF-001")).thenReturn(1);
+
+        IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class, () -> createService().query(queryRequest()));
+
+        assertEquals("refund status update failed after unknown acceptance recovery",
+                exception.getMessage());
+    }
+
+    @Test
+    void shouldRejectRefundWithoutAcceptedTraceOrUnknownSubmitBeforeChannelQuery() {
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", null);
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().query(queryRequest()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryService);
+        org.mockito.Mockito.verifyNoInteractions(refundChannelQueryRateLimitService);
     }
 
     @Test

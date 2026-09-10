@@ -244,7 +244,8 @@ public class RefundServiceImpl implements RefundService {
         try {
             RefundChannelQueryResultDTO result = RefundChannelQueryResultValidator.validateAndNormalize(
                     refundChannelQueryService.query(snapshot));
-            if (!snapshot.getChannelRefundNo().equals(result.getChannelRefundNo())) {
+            if (StringUtils.hasText(snapshot.getChannelRefundNo())
+                    && !snapshot.getChannelRefundNo().equals(result.getChannelRefundNo())) {
                 throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
                         "refund query transaction does not match accepted refund transaction");
             }
@@ -285,8 +286,10 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH,
                     "callback channel does not match refund channel");
         }
-        if (!StringUtils.hasText(source.getChannelRefundNo())
-                || !source.getChannelRefundNo().equals(channelRefundNo)) {
+        boolean acceptanceRecovered = false;
+        if (!StringUtils.hasText(source.getChannelRefundNo())) {
+            acceptanceRecovered = recoverUnknownRefundAcceptance(source, channel, channelRefundNo, operator);
+        } else if (!source.getChannelRefundNo().equals(channelRefundNo)) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
                     "callback transaction does not match refund transaction");
         }
@@ -320,6 +323,10 @@ public class RefundServiceImpl implements RefundService {
         int affectedRows = refundMapper.updateRefundStatus(
                 refundOrderId, STATUS_PROCESSING, targetStatus, statusType, success);
         if (affectedRows == 0) {
+            if (acceptanceRecovered) {
+                throw new IllegalStateException(
+                        "refund status update failed after unknown acceptance recovery");
+            }
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
                     "refund status does not allow callback finalization");
         }
@@ -338,10 +345,35 @@ public class RefundServiceImpl implements RefundService {
     private void validateQueryableRefund(RefundCallbackSourceDTO source) {
         if (!STATUS_PROCESSING.equals(source.getStatus())
                 || !StringUtils.hasText(source.getChannelCode())
-                || !StringUtils.hasText(source.getChannelRefundNo())) {
+                || (!StringUtils.hasText(source.getChannelRefundNo())
+                && !"UNKNOWN".equals(source.getSubmitEventStatus()))) {
             throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
                     "refund is not ready for channel query");
         }
+    }
+
+    private boolean recoverUnknownRefundAcceptance(RefundCallbackSourceDTO source,
+                                                   String channel,
+                                                   String channelRefundNo,
+                                                   String operator) {
+        if (!"UNKNOWN".equals(source.getSubmitEventStatus())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
+                    "callback transaction does not match refund transaction");
+        }
+        if (refundMapper.bindUnknownRefundChannelAccepted(
+                source.getRefundOrderId(), channel, channelRefundNo) != 1
+                || refundMapper.markUnknownRefundSubmitEventConfirmed(source.getRefundOrderId()) != 1) {
+            throw new IllegalStateException("unknown refund acceptance recovery was not applied atomically");
+        }
+        refundMapper.insertOperationLog(buildOperationLog(
+                source.getRefundOrderId(),
+                "CHANNEL_ACCEPTANCE_RECOVERED",
+                "退款渠道受理事实恢复",
+                source.getStatus(),
+                source.getStatus(),
+                operator,
+                "可信渠道核查已确认受理并收敛未知提交事件"));
+        return true;
     }
 
     @Override

@@ -87,7 +87,7 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
         request.setRefundOrderId(required(request.getRefundOrderId(), "refundOrderId", 64));
         request.setChannelCode(required(request.getChannelCode(), "channelCode", 64)
                 .toLowerCase(Locale.ROOT));
-        request.setChannelRefundNo(required(request.getChannelRefundNo(), "channelRefundNo", 128));
+        request.setChannelRefundNo(optional(request.getChannelRefundNo(), "channelRefundNo", 128));
     }
 
     private RefundOrderQueryResultDTO validateUpstreamResponse(UpstreamRefundQueryResponseDTO response,
@@ -102,7 +102,8 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
         if (!REFUND_STATUSES.contains(result.getRefundStatus())) {
             throw invalidResponse("refund query upstream returned an unsupported refundStatus");
         }
-        if (!expectedChannelRefundNo.equals(result.getChannelRefundNo())) {
+        if (StringUtils.hasText(expectedChannelRefundNo)
+                && !expectedChannelRefundNo.equals(result.getChannelRefundNo())) {
             throw invalidResponse("refund query upstream returned a mismatched channelRefundNo");
         }
         if (!StringUtils.hasText(result.getQuerySource())) {
@@ -116,6 +117,19 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
     private String required(String value, String fieldName, int maxLength) {
         if (!StringUtils.hasText(value)) {
             throw invalid(fieldName + " is required");
+        }
+        return validateText(value, fieldName, maxLength, true);
+    }
+
+    private String optional(String value, String fieldName, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (containsIsoControl(value)) {
+            throw invalid(fieldName + " is invalid");
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
         }
         return validateText(value, fieldName, maxLength, true);
     }

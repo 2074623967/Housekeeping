@@ -135,6 +135,32 @@ class RefundSubmitOutboxMapperIntegrationTest {
     }
 
     @Test
+    void shouldRecoverAcceptedTraceOnlyForUnknownRefundSubmit() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+            PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
+            refundMapper.upsertRefundSubmitEvent("EVTR-RECOVER", "REF-UNKNOWN", "PAY-UNKNOWN");
+            assertEquals(1, eventMapper.markPublishUnknown("EVTR-RECOVER"));
+
+            RefundCallbackSourceDTO before =
+                    refundMapper.findCallbackSourceByRefundOrderId("REF-UNKNOWN");
+            assertNull(before.getChannelRefundNo());
+            assertEquals("UNKNOWN", before.getSubmitEventStatus());
+            assertEquals(0, refundMapper.bindUnknownRefundChannelAccepted(
+                    "REF-TRACE", "wx_h5", "RCH-NOT-ALLOWED"));
+            assertEquals(1, refundMapper.bindUnknownRefundChannelAccepted(
+                    "REF-UNKNOWN", "wx_h5", "RCH-RECOVERED"));
+            assertEquals(1, refundMapper.markUnknownRefundSubmitEventConfirmed("REF-UNKNOWN"));
+
+            RefundCallbackSourceDTO after = refundMapper.findCallbackSourceForUpdate("REF-UNKNOWN");
+            assertEquals("RCH-RECOVERED", after.getChannelRefundNo());
+            assertEquals("SUCCESS", after.getSubmitEventStatus());
+            assertEquals("SUCCESS", eventMapper.findByEventNoForUpdate("EVTR-RECOVER").getPublishStatus());
+            session.rollback();
+        }
+    }
+
+    @Test
     void shouldLockCallbackSourceAndFinalizeOnlyFromProcessing() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
@@ -207,8 +233,9 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "status_type VARCHAR(32) NOT NULL DEFAULT 'warn', "
                     + "success_at TIMESTAMP NULL, "
                     + "UNIQUE(channel_code, channel_refund_no))");
-            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status) "
-                    + "VALUES ('REF-TRACE', 'PROCESSING')");
+            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, channel_code, status) "
+                    + "VALUES ('REF-TRACE', NULL, 'PROCESSING'), "
+                    + "('REF-UNKNOWN', 'wx_h5', 'PROCESSING')");
             session.commit();
         }
     }

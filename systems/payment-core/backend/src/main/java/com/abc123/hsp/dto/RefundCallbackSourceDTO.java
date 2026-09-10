@@ -16,4 +16,6 @@ public class RefundCallbackSourceDTO {
     private String channelCode;
     /** 已受理渠道退款单号。 */
     private String channelRefundNo;
+    /** 对应退款提交事件状态，用于识别可按平台退款单号核查的未知受理。 */
+    private String submitEventStatus;
 }

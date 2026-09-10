@@ -91,6 +91,18 @@ public interface RefundMapper {
                                   @Param("channelRefundNo") String channelRefundNo);
 
     /**
+     * 仅为仍处于 UNKNOWN 的退款提交首次补录可信渠道受理事实。
+     */
+    int bindUnknownRefundChannelAccepted(@Param("refundOrderId") String refundOrderId,
+                                         @Param("channelCode") String channelCode,
+                                         @Param("channelRefundNo") String channelRefundNo);
+
+    /**
+     * 将已由可信查单或验签回调确认的退款提交未知事件收敛为成功。
+     */
+    int markUnknownRefundSubmitEventConfirmed(@Param("refundOrderId") String refundOrderId);
+
+    /**
      * 汇总原支付单已申请且未终止的退款金额。
      */
     BigDecimal sumActiveRefundAmount(String paymentOrderId);

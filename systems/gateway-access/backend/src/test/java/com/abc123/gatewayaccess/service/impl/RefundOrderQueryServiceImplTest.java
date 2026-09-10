@@ -84,6 +84,32 @@ class RefundOrderQueryServiceImplTest {
     }
 
     @Test
+    void shouldQueryByPlatformRefundOrderWhenChannelRefundNumberIsUnknown() {
+        configureEnabledGovernance();
+        RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
+        data.setRefundStatus("PROCESSING");
+        data.setChannelRefundNo("CHANNEL-REF-RECOVERED");
+        UpstreamRefundQueryResponseDTO response = new UpstreamRefundQueryResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        ArgumentCaptor<RefundOrderQueryRequestDTO> requestCaptor =
+                ArgumentCaptor.forClass(RefundOrderQueryRequestDTO.class);
+        when(restTemplate.postForObject(
+                eq("https://channel.example/refunds/query"),
+                requestCaptor.capture(),
+                eq(UpstreamRefundQueryResponseDTO.class))).thenReturn(response);
+        RefundOrderQueryRequestDTO request = request();
+        request.setChannelRefundNo(null);
+
+        RefundOrderQueryResultDTO result = service().query(
+                "APP_PAY_CORE", "secret", "127.0.0.1", request);
+
+        assertEquals("REF-001", requestCaptor.getValue().getRefundOrderId());
+        assertEquals(null, requestCaptor.getValue().getChannelRefundNo());
+        assertEquals("CHANNEL-REF-RECOVERED", result.getChannelRefundNo());
+    }
+
+    @Test
     void shouldRejectMismatchedChannelRefundNumber() {
         configureEnabledGovernance();
         RefundOrderQueryResultDTO data = new RefundOrderQueryResultDTO();
@@ -105,6 +131,18 @@ class RefundOrderQueryServiceImplTest {
     void shouldRejectRequestControlCharactersBeforeAuthorization() {
         RefundOrderQueryRequestDTO request = request();
         request.setRefundOrderId("REF-001\n");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+        verify(mapper).insertAuditLog(any(GatewayAuditLogEntity.class));
+    }
+
+    @Test
+    void shouldRejectControlCharactersInOptionalChannelRefundNumber() {
+        RefundOrderQueryRequestDTO request = request();
+        request.setChannelRefundNo("\n");
 
         GatewayAccessException exception = assertThrows(GatewayAccessException.class,
                 () -> service().query("APP_PAY_CORE", "secret", "127.0.0.1", request));
