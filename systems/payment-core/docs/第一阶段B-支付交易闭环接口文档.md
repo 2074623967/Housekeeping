@@ -2778,6 +2778,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 来源参数不改变退款提交幂等与安全边界：已存在受理事实时不得重复外呼，`UNKNOWN` 仍禁止直接重发，受理号冲突、事件状态和重试次数仍按既有规则处理。
 5. 该接口是 payment-core 内部契约，不新增外部 HTTP 字段；来源也不构成可信认证、渠道审批、渠道受理或到账证明。
 
+### 14.95 死信补偿任务人工处置契约
+
+1. `GET /api/payment-dead-letter-tasks` 支持 `taskStatus / targetSystem / messageId / pageNo / pageSize`；返回任务状态、原目标与重放路由、处置事实以及脱敏后的 `payloadSnapshot / headerSnapshot`。
+2. `POST /api/payment-dead-letter-tasks/{taskNo}/ready-to-replay` 与 `POST /api/payment-dead-letter-tasks/{taskNo}/resolve-manually` 仅接受 `PENDING_REVIEW / REPLAY_FAILED`；`POST /api/payment-dead-letter-tasks/{taskNo}/replay` 仅接受 `READY_TO_REPLAY`。三类请求体均为 `{operator, resolutionNote}`。
+3. `taskNo` 去空格后必填、最长 `64`；`operator` 必填、最长 `64`；`resolutionNote` 必填、最长 `512`。三者拒绝控制字符，非法值在 Mapper 与 RabbitMQ 调用前失败。
+4. 执行重放先以条件更新进入 `REPLAYING`，同时记录操作人、处置说明、重放次数和时间；只向任务持久化的原消费者路由发送原始消息体并等待发布确认，成功进入 `REPLAYED`，异常进入 `REPLAY_FAILED` 并保存脱敏失败说明。
+5. `REPLAYED` 只表示 payment-core 获得消息代理发布确认，不证明目标消费者已处理、账务或清分已入账、结算已收口，也不构成正式审批或生产稳定性证据。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
