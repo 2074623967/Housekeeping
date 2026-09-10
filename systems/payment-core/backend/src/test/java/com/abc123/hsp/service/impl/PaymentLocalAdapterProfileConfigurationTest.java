@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.service.PaymentChannelQueryAdapter;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
+import com.abc123.hsp.service.RefundChannelSubmitService;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
@@ -17,6 +18,9 @@ class PaymentLocalAdapterProfileConfigurationTest {
         try (AnnotationConfigApplicationContext context = createContext(null)) {
             assertEquals(0, context.getBeansOfType(PaymentChannelSubmitAdapter.class).size());
             assertEquals(0, context.getBeansOfType(PaymentChannelQueryAdapter.class).size());
+            assertEquals(1, context.getBeansOfType(RefundChannelSubmitService.class).size());
+            assertEquals(GatewayAccessRefundChannelSubmitServiceImpl.class,
+                    context.getBean(RefundChannelSubmitService.class).getClass());
         }
     }
 
@@ -25,6 +29,9 @@ class PaymentLocalAdapterProfileConfigurationTest {
         try (AnnotationConfigApplicationContext context = createContext("demo")) {
             assertEquals(4, context.getBeansOfType(PaymentChannelSubmitAdapter.class).size());
             assertEquals(4, context.getBeansOfType(PaymentChannelQueryAdapter.class).size());
+            assertEquals(1, context.getBeansOfType(RefundChannelSubmitService.class).size());
+            assertEquals(LocalRefundChannelSubmitServiceImpl.class,
+                    context.getBean(RefundChannelSubmitService.class).getClass());
         }
     }
 
@@ -41,7 +48,9 @@ class PaymentLocalAdapterProfileConfigurationTest {
                 WechatH5PaymentChannelQueryAdapter.class,
                 AlipayH5PaymentChannelQueryAdapter.class,
                 OfflineBankPaymentChannelQueryAdapter.class,
-                LocalPaymentChannelQueryAdapter.class);
+                LocalPaymentChannelQueryAdapter.class,
+                GatewayAccessRefundChannelSubmitServiceImpl.class,
+                LocalRefundChannelSubmitServiceImpl.class);
         context.refresh();
         return context;
     }
