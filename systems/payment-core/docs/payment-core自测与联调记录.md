@@ -7402,6 +7402,7 @@
 | 联合定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertNotifierConfigurationTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `53` 个用例；覆盖三通道默认失败、demo 回执、默认/demo Spring 装配、真实 Webhook 与派发失败/主备路径 |
 | payment-core 全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `663` 个用例，`0` failures、`0` errors、`0` skipped |
 | 配置与补丁检查 | YAML 配置契约测试、`git diff --check` | 通过 | 默认本地回执关闭，demo 配置开启，代码和文档无空白符错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `canPromoteTestToMaster=true`、`canCreateRelease=false`；release 仍有候选说明、正式签字、现场核验和稳定观察结束四项真实阻断 |
 | 真实环境验证 | 真实 IM/短信/邮件供应商、生产凭证、网络、最终送达与值班响应 | 未执行 | 不记录真实供应商受理、通知送达、人工响应或生产稳定性通过 |
 
 ### 251.3 当前判断
