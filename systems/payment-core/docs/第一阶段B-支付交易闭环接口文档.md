@@ -2954,6 +2954,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 单轮按重试表主键最多删除一个批次，剩余陈旧标记由后续轮次继续收敛。清理异常不阻断候选查询，也不改变接口的 `processedCount / successCount / warningCount / failCount`。
 4. 总览计数始终以当前支付业务资格为准，陈旧标记本身不计入总积压或退避中数量。本地契约不承诺生产 MySQL 查询成本、锁影响、清理 SLA 或多实例吞吐。
 
+### 14.119 超时关单失败详情脱敏契约
+
+1. 超时关单失败后的内部重试摘要固定为 `EXPIRY_CLOSE_FAILED:<异常简单类名>`；异常原始 message、cause 和调用栈不是持久化字段、任务中心响应或业务日志契约。
+2. 原关单事务异常仍触发该笔回滚，并在事务外按固定分类登记失败；失败标记写入异常同样不得向 Spring 事务日志传播原始详情，登记失败只保留支付单号与异常类型 WARN。
+3. `processedCount / successCount / warningCount / failCount`、最多三笔失败支付单号、退避配置和总览字段均不改变，本轮不新增或删除外部 API 字段。
+4. 本契约只约束本版本新产生的数据与该服务日志路径，不承诺清理历史异常原文，也不证明生产日志配置、诊断权限或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
