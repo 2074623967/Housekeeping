@@ -303,9 +303,13 @@ class PaymentTaskCenterServiceImplTest {
                 IllegalArgumentException.class,
                 () -> service.runPendingPaymentQueries(
                         String.join("", Collections.nCopies(65, "A"))));
+        IllegalArgumentException controlException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.runPendingPaymentQueries("finance-ops\u0085"));
 
         Assertions.assertTrue(blankException.getMessage().contains("人工任务操作人不能为空"));
         Assertions.assertTrue(oversizedException.getMessage().contains("不能超过64个字符"));
+        Assertions.assertTrue(controlException.getMessage().contains("不能包含控制字符"));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .findPendingPaymentOrderIdsForManualQuery(
                         org.mockito.ArgumentMatchers.anyInt(),

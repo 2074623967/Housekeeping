@@ -1450,6 +1450,13 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String normalizeOperationOperator(String operator) {
+        if (operator != null) {
+            for (int index = 0; index < operator.length(); index++) {
+                if (Character.isISOControl(operator.charAt(index))) {
+                    throw invalidPaymentRequest("操作人不能包含控制字符");
+                }
+            }
+        }
         return normalizeRequiredRequestField(operator, "操作人", OPERATOR_MAX_LENGTH);
     }
 

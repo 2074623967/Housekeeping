@@ -176,6 +176,8 @@ class PaymentEventDispatchServiceImplTest {
                 () -> service.republish("EVTR-001", String.join("", java.util.Collections.nCopies(65, "A"))));
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> service.republish("EVTR-001", "operator\nforged"));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.republish("EVTR-001", "operator\n"));
 
         org.mockito.Mockito.verifyNoInteractions(
                 paymentEventMapper, refundMapper, refundChannelSubmitService);

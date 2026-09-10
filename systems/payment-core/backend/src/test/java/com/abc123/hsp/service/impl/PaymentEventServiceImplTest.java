@@ -111,6 +111,9 @@ class PaymentEventServiceImplTest {
         PaymentEventRepublishRequestDTO oversizedOperator = new PaymentEventRepublishRequestDTO();
         oversizedOperator.setEventNo("EVT001");
         oversizedOperator.setOperator(String.join("", Collections.nCopies(65, "A")));
+        PaymentEventRepublishRequestDTO controlOperator = new PaymentEventRepublishRequestDTO();
+        controlOperator.setEventNo("EVT001");
+        controlOperator.setOperator("finance-ops\u0085");
 
         PaymentEventServiceImpl service = new PaymentEventServiceImpl(
                 paymentEventMapper, paymentEventDispatchService);
@@ -119,6 +122,8 @@ class PaymentEventServiceImplTest {
                 () -> service.republish(blankOperator, new PaymentEventQueryDTO()));
         assertThrows(IllegalArgumentException.class,
                 () -> service.republish(oversizedOperator, new PaymentEventQueryDTO()));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.republish(controlOperator, new PaymentEventQueryDTO()));
         verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
     }
 

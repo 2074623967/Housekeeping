@@ -1201,6 +1201,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(operator)) {
             throw new IllegalArgumentException("人工任务操作人不能为空");
         }
+        for (int index = 0; index < operator.length(); index++) {
+            if (Character.isISOControl(operator.charAt(index))) {
+                throw new IllegalArgumentException("人工任务操作人不能包含控制字符");
+            }
+        }
         String normalized = operator.trim();
         if (normalized.length() > 64) {
             throw new IllegalArgumentException("人工任务操作人不能超过64个字符");

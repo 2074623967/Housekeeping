@@ -256,6 +256,13 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     }
 
     private String normalizeOperator(String operator, String requiredMessage) {
+        if (operator != null) {
+            for (int index = 0; index < operator.length(); index++) {
+                if (Character.isISOControl(operator.charAt(index))) {
+                    throw new IllegalArgumentException("操作人不能包含控制字符");
+                }
+            }
+        }
         String normalized = requireText(operator, requiredMessage);
         if (normalized.length() > OPERATOR_MAX_LENGTH) {
             throw new IllegalArgumentException("操作人长度不能超过64字符");

@@ -90,6 +90,8 @@ class PaymentEventRetryTaskServiceImplTest {
                 () -> service.retryFailedEvents(false, "   "));
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> service.retryFailedEvents(true, String.join("", Collections.nCopies(65, "A"))));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.retryFailedEvents(false, "finance-ops\u0085"));
 
         org.mockito.Mockito.verifyNoInteractions(
                 paymentEventMapper, paymentEventDispatchService, transactionManager);

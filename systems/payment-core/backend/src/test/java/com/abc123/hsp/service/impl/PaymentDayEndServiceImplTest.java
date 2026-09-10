@@ -135,6 +135,8 @@ class PaymentDayEndServiceImplTest {
         blankOperator.setTriggeredBy("   ");
         PaymentDayEndRunRequestDTO oversizedOperator = new PaymentDayEndRunRequestDTO();
         oversizedOperator.setTriggeredBy(String.join("", Collections.nCopies(65, "A")));
+        PaymentDayEndRunRequestDTO controlOperator = new PaymentDayEndRunRequestDTO();
+        controlOperator.setTriggeredBy("finance-ops\u0085");
         PaymentDayEndRunRequestDTO automaticMode = new PaymentDayEndRunRequestDTO();
         automaticMode.setTriggeredBy("finance-ops");
         automaticMode.setRunMode("AUTO");
@@ -145,6 +147,8 @@ class PaymentDayEndServiceImplTest {
                 IllegalArgumentException.class, () -> service.run(blankOperator));
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> service.run(oversizedOperator));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(controlOperator));
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> service.run(automaticMode));
 

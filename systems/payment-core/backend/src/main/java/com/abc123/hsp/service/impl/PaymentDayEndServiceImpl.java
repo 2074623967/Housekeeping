@@ -143,6 +143,11 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         if (!StringUtils.hasText(triggeredBy)) {
             throw new IllegalArgumentException("日终处理触发人不能为空");
         }
+        for (int index = 0; index < triggeredBy.length(); index++) {
+            if (Character.isISOControl(triggeredBy.charAt(index))) {
+                throw new IllegalArgumentException("日终处理触发人不能包含控制字符");
+            }
+        }
         String normalized = triggeredBy.trim();
         if (normalized.length() > TRIGGERED_BY_MAX_LENGTH) {
             throw new IllegalArgumentException("日终处理触发人不能超过64个字符");

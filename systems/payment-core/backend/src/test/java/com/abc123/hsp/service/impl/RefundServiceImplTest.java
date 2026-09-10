@@ -682,6 +682,8 @@ class RefundServiceImplTest {
         blankApply.setOperator("   ");
         RefundApplyRequestDTO oversizedApply = new RefundApplyRequestDTO();
         oversizedApply.setOperator(oversizedOperator);
+        RefundApplyRequestDTO controlApply = new RefundApplyRequestDTO();
+        controlApply.setOperator("refund-operator\n");
         RefundActionRequestDTO blankAction = new RefundActionRequestDTO();
         blankAction.setOperator("   ");
         RefundActionRequestDTO oversizedAction = new RefundActionRequestDTO();
@@ -695,6 +697,8 @@ class RefundServiceImplTest {
                 IllegalArgumentException.class, () -> service.apply(blankApply));
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> service.apply(oversizedApply));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.apply(controlApply));
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> service.approve(blankAction));
         org.junit.jupiter.api.Assertions.assertThrows(

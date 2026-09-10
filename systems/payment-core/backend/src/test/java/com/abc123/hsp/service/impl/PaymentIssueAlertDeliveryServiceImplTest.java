@@ -913,8 +913,12 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 IllegalArgumentException.class,
                 () -> service.reconcileDeliveryReceipt(
                         "PIA-IM-SINGLE", String.join("", Collections.nCopies(65, "A"))));
+        IllegalArgumentException controlException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt("PIA-IM-SINGLE", "finance-ops\n"));
 
         Assertions.assertTrue(exception.getMessage().contains("不能超过64个字符"));
+        Assertions.assertTrue(controlException.getMessage().contains("不能包含控制字符"));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .findAcceptedIssueAlertDeliveryLogByAlertNo(org.mockito.ArgumentMatchers.anyString());
     }

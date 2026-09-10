@@ -125,6 +125,9 @@ class PaymentServiceImplTest {
         com.abc123.hsp.dto.PaymentCloseRequestDTO oversizedOperatorClose =
                 new com.abc123.hsp.dto.PaymentCloseRequestDTO();
         oversizedOperatorClose.setPaymentOrderId("PAY-CLOSE-OPERATOR");
+        com.abc123.hsp.dto.PaymentQueryRequestDTO controlOperatorQuery =
+                new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        controlOperatorQuery.setPaymentOrderId("PAY-QUERY-CONTROL-OPERATOR");
 
         BusinessException detailException = assertThrows(
                 BusinessException.class, () -> service.detail(" "));
@@ -139,6 +142,8 @@ class PaymentServiceImplTest {
         BusinessException oversizedOperatorException = assertThrows(
                 BusinessException.class, () -> service.close(
                         oversizedOperatorClose, String.join("", Collections.nCopies(65, "O"))));
+        BusinessException controlOperatorException = assertThrows(
+                BusinessException.class, () -> service.query(controlOperatorQuery, "finance-ops\n"));
 
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_REQUEST_INVALID, detailException.getCode());
@@ -152,6 +157,8 @@ class PaymentServiceImplTest {
                 ErrorCode.PAYMENT_REQUEST_INVALID, blankOperatorException.getCode());
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_REQUEST_INVALID, oversizedOperatorException.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, controlOperatorException.getCode());
         verifyNoInteractions(paymentMapper, paymentChannelQueryRateLimitService);
     }
 

@@ -60,6 +60,11 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
         if (!StringUtils.hasText(operator)) {
             throw new IllegalArgumentException("事件重发操作人不能为空");
         }
+        for (int index = 0; index < operator.length(); index++) {
+            if (Character.isISOControl(operator.charAt(index))) {
+                throw new IllegalArgumentException("事件重发操作人不能包含控制字符");
+            }
+        }
         String normalized = operator.trim();
         if (normalized.length() > OPERATOR_MAX_LENGTH) {
             throw new IllegalArgumentException("事件重发操作人不能超过64个字符");

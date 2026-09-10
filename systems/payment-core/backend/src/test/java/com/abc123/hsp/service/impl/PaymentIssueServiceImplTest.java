@@ -263,6 +263,12 @@ class PaymentIssueServiceImplTest {
                 IllegalArgumentException.class,
                 () -> new PaymentIssueServiceImpl(paymentIssueMapper)
                         .acknowledgeAlert("PIA-ACK-001", longRequest));
+        PaymentIssueAlertAcknowledgeRequestDTO controlRequest = new PaymentIssueAlertAcknowledgeRequestDTO();
+        controlRequest.setOperator("支付运营\n");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .acknowledgeAlert("PIA-ACK-001", controlRequest));
         verifyNoInteractions(paymentIssueMapper);
     }
 
