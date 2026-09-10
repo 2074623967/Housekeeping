@@ -183,6 +183,9 @@ onMounted(loadDetail);
               <div><strong>申请时间：</strong>{{ detail.appliedAt }}</div>
               <div><strong>成功时间：</strong>{{ detail.successAt }}</div>
               <div><strong>退款原因：</strong>{{ detail.refundReason || "-" }}</div>
+              <div><strong>退款渠道：</strong>{{ detail.channelCode || "-" }}</div>
+              <div><strong>渠道退款号：</strong>{{ detail.channelRefundNo || "-" }}</div>
+              <div><strong>渠道受理时间：</strong>{{ detail.channelSubmittedAt || "-" }}</div>
             </div>
           </section>
 

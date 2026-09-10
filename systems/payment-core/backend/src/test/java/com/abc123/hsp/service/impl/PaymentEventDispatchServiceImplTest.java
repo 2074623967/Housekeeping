@@ -72,6 +72,7 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request)).thenReturn(result);
+        when(refundMapper.bindRefundChannelAccepted("REF-001", "wx_h5", "RCH-REF-001")).thenReturn(1);
         when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
 
         boolean success = new PaymentEventDispatchServiceImpl(
@@ -80,6 +81,7 @@ class PaymentEventDispatchServiceImplTest {
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService).submit(request);
+        verify(refundMapper).bindRefundChannelAccepted("REF-001", "wx_h5", "RCH-REF-001");
         verify(paymentEventMapper).markPublishSuccess("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_SUBMIT".equals(log.getActionCode())
@@ -137,6 +139,47 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
         verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldCompleteEventWithoutCallingChannelWhenAcceptedTraceAlreadyExists() {
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        request.setSubmittedChannelCode("WX_H5");
+        request.setChannelRefundNo("RCH-REF-001");
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
+                .thenReturn(refundEvent("FAILED", 1));
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001");
+
+        Assertions.assertTrue(success);
+        verify(refundChannelSubmitService, never()).submit(any());
+        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
+        verify(paymentEventMapper).markPublishSuccess("EVTR-001");
+    }
+
+    @Test
+    void shouldRejectOversizedChannelRefundNoBeforePersistingAcceptedTrace() {
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
+        result.setChannelRefundNo(new String(new char[129]).replace('\0', 'R'));
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
+                .thenReturn(refundEvent("PENDING", 0));
+        when(paymentEventMapper.findByEventNo("EVTR-001"))
+                .thenReturn(refundEvent("PENDING", 0));
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundChannelSubmitService.submit(request)).thenReturn(result);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001");
+
+        Assertions.assertFalse(success);
+        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
+        verify(paymentEventMapper).markPublishFailed("EVTR-001");
     }
 
     @Test

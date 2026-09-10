@@ -36,6 +36,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
+    private static final int CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int DEFAULT_MAX_RETRY_COUNT = 3;
 
     private final PaymentMapper paymentMapper;
@@ -269,9 +270,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         try {
             validateRefundSubmitRequest(event, request);
+            if (StringUtils.hasText(request.getChannelRefundNo())) {
+                validateAcceptedRefundTrace(request);
+                return paymentEventMapper.markPublishSuccess(eventNo) == 1;
+            }
             RefundChannelSubmitResultDTO result = refundChannelSubmitService.submit(request);
             if (result == null || !StringUtils.hasText(result.getChannelRefundNo())) {
                 throw new IllegalStateException("退款渠道未返回受理单号");
+            }
+            String channelRefundNo = normalizeChannelRefundNo(result.getChannelRefundNo());
+            if (refundMapper.bindRefundChannelAccepted(
+                    refundOrderId, request.getChannelCode().trim(), channelRefundNo) != 1) {
+                throw new IllegalStateException("退款渠道受理事实绑定失败");
             }
             refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                     refundOrderId,
@@ -308,6 +318,31 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 || !StringUtils.hasText(request.getChannelCode())) {
             throw new IllegalArgumentException("退款渠道下发快照不完整或不一致");
         }
+    }
+
+    private void validateAcceptedRefundTrace(RefundChannelSubmitRequestDTO request) {
+        normalizeChannelRefundNo(request.getChannelRefundNo());
+        if (!StringUtils.hasText(request.getSubmittedChannelCode())
+                || !request.getChannelCode().trim().equalsIgnoreCase(
+                        request.getSubmittedChannelCode().trim())) {
+            throw new IllegalArgumentException("退款渠道受理事实与原支付渠道不一致");
+        }
+    }
+
+    private String normalizeChannelRefundNo(String channelRefundNo) {
+        if (!StringUtils.hasText(channelRefundNo)) {
+            throw new IllegalArgumentException("渠道退款号不能为空");
+        }
+        String normalized = channelRefundNo.trim();
+        if (normalized.length() > CHANNEL_REFUND_NO_MAX_LENGTH) {
+            throw new IllegalArgumentException("渠道退款号长度不能超过128字符");
+        }
+        for (int index = 0; index < normalized.length(); index++) {
+            if (Character.isISOControl(normalized.charAt(index))) {
+                throw new IllegalArgumentException("渠道退款号不能包含控制字符");
+            }
+        }
+        return normalized;
     }
 
     private String refundSubmitRemark(RefundChannelSubmitRequestDTO request,

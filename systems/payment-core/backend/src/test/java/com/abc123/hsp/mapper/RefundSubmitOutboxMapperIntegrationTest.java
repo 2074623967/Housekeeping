@@ -42,6 +42,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
         parseMapper(configuration, "mapper/PaymentEventMapper.xml");
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
         createEventTable();
+        createRefundTable();
     }
 
     @Test
@@ -68,6 +69,32 @@ class RefundSubmitOutboxMapperIntegrationTest {
             assertEquals("REF-001", event.getBizNo());
             assertEquals("PENDING", event.getPublishStatus());
             assertEquals(0, event.getRetryCount());
+            session.rollback();
+        }
+    }
+
+    @Test
+    void shouldBindAcceptedRefundTraceOnlyOnce() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+
+            int firstBinding = refundMapper.bindRefundChannelAccepted(
+                    "REF-TRACE", "wx_h5", "RCH-TRACE");
+            int conflictingBinding = refundMapper.bindRefundChannelAccepted(
+                    "REF-TRACE", "wx_h5", "RCH-OTHER");
+
+            assertEquals(1, firstBinding);
+            assertEquals(0, conflictingBinding);
+            try (Statement statement = session.getConnection().createStatement();
+                 ResultSet resultSet = statement.executeQuery(
+                         "SELECT channel_code, channel_refund_no, channel_submitted_at "
+                                 + "FROM t_refund_order WHERE refund_order_id='REF-TRACE'")) {
+                resultSet.next();
+                assertEquals("wx_h5", resultSet.getString("channel_code"));
+                assertEquals("RCH-TRACE", resultSet.getString("channel_refund_no"));
+                org.junit.jupiter.api.Assertions.assertNotNull(
+                        resultSet.getTimestamp("channel_submitted_at"));
+            }
             session.rollback();
         }
     }
@@ -101,6 +128,24 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "next_retry_at TIMESTAMP NULL, "
                     + "event_payload CLOB NOT NULL, "
                     + "created_at TIMESTAMP NOT NULL)");
+            session.commit();
+        }
+    }
+
+    private void createRefundTable() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS t_refund_order");
+            statement.execute("CREATE TABLE t_refund_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
+                    + "refund_order_id VARCHAR(64) NOT NULL UNIQUE, "
+                    + "channel_code VARCHAR(64) NULL, "
+                    + "channel_refund_no VARCHAR(128) NULL, "
+                    + "channel_submitted_at TIMESTAMP NULL, "
+                    + "status VARCHAR(32) NOT NULL, "
+                    + "UNIQUE(channel_code, channel_refund_no))");
+            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status) "
+                    + "VALUES ('REF-TRACE', 'PROCESSING')");
             session.commit();
         }
     }

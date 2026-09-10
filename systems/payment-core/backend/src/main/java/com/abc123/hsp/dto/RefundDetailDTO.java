@@ -37,6 +37,12 @@ public class RefundDetailDTO {
     private String paymentMethod;
     /** 原支付状态。 */
     private String paymentStatus;
+    /** 实际受理退款的渠道编码。 */
+    private String channelCode;
+    /** 渠道侧退款单号。 */
+    private String channelRefundNo;
+    /** 首次获得渠道受理号的时间。 */
+    private String channelSubmittedAt;
     /** 操作日志。 */
     private List<RefundOperationLogItemDTO> operationLogs;
 }

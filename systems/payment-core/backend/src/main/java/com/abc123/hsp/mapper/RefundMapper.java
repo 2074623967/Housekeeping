@@ -73,6 +73,13 @@ public interface RefundMapper {
                                 @Param("paymentOrderId") String paymentOrderId);
 
     /**
+     * 首次绑定渠道退款受理事实，禁止后续补偿覆盖为其他渠道单号。
+     */
+    int bindRefundChannelAccepted(@Param("refundOrderId") String refundOrderId,
+                                  @Param("channelCode") String channelCode,
+                                  @Param("channelRefundNo") String channelRefundNo);
+
+    /**
      * 汇总原支付单已申请且未终止的退款金额。
      */
     BigDecimal sumActiveRefundAmount(String paymentOrderId);

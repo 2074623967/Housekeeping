@@ -788,12 +788,16 @@ CREATE TABLE t_refund_order (
     refund_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款金额',
     refund_method VARCHAR(32) NOT NULL COMMENT '退款方式',
     refund_reason VARCHAR(255) NOT NULL DEFAULT '' COMMENT '退款原因',
+    channel_code VARCHAR(64) DEFAULT NULL COMMENT '实际受理退款的渠道编码',
+    channel_refund_no VARCHAR(128) DEFAULT NULL COMMENT '渠道侧退款单号',
+    channel_submitted_at DATETIME DEFAULT NULL COMMENT '首次获得渠道受理号时间',
     status VARCHAR(32) NOT NULL COMMENT '退款状态',
     status_type VARCHAR(32) NOT NULL COMMENT '退款状态样式类型',
     applied_at DATETIME NOT NULL COMMENT '申请时间',
     success_at DATETIME DEFAULT NULL COMMENT '退款成功时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_refund_order_id (refund_order_id),
+    UNIQUE KEY uk_refund_channel_no (channel_code, channel_refund_no),
     KEY idx_refund_payment_status (payment_order_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
 

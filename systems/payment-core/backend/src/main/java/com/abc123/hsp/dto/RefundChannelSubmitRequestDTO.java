@@ -27,4 +27,8 @@ public class RefundChannelSubmitRequestDTO {
     private String channelCode;
     /** 当前退款状态，仅供内部派发边界校验。 */
     private String refundStatus;
+    /** 已绑定的渠道编码，用于受理事实幂等校验。 */
+    private String submittedChannelCode;
+    /** 已持久化的渠道退款号。 */
+    private String channelRefundNo;
 }
