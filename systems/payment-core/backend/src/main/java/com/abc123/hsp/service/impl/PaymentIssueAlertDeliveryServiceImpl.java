@@ -217,8 +217,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO dispatchPendingAlerts() {
-        return dispatchPendingAlertsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO dispatchPendingAlerts(String operator) {
+        return dispatchPendingAlertsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -239,8 +239,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO reconcileDeliveryReceipts() {
-        return reconcileDeliveryReceiptsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO reconcileDeliveryReceipts(String operator) {
+        return reconcileDeliveryReceiptsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -249,7 +249,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(alertNo)) {
             throw new IllegalArgumentException("告警编号不能为空");
         }
-        String normalizedOperator = normalizeReceiptQueryOperator(operator);
+        String normalizedOperator = normalizeManualOperator(operator);
         String normalizedAlertNo = alertNo.trim();
         PaymentIssueAlertLogEntity acceptedLog =
                 paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogByAlertNo(normalizedAlertNo);
@@ -1197,13 +1197,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         return Math.max(attemptCount == null ? 0 : attemptCount, 0);
     }
 
-    private String normalizeReceiptQueryOperator(String operator) {
+    private String normalizeManualOperator(String operator) {
         if (!StringUtils.hasText(operator)) {
-            throw new IllegalArgumentException("回查操作人不能为空");
+            throw new IllegalArgumentException("人工任务操作人不能为空");
         }
         String normalized = operator.trim();
         if (normalized.length() > 64) {
-            throw new IllegalArgumentException("回查操作人不能超过64个字符");
+            throw new IllegalArgumentException("人工任务操作人不能超过64个字符");
         }
         return normalized;
     }

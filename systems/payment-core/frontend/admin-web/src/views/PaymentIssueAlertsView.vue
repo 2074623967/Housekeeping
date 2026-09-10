@@ -303,7 +303,7 @@ onMounted(loadAlertLogs);
         </div>
         <div class="field">
           <label>默认操作人</label>
-          <input v-model="ackOperator" placeholder="请输入操作人" />
+          <input v-model="ackOperator" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

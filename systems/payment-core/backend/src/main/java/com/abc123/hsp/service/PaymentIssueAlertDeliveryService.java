@@ -10,7 +10,7 @@ public interface PaymentIssueAlertDeliveryService {
     /**
      * 手动派发待处理的异常告警。
      */
-    PaymentTaskActionResultDTO dispatchPendingAlerts();
+    PaymentTaskActionResultDTO dispatchPendingAlerts(String operator);
 
     /**
      * 自动派发待处理的异常告警。
@@ -20,7 +20,7 @@ public interface PaymentIssueAlertDeliveryService {
     /**
      * 手动回查已被供应商受理但尚未确认送达的异常告警。
      */
-    PaymentTaskActionResultDTO reconcileDeliveryReceipts();
+    PaymentTaskActionResultDTO reconcileDeliveryReceipts(String operator);
 
     /**
      * 手动回查指定的供应商受理告警。

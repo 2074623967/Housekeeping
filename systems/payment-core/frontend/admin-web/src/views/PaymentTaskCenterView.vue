@@ -47,6 +47,7 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeTaskCode = ref("");
+const taskOperator = ref("payment-core-admin");
 const filters = ref({
   taskCode: "",
   runMode: "全部",
@@ -116,10 +117,14 @@ function exportTaskRuns() {
 }
 
 async function runTask(taskCode, taskName, actionRunner) {
+  if (!taskOperator.value.trim()) {
+    actionMessage.value = `${taskName}执行失败：请先输入人工任务操作人。`;
+    return;
+  }
   activeTaskCode.value = taskCode;
   actionMessage.value = "";
   try {
-    const result = await actionRunner();
+    const result = await actionRunner({ operator: taskOperator.value.trim() });
     overview.value = result.overview;
     await loadTaskRuns();
     actionMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，告警 ${result.warningCount || 0} 条，失败 ${result.failCount} 条。`;
@@ -370,6 +375,13 @@ onMounted(loadOverview);
               <h3>核心自动化任务</h3>
               <p class="meta">本页触发统一任务操作；支付与退款主动查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均纳入人工补偿，自动执行仍受各自开关控制</p>
             </div>
+            </div>
+
+            <div class="toolbar compact-toolbar">
+              <div class="field">
+                <label>人工任务操作人</label>
+                <input v-model="taskOperator" maxlength="64" placeholder="请输入操作人" />
+              </div>
             </div>
 
             <div class="sub-panel">

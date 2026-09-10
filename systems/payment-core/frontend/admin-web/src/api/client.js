@@ -192,16 +192,16 @@ export const paymentTaskCenterApi = {
     });
     return `/api/payment-task-center/task-runs/export?${params.toString()}`;
   },
-  runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
-  runPendingPaymentQueries: () => postJson("/api/payment-task-center/query-pending-payments", {}),
-  runPendingRefundQueries: () => postJson("/api/payment-task-center/query-pending-refunds", {}),
-  runGenerateQueryMonitorAlerts: () => postJson("/api/payment-task-center/generate-query-monitor-alerts", {}),
-  runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
-  runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {}),
-  runEscalateOverdueIssues: () => postJson("/api/payment-task-center/escalate-overdue-issues", {}),
-  runDispatchIssueAlerts: () => postJson("/api/payment-task-center/dispatch-issue-alerts", {}),
-  runReconcileIssueAlertReceipts: () => postJson("/api/payment-task-center/reconcile-issue-alert-receipts", {}),
-  runControlPolicySelfChecks: () => postJson("/api/payment-task-center/control-policy-self-checks", {})
+  runCloseExpiredPayments: (payload) => postJson("/api/payment-task-center/close-expired-payments", payload),
+  runPendingPaymentQueries: (payload) => postJson("/api/payment-task-center/query-pending-payments", payload),
+  runPendingRefundQueries: (payload) => postJson("/api/payment-task-center/query-pending-refunds", payload),
+  runGenerateQueryMonitorAlerts: (payload) => postJson("/api/payment-task-center/generate-query-monitor-alerts", payload),
+  runRepublishFailedEvents: (payload) => postJson("/api/payment-task-center/republish-failed-events", payload),
+  runRetryFailedRefunds: (payload) => postJson("/api/payment-task-center/retry-failed-refunds", payload),
+  runEscalateOverdueIssues: (payload) => postJson("/api/payment-task-center/escalate-overdue-issues", payload),
+  runDispatchIssueAlerts: (payload) => postJson("/api/payment-task-center/dispatch-issue-alerts", payload),
+  runReconcileIssueAlertReceipts: (payload) => postJson("/api/payment-task-center/reconcile-issue-alert-receipts", payload),
+  runControlPolicySelfChecks: (payload) => postJson("/api/payment-task-center/control-policy-self-checks", payload)
 };
 
 export const orderApi = {

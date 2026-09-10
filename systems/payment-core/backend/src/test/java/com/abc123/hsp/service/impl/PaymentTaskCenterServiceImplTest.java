@@ -269,7 +269,8 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
-        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runPendingPaymentQueries();
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runPendingPaymentQueries(" 支付运营 ");
 
         Assertions.assertEquals(3, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -279,10 +280,32 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PAYMENT_PENDING_QUERY".equals(entity.getTaskCode())
                         && "P2".equals(entity.getSeverityLevel())
+                        && "支付运营".equals(entity.getTriggeredBy())
                         && "/payments".equals(entity.getRecommendedRoute())
                         && entity.getSummaryComment().contains("查询失败 1 笔")
                         && entity.getSummaryComment().contains("PAY-QUERY-3")
         ));
+    }
+
+    @Test
+    void shouldRejectInvalidManualTaskOperatorBeforeReadingCandidates() {
+        PaymentTaskCenterServiceImpl service = buildQueryTaskCenterService();
+
+        IllegalArgumentException blankException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.runPendingPaymentQueries(" "));
+        IllegalArgumentException oversizedException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.runPendingPaymentQueries(
+                        String.join("", Collections.nCopies(65, "A"))));
+
+        Assertions.assertTrue(blankException.getMessage().contains("人工任务操作人不能为空"));
+        Assertions.assertTrue(oversizedException.getMessage().contains("不能超过64个字符"));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .findPendingPaymentOrderIdsForManualQuery(
+                        org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.anyInt(),
+                        org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
@@ -319,7 +342,8 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
-        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runPendingRefundQueries();
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runPendingRefundQueries("payment-core-admin");
 
         Assertions.assertEquals(3, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -368,7 +392,8 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
-        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runGenerateQueryMonitorAlerts();
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runGenerateQueryMonitorAlerts("payment-core-admin");
 
         Assertions.assertEquals(2, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -410,7 +435,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runCloseExpiredPayments();
+        ).runCloseExpiredPayments("payment-core-admin");
 
         verify(paymentExpiryTaskService).closeExpiredPayments();
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -479,7 +504,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runRepublishFailedEvents();
+        ).runRepublishFailedEvents("payment-core-admin");
 
         verify(paymentEventRetryTaskService).retryFailedEvents(false);
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -598,7 +623,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runEscalateOverdueIssues();
+        ).runEscalateOverdueIssues("payment-core-admin");
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PAYMENT_ISSUE_ESCALATE".equals(entity.getTaskCode())
@@ -648,7 +673,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runEscalateOverdueIssues();
+        ).runEscalateOverdueIssues("payment-core-admin");
 
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -693,7 +718,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runEscalateOverdueIssues();
+        ).runEscalateOverdueIssues("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).insertIssueAlertLog(captor.capture());
@@ -758,7 +783,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentConfigService,
                 paymentIssueAlertDeliveryService,
                 transactionManager
-        ).runEscalateOverdueIssues();
+        ).runEscalateOverdueIssues("payment-core-admin");
 
         Assertions.assertEquals(3, result.getProcessedCount());
         Assertions.assertEquals(2, result.getSuccessCount());
@@ -791,7 +816,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runEscalateOverdueIssues();
+        ).runEscalateOverdueIssues("payment-core-admin");
 
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(0, result.getSuccessCount());
@@ -895,7 +920,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runRetryFailedRefunds();
+        ).runRetryFailedRefunds("payment-core-admin");
 
         ArgumentCaptor<PaymentTaskRunLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentTaskRunLogEntity.class);
         verify(paymentTaskCenterMapper).insertTaskRunLog(logCaptor.capture());
@@ -923,7 +948,7 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runControlPolicySelfChecks();
+        ).runControlPolicySelfChecks("payment-core-admin");
 
         verify(paymentConfigService).runAllEnabledControlPolicySelfChecks();
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
@@ -965,7 +990,8 @@ class PaymentTaskCenterServiceImplTest {
 
     @Test
     void shouldDispatchIssueAlerts() {
-        when(paymentIssueAlertDeliveryService.dispatchPendingAlerts()).thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
+        when(paymentIssueAlertDeliveryService.dispatchPendingAlerts("payment-core-admin"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentTaskActionResultDTO());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -976,9 +1002,9 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runDispatchIssueAlerts();
+        ).runDispatchIssueAlerts("payment-core-admin");
 
-        verify(paymentIssueAlertDeliveryService).dispatchPendingAlerts();
+        verify(paymentIssueAlertDeliveryService).dispatchPendingAlerts("payment-core-admin");
         Assertions.assertNotNull(result.getOverview());
     }
 

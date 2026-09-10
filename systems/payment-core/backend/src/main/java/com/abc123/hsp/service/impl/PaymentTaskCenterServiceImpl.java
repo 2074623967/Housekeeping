@@ -374,8 +374,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runCloseExpiredPayments() {
-        return runCloseExpiredPaymentsByMode(RUN_MODE_MANUAL, "payment-core-admin", "人工触发");
+    public PaymentTaskActionResultDTO runCloseExpiredPayments(String operator) {
+        return runCloseExpiredPaymentsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator), "人工触发");
     }
 
     @Override
@@ -395,8 +395,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     @Override
-    public PaymentTaskActionResultDTO runPendingPaymentQueries() {
-        return runPendingPaymentQueriesByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO runPendingPaymentQueries(String operator) {
+        return runPendingPaymentQueriesByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -415,8 +415,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     @Override
-    public PaymentTaskActionResultDTO runPendingRefundQueries() {
-        return runPendingRefundQueriesByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO runPendingRefundQueries(String operator) {
+        return runPendingRefundQueriesByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -436,16 +436,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts() {
+    public PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts(String operator) {
+        final String normalizedOperator = normalizeManualOperator(operator);
         return runTaskWithLease(
                 TASK_CODE_QUERY_MONITOR_ALERT,
                 "主动查单监控告警",
                 RUN_MODE_MANUAL,
-                "payment-core-admin",
+                normalizedOperator,
                 new AutoTaskRunner() {
                     @Override
                     public PaymentTaskActionResultDTO run() {
-                        return runGenerateQueryMonitorAlertsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+                        return runGenerateQueryMonitorAlertsByMode(RUN_MODE_MANUAL, normalizedOperator);
                     }
                 }
         );
@@ -472,8 +473,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runRepublishFailedEvents() {
-        return runRepublishFailedEventsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO runRepublishFailedEvents(String operator) {
+        return runRepublishFailedEventsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -494,8 +495,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runRetryFailedRefunds() {
-        return runRetryFailedRefundsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO runRetryFailedRefunds(String operator) {
+        return runRetryFailedRefundsByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -516,14 +517,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runEscalateOverdueIssues() {
-        return runEscalateOverdueIssuesByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO runEscalateOverdueIssues(String operator) {
+        return runEscalateOverdueIssuesByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runDispatchIssueAlerts() {
-        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.dispatchPendingAlerts();
+    public PaymentTaskActionResultDTO runDispatchIssueAlerts(String operator) {
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.dispatchPendingAlerts(
+                normalizeManualOperator(operator));
         result.setOverview(overview());
         return result;
     }
@@ -554,8 +556,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runReconcileIssueAlertReceipts() {
-        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipts();
+    public PaymentTaskActionResultDTO runReconcileIssueAlertReceipts(String operator) {
+        PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipts(
+                normalizeManualOperator(operator));
         result.setOverview(overview());
         return result;
     }
@@ -564,7 +567,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Transactional
     public PaymentTaskActionResultDTO runReconcileIssueAlertReceipt(String alertNo, String operator) {
         PaymentTaskActionResultDTO result = paymentIssueAlertDeliveryService.reconcileDeliveryReceipt(
-                alertNo, operator);
+                alertNo, normalizeManualOperator(operator));
         result.setOverview(overview());
         return result;
     }
@@ -579,8 +582,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     @Override
     @Transactional
-    public PaymentTaskActionResultDTO runControlPolicySelfChecks() {
-        return runControlPolicySelfChecksByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    public PaymentTaskActionResultDTO runControlPolicySelfChecks(String operator) {
+        return runControlPolicySelfChecksByMode(RUN_MODE_MANUAL, normalizeManualOperator(operator));
     }
 
     @Override
@@ -1568,6 +1571,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             normalizedQuery.setPageSize(100);
         }
         return normalizedQuery;
+    }
+
+    private String normalizeManualOperator(String operator) {
+        if (!hasText(operator)) {
+            throw new IllegalArgumentException("人工任务操作人不能为空");
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException("人工任务操作人不能超过64个字符");
+        }
+        return normalized;
     }
 
     private int valueOrZero(Integer value) {

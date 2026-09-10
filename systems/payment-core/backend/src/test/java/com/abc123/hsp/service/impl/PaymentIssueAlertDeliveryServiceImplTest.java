@@ -78,12 +78,13 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts(" 支付运营 ");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> deliveryLogCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(3)).insertIssueAlertLog(deliveryLogCaptor.capture());
         verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
-        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                log -> "支付运营".equals(log.getTriggeredBy())));
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(0, result.getWarningCount());
         Assertions.assertEquals(0, result.getFailCount());
@@ -95,6 +96,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "IM-RECEIPT-001".equals(log.getProviderReceiptNo())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log -> org.springframework.util.StringUtils.hasText(log.getProviderReceiptSnapshot())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getProviderReceiptSnapshot().contains("ACCEPTED")));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(
+                log -> "支付运营".equals(log.getTriggeredBy())));
     }
 
     @Test
@@ -171,7 +174,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor = ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
         verify(imNotifier).send(dispatchCaptor.capture());
@@ -202,7 +205,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
         );
-        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts();
+        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> sourceCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(sourceCaptor.capture());
@@ -227,7 +230,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
         verify(smsNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
@@ -258,7 +261,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertDispatchItemDTO> dispatchCaptor = ArgumentCaptor.forClass(PaymentIssueAlertDispatchItemDTO.class);
         verify(imNotifier).send(dispatchCaptor.capture());
@@ -286,7 +289,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
         );
-        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts();
+        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> sourceCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(sourceCaptor.capture());
@@ -312,7 +315,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         verify(smsNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
@@ -340,7 +343,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
@@ -370,7 +373,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
@@ -402,7 +405,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
@@ -425,7 +428,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         verify(smsNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
@@ -452,7 +455,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertEquals(0, result.getSuccessCount());
@@ -477,7 +480,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertEquals(0, result.getSuccessCount());
@@ -506,7 +509,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertEquals(0, result.getSuccessCount());
@@ -536,7 +539,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
@@ -565,7 +568,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertEquals(0, result.getSuccessCount());
@@ -593,7 +596,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
@@ -630,7 +633,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
@@ -671,7 +674,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
@@ -704,7 +707,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
@@ -741,7 +744,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(2)).insertIssueAlertLog(logCaptor.capture());
@@ -775,7 +778,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 Collections.singletonList(receiptQueryAdapter),
                 receiptQueryRateLimitService
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts(" 支付运营 ");
 
         verify(receiptQueryRateLimitService).acquire("IM", "PIA-IM-001");
         ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
@@ -783,14 +786,14 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PIA-OUTBOX-001".equals(entity.getAlertNo())
                         && "已确认".equals(entity.getAckStatus())
-                        && "payment-core-admin".equals(entity.getAckOperator())
+                        && "支付运营".equals(entity.getAckOperator())
         ));
         verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
         Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
         Assertions.assertEquals("IM-RECEIPT-001", captor.getValue().getProviderReceiptNo());
         Assertions.assertEquals("供应商查询确认送达", captor.getValue().getProviderDeliveryMessage());
         Assertions.assertEquals("已确认", captor.getValue().getAckStatus());
-        Assertions.assertEquals("payment-core-admin", captor.getValue().getAckOperator());
+        Assertions.assertEquals("支付运营", captor.getValue().getAckOperator());
         Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getReceiptQueryCount());
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -816,7 +819,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 Collections.singletonList(receiptQueryAdapter),
                 receiptQueryRateLimitService
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts("payment-core-admin");
 
         verify(receiptQueryAdapter, org.mockito.Mockito.never()).query(acceptedLog);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
@@ -894,7 +897,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 IllegalArgumentException.class,
                 () -> service.reconcileDeliveryReceipt("PIA-IM-SINGLE", " "));
 
-        Assertions.assertTrue(exception.getMessage().contains("回查操作人不能为空"));
+        Assertions.assertTrue(exception.getMessage().contains("人工任务操作人不能为空"));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .findAcceptedIssueAlertDeliveryLogByAlertNo(org.mockito.ArgumentMatchers.anyString());
     }
@@ -928,7 +931,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
@@ -956,7 +959,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 Collections.singletonList(receiptQueryAdapter)
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
@@ -983,8 +986,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 Collections.singletonList(receiptQueryAdapter)
         );
 
-        PaymentTaskActionResultDTO acceptedResult = service.reconcileDeliveryReceipts();
-        PaymentTaskActionResultDTO failedResult = service.reconcileDeliveryReceipts();
+        PaymentTaskActionResultDTO acceptedResult = service.reconcileDeliveryReceipts("payment-core-admin");
+        PaymentTaskActionResultDTO failedResult = service.reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
                 "PIA-IM-001", 1, "ACCEPTED", 60, 10);
@@ -1018,7 +1021,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         );
         service.configureReceiptQueryCompensation(60, 60, 2, 900, 10, 100, 30);
 
-        PaymentTaskActionResultDTO result = service.reconcileDeliveryReceipts();
+        PaymentTaskActionResultDTO result = service.reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
                 "PIA-IM-BACKOFF", 5, "QUERY_ERROR", 900, 10);
@@ -1037,7 +1040,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 Collections.singletonList(receiptQueryAdapter)
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts("payment-core-admin");
 
         verify(receiptQueryAdapter, org.mockito.Mockito.never()).supports(any(String.class));
         verify(receiptQueryAdapter, org.mockito.Mockito.never()).query(any(PaymentIssueAlertLogEntity.class));
@@ -1056,7 +1059,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
         Assertions.assertEquals(0, result.getProcessedCount());
@@ -1072,8 +1075,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
         );
 
-        service.dispatchPendingAlerts();
-        service.dispatchPendingAlerts();
+        service.dispatchPendingAlerts("payment-core-admin");
+        service.dispatchPendingAlerts("payment-core-admin");
 
         ArgumentCaptor<PaymentTaskRunLogEntity> captor = ArgumentCaptor.forClass(PaymentTaskRunLogEntity.class);
         verify(paymentTaskCenterMapper, times(2)).insertTaskRunLog(captor.capture());
@@ -1114,7 +1117,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 transactionManager
-        ).dispatchPendingAlerts();
+        ).dispatchPendingAlerts("payment-core-admin");
 
         Assertions.assertEquals(2, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -1152,7 +1155,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
                 Collections.singletonList(receiptQueryAdapter),
                 transactionManager
-        ).reconcileDeliveryReceipts();
+        ).reconcileDeliveryReceipts("payment-core-admin");
 
         Assertions.assertEquals(2, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());

@@ -8,9 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
-import com.abc123.hsp.dto.PaymentIssueAlertReceiptQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentTaskActionResultDTO;
 import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
+import com.abc123.hsp.dto.PaymentTaskOperatorRequestDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.service.PaymentTaskCenterService;
@@ -75,46 +75,45 @@ class PaymentTaskCenterControllerTest {
         PaymentTaskActionResultDTO resultDTO = new PaymentTaskActionResultDTO();
         resultDTO.setTaskCode("PAYMENT_EXPIRE_CLOSE");
         resultDTO.setProcessedCount(4);
-        when(paymentTaskCenterService.runCloseExpiredPayments()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runPendingPaymentQueries()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runPendingRefundQueries()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runGenerateQueryMonitorAlerts()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runRepublishFailedEvents()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runRetryFailedRefunds()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runEscalateOverdueIssues()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runDispatchIssueAlerts()).thenReturn(resultDTO);
-        when(paymentTaskCenterService.runReconcileIssueAlertReceipts()).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runCloseExpiredPayments("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runPendingPaymentQueries("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runPendingRefundQueries("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runGenerateQueryMonitorAlerts("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runRepublishFailedEvents("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runRetryFailedRefunds("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runEscalateOverdueIssues("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runDispatchIssueAlerts("支付运营")).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runReconcileIssueAlertReceipts("支付运营")).thenReturn(resultDTO);
         when(paymentTaskCenterService.runReconcileIssueAlertReceipt("PIA-001", "支付运营"))
                 .thenReturn(resultDTO);
-        when(paymentTaskCenterService.runControlPolicySelfChecks()).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runControlPolicySelfChecks("支付运营")).thenReturn(resultDTO);
+        PaymentTaskOperatorRequestDTO request = new PaymentTaskOperatorRequestDTO();
+        request.setOperator("支付运营");
 
-        assertEquals(4, controller.runCloseExpiredPayments().getData().getProcessedCount());
-        assertEquals(4, controller.runPendingPaymentQueries().getData().getProcessedCount());
-        assertEquals(4, controller.runPendingRefundQueries().getData().getProcessedCount());
-        assertEquals(4, controller.runGenerateQueryMonitorAlerts().getData().getProcessedCount());
-        assertEquals(4, controller.runRepublishFailedEvents().getData().getProcessedCount());
-        assertEquals(4, controller.runRetryFailedRefunds().getData().getProcessedCount());
-        assertEquals(4, controller.runEscalateOverdueIssues().getData().getProcessedCount());
-        assertEquals(4, controller.runDispatchIssueAlerts().getData().getProcessedCount());
-        assertEquals(4, controller.runReconcileIssueAlertReceipts().getData().getProcessedCount());
-        PaymentIssueAlertReceiptQueryRequestDTO receiptQueryRequest =
-                new PaymentIssueAlertReceiptQueryRequestDTO();
-        receiptQueryRequest.setOperator("支付运营");
+        assertEquals(4, controller.runCloseExpiredPayments(request).getData().getProcessedCount());
+        assertEquals(4, controller.runPendingPaymentQueries(request).getData().getProcessedCount());
+        assertEquals(4, controller.runPendingRefundQueries(request).getData().getProcessedCount());
+        assertEquals(4, controller.runGenerateQueryMonitorAlerts(request).getData().getProcessedCount());
+        assertEquals(4, controller.runRepublishFailedEvents(request).getData().getProcessedCount());
+        assertEquals(4, controller.runRetryFailedRefunds(request).getData().getProcessedCount());
+        assertEquals(4, controller.runEscalateOverdueIssues(request).getData().getProcessedCount());
+        assertEquals(4, controller.runDispatchIssueAlerts(request).getData().getProcessedCount());
+        assertEquals(4, controller.runReconcileIssueAlertReceipts(request).getData().getProcessedCount());
         assertEquals(4, controller.runReconcileIssueAlertReceipt(
-                "PIA-001", receiptQueryRequest).getData().getProcessedCount());
-        assertEquals(4, controller.runControlPolicySelfChecks().getData().getProcessedCount());
+                "PIA-001", request).getData().getProcessedCount());
+        assertEquals(4, controller.runControlPolicySelfChecks(request).getData().getProcessedCount());
 
-        verify(paymentTaskCenterService).runCloseExpiredPayments();
-        verify(paymentTaskCenterService).runPendingPaymentQueries();
-        verify(paymentTaskCenterService).runPendingRefundQueries();
-        verify(paymentTaskCenterService).runGenerateQueryMonitorAlerts();
-        verify(paymentTaskCenterService).runRepublishFailedEvents();
-        verify(paymentTaskCenterService).runRetryFailedRefunds();
-        verify(paymentTaskCenterService).runEscalateOverdueIssues();
-        verify(paymentTaskCenterService).runDispatchIssueAlerts();
-        verify(paymentTaskCenterService).runReconcileIssueAlertReceipts();
+        verify(paymentTaskCenterService).runCloseExpiredPayments("支付运营");
+        verify(paymentTaskCenterService).runPendingPaymentQueries("支付运营");
+        verify(paymentTaskCenterService).runPendingRefundQueries("支付运营");
+        verify(paymentTaskCenterService).runGenerateQueryMonitorAlerts("支付运营");
+        verify(paymentTaskCenterService).runRepublishFailedEvents("支付运营");
+        verify(paymentTaskCenterService).runRetryFailedRefunds("支付运营");
+        verify(paymentTaskCenterService).runEscalateOverdueIssues("支付运营");
+        verify(paymentTaskCenterService).runDispatchIssueAlerts("支付运营");
+        verify(paymentTaskCenterService).runReconcileIssueAlertReceipts("支付运营");
         verify(paymentTaskCenterService).runReconcileIssueAlertReceipt("PIA-001", "支付运营");
-        verify(paymentTaskCenterService).runControlPolicySelfChecks();
+        verify(paymentTaskCenterService).runControlPolicySelfChecks("支付运营");
     }
 
     @Test

@@ -29,7 +29,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行超时关单任务。
      */
-    PaymentTaskActionResultDTO runCloseExpiredPayments();
+    PaymentTaskActionResultDTO runCloseExpiredPayments(String operator);
 
     /**
      * 自动执行超时关单任务。
@@ -39,7 +39,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动补查等待回调的支付单。
      */
-    PaymentTaskActionResultDTO runPendingPaymentQueries();
+    PaymentTaskActionResultDTO runPendingPaymentQueries(String operator);
 
     /**
      * 自动补查等待回调的支付单。
@@ -49,7 +49,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动补查处理中的退款单。
      */
-    PaymentTaskActionResultDTO runPendingRefundQueries();
+    PaymentTaskActionResultDTO runPendingRefundQueries(String operator);
 
     /**
      * 自动补查处理中的退款单。
@@ -59,7 +59,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动生成主动查单监控告警。
      */
-    PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts();
+    PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts(String operator);
 
     /**
      * 自动生成主动查单监控告警。
@@ -69,7 +69,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行失败事件重发。
      */
-    PaymentTaskActionResultDTO runRepublishFailedEvents();
+    PaymentTaskActionResultDTO runRepublishFailedEvents(String operator);
 
     /**
      * 自动执行失败事件重发。
@@ -79,7 +79,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行失败退款重试。
      */
-    PaymentTaskActionResultDTO runRetryFailedRefunds();
+    PaymentTaskActionResultDTO runRetryFailedRefunds(String operator);
 
     /**
      * 自动执行失败退款重试。
@@ -89,12 +89,12 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行异常 SLA 升级巡检。
      */
-    PaymentTaskActionResultDTO runEscalateOverdueIssues();
+    PaymentTaskActionResultDTO runEscalateOverdueIssues(String operator);
 
     /**
      * 手动执行异常告警派发。
      */
-    PaymentTaskActionResultDTO runDispatchIssueAlerts();
+    PaymentTaskActionResultDTO runDispatchIssueAlerts(String operator);
 
     /**
      * 自动执行异常 SLA 升级巡检。
@@ -109,7 +109,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行异常告警供应商回执回查。
      */
-    PaymentTaskActionResultDTO runReconcileIssueAlertReceipts();
+    PaymentTaskActionResultDTO runReconcileIssueAlertReceipts(String operator);
 
     /**
      * 手动执行指定异常告警的供应商回执回查。
@@ -124,7 +124,7 @@ public interface PaymentTaskCenterService {
     /**
      * 手动执行支付控制策略自动巡检。
      */
-    PaymentTaskActionResultDTO runControlPolicySelfChecks();
+    PaymentTaskActionResultDTO runControlPolicySelfChecks(String operator);
 
     /**
      * 自动执行支付控制策略自动巡检。
