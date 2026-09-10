@@ -1247,6 +1247,13 @@
 3. 退款服务定向 `30` 个测试及 payment-core 全量 `782` 个测试通过，覆盖真实事务同步回调、outbox 写入和日志事件断言。
 4. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明真实渠道受理、后续补偿成功、退款到账、日志采集配置或生产稳定性，release 四项治理阻断不变。
 
+### 8.132 2026-09-11 告警网关签名与响应解析异常脱敏进展
+
+1. IM、短信和邮件通知器共用的签名与响应 JSON 解析边界不再拼接底层异常 message，也不再挂载原始 cause；异常只保留 `PAYMENT_ISSUE_ALERT_SIGNATURE_FAILED:<异常简单类名>` 或 `PAYMENT_ISSUE_ALERT_RESPONSE_JSON_INVALID:<异常简单类名>`。
+2. 派发服务继续把通知器运行时异常持久化为既有 `SEND_EXCEPTION`、`LOCAL_FAILURE:SEND_EXCEPTION:[REDACTED]` 和安全提示，当前供应商失败后仍尝试后续候选，不改变供应商明确失败、回执号或失败码语义。
+3. IM 通知器与告警派发服务联合定向 `55` 个测试、payment-core 全量 `784` 个测试通过；模拟 URL、token、响应体和换行未进入异常摘要，原始 cause 为空。
+4. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明真实通知送达、供应商响应可信、密钥托管、生产日志配置或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

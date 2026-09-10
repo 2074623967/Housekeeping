@@ -3010,6 +3010,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 失败日志只允许记录稳定 `eventNo` 和异常类全名，不记录原始 message、cause、堆栈或未经控制字符校验的退款单号。
 4. 该契约不证明真实渠道是否受理、事件补偿必然成功或退款到账；最终退款事实必须由可信回调、主动查单和对账确认。
 
+### 14.127 告警网关签名与响应解析异常脱敏契约
+
+1. 告警通知器签名失败统一为 `PAYMENT_ISSUE_ALERT_SIGNATURE_FAILED:<异常简单类名>`，非法响应 JSON 统一为 `PAYMENT_ISSUE_ALERT_RESPONSE_JSON_INVALID:<异常简单类名>`；两类异常均不保留原始 message、cause 或调用栈。
+2. 派发服务捕获通知器运行时异常后，投递日志继续使用 `SEND_EXCEPTION`、`LOCAL_FAILURE:SEND_EXCEPTION:[REDACTED]` 和“通知器执行异常，transportError=[REDACTED]”，不新增或改变 HTTP 响应字段。
+3. 当前供应商异常后继续尝试后续候选；供应商明确返回的投递状态、回执号和失败码仍按既有响应解析与脱敏规则处理。
+4. 该契约不证明真实签名协议正确、通知送达、供应商响应可信或人员确认；真实结果仍需供应商回执、运营核验和环境证据支撑。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

@@ -8521,3 +8521,26 @@
 
 1. 退款即时派发失败日志已保留必要事件追踪能力并移除原始异常及未校验业务标识，已提交 outbox 仍可进入补偿链路。
 2. 本地 Mockito 不证明真实渠道受理、事件补偿必然成功、退款到账、生产日志采集或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 300. 2026-09-11 告警网关异常详情脱敏 V1.0 验证
+
+### 300.1 本轮补强
+
+1. `AbstractLocalPaymentIssueAlertNotifier` 将签名失败统一转换为 `PAYMENT_ISSUE_ALERT_SIGNATURE_FAILED:<异常简单类名>`，不再拼接签名算法配置或保留底层 cause。
+2. 非法响应 JSON 统一转换为 `PAYMENT_ISSUE_ALERT_RESPONSE_JSON_INVALID:<异常简单类名>`，不再拼接 Jackson 异常 message 或保留可能含响应正文的 cause。
+3. `PaymentIssueAlertDeliveryServiceImpl` 既有安全持久化与供应商回退逻辑不变：异常供应商写 `SEND_EXCEPTION` 脱敏快照，随后继续候选供应商。
+
+### 300.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `55` 个用例；覆盖签名、响应解析、持久化脱敏和候选供应商回退 |
+| payment-core 全量测试 | `mvn test` | 通过 | `784` 个用例，`0` failures、`0` errors、`0` skipped |
+| 签名异常注入 | JUnit + Mockito | 通过 | 模拟 URL、token 与换行不进入固定摘要，异常 cause 为空，网关未被调用 |
+| 非法 JSON 注入 | JUnit + Mockito | 通过 | 模拟响应密文、URL 与换行不进入固定摘要，异常 cause 为空 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 300.3 当前判断
+
+1. 告警网关签名和响应解析的异常对象本身已完成最小化，持久化层继续只保留既有安全失败事实并保持供应商切换语义。
+2. 本地 Mockito 不证明真实通知网关可用、签名协议正确、供应商响应可信、密钥托管或生产稳定性，`release/v1.0.0` 继续冻结。
