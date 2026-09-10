@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -8,8 +9,12 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
+import com.abc123.hsp.mapper.RefundMapper;
+import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Assertions;
@@ -24,6 +29,8 @@ import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -40,6 +47,97 @@ class PaymentEventDispatchServiceImplTest {
     private RestTemplate restTemplate;
     @Mock
     private RabbitTemplate rabbitTemplate;
+    @Mock
+    private RefundMapper refundMapper;
+    @Mock
+    private RefundChannelSubmitService refundChannelSubmitService;
+
+    @Test
+    void shouldDispatchRefundInNewTransactionAfterApprovalCommit() throws Exception {
+        Method method = PaymentEventDispatchServiceImpl.class.getMethod(
+                "publishRefundSubmit", String.class, String.class);
+
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        Assertions.assertNotNull(transactional);
+        Assertions.assertEquals(Propagation.REQUIRES_NEW, transactional.propagation());
+    }
+
+    @Test
+    void shouldDispatchRefundSubmitAndPersistAcceptedFact() {
+        PaymentEventListItemDTO event = refundEvent("PENDING", 0);
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
+        result.setChannelRefundNo("RCH-REF-001");
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundChannelSubmitService.submit(request)).thenReturn(result);
+        when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001");
+
+        Assertions.assertTrue(success);
+        verify(refundChannelSubmitService).submit(request);
+        verify(paymentEventMapper).markPublishSuccess("EVTR-001");
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_SUBMIT".equals(log.getActionCode())
+                        && log.getOperationRemark().contains("RCH-REF-001")));
+    }
+
+    @Test
+    void shouldKeepRefundProcessingAndRetryEventWhenChannelResultIsUnknown() {
+        PaymentEventListItemDTO event = refundEvent("PENDING", 0);
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVTR-001")).thenReturn(event);
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundChannelSubmitService.submit(request)).thenThrow(new IllegalStateException("timeout"));
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001");
+
+        Assertions.assertFalse(success);
+        verify(paymentEventMapper).markPublishFailed("EVTR-001");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVTR-001");
+        verify(refundMapper, never()).updateRefundStatus(any(), any(), any(), any(), anyBoolean());
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_SUBMIT_UNKNOWN".equals(log.getActionCode())));
+    }
+
+    @Test
+    void shouldRejectInconsistentRefundSubmitSnapshotBeforeCallingChannel() {
+        PaymentEventListItemDTO event = refundEvent("PENDING", 0);
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        request.setPaymentOrderId("PAY-OTHER");
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVTR-001")).thenReturn(event);
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001");
+
+        Assertions.assertFalse(success);
+        verify(refundChannelSubmitService, never()).submit(any());
+        verify(paymentEventMapper).markPublishFailed("EVTR-001");
+    }
+
+    @Test
+    void shouldNotSubmitRefundAgainWhenEventAlreadySucceeded() {
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
+                .thenReturn(refundEvent("SUCCESS", 1));
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001");
+
+        Assertions.assertTrue(success);
+        verify(refundChannelSubmitService, never()).submit(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
 
     @Test
     void shouldPublishPaymentSuccessToAmqpWithTraceableMessageProperties() {
@@ -330,6 +428,27 @@ class PaymentEventDispatchServiceImplTest {
         detail.setCustomerName("张女士");
         detail.setAmount("¥168.00");
         return detail;
+    }
+
+    private PaymentEventListItemDTO refundEvent(String publishStatus, int retryCount) {
+        PaymentEventListItemDTO event = new PaymentEventListItemDTO();
+        event.setEventNo("EVTR-001");
+        event.setEventType("REFUND_SUBMIT");
+        event.setPaymentOrderId("PAY-001");
+        event.setBizNo("REF-001");
+        event.setPublishStatus(publishStatus);
+        event.setRetryCount(retryCount);
+        return event;
+    }
+
+    private RefundChannelSubmitRequestDTO refundSubmitRequest() {
+        RefundChannelSubmitRequestDTO request = new RefundChannelSubmitRequestDTO();
+        request.setRefundOrderId("REF-001");
+        request.setPaymentOrderId("PAY-001");
+        request.setChannelCode("wx_h5");
+        request.setRefundAmount(new java.math.BigDecimal("20.00"));
+        request.setRefundStatus("PROCESSING");
+        return request;
     }
 
     private Object invokeGetter(Object target, String methodName) {

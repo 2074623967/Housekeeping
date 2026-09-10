@@ -137,7 +137,9 @@
     <select id="findDueFailedEventNos" resultType="string">
         SELECT event_no
         FROM t_payment_event
-        WHERE publish_status = 'FAILED'
+        WHERE (publish_status = 'FAILED'
+               OR (publish_status = 'PENDING'
+                   AND event_type IN ('PAYMENT_SUCCESS', 'REFUND_SUBMIT')))
           AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
         ORDER BY created_at ASC, id ASC
     </select>
@@ -159,6 +161,18 @@
         FROM t_payment_event
         WHERE event_no = #{eventNo}
         LIMIT 1
+    </select>
+
+    <select id="findByEventNoForUpdate" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
+        SELECT event_no AS eventNo,
+               event_type AS eventType,
+               payment_order_id AS paymentOrderId,
+               biz_no AS bizNo,
+               publish_status AS publishStatus,
+               retry_count AS retryCount
+        FROM t_payment_event
+        WHERE event_no = #{eventNo}
+        FOR UPDATE
     </select>
 
     <update id="markPublishSuccess">

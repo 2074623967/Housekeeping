@@ -8,7 +8,7 @@ import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.mapper.RefundMapper;
-import com.abc123.hsp.service.RefundChannelSubmitService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -152,7 +152,7 @@ public class RefundApplicationConcurrencyIntegrationTest {
     }
 
     private RefundServiceImpl createService(RefundMapper mapper) {
-        return new RefundServiceImpl(mapper, mock(RefundChannelSubmitService.class));
+        return new RefundServiceImpl(mapper, mock(PaymentEventDispatchService.class));
     }
 
     private RefundApplyRequestDTO refundRequest(String amount) {

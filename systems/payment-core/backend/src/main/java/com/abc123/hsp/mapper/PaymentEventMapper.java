@@ -47,6 +47,11 @@ public interface PaymentEventMapper {
     PaymentEventListItemDTO findByEventNo(@Param("eventNo") String eventNo);
 
     /**
+     * 按事件号锁定待派发事件，避免多实例并发重复调用渠道。
+     */
+    PaymentEventListItemDTO findByEventNoForUpdate(@Param("eventNo") String eventNo);
+
+    /**
      * 标记事件发布成功。
      */
     int markPublishSuccess(@Param("eventNo") String eventNo);

@@ -183,13 +183,53 @@
                refund_order.refund_amount AS refundAmount,
                refund_order.refund_method AS refundMethod,
                refund_order.refund_reason AS refundReason,
-               payment_order.channel_code AS channelCode
+               payment_order.channel_code AS channelCode,
+               refund_order.status AS refundStatus
         FROM t_refund_order refund_order
         INNER JOIN t_payment_order payment_order
             ON payment_order.payment_order_id = refund_order.payment_order_id
         WHERE refund_order.refund_order_id = #{refundOrderId}
         LIMIT 1
     </select>
+
+    <insert id="upsertRefundSubmitEvent">
+        INSERT INTO t_payment_event(
+            event_no,
+            event_type,
+            payment_order_id,
+            biz_no,
+            downstream_system,
+            event_topic,
+            publish_status,
+            publish_status_type,
+            retry_count,
+            last_published_at,
+            next_retry_at,
+            event_payload,
+            created_at
+        ) VALUES (
+            #{eventNo},
+            'REFUND_SUBMIT',
+            #{paymentOrderId},
+            #{refundOrderId},
+            'gateway-access',
+            'payment.refund.submitted.v1',
+            'PENDING',
+            'warn',
+            0,
+            NULL,
+            NOW(),
+            '退款渠道待下发',
+            NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            publish_status = 'PENDING',
+            publish_status_type = 'warn',
+            retry_count = 0,
+            last_published_at = NULL,
+            next_retry_at = NOW(),
+            event_payload = '退款渠道待下发'
+    </insert>
 
     <select id="sumActiveRefundAmount" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)

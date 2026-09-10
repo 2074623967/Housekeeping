@@ -3,8 +3,6 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.service.RefundChannelSubmitService;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -14,12 +12,10 @@ import org.springframework.util.StringUtils;
 @Service
 public class LocalRefundChannelSubmitServiceImpl implements RefundChannelSubmitService {
 
-    private static final DateTimeFormatter NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
-
     @Override
     public RefundChannelSubmitResultDTO submit(RefundChannelSubmitRequestDTO request) {
         RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
-        result.setChannelRefundNo("RCH" + LocalDateTime.now().format(NO_FORMATTER));
+        result.setChannelRefundNo("RCH-" + safe(request == null ? null : request.getRefundOrderId()));
         result.setStatus("PROCESSING");
         result.setStatusType("warn");
         result.setResponsePayload(buildResponsePayload(request, result.getChannelRefundNo()));

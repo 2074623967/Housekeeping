@@ -2,15 +2,20 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
+import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -18,6 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -28,6 +35,7 @@ import org.springframework.web.client.RestTemplate;
 public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchService {
 
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
+    private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
     private static final int DEFAULT_MAX_RETRY_COUNT = 3;
 
     private final PaymentMapper paymentMapper;
@@ -43,6 +51,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final long publisherConfirmTimeoutMs;
+    private final RefundMapper refundMapper;
+    private final RefundChannelSubmitService refundChannelSubmitService;
 
     @Autowired
     public PaymentEventDispatchServiceImpl(
@@ -59,7 +69,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             @Value("${payment.amqp.payment-success-routing-key:payment.success.v1}") String paymentSuccessRoutingKey,
             @Value("${payment.amqp.publisher-confirm-timeout-ms:5000}") long publisherConfirmTimeoutMs,
             RabbitTemplate rabbitTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            RefundMapper refundMapper,
+            RefundChannelSubmitService refundChannelSubmitService) {
         this(paymentMapper,
                 paymentEventMapper,
                 clearingUrl,
@@ -72,7 +84,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 paymentSuccessRoutingKey,
                 publisherConfirmTimeoutMs,
                 rabbitTemplate,
-                objectMapper);
+                objectMapper,
+                refundMapper,
+                refundChannelSubmitService);
     }
 
     PaymentEventDispatchServiceImpl(
@@ -93,6 +107,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 "payment.trade",
                 "payment.success.v1",
                 5000L,
+                null,
+                null,
                 null,
                 null);
     }
@@ -116,6 +132,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 "payment.trade",
                 "payment.success.v1",
                 5000L,
+                null,
+                null,
                 null,
                 null);
     }
@@ -141,7 +159,30 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 paymentSuccessRoutingKey,
                 5000L,
                 rabbitTemplate,
-                objectMapper);
+                objectMapper,
+                null,
+                null);
+    }
+
+    PaymentEventDispatchServiceImpl(PaymentEventMapper paymentEventMapper,
+                                    RefundMapper refundMapper,
+                                    RefundChannelSubmitService refundChannelSubmitService,
+                                    int maxRetryCount) {
+        this(null,
+                paymentEventMapper,
+                null,
+                null,
+                null,
+                maxRetryCount,
+                null,
+                "http",
+                null,
+                null,
+                5000L,
+                null,
+                null,
+                refundMapper,
+                refundChannelSubmitService);
     }
 
     private PaymentEventDispatchServiceImpl(
@@ -157,7 +198,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             String paymentSuccessRoutingKey,
             long publisherConfirmTimeoutMs,
             RabbitTemplate rabbitTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            RefundMapper refundMapper,
+            RefundChannelSubmitService refundChannelSubmitService) {
         this.paymentMapper = paymentMapper;
         this.paymentEventMapper = paymentEventMapper;
         this.clearingUrl = clearingUrl;
@@ -171,6 +214,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0 ? 5000L : publisherConfirmTimeoutMs;
+        this.refundMapper = refundMapper;
+        this.refundChannelSubmitService = refundChannelSubmitService;
     }
 
     @Override
@@ -179,12 +224,103 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean publishRefundSubmit(String eventNo, String refundOrderId) {
+        return dispatchRefundSubmit(eventNo, refundOrderId);
+    }
+
+    @Override
+    @Transactional
     public boolean republish(String eventNo) {
         PaymentEventListItemDTO event = paymentEventMapper.findByEventNo(eventNo);
-        if (event == null || !PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())) {
+        if (event == null) {
+            return false;
+        }
+        if (REFUND_SUBMIT_EVENT_TYPE.equals(event.getEventType())) {
+            return dispatchRefundSubmit(eventNo, event.getBizNo());
+        }
+        if (!PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())) {
             return false;
         }
         return dispatchPaymentSuccess(eventNo, event.getPaymentOrderId());
+    }
+
+    private boolean dispatchRefundSubmit(String eventNo, String refundOrderId) {
+        if (refundMapper == null || refundChannelSubmitService == null) {
+            return false;
+        }
+        PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
+        if (event == null
+                || !REFUND_SUBMIT_EVENT_TYPE.equals(event.getEventType())
+                || !Objects.equals(event.getBizNo(), refundOrderId)) {
+            return false;
+        }
+        if ("SUCCESS".equals(event.getPublishStatus())) {
+            return true;
+        }
+        RefundChannelSubmitRequestDTO request =
+                refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
+        if (request == null) {
+            markFailedOrDeadLetter(eventNo);
+            return false;
+        }
+        if (!"PROCESSING".equals(request.getRefundStatus())) {
+            return paymentEventMapper.markPublishSuccess(eventNo) == 1;
+        }
+        try {
+            validateRefundSubmitRequest(event, request);
+            RefundChannelSubmitResultDTO result = refundChannelSubmitService.submit(request);
+            if (result == null || !StringUtils.hasText(result.getChannelRefundNo())) {
+                throw new IllegalStateException("退款渠道未返回受理单号");
+            }
+            refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+                    refundOrderId,
+                    "CHANNEL_SUBMIT",
+                    "提交退款渠道",
+                    "PROCESSING",
+                    "PROCESSING",
+                    "payment-core-admin",
+                    refundSubmitRemark(request, result)));
+            if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
+                throw new IllegalStateException("退款渠道事件成功状态更新失败");
+            }
+            return true;
+        } catch (RuntimeException exception) {
+            refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+                    refundOrderId,
+                    "CHANNEL_SUBMIT_UNKNOWN",
+                    "退款渠道下发结果未知",
+                    "PROCESSING",
+                    "PROCESSING",
+                    "payment-core-admin",
+                    "退款渠道下发未获得确定受理结果，保留处理中并等待幂等补偿"));
+            markFailedOrDeadLetter(eventNo);
+            return false;
+        }
+    }
+
+    private void validateRefundSubmitRequest(PaymentEventListItemDTO event,
+                                             RefundChannelSubmitRequestDTO request) {
+        if (!Objects.equals(event.getBizNo(), request.getRefundOrderId())
+                || !Objects.equals(event.getPaymentOrderId(), request.getPaymentOrderId())
+                || request.getRefundAmount() == null
+                || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0
+                || !StringUtils.hasText(request.getChannelCode())) {
+            throw new IllegalArgumentException("退款渠道下发快照不完整或不一致");
+        }
+    }
+
+    private String refundSubmitRemark(RefundChannelSubmitRequestDTO request,
+                                      RefundChannelSubmitResultDTO result) {
+        String remark = "退款渠道已受理 channel="
+                + safeText(request.getChannelCode())
+                + ", channelRefundNo="
+                + safeText(result.getChannelRefundNo());
+        return remark.length() <= 255 ? remark : remark.substring(0, 255);
+    }
+
+    private String safeText(String value) {
+        return StringUtils.hasText(value) ? value.trim() : "-";
     }
 
     private boolean dispatchPaymentSuccess(String eventNo, String paymentOrderId) {

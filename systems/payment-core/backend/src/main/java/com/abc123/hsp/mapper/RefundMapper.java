@@ -66,6 +66,13 @@ public interface RefundMapper {
     RefundChannelSubmitRequestDTO findChannelSubmitRequestByRefundOrderId(@Param("refundOrderId") String refundOrderId);
 
     /**
+     * 以稳定事件号写入或重新激活退款渠道下发 outbox。
+     */
+    int upsertRefundSubmitEvent(@Param("eventNo") String eventNo,
+                                @Param("refundOrderId") String refundOrderId,
+                                @Param("paymentOrderId") String paymentOrderId);
+
+    /**
      * 汇总原支付单已申请且未终止的退款金额。
      */
     BigDecimal sumActiveRefundAmount(String paymentOrderId);

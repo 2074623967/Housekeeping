@@ -2,7 +2,6 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
-import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
@@ -12,26 +11,32 @@ import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundRetrySourceDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
-import com.abc123.hsp.service.RefundChannelSubmitService;
+import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.RefundService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 @Service
 public class RefundServiceImpl implements RefundService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(RefundServiceImpl.class);
     private static final String STATUS_REVIEWING = "REVIEWING";
     private static final String STATUS_PROCESSING = "PROCESSING";
     private static final String STATUS_SUCCESS = "SUCCESS";
@@ -42,21 +47,21 @@ public class RefundServiceImpl implements RefundService {
     private static final String CALLBACK_OPERATOR = "channel-callback";
 
     private final RefundMapper refundMapper;
-    private final RefundChannelSubmitService refundChannelSubmitService;
+    private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
     @Autowired
     public RefundServiceImpl(RefundMapper refundMapper,
-                             RefundChannelSubmitService refundChannelSubmitService,
+                             PaymentEventDispatchService paymentEventDispatchService,
                              PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.refundMapper = refundMapper;
-        this.refundChannelSubmitService = refundChannelSubmitService;
+        this.paymentEventDispatchService = paymentEventDispatchService;
         this.sensitiveDataMasker = sensitiveDataMasker;
     }
 
     RefundServiceImpl(RefundMapper refundMapper,
-                      RefundChannelSubmitService refundChannelSubmitService) {
-        this(refundMapper, refundChannelSubmitService,
+                      PaymentEventDispatchService paymentEventDispatchService) {
+        this(refundMapper, paymentEventDispatchService,
                 new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
@@ -283,26 +288,48 @@ public class RefundServiceImpl implements RefundService {
                 StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : resolveDefaultRemark(fromStatus, status)
         ));
         if (STATUS_PROCESSING.equals(status)) {
-            triggerChannelSubmit(refundOrderId);
+            enqueueChannelSubmit(refundOrderId);
         }
         return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
     }
 
-    private void triggerChannelSubmit(String refundOrderId) {
+    private void enqueueChannelSubmit(String refundOrderId) {
         RefundChannelSubmitRequestDTO channelSubmitRequest = refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
         if (channelSubmitRequest == null) {
             throw new IllegalArgumentException("退款单不存在或缺少渠道下发信息");
         }
-        RefundChannelSubmitResultDTO submitResult = refundChannelSubmitService.submit(channelSubmitRequest);
-        refundMapper.insertOperationLog(buildOperationLog(
-                refundOrderId,
-                "CHANNEL_SUBMIT",
-                "提交退款渠道",
-                STATUS_PROCESSING,
-                STATUS_PROCESSING,
-                DEFAULT_OPERATOR,
-                buildChannelSubmitRemark(channelSubmitRequest, submitResult)
-        ));
+        String eventNo = buildRefundSubmitEventNo(refundOrderId);
+        refundMapper.upsertRefundSubmitEvent(eventNo, refundOrderId, channelSubmitRequest.getPaymentOrderId());
+        dispatchAfterCommit(eventNo, refundOrderId);
+    }
+
+    private void dispatchAfterCommit(String eventNo, String refundOrderId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            tryDispatch(eventNo, refundOrderId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                tryDispatch(eventNo, refundOrderId);
+            }
+        });
+    }
+
+    private void tryDispatch(String eventNo, String refundOrderId) {
+        try {
+            paymentEventDispatchService.publishRefundSubmit(eventNo, refundOrderId);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("退款渠道事件即时派发失败 eventNo={}, refundOrderId={}",
+                    eventNo, refundOrderId, exception);
+        }
+    }
+
+    private String buildRefundSubmitEventNo(String refundOrderId) {
+        return "EVTR" + UUID.nameUUIDFromBytes(
+                ("REFUND_SUBMIT:" + refundOrderId).getBytes(StandardCharsets.UTF_8))
+                .toString()
+                .replace("-", "");
     }
 
     private String requireRefundOrderId(RefundActionRequestDTO request) {
@@ -385,20 +412,6 @@ public class RefundServiceImpl implements RefundService {
 
     private String resolveDefaultRemark(String fromStatus, String toStatus) {
         return resolveActionName(fromStatus, toStatus);
-    }
-
-    private String buildChannelSubmitRemark(RefundChannelSubmitRequestDTO request,
-                                            RefundChannelSubmitResultDTO result) {
-        return "已提交退款渠道 channel="
-                + safeText(request.getChannelCode())
-                + ", channelRefundNo="
-                + safeText(result == null ? null : result.getChannelRefundNo())
-                + ", response="
-                + safeText(result == null ? null : result.getResponsePayload());
-    }
-
-    private String safeText(String value) {
-        return StringUtils.hasText(value) ? value.trim() : "-";
     }
 
     private String csvCell(String value) {
