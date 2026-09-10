@@ -7457,3 +7457,26 @@
 1. `ACCEPTED` 不再由本地数据库回查自动升级为 `DELIVERED`，送达确认必须来自外部查询适配器的明确结果。
 2. 当前实现完成了失败闭合、关联键保护、事务回写和默认关闭边界，但只提供适配器接口，没有任何真实供应商实现。
 3. 后续仍需按具体供应商实现协议、认证签名、查询限流与重试，并在受控环境验证真实回执、最终送达、值班响应和稳定性。
+
+## 254. 2026-09-10 告警回执查询通知集成网关客户端 V1.0 验证
+
+### 254.1 本轮补强
+
+1. 新增 `HttpPaymentIssueAlertReceiptQueryAdapter`，将 payment-core 的通用回执查询扩展点接到环境显式配置的“通知集成网关”HTTP 客户端；开关、URL、应用编码、访问密钥和通道允许列表必须同时有效。
+2. 请求携带稳定关联字段和专用应用认证头；响应只接受业务码 `0`、非空数据与 `DELIVERED / ACCEPTED / FAILED` 有限状态，非法字段、空/失败响应和传输异常均失败闭合。
+3. 供应商回执快照经统一敏感数据脱敏器处理，并清空响应中的 `renderedContentSnapshot`，保证回查结果不能覆盖原告警正文；服务层继续校验供应商回执号一致性。
+4. 自动回查改为 `receipt-reconcile` 与 `receipt-query.gateway-access` 双开关控制且默认关闭，避免只有调度许可但没有真实网关能力时自动扫描。
+
+### 254.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=HttpPaymentIssueAlertReceiptQueryAdapterTest,PaymentCompensationSchedulerTest,PaymentIssueAlertNotifierConfigurationTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `54` 个用例，`0` failures、`0` errors、`0` skipped；覆盖配置门禁、请求响应校验、脱敏、正文保护、双开关与服务回查边界 |
+| payment-core 全量测试 | `mvn test` | 通过 | `680` 个用例，`0` failures、`0` errors、`0` skipped |
+| 真实环境验证 | 通知集成网关服务端、IM/SMS/EMAIL 供应商协议、生产凭证、网络、最终送达和人员响应 | 未执行 | 当前仓库没有网关服务端或真实供应商实现，不记录真实送达、人员响应或生产稳定性通过 |
+
+### 254.3 当前判断
+
+1. payment-core 已从“只有查询扩展点”推进到具备稳定、默认关闭、失败闭合的通知集成网关客户端，且不会用未知响应或本地数据库事实推导最终送达。
+2. 客户端配置、数据校验和脱敏边界已由本地自动化覆盖；网关服务端、具体供应商协议、认证签名、查询限流与生产部署仍不在当前仓库内。
+3. 本轮测试证据只能证明客户端契约和内部状态保护，不证明任何真实供应商最终送达、值班人员响应或生产稳定性。

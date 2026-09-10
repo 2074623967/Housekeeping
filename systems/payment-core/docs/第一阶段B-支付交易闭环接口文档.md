@@ -2662,6 +2662,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 自动回查由 `payment.issue-alert.receipt-reconcile.enabled` 控制，对应环境变量为 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE_ENABLED`，默认值为 `false`。手工回查即使被调用，也仍受真实查询适配器和明确送达结果约束。
 5. 当前代码只提供查询扩展点，尚未实现任何 IM、SMS 或 EMAIL 真实供应商回执查询适配器。该契约和本地自动化测试不证明供应商最终送达、值班人员收到或生产链路已经验收。
 
+### 14.81 告警回执查询通知集成网关客户端契约
+
+1. `HttpPaymentIssueAlertReceiptQueryAdapter` 定义 payment-core 到“通知集成网关”的稳定 HTTP 客户端契约；只有 `enabled`、查询 URL、应用编码、访问密钥和目标通道允许列表全部配置有效时，才声明支持该通道。
+2. 客户端携带 `X-Gateway-App-Code / X-Gateway-Access-Key` 请求头，以 `POST` 向配置地址发送 `alertNo / issueNo / alertChannel / providerCode / providerReceiptNo`；必填字段、可选字段、长度和 ISO 控制字符均在网络调用前校验。
+3. 只有响应业务码为 `0`、`data` 非空且 `providerDeliveryStatus` 属于 `DELIVERED / ACCEPTED / FAILED` 有限集合时才接受。空响应、失败业务码、未知状态、非法字段和传输异常统一失败闭合，不泄露远端异常原文。
+4. 返回的供应商回执快照在保存前经 `PaymentSensitiveDataMasker` 脱敏；客户端强制清空 `renderedContentSnapshot`，回执查询不得覆盖原告警正文。回执号仍由回查服务执行既有关联一致性校验。
+5. 自动回查必须同时开启 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE_ENABLED` 与 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_GATEWAY_ENABLED`。查询 URL、应用编码、访问密钥或通道配置任一缺失时不生效，默认两项开关均关闭。
+6. 当前仓库没有该“通知集成网关”的服务端实现，也没有任何 IM、SMS 或 EMAIL 真实供应商回执查询实现。本契约及本地固定响应测试不证明真实供应商最终送达、人员响应、生产网络或稳定性验收完成。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。
