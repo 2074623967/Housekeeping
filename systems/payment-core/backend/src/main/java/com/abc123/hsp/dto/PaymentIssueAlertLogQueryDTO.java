@@ -22,6 +22,14 @@ public class PaymentIssueAlertLogQueryDTO {
     private String ackStatus = "全部";
     /** 供应商投递状态。 */
     private String providerDeliveryStatus = "全部";
+    /** 回执回查队列状态。 */
+    private String receiptQueryState = "全部";
+    /** 回执回查首次等待秒数，由服务端按配置写入。 */
+    private int receiptQueryMinAgeSeconds;
+    /** 自动回查最大次数，由服务端按配置写入。 */
+    private int receiptQueryMaxAttempts;
+    /** 回执回查占用超时秒数，由服务端按配置写入。 */
+    private int receiptQueryClaimTimeoutSeconds;
     /** 页码。 */
     private int pageNo = 1;
     /** 每页条数。 */

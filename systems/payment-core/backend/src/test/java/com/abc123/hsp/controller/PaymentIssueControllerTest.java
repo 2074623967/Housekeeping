@@ -45,9 +45,12 @@ class PaymentIssueControllerTest {
     void shouldListAlertLogs() {
         PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
 
-        controller.listAlertLogs("ALERT-001", "ISSUE-001", "PAY-001", "IM", "已派发", "待确认", "ACCEPTED", 1, 20);
+        controller.listAlertLogs(
+                "ALERT-001", "ISSUE-001", "PAY-001", "IM", "已派发", "待确认", "ACCEPTED",
+                "EXHAUSTED", 1, 20);
 
-        verify(paymentIssueService).listAlertLogs(any(PaymentIssueAlertLogQueryDTO.class));
+        verify(paymentIssueService).listAlertLogs(org.mockito.ArgumentMatchers.argThat(
+                query -> "EXHAUSTED".equals(query.getReceiptQueryState())));
     }
 
     @Test
@@ -55,9 +58,12 @@ class PaymentIssueControllerTest {
         PaymentIssueController controller = new PaymentIssueController(paymentIssueService);
         when(paymentIssueService.exportAlertLogsCsv(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn("告警编号\n");
 
-        controller.exportAlertLogs("ALERT-001", "ISSUE-001", "PAY-001", "IM", "已派发", "待确认", "ACCEPTED");
+        controller.exportAlertLogs(
+                "ALERT-001", "ISSUE-001", "PAY-001", "IM", "已派发", "待确认", "ACCEPTED",
+                "EXHAUSTED");
 
-        verify(paymentIssueService).exportAlertLogsCsv(any(PaymentIssueAlertLogQueryDTO.class));
+        verify(paymentIssueService).exportAlertLogsCsv(org.mockito.ArgumentMatchers.argThat(
+                query -> "EXHAUSTED".equals(query.getReceiptQueryState())));
     }
 
     @Test

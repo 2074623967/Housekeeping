@@ -811,6 +811,7 @@
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
+          AND created_at &lt;= TIMESTAMPADD(SECOND, -#{minAgeSeconds}, NOW())
           AND receipt_query_count &lt; #{maxAttempts}
           AND next_receipt_query_at &gt; NOW()
           AND (

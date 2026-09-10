@@ -114,6 +114,7 @@ class PaymentIssueServiceImplTest {
         query.setAlertStatus("  已派发  ");
         query.setAckStatus("  待确认  ");
         query.setProviderDeliveryStatus("  ACCEPTED  ");
+        query.setReceiptQueryState("  exhausted  ");
         query.setPageNo(0);
         query.setPageSize(200);
 
@@ -129,8 +130,24 @@ class PaymentIssueServiceImplTest {
         assertEquals("已派发", normalized.getAlertStatus());
         assertEquals("待确认", normalized.getAckStatus());
         assertEquals("ACCEPTED", normalized.getProviderDeliveryStatus());
+        assertEquals("EXHAUSTED", normalized.getReceiptQueryState());
+        assertEquals(60, normalized.getReceiptQueryMinAgeSeconds());
+        assertEquals(10, normalized.getReceiptQueryMaxAttempts());
+        assertEquals(30, normalized.getReceiptQueryClaimTimeoutSeconds());
         assertEquals(1, normalized.getPageNo());
         assertEquals(100, normalized.getPageSize());
+    }
+
+    @Test
+    void shouldRejectUnknownReceiptQueryState() {
+        PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+        query.setReceiptQueryState("UNKNOWN");
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).listAlertLogs(query));
+
+        assertTrue(exception.getMessage().contains("不支持的回执回查状态"));
     }
 
     @Test
@@ -177,6 +194,11 @@ class PaymentIssueServiceImplTest {
         row.setProviderDeliveryStatus("ACCEPTED");
         row.setProviderDeliveryMessage("accepted");
         row.setProviderReceiptNo("receipt-001");
+        row.setReceiptQueryState("BACKING_OFF");
+        row.setReceiptQueryCount(3);
+        row.setLastReceiptQueryAt("2026-08-07 09:45:00");
+        row.setNextReceiptQueryAt("2026-08-07 09:49:00");
+        row.setReceiptQueryResult("ACCEPTED");
         row.setAckOperator("支付运营");
         row.setAckAt("2026-08-07 10:00:00");
         row.setTriggeredBy("任务中心");
@@ -189,6 +211,7 @@ class PaymentIssueServiceImplTest {
 
         assertTrue(csv.contains("PIA-EXPORT-001"));
         assertTrue(csv.contains("支付异常告警内容"));
+        assertTrue(csv.contains("BACKING_OFF,3,2026-08-07 09:45:00,2026-08-07 09:49:00,ACCEPTED"));
         assertTrue(csv.contains("[REDACTED]"));
         assertFalse(csv.contains("13800138000"));
         assertEquals("HTTP 502: upstream body contains 13800138000", row.getProviderReceiptSnapshot());

@@ -156,7 +156,8 @@ public interface PaymentTaskCenterMapper {
     /**
      * 统计当前处于自动回查退避窗口的外发告警。
      */
-    int countBackingOffIssueAlertReceipts(@Param("maxAttempts") int maxAttempts,
+    int countBackingOffIssueAlertReceipts(@Param("minAgeSeconds") int minAgeSeconds,
+                                          @Param("maxAttempts") int maxAttempts,
                                           @Param("claimTimeoutSeconds") int claimTimeoutSeconds);
 
     /**

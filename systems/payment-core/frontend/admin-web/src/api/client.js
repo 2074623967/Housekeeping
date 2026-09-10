@@ -104,6 +104,7 @@ export const paymentIssueApi = {
     alertStatus = "全部",
     ackStatus = "全部",
     providerDeliveryStatus = "全部",
+    receiptQueryState = "全部",
     pageNo = 1,
     pageSize = 20
   } = {}) => {
@@ -115,6 +116,7 @@ export const paymentIssueApi = {
       alertStatus,
       ackStatus,
       providerDeliveryStatus,
+      receiptQueryState,
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
@@ -127,7 +129,8 @@ export const paymentIssueApi = {
     alertChannel = "全部",
     alertStatus = "全部",
     ackStatus = "全部",
-    providerDeliveryStatus = "全部"
+    providerDeliveryStatus = "全部",
+    receiptQueryState = "全部"
   } = {}) => {
     const params = new URLSearchParams({
       alertNo,
@@ -136,7 +139,8 @@ export const paymentIssueApi = {
       alertChannel,
       alertStatus,
       ackStatus,
-      providerDeliveryStatus
+      providerDeliveryStatus,
+      receiptQueryState
     });
     return `/api/payment-issues/alerts/export?${params.toString()}`;
   },

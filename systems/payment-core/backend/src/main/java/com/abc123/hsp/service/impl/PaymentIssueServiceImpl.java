@@ -12,12 +12,15 @@ import com.abc123.hsp.mapper.PaymentIssueMapper;
 import com.abc123.hsp.service.PaymentIssueService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,16 +33,28 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
 
     private final PaymentIssueMapper paymentIssueMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
+    private final int receiptQueryMinAgeSeconds;
+    private final int receiptQueryMaxAttempts;
+    private final int receiptQueryClaimTimeoutSeconds;
 
     @Autowired
     public PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper,
-                                   PaymentSensitiveDataMasker sensitiveDataMasker) {
+                                   PaymentSensitiveDataMasker sensitiveDataMasker,
+                                   @Value("${payment.issue-alert.receipt-query.compensation.min-age-seconds:60}")
+                                           int receiptQueryMinAgeSeconds,
+                                   @Value("${payment.issue-alert.receipt-query.compensation.max-attempts:10}")
+                                           int receiptQueryMaxAttempts,
+                                   @Value("${payment.issue-alert.receipt-query.compensation.claim-timeout-seconds:30}")
+                                           int receiptQueryClaimTimeoutSeconds) {
         this.paymentIssueMapper = paymentIssueMapper;
         this.sensitiveDataMasker = sensitiveDataMasker;
+        this.receiptQueryMinAgeSeconds = Math.max(receiptQueryMinAgeSeconds, 1);
+        this.receiptQueryMaxAttempts = Math.max(receiptQueryMaxAttempts, 1);
+        this.receiptQueryClaimTimeoutSeconds = Math.max(receiptQueryClaimTimeoutSeconds, 1);
     }
 
     PaymentIssueServiceImpl(PaymentIssueMapper paymentIssueMapper) {
-        this(paymentIssueMapper, new PaymentSensitiveDataMasker(new ObjectMapper()));
+        this(paymentIssueMapper, new PaymentSensitiveDataMasker(new ObjectMapper()), 60, 10, 30);
     }
 
     @Override
@@ -93,7 +108,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                 paymentIssueMapper.findAlertLogs(normalizedQuery));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
-        builder.append("告警编号,异常编号,支付单号,异常类型,严重等级,责任组,告警通道,接收人,告警状态,回执状态,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
+        builder.append("告警编号,异常编号,支付单号,异常类型,严重等级,责任组,告警通道,接收人,告警状态,回执状态,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回查队列状态,回查次数,最近回查时间,下次自动回查时间,最近回查结果,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
         for (PaymentIssueAlertLogRowDTO item : records) {
             builder.append(csv(item.getAlertNo())).append(',')
                     .append(csv(item.getIssueNo())).append(',')
@@ -112,6 +127,11 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
                     .append(csv(item.getProviderDeliveryStatus())).append(',')
                     .append(csv(item.getProviderDeliveryMessage())).append(',')
                     .append(csv(item.getProviderReceiptNo())).append(',')
+                    .append(csv(item.getReceiptQueryState())).append(',')
+                    .append(csv(item.getReceiptQueryCount())).append(',')
+                    .append(csv(item.getLastReceiptQueryAt())).append(',')
+                    .append(csv(item.getNextReceiptQueryAt())).append(',')
+                    .append(csv(item.getReceiptQueryResult())).append(',')
                     .append(csv(item.getAckOperator())).append(',')
                     .append(csv(item.getAckAt())).append(',')
                     .append(csv(item.getTriggeredBy())).append(',')
@@ -205,9 +225,25 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         query.setAlertStatus(query.getAlertStatus() == null ? "全部" : query.getAlertStatus().trim());
         query.setAckStatus(query.getAckStatus() == null ? "全部" : query.getAckStatus().trim());
         query.setProviderDeliveryStatus(query.getProviderDeliveryStatus() == null ? "全部" : query.getProviderDeliveryStatus().trim());
+        query.setReceiptQueryState(normalizeReceiptQueryState(query.getReceiptQueryState()));
+        query.setReceiptQueryMinAgeSeconds(receiptQueryMinAgeSeconds);
+        query.setReceiptQueryMaxAttempts(receiptQueryMaxAttempts);
+        query.setReceiptQueryClaimTimeoutSeconds(receiptQueryClaimTimeoutSeconds);
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return query;
+    }
+
+    private String normalizeReceiptQueryState(String receiptQueryState) {
+        if (!StringUtils.hasText(receiptQueryState) || "全部".equals(receiptQueryState.trim())) {
+            return "全部";
+        }
+        String normalized = receiptQueryState.trim().toUpperCase(Locale.ROOT);
+        if (!Arrays.asList("INITIAL_WAIT", "DUE", "BACKING_OFF", "QUERYING", "EXHAUSTED")
+                .contains(normalized)) {
+            throw new IllegalArgumentException("不支持的回执回查状态：" + receiptQueryState.trim());
+        }
+        return normalized;
     }
 
     private String requireText(String text, String message) {
@@ -226,6 +262,10 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             return "\"" + escaped + "\"";
         }
         return escaped;
+    }
+
+    private String csv(Integer value) {
+        return value == null ? "" : String.valueOf(value);
     }
 
     private List<PaymentIssueAlertLogRowDTO> maskAlertLogItems(List<PaymentIssueAlertLogRowDTO> items) {

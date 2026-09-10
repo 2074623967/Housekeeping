@@ -21,7 +21,8 @@ const filters = ref({
   alertChannel: route.query.alertChannel || "全部",
   alertStatus: route.query.alertStatus || "全部",
   ackStatus: route.query.ackStatus || "全部",
-  providerDeliveryStatus: route.query.providerDeliveryStatus || "全部"
+  providerDeliveryStatus: route.query.providerDeliveryStatus || "全部",
+  receiptQueryState: route.query.receiptQueryState || "全部"
 });
 
 const metricCards = computed(() => [
@@ -64,6 +65,12 @@ const alertSuggestions = computed(() => {
   if (selectedItem.value.providerDeliveryStatus === "SEND_EXCEPTION") {
     suggestions.push("供应商发送异常，建议联查支付处理日志与 outbox 派发日志。");
   }
+  if (selectedItem.value.receiptQueryState === "EXHAUSTED") {
+    suggestions.push("自动回查次数已耗尽，建议核对供应商回执后执行受控人工回查或人工确认，不要推测最终送达。");
+  }
+  if (selectedItem.value.receiptQueryState === "QUERYING") {
+    suggestions.push("当前回查 claim 仍有效，建议等待本次执行完成或占用超时，避免重复外呼。");
+  }
   if (!suggestions.length) {
     suggestions.push("当前告警链路已相对完整，可结合支付单详情与异常中心继续做业务复盘。");
   }
@@ -78,7 +85,8 @@ function resetFilters() {
     alertChannel: "全部",
     alertStatus: "全部",
     ackStatus: "全部",
-    providerDeliveryStatus: "全部"
+    providerDeliveryStatus: "全部",
+    receiptQueryState: "全部"
   };
   pageNo.value = 1;
   loadAlertLogs();
@@ -97,7 +105,8 @@ function exportAlertLogs() {
     alertChannel: filters.value.alertChannel,
     alertStatus: filters.value.alertStatus,
     ackStatus: filters.value.ackStatus,
-    providerDeliveryStatus: filters.value.providerDeliveryStatus
+    providerDeliveryStatus: filters.value.providerDeliveryStatus,
+    receiptQueryState: filters.value.receiptQueryState
   });
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
@@ -114,6 +123,7 @@ async function loadAlertLogs() {
       alertStatus: filters.value.alertStatus,
       ackStatus: filters.value.ackStatus,
       providerDeliveryStatus: filters.value.providerDeliveryStatus,
+      receiptQueryState: filters.value.receiptQueryState,
       pageNo: pageNo.value,
       pageSize
     });
@@ -136,14 +146,11 @@ async function acknowledgeAlert(alertNo) {
   errorMessage.value = "";
   successMessage.value = "";
   try {
-    const updatedRow = await paymentIssueApi.acknowledgeAlert(alertNo, {
+    await paymentIssueApi.acknowledgeAlert(alertNo, {
       operator: ackOperator.value.trim()
     });
-    items.value = items.value.map((item) => (item.alertNo === alertNo ? updatedRow : item));
-    if (selectedItem.value?.alertNo === alertNo) {
-      selectedItem.value = updatedRow;
-    }
     successMessage.value = `告警 ${alertNo} 已确认回执`;
+    await loadAlertLogs();
   } catch (error) {
     errorMessage.value = `确认回执失败：${error.message}`;
   } finally {
@@ -161,6 +168,16 @@ function goToPage(nextPage) {
 
 function pickItem(item) {
   selectedItem.value = item;
+}
+
+function receiptQueryStateLabel(state) {
+  return {
+    INITIAL_WAIT: "首次等待",
+    DUE: "当前可执行",
+    BACKING_OFF: "退避中",
+    QUERYING: "查询中",
+    EXHAUSTED: "自动次数耗尽"
+  }[state] || "-";
 }
 
 onMounted(loadAlertLogs);
@@ -247,6 +264,17 @@ onMounted(loadAlertLogs);
           </select>
         </div>
         <div class="field">
+          <label>回查队列状态</label>
+          <select v-model="filters.receiptQueryState">
+            <option value="全部">全部</option>
+            <option value="INITIAL_WAIT">首次等待</option>
+            <option value="DUE">当前可执行</option>
+            <option value="BACKING_OFF">退避中</option>
+            <option value="QUERYING">查询中</option>
+            <option value="EXHAUSTED">自动次数耗尽</option>
+          </select>
+        </div>
+        <div class="field">
           <label>默认确认人</label>
           <input v-model="ackOperator" placeholder="请输入确认人" />
         </div>
@@ -275,6 +303,7 @@ onMounted(loadAlertLogs);
                 <th>回执状态</th>
                 <th>供应商信息</th>
                 <th>投递回执</th>
+                <th>回查状态</th>
                 <th>操作</th>
                 <th>创建时间</th>
               </tr>
@@ -309,6 +338,11 @@ onMounted(loadAlertLogs);
                   <div class="muted-text">{{ item.providerReceiptNo || "-" }}</div>
                   <div class="muted-text">{{ item.providerDeliveryMessage || "-" }}</div>
                 </td>
+                <td class="flow-summary-cell">
+                  <div>{{ receiptQueryStateLabel(item.receiptQueryState) }}</div>
+                  <div class="muted-text">次数 {{ item.receiptQueryCount ?? 0 }}</div>
+                  <div class="muted-text">结果 {{ item.receiptQueryResult || "-" }}</div>
+                </td>
                 <td>
                   <button
                     v-if="item.ackStatus === '待确认'"
@@ -338,6 +372,7 @@ onMounted(loadAlertLogs);
               <div class="detail-card"><span>触发来源</span><strong>{{ selectedItem.triggeredBy || "-" }}</strong></div>
               <div class="detail-card"><span>接收人</span><strong>{{ selectedItem.receiver || "-" }}</strong></div>
               <div class="detail-card"><span>供应商状态</span><strong>{{ selectedItem.providerDeliveryStatus || "-" }}</strong></div>
+              <div class="detail-card"><span>回查队列</span><strong>{{ receiptQueryStateLabel(selectedItem.receiptQueryState) }}</strong></div>
               <div class="detail-card"><span>回执确认</span><strong>{{ selectedItem.ackAt || "未确认" }}</strong></div>
             </div>
             <div class="ops-card">
@@ -363,6 +398,10 @@ onMounted(loadAlertLogs);
               <div class="ops-row"><span>端点</span><span>{{ selectedItem.endpointAlias || "-" }}</span></div>
               <div class="ops-row"><span>模板</span><span>{{ selectedItem.templateCode || "-" }}</span></div>
               <div class="ops-row"><span>回执号</span><span>{{ selectedItem.providerReceiptNo || "-" }}</span></div>
+              <div class="ops-row"><span>回查次数</span><span>{{ selectedItem.receiptQueryCount ?? 0 }}</span></div>
+              <div class="ops-row"><span>最近回查</span><span>{{ selectedItem.lastReceiptQueryAt || "-" }}</span></div>
+              <div class="ops-row"><span>下次自动回查</span><span>{{ selectedItem.nextReceiptQueryAt || "-" }}</span></div>
+              <div class="ops-row"><span>最近回查结果</span><span>{{ selectedItem.receiptQueryResult || "-" }}</span></div>
               <div class="timeline-item">{{ selectedItem.providerDeliveryMessage || "-" }}</div>
               <div class="timeline-item">{{ selectedItem.providerReceiptSnapshot || "-" }}</div>
             </div>

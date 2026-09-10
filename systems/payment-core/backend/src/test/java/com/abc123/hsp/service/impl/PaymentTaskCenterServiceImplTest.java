@@ -92,7 +92,7 @@ class PaymentTaskCenterServiceImplTest {
     void shouldExposeIssueAlertReceiptQueryQueueMetricsInOverview() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countDueIssueAlertReceipts(60, 10, 30)).thenReturn(7);
-        when(paymentTaskCenterMapper.countBackingOffIssueAlertReceipts(10, 30)).thenReturn(5);
+        when(paymentTaskCenterMapper.countBackingOffIssueAlertReceipts(60, 10, 30)).thenReturn(5);
         when(paymentTaskCenterMapper.countQueryingIssueAlertReceipts(30)).thenReturn(2);
         when(paymentTaskCenterMapper.countExhaustedIssueAlertReceipts(10, 30)).thenReturn(3);
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -215,6 +215,22 @@ class PaymentTaskCenterServiceImplTest {
                 "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
                         && alert.getAlertMessage().contains("最老已等待 30 分钟")));
+    }
+
+    @Test
+    void shouldRaiseP1AndLinkToAlertDetailsWhenReceiptQueriesAreExhausted() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countPendingIssueAlertReceipts()).thenReturn(1);
+        when(paymentTaskCenterMapper.countExhaustedIssueAlertReceipts(10, 30)).thenReturn(1);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("自动次数耗尽 1 条")
+                        && "/payment-issue-alerts?receiptQueryState=EXHAUSTED".equals(alert.getActionRoute())));
     }
 
     @Test

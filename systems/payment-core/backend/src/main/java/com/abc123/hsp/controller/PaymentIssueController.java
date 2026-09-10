@@ -94,6 +94,7 @@ public class PaymentIssueController {
             @RequestParam(defaultValue = "全部") String alertStatus,
             @RequestParam(defaultValue = "全部") String ackStatus,
             @RequestParam(defaultValue = "全部") String providerDeliveryStatus,
+            @RequestParam(defaultValue = "全部") String receiptQueryState,
             @RequestParam(defaultValue = "1") int pageNo,
             @RequestParam(defaultValue = "20") int pageSize) {
         PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
@@ -104,6 +105,7 @@ public class PaymentIssueController {
         query.setAlertStatus(alertStatus);
         query.setAckStatus(ackStatus);
         query.setProviderDeliveryStatus(providerDeliveryStatus);
+        query.setReceiptQueryState(receiptQueryState);
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentIssueService.listAlertLogs(query));
@@ -120,7 +122,8 @@ public class PaymentIssueController {
             @RequestParam(defaultValue = "全部") String alertChannel,
             @RequestParam(defaultValue = "全部") String alertStatus,
             @RequestParam(defaultValue = "全部") String ackStatus,
-            @RequestParam(defaultValue = "全部") String providerDeliveryStatus) {
+            @RequestParam(defaultValue = "全部") String providerDeliveryStatus,
+            @RequestParam(defaultValue = "全部") String receiptQueryState) {
         PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
         query.setAlertNo(alertNo);
         query.setIssueNo(issueNo);
@@ -129,6 +132,7 @@ public class PaymentIssueController {
         query.setAlertStatus(alertStatus);
         query.setAckStatus(ackStatus);
         query.setProviderDeliveryStatus(providerDeliveryStatus);
+        query.setReceiptQueryState(receiptQueryState);
         byte[] csvBytes = paymentIssueService.exportAlertLogsCsv(query).getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-issue-alert-logs.csv")

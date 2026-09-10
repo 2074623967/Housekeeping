@@ -52,6 +52,16 @@ public class PaymentIssueAlertLogRowDTO {
     private String providerDeliveryStatus;
     /** 供应商投递说明。 */
     private String providerDeliveryMessage;
+    /** 回执回查队列状态。 */
+    private String receiptQueryState;
+    /** 回执回查次数。 */
+    private Integer receiptQueryCount;
+    /** 最近回执回查时间。 */
+    private String lastReceiptQueryAt;
+    /** 下一次自动回执回查时间。 */
+    private String nextReceiptQueryAt;
+    /** 最近回执回查有限结果。 */
+    private String receiptQueryResult;
     /** 渲染后的告警内容快照。 */
     private String renderedContentSnapshot;
     /** 触发来源。 */

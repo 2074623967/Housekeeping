@@ -3,6 +3,8 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import java.io.InputStream;
@@ -196,18 +198,45 @@ public class PaymentTaskCenterMapperIntegrationTest {
                         + "('PIA-METRIC-STALE', 'SOURCE-METRIC-STALE', '异常告警派发', 'EMAIL', "
                         + "'待确认', '已派发', 'ACCEPTED', 2, TIMESTAMPADD(MINUTE, -2, NOW()), "
                         + "TIMESTAMPADD(MINUTE, -1, NOW()), 'QUERYING', "
-                        + "TIMESTAMPADD(MINUTE, -10, NOW()))");
+                        + "TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "('PIA-METRIC-INITIAL', 'SOURCE-METRIC-INITIAL', '异常告警派发', 'SMS', "
+                        + "'待确认', '已派发', 'ACCEPTED', 0, NULL, NULL, NULL, NOW()),"
+                        + "('PIA-METRIC-INITIAL-BACKOFF', 'SOURCE-METRIC-INITIAL-BACKOFF', "
+                        + "'异常告警派发', 'EMAIL', '待确认', '已派发', 'ACCEPTED', 0, NULL, "
+                        + "TIMESTAMPADD(MINUTE, 10, NOW()), NULL, NOW())");
             }
 
             assertEquals(2, mapper.countPendingIssueAlertDispatches());
             assertEquals(1, mapper.countFailedIssueAlertDispatches());
             assertEquals(45, mapper.findOldestPendingIssueAlertDispatchMinutes());
-            assertEquals(6, mapper.countPendingIssueAlertReceipts());
+            assertEquals(8, mapper.countPendingIssueAlertReceipts());
             assertEquals(2, mapper.countDueIssueAlertReceipts(60, 10, 30));
-            assertEquals(1, mapper.countBackingOffIssueAlertReceipts(10, 30));
+            assertEquals(1, mapper.countBackingOffIssueAlertReceipts(60, 10, 30));
             assertEquals(1, mapper.countQueryingIssueAlertReceipts(30));
             assertEquals(1, mapper.countExhaustedIssueAlertReceipts(10, 30));
             assertEquals(65, mapper.findOldestPendingIssueAlertReceiptMinutes());
+
+            PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);
+            PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+            query.setReceiptQueryMinAgeSeconds(60);
+            query.setReceiptQueryMaxAttempts(10);
+            query.setReceiptQueryClaimTimeoutSeconds(30);
+            query.setReceiptQueryState("EXHAUSTED");
+            assertEquals(1, issueMapper.countAlertLogs(query));
+            PaymentIssueAlertLogRowDTO exhausted = issueMapper.findAlertLogs(query).get(0);
+            assertEquals("PIA-METRIC-EXHAUSTED", exhausted.getAlertNo());
+            assertEquals("EXHAUSTED", exhausted.getReceiptQueryState());
+            assertEquals(Integer.valueOf(10), exhausted.getReceiptQueryCount());
+            assertEquals("FAILED", exhausted.getReceiptQueryResult());
+
+            query.setReceiptQueryState("DUE");
+            assertEquals(2, issueMapper.countAlertLogs(query));
+            query.setReceiptQueryState("BACKING_OFF");
+            assertEquals(1, issueMapper.countAlertLogs(query));
+            query.setReceiptQueryState("QUERYING");
+            assertEquals(1, issueMapper.countAlertLogs(query));
+            query.setReceiptQueryState("INITIAL_WAIT");
+            assertEquals(2, issueMapper.countAlertLogs(query));
         }
     }
 
@@ -381,6 +410,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".findInSet'");
             statement.execute("CREATE ALIAS IF NOT EXISTS WEEKDAY FOR '"
                     + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".weekday'");
+            statement.execute("CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR '"
+                    + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".dateFormat'");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
@@ -583,6 +614,20 @@ public class PaymentTaskCenterMapperIntegrationTest {
 
     public static int weekday(java.sql.Date date) {
         return date.toLocalDate().getDayOfWeek().getValue() - 1;
+    }
+
+    public static String dateFormat(Timestamp timestamp, String pattern) {
+        if (timestamp == null) {
+            return null;
+        }
+        String javaPattern = pattern
+                .replace("%Y", "yyyy")
+                .replace("%m", "MM")
+                .replace("%d", "dd")
+                .replace("%H", "HH")
+                .replace("%i", "mm")
+                .replace("%s", "ss");
+        return timestamp.toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern(javaPattern));
     }
 
     private int countAlertsByGenerationKey(Connection connection, String generationKey) throws Exception {
