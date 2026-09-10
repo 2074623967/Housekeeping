@@ -49,4 +49,10 @@ public final class ErrorCode {
     public static final String PAYMENT_REQUEST_INVALID = "PAYMENT-1036";
     public static final String PAYMENT_ORDER_ALREADY_SETTLED = "PAYMENT-1037";
     public static final String PAYMENT_PREPAY_REQUEST_CONFLICT = "PAYMENT-1038";
+    public static final String REFUND_CALLBACK_REQUEST_INVALID = "PAYMENT-1039";
+    public static final String REFUND_CALLBACK_CHANNEL_MISMATCH = "PAYMENT-1040";
+    public static final String REFUND_CALLBACK_TRANSACTION_MISMATCH = "PAYMENT-1041";
+    public static final String REFUND_CALLBACK_STATUS_INVALID = "PAYMENT-1042";
+    public static final String REFUND_CALLBACK_FINAL_STATUS_CONFLICT = "PAYMENT-1043";
+    public static final String REFUND_ORDER_NOT_FOUND = "PAYMENT-1044";
 }

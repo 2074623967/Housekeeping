@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.RefundQueryDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.service.RefundService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
@@ -53,5 +54,15 @@ class RefundControllerTest {
         controller.list(null, null, "全部", "全部", 1, 20);
 
         verify(refundService).list(any(RefundQueryDTO.class));
+    }
+
+    @Test
+    void shouldDelegateTrustedRefundCallback() {
+        RefundController controller = new RefundController(refundService);
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+
+        controller.callback("wx_h5", request);
+
+        verify(refundService).callback("wx_h5", request);
     }
 }

@@ -242,8 +242,6 @@ onMounted(loadDetail);
             </div>
             <div class="toolbar-actions">
               <button class="button primary" :disabled="activeAction === 'approve' || detail.status !== 'REVIEWING'" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
-              <button class="button primary" :disabled="activeAction === 'success' || detail.status !== 'PROCESSING'" @click="runAction('success', '退款成功', refundApi.markSuccess)">成功回调</button>
-              <button class="button secondary" :disabled="activeAction === 'fail' || detail.status !== 'PROCESSING'" @click="runAction('fail', '退款失败', refundApi.markFail)">失败回调</button>
               <button class="button secondary" :disabled="activeAction === 'retry' || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
           </div>

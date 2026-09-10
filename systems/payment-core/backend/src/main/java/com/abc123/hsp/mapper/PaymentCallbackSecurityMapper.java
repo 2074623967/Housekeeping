@@ -18,7 +18,8 @@ public interface PaymentCallbackSecurityMapper {
      */
     void insertCallbackNonce(@Param("channelCode") String channelCode,
                              @Param("nonce") String nonce,
-                             @Param("paymentOrderId") String paymentOrderId,
+                             @Param("bizType") String bizType,
+                             @Param("bizNo") String bizNo,
                              @Param("expireSeconds") long expireSeconds);
 
     /**

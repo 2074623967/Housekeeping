@@ -17,8 +17,8 @@
     </select>
 
     <insert id="insertCallbackNonce">
-        INSERT INTO t_payment_callback_nonce(channel_code, nonce, payment_order_id, expires_at, created_at)
-        VALUES (LOWER(#{channelCode}), #{nonce}, #{paymentOrderId},
+        INSERT INTO t_payment_callback_nonce(channel_code, nonce, biz_type, biz_no, expires_at, created_at)
+        VALUES (LOWER(#{channelCode}), #{nonce}, #{bizType}, #{bizNo},
                 TIMESTAMPADD(SECOND, #{expireSeconds}, NOW()), NOW())
     </insert>
 

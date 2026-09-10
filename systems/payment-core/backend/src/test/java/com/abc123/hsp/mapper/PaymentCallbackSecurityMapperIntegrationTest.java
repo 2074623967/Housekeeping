@@ -67,35 +67,36 @@ class PaymentCallbackSecurityMapperIntegrationTest {
             assertEquals("HMAC-SHA256", profile.getCallbackSignAlgorithm());
             assertEquals("channel-secret", profile.getCallbackSecret());
             assertEquals(Integer.valueOf(300), profile.getNotifySignWindowSec());
-            mapper.insertCallbackNonce("WX_H5", "nonce-001", "PAY-001", 601L);
+            mapper.insertCallbackNonce("WX_H5", "nonce-001", "PAYMENT", "PAY-001", 601L);
             session.commit();
         }
 
         try (SqlSession session = sqlSessionFactory.openSession()) {
             NonceRow nonce = findNonce(session.getConnection(), "nonce-001");
             assertEquals("wx_h5", nonce.channelCode);
-            assertEquals("PAY-001", nonce.paymentOrderId);
+            assertEquals("PAYMENT", nonce.bizType);
+            assertEquals("PAY-001", nonce.bizNo);
             assertEquals(601L, Duration.between(
                     nonce.createdAt.toLocalDateTime(),
                     nonce.expiresAt.toLocalDateTime()).getSeconds());
 
             PaymentCallbackSecurityMapper mapper = session.getMapper(PaymentCallbackSecurityMapper.class);
             assertThrows(PersistenceException.class,
-                    () -> mapper.insertCallbackNonce("wx_h5", "nonce-001", "PAY-OTHER", 601L));
+                    () -> mapper.insertCallbackNonce("wx_h5", "nonce-001", "REFUND", "REF-OTHER", 601L));
             session.rollback();
         }
 
         try (SqlSession session = sqlSessionFactory.openSession()) {
             expireNonce(session.getConnection(), "nonce-001");
             PaymentCallbackSecurityMapper mapper = session.getMapper(PaymentCallbackSecurityMapper.class);
-            mapper.insertCallbackNonce("wx_h5", "nonce-active", "PAY-ACTIVE", 601L);
-            mapper.insertCallbackNonce("alipay_h5", "nonce-expired-other", "PAY-OTHER", 601L);
-            mapper.insertCallbackNonce("offline_bank", "nonce-expired-third", "PAY-THIRD", 601L);
+            mapper.insertCallbackNonce("wx_h5", "nonce-active", "REFUND", "REF-ACTIVE", 601L);
+            mapper.insertCallbackNonce("alipay_h5", "nonce-expired-other", "PAYMENT", "PAY-OTHER", 601L);
+            mapper.insertCallbackNonce("offline_bank", "nonce-expired-third", "PAYMENT", "PAY-THIRD", 601L);
             expireNonce(session.getConnection(), "nonce-expired-other");
             expireNonce(session.getConnection(), "nonce-expired-third");
             assertEquals(1, mapper.deleteExpiredNonce("WX_H5", "nonce-001"));
             assertEquals(0, countNonce(session.getConnection(), "nonce-001"));
-            mapper.insertCallbackNonce("wx_h5", "nonce-001", "PAY-REUSED", 601L);
+            mapper.insertCallbackNonce("wx_h5", "nonce-001", "PAYMENT", "PAY-REUSED", 601L);
             assertEquals(1, countNonce(session.getConnection(), "nonce-001"));
             assertEquals(1, countNonce(session.getConnection(), "nonce-expired-other"));
             assertEquals(1, mapper.deleteExpiredNonceBatch(1));
@@ -119,7 +120,7 @@ class PaymentCallbackSecurityMapperIntegrationTest {
                     + "notify_sign_window_sec INT NOT NULL)");
             statement.execute("CREATE TABLE t_payment_callback_nonce ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64) NOT NULL, "
-                    + "nonce VARCHAR(128) NOT NULL, payment_order_id VARCHAR(64) NOT NULL, "
+                    + "nonce VARCHAR(128) NOT NULL, biz_type VARCHAR(16) NOT NULL, biz_no VARCHAR(64) NOT NULL, "
                     + "expires_at DATETIME NOT NULL, created_at DATETIME NOT NULL, "
                     + "UNIQUE(channel_code, nonce))");
             statement.execute("INSERT INTO t_payment_channel_config ("
@@ -133,14 +134,15 @@ class PaymentCallbackSecurityMapperIntegrationTest {
 
     private NonceRow findNonce(Connection connection, String nonce) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT channel_code, payment_order_id, created_at, expires_at "
+                "SELECT channel_code, biz_type, biz_no, created_at, expires_at "
                         + "FROM t_payment_callback_nonce WHERE nonce = ?")) {
             statement.setString(1, nonce);
             try (ResultSet resultSet = statement.executeQuery()) {
                 resultSet.next();
                 return new NonceRow(
                         resultSet.getString("channel_code"),
-                        resultSet.getString("payment_order_id"),
+                        resultSet.getString("biz_type"),
+                        resultSet.getString("biz_no"),
                         resultSet.getTimestamp("created_at"),
                         resultSet.getTimestamp("expires_at"));
             }
@@ -179,13 +181,16 @@ class PaymentCallbackSecurityMapperIntegrationTest {
 
     private static final class NonceRow {
         private final String channelCode;
-        private final String paymentOrderId;
+        private final String bizType;
+        private final String bizNo;
         private final Timestamp createdAt;
         private final Timestamp expiresAt;
 
-        private NonceRow(String channelCode, String paymentOrderId, Timestamp createdAt, Timestamp expiresAt) {
+        private NonceRow(String channelCode, String bizType, String bizNo,
+                         Timestamp createdAt, Timestamp expiresAt) {
             this.channelCode = channelCode;
-            this.paymentOrderId = paymentOrderId;
+            this.bizType = bizType;
+            this.bizNo = bizNo;
             this.createdAt = createdAt;
             this.expiresAt = expiresAt;
         }

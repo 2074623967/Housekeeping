@@ -152,7 +152,10 @@ public class RefundApplicationConcurrencyIntegrationTest {
     }
 
     private RefundServiceImpl createService(RefundMapper mapper) {
-        return new RefundServiceImpl(mapper, mock(PaymentEventDispatchService.class));
+        return new RefundServiceImpl(
+                mapper,
+                mock(PaymentEventDispatchService.class),
+                mock(com.abc123.hsp.service.PaymentCallbackSignatureService.class));
     }
 
     private RefundApplyRequestDTO refundRequest(String amount) {

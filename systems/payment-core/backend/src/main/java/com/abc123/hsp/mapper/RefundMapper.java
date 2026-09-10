@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackSourceDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
@@ -64,6 +65,11 @@ public interface RefundMapper {
      * 查询退款渠道下发请求快照。
      */
     RefundChannelSubmitRequestDTO findChannelSubmitRequestByRefundOrderId(@Param("refundOrderId") String refundOrderId);
+
+    /**
+     * 查询并锁定退款回调收口快照。
+     */
+    RefundCallbackSourceDTO findCallbackSourceForUpdate(@Param("refundOrderId") String refundOrderId);
 
     /**
      * 以稳定事件号写入或重新激活退款渠道下发 outbox。

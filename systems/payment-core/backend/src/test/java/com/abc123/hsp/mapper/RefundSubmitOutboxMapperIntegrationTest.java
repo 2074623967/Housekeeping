@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.RefundCallbackSourceDTO;
 import java.io.InputStream;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -99,6 +100,27 @@ class RefundSubmitOutboxMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldLockCallbackSourceAndFinalizeOnlyFromProcessing() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+            refundMapper.bindRefundChannelAccepted("REF-TRACE", "wx_h5", "RCH-TRACE");
+
+            RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate("REF-TRACE");
+            int finalized = refundMapper.updateRefundStatus(
+                    "REF-TRACE", "PROCESSING", "SUCCESS", "success", true);
+            int repeated = refundMapper.updateRefundStatus(
+                    "REF-TRACE", "PROCESSING", "FAIL", "danger", false);
+
+            assertEquals("PROCESSING", source.getStatus());
+            assertEquals("wx_h5", source.getChannelCode());
+            assertEquals("RCH-TRACE", source.getChannelRefundNo());
+            assertEquals(1, finalized);
+            assertEquals(0, repeated);
+            session.rollback();
+        }
+    }
+
     private void parseMapper(Configuration configuration, String resource) throws Exception {
         try (InputStream mapperXml = Resources.getResourceAsStream(resource)) {
             new XMLMapperBuilder(
@@ -143,6 +165,8 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "channel_refund_no VARCHAR(128) NULL, "
                     + "channel_submitted_at TIMESTAMP NULL, "
                     + "status VARCHAR(32) NOT NULL, "
+                    + "status_type VARCHAR(32) NOT NULL DEFAULT 'warn', "
+                    + "success_at TIMESTAMP NULL, "
                     + "UNIQUE(channel_code, channel_refund_no))");
             statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status) "
                     + "VALUES ('REF-TRACE', 'PROCESSING')");

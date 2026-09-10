@@ -12,6 +12,7 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackSecurityProfileDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.mapper.PaymentCallbackSecurityMapper;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -49,7 +50,35 @@ class PaymentCallbackSignatureServiceImplTest {
 
         assertDoesNotThrow(() -> service.verify("wx_h5", request));
         verify(paymentCallbackSecurityMapper).deleteExpiredNonce("wx_h5", "nonce-001");
-        verify(paymentCallbackSecurityMapper).insertCallbackNonce("wx_h5", "nonce-001", "PAY-TEST-001", 601);
+        verify(paymentCallbackSecurityMapper).insertCallbackNonce(
+                "wx_h5", "nonce-001", "PAYMENT", "PAY-TEST-001", 601);
+    }
+
+    @Test
+    void shouldVerifyValidSignedRefundCallbackAndRecordRefundBusinessType() throws Exception {
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId("REF-TEST-001");
+        request.setRefundStatus("SUCCESS");
+        request.setChannelRefundNo("CHANNEL-REFUND-001");
+        request.setNonce("nonce-refund-001");
+        request.setTimestamp(timestamp);
+        request.setSignature(sign(String.join("|",
+                "wx_h5",
+                request.getRefundOrderId(),
+                request.getRefundStatus(),
+                request.getChannelRefundNo(),
+                timestamp,
+                request.getNonce()), "test-secret"));
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5"))
+                .thenReturn(buildHmacProfile("wx_h5", "test-secret"));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper, true, 601);
+
+        assertDoesNotThrow(() -> service.verifyRefund("WX_H5", request));
+
+        verify(paymentCallbackSecurityMapper).insertCallbackNonce(
+                "wx_h5", "nonce-refund-001", "REFUND", "REF-TEST-001", 601);
     }
 
     @Test
@@ -59,7 +88,7 @@ class PaymentCallbackSignatureServiceImplTest {
         when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5")).thenReturn(buildHmacProfile("wx_h5", "test-secret"));
         org.mockito.Mockito.doThrow(new DuplicateKeyException("duplicate nonce"))
                 .when(paymentCallbackSecurityMapper)
-                .insertCallbackNonce("wx_h5", "nonce-002", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-002", "PAYMENT", "PAY-TEST-001", 601);
         PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
                 paymentCallbackSecurityMapper,
                 true,
@@ -107,7 +136,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-overflow", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-overflow", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -125,7 +154,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SECRET_MISSING, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-004", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-004", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -145,7 +174,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_ALGORITHM_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-005", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-005", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -165,7 +194,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_ALGORITHM_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-006", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-006", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -210,7 +239,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("alipay_h5", "nonce-rsa-signature", "PAY-TEST-001", 601);
+                .insertCallbackNonce("alipay_h5", "nonce-rsa-signature", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -237,7 +266,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("alipay_h5", "nonce-rsa-length", "PAY-TEST-001", 601);
+                .insertCallbackNonce("alipay_h5", "nonce-rsa-length", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -261,7 +290,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_CREDENTIAL_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("alipay_h5", "nonce-rsa-key", "PAY-TEST-001", 601);
+                .insertCallbackNonce("alipay_h5", "nonce-rsa-key", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -281,7 +310,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-window-missing", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-window-missing", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -301,7 +330,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-window-zero", "PAY-TEST-001", 601);
+                .insertCallbackNonce("wx_h5", "nonce-window-zero", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -320,7 +349,7 @@ class PaymentCallbackSignatureServiceImplTest {
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SECURITY_CONFIG_INVALID, exception.getCode());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
-                .insertCallbackNonce("wx_h5", "nonce-ttl-short", "PAY-TEST-001", 600);
+                .insertCallbackNonce("wx_h5", "nonce-ttl-short", "PAYMENT", "PAY-TEST-001", 600);
     }
 
     @Test

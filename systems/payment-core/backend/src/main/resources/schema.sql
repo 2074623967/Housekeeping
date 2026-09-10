@@ -161,13 +161,15 @@ CREATE TABLE t_payment_callback_nonce (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
     nonce VARCHAR(128) NOT NULL COMMENT '回调随机串',
-    payment_order_id VARCHAR(64) NOT NULL COMMENT '支付单号',
+    biz_type VARCHAR(16) NOT NULL COMMENT '业务类型：PAYMENT/REFUND',
+    biz_no VARCHAR(64) NOT NULL COMMENT '支付单号或退款单号',
     expires_at DATETIME NOT NULL COMMENT '过期时间',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_channel_nonce (channel_code, nonce),
+    KEY idx_callback_nonce_biz (biz_type, biz_no),
     KEY idx_nonce_expires_at (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调防重放随机串表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付与退款回调防重放随机串表';
 
 CREATE TABLE t_payment_route_rule_config (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

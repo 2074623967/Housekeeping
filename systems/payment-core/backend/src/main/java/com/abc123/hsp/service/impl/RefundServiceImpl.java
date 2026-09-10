@@ -1,9 +1,13 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackSourceDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
@@ -11,6 +15,7 @@ import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundRetrySourceDTO;
 import com.abc123.hsp.entity.RefundOperationLogEntity;
 import com.abc123.hsp.mapper.RefundMapper;
+import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.RefundService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
@@ -21,6 +26,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -45,23 +51,31 @@ public class RefundServiceImpl implements RefundService {
     private static final DateTimeFormatter REFUND_NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final String DEFAULT_OPERATOR = "payment-core-admin";
     private static final String CALLBACK_OPERATOR = "channel-callback";
+    private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
+    private static final int CALLBACK_REFUND_ORDER_ID_MAX_LENGTH = 64;
+    private static final int CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH = 128;
+    private static final int CALLBACK_REFUND_STATUS_MAX_LENGTH = 32;
 
     private final RefundMapper refundMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
+    private final PaymentCallbackSignatureService paymentCallbackSignatureService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
     @Autowired
     public RefundServiceImpl(RefundMapper refundMapper,
                              PaymentEventDispatchService paymentEventDispatchService,
+                             PaymentCallbackSignatureService paymentCallbackSignatureService,
                              PaymentSensitiveDataMasker sensitiveDataMasker) {
         this.refundMapper = refundMapper;
         this.paymentEventDispatchService = paymentEventDispatchService;
+        this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.sensitiveDataMasker = sensitiveDataMasker;
     }
 
     RefundServiceImpl(RefundMapper refundMapper,
-                      PaymentEventDispatchService paymentEventDispatchService) {
-        this(refundMapper, paymentEventDispatchService,
+                      PaymentEventDispatchService paymentEventDispatchService,
+                      PaymentCallbackSignatureService paymentCallbackSignatureService) {
+        this(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
                 new PaymentSensitiveDataMasker(new ObjectMapper()));
     }
 
@@ -166,14 +180,52 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional
-    public RefundListItemDTO markSuccess(RefundActionRequestDTO request) {
-        return changeStatus(request, STATUS_PROCESSING, STATUS_SUCCESS, "success", true);
-    }
-
-    @Override
-    @Transactional
-    public RefundListItemDTO markFail(RefundActionRequestDTO request) {
-        return changeStatus(request, STATUS_PROCESSING, STATUS_FAIL, "danger", false);
+    public RefundListItemDTO callback(String channel, RefundCallbackRequestDTO request) {
+        String normalizedChannel = normalizeRefundCallback(channel, request);
+        paymentCallbackSignatureService.verifyRefund(normalizedChannel, request);
+        RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate(request.getRefundOrderId());
+        if (source == null) {
+            throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
+        }
+        if (!StringUtils.hasText(source.getChannelCode())
+                || !normalizedChannel.equalsIgnoreCase(source.getChannelCode().trim())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH,
+                    "callback channel does not match refund channel");
+        }
+        if (!StringUtils.hasText(source.getChannelRefundNo())
+                || !source.getChannelRefundNo().equals(request.getChannelRefundNo())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
+                    "callback transaction does not match refund transaction");
+        }
+        String targetStatus = request.getRefundStatus();
+        if (targetStatus.equals(source.getStatus())) {
+            return maskedCopy(refundMapper.findByRefundOrderId(request.getRefundOrderId()));
+        }
+        if (STATUS_SUCCESS.equals(source.getStatus()) || STATUS_FAIL.equals(source.getStatus())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_FINAL_STATUS_CONFLICT,
+                    "refund callback conflicts with finalized status");
+        }
+        if (!STATUS_PROCESSING.equals(source.getStatus())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
+                    "refund status does not allow callback finalization");
+        }
+        boolean success = STATUS_SUCCESS.equals(targetStatus);
+        String statusType = success ? "success" : "danger";
+        int affectedRows = refundMapper.updateRefundStatus(
+                request.getRefundOrderId(), STATUS_PROCESSING, targetStatus, statusType, success);
+        if (affectedRows == 0) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
+                    "refund status does not allow callback finalization");
+        }
+        refundMapper.insertOperationLog(buildOperationLog(
+                request.getRefundOrderId(),
+                targetStatus,
+                success ? "退款成功回调" : "退款失败回调",
+                STATUS_PROCESSING,
+                targetStatus,
+                CALLBACK_OPERATOR,
+                success ? "渠道确认退款成功" : "渠道确认退款失败"));
+        return maskedCopy(refundMapper.findByRefundOrderId(request.getRefundOrderId()));
     }
 
     @Override
@@ -251,6 +303,46 @@ public class RefundServiceImpl implements RefundService {
         if (!StringUtils.hasText(request.getRefundMethod())) {
             request.setRefundMethod("原路退款");
         }
+    }
+
+    private String normalizeRefundCallback(String channel, RefundCallbackRequestDTO request) {
+        if (!StringUtils.hasText(channel)
+                || request == null
+                || !StringUtils.hasText(request.getRefundOrderId())
+                || !StringUtils.hasText(request.getChannelRefundNo())
+                || !StringUtils.hasText(request.getRefundStatus())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
+                    "channel, refundOrderId, channelRefundNo and refundStatus are required");
+        }
+        String normalizedChannel = channel.trim().toLowerCase(Locale.ROOT);
+        request.setRefundOrderId(request.getRefundOrderId().trim());
+        request.setChannelRefundNo(request.getChannelRefundNo().trim());
+        request.setRefundStatus(request.getRefundStatus().trim().toUpperCase(Locale.ROOT));
+        validateCallbackField(normalizedChannel, CALLBACK_CHANNEL_MAX_LENGTH);
+        validateCallbackField(request.getRefundOrderId(), CALLBACK_REFUND_ORDER_ID_MAX_LENGTH);
+        validateCallbackField(request.getChannelRefundNo(), CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH);
+        validateCallbackField(request.getRefundStatus(), CALLBACK_REFUND_STATUS_MAX_LENGTH);
+        if (!STATUS_SUCCESS.equals(request.getRefundStatus()) && !STATUS_FAIL.equals(request.getRefundStatus())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
+                    "refund callback status must be SUCCESS or FAIL");
+        }
+        return normalizedChannel;
+    }
+
+    private void validateCallbackField(String value, int maxLength) {
+        if (value.length() > maxLength || containsIsoControl(value)) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
+                    "refund callback field is invalid");
+        }
+    }
+
+    private boolean containsIsoControl(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

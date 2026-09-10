@@ -3,6 +3,7 @@ package com.abc123.hsp.service;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
@@ -35,14 +36,9 @@ public interface RefundService {
     RefundListItemDTO approve(RefundActionRequestDTO request);
 
     /**
-     * 模拟渠道退款成功回调。
+     * 校验渠道退款回调并收口退款状态。
      */
-    RefundListItemDTO markSuccess(RefundActionRequestDTO request);
-
-    /**
-     * 模拟渠道退款失败回调。
-     */
-    RefundListItemDTO markFail(RefundActionRequestDTO request);
+    RefundListItemDTO callback(String channel, RefundCallbackRequestDTO request);
 
     /**
      * 将失败退款单重新提交处理。

@@ -4,6 +4,7 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
 import com.abc123.hsp.dto.PaymentCallbackSecurityProfileDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.mapper.PaymentCallbackSecurityMapper;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import java.nio.charset.StandardCharsets;
@@ -38,6 +39,8 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     private static final int CALLBACK_TIMESTAMP_MAX_LENGTH = 20;
     private static final int CALLBACK_NONCE_MAX_LENGTH = 128;
     private static final int CALLBACK_SIGNATURE_MAX_LENGTH = 8192;
+    private static final String BIZ_TYPE_PAYMENT = "PAYMENT";
+    private static final String BIZ_TYPE_REFUND = "REFUND";
 
     private final boolean required;
     private final long nonceTtlSeconds;
@@ -66,31 +69,60 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
                 || !StringUtils.hasText(request.getNonce())) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature fields are required");
         }
-        validateSecurityFields(request);
-        String normalizedChannel = normalizeChannel(channel);
-        PaymentCallbackSecurityProfileDTO securityProfile = resolveSecurityProfile(normalizedChannel);
-        long timestampSeconds = parseTimestamp(request.getTimestamp());
-        long nowSeconds = Instant.now().getEpochSecond();
-        long allowedWindowSeconds = resolveNotifySignWindowSeconds(securityProfile);
-        verifyTimestampWindow(timestampSeconds, nowSeconds, allowedWindowSeconds);
         String payload = String.join("|",
-                normalizedChannel,
+                normalizeChannel(channel),
                 request.getPaymentOrderId(),
                 request.getTradeStatus(),
                 request.getChannelTransactionNo(),
                 request.getTimestamp(),
                 request.getNonce());
-        if (!verifySignature(payload, request.getSignature(), securityProfile)) {
+        verifyCallback(channel, request.getTimestamp(), request.getNonce(), request.getSignature(),
+                BIZ_TYPE_PAYMENT, request.getPaymentOrderId(), payload);
+    }
+
+    @Override
+    public void verifyRefund(String channel, RefundCallbackRequestDTO request) {
+        if (!required) {
+            return;
+        }
+        if (request == null
+                || !StringUtils.hasText(request.getSignature())
+                || !StringUtils.hasText(request.getTimestamp())
+                || !StringUtils.hasText(request.getNonce())) {
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature fields are required");
+        }
+        String payload = String.join("|",
+                normalizeChannel(channel),
+                request.getRefundOrderId(),
+                request.getRefundStatus(),
+                request.getChannelRefundNo(),
+                request.getTimestamp(),
+                request.getNonce());
+        verifyCallback(channel, request.getTimestamp(), request.getNonce(), request.getSignature(),
+                BIZ_TYPE_REFUND, request.getRefundOrderId(), payload);
+    }
+
+    private void verifyCallback(String channel,
+                                String timestamp,
+                                String nonce,
+                                String signature,
+                                String bizType,
+                                String bizNo,
+                                String payload) {
+        validateSecurityFields(timestamp, nonce, signature);
+        String normalizedChannel = normalizeChannel(channel);
+        PaymentCallbackSecurityProfileDTO securityProfile = resolveSecurityProfile(normalizedChannel);
+        long timestampSeconds = parseTimestamp(timestamp);
+        long nowSeconds = Instant.now().getEpochSecond();
+        long allowedWindowSeconds = resolveNotifySignWindowSeconds(securityProfile);
+        verifyTimestampWindow(timestampSeconds, nowSeconds, allowedWindowSeconds);
+        if (!verifySignature(payload, signature, securityProfile)) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, "callback signature verification failed");
         }
-        paymentCallbackSecurityMapper.deleteExpiredNonce(normalizedChannel, request.getNonce());
+        paymentCallbackSecurityMapper.deleteExpiredNonce(normalizedChannel, nonce);
         try {
             paymentCallbackSecurityMapper.insertCallbackNonce(
-                    normalizedChannel,
-                    request.getNonce(),
-                    request.getPaymentOrderId(),
-                    nonceTtlSeconds
-            );
+                    normalizedChannel, nonce, bizType, bizNo, nonceTtlSeconds);
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_NONCE_REPLAY, "callback nonce replay detected");
         }
@@ -173,16 +205,16 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         return normalizedChannel;
     }
 
-    private void validateSecurityFields(PaymentCallbackRequestDTO request) {
-        if (request.getTimestamp().length() > CALLBACK_TIMESTAMP_MAX_LENGTH
-                || containsIsoControl(request.getTimestamp())) {
+    private void validateSecurityFields(String timestamp, String nonce, String signature) {
+        if (timestamp.length() > CALLBACK_TIMESTAMP_MAX_LENGTH
+                || containsIsoControl(timestamp)) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
                     "callback timestamp is invalid");
         }
-        if (request.getNonce().length() > CALLBACK_NONCE_MAX_LENGTH
-                || request.getSignature().length() > CALLBACK_SIGNATURE_MAX_LENGTH
-                || containsIsoControl(request.getNonce())
-                || containsIsoControl(request.getSignature())) {
+        if (nonce.length() > CALLBACK_NONCE_MAX_LENGTH
+                || signature.length() > CALLBACK_SIGNATURE_MAX_LENGTH
+                || containsIsoControl(nonce)
+                || containsIsoControl(signature)) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
                     "callback signature fields are invalid");
         }

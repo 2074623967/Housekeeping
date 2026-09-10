@@ -294,20 +294,6 @@ onMounted(loadRefunds);
                     </button>
                     <button
                       class="link-button"
-                      :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'PROCESSING'"
-                      @click="runRefundAction(item.refundOrderId, 'success', '退款成功', refundApi.markSuccess)"
-                    >
-                      {{ isActionRunning(item.refundOrderId, "success") ? "处理中..." : "成功回调" }}
-                    </button>
-                    <button
-                      class="link-button"
-                      :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'PROCESSING'"
-                      @click="runRefundAction(item.refundOrderId, 'fail', '退款失败', refundApi.markFail)"
-                    >
-                      {{ isActionRunning(item.refundOrderId, "fail") ? "处理中..." : "失败回调" }}
-                    </button>
-                    <button
-                      class="link-button"
                       :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'FAIL'"
                       @click="runRefundAction(item.refundOrderId, 'retry', '重新提交', refundApi.retry)"
                     >
@@ -338,7 +324,7 @@ onMounted(loadRefunds);
             </div>
             <div class="ops-card">
               <div class="ops-title">处理建议</div>
-              <div class="ops-row"><span>优先动作</span><span>审核、成功回调、失败回调、失败重试</span></div>
+              <div class="ops-row"><span>优先动作</span><span>审核、关注渠道回调、失败重试</span></div>
               <div class="ops-row"><span>重点核对</span><span>退款状态、退款方式、退款金额</span></div>
               <div class="ops-row"><span>典型场景</span><span>部分退款、原路退款失败、自动重试承接</span></div>
             </div>

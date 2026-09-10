@@ -4,6 +4,7 @@ import com.abc123.hsp.common.ApiResponse;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
@@ -94,19 +95,13 @@ public class RefundController {
     }
 
     /**
-     * 模拟渠道退款成功回调。
+     * 接收渠道退款回调并收口退款状态。
      */
-    @PostMapping("/success")
-    public ApiResponse<RefundListItemDTO> markSuccess(@RequestBody RefundActionRequestDTO request) {
-        return ApiResponse.success(refundService.markSuccess(request));
-    }
-
-    /**
-     * 模拟渠道退款失败回调。
-     */
-    @PostMapping("/fail")
-    public ApiResponse<RefundListItemDTO> markFail(@RequestBody RefundActionRequestDTO request) {
-        return ApiResponse.success(refundService.markFail(request));
+    @PostMapping("/callback/{channel}")
+    public ApiResponse<RefundListItemDTO> callback(
+            @PathVariable String channel,
+            @RequestBody RefundCallbackRequestDTO request) {
+        return ApiResponse.success(refundService.callback(channel, request));
     }
 
     /**

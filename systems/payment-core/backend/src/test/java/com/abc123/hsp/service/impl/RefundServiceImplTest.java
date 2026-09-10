@@ -6,7 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackSourceDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
@@ -17,6 +21,7 @@ import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
 import com.abc123.hsp.dto.RefundRetrySourceDTO;
 import com.abc123.hsp.mapper.RefundMapper;
+import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -38,6 +43,9 @@ class RefundServiceImplTest {
     @Mock
     private PaymentEventDispatchService paymentEventDispatchService;
 
+    @Mock
+    private PaymentCallbackSignatureService paymentCallbackSignatureService;
+
     @Test
     void shouldForwardRefundQueryToMapper() {
         RefundQueryDTO query = new RefundQueryDTO();
@@ -50,7 +58,7 @@ class RefundServiceImplTest {
 
         when(refundMapper.findAll(query)).thenReturn(Collections.emptyList());
         when(refundMapper.count(query)).thenReturn(0L);
-        new RefundServiceImpl(refundMapper, paymentEventDispatchService).list(query);
+        createService().list(query);
 
         assertEquals(1, query.getPageNo());
         assertEquals(100, query.getPageSize());
@@ -67,7 +75,7 @@ class RefundServiceImplTest {
         when(refundMapper.count(query)).thenReturn(1L);
 
         PageResultDTO<RefundListItemDTO> result =
-                new RefundServiceImpl(refundMapper, paymentEventDispatchService).list(query);
+                createService().list(query);
 
         assertEquals("张*", result.getItems().get(0).getCustomerName());
         assertEquals("张女士", item.getCustomerName());
@@ -86,7 +94,7 @@ class RefundServiceImplTest {
         item.setStatusType("success");
         when(refundMapper.findAllForExport(query)).thenReturn(Collections.singletonList(item));
 
-        String csv = new RefundServiceImpl(refundMapper, paymentEventDispatchService).exportCsv(query);
+        String csv = createService().exportCsv(query);
 
         assertEquals("REF-001", query.getRefundOrderId());
         assertEquals("PAY-001", query.getPaymentOrderId());
@@ -116,7 +124,7 @@ class RefundServiceImplTest {
         when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
         when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(new BigDecimal("30.00"));
 
-        new RefundServiceImpl(refundMapper, paymentEventDispatchService).apply(request);
+        createService().apply(request);
 
         verify(refundMapper).insertRefund(
                 org.mockito.ArgumentMatchers.startsWith("REF"),
@@ -144,7 +152,7 @@ class RefundServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new RefundServiceImpl(refundMapper, paymentEventDispatchService).apply(request)
+                () -> createService().apply(request)
         );
     }
 
@@ -165,7 +173,7 @@ class RefundServiceImplTest {
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(submitRequest);
         org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
         try {
-            new RefundServiceImpl(refundMapper, paymentEventDispatchService).approve(request);
+            createService().approve(request);
             verify(paymentEventDispatchService, org.mockito.Mockito.never()).publishRefundSubmit(
                     org.mockito.ArgumentMatchers.anyString(),
                     org.mockito.ArgumentMatchers.anyString());
@@ -205,7 +213,7 @@ class RefundServiceImplTest {
         stubRetryCapacity("REF-002", "PAY-002", new BigDecimal("80.00"),
                 new BigDecimal("20.00"), new BigDecimal("100.00"));
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-002")).thenReturn(submitRequest);
-        new RefundServiceImpl(refundMapper, paymentEventDispatchService).retry(request);
+        createService().retry(request);
 
         verify(refundMapper).upsertRefundSubmitEvent(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
@@ -228,7 +236,7 @@ class RefundServiceImplTest {
         stubRetryCapacity("REF-TASK", "PAY-TASK", new BigDecimal("20.00"),
                 BigDecimal.ZERO, new BigDecimal("100.00"));
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-TASK")).thenReturn(submitRequest);
-        new RefundServiceImpl(refundMapper, paymentEventDispatchService)
+        createService()
                 .retryForTask("REF-TASK", "refund-retry-scheduler");
 
         verify(paymentEventDispatchService).publishRefundSubmit(
@@ -251,7 +259,7 @@ class RefundServiceImplTest {
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new RefundServiceImpl(refundMapper, paymentEventDispatchService).retry(request));
+                () -> createService().retry(request));
 
         assertEquals("累计退款金额不能超过原支付金额", exception.getMessage());
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
@@ -275,7 +283,7 @@ class RefundServiceImplTest {
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
-                () -> new RefundServiceImpl(refundMapper, paymentEventDispatchService).retry(request));
+                () -> createService().retry(request));
 
         assertEquals("退款额度数据异常", exception.getMessage());
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
@@ -297,7 +305,7 @@ class RefundServiceImplTest {
         when(refundMapper.findDetailByRefundOrderId("REF-001")).thenReturn(detail);
         when(refundMapper.findOperationLogs("REF-001")).thenReturn(Arrays.asList(logItem));
 
-        RefundDetailDTO result = new RefundServiceImpl(refundMapper, paymentEventDispatchService).detail("REF-001");
+        RefundDetailDTO result = createService().detail("REF-001");
 
         org.junit.jupiter.api.Assertions.assertEquals("REF-001", result.getRefundOrderId());
         org.junit.jupiter.api.Assertions.assertEquals("张*", result.getCustomerName());
@@ -309,33 +317,111 @@ class RefundServiceImplTest {
     }
 
     @Test
-    void shouldRejectInvalidRefundStatusTransition() {
-        RefundActionRequestDTO request = new RefundActionRequestDTO();
-        request.setRefundOrderId("REF-001");
-        when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "SUCCESS", "success", true)).thenReturn(0);
+    void shouldFinalizeTrustedSuccessfulRefundCallback() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
+        RefundListItemDTO mapperItem = new RefundListItemDTO();
+        mapperItem.setRefundOrderId("REF-001");
+        mapperItem.setCustomerName("张女士");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+        when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "SUCCESS", "success", true))
+                .thenReturn(1);
+        when(refundMapper.findByRefundOrderId("REF-001")).thenReturn(mapperItem);
 
-        org.junit.jupiter.api.Assertions.assertThrows(
-                IllegalArgumentException.class,
-                () -> new RefundServiceImpl(refundMapper, paymentEventDispatchService).markSuccess(request)
-        );
+        RefundListItemDTO result = new RefundServiceImpl(
+                refundMapper, paymentEventDispatchService, paymentCallbackSignatureService)
+                .callback(" WX_H5 ", request);
+
+        assertEquals("张*", result.getCustomerName());
+        assertEquals("SUCCESS", request.getRefundStatus());
+        verify(paymentCallbackSignatureService).verifyRefund("wx_h5", request);
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "SUCCESS".equals(log.getActionCode())
+                        && "channel-callback".equals(log.getOperatorName())));
     }
 
     @Test
-    void shouldMaskRefundActionResponseWithoutChangingMapperDto() {
-        RefundActionRequestDTO request = new RefundActionRequestDTO();
-        request.setRefundOrderId("REF-003");
+    void shouldReturnIdempotentlyForRepeatedSameFinalRefundStatus() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("success");
+        RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "WX_H5", "CHANNEL-REF-001");
         RefundListItemDTO mapperItem = new RefundListItemDTO();
-        mapperItem.setRefundOrderId("REF-003");
-        mapperItem.setCustomerName("张女士");
-        when(refundMapper.updateRefundStatus("REF-003", "PROCESSING", "SUCCESS", "success", true))
-                .thenReturn(1);
-        when(refundMapper.findByRefundOrderId("REF-003")).thenReturn(mapperItem);
+        mapperItem.setRefundOrderId("REF-001");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+        when(refundMapper.findByRefundOrderId("REF-001")).thenReturn(mapperItem);
 
-        RefundListItemDTO result =
-                new RefundServiceImpl(refundMapper, paymentEventDispatchService).markSuccess(request);
+        new RefundServiceImpl(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService)
+                .callback("wx_h5", request);
 
-        assertEquals("张*", result.getCustomerName());
-        assertEquals("张女士", mapperItem.getCustomerName());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .insertOperationLog(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRejectRefundCallbackChannelAndTransactionMismatch() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("FAIL");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001"))
+                .thenReturn(buildCallbackSource("PROCESSING", "alipay_h5", "CHANNEL-REF-001"));
+        RefundServiceImpl service = new RefundServiceImpl(
+                refundMapper, paymentEventDispatchService, paymentCallbackSignatureService);
+
+        BusinessException channelException = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> service.callback("wx_h5", request));
+        assertEquals(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH, channelException.getCode());
+
+        when(refundMapper.findCallbackSourceForUpdate("REF-001"))
+                .thenReturn(buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-OTHER"));
+        BusinessException transactionException = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> service.callback("wx_h5", request));
+        assertEquals(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH, transactionException.getCode());
+    }
+
+    @Test
+    void shouldRejectConflictingOrUnsupportedRefundCallbackStatus() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("FAIL");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001"))
+                .thenReturn(buildCallbackSource("SUCCESS", "wx_h5", "CHANNEL-REF-001"));
+        RefundServiceImpl service = new RefundServiceImpl(
+                refundMapper, paymentEventDispatchService, paymentCallbackSignatureService);
+
+        BusinessException conflictException = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> service.callback("wx_h5", request));
+        assertEquals(ErrorCode.REFUND_CALLBACK_FINAL_STATUS_CONFLICT, conflictException.getCode());
+
+        request.setRefundStatus("PENDING");
+        BusinessException statusException = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> service.callback("wx_h5", request));
+        assertEquals(ErrorCode.REFUND_CALLBACK_STATUS_INVALID, statusException.getCode());
+    }
+
+    private RefundCallbackRequestDTO buildCallbackRequest(String status) {
+        RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
+        request.setRefundOrderId(" REF-001 ");
+        request.setChannelRefundNo(" CHANNEL-REF-001 ");
+        request.setRefundStatus(status);
+        request.setTimestamp("1789000000");
+        request.setNonce("nonce-refund-001");
+        request.setSignature("signature");
+        return request;
+    }
+
+    private RefundCallbackSourceDTO buildCallbackSource(String status, String channel, String channelRefundNo) {
+        RefundCallbackSourceDTO source = new RefundCallbackSourceDTO();
+        source.setRefundOrderId("REF-001");
+        source.setStatus(status);
+        source.setChannelCode(channel);
+        source.setChannelRefundNo(channelRefundNo);
+        return source;
+    }
+
+    private RefundServiceImpl createService() {
+        return new RefundServiceImpl(
+                refundMapper, paymentEventDispatchService, paymentCallbackSignatureService);
     }
 
     private void stubRetryCapacity(String refundOrderId,

@@ -854,8 +854,6 @@ export const refundApi = {
   getDetail: (refundOrderId) => request(`/api/refunds/${refundOrderId}`),
   apply: (payload) => postJson("/api/refunds/apply", payload),
   approve: (refundOrderId, remark = "") => postJson("/api/refunds/approve", { refundOrderId, remark }),
-  markSuccess: (refundOrderId, remark = "") => postJson("/api/refunds/success", { refundOrderId, remark }),
-  markFail: (refundOrderId, remark = "") => postJson("/api/refunds/fail", { refundOrderId, remark }),
   retry: (refundOrderId, remark = "") => postJson("/api/refunds/retry", { refundOrderId, remark })
 };
 

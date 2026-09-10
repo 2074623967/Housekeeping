@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentCallbackRequestDTO;
+import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 
 /**
  * 支付渠道回调签名校验服务。
@@ -17,6 +18,14 @@ public interface PaymentCallbackSignatureService {
      * @param request 回调请求
      */
     void verify(String channel, PaymentCallbackRequestDTO request);
+
+    /**
+     * 校验渠道退款回调签名。
+     *
+     * @param channel 渠道编码
+     * @param request 退款回调请求
+     */
+    void verifyRefund(String channel, RefundCallbackRequestDTO request);
 
     /**
      * 按有限批次清理历史过期 nonce。
