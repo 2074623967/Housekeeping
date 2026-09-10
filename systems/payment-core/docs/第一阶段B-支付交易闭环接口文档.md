@@ -2654,6 +2654,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `providerReceiptNo` 只保存供应商响应中按已配置 Pointer 解析出的非空值。未配置 Pointer、响应字段缺失或传输异常时保持为空，不再根据告警号生成看似供应商回执的本地编号。
 5. 空 HTTP 响应体使用 `HTTP_RESPONSE:EMPTY` 作为稳定快照；该分类与失败状态只证明本地调用结果，不证明供应商受理、最终送达或人工响应。
 
+### 14.80 告警供应商最终送达回执查询契约
+
+1. `PaymentIssueAlertReceiptQueryAdapter` 是按通知通道扩展的供应商回执查询接口。回查服务必须找到支持当前 `alertChannel` 的适配器并取得明确 `providerDeliveryStatus=DELIVERED`，才允许把既有 `ACCEPTED` 投递更新为已送达并确认来源告警。
+2. 没有适配器、查询返回空值、状态仍为 `ACCEPTED`、状态为 `FAILED`、状态未知、查询异常或既有回执号与查询回执号冲突时，本次回查计为失败且不更新投递日志和来源告警；不得再由本地定时任务直接推导送达。
+3. 明确送达时保存查询适配器返回的脱敏回执快照、供应商回执号和说明；查询未返回新快照或回执号时保留已存在的受理证据。回执号冲突必须失败闭合，不能覆盖原供应商关联键。
+4. 自动回查由 `payment.issue-alert.receipt-reconcile.enabled` 控制，对应环境变量为 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE_ENABLED`，默认值为 `false`。手工回查即使被调用，也仍受真实查询适配器和明确送达结果约束。
+5. 当前代码只提供查询扩展点，尚未实现任何 IM、SMS 或 EMAIL 真实供应商回执查询适配器。该契约和本地自动化测试不证明供应商最终送达、值班人员收到或生产链路已经验收。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。

@@ -7434,3 +7434,26 @@
 1. 告警出站结果不再用传输层成功推导业务受理，也不再用内部编号伪装供应商回执，失败与缺失事实均保持可观测。
 2. 供应商明确成功但不提供回执号时允许状态成立而回执为空；是否强制回执仍需结合具体供应商协议另行配置和验证。
 3. 真实供应商字段映射、凭证托管、网络、异步回执查询、最终送达和生产运维响应仍是外部交付边界。
+
+## 253. 2026-09-10 告警最终送达真实回执查询 V1.0 验证
+
+### 253.1 本轮补强
+
+1. 删除回查服务根据本地 `ACCEPTED` 记录直接构造 `DELIVERED` 的逻辑，新增 `PaymentIssueAlertReceiptQueryAdapter` 扩展点；只有支持当前通道的适配器明确返回 `DELIVERED` 才更新投递与来源告警。
+2. 无适配器、空结果、`ACCEPTED/FAILED` 等非送达结果、回执号冲突和查询异常均失败闭合，不修改数据库；明确送达时保存查询快照、真实供应商回执号、送达说明和确认审计字段。
+3. 自动回查增加 `payment.issue-alert.receipt-reconcile.enabled` 独立开关并默认关闭，避免尚未配置真实查询能力时由定时任务推进外部状态。
+
+### 253.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest,PaymentCompensationSchedulerTest,PaymentIssueAlertNotifierConfigurationTest,PaymentTaskCenterMapperIntegrationTest test` | 通过 | `58` 个用例，`0` failures、`0` errors、`0` skipped；覆盖适配器选择、非送达拒绝、回执冲突、默认关闭、事务隔离和真实 Mapper 回写 |
+| payment-core 全量测试 | `mvn test` | 通过 | `674` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、Mapper、配置、测试和交付文档无空白符错误 |
+| 真实环境验证 | IM、SMS、EMAIL 供应商回执查询、生产凭证、网络、最终送达与人员响应 | 未执行 | 当前没有真实查询适配器，不记录供应商最终送达、人员响应或生产稳定性通过 |
+
+### 253.3 当前判断
+
+1. `ACCEPTED` 不再由本地数据库回查自动升级为 `DELIVERED`，送达确认必须来自外部查询适配器的明确结果。
+2. 当前实现完成了失败闭合、关联键保护、事务回写和默认关闭边界，但只提供适配器接口，没有任何真实供应商实现。
+3. 后续仍需按具体供应商实现协议、认证签名、查询限流与重试，并在受控环境验证真实回执、最终送达、值班响应和稳定性。
