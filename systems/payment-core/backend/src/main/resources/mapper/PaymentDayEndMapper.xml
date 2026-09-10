@@ -240,6 +240,18 @@
                     AND payment_event.event_type = 'PAYMENT_SUCCESS'
                     AND payment_event.publish_status = 'SUCCESS'
               )
+              OR EXISTS (
+                  SELECT 1
+                  FROM t_order source_order
+                  WHERE source_order.order_no = payment_order.order_no
+                    AND (
+                        SELECT COALESCE(SUM(prior_success.amount), 0)
+                        FROM t_payment_order prior_success
+                        WHERE prior_success.order_no = payment_order.order_no
+                          AND prior_success.status = 'SUCCESS'
+                          AND prior_success.id &lt;= payment_order.id
+                    ) &gt; source_order.order_amount
+              )
           )
     </select>
 
@@ -262,6 +274,18 @@
                   WHERE payment_event.payment_order_id = payment_order.payment_order_id
                     AND payment_event.event_type = 'PAYMENT_SUCCESS'
                     AND payment_event.publish_status = 'SUCCESS'
+              )
+              OR EXISTS (
+                  SELECT 1
+                  FROM t_order source_order
+                  WHERE source_order.order_no = payment_order.order_no
+                    AND (
+                        SELECT COALESCE(SUM(prior_success.amount), 0)
+                        FROM t_payment_order prior_success
+                        WHERE prior_success.order_no = payment_order.order_no
+                          AND prior_success.status = 'SUCCESS'
+                          AND prior_success.id &lt;= payment_order.id
+                    ) &gt; source_order.order_amount
               )
           )
     </select>

@@ -151,7 +151,7 @@ onMounted(loadIssues);
     <div class="topbar">
       <div>
         <h2>支付交易异常中心</h2>
-        <p>统一聚合待回调、回调待处理、下游事件失败和停用渠道命中问题，支撑运营与研发排障</p>
+        <p>统一聚合支付状态、下游事件、渠道配置和超额成功收款问题，支撑运营、财务与研发排障</p>
       </div>
       <button class="button secondary" @click="loadIssues">刷新</button>
     </div>
@@ -181,6 +181,7 @@ onMounted(loadIssues);
             <option>回调处理待跟进</option>
             <option>下游事件发布失败</option>
             <option>命中停用渠道</option>
+            <option>订单成功收款超额</option>
           </select>
         </div>
         <div class="field">
