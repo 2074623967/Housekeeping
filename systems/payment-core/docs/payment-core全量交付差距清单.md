@@ -1128,6 +1128,13 @@
 3. 无匹配适配器仍保持 `ADAPTER_MISSING`，正常适配器顺序、回执状态校验和 Mapper 并发围栏不变。
 4. 告警派发与回执定向 `42` 个测试及 payment-core 全量 `741` 个测试通过。本轮无前端、Mapper、schema 或迁移变化，也不证明真实适配器配置、供应商可用性或生产稳定性。
 
+### 8.115 2026-09-11 支付查单交易状态有限集合进展
+
+1. 支付查单共享结果校验器在原始字符与容量检查后统一执行 `trim + upper-case`，仅接受 `PREPAY_CREATED / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED / WAIT_CALLBACK / SUCCESS / CLOSED / FAIL` 八种平台交易状态。
+2. `tradeStatus` 与 `channelReturnCode` 保持分层：例如微信 `USERPAYING` 只作为渠道返回码参与码表标准化，平台交易状态仍为 `WAIT_CALLBACK`，不得把渠道原始语义直接写入支付状态。
+3. 未知交易状态在返回码标准化查询和业务持久化前固定失败为 `PAYMENT_CHANNEL_QUERY_FAILED`，不写返回码快照、支付成功事实或下游事件；合法小写及首尾空格状态规范化后继续原流程。
+4. 三类联合定向 `84` 个测试及 payment-core 全量 `743` 个测试通过，补丁检查通过。本轮无前端、Mapper、schema 或迁移变化，也不证明真实渠道协议、查询结果、资金到账或生产稳定性。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

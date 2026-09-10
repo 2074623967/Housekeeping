@@ -8133,3 +8133,26 @@
 
 1. 适配器选择失败已从立即重试风险转为可观测、可退避的有限失败事实，正常查询与无适配器分类不受影响。
 2. 本地 mock 不证明真实 Spring 适配器装配、供应商查询、生产调度频率或稳定性，`release/v1.0.0` 继续冻结。
+
+## 283. 2026-09-11 支付查单交易状态有限集合 V1.0 验证
+
+### 283.1 本轮补强
+
+1. `PaymentChannelQueryResultValidator` 将合法 `tradeStatus` 统一去除首尾空格并转为大写，只允许当前 payment-core 使用的八种平台支付状态。
+2. 未知状态在 `PaymentChannelReturnCodeStandardizer` 前失败闭合，避免渠道不受控文本进入返回码查询、快照或支付状态持久化。
+3. 修正测试中把微信渠道返回码 `USERPAYING` 同时当作平台交易状态的语义混用，明确使用 `WAIT_CALLBACK + USERPAYING` 表达平台状态与渠道原始码。
+
+### 283.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付查单联合定向测试 | `mvn -Dtest=PaymentChannelQueryServiceImplTest,GatewayAccessPaymentChannelQueryAdapterTest,PaymentServiceImplTest test` | 通过 | `84` 个用例；覆盖合法状态规范化、未知状态拒绝和渠道返回码分层 |
+| payment-core 全量测试 | `mvn test` | 通过 | `743` 个用例，`0` failures、`0` errors、`0` skipped |
+| 标准化前失败隔离 | Mockito 调用验证 | 通过 | 未知状态不调用返回码标准化器，不形成返回码快照或支付成功事实 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 283.3 当前判断
+
+1. 平台交易状态与渠道返回码已在查单入口明确分层，合法状态规范化与未知状态失败闭合使用同一共享边界。
+2. 本地 mock 与自动化不证明真实 gateway-access、渠道状态码表、查询结果、资金到账、生产网络或稳定性，`release/v1.0.0` 继续冻结。

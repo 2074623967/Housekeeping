@@ -2889,6 +2889,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 所有适配器均不支持目标通道时继续返回内部分类 `ADAPTER_MISSING`，与选择实现抛错保持可区分。
 4. 本地测试不证明真实 Spring Bean 装配、供应商连通性、生产任务频率或稳定性。
 
+### 14.110 支付查单交易状态标准化契约
+
+1. `PaymentChannelQueryAdapter.query` 返回的 `tradeStatus` 经原始控制字符和长度检查后执行 `trim + upper-case`，只允许 `PREPAY_CREATED / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED / WAIT_CALLBACK / SUCCESS / CLOSED / FAIL`。
+2. `tradeStatus` 表示 payment-core 平台交易状态，`channelReturnCode` 表示渠道原始返回码；例如 `WAIT_CALLBACK + USERPAYING`，两字段不得混用，返回码标准化不得反向推断或改写平台状态。
+3. 空白、未知或不在有限集合内的交易状态统一返回 `PAYMENT_CHANNEL_QUERY_FAILED`，且必须在返回码标准化查询、快照保存、支付状态更新和成功事件派发前失败。
+4. 本地契约测试不证明真实 gateway-access、渠道状态码表、查询结果、资金到账、生产网络或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

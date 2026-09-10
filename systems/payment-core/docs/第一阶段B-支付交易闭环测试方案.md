@@ -950,6 +950,13 @@
 3. 回归无适配器场景仍写 `ADAPTER_MISSING`，正常选择、查询结果有限集合、回执号关联和并发条件更新保持不变。
 4. 告警派发与回执定向测试应不少于 `42` 个，payment-core 全量不少于 `741` 个；本地 mock 不证明真实装配、供应商查询或生产稳定性。
 
+### 4.127 支付查单交易状态有限集合边界
+
+1. 构造 `tradeStatus=" success "`，验证查单 Service 在返回码标准化前将其规范化为 `SUCCESS`，并保持其他合法字段与既有流程不变。
+2. 构造 `tradeStatus=UNKNOWN_REMOTE`，验证固定返回 `PAYMENT_CHANNEL_QUERY_FAILED`，且不调用返回码标准化器、不查询码表、不写返回码快照或支付成功事实。
+3. 使用 `tradeStatus=WAIT_CALLBACK / channelReturnCode=USERPAYING` 回归支付业务查单，验证平台状态、通知日志状态和渠道标准码各自保持独立语义，未知返回码不得推断支付成功。
+4. 三类联合定向测试应不少于 `84` 个，payment-core 全量不少于 `743` 个，补丁检查必须通过；本地 mock 不证明真实渠道协议、查询结果、资金到账或生产稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
