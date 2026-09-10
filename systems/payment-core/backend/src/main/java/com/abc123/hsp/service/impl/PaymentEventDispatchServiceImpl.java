@@ -41,6 +41,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
     private static final int CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final int DOWNSTREAM_URL_MAX_LENGTH = 2048;
+    private static final int ACCOUNT_NO_MAX_LENGTH = 64;
+    private static final int AMQP_DESTINATION_MAX_LENGTH = 255;
+    private static final int DOWNSTREAM_RESPONSE_CODE_MAX_LENGTH = 32;
     private static final int DEFAULT_MAX_RETRY_COUNT = 3;
 
     private final PaymentMapper paymentMapper;
@@ -448,6 +452,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 paymentEventMapper.markPublishSuccess(eventNo);
                 return true;
             }
+            validateHttpDispatchConfiguration();
             postForSuccess(clearingUrl, buildClearingPayload(detail, workerName, amount));
             postForSuccess(accountingUrl, buildAccountingPayload(detail, amount));
             paymentEventMapper.markPublishSuccess(eventNo);
@@ -463,8 +468,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     private void publishToAmqp(String eventNo, PaymentDetailDTO detail, String workerName, BigDecimal amount) {
-        if (rabbitTemplate == null || objectMapper == null || !StringUtils.hasText(paymentSuccessExchange)
-                || !StringUtils.hasText(paymentSuccessRoutingKey)) {
+        if (rabbitTemplate == null || objectMapper == null
+                || !isValidConfiguredText(paymentSuccessExchange, AMQP_DESTINATION_MAX_LENGTH)
+                || !isValidConfiguredText(paymentSuccessRoutingKey, AMQP_DESTINATION_MAX_LENGTH)
+                || !isValidConfiguredText(accountingPaymentSuccessAccountNo, ACCOUNT_NO_MAX_LENGTH)) {
             throw new IllegalStateException("AMQP 支付成功事件配置不完整");
         }
         try {
@@ -522,14 +529,42 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         paymentEventMapper.markPublishFailed(eventNo);
     }
 
+    private void validateHttpDispatchConfiguration() {
+        if (restTemplate == null
+                || !isValidConfiguredText(clearingUrl, DOWNSTREAM_URL_MAX_LENGTH)
+                || !isValidConfiguredText(accountingUrl, DOWNSTREAM_URL_MAX_LENGTH)
+                || !isValidConfiguredText(accountingPaymentSuccessAccountNo, ACCOUNT_NO_MAX_LENGTH)) {
+            throw new IllegalStateException("HTTP 支付成功事件配置不完整");
+        }
+    }
+
+    private boolean isValidConfiguredText(String value, int maxLength) {
+        if (!StringUtils.hasText(value) || value.trim().length() > maxLength) {
+            return false;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void postForSuccess(String url, Object payload) {
-        if (!StringUtils.hasText(url)) {
-            return;
+        ResponseEntity<DownstreamApiResponse> response = restTemplate.postForEntity(
+                url.trim(), payload, DownstreamApiResponse.class);
+        if (response == null || !response.getStatusCode().is2xxSuccessful()
+                || response.getBody() == null || response.getBody().getData() == null
+                || !isSuccessfulResponseCode(response.getBody().getCode())) {
+            throw new IllegalStateException("下游系统未明确返回业务成功");
         }
-        ResponseEntity<String> response = restTemplate.postForEntity(url.trim(), payload, String.class);
-        if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new IllegalStateException("下游系统响应非 2xx");
+    }
+
+    private boolean isSuccessfulResponseCode(String code) {
+        if (!isValidConfiguredText(code, DOWNSTREAM_RESPONSE_CODE_MAX_LENGTH)) {
+            return false;
         }
+        return "0".equals(code.trim());
     }
 
     private PaymentSuccessClearingPayload buildClearingPayload(PaymentDetailDTO detail, String workerName, BigDecimal amount) {
@@ -557,6 +592,49 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private BigDecimal parseAmount(String amountText) {
         String normalized = amountText == null ? "0" : amountText.replace("¥", "").replace(",", "").trim();
         return new BigDecimal(normalized);
+    }
+
+    /**
+     * 对齐清分与账务系统统一响应结构，仅用于确认业务接收结果。
+     */
+    public static class DownstreamApiResponse {
+
+        private String code;
+        private String message;
+        private Object data;
+        private String requestId;
+
+        public String getCode() {
+            return code;
+        }
+
+        public void setCode(String code) {
+            this.code = code;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
+
+        public Object getData() {
+            return data;
+        }
+
+        public void setData(Object data) {
+            this.data = data;
+        }
+
+        public String getRequestId() {
+            return requestId;
+        }
+
+        public void setRequestId(String requestId) {
+            this.requestId = requestId;
+        }
     }
 
     /**

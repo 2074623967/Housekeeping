@@ -353,7 +353,8 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("PAYMENT_SUCCESS", message.getMessageProperties().getHeaders().get("eventType"));
         Assertions.assertEquals("PAY-001", message.getMessageProperties().getHeaders().get("paymentOrderId"));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
-        verify(restTemplate, never()).postForEntity(any(), any(), eq(String.class));
+        verify(restTemplate, never()).postForEntity(
+                any(), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
     }
 
     @Test
@@ -390,14 +391,38 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectMissingAmqpAccountBeforePublishing() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-AMQP-CONFIG-MISSING", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-AMQP-CONFIG-MISSING")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                " ",
+                3,
+                rabbitTemplate,
+                new ObjectMapper(),
+                "payment.trade",
+                "payment.success.v1"
+        ).publishPaymentSuccess("EVT-AMQP-CONFIG-MISSING", "PAY-001");
+
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-AMQP-CONFIG-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMQP-CONFIG-MISSING");
+    }
+
+    @Test
     void shouldPublishPaymentSuccessToClearingAndAccounting() {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
 
         new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -408,8 +433,8 @@ class PaymentEventDispatchServiceImplTest {
                 restTemplate
         ).publishPaymentSuccess("EVT-001", "PAY-001");
 
-        verify(restTemplate).postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class));
-        verify(restTemplate).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class));
+        verify(restTemplate).postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(restTemplate).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
         verify(paymentEventMapper, never()).markPublishFailed("EVT-001");
     }
@@ -425,10 +450,10 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentEventMapper.findByEventNoForUpdate("EVT-001")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("fail", HttpStatus.BAD_GATEWAY));
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("0", HttpStatus.BAD_GATEWAY));
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -455,10 +480,10 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentEventMapper.findByEventNo("EVT-RETRY-003")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("fail", HttpStatus.BAD_GATEWAY));
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("0", HttpStatus.BAD_GATEWAY));
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -528,8 +553,8 @@ class PaymentEventDispatchServiceImplTest {
         ).publishPaymentSuccess("EVT-404", "PAY-404");
 
         verify(paymentEventMapper).markPublishFailed("EVT-404");
-        verify(restTemplate, never()).postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class));
-        verify(restTemplate, never()).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class));
+        verify(restTemplate, never()).postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(restTemplate, never()).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
     }
 
     @Test
@@ -543,8 +568,8 @@ class PaymentEventDispatchServiceImplTest {
         when(paymentEventMapper.findByEventNoForUpdate("EVT-CLEARING-FAIL")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("fail", HttpStatus.BAD_GATEWAY));
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("0", HttpStatus.BAD_GATEWAY));
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -557,7 +582,87 @@ class PaymentEventDispatchServiceImplTest {
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-CLEARING-FAIL");
-        verify(restTemplate, never()).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class));
+        verify(restTemplate, never()).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    @Test
+    void shouldRejectIncompleteHttpConfigurationBeforeCallingEitherDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-CONFIG-MISSING", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-CONFIG-MISSING")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                " ",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-CONFIG-MISSING", "PAY-001");
+
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(paymentEventMapper).markPublishFailed("EVT-CONFIG-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-CONFIG-MISSING");
+    }
+
+    @Test
+    void shouldRejectHttpBusinessFailureWithoutCallingAccounting() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-BUSINESS-FAIL", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-BUSINESS-FAIL")).thenReturn(event);
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(response("CLEARING-FAILED", HttpStatus.OK));
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-BUSINESS-FAIL", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-BUSINESS-FAIL");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-BUSINESS-FAIL");
+        verify(restTemplate, never()).postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+    }
+
+    @Test
+    void shouldRejectEmptyHttpSuccessResponse() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-EMPTY-RESPONSE", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-EMPTY-RESPONSE")).thenReturn(event);
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(new ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse>(
+                        (PaymentEventDispatchServiceImpl.DownstreamApiResponse) null,
+                        HttpStatus.OK));
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-EMPTY-RESPONSE", "PAY-001");
+
+        verify(paymentEventMapper).markPublishFailed("EVT-EMPTY-RESPONSE");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-EMPTY-RESPONSE");
     }
 
     @Test
@@ -565,10 +670,10 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
-        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(String.class)))
-                .thenReturn(new ResponseEntity<String>("ok", HttpStatus.OK));
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
 
         new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -584,12 +689,12 @@ class PaymentEventDispatchServiceImplTest {
         verify(restTemplate).postForEntity(
                 eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
                 clearingCaptor.capture(),
-                eq(String.class)
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)
         );
         verify(restTemplate).postForEntity(
                 eq("http://127.0.0.1:18110/api/accounting/events/payments/success"),
                 accountingCaptor.capture(),
-                eq(String.class)
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)
         );
         Assertions.assertEquals("PAY-001", invokeGetter(clearingCaptor.getValue(), "getPaymentOrderId"));
         Assertions.assertEquals("李阿姨", invokeGetter(clearingCaptor.getValue(), "getWorkerName"));
@@ -604,6 +709,29 @@ class PaymentEventDispatchServiceImplTest {
         detail.setCustomerName("张女士");
         detail.setAmount("¥168.00");
         return detail;
+    }
+
+    private PaymentEventListItemDTO paymentEvent(String eventNo, int retryCount) {
+        PaymentEventListItemDTO event = new PaymentEventListItemDTO();
+        event.setEventNo(eventNo);
+        event.setEventType("PAYMENT_SUCCESS");
+        event.setPaymentOrderId("PAY-001");
+        event.setRetryCount(retryCount);
+        return event;
+    }
+
+    private ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse> successResponse() {
+        return response("0", HttpStatus.OK);
+    }
+
+    private ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse> response(
+            String code,
+            HttpStatus status) {
+        PaymentEventDispatchServiceImpl.DownstreamApiResponse body =
+                new PaymentEventDispatchServiceImpl.DownstreamApiResponse();
+        body.setCode(code);
+        body.setData(new Object());
+        return new ResponseEntity<PaymentEventDispatchServiceImpl.DownstreamApiResponse>(body, status);
     }
 
     private PaymentEventListItemDTO refundEvent(String publishStatus, int retryCount) {
