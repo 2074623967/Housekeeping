@@ -46,6 +46,19 @@ class PaymentIssueAlertNotifierConfigurationTest {
                 "",
                 resolver.getProperty("payment.issue-alert.receipt-query.gateway-access.access-key")
         );
+        Assertions.assertEquals(
+                Boolean.FALSE,
+                resolver.getProperty("payment.issue-alert.receipt-query.rate-limit.enabled", Boolean.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(60),
+                resolver.getProperty("payment.issue-alert.receipt-query.rate-limit.window-seconds", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(100),
+                resolver.getProperty(
+                        "payment.issue-alert.receipt-query.rate-limit.max-queries-per-channel", Integer.class)
+        );
     }
 
     @Test

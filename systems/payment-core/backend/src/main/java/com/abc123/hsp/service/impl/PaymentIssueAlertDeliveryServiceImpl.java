@@ -10,6 +10,7 @@ import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
+import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -68,6 +69,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private PaymentTaskLeaseService paymentTaskLeaseService;
     private final List<PaymentIssueAlertNotifier> notifiers;
     private final List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters;
+    private final PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService;
     private final TransactionTemplate itemTransactionTemplate;
     private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
 
@@ -75,11 +77,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     public PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                                 List<PaymentIssueAlertNotifier> notifiers,
                                                 List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
+                                                PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService,
                                                 PlatformTransactionManager transactionManager) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.receiptQueryAdapters = receiptQueryAdapters;
+        this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
         this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -101,6 +105,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.receiptQueryAdapters = receiptQueryAdapters;
+        this.receiptQueryRateLimitService = (channelCode, alertNo) -> { };
+        this.itemTransactionTemplate = null;
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(
+            PaymentTaskCenterMapper paymentTaskCenterMapper,
+            List<PaymentIssueAlertNotifier> notifiers,
+            List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
+            PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService) {
+        this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
+        this.notifiers = notifiers;
+        this.receiptQueryAdapters = receiptQueryAdapters;
+        this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = null;
     }
 
@@ -108,7 +126,17 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                          List<PaymentIssueAlertNotifier> notifiers,
                                          PlatformTransactionManager transactionManager) {
         this(paymentTaskCenterMapper, notifiers,
-                new ArrayList<PaymentIssueAlertReceiptQueryAdapter>(), transactionManager);
+                new ArrayList<PaymentIssueAlertReceiptQueryAdapter>(),
+                (channelCode, alertNo) -> { }, transactionManager);
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(
+            PaymentTaskCenterMapper paymentTaskCenterMapper,
+            List<PaymentIssueAlertNotifier> notifiers,
+            List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
+            PlatformTransactionManager transactionManager) {
+        this(paymentTaskCenterMapper, notifiers, receiptQueryAdapters,
+                (channelCode, alertNo) -> { }, transactionManager);
     }
 
     @Override
@@ -985,6 +1013,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (adapter == null) {
             return false;
         }
+        receiptQueryRateLimitService.acquire(acceptedLog.getAlertChannel(), acceptedLog.getAlertNo());
         PaymentIssueAlertDeliveryResultDTO queryResult = adapter.query(acceptedLog);
         if (!isConfirmedDeliveredResult(acceptedLog, queryResult)) {
             return false;

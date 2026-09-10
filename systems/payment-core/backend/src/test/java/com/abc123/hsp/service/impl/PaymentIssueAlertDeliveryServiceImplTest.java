@@ -7,6 +7,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
@@ -16,6 +18,7 @@ import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
+import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Assertions;
@@ -44,6 +47,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     private PaymentIssueAlertNotifier emailNotifier;
     @Mock
     private PaymentIssueAlertReceiptQueryAdapter receiptQueryAdapter;
+    @Mock
+    private PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService;
     @Mock
     private PlatformTransactionManager transactionManager;
     @Mock
@@ -764,9 +769,11 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier),
-                Collections.singletonList(receiptQueryAdapter)
+                Collections.singletonList(receiptQueryAdapter),
+                receiptQueryRateLimitService
         ).reconcileDeliveryReceipts();
 
+        verify(receiptQueryRateLimitService).acquire("IM", "PIA-IM-001");
         ArgumentCaptor<PaymentIssueAlertLogEntity> captor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper).updateIssueAlertProviderReceipt(captor.capture());
         verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(org.mockito.ArgumentMatchers.argThat(
@@ -783,6 +790,32 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldFailCurrentReceiptWithoutCallingGatewayWhenSharedQuotaIsExhausted() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-LIMITED", "PIA-OUTBOX-LIMITED");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs())
+                .thenReturn(Collections.singletonList(acceptedLog));
+        when(receiptQueryAdapter.supports("IM")).thenReturn(true);
+        doThrow(new BusinessException(
+                ErrorCode.PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED,
+                "rate limited"))
+                .when(receiptQueryRateLimitService).acquire("IM", "PIA-IM-LIMITED");
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter),
+                receiptQueryRateLimitService
+        ).reconcileDeliveryReceipts();
+
+        verify(receiptQueryAdapter, org.mockito.Mockito.never()).query(acceptedLog);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
     }
 
     @Test

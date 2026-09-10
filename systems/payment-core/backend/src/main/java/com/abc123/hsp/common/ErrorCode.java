@@ -61,4 +61,5 @@ public final class ErrorCode {
     public static final String PAYMENT_CHANNEL_SUBMIT_FAILED = "PAYMENT-1048";
     public static final String REFUND_CHANNEL_SUBMIT_FAILED = "PAYMENT-1049";
     public static final String REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED = "PAYMENT-1050";
+    public static final String PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED = "PAYMENT-1051";
 }

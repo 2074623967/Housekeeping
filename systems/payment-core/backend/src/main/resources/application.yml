@@ -162,6 +162,11 @@ payment:
         app-code: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_APP_CODE:APP_PAY_CORE}
         access-key: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_ACCESS_KEY:}
         timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_TIMEOUT_MS:2000}
+      rate-limit:
+        # 默认关闭；启用真实回执查询后按通道共享固定窗口额度。
+        enabled: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMIT_ENABLED:false}
+        window-seconds: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMIT_WINDOW_SECONDS:60}
+        max-queries-per-channel: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL:100}
     auto-dispatch:
       # 默认关闭；确认通知供应商配置与接收人范围后再启用自动外发。
       enabled: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED:false}
