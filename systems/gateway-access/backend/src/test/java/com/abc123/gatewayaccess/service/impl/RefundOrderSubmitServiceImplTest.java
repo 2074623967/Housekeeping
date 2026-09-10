@@ -1,0 +1,157 @@
+package com.abc123.gatewayaccess.service.impl;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.abc123.gatewayaccess.common.GatewayAccessException;
+import com.abc123.gatewayaccess.config.GatewayTransactionProperties;
+import com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO;
+import com.abc123.gatewayaccess.dto.RefundOrderSubmitRequestDTO;
+import com.abc123.gatewayaccess.dto.RefundOrderSubmitResultDTO;
+import com.abc123.gatewayaccess.dto.UpstreamRefundSubmitResponseDTO;
+import com.abc123.gatewayaccess.entity.GatewayAppEntity;
+import com.abc123.gatewayaccess.entity.GatewayAuditLogEntity;
+import com.abc123.gatewayaccess.entity.GatewayCertificateEntity;
+import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
+import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
+import com.abc123.gatewayaccess.mapper.GatewayAccessMapper;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.web.client.RestTemplate;
+
+class RefundOrderSubmitServiceImplTest {
+
+    private GatewayAccessMapper mapper;
+    private RestTemplate restTemplate;
+    private GatewayTransactionProperties properties;
+    private GatewayTransactionAccessService accessService;
+
+    @BeforeEach
+    void setUp() {
+        mapper = mock(GatewayAccessMapper.class);
+        restTemplate = mock(RestTemplate.class);
+        properties = new GatewayTransactionProperties();
+        properties.setAccessKey("secret");
+        GatewayTransactionProperties.Channel channel = new GatewayTransactionProperties.Channel();
+        channel.setGatewayCode("GW_WX");
+        channel.setRefundSubmitUrl("https://channel.example/refunds/submit");
+        properties.getChannels().put("wx_h5", channel);
+        accessService = new GatewayTransactionAccessService(mapper, properties);
+    }
+
+    @Test
+    void shouldFailClosedWhenSubmitUpstreamIsNotConfigured() {
+        properties.getChannels().get("wx_h5").setRefundSubmitUrl("");
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_NOT_CONFIGURED", exception.getCode());
+        verify(mapper).insertAuditLog(any(GatewayAuditLogEntity.class));
+    }
+
+    @Test
+    void shouldReturnOnlyDefinitiveAcceptanceAndAudit() {
+        configureEnabledGovernance();
+        RefundOrderSubmitResultDTO data = new RefundOrderSubmitResultDTO();
+        data.setChannelRefundNo(" WX-R-1001 ");
+        data.setStatus(" processing ");
+        data.setStatusType(" WARN ");
+        UpstreamRefundSubmitResponseDTO response = new UpstreamRefundSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(
+                eq("https://channel.example/refunds/submit"),
+                any(RefundOrderSubmitRequestDTO.class),
+                eq(UpstreamRefundSubmitResponseDTO.class))).thenReturn(response);
+
+        RefundOrderSubmitResultDTO result = service().submit(
+                "APP_PAY_CORE", "secret", "127.0.0.1", request());
+
+        assertEquals("WX-R-1001", result.getChannelRefundNo());
+        assertEquals("PROCESSING", result.getStatus());
+        assertEquals("warn", result.getStatusType());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("REFUND_SUBMIT", captor.getValue().getOperationType());
+        assertEquals("SUCCESS", captor.getValue().getResultStatus());
+    }
+
+    @Test
+    void shouldRejectAcceptanceWithoutChannelRefundNumber() {
+        configureEnabledGovernance();
+        RefundOrderSubmitResultDTO data = new RefundOrderSubmitResultDTO();
+        data.setStatus("PROCESSING");
+        data.setStatusType("warn");
+        UpstreamRefundSubmitResponseDTO response = new UpstreamRefundSubmitResponseDTO();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundSubmitResponseDTO.class)))
+                .thenReturn(response);
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+    }
+
+    @Test
+    void shouldRejectInvalidAmountBeforeAuthorization() {
+        RefundOrderSubmitRequestDTO request = request();
+        request.setRefundAmount(new BigDecimal("1.001"));
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request));
+
+        assertEquals("GATEWAY_INVALID_ARGUMENT", exception.getCode());
+    }
+
+    private RefundOrderSubmitServiceImpl service() {
+        return new RefundOrderSubmitServiceImpl(accessService, restTemplate);
+    }
+
+    private RefundOrderSubmitRequestDTO request() {
+        RefundOrderSubmitRequestDTO request = new RefundOrderSubmitRequestDTO();
+        request.setRefundOrderId("REF-1001");
+        request.setPaymentOrderId("PAY-1001");
+        request.setOrderNo("ORD-1001");
+        request.setCustomerName("Customer");
+        request.setRefundAmount(new BigDecimal("68.00"));
+        request.setRefundMethod("ORIGINAL_ROUTE");
+        request.setRefundReason("customer request");
+        request.setChannelCode("WX_H5");
+        return request;
+    }
+
+    private void configureEnabledGovernance() {
+        GatewayAppEntity application = new GatewayAppEntity();
+        application.setStatus("ENABLED");
+        when(mapper.findApplicationByCode("APP_PAY_CORE")).thenReturn(application);
+
+        GatewayPermissionEntity permission = new GatewayPermissionEntity();
+        permission.setAppCode("APP_PAY_CORE");
+        permission.setStatus("ENABLED");
+        when(mapper.findPermissionByCode("PERM_PAYMENT_CORE")).thenReturn(permission);
+
+        GatewayChannelEntity gateway = new GatewayChannelEntity();
+        gateway.setStatus("ENABLED");
+        gateway.setSignAlgorithm("HMAC-SHA256");
+        when(mapper.findGatewayByCode("GW_WX")).thenReturn(gateway);
+
+        GatewayCertificateEntity certificate = new GatewayCertificateEntity();
+        certificate.setExpireAt(LocalDate.now().plusDays(30).toString());
+        when(mapper.findEnabledCertificateByGatewayCode("GW_WX")).thenReturn(certificate);
+
+        GatewayReleaseRouteDTO route = new GatewayReleaseRouteDTO();
+        route.setTrafficPercent(100);
+        when(mapper.findEnabledReleaseRoute("GW_WX", "PROD")).thenReturn(route);
+    }
+}

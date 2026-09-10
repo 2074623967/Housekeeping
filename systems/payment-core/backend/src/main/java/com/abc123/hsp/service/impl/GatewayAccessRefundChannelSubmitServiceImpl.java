@@ -1,0 +1,167 @@
+package com.abc123.hsp.service.impl;
+
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
+import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
+import com.abc123.hsp.service.RefundChannelSubmitService;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
+import lombok.Data;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
+
+/**
+ * 非 demo 环境的 gateway-access 退款提交实现。
+ */
+@Service
+@Profile("!demo")
+public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChannelSubmitService {
+
+    private static final Set<String> STATUSES = new HashSet<>(Arrays.asList("PROCESSING", "SUCCESS"));
+    private static final Set<String> STATUS_TYPES = new HashSet<>(
+            Arrays.asList("info", "warn", "danger", "success"));
+
+    private final boolean enabled;
+    private final String submitUrl;
+    private final Set<String> supportedChannels;
+    private final String appCode;
+    private final String accessKey;
+    private final RestTemplate restTemplate;
+
+    @Autowired
+    public GatewayAccessRefundChannelSubmitServiceImpl(
+            @Value("${payment.refund-submit.gateway-access.enabled:false}") boolean enabled,
+            @Value("${payment.refund-submit.gateway-access.submit-url:}") String submitUrl,
+            @Value("${payment.refund-submit.gateway-access.supported-channels:wx_h5,alipay_h5,offline_bank}")
+                    String supportedChannels,
+            @Value("${payment.refund-submit.gateway-access.app-code:APP_PAY_CORE}") String appCode,
+            @Value("${payment.refund-submit.gateway-access.access-key:}") String accessKey,
+            @Value("${payment.refund-submit.gateway-access.timeout-ms:2000}") int timeoutMs) {
+        this(enabled, submitUrl, supportedChannels, appCode, accessKey,
+                AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(timeoutMs));
+    }
+
+    GatewayAccessRefundChannelSubmitServiceImpl(
+            boolean enabled, String submitUrl, String supportedChannels,
+            String appCode, String accessKey, RestTemplate restTemplate) {
+        this.enabled = enabled;
+        this.submitUrl = submitUrl;
+        this.supportedChannels = parseChannels(supportedChannels);
+        this.appCode = appCode;
+        this.accessKey = accessKey;
+        this.restTemplate = restTemplate;
+    }
+
+    @Override
+    public RefundChannelSubmitResultDTO submit(RefundChannelSubmitRequestDTO request) {
+        if (!isConfigured(request)) {
+            throw submitFailed("gateway-access refund submit is disabled or not configured");
+        }
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Gateway-App-Code", appCode);
+            headers.set("X-Gateway-Access-Key", accessKey);
+            ResponseEntity<GatewayRefundSubmitResponse> responseEntity = restTemplate.exchange(
+                    submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers),
+                    GatewayRefundSubmitResponse.class);
+            GatewayRefundSubmitResponse response = responseEntity.getBody();
+            if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
+                throw submitFailed("gateway-access rejected refund submit");
+            }
+            RefundChannelSubmitResultDTO result = response.getData();
+            normalizeAndValidate(result);
+            result.setResponsePayload(buildResponsePayload(request.getChannelCode(), result));
+            return result;
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw submitFailed("gateway-access refund submit failed; query before retrying");
+        }
+    }
+
+    private boolean isConfigured(RefundChannelSubmitRequestDTO request) {
+        return enabled
+                && StringUtils.hasText(submitUrl)
+                && StringUtils.hasText(appCode)
+                && StringUtils.hasText(accessKey)
+                && request != null
+                && StringUtils.hasText(request.getChannelCode())
+                && supportedChannels.contains(request.getChannelCode().trim().toLowerCase(Locale.ROOT));
+    }
+
+    private void normalizeAndValidate(RefundChannelSubmitResultDTO result) {
+        result.setChannelRefundNo(required(result.getChannelRefundNo(), "channel refund number", 128));
+        result.setStatus(required(result.getStatus(), "status", 32).toUpperCase(Locale.ROOT));
+        result.setStatusType(required(result.getStatusType(), "status type", 32).toLowerCase(Locale.ROOT));
+        if (!STATUSES.contains(result.getStatus()) || !STATUS_TYPES.contains(result.getStatusType())) {
+            throw submitFailed("gateway-access returned an unsupported refund acceptance status");
+        }
+    }
+
+    private String required(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            throw submitFailed("gateway-access returned no " + fieldName);
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength || containsIsoControl(normalized)) {
+            throw submitFailed("gateway-access returned an invalid " + fieldName);
+        }
+        return normalized;
+    }
+
+    private boolean containsIsoControl(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String buildResponsePayload(String channelCode, RefundChannelSubmitResultDTO result) {
+        return "{\"source\":\"gateway-access\",\"channelCode\":\""
+                + escapeJson(channelCode) + "\",\"channelRefundNo\":\""
+                + escapeJson(result.getChannelRefundNo()) + "\"}";
+    }
+
+    private String escapeJson(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private Set<String> parseChannels(String channels) {
+        if (!StringUtils.hasText(channels)) {
+            return Collections.emptySet();
+        }
+        Set<String> result = new HashSet<>();
+        Arrays.stream(channels.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(value -> value.toLowerCase(Locale.ROOT))
+                .forEach(result::add);
+        return result;
+    }
+
+    private BusinessException submitFailed(String message) {
+        return new BusinessException(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, message);
+    }
+
+    @Data
+    public static class GatewayRefundSubmitResponse {
+
+        private String code;
+        private String message;
+        private RefundChannelSubmitResultDTO data;
+    }
+}

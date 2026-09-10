@@ -27,6 +27,7 @@ public class GatewayTransactionProperties {
         private String gatewayCode;
         private String paymentSubmitUrl;
         private String paymentQueryUrl;
+        private String refundSubmitUrl;
         private String refundQueryUrl;
     }
 }

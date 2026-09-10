@@ -57,6 +57,15 @@ payment:
     fixed-delay-ms: ${HSP_PAYMENT_EVENT_RETRY_DELAY_MS:300000}
   refund-retry:
     fixed-delay-ms: ${HSP_PAYMENT_REFUND_RETRY_DELAY_MS:300000}
+  refund-submit:
+    gateway-access:
+      # 默认关闭；启用前必须配置 gateway-access 的真实退款上游和共享访问凭证。
+      enabled: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ENABLED:false}
+      submit-url: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/refunds/submit}
+      supported-channels: ${HSP_PAYMENT_REFUND_SUBMIT_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
+      app-code: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_APP_CODE:APP_PAY_CORE}
+      access-key: ${HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ACCESS_KEY:}
+      timeout-ms: ${HSP_PAYMENT_REFUND_SUBMIT_TIMEOUT_MS:2000}
   refund-query:
     gateway-access:
       # 仅接入真实 gateway-access 退款查单实现后启用；本地兜底只回显现状。

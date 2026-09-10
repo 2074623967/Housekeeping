@@ -4,12 +4,14 @@ import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.service.RefundChannelSubmitService;
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Profile;
 import org.springframework.util.StringUtils;
 
 /**
  * 本地退款渠道模拟实现。
  */
 @Service
+@Profile("demo")
 public class LocalRefundChannelSubmitServiceImpl implements RefundChannelSubmitService {
 
     @Override
