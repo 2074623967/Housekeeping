@@ -75,6 +75,7 @@
                SUM(CASE WHEN publish_status = 'PENDING' THEN 1 ELSE 0 END) AS pendingEventCount,
                SUM(CASE WHEN publish_status = 'FAILED' THEN 1 ELSE 0 END) AS failedEventCount,
                SUM(CASE WHEN publish_status = 'DEAD_LETTER' THEN 1 ELSE 0 END) AS deadLetterEventCount,
+               SUM(CASE WHEN publish_status = 'UNKNOWN' THEN 1 ELSE 0 END) AS unknownEventCount,
                SUM(CASE WHEN publish_status IN ('FAILED', 'DEAD_LETTER') THEN 1 ELSE 0 END) AS failedOrDeadLetterCount,
                COUNT(DISTINCT downstream_system) AS distinctDownstreamCount,
                SUM(CASE WHEN publish_status = 'FAILED' AND next_retry_at IS NOT NULL AND next_retry_at &lt;= NOW() THEN 1 ELSE 0 END) AS dueRetryEventCount,
@@ -199,6 +200,16 @@
         UPDATE t_payment_event
         SET publish_status = 'DEAD_LETTER',
             publish_status_type = 'danger',
+            retry_count = retry_count + 1,
+            last_published_at = NOW(),
+            next_retry_at = NULL
+        WHERE event_no = #{eventNo}
+    </update>
+
+    <update id="markPublishUnknown">
+        UPDATE t_payment_event
+        SET publish_status = 'UNKNOWN',
+            publish_status_type = 'warn',
             retry_count = retry_count + 1,
             last_published_at = NOW(),
             next_retry_at = NULL

@@ -16,6 +16,7 @@ const overview = ref({
   pendingEventCount: 0,
   failedEventCount: 0,
   deadLetterEventCount: 0,
+  unknownEventCount: 0,
   failedOrDeadLetterCount: 0,
   distinctDownstreamCount: 0,
   dueRetryEventCount: 0,
@@ -41,6 +42,7 @@ const metrics = computed(() => ({
   pendingTotal: overview.value.pendingEventCount,
   failedTotal: overview.value.failedOrDeadLetterCount,
   deadLetterTotal: overview.value.deadLetterEventCount,
+  unknownTotal: overview.value.unknownEventCount,
   downstreamCount: overview.value.distinctDownstreamCount,
   dueRetryCount: overview.value.dueRetryEventCount,
   paymentSuccessEventCount: overview.value.paymentSuccessEventCount,
@@ -184,6 +186,10 @@ onMounted(loadEvents);
         <p class="card-value">{{ metrics.deadLetterTotal }}</p>
       </article>
       <article class="card">
+        <p class="card-title">结果未知</p>
+        <p class="card-value">{{ metrics.unknownTotal }}</p>
+      </article>
+      <article class="card">
         <p class="card-title">下游系统数</p>
         <p class="card-value">{{ metrics.downstreamCount }}</p>
       </article>
@@ -235,6 +241,7 @@ onMounted(loadEvents);
             <option>PAYMENT_SUCCESS</option>
             <option>PAYMENT_CLOSED</option>
             <option>PAYMENT_EXPIRED_CLOSED</option>
+            <option>REFUND_SUBMIT</option>
           </select>
         </div>
         <div class="field">
@@ -246,6 +253,7 @@ onMounted(loadEvents);
             <option>FAILED_OR_DEAD_LETTER</option>
             <option>FAILED</option>
             <option>DEAD_LETTER</option>
+            <option>UNKNOWN</option>
           </select>
         </div>
         <div class="field">
@@ -325,10 +333,10 @@ onMounted(loadEvents);
                   <button class="link-button" @click="pickItem(item)">快照</button>
                   <button
                     class="link-button"
-                    :disabled="activeEventNo === item.eventNo || item.publishStatus === 'SUCCESS'"
+                    :disabled="activeEventNo === item.eventNo || ['SUCCESS', 'UNKNOWN'].includes(item.publishStatus)"
                     @click="republish(item)"
                   >
-                    {{ item.publishStatus === "SUCCESS" ? "已发布" : "重发" }}
+                    {{ item.publishStatus === "SUCCESS" ? "已发布" : item.publishStatus === "UNKNOWN" ? "待核查" : "重发" }}
                   </button>
                 </td>
               </tr>
@@ -355,10 +363,10 @@ onMounted(loadEvents);
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先动作</span><span>重发事件、核对下游系统状态</span></div>
+              <div class="ops-row"><span>优先动作</span><span>{{ selectedItem.publishStatus === "UNKNOWN" ? "按退款单号向渠道查单，禁止直接重发" : "重发事件、核对下游系统状态" }}</span></div>
               <div class="ops-row"><span>重点核对</span><span>发布状态、重试次数、下次重试时间</span></div>
               <div class="ops-row"><span>典型场景</span><span>下游未消费、消息投递失败、补偿事件积压</span></div>
-              <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信</span></div>
+              <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信，{{ metrics.unknownTotal }} 条结果未知</span></div>
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>

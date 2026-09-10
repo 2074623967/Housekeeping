@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
@@ -134,6 +136,24 @@ class PaymentEventServiceImplTest {
 
         assertEquals("支付事件不存在", exception.getMessage());
         verify(paymentEventDispatchService).republish("EVT404");
+    }
+
+    @Test
+    void shouldPropagateUnknownRefundSubmitReviewError() {
+        PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
+        request.setEventNo(" EVT-UNKNOWN ");
+        when(paymentEventDispatchService.republish("EVT-UNKNOWN"))
+                .thenThrow(new BusinessException(
+                        ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED,
+                        "review required"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentEventServiceImpl(paymentEventMapper, paymentEventDispatchService)
+                        .republish(request, new PaymentEventQueryDTO()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED, exception.getCode());
+        verify(paymentEventDispatchService).republish("EVT-UNKNOWN");
     }
 
     @Test

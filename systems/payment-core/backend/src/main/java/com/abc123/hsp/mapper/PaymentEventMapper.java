@@ -67,6 +67,11 @@ public interface PaymentEventMapper {
     int markPublishDeadLetter(@Param("eventNo") String eventNo);
 
     /**
+     * 标记外部处理结果未知，停止所有直接重试。
+     */
+    int markPublishUnknown(@Param("eventNo") String eventNo);
+
+    /**
      * 兼容旧测试和旧调用方的重发标记方法。
      */
     default int markRepublished(@Param("eventNo") String eventNo) {

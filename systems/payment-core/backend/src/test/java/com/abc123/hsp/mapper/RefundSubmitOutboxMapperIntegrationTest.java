@@ -1,6 +1,8 @@
 package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
@@ -95,6 +97,38 @@ class RefundSubmitOutboxMapperIntegrationTest {
                 assertEquals("RCH-TRACE", resultSet.getString("channel_refund_no"));
                 org.junit.jupiter.api.Assertions.assertNotNull(
                         resultSet.getTimestamp("channel_submitted_at"));
+            }
+            session.rollback();
+        }
+    }
+
+    @Test
+    void shouldExcludeUnknownRefundSubmitFromEveryRetryCandidate() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+            PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
+            refundMapper.upsertRefundSubmitEvent("EVTR-UNKNOWN", "REF-001", "PAY-001");
+
+            assertEquals(1, eventMapper.markPublishUnknown("EVTR-UNKNOWN"));
+            PaymentEventListItemDTO event = eventMapper.findByEventNoForUpdate("EVTR-UNKNOWN");
+
+            assertEquals("UNKNOWN", event.getPublishStatus());
+            assertEquals(1, event.getRetryCount());
+            try (Statement statement = session.getConnection().createStatement();
+                 ResultSet resultSet = statement.executeQuery(
+                         "SELECT publish_status_type, next_retry_at FROM t_payment_event "
+                                 + "WHERE event_no='EVTR-UNKNOWN'")) {
+                resultSet.next();
+                assertEquals("warn", resultSet.getString("publish_status_type"));
+                assertNull(resultSet.getTimestamp("next_retry_at"));
+            }
+            assertFalse(eventMapper.findDueFailedEventNos().contains("EVTR-UNKNOWN"));
+            assertFalse(eventMapper.findAllFailedEventNos().contains("EVTR-UNKNOWN"));
+            try (Statement statement = session.getConnection().createStatement();
+                 ResultSet resultSet = statement.executeQuery(
+                         "SELECT COUNT(*) FROM t_payment_event WHERE publish_status='UNKNOWN'")) {
+                resultSet.next();
+                assertEquals(1, resultSet.getInt(1));
             }
             session.rollback();
         }

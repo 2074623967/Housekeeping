@@ -1,9 +1,8 @@
 package com.abc123.hsp.service.impl;
 
-import com.abc123.hsp.common.BusinessException;
-import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
+import com.abc123.hsp.service.RefundChannelSubmitException;
 import com.abc123.hsp.service.RefundChannelSubmitService;
 import java.util.Arrays;
 import java.util.Collections;
@@ -32,6 +31,18 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
     private static final Set<String> STATUSES = new HashSet<>(Arrays.asList("PROCESSING", "SUCCESS"));
     private static final Set<String> STATUS_TYPES = new HashSet<>(
             Arrays.asList("info", "warn", "danger", "success"));
+    private static final Set<String> REJECTED_BEFORE_UPSTREAM = new HashSet<>(Arrays.asList(
+            "GATEWAY_ACCESS_NOT_CONFIGURED",
+            "GATEWAY_ACCESS_DENIED",
+            "GATEWAY_INVALID_ARGUMENT",
+            "GATEWAY_CHANNEL_NOT_CONFIGURED",
+            "GATEWAY_APPLICATION_DISABLED",
+            "GATEWAY_PERMISSION_DISABLED",
+            "GATEWAY_CHANNEL_DISABLED",
+            "GATEWAY_CERTIFICATE_INVALID",
+            "GATEWAY_ROUTE_DISABLED",
+            "GATEWAY_UPSTREAM_NOT_CONFIGURED",
+            "GATEWAY_OPERATION_NOT_SUPPORTED"));
 
     private final boolean enabled;
     private final String submitUrl;
@@ -67,7 +78,7 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
     @Override
     public RefundChannelSubmitResultDTO submit(RefundChannelSubmitRequestDTO request) {
         if (!isConfigured(request)) {
-            throw submitFailed("gateway-access refund submit is disabled or not configured");
+            throw submitFailed("gateway-access refund submit is disabled or not configured", false);
         }
         try {
             HttpHeaders headers = new HttpHeaders();
@@ -78,16 +89,19 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
                     GatewayRefundSubmitResponse.class);
             GatewayRefundSubmitResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
-                throw submitFailed("gateway-access rejected refund submit");
+                boolean resultUnknown = response == null
+                        || !REJECTED_BEFORE_UPSTREAM.contains(response.getCode());
+                throw submitFailed("gateway-access rejected refund submit", resultUnknown);
             }
             RefundChannelSubmitResultDTO result = response.getData();
             normalizeAndValidate(result);
             result.setResponsePayload(buildResponsePayload(request.getChannelCode(), result));
             return result;
-        } catch (BusinessException exception) {
+        } catch (RefundChannelSubmitException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw submitFailed("gateway-access refund submit failed; query before retrying");
+            throw new RefundChannelSubmitException(
+                    "gateway-access refund submit failed; query before retrying", true, exception);
         }
     }
 
@@ -106,17 +120,17 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         result.setStatus(required(result.getStatus(), "status", 32).toUpperCase(Locale.ROOT));
         result.setStatusType(required(result.getStatusType(), "status type", 32).toLowerCase(Locale.ROOT));
         if (!STATUSES.contains(result.getStatus()) || !STATUS_TYPES.contains(result.getStatusType())) {
-            throw submitFailed("gateway-access returned an unsupported refund acceptance status");
+            throw submitFailed("gateway-access returned an unsupported refund acceptance status", true);
         }
     }
 
     private String required(String value, String fieldName, int maxLength) {
         if (!StringUtils.hasText(value)) {
-            throw submitFailed("gateway-access returned no " + fieldName);
+            throw submitFailed("gateway-access returned no " + fieldName, true);
         }
         String normalized = value.trim();
         if (normalized.length() > maxLength || containsIsoControl(normalized)) {
-            throw submitFailed("gateway-access returned an invalid " + fieldName);
+            throw submitFailed("gateway-access returned an invalid " + fieldName, true);
         }
         return normalized;
     }
@@ -153,8 +167,8 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         return result;
     }
 
-    private BusinessException submitFailed(String message) {
-        return new BusinessException(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, message);
+    private RefundChannelSubmitException submitFailed(String message, boolean resultUnknown) {
+        return new RefundChannelSubmitException(message, resultUnknown);
     }
 
     @Data

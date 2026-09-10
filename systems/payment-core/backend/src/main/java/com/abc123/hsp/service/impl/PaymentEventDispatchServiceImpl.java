@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
@@ -8,6 +10,7 @@ import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
+import com.abc123.hsp.service.RefundChannelSubmitException;
 import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -259,9 +262,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         if ("SUCCESS".equals(event.getPublishStatus())) {
             return true;
         }
+        boolean resultUnknown = "UNKNOWN".equals(event.getPublishStatus());
         RefundChannelSubmitRequestDTO request =
                 refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
         if (request == null) {
+            if (resultUnknown) {
+                throw refundSubmitReviewRequired();
+            }
             markFailedOrDeadLetter(eventNo);
             return false;
         }
@@ -270,10 +277,31 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         try {
             validateRefundSubmitRequest(event, request);
-            if (StringUtils.hasText(request.getChannelRefundNo())) {
+        } catch (RuntimeException exception) {
+            if (resultUnknown) {
+                throw refundSubmitReviewRequired();
+            }
+            recordRefundSubmitFailure(refundOrderId,
+                    "退款渠道下发快照校验失败，修复数据后再重试");
+            markFailedOrDeadLetter(eventNo);
+            return false;
+        }
+        if (StringUtils.hasText(request.getChannelRefundNo())) {
+            try {
                 validateAcceptedRefundTrace(request);
                 return paymentEventMapper.markPublishSuccess(eventNo) == 1;
+            } catch (RuntimeException exception) {
+                if (resultUnknown) {
+                    throw refundSubmitReviewRequired();
+                }
+                markRefundSubmitUnknown(eventNo, refundOrderId);
+                return false;
             }
+        }
+        if (resultUnknown) {
+            throw refundSubmitReviewRequired();
+        }
+        try {
             RefundChannelSubmitResultDTO result = refundChannelSubmitService.submit(request);
             if (result == null || !StringUtils.hasText(result.getChannelRefundNo())) {
                 throw new IllegalStateException("退款渠道未返回受理单号");
@@ -295,18 +323,48 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 throw new IllegalStateException("退款渠道事件成功状态更新失败");
             }
             return true;
+        } catch (RefundChannelSubmitException exception) {
+            if (!exception.isResultUnknown()) {
+                recordRefundSubmitFailure(refundOrderId,
+                        "退款提交在调用渠道前被配置或治理门禁拒绝，等待修复后重试");
+                markFailedOrDeadLetter(eventNo);
+                return false;
+            }
+            markRefundSubmitUnknown(eventNo, refundOrderId);
+            return false;
         } catch (RuntimeException exception) {
-            refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
-                    refundOrderId,
-                    "CHANNEL_SUBMIT_UNKNOWN",
-                    "退款渠道下发结果未知",
-                    "PROCESSING",
-                    "PROCESSING",
-                    "payment-core-admin",
-                    "退款渠道下发未获得确定受理结果，保留处理中并等待幂等补偿"));
-            markFailedOrDeadLetter(eventNo);
+            markRefundSubmitUnknown(eventNo, refundOrderId);
             return false;
         }
+    }
+
+    private BusinessException refundSubmitReviewRequired() {
+        return new BusinessException(
+                ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED,
+                "refund submit result is unknown; verify the provider result before any retry");
+    }
+
+    private void recordRefundSubmitFailure(String refundOrderId, String remark) {
+        refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+                refundOrderId,
+                "CHANNEL_SUBMIT_FAILED",
+                "退款渠道下发失败",
+                "PROCESSING",
+                "PROCESSING",
+                "payment-core-admin",
+                remark));
+    }
+
+    private void markRefundSubmitUnknown(String eventNo, String refundOrderId) {
+        refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+                refundOrderId,
+                "CHANNEL_SUBMIT_UNKNOWN",
+                "退款渠道下发结果未知",
+                "PROCESSING",
+                "PROCESSING",
+                "payment-core-admin",
+                "退款渠道可能已经受理，已停止直接重试；须按退款单号向渠道查单或人工核查"));
+        paymentEventMapper.markPublishUnknown(eventNo);
     }
 
     private void validateRefundSubmitRequest(PaymentEventListItemDTO event,

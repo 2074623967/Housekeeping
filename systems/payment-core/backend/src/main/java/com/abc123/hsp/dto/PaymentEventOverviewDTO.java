@@ -18,6 +18,8 @@ public class PaymentEventOverviewDTO {
     private Long failedEventCount;
     /** 死信事件数。 */
     private Long deadLetterEventCount;
+    /** 外部处理结果未知、必须人工核查的事件数。 */
+    private Long unknownEventCount;
     /** 失败或死信事件数。 */
     private Long failedOrDeadLetterCount;
     /** 涉及下游系统数。 */

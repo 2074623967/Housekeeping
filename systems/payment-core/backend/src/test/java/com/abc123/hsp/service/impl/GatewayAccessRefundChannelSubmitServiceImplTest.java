@@ -8,10 +8,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
+import com.abc123.hsp.service.RefundChannelSubmitException;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
@@ -68,15 +68,31 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
                 eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
                 .thenReturn(ResponseEntity.ok(response));
 
-        BusinessException exception = assertThrows(BusinessException.class,
+        RefundChannelSubmitException exception = assertThrows(RefundChannelSubmitException.class,
                 () -> adapter(restTemplate).submit(request()));
 
         assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertFalse(exception.isResultUnknown());
+    }
+
+    @Test
+    void shouldClassifyUpstreamFailureAsUnknown() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
+                .thenThrow(new IllegalStateException("timeout"));
+
+        RefundChannelSubmitException exception = assertThrows(RefundChannelSubmitException.class,
+                () -> adapter(restTemplate).submit(request()));
+
+        assertTrue(exception.isResultUnknown());
     }
 
     private void assertFailure(GatewayAccessRefundChannelSubmitServiceImpl service) {
-        BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request()));
+        RefundChannelSubmitException exception = assertThrows(
+                RefundChannelSubmitException.class, () -> service.submit(request()));
         assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertFalse(exception.isResultUnknown());
     }
 
     private GatewayAccessRefundChannelSubmitServiceImpl adapter(RestTemplate restTemplate) {
