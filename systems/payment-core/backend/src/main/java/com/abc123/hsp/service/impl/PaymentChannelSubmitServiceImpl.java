@@ -38,10 +38,18 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         for (PaymentChannelSubmitAdapter adapter : adapters) {
             if (adapter.supports(request.getResolvedChannelCode())) {
-                PaymentChannelSubmitResultDTO result = PaymentChannelSubmitResultValidator.validateAndNormalize(
-                        adapter.submit(request));
-                return PaymentChannelSubmitResultValidator.validateAndNormalize(
-                        returnCodeStandardizer.standardizeSubmit(request.getResolvedChannelCode(), result));
+                try {
+                    PaymentChannelSubmitResultDTO result = PaymentChannelSubmitResultValidator.validateAndNormalize(
+                            adapter.submit(request));
+                    return PaymentChannelSubmitResultValidator.validateAndNormalize(
+                            returnCodeStandardizer.standardizeSubmit(request.getResolvedChannelCode(), result));
+                } catch (BusinessException exception) {
+                    throw exception;
+                } catch (RuntimeException exception) {
+                    throw BusinessException.sanitized(
+                            ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                            "payment channel submit failed unexpectedly; query before retrying");
+                }
             }
         }
         throw adapterMissing();

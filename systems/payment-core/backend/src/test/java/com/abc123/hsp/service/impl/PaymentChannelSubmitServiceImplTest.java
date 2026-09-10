@@ -1,6 +1,8 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -153,6 +155,28 @@ class PaymentChannelSubmitServiceImplTest {
                         Collections.singletonList(adapter), standardizer).submit(request));
 
         assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+    }
+
+    @Test
+    void shouldSanitizeUnexpectedAdapterFailure() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelSubmitAdapter adapter = Mockito.mock(PaymentChannelSubmitAdapter.class);
+        String sensitiveDetail = "jdbc:mysql://internal/payment?password=submit-secret\n"
+                + "select * from payment_order where token='submit-token'";
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        when(adapter.submit(any())).thenThrow(new IllegalStateException(sensitiveDetail));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service(adapter, mapper).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertEquals("payment channel submit failed unexpectedly; query before retrying", exception.getMessage());
+        assertFalse(exception.getMessage().contains(sensitiveDetail));
+        assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        exception.addSuppressed(new IllegalStateException(sensitiveDetail));
+        assertEquals(0, exception.getSuppressed().length);
+        verifyNoInteractions(mapper);
     }
 
     private PaymentChannelSubmitServiceImpl buildService() {
