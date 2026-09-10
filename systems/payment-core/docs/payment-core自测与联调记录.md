@@ -8590,3 +8590,26 @@
 1. 支付与退款主动查单未知异常已不再沿业务异常链传播底层详情，同时保留失败事实、原业务错误码、固定外部文案和自动补偿所需统计。
 2. 早期记录中“内部 cause 供受控排障”的描述已被本轮实现替代；当前普通异常链不再承担原始技术诊断载体，若生产确需诊断必须另建受控设施。
 3. 本地 Mockito 不证明真实渠道查单、生产事务日志配置、补偿最终成功、资金到账、对账收口或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 303. 2026-09-11 退款渠道提交上游异常脱敏 V1.0 验证
+
+### 303.1 本轮补强
+
+1. `GatewayAccessRefundChannelSubmitServiceImpl` 捕获未知上游运行时异常后，改用 `RefundChannelSubmitException.sanitized` 返回固定 `PAYMENT-1049` 和安全文案，不再保留原始 cause。
+2. 脱敏异常关闭 suppressed 与可写堆栈，但继续携带 `resultUnknown=true`；事件派发仍进入结果未知分支，不把超时、连接失败或非法受理结果解释为渠道明确拒绝。
+3. 明确发生在外部调用前的配置门禁和已有 `RefundChannelSubmitException` 路径保持原错误分类与重试语义。
+
+### 303.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 退款提交与事件派发定向测试 | `mvn -Dtest=GatewayAccessRefundChannelSubmitServiceImplTest,PaymentEventDispatchServiceImplTest test` | 通过 | `32` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 全量测试 | `mvn test` | 通过 | `785` 个用例，`0` failures、`0` errors、`0` skipped |
+| 敏感异常注入 | JUnit + Mockito | 通过 | 模拟 JDBC 地址、密码、请求令牌、响应正文与换行不进入 message、cause、suppressed 或堆栈 |
+| 结果未知语义 | 事件派发回归 | 通过 | 事件保持 `UNKNOWN`，不记普通失败或成功，退款状态和额度不被错误收口 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 303.3 当前判断
+
+1. 退款渠道提交适配器已同时保留资金安全所需的“结果未知”分类和异常最小化边界，避免为了脱敏而放宽重复退款保护。
+2. 本地 Mockito 不证明真实渠道请求是否送达、渠道是否受理、退款到账、主动查单或对账最终收口、生产日志配置或生产稳定性，`release/v1.0.0` 继续冻结。

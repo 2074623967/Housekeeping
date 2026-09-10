@@ -3031,6 +3031,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 抛错前仍分别写固定 `QUERY_FAILED` 通知快照或 `CHANNEL_QUERY_FAILED` 操作日志，保证自动退避、失败统计和后续补偿可用；不得更新返回码快照、支付/退款终态或生成成功事件。
 4. 该契约不证明真实渠道查单协议、生产日志配置、补偿成功、资金到账或最终一致性；最终状态仍需可信回调、可信查询结果与对账证据确认。
 
+### 14.130 退款渠道提交上游异常脱敏契约
+
+1. 退款提交 HTTP 客户端或未知运行时异常统一返回 `PAYMENT-1049`、`gateway-access refund submit failed; query before retrying` 和 `resultUnknown=true`，不得拼接或挂载底层异常详情。
+2. 该异常关闭 cause、suppressed 和可写堆栈；调用前配置或治理拒绝继续使用 `resultUnknown=false`，已有受控退款提交异常不得被重复改写。
+3. 事件派发捕获 `resultUnknown=true` 后仍写 `CHANNEL_SUBMIT_UNKNOWN` 并将事件置为 `UNKNOWN`，退款保持 `PROCESSING`、额度保持占用，不得自动重复向渠道下发。
+4. 该契约不证明请求是否实际送达或被渠道受理；最终退款事实仍需可信回调、主动查单、渠道对账和资金核验确认。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

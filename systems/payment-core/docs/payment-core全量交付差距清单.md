@@ -1268,6 +1268,13 @@
 3. 支付与退款服务定向 `100` 个测试、payment-core 全量 `785` 个测试通过；模拟 JDBC 地址、密码、SQL、令牌和换行无法从异常 message、cause、suppressed、堆栈或失败持久化参数恢复。
 4. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明真实渠道查单协议、生产事务日志配置、补偿最终成功、资金到账、对账收口或生产稳定性，release 四项治理阻断不变。
 
+### 8.135 2026-09-11 退款渠道提交上游异常脱敏进展
+
+1. `GatewayAccessRefundChannelSubmitServiceImpl` 遇到 HTTP 客户端或其他未知运行时异常时，不再把原始异常作为 `RefundChannelSubmitException` cause；固定返回 `PAYMENT-1049` 和安全文案，并关闭 cause、suppressed 与可写堆栈。
+2. `resultUnknown=true` 分类保持不变，事件派发仍把退款提交记为 `UNKNOWN`、退款保持 `PROCESSING` 且额度不释放，禁止依据本地超时或客户端异常自动重复退款。
+3. 退款提交适配器与事件派发定向 `32` 个测试、payment-core 全量 `785` 个测试通过；模拟 JDBC 地址、密码、请求令牌、响应正文和换行无法从异常对象恢复。
+4. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明真实渠道是否受理、渠道退款号、退款到账、补偿收口或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
