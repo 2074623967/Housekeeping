@@ -8089,3 +8089,25 @@
 
 1. 派发成功判断、持久化状态和回执补查选择已使用同一有限集合口径，未知供应商状态不会污染运营查询。
 2. 本地测试不证明真实供应商码表、受理、最终送达、人员响应或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 281. 2026-09-11 告警回执查询结果二次校验 V1.0 验证
+
+### 281.1 本轮补强
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 对所有 `PaymentIssueAlertReceiptQueryAdapter` 返回值执行统一二次校验，防止新增或替换适配器绕过 HTTP 实现已有的字段防护。
+2. 状态统一为 `ACCEPTED / DELIVERED / FAILED`；未知状态、控制字符或超容量字段沿查询异常路径写固定 `QUERY_ERROR`，不把原始污染值写入 `receipt_query_result`。
+3. 成功回执快照在 Service 持久化前再次脱敏并丢弃无关渲染内容；原记录已有供应商回执号时，查询结果缺号或异号均按 `RECEIPT_CONFLICT` 处理。
+
+### 281.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警派发与回执定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `41` 个用例；覆盖未知状态、控制字符、超容量、状态归一化、快照脱敏和缺失关联回执号 |
+| payment-core 全量测试 | `mvn test` | 通过 | `740` 个用例，`0` failures、`0` errors、`0` skipped |
+| 持久化条件复核 | 检查 Service 与 Mapper | 通过 | 非可信结果只更新有限 `receipt_query_result`，不命中 `updateIssueAlertProviderReceipt` 或来源告警确认 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 281.3 当前判断
+
+1. 回执查询结果已形成“具体适配器首层校验 + Service 统一二次校验 + Mapper 条件更新”的防御链，送达确认需要明确标准状态和现有回执号关联证据。
+2. 本地 mock 与自动化不证明真实供应商回执查询、最终送达、人员响应、生产网络或稳定性，`release/v1.0.0` 继续冻结。

@@ -570,6 +570,13 @@ t_order
 3. 未知状态不落原文，当前候选仅写固定 `SEND_EXCEPTION`；本轮不修改表、字段、索引、schema 或迁移。
 4. 该边界不证明真实供应商码表、最终送达、数据库隔离或生产稳定性。
 
+### 4.39 告警回执查询结果持久化边界
+
+1. `receipt_query_result` 只保存内部有限分类或标准状态，包括 `QUERYING / EMPTY / ACCEPTED / FAILED / DELIVERED / QUERY_ERROR / RECEIPT_CONFLICT / RATE_LIMITED / ADAPTER_MISSING`，不保存未知供应商状态原文。
+2. `provider_delivery_status` 只有在查询结果明确为 `DELIVERED` 且与原 `provider_receipt_no` 关联一致时才由条件更新改写；原记录有回执号而结果缺号或异号时保持 `ACCEPTED`。
+3. Service 在写库前按现有列容量校验回执号、说明和快照并脱敏快照；非法结果只完成本次查询尝试，不覆盖既有供应商回执事实或来源告警确认状态。
+4. 本轮不修改表、字段、索引、schema 或迁移；本地测试不证明真实供应商回执、数据库隔离或生产稳定性。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

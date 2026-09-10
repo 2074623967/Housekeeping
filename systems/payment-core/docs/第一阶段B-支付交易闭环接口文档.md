@@ -2875,6 +2875,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 标准化后的 `ACCEPTED` 必须同时用于派发成功判断与后续回执候选、积压和监控查询，禁止出现成功判断忽略大小写但数据库保留非标准值的口径分裂。
 4. 本地测试不证明真实供应商状态码表、受理、最终送达、人员响应、生产网络或稳定性。
 
+### 14.108 告警回执查询适配器结果契约
+
+1. `PaymentIssueAlertReceiptQueryAdapter.query` 返回后由 Service 统一校验；`providerDeliveryStatus` 只允许规范化后的 `ACCEPTED / DELIVERED / FAILED`，未知状态不得写入 `receipt_query_result`。
+2. 回执号最长 `128`、投递说明最长 `255`、回执快照最长 `2048` 个字符，所有返回字段在去空格前拒绝 ISO 控制字符；快照在持久化前统一脱敏，渲染内容不参与回执更新。
+3. 原受理记录存在 `providerReceiptNo` 时，`DELIVERED` 结果必须返回同一编号；缺失或不一致统一形成 `RECEIPT_CONFLICT`，不得确认送达或联动确认来源告警。
+4. 空结果或空状态继续形成 `EMPTY`，适配器异常、未知状态及非法字段形成 `QUERY_ERROR`；本地契约测试不证明真实供应商回执、最终送达、人员响应或生产网络。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
