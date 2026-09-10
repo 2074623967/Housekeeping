@@ -7129,3 +7129,27 @@
 1. 用户和运营页面已不能通过公开按钮构造成功通知，支付成功必须来自后端接受的可信渠道回调或主动查单事实。
 2. 保留真实回调接口是渠道异步通知所必需的，不应因删除 UI 模拟入口而删除 Controller 或弱化验签；本地 demo profile 的关闭验签能力也不得用于测试、预发或生产。
 3. 四端构建只证明前端依赖和模板编译通过，未执行真实渠道报文、浏览器人工回归、生产配置或资金一致性验收。
+
+## 241. 2026-09-10 本地模拟支付适配器环境隔离 V1.0 验证
+
+### 241.1 本轮补强
+
+1. 4 个本地支付提交适配器和 4 个本地支付查单适配器增加 `demo` profile 限制，默认环境不再生成模拟渠道流水或以数据库当前状态冒充渠道查询结果。
+2. `PaymentChannelSubmitService` 增加适配器可用性预检；支付主服务在任何渠道提交事实落库前执行预检，无适配器时返回 `PAYMENT-1012` 并保持原预付状态。
+3. 真实 `GatewayAccessPaymentChannelQueryAdapter` 保持独立配置开关；非 demo 未启用或未匹配真实适配器时，主动查单继续以 `PAYMENT-1004` 失败闭合。
+
+### 241.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 环境装配契约 | `PaymentLocalAdapterProfileConfigurationTest` | 通过 | 默认 profile 的本地提交/查单 Bean 均为 `0`，demo profile 分别注册 `4` 个 |
+| 渠道服务与支付主链路定向测试 | `mvn -Dtest=PaymentLocalAdapterProfileConfigurationTest,PaymentChannelSubmitServiceImplTest,PaymentChannelQueryServiceImplTest,PaymentServiceImplTest test` | 通过 | `81` 个用例，覆盖无适配器错误码、demo 装配和预检失败无提交事实副作用 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `634` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、YAML、测试和文档无空白符错误 |
+| 真实环境验证 | 真实渠道下单/查单、gateway-access、凭证、生产网络和资金事实 | 未执行 | 不记录真实渠道受理、查询、生产部署或资金验收通过 |
+
+### 241.3 当前判断
+
+1. 基础环境现在宁可明确暴露“真实适配器缺失”，也不会生成看似可信的模拟渠道单号或查询来源；这是失败闭合，不是支付渠道已经可用。
+2. demo 仍可支持仓库本地演示和自动化适配器单测，但启用 demo 会同时引入样例数据初始化与未签名回调配置，必须与测试、预发和生产部署隔离。
+3. 下一步仍需由 gateway-access 或渠道专属实现提供真实提交和查询适配器，并补商户应用绑定、证书/密钥托管、网络来源控制、超时语义、真实报文和资金一致性验证。

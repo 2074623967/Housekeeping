@@ -1987,7 +1987,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 处理规则：
 
-1. `payment.channel-query.gateway-access.enabled=false` 时继续使用微信、支付宝、线下银行和本地兜底模拟适配器，不改变本地开发行为。
+1. `payment.channel-query.gateway-access.enabled=false` 时，非 demo 环境不使用微信、支付宝、线下银行或本地兜底模拟适配器；未找到其他真实适配器时返回 `PAYMENT-1004`。只有显式 demo profile 保留本地模拟查单。
 2. 启用 `gateway-access` 后，支付核心向配置的 `query-url` 发送 `paymentOrderId / orderNo / channelCode / channelTransactionNo`，并读取统一响应中的 `data.tradeStatus / data.channelTransactionNo / data.querySource / data.channelReturnCode`。
 3. 每次有效渠道查询都会写入查询事实日志；`WAIT_CALLBACK / USERPAYING / FAIL / UNKNOWN` 等非成功状态只刷新返回快照，不修改支付、订单或账单状态。
 4. 渠道明确返回 `SUCCESS` 且存在渠道流水号时，通过条件更新原子抢占成功收口权；抢占成功后同步更新支付尝试、预付单、订单、账单，生成 `PAYMENT_SUCCESS` 事件，派发下游并释放提交并发令牌。
@@ -2194,7 +2194,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.25 模拟渠道交易号规则
 
-1. 本地微信 H5、支付宝 H5、线下银行与兜底适配器返回的 `channelTransactionNo` 使用“渠道前缀 + 13 位毫秒时间 + 32 位 UUID 十六进制段”，最大长度小于当前 `128` 字符字段上限。
+1. 仅 demo profile 注册的本地微信 H5、支付宝 H5、线下银行与兜底适配器返回的 `channelTransactionNo` 使用“渠道前缀 + 13 位毫秒时间 + 32 位 UUID 十六进制段”，最大长度小于当前 `128` 字符字段上限。
 2. `PaymentChannelSubmitResultDTO.channelTransactionNo` 与 `responsePayload.channelTransactionNo` 必须保持一致，支付核心将该值回写支付单并在后续渠道查单时透传。
 3. 调用方必须把渠道交易号视为不透明字符串，不得校验固定长度、解析时间或自行重建；真实渠道接入后直接采用供应商返回值，不沿用本地模拟生成规则。
 4. 该编号不是提交幂等键，也不证明支付成功。真实渠道超时或未知结果必须先按稳定支付标识查单，禁止仅因本地未落库直接重复下单。
@@ -2513,6 +2513,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. App/H5/PC 和管理端不再封装或调用该接口，也不构造 `tradeStatus=SUCCESS`、模拟渠道交易号或提供模拟回调按钮；浏览器不能作为渠道通知发起方人工制造支付终态。
 3. 用户端和运营端对处理中支付只提供详情刷新、主动查单和轨迹排查；只有确认未提交渠道且无渠道流水/支付尝试的支付单保留受限本地关单能力。
 4. 删除前端调用面不代表真实渠道回调已联通或验收。测试、预发和生产仍必须配置渠道独立凭证，并以真实协议报文验证签名、关联键、幂等和资金事实。
+
+### 14.69 本地模拟支付适配器环境与提交预检契约
+
+1. `WechatH5/AlipayH5/OfflineBank/Local` 提交和查单适配器只在 Spring `demo` profile 注册；默认、测试、预发和生产 profile 不得依赖这些适配器生成渠道流水或回显本地状态。
+2. 非 demo 支付提交在路由、控制策略、风控和幂等复核后调用 `ensureAdapterAvailable(channelCode)`，并在更新支付单、预付单、路由、尝试或提交并发令牌前完成。无适配器返回 `PAYMENT-1012`，原支付事实保持不变。
+3. 已有相同幂等键的支付尝试仍直接复用当前预付结果，不因当前适配器配置变化重复下单；风控非 `PASS` 仍优先按风控状态收口，不进入渠道适配器预检。
+4. 非 demo 主动查单只有已启用且支持目标渠道的真实查询适配器可执行；缺少适配器返回 `PAYMENT-1004`，不得降级为数据库状态回显。当前默认配置尚不代表真实 gateway-access 已实现或联通。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
