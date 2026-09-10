@@ -2713,6 +2713,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 返回继续使用 `PaymentTaskActionResultDTO`：明确送达计成功，未送达、限流、适配器缺失、查询异常、空结果或回执号冲突计失败并返回有限摘要；同时记录任务运行日志并刷新 overview，推荐路由为 `/payment-issue-alerts`。
 5. 本地接口、Mapper 和服务测试只证明受控编排与并发围栏，不证明真实查询适配器已配置、供应商已送达、人员已响应、生产网络或稳定性已验证。
 
+### 14.87 单条告警回执回查操作者契约
+
+1. `POST /api/payment-task-center/reconcile-issue-alert-receipts/{alertNo}` 请求体固定为 `{ "operator": "支付运营" }`；`operator` 去除首尾空白后必填且最长 `64` 个字符，非法输入在候选查询、claim、限流和外呼前失败。
+2. 规范化后的操作人贯穿本次任务运行日志 `triggeredBy`、明确送达外部告警的 `ackOperator` 与来源 outbox 确认记录，替代单条入口原先固定写入的 `payment-core-admin`，便于按实际发起声明联查。
+3. 未送达或有限失败时不会写成确认人，但任务运行日志仍记录本次发起声明；自动回查继续使用调度器身份，既有人工批量入口继续保持原契约，不因本次调整改变。
+4. `operator` 当前属于请求方自声明字段，不是从可信登录主体、权限令牌或审计网关派生。本契约提升内部可追溯性，但不证明操作者身份真实、已获授权或满足正式审计合规要求。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。
