@@ -7207,3 +7207,30 @@
 1. 支付核心到 gateway-access 的支付提交调用边界已可运行，并与主动查单共享失败闭合的治理门禁；本地受控 stub 只验证 HTTP 转发和响应校验，不是任何真实渠道联调。
 2. 当前尚未实现微信、支付宝和银行各自的请求映射、签名验签、商户/应用绑定、生产密钥托管与轮换、来源 IP 白名单执行和真实网络故障语义。
 3. 发布路由目前只做启用及正流量门禁，不执行实际百分比灰度算法；渠道资金到账、回调、主动查单、对账、结算和财务核验仍需真实环境独立验证。
+
+## 244. 2026-09-10 gateway-access 退款查单代理边界 V1.0 验证
+
+### 244.1 本轮补强
+
+1. `gateway-access` 新增 `POST /api/gateway/refunds/query`，复用支付交易代理的调用凭证、应用、权限、网关、有效证书和发布路由门禁；三个渠道退款查单 URL 默认留空并失败闭合。
+2. 代理请求和结果分别稳定为 `refundOrderId / channelCode / channelRefundNo` 与 `refundStatus / channelRefundNo / querySource`。状态仅接受 `PROCESSING / SUCCESS / FAIL`，响应渠道退款号必须与请求一致，防止串退款单收口。
+3. `payment-core` 退款查单适配器补齐应用编码和访问凭证请求头，凭证为空时不声明支持；默认地址由错误的 reconciliation-system `18150` 修正为 gateway-access `8090`，网关业务码非 `0` 时按 `PAYMENT-1046` 失败闭合。
+4. 两端只记录最小审计和既有退款操作事实，不保存访问密钥、上游原始报文或异常原文。
+
+### 244.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway-access 定向测试 | `mvn -Dtest=GatewayRefundControllerTest,RefundOrderQueryServiceImplTest,GatewayAccessMapperIntegrationTest test` | 通过 | `6` 个用例；后续边界复跑 `5` 个用例，覆盖控制字符、关联退款号、门禁和 Controller 委派 |
+| payment-core 定向测试 | `mvn -Dtest=GatewayAccessRefundChannelQueryAdapterTest,RefundChannelQueryServiceImplTest,RefundServiceImplTest test` | 通过 | `30` 个用例，覆盖凭证配置、业务码、结果规范化和退款状态收口 |
+| gateway-access 全量测试 | `mvn test` | 通过 | `41` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 全量测试 | `mvn test` | 通过 | `638` 个用例，`0` failures、`0` errors、`0` skipped |
+| 本地受控上游冒烟 | gateway-access `8090` 转发到固定响应 stub `19091` | 通过 | 正确凭证返回匹配的 `PROCESSING` 退款事实；错误凭证返回 `GATEWAY_ACCESS_DENIED` |
+| 补丁检查 | `git diff --check` | 通过 | Java、YAML、测试和文档无空白符错误 |
+| 真实环境验证 | 微信/支付宝/银行退款协议、生产凭证、网络、到账和对账 | 未执行 | 不记录真实退款查单、生产部署、资金到账、对账或财务验收通过 |
+
+### 244.3 当前判断
+
+1. payment-core 原有退款主动查单、自动补偿、退避、限流和状态收口现在有了真实存在且失败闭合的 gateway-access HTTP 出口，不再依赖错误的服务地址。
+2. 本地受控 stub 只验证代理链路和稳定契约，不是微信、支付宝或银行真实退款查单；真实请求映射、签名验签、商户应用绑定、密钥轮换和网络来源控制仍未完成。
+3. 退款 `SUCCESS` 仍只表示可信上游状态返回后的本地收口；真实资金到账、支付机构账单、对账差异、会计分录和财务审批必须另行验证。

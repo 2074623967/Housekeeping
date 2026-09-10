@@ -2466,7 +2466,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 1. 接口仅查询已绑定 `channelCode/channelRefundNo` 且状态为 `PROCESSING` 的退款；`SUCCESS/FAIL` 直接返回最新退款摘要，不重复调用渠道。
 2. 渠道结果必须包含 `refundStatus/channelRefundNo/querySource`，状态只允许 `PROCESSING/SUCCESS/FAIL`；字段超长、含控制字符、为空或渠道退款号与已受理事实不一致时返回 `PAYMENT-1046`。
 3. `PROCESSING` 只写 `CHANNEL_QUERY` 操作日志并保持状态；明确 `SUCCESS/FAIL` 在锁内复核关联键后通过 CAS 收口并写 `CHANNEL_QUERY_SUCCESS/FAIL`。
-4. 未找到可用适配器返回 `PAYMENT-1045`。默认本地兜底只回显现状，`gateway-access` HTTP 适配器默认关闭；当前契约不代表真实网关退款查询已实现。
+4. 未找到可用适配器返回 `PAYMENT-1045`。默认本地兜底只回显现状，`gateway-access` HTTP 适配器默认关闭；启用时必须同时配置应用编码、访问凭证、真实退款上游和允许渠道。
 
 ### 14.63 退款批量主动查单任务接口契约
 
@@ -2532,6 +2532,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 网关拒绝、超时、空响应和字段非法统一返回 `PAYMENT-1048`。由于外部渠道可能已经受理，既有主流程会把已准备提交的支付尝试标记为“结果未知，待查单”，禁止自动重复下单。
 5. 关键配置为 `HSP_PAYMENT_SUBMIT_GATEWAY_ENABLED / HSP_PAYMENT_SUBMIT_GATEWAY_URL / HSP_PAYMENT_SUBMIT_GATEWAY_SUPPORTED_CHANNELS / HSP_PAYMENT_SUBMIT_GATEWAY_APP_CODE / HSP_PAYMENT_SUBMIT_GATEWAY_ACCESS_KEY / HSP_PAYMENT_SUBMIT_GATEWAY_TIMEOUT_MS`；开关默认关闭，访问密钥默认空。
 6. 当前本地受控上游验证只证明 payment-core 与 gateway-access 的稳定 HTTP 代理契约，不代表微信、支付宝或银行真实协议、签名验签、生产密钥托管、来源 IP 白名单、灰度发布、资金到账、对账或财务验收已经完成。
+
+### 14.71 gateway-access 退款查单代理契约
+
+1. `payment.refund-query.gateway-access.enabled=false` 为默认值；查询 URL、应用编码、访问密钥或目标渠道配置不完整时，适配器不声明支持，退款查单返回既有 `PAYMENT-1045`，不降级为本地状态回显。
+2. 配置完整后，payment-core 携带 `X-Gateway-App-Code / X-Gateway-Access-Key`，向 `POST /api/gateway/refunds/query` 发送 `refundOrderId / channelCode / channelRefundNo`。默认地址为 `http://127.0.0.1:8090/api/gateway/refunds/query`，不再指向 reconciliation-system 的 `18150`。
+3. gateway-access 在转发前复用应用、凭证、权限、网关、有效证书和发布路由门禁；微信、支付宝和银行退款查单上游 URL 默认均为空，未显式配置时失败闭合。
+4. 只有网关业务码为 `0`，且结果包含 `refundStatus / channelRefundNo / querySource` 时才接受；状态只允许 `PROCESSING / SUCCESS / FAIL`，渠道退款号必须与已受理事实一致。失败统一沿用 `PAYMENT-1046` 并写最小失败历史。
+5. payment-core 配置项为 `HSP_PAYMENT_REFUND_QUERY_GATEWAY_ENABLED / HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL / HSP_PAYMENT_REFUND_QUERY_SUPPORTED_CHANNELS / HSP_PAYMENT_REFUND_QUERY_GATEWAY_APP_CODE / HSP_PAYMENT_REFUND_QUERY_GATEWAY_ACCESS_KEY / HSP_PAYMENT_REFUND_QUERY_TIMEOUT_MS`；gateway-access 上游配置为 `HSP_GATEWAY_WX_REFUND_QUERY_URL / HSP_GATEWAY_ALIPAY_REFUND_QUERY_URL / HSP_GATEWAY_BANK_REFUND_QUERY_URL`。
+6. 本地受控上游冒烟只证明稳定 HTTP 转发、凭证拒绝和退款号关联校验，不代表真实退款渠道协议、签名验签、生产密钥托管、来源 IP 白名单、退款到账、对账或财务验收完成。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。

@@ -148,3 +148,33 @@
 | `HSP_GATEWAY_BANK_PAYMENT_QUERY_URL` | 空 | 银行渠道真实查单集成地址 |
 
 默认访问凭证和三个上游 URL 均为空，因此仓库默认配置不能调用外部渠道。当前接口是稳定代理边界，不代表微信、支付宝或银行协议适配、生产密钥托管、来源 IP 白名单执行、真实网络联通、资金到账或财务验收已经完成。
+
+## 10. 退款订单主动查单代理
+
+### `POST /api/gateway/refunds/query`
+
+请求头与支付交易代理一致，必须提供 `X-Gateway-App-Code` 和 `X-Gateway-Access-Key`。
+
+请求体：
+
+```json
+{
+  "refundOrderId": "REF202609100001",
+  "channelCode": "wx_h5",
+  "channelRefundNo": "WX-REFUND-202609100001"
+}
+```
+
+成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo / querySource`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`，返回的 `channelRefundNo` 必须与请求完全一致；缺失、超长、含 ISO 控制字符、状态非法或关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
+
+退款查单复用支付交易代理的应用、访问凭证、权限、网关、有效证书和当前环境发布路由门禁，并写入 `REFUND_QUERY` 最小审计。访问密钥、请求报文、上游原始响应和异常原文不进入审计日志。
+
+退款查单上游由以下环境变量显式配置，默认均为空：
+
+| 环境变量 | 渠道 |
+| --- | --- |
+| `HSP_GATEWAY_WX_REFUND_QUERY_URL` | 微信 H5 |
+| `HSP_GATEWAY_ALIPAY_REFUND_QUERY_URL` | 支付宝 H5 |
+| `HSP_GATEWAY_BANK_REFUND_QUERY_URL` | 线下银行 |
+
+当前接口只闭合稳定 HTTP 代理契约，不代表微信、支付宝或银行真实退款协议、签名验签、生产凭证、网络白名单、退款到账、对账或财务验收已经完成。
