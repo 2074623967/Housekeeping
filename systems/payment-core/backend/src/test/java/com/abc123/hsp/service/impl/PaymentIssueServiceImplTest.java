@@ -210,7 +210,10 @@ class PaymentIssueServiceImplTest {
         row.setProviderReceiptSnapshot("HTTP 502: upstream body contains 13800138000");
         when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
 
-        String csv = new PaymentIssueServiceImpl(paymentIssueMapper).exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO());
+        PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+        query.setPageNo(3);
+        query.setPageSize(2);
+        String csv = new PaymentIssueServiceImpl(paymentIssueMapper).exportAlertLogsCsv(query);
 
         assertTrue(csv.contains("PIA-EXPORT-001"));
         assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.invalid\"\",\"\"支付异常告警内容\"\")"));
@@ -219,7 +222,39 @@ class PaymentIssueServiceImplTest {
         assertTrue(csv.contains("[REDACTED]"));
         assertFalse(csv.contains("13800138000"));
         assertEquals("HTTP 502: upstream body contains 13800138000", row.getProviderReceiptSnapshot());
-        verify(paymentIssueMapper).findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class));
+        ArgumentCaptor<PaymentIssueAlertLogQueryDTO> queryCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogQueryDTO.class);
+        verify(paymentIssueMapper).findAlertLogs(queryCaptor.capture());
+        assertEquals(1, queryCaptor.getValue().getPageNo());
+        assertEquals(1001, queryCaptor.getValue().getPageSize());
+    }
+
+    @Test
+    void shouldRejectAlertLogExportAboveLimit() {
+        PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
+        row.setAlertNo("PIA-EXPORT-LIMIT");
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(Collections.nCopies(1001, row));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO()));
+
+        assertTrue(exception.getMessage().contains("超过1000条"));
+    }
+
+    @Test
+    void shouldExportAlertLogsAtLimit() {
+        PaymentIssueAlertLogRowDTO row = new PaymentIssueAlertLogRowDTO();
+        row.setAlertNo("PIA-EXPORT-LIMIT");
+        when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class)))
+                .thenReturn(Collections.nCopies(1000, row));
+
+        String csv = new PaymentIssueServiceImpl(paymentIssueMapper)
+                .exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO());
+
+        assertTrue(csv.contains("PIA-EXPORT-LIMIT"));
     }
 
     @Test

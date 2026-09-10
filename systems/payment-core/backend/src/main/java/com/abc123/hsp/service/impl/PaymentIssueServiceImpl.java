@@ -34,6 +34,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentIssueServiceImpl implements PaymentIssueService {
 
+    private static final int ALERT_EXPORT_MAX_ROWS = 1000;
     private static final int ISSUE_ACTION_BATCH_MAX_SIZE = 100;
     private static final int ISSUE_NO_MAX_LENGTH = 128;
     private static final int ALERT_NO_MAX_LENGTH = 64;
@@ -114,8 +115,13 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Override
     public String exportAlertLogsCsv(PaymentIssueAlertLogQueryDTO query) {
         PaymentIssueAlertLogQueryDTO normalizedQuery = normalizeAlertLogQuery(query);
-        List<PaymentIssueAlertLogRowDTO> records = maskAlertLogItems(
-                paymentIssueMapper.findAlertLogs(normalizedQuery));
+        normalizedQuery.setPageNo(1);
+        normalizedQuery.setPageSize(ALERT_EXPORT_MAX_ROWS + 1);
+        List<PaymentIssueAlertLogRowDTO> exportRows = paymentIssueMapper.findAlertLogs(normalizedQuery);
+        if (exportRows != null && exportRows.size() > ALERT_EXPORT_MAX_ROWS) {
+            throw new IllegalArgumentException("导出数据超过1000条，请缩小筛选范围");
+        }
+        List<PaymentIssueAlertLogRowDTO> records = maskAlertLogItems(exportRows);
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("告警编号,异常编号,支付单号,异常类型,严重等级,责任组,告警通道,接收人,告警状态,回执状态,供应商编码,供应商名称,供应商端点别名,模板编码,供应商投递状态,供应商投递说明,供应商回执号,回查队列状态,回查次数,最近回查时间,下次自动回查时间,最近回查结果,回执确认人,回执确认时间,触发来源,创建时间,内容快照,回执快照\n");
