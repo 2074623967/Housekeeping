@@ -7999,3 +7999,26 @@
 
 1. 配置治理快照已同时形成数据库读取上限与 Service 完整性拒绝边界，普通配置总览和业务查询不受导出上限影响。
 2. 本地测试不证明生产数据规模、执行计划、真实下载、导出权限或稳定性，`release/v1.0.0` 继续冻结。
+
+## 277. 2026-09-11 外部渠道结果原始控制字符防护 V1.0 验证
+
+### 277.1 本轮补强
+
+1. `PaymentChannelQueryResultValidator` 在空值和空白归一化前扫描原始字段；适配器结果在码表查询前校验，标准化结果和 PaymentService 写入前再次校验。
+2. gateway-access 支付提交与退款提交适配器对渠道流水号、状态、状态类型和返回码执行同一原始值边界；正常首尾空格仍允许归一化。
+3. 退款事件派发在绑定首次渠道退款号前再次检查原始值。非法受理号转为未知结果，退款保持 `PROCESSING`，不写渠道关联键。
+
+### 277.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 五类联合定向测试 | `mvn -Dtest=PaymentChannelQueryServiceImplTest,PaymentServiceImplTest,GatewayAccessPaymentChannelSubmitAdapterTest,GatewayAccessRefundChannelSubmitServiceImplTest,PaymentEventDispatchServiceImplTest test` | 通过 | `108` 个用例；新增 5 个末尾换行边界及零错误写入断言 |
+| payment-core 全量测试 | `mvn test` | 通过 | `734` 个用例，`0` failures、`0` errors、`0` skipped |
+| 同类结果校验检索 | 检索外部响应 `validate/normalize/containsIsoControl` | 通过 | 支付查单、支付提交、退款提交与告警回执均在原始值上检查；退款落库前具备二次防御 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 277.3 当前判断
+
+1. 外部渠道结果不能再通过尾部控制字符绕过 payment-core 的字段边界，支付和退款既有成功、待处理与未知结果状态机保持不变。
+2. 本地测试不证明真实渠道报文、生产网络、渠道受理、资金到账或稳定性，`release/v1.0.0` 继续冻结。
