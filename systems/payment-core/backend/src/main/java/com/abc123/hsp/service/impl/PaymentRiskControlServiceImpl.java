@@ -99,14 +99,19 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         result.setHitCode(normalizeOptional(result.getHitCode(), HIT_CODE_MAX_LENGTH));
         result.setRiskTag(normalizeOptional(result.getRiskTag(), RISK_TAG_MAX_LENGTH));
         String reviewNo = normalizeOptional(result.getReviewNo(), REVIEW_NO_MAX_LENGTH);
+        String eventNo = normalizeOptional(result.getEventNo(), EVENT_NO_MAX_LENGTH);
         if ("REVIEW".equals(decision) && !StringUtils.hasText(reviewNo)) {
             throw invalidResult();
         }
-        result.setReviewNo(reviewNo);
-        String eventNo = normalizeOptional(result.getEventNo(), EVENT_NO_MAX_LENGTH);
         if ("INTERCEPT".equals(decision) && !StringUtils.hasText(eventNo)) {
             throw invalidResult();
         }
+        if ("REJECT".equals(decision)
+                && !StringUtils.hasText(reviewNo)
+                && !StringUtils.hasText(eventNo)) {
+            throw invalidResult();
+        }
+        result.setReviewNo(reviewNo);
         result.setEventNo(eventNo);
         normalizeOptional(result.getMessage(), MESSAGE_MAX_LENGTH);
         result.setMessage(decisionMessage(decision));

@@ -133,7 +133,9 @@ public class RiskControlServiceImpl implements RiskControlService {
                 return rejectResult(
                         "人工复核已拒绝，当前支付单不允许继续提交",
                         latestReviewOrder.getReviewNo(),
-                        latestReviewOrder.getRiskTag());
+                        latestReviewOrder.getRiskTag(),
+                        null,
+                        null);
             }
             if ("PENDING".equalsIgnoreCase(latestReviewOrder.getStatus())) {
                 return reviewResult(
@@ -353,7 +355,8 @@ public class RiskControlServiceImpl implements RiskControlService {
             return reviewResult(hit.message, reviewOrder.getReviewNo(), hit.riskTag, interceptEvent.getEventNo());
         }
         if ("REJECT".equals(hit.action)) {
-            return rejectResult(hit.message, null, hit.riskTag);
+            InterceptEventEntity rejectEvent = buildOrReuseInterceptEvent(request, hit, "已拒绝");
+            return rejectResult(hit.message, null, hit.riskTag, rejectEvent.getEventNo(), hit.hitCode);
         }
         InterceptEventEntity interceptEvent = buildOrReuseInterceptEvent(request, hit, "已拦截");
         RiskDecisionResultDTO result = new RiskDecisionResultDTO();
@@ -420,12 +423,19 @@ public class RiskControlServiceImpl implements RiskControlService {
         return result;
     }
 
-    private RiskDecisionResultDTO rejectResult(String message, String reviewNo, String riskTag) {
+    private RiskDecisionResultDTO rejectResult(
+            String message,
+            String reviewNo,
+            String riskTag,
+            String eventNo,
+            String hitCode) {
         RiskDecisionResultDTO result = new RiskDecisionResultDTO();
         result.setDecision("REJECT");
         result.setDecisionType("danger");
+        result.setHitCode(hitCode);
         result.setReviewNo(reviewNo);
         result.setRiskTag(riskTag);
+        result.setEventNo(eventNo);
         result.setMessage(message);
         return result;
     }
