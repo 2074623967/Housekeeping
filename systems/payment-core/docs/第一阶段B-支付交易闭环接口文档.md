@@ -54,8 +54,7 @@
 | `/api/refunds/{refundOrderId}` | `GET` | 查询退款详情与操作日志 |
 | `/api/refunds/apply` | `POST` | 发起退款申请 |
 | `/api/refunds/approve` | `POST` | 审核通过退款单并提交处理 |
-| `/api/refunds/success` | `POST` | 模拟渠道退款成功回调 |
-| `/api/refunds/fail` | `POST` | 模拟渠道退款失败回调 |
+| `/api/refunds/callback/{channel}` | `POST` | 验签并收口渠道退款结果 |
 | `/api/refunds/retry` | `POST` | 失败退款单重新提交处理 |
 | `/api/settlements/workers` | `GET` | 查询服务者结算单 |
 | `/api/settlements/workers/overview` | `GET` | 查询服务者结算总览指标 |
@@ -616,7 +615,7 @@
 4. 如果并发请求发现预付单已经被其他线程占位，接口会优先返回最新预付单状态，避免重复路由、重复下单和重复待回调日志。
 5. 这样可以避免按钮重复点击、浏览器重试和并发接口重放导致重复路由、重复尝试和重复待回调日志。
 
-## 8. 模拟回调
+## 8. 支付渠道回调
 
 接口：`POST /api/payments/callback/{channel}`
 
@@ -913,7 +912,7 @@
 2. 原支付快照：原支付金额、原支付方式、原支付状态。
 3. `operationLogs`：退款操作日志，覆盖发起申请、审核通过、成功回调、失败回调、失败重试以及任务中心批量重试等动作。
 
-### 12.4 退款动作接口
+### 12.4 退款动作与渠道回调接口
 
 审核通过：
 
@@ -921,16 +920,10 @@
 POST /api/refunds/approve
 ```
 
-模拟成功：
+可信渠道回调：
 
 ```http
-POST /api/refunds/success
-```
-
-模拟失败：
-
-```http
-POST /api/refunds/fail
+POST /api/refunds/callback/{channel}
 ```
 
 失败重试：
@@ -948,21 +941,34 @@ POST /api/refunds/retry
 }
 ```
 
+渠道回调请求示例：
+
+```json
+{
+  "refundOrderId": "REF20260720223600123",
+  "channelRefundNo": "WXREF202607200001",
+  "refundStatus": "SUCCESS",
+  "timestamp": "1753022160",
+  "nonce": "refund-notify-001",
+  "signature": "base64-signature"
+}
+```
+
 状态流转：
 
 | 动作 | 原状态 | 目标状态 |
 | --- | --- | --- |
 | 审核通过 | `REVIEWING` | `PROCESSING` |
-| 成功回调 | `PROCESSING` | `SUCCESS` |
-| 失败回调 | `PROCESSING` | `FAIL` |
+| 渠道成功回调 | `PROCESSING` | `SUCCESS` |
+| 渠道失败回调 | `PROCESSING` | `FAIL` |
 | 失败重试 | `FAIL` | `PROCESSING` |
 
 实现说明：
 
-1. 后端使用状态条件更新，避免重复点击、重复回调导致退款状态回退。
-2. `SUCCESS` 会写入 `success_at`，`retry` 会清空成功时间。
-3. 退款原因会落在退款单上，操作备注会进入退款操作日志，便于财务、运营、测试和研发统一复盘。
-4. 当前为本地模拟闭环，真实渠道退款请求、退款回调验签、退款渠道流水和差错补偿在后续渠道网关能力中扩展。
+1. 回调签名原文为 `channel|refundOrderId|refundStatus|channelRefundNo|timestamp|nonce`，渠道规范化为小写；签名算法、时间窗和 nonce 防重规则与支付回调共享。
+2. 后端锁定退款单并核对实际受理渠道与渠道退款号，只有 `SUCCESS/FAIL` 可从 `PROCESSING` 收口；相同终态幂等返回，相反终态返回冲突。
+3. `SUCCESS` 会写入 `success_at`，`retry` 会清空成功时间；可信回调操作人固定为 `channel-callback`。
+4. 后台不再提供模拟成功/失败接口。当前通用回调契约仍需由真实渠道适配器映射，主动查单、渠道流水和到账核验尚未完成。
 
 ## 11.4 服务者结算单查询与导出
 
@@ -2435,6 +2441,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `(channelCode, channelRefundNo)` 在退款单表内唯一。事件补偿读取到既有受理号时，只有已绑定渠道与原支付渠道一致才可直接收口事件；不一致时不得再次调用渠道。
 4. `channelSubmittedAt` 和 `channelRefundNo` 只表达渠道受理事实，退款是否成功仍由后续可信退款回调或主动查单确认；接口不得将受理时间作为 `successAt` 返回。
 
+### 14.61 退款可信回调错误与幂等契约
+
+1. `PAYMENT-1039` 表示退款回调业务字段缺失、超长或含控制字符；`PAYMENT-1042` 表示退款状态不是 `SUCCESS/FAIL`，或当前状态不能收口。
+2. `PAYMENT-1040/1041` 分别表示 URL 渠道、渠道退款号与退款单已绑定事实不一致；`PAYMENT-1043` 表示回调目标与既有终态冲突；退款单不存在返回 `PAYMENT-1044`。
+3. 验签、时间窗和 nonce 仍使用 `PAYMENT-1005` 至 `PAYMENT-1009`、`PAYMENT-1032` 至 `PAYMENT-1034`。nonce 唯一键跨 `PAYMENT/REFUND` 共用同一渠道范围，不能跨业务重放。
+4. 相同终态使用新 nonce 重复通知时幂等返回且不重复写终态日志；相反终态失败闭合。该契约不等同真实渠道通知格式、到账或生产联调已完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2468,6 +2481,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1036` | 支付通用入口或预付请求为空，标识/业务字段缺失、超长、含控制字符，或金额格式越界 |
 | `PAYMENT-1037` | 订单已结清或已超额支付，无需再次创建支付单 |
 | `PAYMENT-1038` | 同一订单已有有效预付单，但本次支付场景、客户、金额或收银台标题不一致 |
+| `PAYMENT-1039` | 退款回调业务字段缺失、超长或含控制字符 |
+| `PAYMENT-1040` | 退款回调渠道与已受理渠道不一致 |
+| `PAYMENT-1041` | 退款回调渠道退款号与已受理退款号不一致 |
+| `PAYMENT-1042` | 退款回调状态非法或退款当前状态不可收口 |
+| `PAYMENT-1043` | 退款回调目标与既有退款终态冲突 |
+| `PAYMENT-1044` | 退款单不存在 |
 
 联调说明：
 

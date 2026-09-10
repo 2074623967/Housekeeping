@@ -6931,3 +6931,27 @@
 1. 渠道受理号是退款处理中阶段的重要不可覆盖事实，可缩小“渠道已受理但事件未收口”时的重复调用窗口，但它仍不是退款到账凭证。
 2. 数据库事务回滚与外部渠道受理之间仍存在不可消除的原子性缺口；在本地尚未保存受理号时，补偿安全继续依赖渠道以 `refundOrderId` 幂等受理或查询。
 3. 下一步应以独立退款回调/查单契约核验渠道、退款单号和渠道退款号，并把可信终态及回调日志持久化；不能继续把后台模拟成功/失败动作当作生产闭环。
+
+## 233. 2026-09-10 退款可信回调 V1.0 验证
+
+### 233.1 本轮补强
+
+1. 新增退款专用回调 DTO、Controller 与服务编排，共享支付回调的 HMAC-SHA256/RSA2、时间窗和 nonce 防重底座，但使用独立退款签名原文和 `REFUND` 业务类型。
+2. 回调先规范化并校验渠道、退款单号、渠道退款号和有限状态，再验签、锁定退款单、核对渠道关联键，并通过 CAS 收口终态；重复同终态幂等，相反终态返回冲突。
+3. 删除 `/api/refunds/success`、`/api/refunds/fail` 及管理端对应按钮，人工界面不再直接制造渠道终态。
+
+### 233.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 定向测试 | `mvn -Dtest=PaymentCallbackSignatureServiceImplTest,PaymentCallbackSecurityMapperIntegrationTest,RefundServiceImplTest,RefundControllerTest,RefundSubmitOutboxMapperIntegrationTest,RefundApplicationConcurrencyIntegrationTest test` | 通过 | `42` 个用例，覆盖支付兼容、退款验签业务类型、字段绑定、终态幂等/冲突及 Mapper CAS |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `599` 个用例，`0` failures、`0` errors、`0` skipped |
+| 管理端构建 | `npm run build` | 通过 | Vite 完成 `68` 个模块转换并生成生产构建产物 |
+| schema 与迁移 | 双全量 schema + `2026-09-10-generalize-callback-nonce.sql` | 通过 | 存量 nonce 迁移为 `PAYMENT`，新增业务索引且保留跨业务渠道 nonce 唯一约束 |
+| 真实环境验证 | 真实渠道签名报文、MySQL 迁移、主动查单、到账与财务核验 | 未执行 | 不记录真实退款成功、生产迁移或现场资金验收通过 |
+
+### 233.3 当前判断
+
+1. 渠道受理号与可信终态现在通过渠道、退款单号和渠道退款号三方绑定，不能由后台人工按钮替代。
+2. 相同终态允许使用新 nonce 重复通知并幂等返回；同一 nonce 的重放仍在验签层拒绝，相反终态不能覆盖既有终态。
+3. 当前密码学与状态机证据来自本地配置和测试，不代表微信、支付宝或银行真实退款通知格式已经联调；主动查单与渠道对账仍是下一优先缺口。

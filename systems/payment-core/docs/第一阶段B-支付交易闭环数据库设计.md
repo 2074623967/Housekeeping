@@ -363,6 +363,19 @@ t_order
 
 索引规则：`uk_refund_order_id(refund_order_id)` 保证平台退款单唯一；`uk_refund_channel_no(channel_code, channel_refund_no)` 防止同一渠道退款号绑定多笔退款；`idx_refund_payment_status(payment_order_id, status)` 支撑原支付单活动额度和成功退款聚合。既有运行库通过 `database/migrations/2026-09-10-add-refund-channel-trace.sql` 增量加列和唯一键；生产执行前必须核对历史重复、DDL 锁、回滚和渠道退款号实际唯一性。
 
+### 4.17 支付与退款回调 nonce 表 `t_payment_callback_nonce`
+
+作用：保存支付和退款渠道通知的短期随机串占用，用数据库唯一键提供跨实例防重放边界。
+
+| 字段 | 说明 |
+| --- | --- |
+| `channel_code / nonce` | 规范化渠道编码与回调随机串，组合唯一 |
+| `biz_type` | `PAYMENT` 或 `REFUND`，标识随机串对应业务类型 |
+| `biz_no` | 支付单号或退款单号，仅用于审计关联，不参与唯一性放宽 |
+| `expires_at / created_at` | nonce 过期时间与创建时间，均使用数据库时钟 |
+
+索引规则：`uk_channel_nonce(channel_code, nonce)` 在同一渠道内跨支付和退款共同防重；`idx_callback_nonce_biz(biz_type, biz_no)` 支撑业务排查；`idx_nonce_expires_at(expires_at)` 支撑限量清理。既有运行库通过 `database/migrations/2026-09-10-generalize-callback-nonce.sql` 将 `payment_order_id` 重命名为 `biz_no`，新增 `biz_type` 并把存量行默认标记为 `PAYMENT`。生产执行前必须验证 MySQL 在线 DDL、锁影响、备份与回滚，不得因业务类型不同放宽同渠道 nonce 唯一约束。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
