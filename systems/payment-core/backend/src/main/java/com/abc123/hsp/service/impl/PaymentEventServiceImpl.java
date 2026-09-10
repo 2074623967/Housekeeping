@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -113,7 +114,8 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     @Override
     public String exportCsv(PaymentEventQueryDTO query) {
         normalizeQuery(query);
-        List<PaymentEventListItemDTO> items = maskEventItems(paymentEventMapper.findAllForExport(query));
+        List<PaymentEventListItemDTO> items = maskEventItems(
+                CsvExportRowLimiter.requireWithinLimit(paymentEventMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,重试次数,最近发布时间,下次重试时间,最近重发操作人,最近重发时间,事件摘要,创建时间\n");
         for (PaymentEventListItemDTO item : items) {

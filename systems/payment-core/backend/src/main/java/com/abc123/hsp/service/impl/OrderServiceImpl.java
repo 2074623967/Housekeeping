@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import com.abc123.hsp.service.OrderService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -46,7 +47,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public String exportCsv(OrderQueryDTO query) {
         normalizeQuery(query);
-        List<OrderListItemDTO> records = maskItems(orderMapper.findForExport(query));
+        List<OrderListItemDTO> records = maskItems(
+                CsvExportRowLimiter.requireWithinLimit(orderMapper.findForExport(query)));
         StringBuilder builder = new StringBuilder();
         builder.append('\uFEFF');
         builder.append("订单号,账单号,客户名称,服务品类,服务者,订单金额,已付金额,订单状态,履约状态,最近支付状态,最近收银台状态,创建时间\n");

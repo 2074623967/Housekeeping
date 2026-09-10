@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.mapper.PaymentRouteExecutionMapper;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -73,7 +74,8 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
     public String exportCsv(PaymentRouteExecutionQueryDTO query) {
         normalizeQuery(query);
         List<PaymentRouteExecutionListItemDTO> items = maskItems(
-                paymentRouteExecutionMapper.findAllForExport(query));
+                CsvExportRowLimiter.requireWithinLimit(
+                        paymentRouteExecutionMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("路由记录号,支付单号,订单号,预付单号,客户名称,支付金额,支付方式,命中渠道,路由规则,路由结果,配置快照版本,终端,客户端IP,幂等键,请求报文,响应报文,创建时间\n");
         for (PaymentRouteExecutionListItemDTO item : items) {

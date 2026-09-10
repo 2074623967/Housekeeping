@@ -8,6 +8,7 @@ import com.abc123.hsp.entity.PaymentDayEndBatchEntity;
 import com.abc123.hsp.mapper.PaymentDayEndMapper;
 import com.abc123.hsp.service.PaymentDayEndService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -95,7 +96,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     @Override
     public String exportBatchesCsv() {
         java.util.List<PaymentDayEndBatchListItemDTO> batches =
-                enrichRecentBatches(paymentDayEndMapper.findAllBatchesForExport());
+                enrichRecentBatches(CsvExportRowLimiter.requireWithinLimit(
+                        paymentDayEndMapper.findAllBatchesForExport()));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("批次号,业务日期,运行方式,批次状态,支付总单量,支付成功单量,支付成功金额,渠道成功单量,渠道成功金额,内部成功单量,内部成功金额,成功差异单量,成功差异金额,退款成功单量,退款成功金额,渠道异常,内部异常,待收口退款,待收口退款金额,对账准入,准入说明,备注,触发人,创建时间,完成时间\n");
         for (PaymentDayEndBatchListItemDTO batch : batches) {

@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.CashierSessionMapper;
 import com.abc123.hsp.service.CashierSessionService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -86,7 +87,8 @@ public class CashierSessionServiceImpl implements CashierSessionService {
         normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("会话编号,预付单号,支付单号,订单号,账单号,客户名称,收银台标题,终端,金额,会话状态,状态类型,创建时间,失效时间\n");
-        for (CashierSessionListItemDTO item : maskItems(cashierSessionMapper.findAllForExport(query))) {
+        for (CashierSessionListItemDTO item : maskItems(
+                CsvExportRowLimiter.requireWithinLimit(cashierSessionMapper.findAllForExport(query)))) {
             builder.append(csvCell(item.getSessionNo())).append(',')
                     .append(csvCell(item.getPrepayOrderNo())).append(',')
                     .append(csvCell(item.getPaymentOrderId())).append(',')

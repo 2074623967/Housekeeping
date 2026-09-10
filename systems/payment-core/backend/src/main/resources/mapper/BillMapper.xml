@@ -113,5 +113,6 @@
                 DESC
             </otherwise>
         </choose>
+        LIMIT 1001
     </select>
 </mapper>

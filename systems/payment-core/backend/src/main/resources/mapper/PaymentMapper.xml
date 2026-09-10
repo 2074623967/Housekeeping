@@ -80,6 +80,7 @@
             </if>
         </where>
         ORDER BY p.created_at DESC
+        LIMIT 1001
     </select>
 
     <select id="findExpiredPayments" resultType="com.abc123.hsp.dto.ExpiredPaymentDTO">

@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import org.springframework.stereotype.Service;
 
 /**
@@ -73,7 +74,8 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     public String exportCsv(PaymentLogQueryDTO query) {
         normalizeQuery(query);
 
-        java.util.List<PaymentLogListItemDTO> items = paymentLogMapper.findAllForExport(query);
+        java.util.List<PaymentLogListItemDTO> items = CsvExportRowLimiter.requireWithinLimit(
+                paymentLogMapper.findAllForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("日志编号,支付单号,订单号,处理阶段,日志级别,来源,日志消息,创建时间\n");
         for (PaymentLogListItemDTO item : items) {

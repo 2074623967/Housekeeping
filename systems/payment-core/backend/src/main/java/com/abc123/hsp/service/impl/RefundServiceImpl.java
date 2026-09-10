@@ -23,6 +23,7 @@ import com.abc123.hsp.service.RefundChannelQueryRateLimitService;
 import com.abc123.hsp.service.RefundChannelQueryService;
 import com.abc123.hsp.service.RefundService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -118,7 +119,8 @@ public class RefundServiceImpl implements RefundService {
     @Override
     public String exportCsv(RefundQueryDTO query) {
         normalizeQuery(query);
-        List<RefundListItemDTO> items = maskItems(refundMapper.findAllForExport(query));
+        List<RefundListItemDTO> items = maskItems(
+                CsvExportRowLimiter.requireWithinLimit(refundMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("退款单号,支付单号,订单号,客户名称,退款金额,退款方式,退款状态,状态类型,申请时间,成功时间\n");
         for (RefundListItemDTO item : items) {

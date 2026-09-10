@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentRequestListItemDTO;
 import com.abc123.hsp.dto.PaymentRequestOverviewDTO;
 import com.abc123.hsp.dto.PaymentRequestQueryDTO;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -92,7 +93,8 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
     @Override
     public String exportCsv(PaymentRequestQueryDTO query) {
         normalizeQuery(query);
-        List<PaymentRequestListItemDTO> items = maskRequestItems(paymentRequestMapper.findAllForExport(query));
+        List<PaymentRequestListItemDTO> items = maskRequestItems(
+                CsvExportRowLimiter.requireWithinLimit(paymentRequestMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("请求编号,支付单号,预付单号,订单号,支付方式,渠道编码,路由结果,终端,客户端IP,幂等键,请求状态,创建时间,请求报文,响应报文\n");
         for (PaymentRequestListItemDTO item : items) {

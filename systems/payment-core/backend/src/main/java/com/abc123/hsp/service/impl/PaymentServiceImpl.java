@@ -27,6 +27,7 @@ import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
@@ -299,7 +300,8 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public String exportCsv(PaymentListQueryDTO query) {
         normalizeQuery(query);
-        List<PaymentListItemDTO> items = maskPaymentItems(paymentMapper.findAllForExport(query));
+        List<PaymentListItemDTO> items = maskPaymentItems(
+                CsvExportRowLimiter.requireWithinLimit(paymentMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("支付单号,订单号,客户名称,支付金额,支付方式,支付渠道,渠道交易号,支付状态,创建时间\n");
         for (PaymentListItemDTO item : items) {

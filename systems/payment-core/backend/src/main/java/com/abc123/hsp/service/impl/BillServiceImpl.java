@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.BillMapper;
 import com.abc123.hsp.service.BillService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -85,7 +86,8 @@ public class BillServiceImpl implements BillService {
         normalizeQuery(query);
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("账单号,订单号,客户名称,应收金额,已付金额,待付金额,账单状态,状态类型,到期时间,创建时间\n");
-        for (BillListItemDTO item : maskItems(billMapper.findAllForExport(query))) {
+        for (BillListItemDTO item : maskItems(
+                CsvExportRowLimiter.requireWithinLimit(billMapper.findAllForExport(query)))) {
             builder.append(csvCell(item.getBillNo())).append(',')
                     .append(csvCell(item.getOrderNo())).append(',')
                     .append(csvCell(item.getCustomerName())).append(',')

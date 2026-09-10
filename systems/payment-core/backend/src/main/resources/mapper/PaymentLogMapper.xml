@@ -74,6 +74,7 @@
         FROM t_payment_process_log
         <include refid="paymentLogWhere"/>
         <include refid="paymentLogOrder"/>
+        LIMIT 1001
     </select>
 
     <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentLogOverviewDTO">

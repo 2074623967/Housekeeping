@@ -25,6 +25,7 @@ import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundQueryTaskService;
@@ -348,7 +349,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     public String exportTaskRunsCsv(PaymentTaskRunLogQueryDTO query) {
         PaymentTaskRunLogQueryDTO normalizedQuery = normalizeQuery(query);
         List<PaymentTaskRunLogItemDTO> items =
-                enrichTaskRuns(paymentTaskCenterMapper.findTaskRunLogsForExport(normalizedQuery));
+                enrichTaskRuns(CsvExportRowLimiter.requireWithinLimit(
+                        paymentTaskCenterMapper.findTaskRunLogsForExport(normalizedQuery)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("日志号,任务编码,任务名称,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
         for (PaymentTaskRunLogItemDTO item : items) {

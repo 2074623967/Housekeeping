@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import com.abc123.hsp.mapper.PaymentFlowMapper;
 import com.abc123.hsp.service.PaymentFlowService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -49,7 +50,8 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
     @Override
     public String exportCsv(PaymentFlowQueryDTO query) {
         normalizeQuery(query);
-        List<PaymentFlowListItemDTO> items = maskItems(paymentFlowMapper.findAllForExport(query));
+        List<PaymentFlowListItemDTO> items = maskItems(
+                CsvExportRowLimiter.requireWithinLimit(paymentFlowMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("流水编号,支付单号,订单号,预付单号,流水类型,类型标签,渠道编码,终端,客户端IP,幂等键,业务状态,状态类型,通知类型,路由规则,下游系统,事件主题,发布状态,重试次数,请求报文,响应报文,摘要,创建时间\n");
         for (PaymentFlowListItemDTO item : items) {

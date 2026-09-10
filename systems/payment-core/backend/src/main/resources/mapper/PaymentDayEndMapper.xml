@@ -135,6 +135,7 @@
                DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s') AS completedAt
         FROM t_payment_day_end_batch
         ORDER BY biz_date DESC, id DESC
+        LIMIT 1001
     </select>
 
     <select id="countPaymentsByDate" resultType="java.lang.Integer">

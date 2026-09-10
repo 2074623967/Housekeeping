@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.mapper.SettlementMapper;
 import com.abc123.hsp.service.SettlementService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -85,7 +86,8 @@ public class SettlementServiceImpl implements SettlementService {
     public String exportCsv(WorkerSettlementQueryDTO query) {
         normalizeQuery(query);
         List<WorkerSettlementListItemDTO> items = maskItems(
-                settlementMapper.findWorkerSettlementsForExport(query));
+                CsvExportRowLimiter.requireWithinLimit(
+                        settlementMapper.findWorkerSettlementsForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
         builder.append("结算单号,服务者,账期,应结金额,已扣减金额,实结金额,保证金影响,结算状态,出款状态\n");
         for (WorkerSettlementListItemDTO item : items) {

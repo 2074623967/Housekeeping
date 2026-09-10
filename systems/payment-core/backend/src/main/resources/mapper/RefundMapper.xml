@@ -86,6 +86,7 @@
             </if>
         </where>
         ORDER BY applied_at DESC
+        LIMIT 1001
     </select>
 
     <select id="findFailedRefundOrderIds" resultType="string">

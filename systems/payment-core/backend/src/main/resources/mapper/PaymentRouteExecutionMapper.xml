@@ -151,6 +151,7 @@
                 prr.id DESC
             </otherwise>
         </choose>
+        LIMIT 1001
     </select>
 
     <select id="findOverview" resultType="com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO">
