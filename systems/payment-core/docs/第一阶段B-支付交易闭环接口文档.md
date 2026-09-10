@@ -2910,6 +2910,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 决策最长 `32`、样式最长 `32`、命中编码最长 `64`、风险标签最长 `128`、复核单号和事件号最长 `64`、说明最长 `255` 个字符。所有字符串在去空格前拒绝 ISO 控制字符，可选纯空白字段归一化为 `null`。
 4. 风控空结果、非法结果和 HTTP 运行时异常均返回固定脱敏错误，不进入支付尝试创建或渠道调用。本地契约测试不证明真实风控服务连通、规则正确性、人工复核或生产稳定性。
 
+### 14.113 运营配置有效快照消费契约
+
+1. `GET /api/ops-config/effective-snapshot` 只有统一响应 `code` 去除首尾空格后等于字符串 `0` 且 `data` 完整时才可消费；失败码携带的快照数据必须忽略。
+2. `snapshotVersion` 必须大于等于 `0`，`businessCode / payType / terminalType` 必须分别与请求值匹配。三者最长 `64`，默认支付方式最长 `64`，主备渠道编码最长 `64`，路由策略最长 `128` 个字符。
+3. `enabledSystemControls` 必须为非 `null` 集合且最多 `1000` 条，允许当前无启用控制项；集合内对象不得为空，编码唯一、状态只允许 `ENABLED`，样式只允许 `info / warn / danger / success`。控制编码最长 `64`、名称/范围/值最长 `128`、风险级别最长 `64`、状态和样式最长 `32`、更新时间最长 `32`。
+4. 所有文本在去空格前拒绝 ISO 控制字符。非法快照与 URL/HTTP 异常按现有可选依赖契约返回 `null`；PaymentService 只在缺少必须默认值时返回 `PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID`。本地测试不证明真实配置发布或跨系统一致性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
