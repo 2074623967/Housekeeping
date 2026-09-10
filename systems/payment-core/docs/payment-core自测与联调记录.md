@@ -8788,3 +8788,25 @@
 
 1. payment-core 不再接受业务决策与展示严重度矛盾的风控响应，风险事件的两类字段保持同一语义。
 2. 本轮无前端、Mapper、schema 或迁移变化；静态核对和本地 mock 不证明真实策略、实际处置、跨系统生产一致或稳定性，`release/v1.0.0` 继续冻结。
+
+## 312. 2026-09-11 风控拒绝来源追踪完整性 V1.0 验证
+
+### 312.1 本轮补强
+
+1. payment-core 对 `REJECT` 增加来源追踪条件：人工拒绝使用 `reviewNo`，策略直接拒绝使用 `eventNo`，至少一个必须存在并满足既有字符与容量边界。
+2. risk-control-system 的策略直接拒绝生成或复用“已拒绝”风险事件，返回事件号和命中编码；人工复核拒绝只返回原复核单号。
+3. 首轮 risk-control 测试发现直接拒绝结果未携带 `hitCode`，实现修正后重新执行定向及全量测试通过。
+
+### 312.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| payment-core 定向测试 | `mvn -Dtest=PaymentRiskControlServiceImplTest,PaymentServiceImplTest test` | 通过 | `84` 个用例；覆盖无追踪号拒绝失败、人工拒绝复核号和直接拒绝事件号 |
+| payment-core 全量测试 | `mvn test` | 通过 | `795` 个用例，`0` failures、`0` errors、`0` skipped |
+| risk-control-system 定向与全量测试 | `mvn -Dtest=RiskControlServiceImplTest,RiskControlIntegrationTest test`、`mvn test` | 通过 | `9` 个用例；覆盖直接拒绝事件写入及人工拒绝不创建事件 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 312.3 当前判断
+
+1. 两类 `REJECT` 来源均具备与真实业务来源相符的最小追踪键，payment-core 不再接受无法定位来源的拒绝结果。
+2. 本轮无前端、Mapper、schema 或迁移变化；本地 H2、Mockito 和静态核对不证明真实策略命中、人工处置、生产数据一致或稳定性，`release/v1.0.0` 继续冻结。

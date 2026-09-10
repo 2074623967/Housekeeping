@@ -3094,6 +3094,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 大小写与首尾空格继续按既有规则规范化，控制字符和 `32` 字符容量边界保持不变；本轮不改变决策状态机、固定平台说明及追踪键条件。
 4. 本轮不改变接口字段、前端、Mapper、schema 或迁移；固定映射不证明真实风险决策正确、处置完成或跨系统生产一致性。
 
+### 14.139 风控拒绝来源追踪完整性契约
+
+1. 当规范化 `data.decision=REJECT` 时，`data.reviewNo` 与 `data.eventNo` 至少一个非空，且各自继续满足原文无 ISO 控制字符、去除首尾空格和最长 `64` 个字符的边界。
+2. 人工复核拒绝由 risk-control-system 返回原 `reviewNo`；策略直接拒绝在评估事务内生成或复用风险事件，返回 `eventNo + hitCode`。两类来源不互相伪造追踪字段。
+3. 两类追踪号均为空或任一已提供字段非法时统一返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`，不得写入支付状态、风险事件、支付尝试或发起渠道调用。
+4. 本轮不改变接口字段、前端、Mapper、schema 或迁移；该契约不证明复核单或风险事件在生产环境真实存在、处置正确或跨系统数据已对账。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

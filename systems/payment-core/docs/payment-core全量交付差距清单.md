@@ -1331,6 +1331,13 @@
 3. 当前 risk-control-system 四类返回路径与上述映射一致；四类矛盾组合和合法拒绝路径已加入回归。风控适配器与支付主流程定向 `82` 个测试、payment-core 全量 `793` 个测试通过。
 4. 本轮无前端、Mapper、schema 或迁移变化；固定映射不证明真实策略正确、风险处置完成、跨系统生产一致或稳定性，release 四项治理阻断不变。
 
+### 8.144 2026-09-11 风控拒绝来源追踪完整性进展
+
+1. payment-core 风控适配器要求 `REJECT` 至少携带 `reviewNo` 或 `eventNo`，两类追踪号均为空时统一以 `PAYMENT_RISK_SERVICE_UNAVAILABLE` 失败闭合，不写入无来源的拒绝事实。
+2. risk-control-system 同步补齐策略直接拒绝路径：在评估事务内生成或复用处置结果为“已拒绝”的风险事件，并返回 `eventNo + hitCode`；人工复核拒绝继续返回既有 `reviewNo`，不伪造事件。
+3. 首轮测试暴露直接拒绝结果丢失 `hitCode` 后已修复；payment-core 风控适配器与支付主流程定向 `84` 个测试、全量 `795` 个测试通过，risk-control-system 全量 `9` 个测试通过。
+4. 本轮无前端、Mapper、schema 或迁移变化；H2、Mockito 和静态契约不证明生产风险事件真实落库、人工拒绝真实发生、跨系统生产一致或稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
