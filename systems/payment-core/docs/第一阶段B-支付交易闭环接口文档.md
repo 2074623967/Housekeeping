@@ -2488,6 +2488,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_WINDOW_SECONDS` | `60` | 固定时间窗秒数，最小归一化为 `1` |
 | `HSP_PAYMENT_REFUND_QUERY_RATE_LIMIT_MAX_QUERIES_PER_CHANNEL` | `100` | 单渠道每窗最大退款查单次数，最小归一化为 `1` |
 
+### 14.65 支付与退款主动查单统一监控契约
+
+1. 任务中心总览的 `recentQueryCount/recentQueryFailureCount/recentQueryFailureRate/queryTrends` 同时覆盖支付和退款主动查单，并沿用 `queryMonitorWindowHours` 时间窗。
+2. 支付查询事实来自通知日志状态 `已查单/查单失败`；退款查询事实来自操作日志动作 `CHANNEL_QUERY/CHANNEL_QUERY_SUCCESS/CHANNEL_QUERY_FAIL/CHANNEL_QUERY_FAILED`。
+3. 失败数只包含支付 `查单失败` 与退款 `CHANNEL_QUERY_FAILED`。`CHANNEL_QUERY_FAIL` 表示可信查询得到退款失败终态，不是查询调用失败；`PAYMENT-1047` 限流拒绝通过独立指标统计。
+4. 支付与退款当前共用查询失败次数、最小样本、失败率和限流拒绝阈值，并复用既有监控 outbox；接口暂不返回按业务类型拆分的趋势或阈值。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
