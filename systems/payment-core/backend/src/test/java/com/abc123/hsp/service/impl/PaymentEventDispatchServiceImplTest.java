@@ -118,7 +118,6 @@ class PaymentEventDispatchServiceImplTest {
         PaymentEventListItemDTO event = refundEvent("PENDING", 0);
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(paymentEventMapper.findByEventNo("EVTR-001")).thenReturn(event);
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request))
                 .thenThrow(new RefundChannelSubmitException("not configured", false));
@@ -140,7 +139,6 @@ class PaymentEventDispatchServiceImplTest {
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         request.setPaymentOrderId("PAY-OTHER");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(paymentEventMapper.findByEventNo("EVTR-001")).thenReturn(event);
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
 
         boolean success = new PaymentEventDispatchServiceImpl(
@@ -171,7 +169,6 @@ class PaymentEventDispatchServiceImplTest {
     @Test
     void shouldRejectDirectRepublishWhenRefundResultIsUnknown() {
         PaymentEventListItemDTO event = refundEvent("UNKNOWN", 1);
-        when(paymentEventMapper.findByEventNo("EVTR-001")).thenReturn(event);
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001"))
                 .thenReturn(refundSubmitRequest());
@@ -298,7 +295,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setRetryCount(0);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
-        when(paymentEventMapper.findByEventNo("EVT-001")).thenReturn(event);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-001")).thenReturn(event);
         when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
             org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
             return callback.doInRabbit(rabbitTemplate);
@@ -355,7 +352,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setRetryCount(0);
-        when(paymentEventMapper.findByEventNo("EVT-001")).thenReturn(event);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-001")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))
@@ -384,6 +381,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setRetryCount(2);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-RETRY-003")).thenReturn(event);
         when(paymentEventMapper.findByEventNo("EVT-RETRY-003")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
@@ -409,7 +407,7 @@ class PaymentEventDispatchServiceImplTest {
 
     @Test
     void shouldReturnFalseWhenRepublishEventMissing() {
-        when(paymentEventMapper.findByEventNo("EVT-MISSING")).thenReturn(null);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-MISSING")).thenReturn(null);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -429,7 +427,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();
         event.setEventNo("EVT-REFUND-001");
         event.setEventType("REFUND_SUCCESS");
-        when(paymentEventMapper.findByEventNo("EVT-REFUND-001")).thenReturn(event);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-REFUND-001")).thenReturn(event);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -472,7 +470,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setRetryCount(0);
-        when(paymentEventMapper.findByEventNo("EVT-CLEARING-FAIL")).thenReturn(event);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-CLEARING-FAIL")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(String.class)))

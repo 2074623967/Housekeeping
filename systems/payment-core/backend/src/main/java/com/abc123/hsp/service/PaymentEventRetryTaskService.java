@@ -10,5 +10,5 @@ public interface PaymentEventRetryTaskService {
     /**
      * 重发失败事件；自动模式只处理已到重试时间的事件。
      */
-    PaymentEventRetryResultDTO retryFailedEvents(boolean automatic);
+    PaymentEventRetryResultDTO retryFailedEvents(boolean automatic, String operator);
 }

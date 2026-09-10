@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentEventOverviewDTO;
 import com.abc123.hsp.dto.PaymentEventQueryDTO;
+import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.service.PaymentEventService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
@@ -73,5 +74,19 @@ class PaymentEventControllerTest {
         controller.overview("PAY-001", "PAYMENT_SUCCESS", "FAILED_OR_DEAD_LETTER", "accounting-system", "payment.trade", "createdAt", "desc");
 
         verify(paymentEventService).overview(any(PaymentEventQueryDTO.class));
+    }
+
+    @Test
+    void shouldPassRepublishOperatorToService() {
+        PaymentEventController controller = new PaymentEventController(paymentEventService);
+        PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
+        request.setEventNo("EVT-001");
+        request.setOperator("finance-ops");
+
+        controller.republish(
+                request, null, "全部", "全部", "全部", null, "createdAt", "desc", 1, 20);
+
+        verify(paymentEventService).republish(org.mockito.ArgumentMatchers.eq(request),
+                any(PaymentEventQueryDTO.class));
     }
 }

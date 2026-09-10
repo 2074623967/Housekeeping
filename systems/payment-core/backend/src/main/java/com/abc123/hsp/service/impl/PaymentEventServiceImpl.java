@@ -25,6 +25,9 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentEventServiceImpl implements PaymentEventService {
 
+    private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final int EVENT_NO_MAX_LENGTH = 64;
+
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
@@ -111,7 +114,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
         normalizeQuery(query);
         List<PaymentEventListItemDTO> items = maskEventItems(paymentEventMapper.findAllForExport(query));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,重试次数,最近发布时间,下次重试时间,事件摘要,创建时间\n");
+        builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,重试次数,最近发布时间,下次重试时间,最近重发操作人,最近重发时间,事件摘要,创建时间\n");
         for (PaymentEventListItemDTO item : items) {
             builder.append(csvCell(item.getEventNo())).append(',')
                     .append(csvCell(item.getEventType())).append(',')
@@ -123,6 +126,8 @@ public class PaymentEventServiceImpl implements PaymentEventService {
                     .append(csvCell(item.getRetryCount() == null ? null : String.valueOf(item.getRetryCount()))).append(',')
                     .append(csvCell(item.getLastPublishedAt())).append(',')
                     .append(csvCell(item.getNextRetryAt())).append(',')
+                    .append(csvCell(item.getLastRepublishOperator())).append(',')
+                    .append(csvCell(item.getLastRepublishedAt())).append(',')
                     .append(csvCell(item.getEventPayload())).append(',')
                     .append(csvCell(item.getCreatedAt())).append('\n');
         }
@@ -137,11 +142,30 @@ public class PaymentEventServiceImpl implements PaymentEventService {
         if (request == null || !StringUtils.hasText(request.getEventNo())) {
             throw new IllegalArgumentException("事件号不能为空");
         }
-        boolean published = paymentEventDispatchService.republish(request.getEventNo().trim());
+        String eventNo = request.getEventNo().trim();
+        if (eventNo.length() > EVENT_NO_MAX_LENGTH) {
+            throw new IllegalArgumentException("事件号不能超过64个字符");
+        }
+        String operator = normalizeOperator(request.getOperator());
+        boolean published = paymentEventDispatchService.republish(eventNo);
         if (!published) {
-            throw new IllegalArgumentException("支付事件不存在");
+            throw new IllegalArgumentException("支付事件不存在、不可重发或投递失败");
+        }
+        if (paymentEventMapper.updateLastRepublishAudit(eventNo, operator) != 1) {
+            throw new IllegalStateException("支付事件重发审计写入失败");
         }
         return list(query == null ? new PaymentEventQueryDTO() : query);
+    }
+
+    private String normalizeOperator(String operator) {
+        if (!StringUtils.hasText(operator)) {
+            throw new IllegalArgumentException("事件重发操作人不能为空");
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("事件重发操作人不能超过64个字符");
+        }
+        return normalized;
     }
 
     private void normalizeQuery(PaymentEventQueryDTO query) {

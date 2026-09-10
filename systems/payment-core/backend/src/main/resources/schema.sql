@@ -806,6 +806,8 @@ CREATE TABLE t_payment_event (
     retry_count INT NOT NULL DEFAULT 0 COMMENT '事件重试次数',
     last_published_at DATETIME DEFAULT NULL COMMENT '最近发布时间',
     next_retry_at DATETIME DEFAULT NULL COMMENT '下次重试时间',
+    last_republish_operator VARCHAR(64) DEFAULT NULL COMMENT '最近一次成功重发操作人',
+    last_republished_at DATETIME DEFAULT NULL COMMENT '最近一次成功重发时间',
     event_payload VARCHAR(2048) NOT NULL COMMENT '事件报文',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),

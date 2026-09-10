@@ -48,10 +48,11 @@ class PaymentEventRetryTaskServiceImplTest {
                     }
                     return "EVT-SUCCESS".equals(eventNo);
                 });
+        when(paymentEventMapper.updateLastRepublishAudit("EVT-SUCCESS", "finance-ops")).thenReturn(1);
 
         PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
                 paymentEventMapper, paymentEventDispatchService, transactionManager)
-                .retryFailedEvents(false);
+                .retryFailedEvents(false, " finance-ops ");
 
         Assertions.assertEquals(3, result.getProcessedCount());
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -60,6 +61,7 @@ class PaymentEventRetryTaskServiceImplTest {
         verify(transactionManager, times(2)).commit(transactionStatus);
         verify(transactionManager).rollback(transactionStatus);
         verify(paymentEventDispatchService).republish("EVT-FAILED");
+        verify(paymentEventMapper).updateLastRepublishAudit("EVT-SUCCESS", "finance-ops");
     }
 
     @Test
@@ -68,12 +70,26 @@ class PaymentEventRetryTaskServiceImplTest {
 
         PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
                 paymentEventMapper, paymentEventDispatchService, transactionManager)
-                .retryFailedEvents(true);
+                .retryFailedEvents(true, "payment-event-scheduler");
 
         Assertions.assertEquals(0, result.getProcessedCount());
         verify(paymentEventMapper).findDueFailedEventNos();
         verify(paymentEventMapper, never()).findAllFailedEventNos();
         verify(transactionManager, never()).getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class));
+    }
+
+    @Test
+    void shouldRejectInvalidOperatorBeforeReadingCandidates() {
+        PaymentEventRetryTaskServiceImpl service = new PaymentEventRetryTaskServiceImpl(
+                paymentEventMapper, paymentEventDispatchService, transactionManager);
+
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.retryFailedEvents(false, "   "));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.retryFailedEvents(true, String.join("", Collections.nCopies(65, "A"))));
+
+        org.mockito.Mockito.verifyNoInteractions(
+                paymentEventMapper, paymentEventDispatchService, transactionManager);
     }
 }

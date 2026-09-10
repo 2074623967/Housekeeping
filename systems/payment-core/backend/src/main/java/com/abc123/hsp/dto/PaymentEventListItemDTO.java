@@ -30,6 +30,10 @@ public class PaymentEventListItemDTO {
     private String lastPublishedAt;
     /** 下次重试时间。 */
     private String nextRetryAt;
+    /** 最近一次成功重发操作人。 */
+    private String lastRepublishOperator;
+    /** 最近一次成功重发时间。 */
+    private String lastRepublishedAt;
     /** 事件摘要。 */
     private String eventPayload;
     /** 创建时间。 */

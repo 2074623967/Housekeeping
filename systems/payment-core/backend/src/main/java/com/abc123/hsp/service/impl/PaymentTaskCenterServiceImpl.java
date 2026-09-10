@@ -891,7 +891,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO runRepublishFailedEventsByMode(String runMode, String triggeredBy) {
         PaymentEventRetryResultDTO retryResult = paymentEventRetryTaskService.retryFailedEvents(
-                RUN_MODE_AUTO.equals(runMode));
+                RUN_MODE_AUTO.equals(runMode), triggeredBy);
         int processedCount = retryResult.getProcessedCount();
         int successCount = retryResult.getSuccessCount();
         int failCount = retryResult.getFailCount();

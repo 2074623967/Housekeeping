@@ -43,6 +43,8 @@
                retry_count AS retryCount,
                DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
                DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               last_republish_operator AS lastRepublishOperator,
+               DATE_FORMAT(last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
                event_payload AS eventPayload,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
@@ -103,6 +105,8 @@
                retry_count AS retryCount,
                DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
                DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               last_republish_operator AS lastRepublishOperator,
+               DATE_FORMAT(last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
                event_payload AS eventPayload,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
@@ -157,6 +161,8 @@
                retry_count AS retryCount,
                DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
                DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
+               last_republish_operator AS lastRepublishOperator,
+               DATE_FORMAT(last_republished_at, '%Y-%m-%d %H:%i:%s') AS lastRepublishedAt,
                event_payload AS eventPayload,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
@@ -213,6 +219,13 @@
             retry_count = retry_count + 1,
             last_published_at = NOW(),
             next_retry_at = NULL
+        WHERE event_no = #{eventNo}
+    </update>
+
+    <update id="updateLastRepublishAudit">
+        UPDATE t_payment_event
+        SET last_republish_operator = #{operator},
+            last_republished_at = NOW()
         WHERE event_no = #{eventNo}
     </update>
 </mapper>

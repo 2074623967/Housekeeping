@@ -9,12 +9,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 
 /**
  * 支付事件批次重发默认实现。
  */
 @Service
 public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskService {
+
+    private static final int OPERATOR_MAX_LENGTH = 64;
 
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -30,7 +33,8 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
     }
 
     @Override
-    public PaymentEventRetryResultDTO retryFailedEvents(boolean automatic) {
+    public PaymentEventRetryResultDTO retryFailedEvents(boolean automatic, String operator) {
+        String normalizedOperator = normalizeOperator(operator);
         List<String> eventNos = automatic
                 ? paymentEventMapper.findDueFailedEventNos()
                 : paymentEventMapper.findAllFailedEventNos();
@@ -39,7 +43,7 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
         for (String eventNo : eventNos) {
             try {
                 Boolean success = transactionTemplate.execute(
-                        status -> paymentEventDispatchService.republish(eventNo));
+                        status -> republishAndRecord(eventNo, normalizedOperator));
                 if (Boolean.TRUE.equals(success)) {
                     result.setSuccessCount(result.getSuccessCount() + 1);
                 } else {
@@ -50,6 +54,25 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
             }
         }
         return result;
+    }
+
+    private String normalizeOperator(String operator) {
+        if (!StringUtils.hasText(operator)) {
+            throw new IllegalArgumentException("事件重发操作人不能为空");
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("事件重发操作人不能超过64个字符");
+        }
+        return normalized;
+    }
+
+    private boolean republishAndRecord(String eventNo, String operator) {
+        boolean published = paymentEventDispatchService.republish(eventNo);
+        if (published && paymentEventMapper.updateLastRepublishAudit(eventNo, operator) != 1) {
+            throw new IllegalStateException("payment event republish audit update failed");
+        }
+        return published;
     }
 
     private void recordFailure(PaymentEventRetryResultDTO result, String eventNo) {

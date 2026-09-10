@@ -26,6 +26,7 @@ const overview = ref({
 const pageNo = ref(1);
 const pageSize = 20;
 const activeEventNo = ref("");
+const republishOperator = ref("");
 const filters = ref({
   paymentOrderId: typeof route.query.paymentOrderId === "string" ? route.query.paymentOrderId : "",
   eventType: typeof route.query.eventType === "string" ? route.query.eventType : "全部",
@@ -119,10 +120,15 @@ function exportEvents() {
 }
 
 async function republish(item) {
+  const operator = republishOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入重发操作人。";
+    return;
+  }
   activeEventNo.value = item.eventNo;
   actionMessage.value = "";
   try {
-    const result = await paymentEventApi.republish(item.eventNo, {
+    const result = await paymentEventApi.republish(item.eventNo, operator, {
       paymentOrderId: filters.value.paymentOrderId,
       eventType: filters.value.eventType,
       publishStatus: filters.value.publishStatus,
@@ -229,6 +235,10 @@ onMounted(loadEvents);
 
       <div class="toolbar">
         <div class="field">
+          <label>重发操作人</label>
+          <input v-model.trim="republishOperator" maxlength="64" placeholder="请输入操作人" />
+        </div>
+        <div class="field">
           <label>支付单号</label>
           <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
         </div>
@@ -310,6 +320,8 @@ onMounted(loadEvents);
                 <th>重试次数</th>
                 <th>最近发布时间</th>
                 <th>下次重试时间</th>
+                <th>最近重发操作人</th>
+                <th>最近重发时间</th>
                 <th>事件摘要</th>
                 <th>创建时间</th>
                 <th>操作</th>
@@ -327,6 +339,8 @@ onMounted(loadEvents);
                 <td>{{ item.retryCount }}</td>
                 <td>{{ item.lastPublishedAt || "-" }}</td>
                 <td>{{ item.nextRetryAt || "-" }}</td>
+                <td>{{ item.lastRepublishOperator || "-" }}</td>
+                <td>{{ item.lastRepublishedAt || "-" }}</td>
                 <td class="flow-summary-cell">{{ item.eventPayload }}</td>
                 <td>{{ item.createdAt }}</td>
                 <td>
@@ -358,6 +372,8 @@ onMounted(loadEvents);
               <div class="detail-card"><span>下游系统</span><strong>{{ selectedItem.downstreamSystem }}</strong></div>
               <div class="detail-card"><span>发布状态</span><strong>{{ selectedItem.publishStatus }}</strong></div>
               <div class="detail-card"><span>重试次数</span><strong>{{ selectedItem.retryCount }}</strong></div>
+              <div class="detail-card"><span>最近重发操作人</span><strong>{{ selectedItem.lastRepublishOperator || "-" }}</strong></div>
+              <div class="detail-card"><span>最近重发时间</span><strong>{{ selectedItem.lastRepublishedAt || "-" }}</strong></div>
               <div class="detail-card"><span>最近发布时间</span><strong>{{ selectedItem.lastPublishedAt || "—" }}</strong></div>
               <div class="detail-card detail-card-wide"><span>下次重试时间</span><strong>{{ selectedItem.nextRetryAt || "—" }}</strong></div>
             </div>

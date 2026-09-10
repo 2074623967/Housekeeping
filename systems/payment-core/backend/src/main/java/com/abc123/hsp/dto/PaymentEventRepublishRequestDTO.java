@@ -10,4 +10,6 @@ public class PaymentEventRepublishRequestDTO {
 
     /** 事件号。 */
     private String eventNo;
+    /** 重发操作人。 */
+    private String operator;
 }

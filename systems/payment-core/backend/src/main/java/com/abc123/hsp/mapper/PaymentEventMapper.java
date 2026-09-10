@@ -72,6 +72,12 @@ public interface PaymentEventMapper {
     int markPublishUnknown(@Param("eventNo") String eventNo);
 
     /**
+     * 记录最近一次成功重发的来源身份。
+     */
+    int updateLastRepublishAudit(@Param("eventNo") String eventNo,
+                                 @Param("operator") String operator);
+
+    /**
      * 兼容旧测试和旧调用方的重发标记方法。
      */
     default int markRepublished(@Param("eventNo") String eventNo) {

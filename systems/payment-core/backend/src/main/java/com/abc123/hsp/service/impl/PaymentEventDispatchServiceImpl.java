@@ -236,7 +236,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     @Override
     @Transactional
     public boolean republish(String eventNo) {
-        PaymentEventListItemDTO event = paymentEventMapper.findByEventNo(eventNo);
+        PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
         if (event == null) {
             return false;
         }

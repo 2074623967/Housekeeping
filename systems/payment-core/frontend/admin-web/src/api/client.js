@@ -495,7 +495,7 @@ export const paymentEventApi = {
     });
     return `/api/payment-events/export?${params.toString()}`;
   },
-  republish: (eventNo, {
+  republish: (eventNo, operator, {
     paymentOrderId = "",
     eventType = "全部",
     publishStatus = "全部",
@@ -517,7 +517,7 @@ export const paymentEventApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize)
     });
-    return postJson(`/api/payment-events/republish?${params.toString()}`, { eventNo });
+    return postJson(`/api/payment-events/republish?${params.toString()}`, { eventNo, operator });
   }
 };
 

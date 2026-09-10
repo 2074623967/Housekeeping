@@ -495,7 +495,7 @@ class PaymentTaskCenterServiceImplTest {
         retryResult.setSuccessCount(1);
         retryResult.setFailCount(2);
         retryResult.setFailedEventNos(Arrays.asList("EVT-2", "EVT-3"));
-        when(paymentEventRetryTaskService.retryFailedEvents(false)).thenReturn(retryResult);
+        when(paymentEventRetryTaskService.retryFailedEvents(false, "finance-ops")).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -506,11 +506,12 @@ class PaymentTaskCenterServiceImplTest {
                 refundRetryTaskService,
                 paymentConfigService,
                 paymentIssueAlertDeliveryService
-        ).runRepublishFailedEvents("payment-core-admin");
+        ).runRepublishFailedEvents(" finance-ops ");
 
-        verify(paymentEventRetryTaskService).retryFailedEvents(false);
+        verify(paymentEventRetryTaskService).retryFailedEvents(false, "finance-ops");
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "P2".equals(entity.getSeverityLevel())
+                        && "finance-ops".equals(entity.getTriggeredBy())
                         && "纳入当班跟进".equals(entity.getEscalationStatus())
                         && entity.getProcessedCount() == 3
                         && entity.getSuccessCount() == 1
@@ -525,7 +526,7 @@ class PaymentTaskCenterServiceImplTest {
         PaymentEventRetryResultDTO retryResult = new PaymentEventRetryResultDTO();
         retryResult.setProcessedCount(1);
         retryResult.setSuccessCount(1);
-        when(paymentEventRetryTaskService.retryFailedEvents(true)).thenReturn(retryResult);
+        when(paymentEventRetryTaskService.retryFailedEvents(true, "payment-event-scheduler")).thenReturn(retryResult);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_EVENT_RETRY"), leaseOwner("payment-event-scheduler"), eq(120))).thenReturn(1);
@@ -539,7 +540,7 @@ class PaymentTaskCenterServiceImplTest {
                 paymentIssueAlertDeliveryService
         ).runAutoRepublishFailedEvents();
 
-        verify(paymentEventRetryTaskService).retryFailedEvents(true);
+        verify(paymentEventRetryTaskService).retryFailedEvents(true, "payment-event-scheduler");
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "AUTO".equals(entity.getRunMode()) && "payment-event-scheduler".equals(entity.getTriggeredBy())
         ));
