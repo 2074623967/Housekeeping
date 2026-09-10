@@ -191,6 +191,7 @@ class RefundServiceImplTest {
             createService().approve(request);
             verify(paymentEventDispatchService, org.mockito.Mockito.never()).publishRefundSubmit(
                     org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.anyString(),
                     org.mockito.ArgumentMatchers.anyString());
             java.util.List<org.springframework.transaction.support.TransactionSynchronization> synchronizations =
                     org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations();
@@ -206,7 +207,8 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("PAY-001"));
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-001"));
+                org.mockito.ArgumentMatchers.eq("REF-001"),
+                org.mockito.ArgumentMatchers.eq("refund-approver"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "APPROVE".equals(log.getActionCode())
                         && "refund-approver".equals(log.getOperatorName())));
@@ -239,7 +241,8 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("PAY-002"));
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-002"));
+                org.mockito.ArgumentMatchers.eq("REF-002"),
+                org.mockito.ArgumentMatchers.eq("refund-retry-operator"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "RETRY".equals(log.getActionCode())
                         && "refund-retry-operator".equals(log.getOperatorName())));
@@ -262,7 +265,8 @@ class RefundServiceImplTest {
 
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-TASK"));
+                org.mockito.ArgumentMatchers.eq("REF-TASK"),
+                org.mockito.ArgumentMatchers.eq("refund-retry-scheduler"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "TASK_RETRY".equals(log.getActionCode())
                         && "refund-retry-scheduler".equals(log.getOperatorName())

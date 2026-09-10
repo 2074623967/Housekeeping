@@ -68,7 +68,7 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
     }
 
     private boolean republishAndRecord(String eventNo, String operator) {
-        boolean published = paymentEventDispatchService.republish(eventNo);
+        boolean published = paymentEventDispatchService.republish(eventNo, operator);
         if (published && paymentEventMapper.updateLastRepublishAudit(eventNo, operator) != 1) {
             throw new IllegalStateException("payment event republish audit update failed");
         }

@@ -15,7 +15,7 @@ public interface PaymentEventDispatchService {
      *
      * @return 是否已获得可持久化的渠道受理结果
      */
-    default boolean publishRefundSubmit(String eventNo, String refundOrderId) {
+    default boolean publishRefundSubmit(String eventNo, String refundOrderId, String operator) {
         return false;
     }
 
@@ -24,5 +24,5 @@ public interface PaymentEventDispatchService {
      *
      * @return 是否投递成功
      */
-    boolean republish(String eventNo);
+    boolean republish(String eventNo, String operator);
 }

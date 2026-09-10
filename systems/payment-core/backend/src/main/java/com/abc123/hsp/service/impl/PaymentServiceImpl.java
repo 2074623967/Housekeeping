@@ -230,7 +230,7 @@ public class PaymentServiceImpl implements PaymentService {
                     }
 
                     @Override
-                    public boolean republish(String eventNo) {
+                    public boolean republish(String eventNo, String operator) {
                         return false;
                     }
                 },

@@ -58,7 +58,7 @@ class PaymentEventDispatchServiceImplTest {
     @Test
     void shouldDispatchRefundInNewTransactionAfterApprovalCommit() throws Exception {
         Method method = PaymentEventDispatchServiceImpl.class.getMethod(
-                "publishRefundSubmit", String.class, String.class);
+                "publishRefundSubmit", String.class, String.class, String.class);
 
         Transactional transactional = method.getAnnotation(Transactional.class);
 
@@ -80,7 +80,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService).submit(request);
@@ -88,7 +88,36 @@ class PaymentEventDispatchServiceImplTest {
         verify(paymentEventMapper).markPublishSuccess("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_SUBMIT".equals(log.getActionCode())
+                        && "refund-operator".equals(log.getOperatorName())
                         && log.getOperationRemark().contains("RCH-REF-001")));
+    }
+
+    @Test
+    void shouldRepublishFailedRefundAndKeepInitiatorInSubmitLog() {
+        PaymentEventListItemDTO event = refundEvent("FAILED", 1);
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
+        result.setChannelRefundNo("RCH-REF-RETRY-001");
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundChannelSubmitService.submit(request)).thenReturn(result);
+        when(refundMapper.bindRefundChannelAccepted(
+                "REF-001", "wx_h5", "RCH-REF-RETRY-001")).thenReturn(1);
+        when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .republish("EVTR-001", " finance-ops ");
+
+        Assertions.assertTrue(success);
+        verify(refundChannelSubmitService).submit(request);
+        verify(refundMapper).bindRefundChannelAccepted(
+                "REF-001", "wx_h5", "RCH-REF-RETRY-001");
+        verify(paymentEventMapper).markPublishSuccess("EVTR-001");
+        verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
+                "CHANNEL_SUBMIT".equals(log.getActionCode())
+                        && "finance-ops".equals(log.getOperatorName())
+                        && log.getOperationRemark().contains("RCH-REF-RETRY-001")));
     }
 
     @Test
@@ -102,7 +131,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishUnknown("EVTR-001");
@@ -110,7 +139,8 @@ class PaymentEventDispatchServiceImplTest {
         verify(paymentEventMapper, never()).markPublishSuccess("EVTR-001");
         verify(refundMapper, never()).updateRefundStatus(any(), any(), any(), any(), anyBoolean());
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
-                "CHANNEL_SUBMIT_UNKNOWN".equals(log.getActionCode())));
+                "CHANNEL_SUBMIT_UNKNOWN".equals(log.getActionCode())
+                        && "refund-operator".equals(log.getOperatorName())));
     }
 
     @Test
@@ -124,13 +154,31 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVTR-001");
         verify(paymentEventMapper, never()).markPublishUnknown("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
-                "CHANNEL_SUBMIT_FAILED".equals(log.getActionCode())));
+                "CHANNEL_SUBMIT_FAILED".equals(log.getActionCode())
+                        && "refund-operator".equals(log.getOperatorName())));
+
+    }
+
+    @Test
+    void shouldRejectInvalidDispatchOperatorBeforeReadingEvent() {
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3);
+
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.publishRefundSubmit("EVTR-001", "REF-001", " "));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.republish("EVTR-001", String.join("", java.util.Collections.nCopies(65, "A"))));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.republish("EVTR-001", "operator\nforged"));
+
+        org.mockito.Mockito.verifyNoInteractions(
+                paymentEventMapper, refundMapper, refundChannelSubmitService);
     }
 
     @Test
@@ -143,7 +191,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertFalse(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -159,7 +207,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -176,7 +224,7 @@ class PaymentEventDispatchServiceImplTest {
         BusinessException exception = Assertions.assertThrows(BusinessException.class,
                 () -> new PaymentEventDispatchServiceImpl(
                         paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                        .republish("EVTR-001"));
+                        .republish("EVTR-001", " payment-event-scheduler "));
 
         Assertions.assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED, exception.getCode());
         verify(refundChannelSubmitService, never()).submit(any());
@@ -195,7 +243,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -216,7 +264,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -236,7 +284,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001");
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertFalse(success);
         verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
@@ -312,7 +360,7 @@ class PaymentEventDispatchServiceImplTest {
                 new ObjectMapper(),
                 "payment.trade",
                 "payment.success.v1"
-        ).republish("EVT-001");
+        ).republish("EVT-001", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-001");
@@ -367,7 +415,7 @@ class PaymentEventDispatchServiceImplTest {
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-001");
+        ).republish("EVT-001", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-001");
@@ -398,7 +446,7 @@ class PaymentEventDispatchServiceImplTest {
                 "ACT10003",
                 3,
                 restTemplate
-        ).republish("EVT-RETRY-003");
+        ).republish("EVT-RETRY-003", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishDeadLetter("EVT-RETRY-003");
@@ -416,7 +464,7 @@ class PaymentEventDispatchServiceImplTest {
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-MISSING");
+        ).republish("EVT-MISSING", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentMapper, never()).findDetail(any());
@@ -436,7 +484,7 @@ class PaymentEventDispatchServiceImplTest {
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-REFUND-001");
+        ).republish("EVT-REFUND-001", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentMapper, never()).findDetail(any());
@@ -483,7 +531,7 @@ class PaymentEventDispatchServiceImplTest {
                 "http://127.0.0.1:18110/api/accounting/events/payments/success",
                 "ACT10003",
                 restTemplate
-        ).republish("EVT-CLEARING-FAIL");
+        ).republish("EVT-CLEARING-FAIL", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
         verify(paymentEventMapper).markPublishFailed("EVT-CLEARING-FAIL");

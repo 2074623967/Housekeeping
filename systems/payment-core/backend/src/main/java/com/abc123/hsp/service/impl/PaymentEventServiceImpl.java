@@ -55,7 +55,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
             }
 
             @Override
-            public boolean republish(String eventNo) {
+            public boolean republish(String eventNo, String operator) {
                 return paymentEventMapper.markRepublished(eventNo) > 0;
             }
         }, new PaymentSensitiveDataMasker(new ObjectMapper()));
@@ -147,7 +147,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
             throw new IllegalArgumentException("事件号不能超过64个字符");
         }
         String operator = normalizeOperator(request.getOperator());
-        boolean published = paymentEventDispatchService.republish(eventNo);
+        boolean published = paymentEventDispatchService.republish(eventNo, operator);
         if (!published) {
             throw new IllegalArgumentException("支付事件不存在、不可重发或投递失败");
         }

@@ -40,6 +40,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
     private static final int CHANNEL_REFUND_NO_MAX_LENGTH = 128;
+    private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int DEFAULT_MAX_RETRY_COUNT = 3;
 
     private final PaymentMapper paymentMapper;
@@ -229,19 +230,20 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean publishRefundSubmit(String eventNo, String refundOrderId) {
-        return dispatchRefundSubmit(eventNo, refundOrderId);
+    public boolean publishRefundSubmit(String eventNo, String refundOrderId, String operator) {
+        return dispatchRefundSubmit(eventNo, refundOrderId, normalizeOperator(operator));
     }
 
     @Override
     @Transactional
-    public boolean republish(String eventNo) {
+    public boolean republish(String eventNo, String operator) {
+        String normalizedOperator = normalizeOperator(operator);
         PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
         if (event == null) {
             return false;
         }
         if (REFUND_SUBMIT_EVENT_TYPE.equals(event.getEventType())) {
-            return dispatchRefundSubmit(eventNo, event.getBizNo());
+            return dispatchRefundSubmit(eventNo, event.getBizNo(), normalizedOperator);
         }
         if (!PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())) {
             return false;
@@ -249,7 +251,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return dispatchPaymentSuccess(eventNo, event.getPaymentOrderId());
     }
 
-    private boolean dispatchRefundSubmit(String eventNo, String refundOrderId) {
+    private boolean dispatchRefundSubmit(String eventNo, String refundOrderId, String operator) {
         if (refundMapper == null || refundChannelSubmitService == null) {
             return false;
         }
@@ -281,7 +283,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             if (resultUnknown) {
                 throw refundSubmitReviewRequired();
             }
-            recordRefundSubmitFailure(refundOrderId,
+            recordRefundSubmitFailure(refundOrderId, operator,
                     "退款渠道下发快照校验失败，修复数据后再重试");
             markFailedOrDeadLetter(eventNo);
             return false;
@@ -294,7 +296,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 if (resultUnknown) {
                     throw refundSubmitReviewRequired();
                 }
-                markRefundSubmitUnknown(eventNo, refundOrderId);
+                markRefundSubmitUnknown(eventNo, refundOrderId, operator);
                 return false;
             }
         }
@@ -317,7 +319,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                     "提交退款渠道",
                     "PROCESSING",
                     "PROCESSING",
-                    "payment-core-admin",
+                    operator,
                     refundSubmitRemark(request, result)));
             if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
                 throw new IllegalStateException("退款渠道事件成功状态更新失败");
@@ -325,15 +327,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             return true;
         } catch (RefundChannelSubmitException exception) {
             if (!exception.isResultUnknown()) {
-                recordRefundSubmitFailure(refundOrderId,
+                recordRefundSubmitFailure(refundOrderId, operator,
                         "退款提交在调用渠道前被配置或治理门禁拒绝，等待修复后重试");
                 markFailedOrDeadLetter(eventNo);
                 return false;
             }
-            markRefundSubmitUnknown(eventNo, refundOrderId);
+            markRefundSubmitUnknown(eventNo, refundOrderId, operator);
             return false;
         } catch (RuntimeException exception) {
-            markRefundSubmitUnknown(eventNo, refundOrderId);
+            markRefundSubmitUnknown(eventNo, refundOrderId, operator);
             return false;
         }
     }
@@ -344,27 +346,43 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 "refund submit result is unknown; verify the provider result before any retry");
     }
 
-    private void recordRefundSubmitFailure(String refundOrderId, String remark) {
+    private void recordRefundSubmitFailure(String refundOrderId, String operator, String remark) {
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 "CHANNEL_SUBMIT_FAILED",
                 "退款渠道下发失败",
                 "PROCESSING",
                 "PROCESSING",
-                "payment-core-admin",
+                operator,
                 remark));
     }
 
-    private void markRefundSubmitUnknown(String eventNo, String refundOrderId) {
+    private void markRefundSubmitUnknown(String eventNo, String refundOrderId, String operator) {
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 "CHANNEL_SUBMIT_UNKNOWN",
                 "退款渠道下发结果未知",
                 "PROCESSING",
                 "PROCESSING",
-                "payment-core-admin",
+                operator,
                 "退款渠道可能已经受理，已停止直接重试；须按退款单号向渠道查单或人工核查"));
         paymentEventMapper.markPublishUnknown(eventNo);
+    }
+
+    private String normalizeOperator(String operator) {
+        if (!StringUtils.hasText(operator)) {
+            throw new IllegalArgumentException("事件派发操作人不能为空");
+        }
+        String normalized = operator.trim();
+        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("事件派发操作人不能超过64个字符");
+        }
+        for (int index = 0; index < normalized.length(); index++) {
+            if (Character.isISOControl(normalized.charAt(index))) {
+                throw new IllegalArgumentException("事件派发操作人不能包含控制字符");
+            }
+        }
+        return normalized;
     }
 
     private void validateRefundSubmitRequest(PaymentEventListItemDTO event,

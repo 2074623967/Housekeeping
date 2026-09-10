@@ -533,37 +533,37 @@ public class RefundServiceImpl implements RefundService {
                 StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : resolveDefaultRemark(fromStatus, status)
         ));
         if (STATUS_PROCESSING.equals(status)) {
-            enqueueChannelSubmit(refundOrderId);
+            enqueueChannelSubmit(refundOrderId, operator);
         }
         return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
     }
 
-    private void enqueueChannelSubmit(String refundOrderId) {
+    private void enqueueChannelSubmit(String refundOrderId, String operator) {
         RefundChannelSubmitRequestDTO channelSubmitRequest = refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
         if (channelSubmitRequest == null) {
             throw new IllegalArgumentException("退款单不存在或缺少渠道下发信息");
         }
         String eventNo = buildRefundSubmitEventNo(refundOrderId);
         refundMapper.upsertRefundSubmitEvent(eventNo, refundOrderId, channelSubmitRequest.getPaymentOrderId());
-        dispatchAfterCommit(eventNo, refundOrderId);
+        dispatchAfterCommit(eventNo, refundOrderId, operator);
     }
 
-    private void dispatchAfterCommit(String eventNo, String refundOrderId) {
+    private void dispatchAfterCommit(String eventNo, String refundOrderId, String operator) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            tryDispatch(eventNo, refundOrderId);
+            tryDispatch(eventNo, refundOrderId, operator);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                tryDispatch(eventNo, refundOrderId);
+                tryDispatch(eventNo, refundOrderId, operator);
             }
         });
     }
 
-    private void tryDispatch(String eventNo, String refundOrderId) {
+    private void tryDispatch(String eventNo, String refundOrderId, String operator) {
         try {
-            paymentEventDispatchService.publishRefundSubmit(eventNo, refundOrderId);
+            paymentEventDispatchService.publishRefundSubmit(eventNo, refundOrderId, operator);
         } catch (RuntimeException exception) {
             LOGGER.warn("退款渠道事件即时派发失败 eventNo={}, refundOrderId={}",
                     eventNo, refundOrderId, exception);

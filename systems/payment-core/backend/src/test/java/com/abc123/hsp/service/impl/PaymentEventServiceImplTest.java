@@ -131,14 +131,14 @@ class PaymentEventServiceImplTest {
         query.setEventTopic(" payment.trade ");
         query.setSortField(" nextRetryAt ");
         query.setSortOrder(" ASC ");
-        when(paymentEventDispatchService.republish("EVT001")).thenReturn(true);
+        when(paymentEventDispatchService.republish("EVT001", "finance-ops")).thenReturn(true);
         when(paymentEventMapper.updateLastRepublishAudit("EVT001", "finance-ops")).thenReturn(1);
         when(paymentEventMapper.findAll(query)).thenReturn(Collections.emptyList());
         when(paymentEventMapper.count(query)).thenReturn(0L);
 
         new PaymentEventServiceImpl(paymentEventMapper, paymentEventDispatchService).republish(request, query);
 
-        verify(paymentEventDispatchService).republish("EVT001");
+        verify(paymentEventDispatchService).republish("EVT001", "finance-ops");
         verify(paymentEventMapper).updateLastRepublishAudit("EVT001", "finance-ops");
         assertEquals("payment.trade", query.getEventTopic());
         assertEquals("nextRetryAt", query.getSortField());
@@ -151,7 +151,7 @@ class PaymentEventServiceImplTest {
         request.setEventNo(" EVT404 ");
         request.setOperator("finance-ops");
 
-        when(paymentEventDispatchService.republish("EVT404")).thenReturn(false);
+        when(paymentEventDispatchService.republish("EVT404", "finance-ops")).thenReturn(false);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
@@ -160,7 +160,7 @@ class PaymentEventServiceImplTest {
         );
 
         assertEquals("支付事件不存在、不可重发或投递失败", exception.getMessage());
-        verify(paymentEventDispatchService).republish("EVT404");
+        verify(paymentEventDispatchService).republish("EVT404", "finance-ops");
     }
 
     @Test
@@ -168,7 +168,7 @@ class PaymentEventServiceImplTest {
         PaymentEventRepublishRequestDTO request = new PaymentEventRepublishRequestDTO();
         request.setEventNo(" EVT-UNKNOWN ");
         request.setOperator("finance-ops");
-        when(paymentEventDispatchService.republish("EVT-UNKNOWN"))
+        when(paymentEventDispatchService.republish("EVT-UNKNOWN", "finance-ops"))
                 .thenThrow(new BusinessException(
                         ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED,
                         "review required"));
@@ -179,7 +179,7 @@ class PaymentEventServiceImplTest {
                         .republish(request, new PaymentEventQueryDTO()));
 
         assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_REVIEW_REQUIRED, exception.getCode());
-        verify(paymentEventDispatchService).republish("EVT-UNKNOWN");
+        verify(paymentEventDispatchService).republish("EVT-UNKNOWN", "finance-ops");
     }
 
     @Test

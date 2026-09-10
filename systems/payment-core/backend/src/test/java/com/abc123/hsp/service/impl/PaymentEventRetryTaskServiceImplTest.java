@@ -40,7 +40,9 @@ class PaymentEventRetryTaskServiceImplTest {
                 .thenReturn(Arrays.asList("EVT-SUCCESS", "EVT-THROW", "EVT-FAILED"));
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
-        when(paymentEventDispatchService.republish(org.mockito.ArgumentMatchers.anyString()))
+        when(paymentEventDispatchService.republish(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq("finance-ops")))
                 .thenAnswer(invocation -> {
                     String eventNo = invocation.getArgument(0);
                     if ("EVT-THROW".equals(eventNo)) {
@@ -60,7 +62,7 @@ class PaymentEventRetryTaskServiceImplTest {
         Assertions.assertEquals(Arrays.asList("EVT-THROW", "EVT-FAILED"), result.getFailedEventNos());
         verify(transactionManager, times(2)).commit(transactionStatus);
         verify(transactionManager).rollback(transactionStatus);
-        verify(paymentEventDispatchService).republish("EVT-FAILED");
+        verify(paymentEventDispatchService).republish("EVT-FAILED", "finance-ops");
         verify(paymentEventMapper).updateLastRepublishAudit("EVT-SUCCESS", "finance-ops");
     }
 
