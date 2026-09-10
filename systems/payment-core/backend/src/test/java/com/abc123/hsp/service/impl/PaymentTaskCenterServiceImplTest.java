@@ -4,6 +4,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
@@ -39,6 +42,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 支付任务中心服务测试。
@@ -808,7 +812,8 @@ class PaymentTaskCenterServiceImplTest {
                 .thenAnswer(invocation -> {
                     PaymentIssueAlertLogEntity entity = invocation.getArgument(0);
                     if ("ISSUE-FAIL".equals(entity.getIssueNo())) {
-                        throw new IllegalStateException("alert insert failed");
+                        throw new IllegalStateException(
+                                "jdbc:mysql://internal/payment password=alert-secret\ninvalid SQL");
                     }
                     return 1;
                 });
@@ -817,24 +822,43 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
-        PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
-                paymentTaskCenterMapper,
-                paymentExpiryTaskService,
-                paymentEventRetryTaskService,
-                refundRetryTaskService,
-                paymentConfigService,
-                paymentIssueAlertDeliveryService,
-                transactionManager
-        ).runEscalateOverdueIssues("payment-core-admin");
+        Logger transactionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(TransactionTemplate.class);
+        ListAppender<ILoggingEvent> transactionAppender = new ListAppender<>();
+        transactionAppender.start();
+        transactionLogger.addAppender(transactionAppender);
+        try {
+            PaymentTaskActionResultDTO result = new PaymentTaskCenterServiceImpl(
+                    paymentTaskCenterMapper,
+                    paymentExpiryTaskService,
+                    paymentEventRetryTaskService,
+                    refundRetryTaskService,
+                    paymentConfigService,
+                    paymentIssueAlertDeliveryService,
+                    transactionManager
+            ).runEscalateOverdueIssues("payment-core-admin");
 
-        Assertions.assertEquals(3, result.getProcessedCount());
-        Assertions.assertEquals(2, result.getSuccessCount());
-        Assertions.assertEquals(1, result.getFailCount());
-        Assertions.assertTrue(result.getSummaryComment().contains("ISSUE-FAIL"));
-        verify(transactionManager, org.mockito.Mockito.times(2)).commit(transactionStatus);
-        verify(transactionManager).rollback(transactionStatus);
-        verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
-                entity -> "ISSUE-3".equals(entity.getIssueNo())));
+            Assertions.assertEquals(3, result.getProcessedCount());
+            Assertions.assertEquals(2, result.getSuccessCount());
+            Assertions.assertEquals(1, result.getFailCount());
+            Assertions.assertTrue(result.getSummaryComment().contains("ISSUE-FAIL"));
+            verify(transactionManager, org.mockito.Mockito.times(2)).commit(transactionStatus);
+            verify(transactionManager).rollback(transactionStatus);
+            verify(paymentTaskCenterMapper).insertIssueAlertLog(org.mockito.ArgumentMatchers.argThat(
+                    entity -> "ISSUE-3".equals(entity.getIssueNo())));
+            Assertions.assertTrue(transactionAppender.list.stream().anyMatch(event ->
+                    event.getThrowableProxy() != null
+                            && "PAYMENT_ISSUE_ALERT_WRITE_FAILED:IllegalStateException"
+                            .equals(event.getThrowableProxy().getMessage())
+                            && event.getThrowableProxy().getCause() == null
+                            && event.getThrowableProxy().getStackTraceElementProxyArray().length == 0));
+            Assertions.assertTrue(transactionAppender.list.stream().noneMatch(event ->
+                    event.getFormattedMessage().contains("alert-secret")
+                            || (event.getThrowableProxy() != null
+                            && String.valueOf(event.getThrowableProxy().getMessage()).contains("alert-secret"))));
+        } finally {
+            transactionLogger.detachAppender(transactionAppender);
+            transactionAppender.stop();
+        }
     }
 
     @Test

@@ -64,6 +64,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final int ISSUE_ALERT_CONTENT_MAX_LENGTH = 512;
+    private static final String ISSUE_ALERT_WRITE_FAILURE_CODE = "PAYMENT_ISSUE_ALERT_WRITE_FAILED";
     private static final String ISSUE_ACTIVE_GENERATION_KEY_PREFIX = "ISSUE_ACTIVE:";
     private static final String ISSUE_ESCALATION_GENERATION_KEY_PREFIX = "ISSUE_ESCALATION:";
     private static final String QUERY_FAILURE_ISSUE_TYPE = "主动查单失败趋势";
@@ -794,8 +795,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             if (valueOrZero(insertedRows) > 0) {
                 return IssueAlertGenerationResult.GENERATED;
             }
-        } catch (DuplicateKeyException exception) {
-            return IssueAlertGenerationResult.DUPLICATE;
+        } catch (SanitizedIssueAlertWriteException exception) {
+            if (exception.isDuplicateKey()) {
+                return IssueAlertGenerationResult.DUPLICATE;
+            }
         } catch (RuntimeException exception) {
             // 当前候选由独立事务回滚，批次继续处理后续异常。
         }
@@ -805,9 +808,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private <T> T executeIssueAlertTransaction(Supplier<T> action) {
         if (issueAlertTransactionTemplate == null) {
-            return action.get();
+            return executeIssueAlertAction(action);
         }
-        return issueAlertTransactionTemplate.execute(status -> action.get());
+        return issueAlertTransactionTemplate.execute(status -> executeIssueAlertAction(action));
+    }
+
+    private <T> T executeIssueAlertAction(Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (RuntimeException exception) {
+            throw new SanitizedIssueAlertWriteException(exception);
+        }
     }
 
     private void recordFailedIssueNo(List<String> failedIssueNos, PaymentIssueAlertCandidateDTO candidate) {
@@ -854,6 +865,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         GENERATED,
         DUPLICATE,
         FAILED
+    }
+
+    private static final class SanitizedIssueAlertWriteException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+        private final boolean duplicateKey;
+
+        private SanitizedIssueAlertWriteException(RuntimeException exception) {
+            super(ISSUE_ALERT_WRITE_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+            this.duplicateKey = exception instanceof DuplicateKeyException;
+        }
+
+        private boolean isDuplicateKey() {
+            return duplicateKey;
+        }
+
+        private static String exceptionName(RuntimeException exception) {
+            String simpleName = exception.getClass().getSimpleName();
+            return simpleName.isEmpty() ? RuntimeException.class.getSimpleName() : simpleName;
+        }
     }
 
     private String buildScheduledAlertContent(PaymentIssueAlertCandidateDTO candidate) {
