@@ -8544,3 +8544,26 @@
 
 1. 告警网关签名和响应解析的异常对象本身已完成最小化，持久化层继续只保留既有安全失败事实并保持供应商切换语义。
 2. 本地 Mockito 不证明真实通知网关可用、签名协议正确、供应商响应可信、密钥托管或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 301. 2026-09-11 支付回调验签底层异常脱敏 V1.0 验证
+
+### 301.1 本轮补强
+
+1. 时间戳格式错误和极值溢出继续返回 `PAYMENT_CALLBACK_TIMESTAMP_INVALID`，但业务异常不再挂载包含输入详情的 `NumberFormatException` 或底层算术异常。
+2. RSA 签名非 Base64、签名字节长度错误和公钥材料损坏继续分别返回既有签名/凭证业务错误码与安全文案，不再保留底层解析或 JCA cause。
+3. 非预期验签异常统一为 `PAYMENT_CALLBACK_VERIFICATION_FAILED:<异常简单类名>`，关闭 cause、suppressed 和可写堆栈；支付与退款回调入口、nonce 防重放和状态机顺序不变。
+
+### 301.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentCallbackSignatureServiceImplTest,PaymentServiceImplTest,RefundServiceImplTest,GlobalExceptionHandlerTest test` | 通过 | `122` 个用例；覆盖验签、支付/退款回调事务入口和统一错误响应 |
+| payment-core 全量测试 | `mvn test` | 通过 | `785` 个用例，`0` failures、`0` errors、`0` skipped |
+| 畸形时间戳注入 | JUnit + 真实 HMAC 计算 | 通过 | 输入含模拟敏感片段，返回固定业务码与安全文案，cause 为空且 nonce 未写入 |
+| RSA 错误分类回归 | JUnit + 真实 RSA 密钥对 | 通过 | 非 Base64、错误长度、公钥损坏保持原错误码，底层 cause 为空 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 301.3 当前判断
+
+1. 支付与退款回调验签的已知失败继续保持可解释业务错误，底层异常详情不再随异常链传播；非预期验证失败也已具备固定最小分类。
+2. 本地测试不证明真实渠道签名向量、证书链、公钥轮换、密钥托管、网关网络来源或生产稳定性，`release/v1.0.0` 继续冻结。

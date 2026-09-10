@@ -3017,6 +3017,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 当前供应商异常后继续尝试后续候选；供应商明确返回的投递状态、回执号和失败码仍按既有响应解析与脱敏规则处理。
 4. 该契约不证明真实签名协议正确、通知送达、供应商响应可信或人员确认；真实结果仍需供应商回执、运营核验和环境证据支撑。
 
+### 14.128 支付回调验签底层异常脱敏契约
+
+1. 时间戳解析/溢出继续返回 `PAYMENT_CALLBACK_TIMESTAMP_INVALID`，RSA 签名编码/验证与公钥解析继续返回 `PAYMENT_CALLBACK_SIGNATURE_INVALID` 或 `PAYMENT_CALLBACK_CREDENTIAL_INVALID`；错误码和安全响应文案不变。
+2. 上述业务异常不保留底层 cause；未分类的 JCA 异常转换为 `PAYMENT_CALLBACK_VERIFICATION_FAILED:<异常简单类名>`，不保留 cause、suppressed 或可写堆栈，并由统一异常处理返回通用系统错误。
+3. 支付与退款共用该验签边界；失败时不得清理/写入 nonce，不得读取并更新支付或退款业务状态，也不得生成资金、事件或操作日志副作用。
+4. 该契约不证明真实渠道签名向量、证书链、公钥轮换、密钥托管或网络来源可信；生产接入仍需渠道协议、网关安全与环境证据验收。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

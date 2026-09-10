@@ -1254,6 +1254,13 @@
 3. IM 通知器与告警派发服务联合定向 `55` 个测试、payment-core 全量 `784` 个测试通过；模拟 URL、token、响应体和换行未进入异常摘要，原始 cause 为空。
 4. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明真实通知送达、供应商响应可信、密钥托管、生产日志配置或生产稳定性，release 四项治理阻断不变。
 
+### 8.133 2026-09-11 支付回调验签底层异常脱敏进展
+
+1. 支付与退款共用的回调验签服务不再把时间戳解析/溢出、RSA 签名编码/长度或公钥解析的底层异常保留为业务异常 cause；既有 `PAYMENT_CALLBACK_TIMESTAMP_INVALID`、`PAYMENT_CALLBACK_SIGNATURE_INVALID` 和 `PAYMENT_CALLBACK_CREDENTIAL_INVALID` 错误码与安全文案不变。
+2. 未被业务分支覆盖的 JCA 异常统一转换为 `PAYMENT_CALLBACK_VERIFICATION_FAILED:<异常简单类名>`，且不保留 cause、suppressed 或可写堆栈；回调失败仍发生在 nonce 写入和支付/退款状态副作用之前。
+3. 验签服务、支付回调、退款回调和全局异常处理联合定向 `122` 个测试、payment-core 全量 `785` 个测试通过；新增畸形时间戳用例验证输入原文不进入 cause。
+4. 本轮无前端、Mapper、schema 或迁移变化；本地 JCA/JUnit 不证明真实渠道签名向量、证书链、公钥轮换、密钥托管、网络来源可信或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
