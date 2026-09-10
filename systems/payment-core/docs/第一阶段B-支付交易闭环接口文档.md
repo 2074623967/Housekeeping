@@ -3066,6 +3066,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 定向重放只使用持久化的原始 `payload_snapshot` 作为消息体，并重建 `compensationTaskNo`、`compensationReplay` 等受控消息头，不恢复或转发原始入站消息头。
 4. 本轮不改变接口字段、Mapper、schema、迁移、人工复核和任务状态机；本地测试不证明真实 RabbitMQ 消息或生产凭据保护效果。
 
+### 14.135 外部风控决策说明最小化契约
+
+1. 风控响应 `data.message` 仍在去空格前拒绝 ISO 控制字符并限制为最多 `255` 个字符；非法原文继续使整个响应以 `PAYMENT_RISK_SERVICE_UNAVAILABLE` 失败闭合。
+2. 合法原文校验通过后必须丢弃，不得直接返回或写入支付风险事件；payment-core 按规范化决策生成固定平台说明，分别表达准入通过、需要人工复核、风控拦截和风控拒绝。
+3. `decision / decisionType / hitCode / riskTag / reviewNo / eventNo` 的既有必填、白名单、容量和规范化契约不变，固定说明不得改变支付状态机或放宽渠道调用准入。
+4. 本轮不改变接口字段、Mapper、schema 或迁移；固定说明仅证明代码内数据最小化，不证明真实风控策略、人工复核或生产可用性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
