@@ -6955,3 +6955,29 @@
 1. 渠道受理号与可信终态现在通过渠道、退款单号和渠道退款号三方绑定，不能由后台人工按钮替代。
 2. 相同终态允许使用新 nonce 重复通知并幂等返回；同一 nonce 的重放仍在验签层拒绝，相反终态不能覆盖既有终态。
 3. 当前密码学与状态机证据来自本地配置和测试，不代表微信、支付宝或银行真实退款通知格式已经联调；主动查单与渠道对账仍是下一优先缺口。
+
+## 234. 2026-09-10 退款人工主动查单 V1.0 验证
+
+### 234.1 本轮补强
+
+1. 新增退款查单 DTO、服务、适配器和 `POST /api/refunds/query`；仅对已绑定渠道受理号的 `PROCESSING` 退款调用渠道，既有 `SUCCESS/FAIL` 直接幂等返回。
+2. 外部查询前只读取非锁定快照，查询完成后再锁定退款行并复核渠道、渠道退款号和最新状态；明确终态通过 `PROCESSING` 条件更新收口，回调已先收口时不回退。
+3. `gateway-access` HTTP 适配器默认关闭；本地兜底只回显现有状态。查询结果统一限制为 `PROCESSING/SUCCESS/FAIL`，并校验必填、长度和 ISO 控制字符。
+4. 管理端退款列表和详情仅在 `PROCESSING` 状态开放“主动查单”，执行后刷新服务端最新事实，不提供人工选择成功或失败。
+
+### 234.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 定向测试 | `mvn -Dtest=RefundServiceImplTest,RefundControllerTest,RefundChannelQueryServiceImplTest,GatewayAccessRefundChannelQueryAdapterTest,RefundApplicationConcurrencyIntegrationTest test` | 通过 | `34` 个用例，覆盖适配器选择、结果校验、处理中留痕、成功/失败收口、终态短路及回调并发优先 |
+| Mapper 集成 | 正式 `RefundMapper.xml` + H2 MySQL 模式 | 通过 | 非锁定快照与加锁收口源均读回渠道、渠道退款号和状态；CAS 仍只允许 `PROCESSING` 单向收口 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `613` 个用例，`0` failures、`0` errors、`0` skipped |
+| 管理端构建 | `npm run build` | 通过 | Vite 完成 `68` 个模块转换并生成生产构建产物 |
+| 补丁检查 | `git diff --check` | 通过 | Java、XML、Vue、测试和文档无空白符错误 |
+| 真实环境验证 | 真实 gateway-access 退款查询、MySQL、渠道流水、到账和财务核验 | 未执行 | 不记录真实退款查单、生产迁移、到账或现场资金验收通过 |
+
+### 234.3 当前判断
+
+1. 人工主动查单补齐了回调丢失时的本地状态收口入口，但只有真实网关返回且关联键一致的明确终态才具备生产意义。
+2. 本地兜底的 `PROCESSING` 只证明当前数据库仍在处理中，不是渠道探活或外部查询成功；不得据此释放额度或宣称退款失败。
+3. 自动退款查单补偿尚未接入任务中心；应在真实网关契约稳定后复用共享租约、候选扫描、退避、限流和任务日志，不在本轮伪造外部能力。

@@ -2448,6 +2448,23 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 验签、时间窗和 nonce 仍使用 `PAYMENT-1005` 至 `PAYMENT-1009`、`PAYMENT-1032` 至 `PAYMENT-1034`。nonce 唯一键跨 `PAYMENT/REFUND` 共用同一渠道范围，不能跨业务重放。
 4. 相同终态使用新 nonce 重复通知时幂等返回且不重复写终态日志；相反终态失败闭合。该契约不等同真实渠道通知格式、到账或生产联调已完成。
 
+### 14.62 退款人工主动查单接口契约
+
+`POST /api/refunds/query`
+
+请求体：
+
+```json
+{
+  "refundOrderId": "REF202609101030000001"
+}
+```
+
+1. 接口仅查询已绑定 `channelCode/channelRefundNo` 且状态为 `PROCESSING` 的退款；`SUCCESS/FAIL` 直接返回最新退款摘要，不重复调用渠道。
+2. 渠道结果必须包含 `refundStatus/channelRefundNo/querySource`，状态只允许 `PROCESSING/SUCCESS/FAIL`；字段超长、含控制字符、为空或渠道退款号与已受理事实不一致时返回 `PAYMENT-1046`。
+3. `PROCESSING` 只写 `CHANNEL_QUERY` 操作日志并保持状态；明确 `SUCCESS/FAIL` 在锁内复核关联键后通过 CAS 收口并写 `CHANNEL_QUERY_SUCCESS/FAIL`。
+4. 未找到可用适配器返回 `PAYMENT-1045`。默认本地兜底只回显现状，`gateway-access` HTTP 适配器默认关闭；当前契约不代表真实网关退款查询已实现。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2487,6 +2504,8 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1042` | 退款回调状态非法或退款当前状态不可收口 |
 | `PAYMENT-1043` | 退款回调目标与既有退款终态冲突 |
 | `PAYMENT-1044` | 退款单不存在 |
+| `PAYMENT-1045` | 未找到可用退款渠道查单适配器 |
+| `PAYMENT-1046` | 退款渠道查单失败、结果非法/不完整、关联键不一致或退款尚未具备查单条件 |
 
 联调说明：
 
