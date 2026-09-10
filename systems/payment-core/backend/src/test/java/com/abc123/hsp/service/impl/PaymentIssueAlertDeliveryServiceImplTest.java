@@ -688,6 +688,53 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldRejectMissingAndControlOnlyNotifierStatusWithoutFalseAcceptance() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_SECONDARY", "企业微信告警机器人-次", "wecom-bot-secondary",
+                        "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup",
+                        "TPL_PAYMENT_ISSUE_IM_V3", "DEFAULT", 30)
+        ));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(null)
+                .thenReturn(buildDeliveryResult(
+                        "IM-SECONDARY-001", "\n", "非法状态不应被默认受理", "[IM-SECONDARY] ISSUE-001"))
+                .thenReturn(buildDeliveryResult(
+                        "IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("payment-core-admin");
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.times(3)).insertIssueAlertLog(logCaptor.capture());
+        PaymentIssueAlertLogEntity primaryLog = logCaptor.getAllValues().get(0);
+        PaymentIssueAlertLogEntity secondaryLog = logCaptor.getAllValues().get(1);
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals("派发失败", primaryLog.getAlertStatus());
+        Assertions.assertEquals("SEND_EXCEPTION", primaryLog.getProviderDeliveryStatus());
+        Assertions.assertEquals("派发失败", secondaryLog.getAlertStatus());
+        Assertions.assertEquals("SEND_EXCEPTION", secondaryLog.getProviderDeliveryStatus());
+        Assertions.assertFalse(secondaryLog.getProviderDeliveryMessage().contains("非法状态"));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "企业微信告警机器人-备".equals(log.getProviderName())
+                        && "已派发".equals(log.getAlertStatus())
+                        && "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+    }
+
+    @Test
     void shouldFallbackToNextProviderWhenPrimaryProviderReturnsTransportFailureResult() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");

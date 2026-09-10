@@ -425,7 +425,6 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 PaymentIssueAlertDeliveryResultDTO normalizedResult = normalizeDeliveryResult(
                         deliveryItem,
                         deliveryResult,
-                        "ACCEPTED",
                         "供应商已受理告警"
                 );
                 if (!isSuccessfulProviderDeliveryStatus(normalizedResult.getProviderDeliveryStatus())) {
@@ -685,13 +684,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private PaymentIssueAlertDeliveryResultDTO normalizeDeliveryResult(PaymentIssueAlertDispatchItemDTO item,
                                                                        PaymentIssueAlertDeliveryResultDTO deliveryResult,
-                                                                       String defaultStatus,
                                                                        String defaultMessage) {
-        PaymentIssueAlertDeliveryResultDTO normalizedResult = deliveryResult == null
-                ? new PaymentIssueAlertDeliveryResultDTO()
-                : deliveryResult;
+        if (deliveryResult == null) {
+            throw new IllegalArgumentException("通知器未返回投递结果");
+        }
+        PaymentIssueAlertDeliveryResultDTO normalizedResult = deliveryResult;
+        validateDeliveryResultCharacters(normalizedResult);
         if (!StringUtils.hasText(normalizedResult.getProviderDeliveryStatus())) {
-            normalizedResult.setProviderDeliveryStatus(defaultStatus);
+            throw new IllegalArgumentException("通知器未返回明确投递状态");
         }
         normalizedResult.setProviderDeliveryStatus(truncate(
                 normalizedResult.getProviderDeliveryStatus(),
@@ -708,7 +708,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH
         ));
         if (!StringUtils.hasText(normalizedResult.getProviderReceiptSnapshot())) {
-            normalizedResult.setProviderReceiptSnapshot("LOCAL_RESULT:" + defaultStatus);
+            normalizedResult.setProviderReceiptSnapshot(
+                    "LOCAL_RESULT:" + normalizedResult.getProviderDeliveryStatus());
         }
         normalizedResult.setProviderReceiptSnapshot(truncate(
                 normalizedResult.getProviderReceiptSnapshot(),
@@ -726,6 +727,25 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 RENDERED_CONTENT_SNAPSHOT_MAX_LENGTH
         ));
         return normalizedResult;
+    }
+
+    private void validateDeliveryResultCharacters(PaymentIssueAlertDeliveryResultDTO result) {
+        rejectIsoControl(result.getProviderDeliveryStatus());
+        rejectIsoControl(result.getProviderDeliveryMessage());
+        rejectIsoControl(result.getProviderReceiptSnapshot());
+        rejectIsoControl(result.getProviderReceiptNo());
+        rejectIsoControl(result.getRenderedContentSnapshot());
+    }
+
+    private void rejectIsoControl(String value) {
+        if (value == null) {
+            return;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException("通知器返回结果不能包含控制字符");
+            }
+        }
     }
 
     private String truncate(String value, int maxLength) {
