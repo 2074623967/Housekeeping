@@ -7839,3 +7839,26 @@
 
 1. 八类配置 maker-checker 流程现在共享同一人员声明字符边界，申请与审批不再接受控制字符；正常说明文本的多行录入语义保持不变。
 2. 人员值仍来自请求方自声明，不构成认证、授权或不可抵赖审计。本地单测不证明真实人员审批、生产配置发布、现场核验或稳定性通过，`release/v1.0.0` 继续冻结。
+
+## 270. 2026-09-10 人工操作人控制字符统一防护 V1.0 验证
+
+### 270.1 本轮补强
+
+1. 九个服务的人工操作人/触发人规范化统一在 `trim()` 前检查原始值，拒绝全部 ISO 控制字符，并保持既有必填、普通首尾空格去除和 `64` 字符容量规则。
+2. 覆盖任务中心、告警派发与回查、日终、退款申请/审核/重试/查单、支付事件单笔与批量重发、退款事件派发、后台支付查单/关单、异常批量动作和告警确认。
+3. 测试同时使用末尾换行和 `U+0085`，确认非法值不会读取业务候选、获取任务租约、写审计日志、占用共享限流、派发消息或调用渠道/通知供应商。
+
+### 270.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 九类联合定向测试 | `mvn -Dtest=PaymentTaskCenterServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentDayEndServiceImplTest,RefundServiceImplTest,PaymentEventServiceImplTest,PaymentIssueServiceImplTest,PaymentEventRetryTaskServiceImplTest,PaymentEventDispatchServiceImplTest,PaymentServiceImplTest test` | 通过 | `224` 个用例，`0` failures、`0` errors、`0` skipped；覆盖原始值控制字符和零副作用边界 |
+| payment-core 全量测试 | `mvn test` | 通过 | `714` 个用例，`0` failures、`0` errors、`0` skipped |
+| 前端与数据库 | 变更范围检查 | 未重复执行 | 本轮没有前端、Mapper XML、schema 或迁移变化 |
+| 补丁检查 | `git diff --check` | 通过 | Java 与文档变更无空白符错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`，release 明细仍有 `4` 项真实阻断 |
+
+### 270.3 当前判断
+
+1. 主要人工操作入口与其内部事件/任务边界不再接受控制字符，避免不可见来源污染租约键、运行日志和业务操作审计。
+2. 操作人仍是请求方自声明或服务端调度类别，不构成可信认证、授权或正式审批。本轮自动化不证明真实渠道、供应商送达、生产执行或稳定性通过，`release/v1.0.0` 继续冻结。
