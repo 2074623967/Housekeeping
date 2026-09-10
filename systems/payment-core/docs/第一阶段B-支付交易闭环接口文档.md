@@ -2882,6 +2882,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 原受理记录存在 `providerReceiptNo` 时，`DELIVERED` 结果必须返回同一编号；缺失或不一致统一形成 `RECEIPT_CONFLICT`，不得确认送达或联动确认来源告警。
 4. 空结果或空状态继续形成 `EMPTY`，适配器异常、未知状态及非法字段形成 `QUERY_ERROR`；本地契约测试不证明真实供应商回执、最终送达、人员响应或生产网络。
 
+### 14.109 告警回执适配器选择失败契约
+
+1. Service 在领取回执查询任务后调用各适配器 `supports(channelCode)`；选择过程抛出运行时异常时，本次尝试固定完成为 `QUERY_ERROR`，不向接口响应或数据库暴露异常原文。
+2. 选择失败不得继续获取共享查询配额、调用 `query` 或更新 `DELIVERED`；`nextReceiptQueryAt` 按既有指数退避计算，达到最大次数后停止自动候选。
+3. 所有适配器均不支持目标通道时继续返回内部分类 `ADAPTER_MISSING`，与选择实现抛错保持可区分。
+4. 本地测试不证明真实 Spring Bean 装配、供应商连通性、生产任务频率或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
