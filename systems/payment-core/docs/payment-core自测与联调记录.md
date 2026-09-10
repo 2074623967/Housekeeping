@@ -7552,3 +7552,28 @@
 1. 回查调度状态已经从单一总数推进到可执行、等待、占用和人工介入视角，运营可以更准确地区分当前动作。
 2. 本轮没有数据库结构变更；本地 H2/MySQL 兼容查询和前端构建只证明代码口径可执行，生产查询性能与参数仍需真实环境验证。
 3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断未解除，`release/v1.0.0` 不应移动。
+
+## 258. 2026-09-10 告警回执回查明细钻取 V1.0 验证
+
+### 258.1 本轮补强
+
+1. 异常告警明细列表与 CSV 新增五类回查状态筛选及次数、最近时间、下次时间、有限结果证据；服务端校验有限集合并注入与补偿任务同源的三项配置。
+2. 任务中心在自动次数耗尽时把既有待回查告警提升为 P1，跳转直接携带耗尽筛选；admin-web 从 URL 初始化筛选，展示明细证据与处理建议，人工确认后重新加载当前条件。
+3. 审查修正首次等待与退避重叠边界：仍在首次等待期的记录即使 next time 在未来也只归为 `INITIAL_WAIT`，任务中心退避计数与明细筛选保持一致。
+
+### 258.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=PaymentTaskCenterMapperIntegrationTest,PaymentIssueServiceImplTest,PaymentIssueControllerTest,PaymentTaskCenterServiceImplTest test` | 通过 | `63` 个用例，`0` failures、`0` errors、`0` skipped；覆盖五类筛选、边界互斥、参数校验、CSV 和 P1 跳转 |
+| payment-core 全量测试 | `mvn test` | 通过 | `692` 个用例，`0` failures、`0` errors、`0` skipped |
+| admin-web 生产构建 | `npm run build` | 通过 | Vite 转换 `68` 个模块；仅有既有大于 `500 kB` 的 chunk 警告 |
+| XML 与补丁检查 | `xmllint --noout ... && git diff --check` | 通过 | `PaymentIssueMapper.xml` 与 `PaymentTaskCenterMapper.xml` 合法，无空白符错误 |
+| 浏览器/API 联调 | `/payment-issue-alerts?receiptQueryState=EXHAUSTED` | 部分验证 | 筛选控件曾按 URL 自动选中；当时未连接可用 `18081` 后端，未记录业务 API 联调成功 |
+| 真实环境验证 | 通知集成网关、供应商协议、生产 MySQL 与人员响应 | 未执行 | 不记录真实查询、送达、响应或稳定性通过 |
+
+### 258.3 当前判断
+
+1. 运营已可从任务中心的耗尽告警直接定位到回查明细，并查看与导出足以支持人工核查的内部调度证据；筛选与展示状态不再在首次等待/退避边界漂移。
+2. 本轮本地测试和构建证据完整，但没有可用后端支撑浏览器业务 API 联调，也没有真实通知网关或供应商环境，因此不扩大外部事实结论。
+3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断保持不变，`release/v1.0.0` 继续冻结。
