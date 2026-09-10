@@ -59,6 +59,38 @@ class PaymentIssueAlertNotifierConfigurationTest {
                 resolver.getProperty(
                         "payment.issue-alert.receipt-query.rate-limit.max-queries-per-channel", Integer.class)
         );
+        Assertions.assertEquals(
+                Integer.valueOf(60),
+                resolver.getProperty("payment.issue-alert.receipt-query.compensation.min-age-seconds", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(60),
+                resolver.getProperty(
+                        "payment.issue-alert.receipt-query.compensation.retry-interval-seconds", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(2),
+                resolver.getProperty(
+                        "payment.issue-alert.receipt-query.compensation.retry-backoff-factor", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(900),
+                resolver.getProperty(
+                        "payment.issue-alert.receipt-query.compensation.max-retry-interval-seconds", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(10),
+                resolver.getProperty("payment.issue-alert.receipt-query.compensation.max-attempts", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(100),
+                resolver.getProperty("payment.issue-alert.receipt-query.compensation.batch-size", Integer.class)
+        );
+        Assertions.assertEquals(
+                Integer.valueOf(30),
+                resolver.getProperty(
+                        "payment.issue-alert.receipt-query.compensation.claim-timeout-seconds", Integer.class)
+        );
     }
 
     @Test

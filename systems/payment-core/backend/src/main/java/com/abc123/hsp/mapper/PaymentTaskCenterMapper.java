@@ -195,7 +195,34 @@ public interface PaymentTaskCenterMapper {
     /**
      * 查询供应商已受理但尚未确认送达的异常告警派发日志。
      */
-    List<PaymentIssueAlertLogEntity> findAcceptedIssueAlertDeliveryLogs();
+    List<PaymentIssueAlertLogEntity> findAcceptedIssueAlertDeliveryLogs(@Param("batchSize") int batchSize);
+
+    /**
+     * 查询达到首次等待或重试退避时间、尚未耗尽自动次数的供应商受理告警。
+     */
+    List<PaymentIssueAlertLogEntity> findDueAcceptedIssueAlertDeliveryLogs(
+            @Param("minAgeSeconds") int minAgeSeconds,
+            @Param("maxAttempts") int maxAttempts,
+            @Param("claimTimeoutSeconds") int claimTimeoutSeconds,
+            @Param("batchSize") int batchSize);
+
+    /**
+     * 在外部查询前条件占用单条回查记录并递增尝试次数。
+     */
+    int claimIssueAlertReceiptQuery(@Param("alertNo") String alertNo,
+                                    @Param("expectedAttemptCount") int expectedAttemptCount,
+                                    @Param("manual") boolean manual,
+                                    @Param("maxAttempts") int maxAttempts,
+                                    @Param("claimTimeoutSeconds") int claimTimeoutSeconds);
+
+    /**
+     * 保存未送达或失败回查的有限结果及下一次自动重试时间。
+     */
+    int completeIssueAlertReceiptQueryAttempt(@Param("alertNo") String alertNo,
+                                              @Param("attemptCount") int attemptCount,
+                                              @Param("queryResult") String queryResult,
+                                              @Param("nextDelaySeconds") int nextDelaySeconds,
+                                              @Param("maxAttempts") int maxAttempts);
 
     /**
      * 回写异常告警供应商回执状态。

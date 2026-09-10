@@ -251,6 +251,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             accepted.setProviderDeliveryStatus("ACCEPTED");
             accepted.setProviderDeliveryMessage("供应商已受理");
             assertEquals(1, mapper.insertIssueAlertLog(accepted));
+            assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, true, 10, 30));
 
             PaymentIssueAlertLogEntity update = new PaymentIssueAlertLogEntity();
             update.setAlertNo(accepted.getAlertNo());
@@ -262,6 +263,9 @@ public class PaymentTaskCenterMapperIntegrationTest {
             update.setAckStatusType("success");
             update.setAckOperator("payment-core-admin");
             update.setTriggeredBy("integration-test");
+            update.setReceiptQueryCount(0);
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(update));
+            update.setReceiptQueryCount(1);
 
             assertEquals(1, mapper.updateIssueAlertProviderReceipt(update));
             PaymentIssueAlertLogEntity persisted = findIssueAlertReceipt(
@@ -275,6 +279,51 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals("success", persisted.getAckStatusType());
             assertEquals("payment-core-admin", persisted.getAckOperator());
             assertEquals("integration-test", persisted.getTriggeredBy());
+            assertEquals(Integer.valueOf(1), persisted.getReceiptQueryCount());
+            assertEquals("DELIVERED", persisted.getReceiptQueryResult());
+        }
+    }
+
+    @Test
+    void shouldSelectClaimBackoffAndExhaustAutomaticReceiptQueries() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity accepted = buildIssueAlertLog("PIA-RECEIPT-RETRY");
+            accepted.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-RETRY");
+            accepted.setAlertChannel("SMS");
+            accepted.setAlertStatus("已派发");
+            accepted.setProviderDeliveryStatus("ACCEPTED");
+            assertEquals(1, mapper.insertIssueAlertLog(accepted));
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET created_at = TIMESTAMPADD(MINUTE, -2, NOW()) "
+                        + "WHERE alert_no = 'PIA-RECEIPT-RETRY'");
+            }
+
+            assertEquals(1, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
+            assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, false, 2, 30));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, false, 2, 30));
+            assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
+                    accepted.getAlertNo(), 1, "ACCEPTED", 60, 2));
+            assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET next_receipt_query_at = TIMESTAMPADD(SECOND, -1, NOW()) "
+                        + "WHERE alert_no = 'PIA-RECEIPT-RETRY'");
+            }
+            session.clearCache();
+            List<PaymentIssueAlertLogEntity> due = mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10);
+            assertEquals(1, due.size());
+            assertEquals(Integer.valueOf(1), due.get(0).getReceiptQueryCount());
+            assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 1, false, 2, 30));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    accepted.getAlertNo(), 1, "FAILED", 120, 2));
+            assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
+                    accepted.getAlertNo(), 2, "FAILED", 120, 2));
+            assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
+            assertEquals(1, mapper.findAcceptedIssueAlertDeliveryLogs(10).size());
+            assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 2, true, 2, 30));
         }
     }
 
@@ -367,6 +416,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "endpoint_alias VARCHAR(128), template_code VARCHAR(128), "
                     + "provider_receipt_snapshot VARCHAR(2048), provider_receipt_no VARCHAR(128), "
                     + "provider_delivery_status VARCHAR(64), provider_delivery_message VARCHAR(255), "
+                    + "receipt_query_count INT NOT NULL DEFAULT 0, last_receipt_query_at DATETIME, "
+                    + "next_receipt_query_at DATETIME, receipt_query_result VARCHAR(32), "
                     + "rendered_content_snapshot VARCHAR(1024), triggered_by VARCHAR(64), "
                     + "ack_operator VARCHAR(64), ack_at DATETIME, created_at DATETIME, "
                     + "UNIQUE (alert_no), UNIQUE (generation_key))");
@@ -534,7 +585,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
     private PaymentIssueAlertLogEntity findIssueAlertReceipt(Connection connection, String alertNo) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT provider_receipt_snapshot, provider_receipt_no, provider_delivery_status, "
-                        + "provider_delivery_message, ack_status, ack_status_type, ack_operator, triggered_by "
+                        + "provider_delivery_message, receipt_query_count, receipt_query_result, "
+                        + "ack_status, ack_status_type, ack_operator, triggered_by "
                         + "FROM t_payment_issue_alert_log WHERE alert_no = ?")) {
             statement.setString(1, alertNo);
             try (java.sql.ResultSet resultSet = statement.executeQuery()) {
@@ -544,6 +596,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                 entity.setProviderReceiptNo(resultSet.getString("provider_receipt_no"));
                 entity.setProviderDeliveryStatus(resultSet.getString("provider_delivery_status"));
                 entity.setProviderDeliveryMessage(resultSet.getString("provider_delivery_message"));
+                entity.setReceiptQueryCount(resultSet.getInt("receipt_query_count"));
+                entity.setReceiptQueryResult(resultSet.getString("receipt_query_result"));
                 entity.setAckStatus(resultSet.getString("ack_status"));
                 entity.setAckStatusType(resultSet.getString("ack_status_type"));
                 entity.setAckOperator(resultSet.getString("ack_operator"));

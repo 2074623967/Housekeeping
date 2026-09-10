@@ -54,6 +54,14 @@ public class PaymentIssueAlertLogEntity {
     private String providerDeliveryStatus;
     /** 供应商侧投递说明。 */
     private String providerDeliveryMessage;
+    /** 供应商回执回查尝试次数。 */
+    private Integer receiptQueryCount;
+    /** 最近一次供应商回执回查时间。 */
+    private String lastReceiptQueryAt;
+    /** 下一次允许自动回查时间。 */
+    private String nextReceiptQueryAt;
+    /** 最近一次供应商回执回查有限结果。 */
+    private String receiptQueryResult;
     /** 渲染后的告警内容快照。 */
     private String renderedContentSnapshot;
     /** 回执确认人。 */

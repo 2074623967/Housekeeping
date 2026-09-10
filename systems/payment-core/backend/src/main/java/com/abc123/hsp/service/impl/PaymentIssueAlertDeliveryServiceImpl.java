@@ -1,5 +1,7 @@
 package com.abc123.hsp.service.impl;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDeliveryResultDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
@@ -26,6 +28,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -63,6 +66,11 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final int PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH = 255;
     private static final int RENDERED_CONTENT_SNAPSHOT_MAX_LENGTH = 1024;
     private static final String TRANSPORT_ERROR_MARKER = "transportError=";
+    private static final String RECEIPT_QUERY_RESULT_ADAPTER_MISSING = "ADAPTER_MISSING";
+    private static final String RECEIPT_QUERY_RESULT_RATE_LIMITED = "RATE_LIMITED";
+    private static final String RECEIPT_QUERY_RESULT_QUERY_ERROR = "QUERY_ERROR";
+    private static final String RECEIPT_QUERY_RESULT_EMPTY = "EMPTY";
+    private static final String RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT = "RECEIPT_CONFLICT";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
@@ -71,6 +79,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private final List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters;
     private final PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService;
     private final TransactionTemplate itemTransactionTemplate;
+    private int receiptQueryMinAgeSeconds = 60;
+    private int receiptQueryRetryIntervalSeconds = 60;
+    private int receiptQueryRetryBackoffFactor = 2;
+    private int receiptQueryMaxRetryIntervalSeconds = 900;
+    private int receiptQueryMaxAttempts = 10;
+    private int receiptQueryBatchSize = 100;
+    private int receiptQueryClaimTimeoutSeconds = 30;
     private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
 
     @Autowired
@@ -78,7 +93,28 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                 List<PaymentIssueAlertNotifier> notifiers,
                                                 List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
                                                 PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService,
-                                                PlatformTransactionManager transactionManager) {
+                                                PlatformTransactionManager transactionManager,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.min-age-seconds:60}")
+                                                        int receiptQueryMinAgeSeconds,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.retry-interval-seconds:60}")
+                                                        int receiptQueryRetryIntervalSeconds,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.retry-backoff-factor:2}")
+                                                        int receiptQueryRetryBackoffFactor,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.max-retry-interval-seconds:900}")
+                                                        int receiptQueryMaxRetryIntervalSeconds,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.max-attempts:10}")
+                                                        int receiptQueryMaxAttempts,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.batch-size:100}")
+                                                        int receiptQueryBatchSize,
+                                                @Value(
+                                                        "${payment.issue-alert.receipt-query.compensation.claim-timeout-seconds:30}")
+                                                        int receiptQueryClaimTimeoutSeconds) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
@@ -86,11 +122,35 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
         this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        configureReceiptQueryCompensation(
+                receiptQueryMinAgeSeconds,
+                receiptQueryRetryIntervalSeconds,
+                receiptQueryRetryBackoffFactor,
+                receiptQueryMaxRetryIntervalSeconds,
+                receiptQueryMaxAttempts,
+                receiptQueryBatchSize,
+                receiptQueryClaimTimeoutSeconds);
     }
 
     @Autowired
     void setPaymentTaskLeaseService(PaymentTaskLeaseService paymentTaskLeaseService) {
         this.paymentTaskLeaseService = paymentTaskLeaseService;
+    }
+
+    void configureReceiptQueryCompensation(int minAgeSeconds,
+                                           int retryIntervalSeconds,
+                                           int retryBackoffFactor,
+                                           int maxRetryIntervalSeconds,
+                                           int maxAttempts,
+                                           int batchSize,
+                                           int claimTimeoutSeconds) {
+        this.receiptQueryMinAgeSeconds = Math.max(minAgeSeconds, 1);
+        this.receiptQueryRetryIntervalSeconds = Math.max(retryIntervalSeconds, 1);
+        this.receiptQueryRetryBackoffFactor = Math.max(retryBackoffFactor, 1);
+        this.receiptQueryMaxRetryIntervalSeconds = Math.max(maxRetryIntervalSeconds, 1);
+        this.receiptQueryMaxAttempts = Math.max(maxAttempts, 1);
+        this.receiptQueryBatchSize = Math.max(batchSize, 1);
+        this.receiptQueryClaimTimeoutSeconds = Math.max(claimTimeoutSeconds, 1);
     }
 
     PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -137,6 +197,21 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             PlatformTransactionManager transactionManager) {
         this(paymentTaskCenterMapper, notifiers, receiptQueryAdapters,
                 (channelCode, alertNo) -> { }, transactionManager);
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(
+            PaymentTaskCenterMapper paymentTaskCenterMapper,
+            List<PaymentIssueAlertNotifier> notifiers,
+            List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
+            PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService,
+            PlatformTransactionManager transactionManager) {
+        this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
+        this.notifiers = notifiers;
+        this.receiptQueryAdapters = receiptQueryAdapters;
+        this.receiptQueryRateLimitService = receiptQueryRateLimitService;
+        this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override
@@ -980,13 +1055,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     private PaymentTaskActionResultDTO reconcileDeliveryReceiptsByMode(String runMode, String triggeredBy) {
-        List<PaymentIssueAlertLogEntity> acceptedLogs = paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs();
+        List<PaymentIssueAlertLogEntity> acceptedLogs = RUN_MODE_AUTO.equals(runMode)
+                ? paymentTaskCenterMapper.findDueAcceptedIssueAlertDeliveryLogs(
+                        receiptQueryMinAgeSeconds,
+                        receiptQueryMaxAttempts,
+                        receiptQueryClaimTimeoutSeconds,
+                        receiptQueryBatchSize)
+                : paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(receiptQueryBatchSize);
         int successCount = 0;
         int failCount = 0;
         List<String> failedAlertNos = new ArrayList<String>();
         for (PaymentIssueAlertLogEntity acceptedLog : acceptedLogs) {
             try {
-                Boolean reconciled = executeInItemTransaction(() -> reconcileDeliveryReceipt(acceptedLog, triggeredBy));
+                Boolean reconciled = executeInItemTransaction(
+                        () -> reconcileDeliveryReceipt(acceptedLog, runMode, triggeredBy));
                 if (Boolean.TRUE.equals(reconciled)) {
                     successCount++;
                 } else {
@@ -1008,23 +1090,97 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         );
     }
 
-    private boolean reconcileDeliveryReceipt(PaymentIssueAlertLogEntity acceptedLog, String triggeredBy) {
-        PaymentIssueAlertReceiptQueryAdapter adapter = findReceiptQueryAdapter(acceptedLog);
-        if (adapter == null) {
+    private boolean reconcileDeliveryReceipt(PaymentIssueAlertLogEntity acceptedLog,
+                                              String runMode,
+                                              String triggeredBy) {
+        if (acceptedLog == null || !StringUtils.hasText(acceptedLog.getAlertNo())) {
             return false;
         }
-        receiptQueryRateLimitService.acquire(acceptedLog.getAlertChannel(), acceptedLog.getAlertNo());
-        PaymentIssueAlertDeliveryResultDTO queryResult = adapter.query(acceptedLog);
+        int previousAttemptCount = normalizeReceiptQueryCount(acceptedLog.getReceiptQueryCount());
+        int claimed = paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
+                acceptedLog.getAlertNo(),
+                previousAttemptCount,
+                RUN_MODE_MANUAL.equals(runMode),
+                receiptQueryMaxAttempts,
+                receiptQueryClaimTimeoutSeconds);
+        if (claimed <= 0) {
+            return false;
+        }
+        PaymentIssueAlertReceiptQueryAdapter adapter = findReceiptQueryAdapter(acceptedLog);
+        if (adapter == null) {
+            completeReceiptQueryAttempt(acceptedLog, previousAttemptCount, RECEIPT_QUERY_RESULT_ADAPTER_MISSING);
+            return false;
+        }
+        PaymentIssueAlertDeliveryResultDTO queryResult;
+        try {
+            receiptQueryRateLimitService.acquire(acceptedLog.getAlertChannel(), acceptedLog.getAlertNo());
+            queryResult = adapter.query(acceptedLog);
+        } catch (BusinessException exception) {
+            String result = ErrorCode.PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED
+                    .equals(exception.getCode())
+                    ? RECEIPT_QUERY_RESULT_RATE_LIMITED
+                    : RECEIPT_QUERY_RESULT_QUERY_ERROR;
+            completeReceiptQueryAttempt(acceptedLog, previousAttemptCount, result);
+            return false;
+        } catch (RuntimeException exception) {
+            completeReceiptQueryAttempt(acceptedLog, previousAttemptCount, RECEIPT_QUERY_RESULT_QUERY_ERROR);
+            return false;
+        }
         if (!isConfirmedDeliveredResult(acceptedLog, queryResult)) {
+            completeReceiptQueryAttempt(
+                    acceptedLog, previousAttemptCount, resolveReceiptQueryResult(acceptedLog, queryResult));
             return false;
         }
         PaymentIssueAlertLogEntity receiptUpdate = buildReceiptUpdate(acceptedLog, queryResult, triggeredBy);
+        receiptUpdate.setReceiptQueryCount(previousAttemptCount + 1);
         int affectedRows = paymentTaskCenterMapper.updateIssueAlertProviderReceipt(receiptUpdate);
         if (affectedRows <= 0) {
             return false;
         }
         acknowledgeSourceAlertFromReceipt(acceptedLog, receiptUpdate);
         return true;
+    }
+
+    private String resolveReceiptQueryResult(PaymentIssueAlertLogEntity acceptedLog,
+                                             PaymentIssueAlertDeliveryResultDTO queryResult) {
+        if (queryResult == null || !StringUtils.hasText(queryResult.getProviderDeliveryStatus())) {
+            return RECEIPT_QUERY_RESULT_EMPTY;
+        }
+        if ("DELIVERED".equalsIgnoreCase(queryResult.getProviderDeliveryStatus())
+                && StringUtils.hasText(queryResult.getProviderReceiptNo())
+                && StringUtils.hasText(acceptedLog.getProviderReceiptNo())
+                && !acceptedLog.getProviderReceiptNo().trim().equals(queryResult.getProviderReceiptNo().trim())) {
+            return RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT;
+        }
+        return queryResult.getProviderDeliveryStatus().trim().toUpperCase();
+    }
+
+    private void completeReceiptQueryAttempt(PaymentIssueAlertLogEntity acceptedLog,
+                                             int previousAttemptCount,
+                                             String queryResult) {
+        int affectedRows = paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
+                acceptedLog.getAlertNo(),
+                previousAttemptCount + 1,
+                queryResult,
+                calculateReceiptQueryRetryDelaySeconds(previousAttemptCount),
+                receiptQueryMaxAttempts);
+        if (affectedRows <= 0) {
+            throw new IllegalStateException("告警供应商回执回查尝试状态更新失败");
+        }
+    }
+
+    private int normalizeReceiptQueryCount(Integer attemptCount) {
+        return Math.max(attemptCount == null ? 0 : attemptCount, 0);
+    }
+
+    private int calculateReceiptQueryRetryDelaySeconds(Integer previousAttemptCount) {
+        int exponent = Math.min(Math.max(previousAttemptCount == null ? 0 : previousAttemptCount, 0), 20);
+        long delay = receiptQueryRetryIntervalSeconds;
+        for (int index = 0; index < exponent; index++) {
+            delay = Math.min((long) receiptQueryMaxRetryIntervalSeconds,
+                    delay * (long) receiptQueryRetryBackoffFactor);
+        }
+        return (int) Math.min(delay, (long) receiptQueryMaxRetryIntervalSeconds);
     }
 
     private PaymentIssueAlertReceiptQueryAdapter findReceiptQueryAdapter(PaymentIssueAlertLogEntity acceptedLog) {

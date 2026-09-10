@@ -985,6 +985,10 @@ CREATE TABLE t_payment_issue_alert_log (
     provider_receipt_no VARCHAR(128) DEFAULT NULL COMMENT '供应商侧回执号',
     provider_delivery_status VARCHAR(64) DEFAULT NULL COMMENT '供应商侧投递状态',
     provider_delivery_message VARCHAR(255) DEFAULT NULL COMMENT '供应商侧投递说明',
+    receipt_query_count INT NOT NULL DEFAULT 0 COMMENT '供应商回执回查尝试次数',
+    last_receipt_query_at DATETIME DEFAULT NULL COMMENT '最近一次供应商回执回查时间',
+    next_receipt_query_at DATETIME DEFAULT NULL COMMENT '下一次允许自动回查时间',
+    receipt_query_result VARCHAR(32) DEFAULT NULL COMMENT '最近一次供应商回执回查有限结果',
     rendered_content_snapshot VARCHAR(1024) DEFAULT NULL COMMENT '渲染后的告警内容快照',
     triggered_by VARCHAR(64) NOT NULL COMMENT '触发来源',
     ack_operator VARCHAR(64) DEFAULT NULL COMMENT '回执确认人',
@@ -995,7 +999,10 @@ CREATE TABLE t_payment_issue_alert_log (
     UNIQUE KEY uk_issue_alert_generation (generation_key),
     KEY idx_issue_alert_source_channel (source_alert_no, alert_channel, alert_status),
     KEY idx_issue_alert_issue (issue_no, created_at),
-    KEY idx_issue_alert_ack (ack_status, created_at)
+    KEY idx_issue_alert_ack (ack_status, created_at),
+    KEY idx_issue_alert_receipt_query (
+        provider_delivery_status, alert_status, next_receipt_query_at, receipt_query_count, created_at
+    )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付交易异常告警通知日志表';
 
 CREATE TABLE t_worker_settlement_order (
