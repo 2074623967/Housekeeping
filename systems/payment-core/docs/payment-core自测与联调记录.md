@@ -8810,3 +8810,26 @@
 
 1. 两类 `REJECT` 来源均具备与真实业务来源相符的最小追踪键，payment-core 不再接受无法定位来源的拒绝结果。
 2. 本轮无前端、Mapper、schema 或迁移变化；本地 H2、Mockito 和静态核对不证明真实策略命中、人工处置、生产数据一致或稳定性，`release/v1.0.0` 继续冻结。
+
+## 313. 2026-09-11 风控事件型终态引用完整性 V1.0 验证
+
+### 313.1 本轮补强
+
+1. payment-core 对 `INTERCEPT` 增加 `hitCode` 条件必填校验，使事件型拦截必须同时具备 `eventNo + hitCode`。
+2. `REJECT` 有 `reviewNo` 时继续按人工拒绝处理；没有 `reviewNo` 时按策略直接拒绝处理，并要求同时具备 `eventNo + hitCode`。
+3. risk-control-system 将黑名单和策略直接拒绝说明与 `REJECT` 决策对齐，不再用“直接拦截”描述拒绝结果。
+
+### 313.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| payment-core 定向测试 | `mvn -Dtest=PaymentRiskControlServiceImplTest,PaymentServiceImplTest test` | 通过 | `86` 个用例；新增覆盖拦截缺少命中编码、直接拒绝缺少命中编码的失败闭合 |
+| payment-core 全量测试 | `mvn test` | 通过 | `797` 个用例，`0` failures、`0` errors、`0` skipped |
+| risk-control-system 定向测试 | `mvn -Dtest=RiskControlServiceImplTest,RiskControlIntegrationTest test` | 通过 | `10` 个用例；覆盖黑名单与策略直接拒绝的引用及说明语义 |
+| risk-control-system 全量测试 | `mvn test` | 通过 | `10` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 313.3 当前判断
+
+1. 事件型拦截和策略直接拒绝均具备事件号与命中编码，人工拒绝继续保留来源相符的复核单号，跨系统引用矩阵已完整闭合。
+2. 本轮无前端、Mapper、schema 或迁移变化；本地 H2、Mockito 和静态核对不证明真实风险事件、真实策略命中、人工审核、跨系统生产一致或稳定性，`release/v1.0.0` 继续冻结。

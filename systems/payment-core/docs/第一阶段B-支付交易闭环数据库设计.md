@@ -795,6 +795,14 @@ t_order
 3. risk-control-system 复用既有 `t_risk_intercept_event` 保存策略直接拒绝事实，`decision_result=已拒绝`，按业务单号、命中编码和处置结果复用，不新增表或迁移。
 4. H2 与 Mockito 测试不证明生产库风险事件真实落库、既有数据完整、人工拒绝真实发生或跨系统数据已对账。
 
+### 4.71 风控事件型终态引用持久化边界
+
+1. payment-core 在写支付风险事件前校验事件型终态引用：`INTERCEPT` 必须有 `eventNo + hitCode`；无 `reviewNo` 的策略直接 `REJECT` 也必须有 `eventNo + hitCode`。
+2. 人工拒绝继续以 `reviewNo` 关联 `t_risk_review_order` 的审核事实，不要求为满足支付侧格式额外写入 `t_risk_intercept_event`。
+3. risk-control-system 的直接拦截和直接拒绝继续复用 `t_risk_intercept_event`，通过 `decision_result` 区分“已拦截”和“已拒绝”，命中编码保留对应规则来源。
+4. 校验失败发生在 payment-core 任何风险事件或支付状态持久化之前，不形成缺少命中来源的事件型终态记录。
+5. 本轮不新增表、字段、索引或迁移；本地 H2 与 Mockito 不证明生产数据已经补齐、真实事件落库、跨系统事务一致或生产稳定性。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

@@ -3101,6 +3101,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 两类追踪号均为空或任一已提供字段非法时统一返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`，不得写入支付状态、风险事件、支付尝试或发起渠道调用。
 4. 本轮不改变接口字段、前端、Mapper、schema 或迁移；该契约不证明复核单或风险事件在生产环境真实存在、处置正确或跨系统数据已对账。
 
+### 14.140 风控事件型终态引用完整性契约
+
+1. `decision=INTERCEPT` 时，`eventNo` 与 `hitCode` 均为必填；二者分别用于定位风险事件和命中规则，任一缺失均返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`。
+2. `decision=REJECT` 且存在 `reviewNo` 时按人工拒绝处理，不强制 `eventNo / hitCode`；不存在 `reviewNo` 时按策略直接拒绝处理，必须同时返回 `eventNo + hitCode`。
+3. 所有已提供字段继续执行既有控制字符与容量校验；条件必填校验发生在支付状态、风险事件、支付尝试和渠道调用之前。
+4. risk-control-system 的事件型终态说明必须与决策一致：`INTERCEPT` 表达直接拦截，`REJECT` 表达直接拒绝，不得用拦截文案描述拒绝结果。
+5. 本轮不新增接口字段、错误码或对外支付接口结构；本地测试与静态核对不证明真实风险事件、策略命中、人工处置、跨系统生产一致或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

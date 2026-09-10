@@ -1190,6 +1190,14 @@
 4. payment-core 定向测试应不少于 `84` 个、全量不少于 `795` 个，risk-control-system 全量不少于 `9` 个；补丁检查必须通过。本轮无前端、Mapper、schema 或迁移变化。
 5. H2、Mockito 和静态核对不证明真实策略命中、人工审核、生产事件落库、跨系统生产一致或稳定性。
 
+### 4.157 风控事件型终态引用完整性
+
+1. 构造 `decision=INTERCEPT`、具备合法 `eventNo` 但缺少 `hitCode` 的响应，验证固定返回 `PAYMENT_RISK_SERVICE_UNAVAILABLE`，事件号不能替代命中来源。
+2. 构造无 `reviewNo` 的直接 `REJECT`、具备合法 `eventNo` 但缺少 `hitCode` 的响应，验证同样失败闭合；回归 `eventNo + hitCode` 完整时正常返回。
+3. 回归人工拒绝仅携带合法 `reviewNo` 时仍可接受，不要求伪造事件号；在 risk-control-system 验证黑名单和策略直接拒绝说明使用拒绝语义。
+4. payment-core 定向测试应不少于 `86` 个、全量不少于 `797` 个，risk-control-system 定向及全量测试均不少于 `10` 个；补丁检查必须通过。
+5. 本轮无前端、Mapper、schema 或迁移变化；H2、Mockito 和静态核对不证明真实策略命中、生产事件落库、人工处置、跨系统生产一致或稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
