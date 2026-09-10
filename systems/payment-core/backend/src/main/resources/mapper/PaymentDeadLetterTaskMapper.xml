@@ -109,7 +109,8 @@
     <update id="markReplaying">
         UPDATE t_payment_dead_letter_task
         SET task_status = 'REPLAYING', task_status_type = 'warn', operator = #{operator},
-            replay_count = replay_count + 1, last_replay_at = NOW(), updated_at = NOW()
+            resolution_note = #{resolutionNote}, replay_count = replay_count + 1,
+            last_replay_at = NOW(), resolved_at = NOW(), updated_at = NOW()
         WHERE task_no = #{taskNo}
           AND task_status = 'READY_TO_REPLAY'
     </update>

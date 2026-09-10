@@ -22,6 +22,7 @@ import PaymentConfigView from "../views/PaymentConfigView.vue";
 import PaymentMonitorView from "../views/PaymentMonitorView.vue";
 import PaymentDayEndView from "../views/PaymentDayEndView.vue";
 import PaymentTaskCenterView from "../views/PaymentTaskCenterView.vue";
+import PaymentDeadLetterTasksView from "../views/PaymentDeadLetterTasksView.vue";
 
 const routes = [
   {
@@ -72,6 +73,7 @@ const routes = [
       { path: "payment-config", component: PaymentConfigView },
       { path: "payment-monitor", component: PaymentMonitorView },
       { path: "payment-task-center", component: PaymentTaskCenterView },
+      { path: "payment-dead-letter-tasks", component: PaymentDeadLetterTasksView },
       { path: "payment-day-end", component: PaymentDayEndView },
       { path: "worker-settlements", component: WorkerSettlementsView }
     ]

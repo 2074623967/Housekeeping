@@ -211,6 +211,7 @@ onMounted(loadEvents);
           <p class="overview-title">失败或死信事件</p>
           <strong>{{ metrics.failedTotal }}</strong>
           <span>优先核对失败投递与死信积压，确认是否需要人工补偿或跨系统追单。</span>
+          <RouterLink class="link-button" to="/payment-dead-letter-tasks">查看死信补偿任务</RouterLink>
         </article>
         <article class="overview-card warn">
           <p class="overview-title">到期待重试</p>
@@ -388,6 +389,7 @@ onMounted(loadEvents);
               <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
               <RouterLink class="link-button" :to="`/payment-logs?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付日志</RouterLink>
               <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
+              <RouterLink class="link-button" to="/payment-dead-letter-tasks">查看死信补偿任务</RouterLink>
             </div>
           </div>
           <div v-else class="state-box">选择左侧支付事件后，可在这里查看事件快照与排障建议。</div>

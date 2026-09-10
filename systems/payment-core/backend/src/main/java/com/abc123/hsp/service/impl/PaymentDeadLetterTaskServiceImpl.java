@@ -36,6 +36,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private static final String STATUS_READY_TO_REPLAY = "READY_TO_REPLAY";
     private static final String STATUS_MANUAL_RESOLVED = "MANUAL_RESOLVED";
     private static final String STATUS_REPLAYED = "REPLAYED";
+    private static final int TASK_NO_MAX_LENGTH = 64;
+    private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final int RESOLUTION_NOTE_MAX_LENGTH = 512;
     private static final int DEFAULT_CONFIRM_TIMEOUT_MS = 5000;
     private static final Pattern PAYMENT_DLQ_PATTERN = Pattern.compile(
             "^payment\\.success\\.(clearing|accounting)\\.dlq(?:\\.([^.]+))?\\.v1$");
@@ -128,7 +131,10 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     public PaymentDeadLetterTaskEntity replay(String taskNo, PaymentDeadLetterTaskActionRequestDTO request) {
         PaymentDeadLetterTaskActionRequestDTO normalizedRequest = requireAction(request);
         String normalizedTaskNo = normalizeTaskNo(taskNo);
-        if (paymentDeadLetterTaskMapper.markReplaying(normalizedTaskNo, normalizedRequest.getOperator()) <= 0) {
+        if (paymentDeadLetterTaskMapper.markReplaying(
+                normalizedTaskNo,
+                normalizedRequest.getOperator(),
+                normalizedRequest.getResolutionNote()) <= 0) {
             throw new IllegalArgumentException("死信任务尚未完成复核或已被其他操作处理");
         }
         PaymentDeadLetterTaskEntity task = findRequiredTask(normalizedTaskNo);
@@ -177,9 +183,22 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (request == null || !StringUtils.hasText(request.getOperator()) || !StringUtils.hasText(request.getResolutionNote())) {
             throw new IllegalArgumentException("处置人和处置说明不能为空");
         }
-        request.setOperator(request.getOperator().trim());
-        request.setResolutionNote(request.getResolutionNote().trim());
+        request.setOperator(normalizeActionField(
+                request.getOperator(), OPERATOR_MAX_LENGTH, "处置人"));
+        request.setResolutionNote(normalizeActionField(
+                request.getResolutionNote(), RESOLUTION_NOTE_MAX_LENGTH, "处置说明"));
         return request;
+    }
+
+    private String normalizeActionField(String value, int maxLength, String fieldName) {
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        if (containsIsoControl(normalized)) {
+            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+        }
+        return normalized;
     }
 
     private String resolveMessageId(Message message) {
@@ -202,7 +221,23 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         if (!StringUtils.hasText(taskNo)) {
             throw new IllegalArgumentException("死信任务号不能为空");
         }
-        return taskNo.trim();
+        String normalized = taskNo.trim();
+        if (normalized.length() > TASK_NO_MAX_LENGTH) {
+            throw new IllegalArgumentException("死信任务号不能超过64个字符");
+        }
+        if (containsIsoControl(normalized)) {
+            throw new IllegalArgumentException("死信任务号不能包含控制字符");
+        }
+        return normalized;
+    }
+
+    private boolean containsIsoControl(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String trimToNull(String value) {

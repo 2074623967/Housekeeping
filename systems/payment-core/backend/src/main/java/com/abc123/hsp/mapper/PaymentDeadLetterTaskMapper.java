@@ -24,7 +24,9 @@ public interface PaymentDeadLetterTaskMapper {
                              @Param("operator") String operator,
                              @Param("resolutionNote") String resolutionNote);
 
-    int markReplaying(@Param("taskNo") String taskNo, @Param("operator") String operator);
+    int markReplaying(@Param("taskNo") String taskNo,
+                      @Param("operator") String operator,
+                      @Param("resolutionNote") String resolutionNote);
 
     int markReplayed(@Param("taskNo") String taskNo);
 

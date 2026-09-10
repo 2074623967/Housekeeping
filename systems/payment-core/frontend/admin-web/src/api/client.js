@@ -521,6 +521,37 @@ export const paymentEventApi = {
   }
 };
 
+export const paymentDeadLetterTaskApi = {
+  getList: ({
+    taskStatus = "",
+    targetSystem = "",
+    messageId = "",
+    pageNo = 1,
+    pageSize = 20
+  } = {}) => {
+    const params = new URLSearchParams({
+      taskStatus,
+      targetSystem,
+      messageId,
+      pageNo: String(pageNo),
+      pageSize: String(pageSize)
+    });
+    return request(`/api/payment-dead-letter-tasks?${params.toString()}`);
+  },
+  markReadyToReplay: (taskNo, payload) => postJson(
+    `/api/payment-dead-letter-tasks/${encodeURIComponent(taskNo)}/ready-to-replay`,
+    payload
+  ),
+  resolveManually: (taskNo, payload) => postJson(
+    `/api/payment-dead-letter-tasks/${encodeURIComponent(taskNo)}/resolve-manually`,
+    payload
+  ),
+  replay: (taskNo, payload) => postJson(
+    `/api/payment-dead-letter-tasks/${encodeURIComponent(taskNo)}/replay`,
+    payload
+  )
+};
+
 export const cashierSessionApi = {
   getOverview: ({
     sessionNo = "",

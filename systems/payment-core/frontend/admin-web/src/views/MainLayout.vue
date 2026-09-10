@@ -37,6 +37,7 @@ const navGroups = [
     links: [
       { label: "支付监控分析", to: "/payment-monitor" },
       { label: "支付任务中心", to: "/payment-task-center" },
+      { label: "死信补偿任务", to: "/payment-dead-letter-tasks" },
       { label: "支付日终处理", to: "/payment-day-end" }
     ]
   }

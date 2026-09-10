@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PageResultDTO;
@@ -83,7 +84,8 @@ class PaymentDeadLetterTaskServiceImplTest {
 
     @Test
     void shouldRequireReviewBeforeReplay() {
-        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营")).thenReturn(0);
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(0);
 
         assertThrows(IllegalArgumentException.class,
                 () -> service().replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放")));
@@ -123,7 +125,8 @@ class PaymentDeadLetterTaskServiceImplTest {
     @Test
     void shouldReplayOnlyTheOriginalConsumerAfterReview() {
         PaymentDeadLetterTaskEntity task = replayTask();
-        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
         when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
             org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
@@ -148,7 +151,8 @@ class PaymentDeadLetterTaskServiceImplTest {
     @Test
     void shouldRecordReplayFailureForManualFollowUp() {
         PaymentDeadLetterTaskEntity task = replayTask();
-        when(paymentDeadLetterTaskMapper.markReplaying("DLQ-001", "支付运营")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
         when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
         when(rabbitTemplate.invoke(any())).thenThrow(new IllegalStateException("broker unavailable"));
 
@@ -161,6 +165,41 @@ class PaymentDeadLetterTaskServiceImplTest {
     void shouldRequireOperatorAndResolutionNoteForManualAction() {
         assertThrows(IllegalArgumentException.class,
                 () -> service().markReadyToReplay("DLQ-001", new PaymentDeadLetterTaskActionRequestDTO()));
+    }
+
+    @Test
+    void shouldNormalizeManualActionBeforeUpdatingTask() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.markReadyToReplay("DLQ-001", "finance-ops", "核对完成"))
+                .thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+
+        service().markReadyToReplay(" DLQ-001 ", action(" finance-ops ", " 核对完成 "));
+
+        verify(paymentDeadLetterTaskMapper)
+                .markReadyToReplay("DLQ-001", "finance-ops", "核对完成");
+    }
+
+    @Test
+    void shouldRejectInvalidManualActionBeforeMapperOrBrokerAccess() {
+        String oversizedOperator = String.join("", Collections.nCopies(65, "A"));
+        String oversizedNote = String.join("", Collections.nCopies(513, "N"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service().markReadyToReplay("DLQ-001", action(oversizedOperator, "核对完成")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().markManuallyResolved("DLQ-001", action("finance-ops", oversizedNote)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().replay("DLQ-001", action("finance\nops", "核对完成")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().replay("DLQ-001", action("finance-ops", "核对\t完成")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().replay("DLQ-001\nforged", action("finance-ops", "核对完成")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service().replay(String.join("", Collections.nCopies(65, "D")),
+                        action("finance-ops", "核对完成")));
+
+        verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
     }
 
     private PaymentDeadLetterTaskServiceImpl service() {
