@@ -2545,12 +2545,20 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 ### 14.72 gateway-access 退款提交代理契约
 
 1. 非 `demo` 环境的退款下发使用 `GatewayAccessRefundChannelSubmitServiceImpl`；`LocalRefundChannelSubmitServiceImpl` 只在 `demo` profile 注册，默认环境不再生成模拟渠道退款号。
-2. `payment.refund-submit.gateway-access.enabled=false` 为默认值。开关、提交 URL、应用编码、访问密钥或渠道允许列表任一不完整时返回 `PAYMENT-1049`，退款保持 `PROCESSING`，既有 `REFUND_SUBMIT` outbox 进入失败/死信核查路径。
+2. `payment.refund-submit.gateway-access.enabled=false` 为默认值。开关、提交 URL、应用编码、访问密钥或渠道允许列表任一不完整时返回 `PAYMENT-1049`，退款保持 `PROCESSING`，既有 `REFUND_SUBMIT` outbox 进入可退避的失败/死信核查路径。
 3. 配置完整后，payment-core 携带 `X-Gateway-App-Code / X-Gateway-Access-Key`，向 `POST /api/gateway/refunds/submit` 发送退款单、原支付单、原订单、退款金额、方式、原因与原支付渠道。gateway-access 复用应用、权限、网关、有效证书和发布路由门禁。
 4. 只有网关业务码为 `0`，且结果包含 `channelRefundNo / status / statusType` 时才接受；状态只允许 `PROCESSING / SUCCESS`。payment-core 只保存渠道、渠道退款号和来源组成的最小留痕，不保存访问密钥或上游原始报文。
-5. 网关拒绝、超时、空响应或字段非法统一按 `PAYMENT-1049` 失败闭合。外部渠道可能已经受理时不得据此自动重复退款，应保留处理中状态并结合稳定 `refundOrderId` 幂等、主动查单和人工核查收口。
+5. 明确发生在上游调用前的网关配置或治理拒绝按 `PAYMENT-1049` 进入失败退避；超时、空响应、未知业务码或受理字段非法表示结果未知，事件进入 `UNKNOWN` 并停止直接重试。外部渠道可能已经受理时不得据此自动重复退款。
 6. payment-core 配置为 `HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ENABLED / HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_URL / HSP_PAYMENT_REFUND_SUBMIT_SUPPORTED_CHANNELS / HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_APP_CODE / HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ACCESS_KEY / HSP_PAYMENT_REFUND_SUBMIT_TIMEOUT_MS`；gateway-access 上游配置为 `HSP_GATEWAY_WX_REFUND_SUBMIT_URL / HSP_GATEWAY_ALIPAY_REFUND_SUBMIT_URL / HSP_GATEWAY_BANK_REFUND_SUBMIT_URL`，均默认失败闭合。
 7. 本地固定响应 stub 只证明稳定 HTTP 转发、错误凭证拒绝和关联字段传递，不代表真实退款协议、签名验签、渠道幂等、生产凭证、退款到账、对账或财务验收完成。
+
+### 14.73 退款提交结果未知事件契约
+
+1. `REFUND_SUBMIT` 请求可能已到达上游，但因网络异常、未知网关业务码、非法受理响应或本地受理事实绑定失败无法确认结果时，事件写为 `publishStatus=UNKNOWN`、`publishStatusType=warn`，`nextRetryAt` 清空；退款单保持 `PROCESSING`。
+2. `UNKNOWN` 不是退款成功或失败终态，只表示提交受理事实未知。自动任务与批量失败重试均不选择该状态，管理端禁用直接重发并提示按退款单号向渠道查单或人工核查。
+3. 对没有可信渠道受理号的 `UNKNOWN` 事件调用单笔重发接口返回 `PAYMENT-1050`，不得再次调用退款渠道。该错误码表示必须先核查，不表示退款失败。
+4. 若可信核查已为原退款单补录渠道退款号和一致的提交渠道，再次处理事件只校验受理事实并将事件收敛为 `SUCCESS`，不重复提交退款；退款终态仍由可信回调或主动查单单向收口。
+5. 操作日志仅记录固定处置语义，不保存异常原文、访问凭证或完整渠道报文。当前实现不替代真实渠道按退款单号查询、人工审批、到账核验或财务验收。
 
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
@@ -2596,6 +2604,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1047` | 当前退款渠道共享查单固定窗口配额已耗尽 |
 | `PAYMENT-1048` | gateway-access 支付提交失败或未返回可确认的渠道受理事实；必须先查单，禁止自动重提 |
 | `PAYMENT-1049` | gateway-access 退款提交未配置、调用失败或未返回可确认的渠道受理事实；保持处理中并先查单核验 |
+| `PAYMENT-1050` | 退款提交受理结果未知，必须先向渠道查单或人工核查，禁止直接重发 |
 
 联调说明：
 
