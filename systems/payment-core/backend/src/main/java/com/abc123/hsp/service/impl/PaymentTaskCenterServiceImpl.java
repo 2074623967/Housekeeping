@@ -249,6 +249,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     public PaymentTaskCenterOverviewDTO overview() {
         PaymentTaskCenterOverviewDTO overview = paymentTaskCenterMapper.findOverviewSummary();
+        overview.setUnknownRefundSubmitEventCount(
+                paymentTaskCenterMapper.countUnknownRefundSubmitEvents());
         overview.setPendingQueryBacklogCount(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(
                 pendingQueryMinAgeSeconds));
         overview.setDuePendingQueryCount(paymentTaskCenterMapper.countDuePendingPaymentQueries(
@@ -1094,6 +1096,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 overview.getRecentQueryRateLimitRejectionCount());
         double recentQueryFailureRate = percentage(recentQueryFailureCount, recentQueryCount);
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
+        int unknownRefundSubmitEventCount = valueOrZero(overview.getUnknownRefundSubmitEventCount());
         int pendingIssueAlertDispatchCount = valueOrZero(overview.getPendingIssueAlertDispatchCount());
         int failedIssueAlertDispatchCount = valueOrZero(overview.getFailedIssueAlertDispatchCount());
         int oldestPendingIssueAlertDispatchMinutes =
@@ -1181,6 +1184,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "/payment-task-center",
                 failedEventCount > 5 ? "P1" : "P2",
                 failedEventCount > 5 ? "danger" : "warn"
+        ));
+        alerts.add(buildAlert(
+                "REFUND_SUBMIT_UNKNOWN",
+                "退款提交结果待核查",
+                unknownRefundSubmitEventCount,
+                unknownRefundSubmitEventCount > 0
+                        ? "存在可能已被渠道受理的退款提交，必须先查单或人工核查，禁止直接重发"
+                        : "暂无退款提交结果未知事件",
+                "/payment-issues?issueType=退款提交结果待核查",
+                unknownRefundSubmitEventCount > 0 ? "P1" : "P3",
+                unknownRefundSubmitEventCount > 0 ? "danger" : "success"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG",

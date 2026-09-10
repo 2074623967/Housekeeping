@@ -89,6 +89,24 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExposeUnknownRefundSubmitAsImmediateP1Alert() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countUnknownRefundSubmitEvents()).thenReturn(2);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(2, overview.getUnknownRefundSubmitEventCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "REFUND_SUBMIT_UNKNOWN".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && "danger".equals(alert.getAlertLevelType())
+                        && alert.getAlertMessage().contains("禁止直接重发")
+                        && "/payment-issues?issueType=退款提交结果待核查"
+                        .equals(alert.getActionRoute())));
+    }
+
+    @Test
     void shouldExposeQueryFailureTrendAndRaiseRateThresholdAlert() {
         PaymentQueryTrendPointDTO trend = new PaymentQueryTrendPointDTO();
         trend.setTimeBucket("2026-09-08 09:00");

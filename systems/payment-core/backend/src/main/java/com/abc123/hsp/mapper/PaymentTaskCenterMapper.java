@@ -23,6 +23,11 @@ public interface PaymentTaskCenterMapper {
     PaymentTaskCenterOverviewDTO findOverviewSummary();
 
     /**
+     * 统计必须查单或人工核查的退款提交未知事件。
+     */
+    int countUnknownRefundSubmitEvents();
+
+    /**
      * 查询最近任务执行日志。
      */
     List<PaymentTaskRunLogItemDTO> findRecentTaskRuns();

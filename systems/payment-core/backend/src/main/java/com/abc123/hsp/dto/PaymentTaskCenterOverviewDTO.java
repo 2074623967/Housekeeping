@@ -61,6 +61,8 @@ public class PaymentTaskCenterOverviewDTO {
     private List<PaymentQueryTrendPointDTO> queryTrends;
     /** 失败事件数。 */
     private Integer failedEventCount;
+    /** 退款提交结果未知、禁止直接重试的事件数。 */
+    private Integer unknownRefundSubmitEventCount;
     /** 失败退款数。 */
     private Integer failedRefundCount;
     /** 日终告警批次数。 */

@@ -180,6 +180,7 @@ onMounted(loadIssues);
             <option>待回调未收口</option>
             <option>回调处理待跟进</option>
             <option>下游事件发布失败</option>
+            <option>退款提交结果待核查</option>
             <option>命中停用渠道</option>
             <option>订单成功收款超额</option>
           </select>

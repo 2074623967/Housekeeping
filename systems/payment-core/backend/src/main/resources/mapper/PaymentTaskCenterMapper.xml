@@ -60,6 +60,11 @@
                     FROM t_payment_event pe
                     WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
                     UNION ALL
+                    SELECT COALESCE(pe.last_published_at, pe.created_at), 'P1' AS severity
+                    FROM t_payment_event pe
+                    WHERE pe.event_type = 'REFUND_SUBMIT'
+                      AND pe.publish_status = 'UNKNOWN'
+                    UNION ALL
                     SELECT po.created_at, 'P2' AS severity
                     FROM t_payment_order po
                              INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
@@ -68,6 +73,13 @@
                 WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
                    OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
             ), 0) AS overdueIssueCount
+    </select>
+
+    <select id="countUnknownRefundSubmitEvents" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_event
+        WHERE event_type = 'REFUND_SUBMIT'
+          AND publish_status = 'UNKNOWN'
     </select>
 
     <select id="countOverduePaymentIssues" resultType="int">
@@ -85,6 +97,11 @@
             FROM t_payment_event pe
             WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
             UNION ALL
+            SELECT COALESCE(pe.last_published_at, pe.created_at), 'P1' AS severity
+            FROM t_payment_event pe
+            WHERE pe.event_type = 'REFUND_SUBMIT'
+              AND pe.publish_status = 'UNKNOWN'
+            UNION ALL
             SELECT po.created_at, 'P2' AS severity
             FROM t_payment_order po
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
@@ -99,10 +116,19 @@
                issue_sla.payment_order_id AS paymentOrderId,
                issue_sla.issue_type AS issueType,
                issue_sla.severity AS severity,
-               COALESCE(roster.responsibility_group, '支付运营组') AS responsibilityGroup,
-               COALESCE(roster.receiver, '支付运营') AS receiver,
-               COALESCE(roster.escalation_receiver, '支付值班负责人') AS escalationReceiver,
-               COALESCE(roster.escalation_policy, '超时未确认升级值班负责人') AS escalationPolicy,
+               COALESCE(roster.responsibility_group,
+                        CASE WHEN issue_sla.issue_type = '退款提交结果待核查'
+                             THEN '账务清结算联动组' ELSE '支付运营组' END) AS responsibilityGroup,
+               COALESCE(roster.receiver,
+                        CASE WHEN issue_sla.issue_type = '退款提交结果待核查'
+                             THEN '账清结算联动值班' ELSE '支付运营' END) AS receiver,
+               COALESCE(roster.escalation_receiver,
+                        CASE WHEN issue_sla.issue_type = '退款提交结果待核查'
+                             THEN '账清结算负责人' ELSE '支付值班负责人' END) AS escalationReceiver,
+               COALESCE(roster.escalation_policy,
+                        CASE WHEN issue_sla.issue_type = '退款提交结果待核查'
+                             THEN '30分钟未核查升级账清结算负责人'
+                             ELSE '超时未确认升级值班负责人' END) AS escalationPolicy,
                COALESCE(roster.escalation_timeout_minutes, 30) AS escalationTimeoutMinutes,
                COALESCE(roster.schedule_tag, '默认班次') AS scheduleTag,
                CASE
@@ -139,6 +165,15 @@
                    pe.created_at
             FROM t_payment_event pe
             WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
+            UNION ALL
+            SELECT CONCAT('ISSUE-REFUND-SUBMIT-UNKNOWN-', pe.event_no) AS issue_no,
+                   pe.payment_order_id,
+                   '退款提交结果待核查' AS issue_type,
+                   'P1' AS severity,
+                   COALESCE(pe.last_published_at, pe.created_at) AS created_at
+            FROM t_payment_event pe
+            WHERE pe.event_type = 'REFUND_SUBMIT'
+              AND pe.publish_status = 'UNKNOWN'
             UNION ALL
             SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
                    po.payment_order_id,

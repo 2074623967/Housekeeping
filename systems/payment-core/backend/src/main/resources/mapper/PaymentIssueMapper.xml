@@ -87,6 +87,32 @@
 
         UNION ALL
 
+        SELECT CONCAT('ISSUE-REFUND-SUBMIT-UNKNOWN-', pe.event_no) AS issue_no,
+               pe.payment_order_id,
+               po.order_no,
+               po.customer_name,
+               po.payment_method,
+               po.channel_code,
+               '退款提交结果待核查' AS issue_type,
+               'danger' AS issue_type_tag,
+               'P1' AS severity,
+               'danger' AS severity_type,
+               po.status AS payment_status,
+               po.status_type AS payment_status_type,
+               CONCAT('退款单=', pe.biz_no, ' 的渠道提交结果未知，事件=', pe.event_no,
+                      '，重试次数=', pe.retry_count) AS issue_summary,
+               '渠道可能已经受理退款，必须按退款单号查单或人工核查；在确认未受理前禁止直接重发。' AS root_cause_hint,
+               '进入支付事件出站页核对退款单和渠道受理事实' AS recommended_action,
+               CONCAT('/payment-events?paymentOrderId=', pe.payment_order_id,
+                      '&amp;publishStatus=UNKNOWN') AS recommended_route,
+               DATE_FORMAT(COALESCE(pe.last_published_at, pe.created_at), '%Y-%m-%d %H:%i:%s') AS created_at
+        FROM t_payment_event pe
+                 INNER JOIN t_payment_order po ON po.payment_order_id = pe.payment_order_id
+        WHERE pe.event_type = 'REFUND_SUBMIT'
+          AND pe.publish_status = 'UNKNOWN'
+
+        UNION ALL
+
         SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
                po.payment_order_id,
                po.order_no,
@@ -167,19 +193,20 @@
                COALESCE(latest_action.assignee, '未分派') AS assignee,
                CASE
                    WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
-                   WHEN payment_issue_union.issue_type IN ('下游事件发布失败', '订单成功收款超额') THEN '账务清结算联动组'
+                   WHEN payment_issue_union.issue_type IN ('下游事件发布失败', '订单成功收款超额', '退款提交结果待核查') THEN '账务清结算联动组'
                    WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '渠道配置运营组'
                    ELSE '支付运营组'
                END AS responsibilityGroup,
                CASE
                    WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN 'danger'
-                   WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN 'danger'
+                   WHEN payment_issue_union.issue_type IN ('订单成功收款超额', '退款提交结果待核查') THEN 'danger'
                    WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN 'warn'
                    ELSE 'info'
                END AS responsibilityGroupType,
                CASE
                    WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
                    WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN '优先核对订单应收、成功支付总额、渠道流水和退款差错处理'
+                   WHEN payment_issue_union.issue_type = '退款提交结果待核查' THEN '优先按退款单号查单并核对渠道受理事实，确认前禁止重发'
                    WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '优先核对事件重发、下游订阅和账务/清分/结算消费结果'
                    WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
                    ELSE '由支付运营确认责任方并补充处理备注'
@@ -378,19 +405,20 @@
                    severity,
                    CASE
                        WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '支付后端值班组'
-                       WHEN payment_issue_union.issue_type IN ('下游事件发布失败', '订单成功收款超额') THEN '账务清结算联动组'
+                       WHEN payment_issue_union.issue_type IN ('下游事件发布失败', '订单成功收款超额', '退款提交结果待核查') THEN '账务清结算联动组'
                        WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '渠道配置运营组'
                        ELSE '支付运营组'
                    END AS responsibility_group,
                    CASE
                        WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN 'danger'
-                       WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN 'danger'
+                       WHEN payment_issue_union.issue_type IN ('订单成功收款超额', '退款提交结果待核查') THEN 'danger'
                        WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN 'warn'
                        ELSE 'info'
                    END AS responsibility_group_type,
                    CASE
                        WHEN payment_issue_union.issue_type IN ('待回调未收口', '回调处理待跟进') THEN '优先核对查单、回调验签、幂等和状态机收口'
                        WHEN payment_issue_union.issue_type = '订单成功收款超额' THEN '优先核对订单应收、成功支付总额、渠道流水和退款差错处理'
+                       WHEN payment_issue_union.issue_type = '退款提交结果待核查' THEN '优先按退款单号查单并核对渠道受理事实，确认前禁止重发'
                        WHEN payment_issue_union.issue_type = '下游事件发布失败' THEN '优先核对事件重发、下游订阅和账务/清分/结算消费结果'
                        WHEN payment_issue_union.issue_type = '命中停用渠道' THEN '优先核对渠道启停、路由规则和存量单处理策略'
                        ELSE '由支付运营确认责任方并补充处理备注'

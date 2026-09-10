@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import java.io.InputStream;
@@ -28,7 +29,7 @@ import org.junit.jupiter.api.Test;
 /**
  * 支付任务中心 Mapper 的 MySQL 兼容 SQL 集成测试。
  */
-class PaymentTaskCenterMapperIntegrationTest {
+public class PaymentTaskCenterMapperIntegrationTest {
 
     private SqlSessionFactory sqlSessionFactory;
 
@@ -175,6 +176,21 @@ class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldCountUnknownRefundSubmitAsOverdueP1Issue() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(1, mapper.countUnknownRefundSubmitEvents());
+            assertEquals(1, mapper.countOverduePaymentIssues());
+            List<PaymentIssueAlertCandidateDTO> candidates = mapper.findOverdueIssueAlertCandidates();
+            assertEquals(1, candidates.size());
+            assertEquals("退款提交结果待核查", candidates.get(0).getIssueType());
+            assertEquals("账务清结算联动组", candidates.get(0).getResponsibilityGroup());
+            assertEquals("账清结算联动值班", candidates.get(0).getReceiver());
+        }
+    }
+
+    @Test
     void shouldRejectDuplicateIssueAlertGenerationKeyWithoutOverwritingOriginalAlert() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -235,11 +251,18 @@ class PaymentTaskCenterMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             Connection connection = session.getConnection();
+            statement.execute("CREATE ALIAS IF NOT EXISTS FIND_IN_SET FOR '"
+                    + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".findInSet'");
+            statement.execute("CREATE ALIAS IF NOT EXISTS WEEKDAY FOR '"
+                    + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".weekday'");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_issue_duty_roster");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_event");
+            statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("DROP TABLE IF EXISTS t_refund_operation_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
@@ -254,8 +277,15 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "attempt_status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_notify_log ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, notify_no VARCHAR(64), "
+                    + "payment_order_id VARCHAR(64), "
                     + "notify_status VARCHAR(32), created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_event ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, event_no VARCHAR(64), "
+                    + "payment_order_id VARCHAR(64), event_type VARCHAR(64), publish_status VARCHAR(32), "
+                    + "last_published_at DATETIME, created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_channel_config ("
+                    + "channel_code VARCHAR(64), status VARCHAR(32))");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
                     + "channel_code VARCHAR(64), channel_refund_no VARCHAR(128), "
@@ -287,6 +317,13 @@ class PaymentTaskCenterMapperIntegrationTest {
                     + "rendered_content_snapshot VARCHAR(1024), triggered_by VARCHAR(64), "
                     + "ack_operator VARCHAR(64), ack_at DATETIME, created_at DATETIME, "
                     + "UNIQUE (alert_no), UNIQUE (generation_key))");
+            statement.execute("CREATE TABLE t_payment_issue_duty_roster ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, issue_type VARCHAR(64), severity VARCHAR(32), "
+                    + "responsibility_group VARCHAR(64), receiver VARCHAR(64), "
+                    + "escalation_receiver VARCHAR(64), escalation_policy VARCHAR(128), "
+                    + "escalation_timeout_minutes INT, schedule_tag VARCHAR(64), "
+                    + "effective_start_hour INT, effective_end_hour INT, weekday_scope VARCHAR(32), "
+                    + "holiday_strategy VARCHAR(32), status VARCHAR(32))");
 
             LocalDateTime now = LocalDateTime.now();
             insertPayment(connection, "PAY-NO-HISTORY", "wx_h5", now.minusMinutes(10));
@@ -300,6 +337,17 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertPayment(connection, "PAY-FRESH-ATTEMPT", "wx_h5", now.minusMinutes(20));
             insertPaymentAttempt(connection, "PAY-FRESH-ATTEMPT", now);
             insertPaymentWithoutAttempt(connection, "PAY-NO-ATTEMPT", "wx_h5", now.minusMinutes(20));
+            statement.executeUpdate("INSERT INTO t_payment_event("
+                    + "event_no, payment_order_id, event_type, publish_status, last_published_at, created_at) "
+                    + "VALUES ('EVTR-UNKNOWN-001', 'PAY-NO-HISTORY', 'REFUND_SUBMIT', 'UNKNOWN', "
+                    + "TIMESTAMPADD(MINUTE, -31, NOW()), TIMESTAMPADD(MINUTE, -31, NOW()))");
+            statement.executeUpdate("INSERT INTO t_payment_issue_duty_roster("
+                    + "issue_type, severity, responsibility_group, receiver, escalation_receiver, "
+                    + "escalation_policy, escalation_timeout_minutes, schedule_tag, effective_start_hour, "
+                    + "effective_end_hour, weekday_scope, holiday_strategy, status) VALUES ("
+                    + "'退款提交结果待核查', 'P1', '账务清结算联动组', '账清结算联动值班', "
+                    + "'账清结算负责人', '30分钟未核查升级账清结算负责人', 30, '退款核查全时段', "
+                    + "0, 23, '1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED')");
 
             insertQueryHistory(connection, "PAY-BASE-WAIT", now, 30);
             insertQueryHistory(connection, "PAY-BACKOFF-WAIT", now, 300, 90);
@@ -376,6 +424,23 @@ class PaymentTaskCenterMapperIntegrationTest {
         entity.setAlertContent("幂等测试告警");
         entity.setTriggeredBy("integration-test");
         return entity;
+    }
+
+    public static int findInSet(String value, String values) {
+        if (value == null || values == null) {
+            return 0;
+        }
+        String[] candidates = values.split(",");
+        for (int index = 0; index < candidates.length; index++) {
+            if (value.equals(candidates[index])) {
+                return index + 1;
+            }
+        }
+        return 0;
+    }
+
+    public static int weekday(java.sql.Date date) {
+        return date.toLocalDate().getDayOfWeek().getValue() - 1;
     }
 
     private int countAlertsByGenerationKey(Connection connection, String generationKey) throws Exception {

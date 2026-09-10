@@ -66,6 +66,7 @@ INSERT INTO t_payment_issue_duty_roster (roster_code, issue_type, severity, resp
 ('DUTY_WAIT_CALLBACK_P1', '待回调未收口', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '支付技术负责人', '30分钟未确认升级支付技术负责人', 30, '交易链路白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
 ('DUTY_NOTIFY_PENDING_P1', '回调处理待跟进', 'P1', '支付后端值班组', '支付后端值班', 'IN_APP,IM,SMS', 'L1', '支付技术负责人', '30分钟未确认升级支付技术负责人', 30, '回调补偿白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00'),
 ('DUTY_EVENT_FAILED_P2', '下游事件发布失败', 'P2', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,EMAIL', 'L2', '账清结算负责人', '60分钟未恢复升级账清结算负责人', 60, '账务联动晚班', 0, 23, '1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED', 'success', '2026-07-21 09:10:00'),
+('DUTY_REFUND_SUBMIT_UNKNOWN_P1', '退款提交结果待核查', 'P1', '账务清结算联动组', '账清结算联动值班', 'IN_APP,IM,SMS', 'L1', '账清结算负责人', '30分钟未核查升级账清结算负责人', 30, '退款核查全时段', 0, 23, '1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED', 'success', '2026-09-10 15:10:00'),
 ('DUTY_DISABLED_CHANNEL_P2', '命中停用渠道', 'P2', '渠道配置运营组', '渠道配置运营', 'IN_APP,IM', 'L2', '渠道运营负责人', '60分钟未处理升级渠道运营负责人', 60, '渠道运营白班', 0, 23, '1,2,3,4,5', 'WORKDAY_ONLY', 'ENABLED', 'success', '2026-07-21 09:10:00');
 
 INSERT INTO t_order (order_no, customer_name, service_type, worker_name, order_amount, paid_amount, order_status, order_status_type, fulfillment_status, fulfillment_status_type, created_at) VALUES

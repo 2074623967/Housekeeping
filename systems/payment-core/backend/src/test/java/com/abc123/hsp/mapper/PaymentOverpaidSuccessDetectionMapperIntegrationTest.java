@@ -94,6 +94,29 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldExposeUnknownRefundSubmitAsP1ClearingIssue() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentIssueMapper mapper = session.getMapper(PaymentIssueMapper.class);
+            PaymentIssueRowDTO issue = mapper.findByIssueNo(
+                    "ISSUE-REFUND-SUBMIT-UNKNOWN-EVTR-UNKNOWN-001");
+
+            assertEquals("退款提交结果待核查", issue.getIssueType());
+            assertEquals("P1", issue.getSeverity());
+            assertTrue(issue.getIssueSummary().contains("REF-UNKNOWN-001"));
+            assertTrue(issue.getRootCauseHint().contains("禁止直接重发"));
+            assertTrue(issue.getRecommendedRoute().contains("publishStatus=UNKNOWN"));
+
+            PaymentIssueQueryDTO query = new PaymentIssueQueryDTO();
+            query.setIssueType("退款提交结果待核查");
+            List<PaymentIssueResponsibilitySummaryDTO> summaries = mapper.responsibilitySummary(query);
+            assertEquals(1, summaries.size());
+            assertEquals("账务清结算联动组", summaries.get(0).getGroupName());
+            assertEquals("danger", summaries.get(0).getGroupType());
+            assertEquals(1, summaries.get(0).getP1Count());
+        }
+    }
+
     private void parseMapper(Configuration configuration, String resource) throws Exception {
         try (InputStream mapperXml = Resources.getResourceAsStream(resource)) {
             new XMLMapperBuilder(
@@ -136,8 +159,9 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + "notify_status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_event ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, event_no VARCHAR(64), "
-                    + "payment_order_id VARCHAR(64), event_type VARCHAR(64), event_topic VARCHAR(128), "
-                    + "publish_status VARCHAR(32), retry_count INT, created_at DATETIME)");
+                    + "payment_order_id VARCHAR(64), biz_no VARCHAR(64), event_type VARCHAR(64), "
+                    + "event_topic VARCHAR(128), publish_status VARCHAR(32), retry_count INT, "
+                    + "last_published_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "channel_code VARCHAR(64), status VARCHAR(32))");
             statement.executeUpdate("INSERT INTO t_order(order_no, order_amount) VALUES "
@@ -154,6 +178,8 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + "('PAY-OVERPAID-1', 'ORD-OVERPAID', '李女士', 80.00, '微信', 'wx_h5', "
                     + "'SUCCESS', 'success', NOW()), "
                     + "('PAY-OVERPAID-2', 'ORD-OVERPAID', '李女士', 30.00, '微信', 'wx_h5', "
+                    + "'SUCCESS', 'success', NOW()), "
+                    + "('PAY-REFUND-UNKNOWN', 'ORD-REFUND', '王女士', 50.00, '微信', 'wx_h5', "
                     + "'SUCCESS', 'success', NOW())");
             statement.executeUpdate("INSERT INTO t_payment_notify_log("
                     + "notify_no, payment_order_id, channel_code, notify_type, notify_status, created_at) "
@@ -163,6 +189,11 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + "event_no, payment_order_id, event_type, event_topic, publish_status, retry_count, created_at) "
                     + "SELECT CONCAT('EVT-', payment_order_id), payment_order_id, 'PAYMENT_SUCCESS', "
                     + "'payment.success.v1', 'SUCCESS', 0, NOW() FROM t_payment_order");
+            statement.executeUpdate("INSERT INTO t_payment_event("
+                    + "event_no, payment_order_id, biz_no, event_type, event_topic, publish_status, "
+                    + "retry_count, last_published_at, created_at) VALUES "
+                    + "('EVTR-UNKNOWN-001', 'PAY-REFUND-UNKNOWN', 'REF-UNKNOWN-001', "
+                    + "'REFUND_SUBMIT', 'payment.refund.submitted.v1', 'UNKNOWN', 1, NOW(), NOW())");
             session.commit();
         }
     }

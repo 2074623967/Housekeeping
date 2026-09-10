@@ -27,6 +27,7 @@ const overview = ref({
   issueAlertReceiptTimeoutMinutes: 30,
   queryTrends: [],
   failedEventCount: 0,
+  unknownRefundSubmitEventCount: 0,
   failedRefundCount: 0,
   warningDayEndBatchCount: 0,
   controlPolicyWarningCount: 0,
@@ -154,6 +155,7 @@ onMounted(loadOverview);
             <div class="detail-label">{{ alert.alertTitle }}</div>
             <div class="detail-value">{{ alert.affectedCount }}</div>
             <div class="detail-hint">{{ alert.alertMessage }}</div>
+            <RouterLink v-if="alert.actionRoute" class="link-button" :to="alert.actionRoute">查看处置入口</RouterLink>
           </div>
         </div>
 
@@ -199,6 +201,11 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">失败事件</div>
             <div class="detail-value">{{ overview.failedEventCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">退款提交待核查</div>
+            <div class="detail-value">{{ overview.unknownRefundSubmitEventCount }}</div>
+            <div class="meta">结果未知，禁止直接重发</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">失败退款</div>
@@ -526,6 +533,11 @@ onMounted(loadOverview);
                   <td>失败事件</td>
                   <td>{{ overview.failedEventCount }}</td>
                   <td>影响账务、清分、结算跨系统同步</td>
+                </tr>
+                <tr>
+                  <td>退款提交结果待核查</td>
+                  <td>{{ overview.unknownRefundSubmitEventCount }}</td>
+                  <td>渠道可能已受理，须按退款单号查单或人工核查，禁止直接重发</td>
                 </tr>
                 <tr>
                   <td>失败退款</td>
