@@ -10,6 +10,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PrepayOrderDTO;
@@ -51,6 +54,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 支付状态收口规则单元测试。
@@ -1614,7 +1618,8 @@ class PaymentServiceImplTest {
         submitResult.setAttemptStatus("待回调");
         submitResult.setAttemptStatusType("warn");
         when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
-        org.mockito.Mockito.doThrow(new IllegalStateException("finalization failed"))
+        org.mockito.Mockito.doThrow(new IllegalStateException(
+                        "jdbc:mysql://internal/payment password=submit-secret\ninvalid SQL"))
                 .when(paymentMapper).updatePaymentAttemptSubmitResult(
                         org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.eq("{\"code\":\"ACCEPTED\"}"),
@@ -1641,7 +1646,33 @@ class PaymentServiceImplTest {
                         new com.fasterxml.jackson.databind.ObjectMapper()),
                 transactionManager);
 
-        assertThrows(IllegalStateException.class, () -> service.submit(request));
+        Logger transactionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(TransactionTemplate.class);
+        ListAppender<ILoggingEvent> transactionAppender = new ListAppender<>();
+        transactionAppender.start();
+        transactionLogger.addAppender(transactionAppender);
+        RuntimeException exception;
+        try {
+            exception = assertThrows(RuntimeException.class, () -> service.submit(request));
+        } finally {
+            transactionLogger.detachAppender(transactionAppender);
+            transactionAppender.stop();
+        }
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "PAYMENT_SUBMIT_TRANSACTION_FAILED:IllegalStateException", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
+        org.junit.jupiter.api.Assertions.assertEquals(0, exception.getStackTrace().length);
+        org.junit.jupiter.api.Assertions.assertEquals(0, exception.getSuppressed().length);
+        org.junit.jupiter.api.Assertions.assertTrue(transactionAppender.list.stream().anyMatch(event ->
+                event.getThrowableProxy() != null
+                        && "PAYMENT_SUBMIT_TRANSACTION_FAILED:IllegalStateException"
+                        .equals(event.getThrowableProxy().getMessage())
+                        && event.getThrowableProxy().getCause() == null
+                        && event.getThrowableProxy().getStackTraceElementProxyArray().length == 0));
+        org.junit.jupiter.api.Assertions.assertTrue(transactionAppender.list.stream().noneMatch(event ->
+                event.getFormattedMessage().contains("submit-secret")
+                        || (event.getThrowableProxy() != null
+                        && String.valueOf(event.getThrowableProxy().getMessage()).contains("submit-secret"))));
 
         org.mockito.InOrder transactionOrder = org.mockito.Mockito.inOrder(
                 transactionManager, paymentChannelSubmitService);

@@ -88,6 +88,7 @@ public class PaymentServiceImpl implements PaymentService {
     private static final String CUSTOMER_SELF_SERVICE_OPERATOR = "customer-self-service";
 
     private static final int SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS = 120;
+    private static final String SUBMIT_TRANSACTION_FAILURE_CODE = "PAYMENT_SUBMIT_TRANSACTION_FAILED";
 
     private final PaymentMapper paymentMapper;
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
@@ -751,9 +752,21 @@ public class PaymentServiceImpl implements PaymentService {
 
     private <T> T executeSubmitTransaction(Supplier<T> action) {
         if (submitTransactionTemplate == null) {
-            return action.get();
+            return executeSubmitAction(action);
         }
-        return submitTransactionTemplate.execute(status -> action.get());
+        return submitTransactionTemplate.execute(status -> executeSubmitAction(action));
+    }
+
+    private <T> T executeSubmitAction(Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw exception instanceof SanitizedSubmitTransactionException
+                    ? exception
+                    : new SanitizedSubmitTransactionException(exception);
+        }
     }
 
     /**
@@ -1946,5 +1959,19 @@ public class PaymentServiceImpl implements PaymentService {
 
     private String defaultText(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static final class SanitizedSubmitTransactionException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private SanitizedSubmitTransactionException(RuntimeException exception) {
+            super(SUBMIT_TRANSACTION_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+        }
+
+        private static String exceptionName(RuntimeException exception) {
+            String simpleName = exception.getClass().getSimpleName();
+            return simpleName.isEmpty() ? RuntimeException.class.getSimpleName() : simpleName;
+        }
     }
 }
