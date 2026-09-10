@@ -1134,6 +1134,14 @@
 4. 渠道提交与支付服务定向测试应不少于 `80` 个，payment-core 全量不少于 `786` 个；补丁检查必须通过。本轮无前端、Mapper 或 schema 变化。
 5. 本地 Mockito 不证明请求真实送达、渠道受理、主动查单、对账收口、资金到账或生产稳定性。
 
+### 4.150 死信接入毒消息重入队治理
+
+1. 注入包含模拟令牌与换行的不受支持 routing key，验证抛出专用永久异常、固定文案不回显原值，且不访问 Mapper 或 broker。
+2. 监听器收到专用永久异常时必须执行 `basicNack(deliveryTag, false, false)`，不得 ACK 或重入当前队列。
+3. 注入数据库等普通运行时失败时仍执行 `basicNack(deliveryTag, false, true)`；合法任务持久化完成后才执行 ACK。
+4. 死信服务与监听器定向测试应不少于 `14` 个，payment-core 全量不少于 `787` 个；补丁检查必须通过。本轮无前端、Mapper 或 schema 变化。
+5. 本地 Mockito 不证明真实 RabbitMQ DLX、消息隔离与保留、生产网络故障或稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

@@ -8658,3 +8658,25 @@
 
 1. 支付渠道提交的意外失败已在领域服务边界最小化，同时保留结果未知场景必须查单确认的资金安全约束。
 2. 本地 Mockito 不证明请求真实送达、渠道受理、主动查单、对账收口、资金到账或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 306. 2026-09-11 死信接入毒消息重入队治理 V1.0 验证
+
+### 306.1 本轮补强
+
+1. `PaymentDeadLetterTaskService` 新增不受支持路由的专用永久异常，固定文案不携带 routing key 原文。
+2. `PaymentDeadLetterTaskAmqpListener` 对专用异常执行 `basicNack(requeue=false)`；其他运行时失败继续 `basicNack(requeue=true)`，成功持久化后才 ACK。
+3. 专用分类避免永久毒消息循环，同时不把 Mapper 或基础设施瞬时异常误判为不可重试错误。
+
+### 306.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 死信服务与监听器定向测试 | `mvn -Dtest=PaymentDeadLetterTaskServiceImplTest,PaymentDeadLetterTaskAmqpListenerTest test` | 通过 | `14` 个用例，覆盖合法入账、未知路由、ACK/NACK、人工复核与重放 |
+| payment-core 全量测试 | `mvn test` | 通过 | `787` 个用例，`0` failures、`0` errors、`0` skipped |
+| 路由原文注入 | JUnit + Mockito | 通过 | 模拟令牌和换行的 routing key 不进入固定异常文案，也不触发 Mapper 或 broker 调用 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 306.3 当前判断
+
+1. 死信接入已区分永久路由错误和可恢复运行时失败，避免当前接入队列对确定性错误无限重试。
+2. 本地 Mockito 不证明 `requeue=false` 后消息进入隔离队列、生产 RabbitMQ 拓扑正确、消息绝不丢失或生产稳定性，`release/v1.0.0` 继续冻结。
