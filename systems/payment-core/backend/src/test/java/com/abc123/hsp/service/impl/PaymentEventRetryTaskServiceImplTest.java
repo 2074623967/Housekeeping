@@ -5,6 +5,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
@@ -18,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 支付事件批次重发服务测试。
@@ -36,6 +40,7 @@ class PaymentEventRetryTaskServiceImplTest {
 
     @Test
     void shouldIsolateUnexpectedFailureAndContinueRetryingEvents() {
+        String sensitiveMessage = "jdbc:mysql://internal/payment password=event-secret\ninvalid SQL";
         when(paymentEventMapper.findAllFailedEventNos())
                 .thenReturn(Arrays.asList("EVT-SUCCESS", "EVT-THROW", "EVT-FAILED"));
         when(transactionManager.getTransaction(
@@ -46,24 +51,43 @@ class PaymentEventRetryTaskServiceImplTest {
                 .thenAnswer(invocation -> {
                     String eventNo = invocation.getArgument(0);
                     if ("EVT-THROW".equals(eventNo)) {
-                        throw new IllegalStateException("status update failed");
+                        throw new IllegalStateException(sensitiveMessage);
                     }
                     return "EVT-SUCCESS".equals(eventNo);
                 });
         when(paymentEventMapper.updateLastRepublishAudit("EVT-SUCCESS", "finance-ops")).thenReturn(1);
 
-        PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
-                paymentEventMapper, paymentEventDispatchService, transactionManager)
-                .retryFailedEvents(false, " finance-ops ");
+        Logger transactionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(TransactionTemplate.class);
+        ListAppender<ILoggingEvent> transactionAppender = new ListAppender<>();
+        transactionAppender.start();
+        transactionLogger.addAppender(transactionAppender);
+        try {
+            PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
+                    paymentEventMapper, paymentEventDispatchService, transactionManager)
+                    .retryFailedEvents(false, " finance-ops ");
 
-        Assertions.assertEquals(3, result.getProcessedCount());
-        Assertions.assertEquals(1, result.getSuccessCount());
-        Assertions.assertEquals(2, result.getFailCount());
-        Assertions.assertEquals(Arrays.asList("EVT-THROW", "EVT-FAILED"), result.getFailedEventNos());
-        verify(transactionManager, times(2)).commit(transactionStatus);
-        verify(transactionManager).rollback(transactionStatus);
-        verify(paymentEventDispatchService).republish("EVT-FAILED", "finance-ops");
-        verify(paymentEventMapper).updateLastRepublishAudit("EVT-SUCCESS", "finance-ops");
+            Assertions.assertEquals(3, result.getProcessedCount());
+            Assertions.assertEquals(1, result.getSuccessCount());
+            Assertions.assertEquals(2, result.getFailCount());
+            Assertions.assertEquals(Arrays.asList("EVT-THROW", "EVT-FAILED"), result.getFailedEventNos());
+            verify(transactionManager, times(2)).commit(transactionStatus);
+            verify(transactionManager).rollback(transactionStatus);
+            verify(paymentEventDispatchService).republish("EVT-FAILED", "finance-ops");
+            verify(paymentEventMapper).updateLastRepublishAudit("EVT-SUCCESS", "finance-ops");
+            Assertions.assertTrue(transactionAppender.list.stream().anyMatch(event ->
+                    event.getThrowableProxy() != null
+                            && "PAYMENT_EVENT_RETRY_TRANSACTION_FAILED:IllegalStateException"
+                            .equals(event.getThrowableProxy().getMessage())
+                            && event.getThrowableProxy().getCause() == null
+                            && event.getThrowableProxy().getStackTraceElementProxyArray().length == 0));
+            Assertions.assertTrue(transactionAppender.list.stream().noneMatch(event ->
+                    event.getFormattedMessage().contains("event-secret")
+                            || (event.getThrowableProxy() != null
+                            && String.valueOf(event.getThrowableProxy().getMessage()).contains("event-secret"))));
+        } finally {
+            transactionLogger.detachAppender(transactionAppender);
+            transactionAppender.stop();
+        }
     }
 
     @Test

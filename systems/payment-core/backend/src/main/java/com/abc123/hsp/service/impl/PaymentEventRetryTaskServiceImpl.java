@@ -18,6 +18,7 @@ import org.springframework.util.StringUtils;
 public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskService {
 
     private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final String TRANSACTION_FAILURE_CODE = "PAYMENT_EVENT_RETRY_TRANSACTION_FAILED";
 
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -43,7 +44,7 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
         for (String eventNo : eventNos) {
             try {
                 Boolean success = transactionTemplate.execute(
-                        status -> republishAndRecord(eventNo, normalizedOperator));
+                        status -> executeRetryAction(eventNo, normalizedOperator));
                 if (Boolean.TRUE.equals(success)) {
                     result.setSuccessCount(result.getSuccessCount() + 1);
                 } else {
@@ -80,10 +81,34 @@ public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskSe
         return published;
     }
 
+    private boolean executeRetryAction(String eventNo, String operator) {
+        try {
+            return republishAndRecord(eventNo, operator);
+        } catch (RuntimeException exception) {
+            throw exception instanceof SanitizedEventRetryTransactionException
+                    ? exception
+                    : new SanitizedEventRetryTransactionException(exception);
+        }
+    }
+
     private void recordFailure(PaymentEventRetryResultDTO result, String eventNo) {
         result.setFailCount(result.getFailCount() + 1);
         if (result.getFailedEventNos().size() < 3) {
             result.getFailedEventNos().add(eventNo);
+        }
+    }
+
+    private static final class SanitizedEventRetryTransactionException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private SanitizedEventRetryTransactionException(RuntimeException exception) {
+            super(TRANSACTION_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+        }
+
+        private static String exceptionName(RuntimeException exception) {
+            String simpleName = exception.getClass().getSimpleName();
+            return simpleName.isEmpty() ? RuntimeException.class.getSimpleName() : simpleName;
         }
     }
 }
