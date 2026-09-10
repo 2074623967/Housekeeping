@@ -92,7 +92,7 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
                 throw queryFailed("gateway-access rejected refund query");
             }
             RefundChannelQueryResultDTO result = response.getData();
-            if (!StringUtils.hasText(result.getQuerySource())) {
+            if (result.getQuerySource() == null || result.getQuerySource().isEmpty()) {
                 result.setQuerySource("GATEWAY_ACCESS_HTTP");
             }
             return RefundChannelQueryResultValidator.validateAndNormalize(result);

@@ -131,6 +131,31 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, failed.getCode());
     }
 
+    @Test
+    void shouldRejectRawGatewayQuerySourceWithTrailingControlCharacter() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
+                new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
+        RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundStatus("PROCESSING");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        data.setQuerySource("GATEWAY_ACCESS_HTTP\n");
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/refunds/query"),
+                eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> new GatewayAccessRefundChannelQueryAdapter(
+                        true, "http://gateway/refunds/query", "wx_h5",
+                        "APP_PAY_CORE", "secret", restTemplate).query(refund()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
     private RefundCallbackSourceDTO refund() {
         RefundCallbackSourceDTO refund = new RefundCallbackSourceDTO();
         refund.setRefundOrderId("REF-001");

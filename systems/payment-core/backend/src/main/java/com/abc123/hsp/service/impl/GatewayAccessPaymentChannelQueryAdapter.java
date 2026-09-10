@@ -102,21 +102,15 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
                         "gateway-access rejected payment query");
             }
             PaymentChannelQueryResultDTO result = response.getData();
-            if (result == null || !StringUtils.hasText(result.getTradeStatus())) {
+            if (result == null) {
                 throw new BusinessException(
                         ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                         "gateway-access returned no definitive trade status");
             }
-            result.setTradeStatus(result.getTradeStatus().trim());
-            if (StringUtils.hasText(result.getChannelTransactionNo())) {
-                result.setChannelTransactionNo(result.getChannelTransactionNo().trim());
-            }
-            if (!StringUtils.hasText(result.getQuerySource())) {
+            if (result.getQuerySource() == null || result.getQuerySource().isEmpty()) {
                 result.setQuerySource("GATEWAY_ACCESS_HTTP");
-            } else {
-                result.setQuerySource(result.getQuerySource().trim());
             }
-            return result;
+            return PaymentChannelQueryResultValidator.validateAndNormalize(result);
         } catch (BusinessException exception) {
             throw exception;
         } catch (RuntimeException exception) {

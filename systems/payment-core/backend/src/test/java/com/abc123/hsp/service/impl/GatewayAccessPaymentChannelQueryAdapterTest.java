@@ -87,6 +87,57 @@ class GatewayAccessPaymentChannelQueryAdapterTest {
     }
 
     @Test
+    void shouldRejectRawGatewayTradeStatusWithTrailingControlCharacter() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse response =
+                new GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse();
+        PaymentChannelQueryResultDTO data = new PaymentChannelQueryResultDTO();
+        data.setTradeStatus("SUCCESS\n");
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/query"),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                eq(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new GatewayAccessPaymentChannelQueryAdapter(
+                        true, "http://gateway/query", "wx_h5", restTemplate)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectRawGatewayQuerySourceWithTrailingControlCharacter() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse response =
+                new GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse();
+        PaymentChannelQueryResultDTO data = new PaymentChannelQueryResultDTO();
+        data.setTradeStatus("SUCCESS");
+        data.setQuerySource("GATEWAY_ACCESS_HTTP\n");
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/query"),
+                eq(HttpMethod.POST),
+                any(HttpEntity.class),
+                eq(GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new GatewayAccessPaymentChannelQueryAdapter(
+                        true, "http://gateway/query", "wx_h5", restTemplate)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    @Test
     void shouldRejectGatewayBusinessFailure() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         GatewayAccessPaymentChannelQueryAdapter.GatewayQueryResponse response =
