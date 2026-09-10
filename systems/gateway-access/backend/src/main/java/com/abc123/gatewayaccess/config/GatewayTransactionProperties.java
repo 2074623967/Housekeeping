@@ -25,6 +25,7 @@ public class GatewayTransactionProperties {
     public static class Channel {
 
         private String gatewayCode;
+        private String paymentSubmitUrl;
         private String paymentQueryUrl;
     }
 }

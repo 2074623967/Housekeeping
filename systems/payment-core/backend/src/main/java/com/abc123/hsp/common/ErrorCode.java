@@ -58,4 +58,5 @@ public final class ErrorCode {
     public static final String REFUND_CHANNEL_QUERY_ADAPTER_MISSING = "PAYMENT-1045";
     public static final String REFUND_CHANNEL_QUERY_FAILED = "PAYMENT-1046";
     public static final String REFUND_CHANNEL_QUERY_RATE_LIMITED = "PAYMENT-1047";
+    public static final String PAYMENT_CHANNEL_SUBMIT_FAILED = "PAYMENT-1048";
 }

@@ -3,7 +3,10 @@ package com.abc123.gatewayaccess.controller;
 import com.abc123.gatewayaccess.common.ApiResponse;
 import com.abc123.gatewayaccess.dto.PaymentOrderQueryRequestDTO;
 import com.abc123.gatewayaccess.dto.PaymentOrderQueryResultDTO;
+import com.abc123.gatewayaccess.dto.PaymentOrderSubmitRequestDTO;
+import com.abc123.gatewayaccess.dto.PaymentOrderSubmitResultDTO;
 import com.abc123.gatewayaccess.service.PaymentOrderQueryService;
+import com.abc123.gatewayaccess.service.PaymentOrderSubmitService;
 import javax.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,9 +22,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class GatewayTransactionController {
 
     private final PaymentOrderQueryService paymentOrderQueryService;
+    private final PaymentOrderSubmitService paymentOrderSubmitService;
 
-    public GatewayTransactionController(PaymentOrderQueryService paymentOrderQueryService) {
+    public GatewayTransactionController(PaymentOrderQueryService paymentOrderQueryService,
+                                        PaymentOrderSubmitService paymentOrderSubmitService) {
         this.paymentOrderQueryService = paymentOrderQueryService;
+        this.paymentOrderSubmitService = paymentOrderSubmitService;
+    }
+
+    @PostMapping("/payment-orders/submit")
+    public ApiResponse<PaymentOrderSubmitResultDTO> submitPaymentOrder(
+            @RequestHeader(value = "X-Gateway-App-Code", required = false) String appCode,
+            @RequestHeader(value = "X-Gateway-Access-Key", required = false) String accessKey,
+            @RequestBody PaymentOrderSubmitRequestDTO request,
+            HttpServletRequest servletRequest) {
+        return ApiResponse.success(paymentOrderSubmitService.submit(
+                appCode, accessKey, servletRequest.getRemoteAddr(), request));
     }
 
     @PostMapping("/payment-orders/query")

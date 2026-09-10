@@ -36,6 +36,14 @@ payment:
   submit:
     # 默认不信任转发头；仅配置实际反向代理的 IP，多个地址使用逗号分隔。
     trusted-proxy-addresses: ${HSP_PAYMENT_SUBMIT_TRUSTED_PROXY_ADDRESSES:}
+    gateway-access:
+      # 只有 gateway-access 已配置真实渠道提交上游和共享访问凭证后才启用。
+      enabled: ${HSP_PAYMENT_SUBMIT_GATEWAY_ENABLED:false}
+      submit-url: ${HSP_PAYMENT_SUBMIT_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/payment-orders/submit}
+      supported-channels: ${HSP_PAYMENT_SUBMIT_GATEWAY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
+      app-code: ${HSP_PAYMENT_SUBMIT_GATEWAY_APP_CODE:APP_PAY_CORE}
+      access-key: ${HSP_PAYMENT_SUBMIT_GATEWAY_ACCESS_KEY:}
+      timeout-ms: ${HSP_PAYMENT_SUBMIT_GATEWAY_TIMEOUT_MS:2000}
   callback:
     # 默认失败闭合；仅 demo profile 显式关闭，真实渠道环境必须注入独立密钥或公钥。
     require-signature: ${HSP_PAYMENT_CALLBACK_REQUIRE_SIGNATURE:true}

@@ -13,7 +13,7 @@
                permission_scope,
                status,
                status_type,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_app
         ORDER BY id ASC
     </select>
@@ -27,7 +27,7 @@
                endpoint,
                status,
                status_type,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_channel
         <where>
             <if test="query.keyword != null and query.keyword != ''">
@@ -51,10 +51,10 @@
         SELECT certificate_code,
                gateway_code,
                certificate_version,
-               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               expire_at AS expireAt,
                status,
                status_type,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_certificate
         ORDER BY id ASC
     </select>
@@ -65,7 +65,7 @@
                scope,
                status,
                status_type,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_permission
         ORDER BY id ASC
     </select>
@@ -80,7 +80,7 @@
                result_status,
                result_status_type,
                risk_hint,
-               DATE_FORMAT(happened_at, '%Y-%m-%d %H:%i:%s') AS happenedAt
+               happened_at AS happenedAt
         FROM t_gateway_audit_log
         <where>
             <if test="query.keyword != null and query.keyword != ''">
@@ -109,7 +109,7 @@
                release_window,
                status,
                status_type,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_release_route
         <where>
             <if test="query.environment != null and query.environment != '' and query.environment != '全部'">
@@ -132,7 +132,7 @@
                permission_scope AS permissionScope,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_app
         WHERE app_code = #{appCode}
         LIMIT 1
@@ -148,7 +148,7 @@
                endpoint,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_channel
         WHERE gateway_code = #{gatewayCode}
         LIMIT 1
@@ -159,10 +159,10 @@
                certificate_code AS certificateCode,
                gateway_code AS gatewayCode,
                certificate_version AS certificateVersion,
-               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               expire_at AS expireAt,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_certificate
         WHERE certificate_code = #{certificateCode}
         LIMIT 1
@@ -175,7 +175,7 @@
                scope,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_permission
         WHERE permission_code = #{permissionCode}
         LIMIT 1
@@ -187,10 +187,10 @@
                certificate_code AS certificateCode,
                gateway_code AS gatewayCode,
                certificate_version AS certificateVersion,
-               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               expire_at AS expireAt,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_certificate
         WHERE gateway_code = #{gatewayCode}
           AND status = 'ENABLED'
@@ -208,7 +208,7 @@
                release_window AS releaseWindow,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_release_route
         WHERE gateway_code = #{gatewayCode}
           AND environment = #{environment}
@@ -236,7 +236,7 @@
                release_window AS releaseWindow,
                status,
                status_type AS statusType,
-               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+               updated_at AS updatedAt
         FROM t_gateway_release_route
         WHERE route_code = #{routeCode}
         LIMIT 1
