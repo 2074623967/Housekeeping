@@ -194,6 +194,7 @@ export const paymentTaskCenterApi = {
   },
   runCloseExpiredPayments: () => postJson("/api/payment-task-center/close-expired-payments", {}),
   runPendingPaymentQueries: () => postJson("/api/payment-task-center/query-pending-payments", {}),
+  runPendingRefundQueries: () => postJson("/api/payment-task-center/query-pending-refunds", {}),
   runGenerateQueryMonitorAlerts: () => postJson("/api/payment-task-center/generate-query-monitor-alerts", {}),
   runRepublishFailedEvents: () => postJson("/api/payment-task-center/republish-failed-events", {}),
   runRetryFailedRefunds: () => postJson("/api/payment-task-center/retry-failed-refunds", {}),

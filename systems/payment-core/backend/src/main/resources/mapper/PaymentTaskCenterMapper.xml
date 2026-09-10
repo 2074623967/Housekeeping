@@ -428,6 +428,67 @@
         LIMIT #{batchSize}
     </select>
 
+    <select id="findPendingRefundOrderIdsForManualQuery" resultType="string">
+        SELECT candidates.refund_order_id
+        FROM (
+            SELECT refund.refund_order_id,
+                   refund.channel_submitted_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY refund.channel_code
+                       ORDER BY refund.channel_submitted_at, refund.id
+                   ) AS channel_rank
+            FROM t_refund_order refund
+            WHERE refund.status = 'PROCESSING'
+              AND refund.channel_code IS NOT NULL
+              AND refund.channel_refund_no IS NOT NULL
+              AND refund.channel_submitted_at IS NOT NULL
+              AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+        ) candidates
+        WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
+        ORDER BY candidates.channel_submitted_at, candidates.refund_order_id
+        LIMIT #{batchSize}
+    </select>
+
+    <select id="findDuePendingRefundOrderIdsForQuery" resultType="string">
+        SELECT candidates.refund_order_id
+        FROM (
+            SELECT refund.refund_order_id,
+                   refund.channel_submitted_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY refund.channel_code
+                       ORDER BY refund.channel_submitted_at, refund.id
+                   ) AS channel_rank
+            FROM t_refund_order refund
+                     LEFT JOIN (
+                        SELECT refund_order_id,
+                               COUNT(1) AS query_count,
+                               MAX(created_at) AS latest_query_at
+                        FROM t_refund_operation_log
+                        WHERE action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
+                        GROUP BY refund_order_id
+                     ) query_history ON query_history.refund_order_id = refund.refund_order_id
+            WHERE refund.status = 'PROCESSING'
+              AND refund.channel_code IS NOT NULL
+              AND refund.channel_refund_no IS NOT NULL
+              AND refund.channel_submitted_at IS NOT NULL
+              AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+              AND (
+                query_history.latest_query_at IS NULL
+                OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
+                    LEAST(
+                        #{maxRetryIntervalSeconds},
+                        #{retryIntervalSeconds} * POWER(
+                            #{retryBackoffFactor},
+                            LEAST(GREATEST(query_history.query_count - 1, 0), 20)
+                        )
+                    )
+              )
+        ) candidates
+        WHERE candidates.channel_rank &lt;= #{perChannelBatchSize}
+        ORDER BY candidates.channel_submitted_at, candidates.refund_order_id
+        LIMIT #{batchSize}
+    </select>
+
     <select id="countPendingPaymentQueryBacklog" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_order p
@@ -464,6 +525,45 @@
                  ) query_history ON query_history.payment_order_id = p.payment_order_id
         WHERE p.status = 'WAIT_CALLBACK'
           AND TIMESTAMPDIFF(SECOND, latest_attempt.created_at, NOW()) &gt;= #{minAgeSeconds}
+          AND (
+            query_history.latest_query_at IS NULL
+            OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=
+                LEAST(
+                    #{maxRetryIntervalSeconds},
+                    #{retryIntervalSeconds} * POWER(
+                        #{retryBackoffFactor},
+                        LEAST(GREATEST(query_history.query_count - 1, 0), 20)
+                    )
+                )
+          )
+    </select>
+
+    <select id="countPendingRefundQueryBacklog" resultType="int">
+        SELECT COUNT(1)
+        FROM t_refund_order refund
+        WHERE refund.status = 'PROCESSING'
+          AND refund.channel_code IS NOT NULL
+          AND refund.channel_refund_no IS NOT NULL
+          AND refund.channel_submitted_at IS NOT NULL
+          AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
+    </select>
+
+    <select id="countDuePendingRefundQueries" resultType="int">
+        SELECT COUNT(1)
+        FROM t_refund_order refund
+                 LEFT JOIN (
+                    SELECT refund_order_id,
+                           COUNT(1) AS query_count,
+                           MAX(created_at) AS latest_query_at
+                    FROM t_refund_operation_log
+                    WHERE action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
+                    GROUP BY refund_order_id
+                 ) query_history ON query_history.refund_order_id = refund.refund_order_id
+        WHERE refund.status = 'PROCESSING'
+          AND refund.channel_code IS NOT NULL
+          AND refund.channel_refund_no IS NOT NULL
+          AND refund.channel_submitted_at IS NOT NULL
+          AND TIMESTAMPDIFF(SECOND, refund.channel_submitted_at, NOW()) &gt;= #{minAgeSeconds}
           AND (
             query_history.latest_query_at IS NULL
             OR TIMESTAMPDIFF(SECOND, query_history.latest_query_at, NOW()) &gt;=

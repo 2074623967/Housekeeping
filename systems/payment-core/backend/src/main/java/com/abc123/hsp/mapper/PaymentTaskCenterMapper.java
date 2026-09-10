@@ -61,6 +61,24 @@ public interface PaymentTaskCenterMapper {
             @Param("batchSize") int batchSize);
 
     /**
+     * 查询达到首次等待阈值的处理中退款，供人工立即补查。
+     */
+    List<String> findPendingRefundOrderIdsForManualQuery(@Param("minAgeSeconds") int minAgeSeconds,
+                                                         @Param("perChannelBatchSize") int perChannelBatchSize,
+                                                         @Param("batchSize") int batchSize);
+
+    /**
+     * 查询达到自动重试退避窗口的处理中退款。
+     */
+    List<String> findDuePendingRefundOrderIdsForQuery(
+            @Param("minAgeSeconds") int minAgeSeconds,
+            @Param("retryIntervalSeconds") int retryIntervalSeconds,
+            @Param("retryBackoffFactor") int retryBackoffFactor,
+            @Param("maxRetryIntervalSeconds") int maxRetryIntervalSeconds,
+            @Param("perChannelBatchSize") int perChannelBatchSize,
+            @Param("batchSize") int batchSize);
+
+    /**
      * 统计最新支付尝试达到首次等待阈值的待回调支付单积压。
      */
     int countPendingPaymentQueryBacklog(@Param("minAgeSeconds") int minAgeSeconds);
@@ -69,6 +87,14 @@ public interface PaymentTaskCenterMapper {
      * 统计当前已达到自动查单退避时间的支付单。
      */
     int countDuePendingPaymentQueries(
+            @Param("minAgeSeconds") int minAgeSeconds,
+            @Param("retryIntervalSeconds") int retryIntervalSeconds,
+            @Param("retryBackoffFactor") int retryBackoffFactor,
+            @Param("maxRetryIntervalSeconds") int maxRetryIntervalSeconds);
+
+    int countPendingRefundQueryBacklog(@Param("minAgeSeconds") int minAgeSeconds);
+
+    int countDuePendingRefundQueries(
             @Param("minAgeSeconds") int minAgeSeconds,
             @Param("retryIntervalSeconds") int retryIntervalSeconds,
             @Param("retryBackoffFactor") int retryBackoffFactor,

@@ -16,10 +16,11 @@ public class PaymentCompensationScheduler {
 
     private final PaymentTaskCenterService paymentTaskCenterService;
     private final boolean pendingPaymentQueryEnabled;
+    private final boolean pendingRefundQueryEnabled;
     private final boolean issueAlertAutoDispatchEnabled;
 
     public PaymentCompensationScheduler(PaymentTaskCenterService paymentTaskCenterService) {
-        this(paymentTaskCenterService, false, false, false);
+        this(paymentTaskCenterService, false, false, false, false, false);
     }
 
     PaymentCompensationScheduler(
@@ -29,14 +30,30 @@ public class PaymentCompensationScheduler {
         this(paymentTaskCenterService, pendingPaymentQueryEnabled, gatewayQueryEnabled, false);
     }
 
-    @Autowired
     public PaymentCompensationScheduler(
             PaymentTaskCenterService paymentTaskCenterService,
             @Value("${payment.channel-query.compensation.enabled:false}") boolean pendingPaymentQueryEnabled,
             @Value("${payment.channel-query.gateway-access.enabled:false}") boolean gatewayQueryEnabled,
             @Value("${payment.issue-alert.auto-dispatch.enabled:false}") boolean issueAlertAutoDispatchEnabled) {
+        this(paymentTaskCenterService,
+                pendingPaymentQueryEnabled,
+                gatewayQueryEnabled,
+                false,
+                false,
+                issueAlertAutoDispatchEnabled);
+    }
+
+    @Autowired
+    public PaymentCompensationScheduler(
+            PaymentTaskCenterService paymentTaskCenterService,
+            @Value("${payment.channel-query.compensation.enabled:false}") boolean pendingPaymentQueryEnabled,
+            @Value("${payment.channel-query.gateway-access.enabled:false}") boolean gatewayQueryEnabled,
+            @Value("${payment.refund-query.compensation.enabled:false}") boolean pendingRefundQueryEnabled,
+            @Value("${payment.refund-query.gateway-access.enabled:false}") boolean gatewayRefundQueryEnabled,
+            @Value("${payment.issue-alert.auto-dispatch.enabled:false}") boolean issueAlertAutoDispatchEnabled) {
         this.paymentTaskCenterService = paymentTaskCenterService;
         this.pendingPaymentQueryEnabled = pendingPaymentQueryEnabled && gatewayQueryEnabled;
+        this.pendingRefundQueryEnabled = pendingRefundQueryEnabled && gatewayRefundQueryEnabled;
         this.issueAlertAutoDispatchEnabled = issueAlertAutoDispatchEnabled;
     }
 
@@ -53,6 +70,16 @@ public class PaymentCompensationScheduler {
     public void queryPendingPayments() {
         if (pendingPaymentQueryEnabled) {
             paymentTaskCenterService.runAutoPendingPaymentQueries();
+        }
+    }
+
+    /**
+     * 定期主动查询处理中的退款，补偿渠道退款回调丢失场景。
+     */
+    @Scheduled(fixedDelayString = "${payment.refund-query.compensation.fixed-delay-ms:60000}")
+    public void queryPendingRefunds() {
+        if (pendingRefundQueryEnabled) {
+            paymentTaskCenterService.runAutoPendingRefundQueries();
         }
     }
 

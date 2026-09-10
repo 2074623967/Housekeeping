@@ -17,6 +17,10 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer pendingQueryBacklogCount;
     /** 当前已达到自动退避时间的支付单数。 */
     private Integer duePendingQueryCount;
+    /** 已达到主动补查阈值的处理中退款数。 */
+    private Integer pendingRefundQueryBacklogCount;
+    /** 当前已达到自动退避时间的处理中退款数。 */
+    private Integer duePendingRefundQueryCount;
     /** 查单趋势统计窗口小时数。 */
     private Integer queryMonitorWindowHours;
     /** 统计窗口内查单总次数。 */

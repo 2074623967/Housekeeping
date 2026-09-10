@@ -39,6 +39,18 @@ class PaymentCompensationSchedulerTest {
     }
 
     @Test
+    void shouldRequireGatewayAndCompensationSwitchesForPendingRefundQueries() {
+        new PaymentCompensationScheduler(paymentTaskCenterService, false, false, true, true, false)
+                .queryPendingRefunds();
+        verify(paymentTaskCenterService).runAutoPendingRefundQueries();
+
+        org.mockito.Mockito.reset(paymentTaskCenterService);
+        new PaymentCompensationScheduler(paymentTaskCenterService, false, false, true, false, false)
+                .queryPendingRefunds();
+        verify(paymentTaskCenterService, never()).runAutoPendingRefundQueries();
+    }
+
+    @Test
     void shouldDelegateToAutoRepublishFailedEvents() {
         new PaymentCompensationScheduler(paymentTaskCenterService).republishFailedEvents();
 

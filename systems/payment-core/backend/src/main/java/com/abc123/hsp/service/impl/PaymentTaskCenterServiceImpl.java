@@ -14,6 +14,7 @@ import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.dto.RefundRetryResultDTO;
+import com.abc123.hsp.dto.RefundQueryTaskResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
@@ -25,6 +26,7 @@ import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.RefundRetryTaskService;
+import com.abc123.hsp.service.RefundQueryTaskService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -51,6 +53,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_STATUS_WARN = "WARNING";
     private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
     private static final String TASK_CODE_PENDING_QUERY = "PAYMENT_PENDING_QUERY";
+    private static final String TASK_CODE_REFUND_PENDING_QUERY = "REFUND_PENDING_QUERY";
     private static final String TASK_CODE_QUERY_MONITOR_ALERT = "PAYMENT_QUERY_MONITOR_ALERT";
     private static final String TASK_CODE_EVENT_RETRY = "PAYMENT_EVENT_RETRY";
     private static final String TASK_CODE_REFUND_RETRY = "REFUND_FAIL_RETRY";
@@ -69,6 +72,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentExpiryTaskService paymentExpiryTaskService;
     private final PaymentEventRetryTaskService paymentEventRetryTaskService;
     private final RefundRetryTaskService refundRetryTaskService;
+    private RefundQueryTaskService refundQueryTaskService;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
     private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
@@ -172,6 +176,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.paymentTaskLeaseService = paymentTaskLeaseService;
     }
 
+    @Autowired
+    void setRefundQueryTaskService(RefundQueryTaskService refundQueryTaskService) {
+        this.refundQueryTaskService = refundQueryTaskService;
+    }
+
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                  PaymentExpiryTaskService paymentExpiryTaskService,
                                  PaymentEventRetryTaskService paymentEventRetryTaskService,
@@ -247,6 +256,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 pendingQueryRetryIntervalSeconds,
                 pendingQueryRetryBackoffFactor,
                 pendingQueryMaxRetryIntervalSeconds));
+        overview.setPendingRefundQueryBacklogCount(
+                refundQueryTaskService == null ? 0 : refundQueryTaskService.countPendingRefunds());
+        overview.setDuePendingRefundQueryCount(
+                refundQueryTaskService == null ? 0 : refundQueryTaskService.countDueRefunds());
         int recentQueryCount = paymentTaskCenterMapper.countRecentPaymentQueries(queryMonitorLookbackHours);
         int recentQueryFailureCount = paymentTaskCenterMapper.countRecentPaymentQueryFailures(
                 queryMonitorLookbackHours);
@@ -359,6 +372,26 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     @Override
                     public PaymentTaskActionResultDTO run() {
                         return runPendingPaymentQueriesByMode(RUN_MODE_AUTO, "payment-query-scheduler");
+                    }
+                }
+        );
+    }
+
+    @Override
+    public PaymentTaskActionResultDTO runPendingRefundQueries() {
+        return runPendingRefundQueriesByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    public PaymentTaskActionResultDTO runAutoPendingRefundQueries() {
+        return runAutoTaskWithLease(
+                TASK_CODE_REFUND_PENDING_QUERY,
+                "处理中退款主动查单",
+                "refund-query-scheduler",
+                new AutoTaskRunner() {
+                    @Override
+                    public PaymentTaskActionResultDTO run() {
+                        return runPendingRefundQueriesByMode(RUN_MODE_AUTO, "refund-query-scheduler");
                     }
                 }
         );
@@ -888,6 +921,36 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         );
     }
 
+    private PaymentTaskActionResultDTO runPendingRefundQueriesByMode(String runMode, String triggeredBy) {
+        if (refundQueryTaskService == null) {
+            throw new IllegalStateException("refund query task service is required for pending refund queries");
+        }
+        RefundQueryTaskResultDTO queryResult = RUN_MODE_MANUAL.equals(runMode)
+                ? refundQueryTaskService.queryPendingRefunds()
+                : refundQueryTaskService.queryDueRefunds();
+        String failedRefundHint = queryResult.getFailedRefundOrderIds().isEmpty()
+                ? ""
+                : "，查询失败退款单：" + String.join("/", queryResult.getFailedRefundOrderIds());
+        return buildAndRecordResult(
+                TASK_CODE_REFUND_PENDING_QUERY,
+                "处理中退款主动查单",
+                runMode,
+                triggeredBy,
+                queryResult.getProcessedCount(),
+                queryResult.getSuccessCount(),
+                queryResult.getWarningCount(),
+                queryResult.getFailCount(),
+                queryResult.getProcessedCount() == 0
+                        ? "当前没有达到补查条件的处理中退款。"
+                        : String.format("已补查 %d 笔处理中退款，成功收口 %d 笔，仍待跟进 %d 笔，查询失败 %d 笔%s。",
+                        queryResult.getProcessedCount(),
+                        queryResult.getSuccessCount(),
+                        queryResult.getWarningCount(),
+                        queryResult.getFailCount(),
+                        failedRefundHint)
+        );
+    }
+
     private PaymentTaskActionResultDTO runRetryFailedRefundsByMode(String runMode, String triggeredBy) {
         RefundRetryResultDTO retryResult = refundRetryTaskService.retryFailedRefunds(triggeredBy);
         int processedCount = retryResult.getProcessedCount();
@@ -1255,6 +1318,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             }
             return processedCount > 0 ? "已完成待回调支付收口，继续观察渠道回调与下游事件" : "暂无待回调支付需要补查";
         }
+        if (TASK_CODE_REFUND_PENDING_QUERY.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先核对 gateway-access 退款查单实现、渠道凭证和渠道退款号，再补跑退款查单任务";
+            }
+            if (warningCount > 0) {
+                return "仍有处理中或失败退款，继续等待可信回调并按退避窗口补查，失败终态需复核后再重试";
+            }
+            return processedCount > 0 ? "已完成退款成功收口，继续核对到账与后续账务事实" : "暂无处理中退款需要补查";
+        }
         if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
             return processedCount > 0
                     ? "进入支付异常中心确认主动查单监控告警，并按既有派发任务通知渠道运营和值班人员"
@@ -1299,6 +1371,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
             return "/payments";
+        }
+        if (TASK_CODE_REFUND_PENDING_QUERY.equals(taskCode)) {
+            return "/refunds";
         }
         if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
             return "/payment-issues";
@@ -1370,7 +1445,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return failCount >= 5 || processedCount >= 30;
         }
-        if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
+        if (TASK_CODE_PENDING_QUERY.equals(taskCode)
+                || TASK_CODE_REFUND_PENDING_QUERY.equals(taskCode)) {
             return failCount >= 3;
         }
         return failCount >= 1;
@@ -1401,7 +1477,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return processedCount >= 10;
         }
-        if (TASK_CODE_PENDING_QUERY.equals(taskCode)) {
+        if (TASK_CODE_PENDING_QUERY.equals(taskCode)
+                || TASK_CODE_REFUND_PENDING_QUERY.equals(taskCode)) {
             return warningCount > 0 || failCount > 0;
         }
         if (TASK_CODE_ISSUE_ESCALATE.equals(taskCode)) {

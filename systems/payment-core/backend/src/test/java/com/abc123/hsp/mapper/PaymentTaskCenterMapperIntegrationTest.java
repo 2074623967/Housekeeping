@@ -105,6 +105,36 @@ class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldQueryProcessingRefundsWithBackoffAndChannelQuotas() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            List<String> automaticCandidates = mapper.findDuePendingRefundOrderIdsForQuery(
+                    30, 60, 2, 900, 20, 100);
+            List<String> channelLimitedAutomaticCandidates = mapper.findDuePendingRefundOrderIdsForQuery(
+                    30, 60, 2, 900, 1, 100);
+            List<String> manualCandidates = mapper.findPendingRefundOrderIdsForManualQuery(30, 20, 100);
+
+            assertEquals(Arrays.asList("REF-NO-HISTORY", "REF-BACKOFF-DUE", "REF-MAX-DUE"),
+                    automaticCandidates);
+            assertEquals(Arrays.asList("REF-NO-HISTORY", "REF-MAX-DUE"),
+                    channelLimitedAutomaticCandidates);
+            assertEquals(Arrays.asList(
+                    "REF-NO-HISTORY",
+                    "REF-BASE-WAIT",
+                    "REF-BACKOFF-WAIT",
+                    "REF-BACKOFF-DUE",
+                    "REF-MAX-WAIT",
+                    "REF-MAX-DUE"), manualCandidates);
+            org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("REF-FRESH"));
+            org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("REF-NO-TRACE"));
+            org.junit.jupiter.api.Assertions.assertFalse(manualCandidates.contains("REF-SUCCESS"));
+            assertEquals(6, mapper.countPendingRefundQueryBacklog(30));
+            assertEquals(3, mapper.countDuePendingRefundQueries(30, 60, 2, 900));
+        }
+    }
+
+    @Test
     void shouldSummarizeRecentPaymentQueryTrendWithinLookbackWindow() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -209,6 +239,8 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
+            statement.execute("DROP TABLE IF EXISTS t_refund_operation_log");
+            statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
@@ -223,6 +255,13 @@ class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_notify_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "notify_status VARCHAR(32), created_at DATETIME)");
+            statement.execute("CREATE TABLE t_refund_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
+                    + "channel_code VARCHAR(64), channel_refund_no VARCHAR(128), "
+                    + "channel_submitted_at DATETIME, status VARCHAR(32), applied_at DATETIME)");
+            statement.execute("CREATE TABLE t_refund_operation_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
+                    + "action_code VARCHAR(64), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_query_rate_limit_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
@@ -264,6 +303,20 @@ class PaymentTaskCenterMapperIntegrationTest {
             insertQueryHistory(connection, "PAY-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
             insertQueryHistory(connection, "PAY-OUTSIDE-MONITOR-WINDOW", now, 90000);
             insertRateLimitRejections(connection, now, 30, 3600, 7200, 90000);
+            insertRefund(connection, "REF-NO-HISTORY", "wx_h5", "PROCESSING", now.minusMinutes(10), true);
+            insertRefund(connection, "REF-BASE-WAIT", "wx_h5", "PROCESSING", now.minusMinutes(9), true);
+            insertRefund(connection, "REF-BACKOFF-WAIT", "wx_h5", "PROCESSING", now.minusMinutes(8), true);
+            insertRefund(connection, "REF-BACKOFF-DUE", "wx_h5", "PROCESSING", now.minusMinutes(7), true);
+            insertRefund(connection, "REF-MAX-WAIT", "alipay_h5", "PROCESSING", now.minusMinutes(6), true);
+            insertRefund(connection, "REF-MAX-DUE", "alipay_h5", "PROCESSING", now.minusMinutes(5), true);
+            insertRefund(connection, "REF-FRESH", "wx_h5", "PROCESSING", now, true);
+            insertRefund(connection, "REF-NO-TRACE", "wx_h5", "PROCESSING", now.minusMinutes(20), false);
+            insertRefund(connection, "REF-SUCCESS", "wx_h5", "SUCCESS", now.minusMinutes(20), true);
+            insertRefundQueryHistory(connection, "REF-BASE-WAIT", now, 30);
+            insertRefundQueryHistory(connection, "REF-BACKOFF-WAIT", now, 300, 90);
+            insertRefundQueryHistory(connection, "REF-BACKOFF-DUE", now, 300, 130);
+            insertRefundQueryHistory(connection, "REF-MAX-WAIT", now, 2100, 1800, 1500, 1200, 800);
+            insertRefundQueryHistory(connection, "REF-MAX-DUE", now, 2100, 1800, 1500, 1200, 920);
             statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
                     + "source_alert_no, issue_type, alert_channel, ack_status, alert_status, "
                     + "provider_delivery_status, created_at) VALUES "
@@ -437,6 +490,43 @@ class PaymentTaskCenterMapperIntegrationTest {
                 statement.setInt(4, 60);
                 statement.setInt(5, 100);
                 statement.setTimestamp(6, Timestamp.valueOf(now.minusSeconds(secondsAgo[index])));
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private void insertRefund(
+            Connection connection,
+            String refundOrderId,
+            String channelCode,
+            String status,
+            LocalDateTime submittedAt,
+            boolean withTrace) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO t_refund_order(refund_order_id, channel_code, channel_refund_no, "
+                        + "channel_submitted_at, status, applied_at) VALUES (?, ?, ?, ?, ?, ?)")) {
+            statement.setString(1, refundOrderId);
+            statement.setString(2, withTrace ? channelCode : null);
+            statement.setString(3, withTrace ? "CHANNEL-" + refundOrderId : null);
+            statement.setTimestamp(4, withTrace ? Timestamp.valueOf(submittedAt) : null);
+            statement.setString(5, status);
+            statement.setTimestamp(6, Timestamp.valueOf(submittedAt));
+            statement.executeUpdate();
+        }
+    }
+
+    private void insertRefundQueryHistory(
+            Connection connection,
+            String refundOrderId,
+            LocalDateTime now,
+            int... secondsAgo) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO t_refund_operation_log(refund_order_id, action_code, created_at) VALUES (?, ?, ?)")) {
+            for (int seconds : secondsAgo) {
+                statement.setString(1, refundOrderId);
+                statement.setString(2, "CHANNEL_QUERY");
+                statement.setTimestamp(3, Timestamp.valueOf(now.minusSeconds(seconds)));
                 statement.addBatch();
             }
             statement.executeBatch();

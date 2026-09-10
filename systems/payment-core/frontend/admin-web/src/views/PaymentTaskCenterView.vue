@@ -133,7 +133,7 @@ onMounted(loadOverview);
       <div class="topbar">
       <div>
         <h2>支付任务中心</h2>
-        <p>统一查看待回调查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
+        <p>统一查看支付与退款待收口查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发、回执回查和日终告警，并承接自动调度与人工处理的统一留痕</p>
       </div>
       <button class="button secondary" @click="loadOverview">刷新</button>
     </div>
@@ -173,6 +173,14 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">当前到期可查</div>
             <div class="detail-value">{{ overview.duePendingQueryCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">退款达到补查阈值</div>
+            <div class="detail-value">{{ overview.pendingRefundQueryBacklogCount }}</div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">退款当前到期可查</div>
+            <div class="detail-value">{{ overview.duePendingRefundQueryCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">近 {{ overview.queryMonitorWindowHours }} 小时查单</div>
@@ -290,6 +298,12 @@ onMounted(loadOverview);
                   <td>全部成功收口或无待补查支付单</td>
                 </tr>
                 <tr>
+                  <td>处理中退款主动查单</td>
+                  <td>查询失败 ≥ 3</td>
+                  <td>存在查询失败、处理中或退款失败终态</td>
+                  <td>全部成功收口或无到期退款</td>
+                </tr>
+                <tr>
                   <td>主动查单监控告警</td>
                   <td>失败笔数/失败率或限流拒绝达到配置阈值</td>
                   <td>不适用，命中阈值即生成 P1 outbox</td>
@@ -341,7 +355,7 @@ onMounted(loadOverview);
             <div class="section-title">
               <div>
               <h3>核心自动化任务</h3>
-              <p class="meta">本页触发统一任务操作；待回调主动查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均已纳入自动调度与人工补偿双通道</p>
+              <p class="meta">本页触发统一任务操作；支付与退款主动查单、查单监控告警、超时关单、失败事件重发、失败退款重试、控制策略巡检、异常告警派发与回执回查均纳入人工补偿，自动执行仍受各自开关控制</p>
             </div>
             </div>
 
@@ -378,6 +392,18 @@ onMounted(loadOverview);
                 @click="runTask('PAYMENT_QUERY_MONITOR_ALERT', '主动查单监控告警', paymentTaskCenterApi.runGenerateQueryMonitorAlerts)"
               >
                 {{ activeTaskCode === "PAYMENT_QUERY_MONITOR_ALERT" ? "执行中..." : "生成查单监控告警" }}
+              </button>
+            </div>
+
+            <div class="sub-panel">
+              <h3>处理中退款主动查单</h3>
+              <p>立即补查已获得渠道退款号且达到等待阈值的退款；明确终态由服务端收口，处理中或失败结果进入任务日志继续跟进。</p>
+              <button
+                class="button primary"
+                :disabled="activeTaskCode === 'REFUND_PENDING_QUERY'"
+                @click="runTask('REFUND_PENDING_QUERY', '处理中退款主动查单', paymentTaskCenterApi.runPendingRefundQueries)"
+              >
+                {{ activeTaskCode === "REFUND_PENDING_QUERY" ? "执行中..." : "执行退款查单" }}
               </button>
             </div>
 

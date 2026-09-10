@@ -97,6 +97,14 @@ public class PaymentTaskCenterController {
     }
 
     /**
+     * 手动执行处理中退款主动查单补偿。
+     */
+    @PostMapping("/query-pending-refunds")
+    public ApiResponse<PaymentTaskActionResultDTO> runPendingRefundQueries() {
+        return ApiResponse.success(paymentTaskCenterService.runPendingRefundQueries());
+    }
+
+    /**
      * 手动生成主动查单监控告警。
      */
     @PostMapping("/generate-query-monitor-alerts")

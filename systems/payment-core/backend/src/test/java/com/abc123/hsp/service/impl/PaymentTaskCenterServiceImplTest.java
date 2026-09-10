@@ -16,6 +16,7 @@ import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.dto.RefundRetryResultDTO;
+import com.abc123.hsp.dto.RefundQueryTaskResultDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
@@ -25,6 +26,7 @@ import com.abc123.hsp.service.PaymentExpiryTaskService;
 import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.RefundRetryTaskService;
+import com.abc123.hsp.service.RefundQueryTaskService;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Assertions;
@@ -53,6 +55,8 @@ class PaymentTaskCenterServiceImplTest {
     @Mock
     private RefundRetryTaskService refundRetryTaskService;
     @Mock
+    private RefundQueryTaskService refundQueryTaskService;
+    @Mock
     private PaymentConfigService paymentConfigService;
     @Mock
     private PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
@@ -68,12 +72,16 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(30)).thenReturn(120);
         when(paymentTaskCenterMapper.countDuePendingPaymentQueries(30, 60, 2, 900)).thenReturn(35);
+        when(refundQueryTaskService.countPendingRefunds()).thenReturn(18);
+        when(refundQueryTaskService.countDueRefunds()).thenReturn(6);
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
         PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
 
         Assertions.assertEquals(120, overview.getPendingQueryBacklogCount());
         Assertions.assertEquals(35, overview.getDuePendingQueryCount());
+        Assertions.assertEquals(18, overview.getPendingRefundQueryBacklogCount());
+        Assertions.assertEquals(6, overview.getDuePendingRefundQueryCount());
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_QUERY_BACKLOG".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
@@ -229,6 +237,51 @@ class PaymentTaskCenterServiceImplTest {
                 eq("PAYMENT_PENDING_QUERY"), leaseOwnerCaptor.capture());
         Assertions.assertEquals(leaseOwnerCaptor.getAllValues().get(0), leaseOwnerCaptor.getAllValues().get(1));
         Assertions.assertTrue(leaseOwnerCaptor.getValue().startsWith("payment-query-scheduler:"));
+    }
+
+    @Test
+    void shouldQueryPendingRefundsAndRecordTaskResult() {
+        RefundQueryTaskResultDTO queryResult = new RefundQueryTaskResultDTO();
+        queryResult.setProcessedCount(3);
+        queryResult.setSuccessCount(1);
+        queryResult.setWarningCount(1);
+        queryResult.setFailCount(1);
+        queryResult.getFailedRefundOrderIds().add("REF-QUERY-3");
+        when(refundQueryTaskService.queryPendingRefunds()).thenReturn(queryResult);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runPendingRefundQueries();
+
+        Assertions.assertEquals(3, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "REFUND_PENDING_QUERY".equals(entity.getTaskCode())
+                        && "P2".equals(entity.getSeverityLevel())
+                        && "/refunds".equals(entity.getRecommendedRoute())
+                        && entity.getSummaryComment().contains("REF-QUERY-3")));
+    }
+
+    @Test
+    void shouldUseLeaseForAutomaticPendingRefundQueries() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwner("refund-query-scheduler"), eq(120))).thenReturn(1);
+        when(refundQueryTaskService.queryDueRefunds()).thenReturn(new RefundQueryTaskResultDTO());
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        buildQueryTaskCenterService().runAutoPendingRefundQueries();
+
+        verify(paymentTaskCenterMapper).initTaskLease("REFUND_PENDING_QUERY");
+        verify(refundQueryTaskService).queryDueRefunds();
+        ArgumentCaptor<String> leaseOwnerCaptor = ArgumentCaptor.forClass(String.class);
+        verify(paymentTaskCenterMapper).acquireTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwnerCaptor.capture(), eq(120));
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("REFUND_PENDING_QUERY"), leaseOwnerCaptor.capture());
+        Assertions.assertEquals(leaseOwnerCaptor.getAllValues().get(0), leaseOwnerCaptor.getAllValues().get(1));
     }
 
     @Test
@@ -901,7 +954,7 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     private PaymentTaskCenterServiceImpl buildQueryTaskCenterService() {
-        return new PaymentTaskCenterServiceImpl(
+        PaymentTaskCenterServiceImpl service = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
                 paymentEventRetryTaskService,
@@ -926,6 +979,8 @@ class PaymentTaskCenterServiceImplTest {
                 15,
                 10,
                 30);
+        service.setRefundQueryTaskService(refundQueryTaskService);
+        return service;
     }
 
     private String leaseOwner(String prefix) {

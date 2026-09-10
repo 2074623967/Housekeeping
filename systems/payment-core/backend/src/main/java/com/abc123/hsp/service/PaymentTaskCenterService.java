@@ -47,6 +47,16 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runAutoPendingPaymentQueries();
 
     /**
+     * 手动补查处理中的退款单。
+     */
+    PaymentTaskActionResultDTO runPendingRefundQueries();
+
+    /**
+     * 自动补查处理中的退款单。
+     */
+    PaymentTaskActionResultDTO runAutoPendingRefundQueries();
+
+    /**
      * 手动生成主动查单监控告警。
      */
     PaymentTaskActionResultDTO runGenerateQueryMonitorAlerts();
