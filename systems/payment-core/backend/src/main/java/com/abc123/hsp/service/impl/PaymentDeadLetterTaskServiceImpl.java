@@ -92,7 +92,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         entity.setTaskStatus(STATUS_PENDING_REVIEW);
         entity.setTaskStatusType("warn");
         entity.setPayloadSnapshot(new String(message.getBody(), StandardCharsets.UTF_8));
-        entity.setHeaderSnapshot(writeHeaders(properties.getHeaders()));
+        entity.setHeaderSnapshot(sensitiveDataMasker.maskPayload(writeHeaders(properties.getHeaders())));
         entity.setReplayCount(0);
         paymentDeadLetterTaskMapper.insertIgnore(entity);
     }

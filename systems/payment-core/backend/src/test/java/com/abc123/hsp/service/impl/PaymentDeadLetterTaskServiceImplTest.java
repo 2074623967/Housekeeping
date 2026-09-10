@@ -42,6 +42,7 @@ class PaymentDeadLetterTaskServiceImplTest {
         properties.setMessageId("MSG-001");
         properties.setCorrelationId("CORR-001");
         properties.setHeader("x-retry-count", 3);
+        properties.setHeader("Authorization", "Bearer secret-token");
 
         service.intake(new Message("{invalid}".getBytes(java.nio.charset.StandardCharsets.UTF_8), properties),
                 "payment.success.clearing.dlq.v1");
@@ -55,6 +56,8 @@ class PaymentDeadLetterTaskServiceImplTest {
         assertEquals("payment.success.clearing.replay.v1", task.getReplayRoutingKey());
         assertEquals("PENDING_REVIEW", task.getTaskStatus());
         org.junit.jupiter.api.Assertions.assertTrue(task.getHeaderSnapshot().contains("x-retry-count"));
+        assertEquals("[REDACTED]", readJson(task.getHeaderSnapshot()).get("Authorization").asText());
+        org.junit.jupiter.api.Assertions.assertFalse(task.getHeaderSnapshot().contains("secret-token"));
     }
 
     @Test
