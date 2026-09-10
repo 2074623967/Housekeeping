@@ -100,6 +100,20 @@ class PaymentRiskControlServiceImplTest {
     }
 
     @Test
+    void shouldRejectInterceptDecisionWithoutHitCode() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision("INTERCEPT", "danger");
+        data.setEventNo("RISK-EVT-001");
+        stubResponse(restTemplate, "0", data);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+
+        assertInvalidRiskResult(exception);
+    }
+
+    @Test
     void shouldNormalizeInterceptDecisionWithRiskEventReference() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentRiskDecisionResultDTO data = decision(" intercept ", " DANGER ");
@@ -182,6 +196,20 @@ class PaymentRiskControlServiceImplTest {
         assertEquals("RISK-EVT-REJECT-001", result.getEventNo());
         assertNull(result.getReviewNo());
         assertEquals("支付被风控拒绝", result.getMessage());
+    }
+
+    @Test
+    void shouldRejectDirectRejectDecisionWithoutHitCode() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision("REJECT", "danger");
+        data.setEventNo("RISK-EVT-REJECT-001");
+        stubResponse(restTemplate, "0", data);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+
+        assertInvalidRiskResult(exception);
     }
 
     @Test

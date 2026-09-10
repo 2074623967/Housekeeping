@@ -246,7 +246,7 @@ public class RiskControlServiceImpl implements RiskControlService {
                     entity.getBlockCode(),
                     "高",
                     entity.getReason(),
-                    "REVIEW".equals(action) ? "命中黑名单，需人工复核后再决定是否放行" : "命中黑名单，已直接拦截支付提交",
+                    blocklistDecisionMessage(action),
                     buildReviewItem(entity, request));
         }
         return null;
@@ -308,7 +308,7 @@ public class RiskControlServiceImpl implements RiskControlService {
                     entity.getPolicyCode(),
                     entity.getRiskLevel(),
                     entity.getPolicyName(),
-                    "REVIEW".equals(action) ? "命中高危策略，需人工复核" : "命中高危策略，已直接拦截",
+                    policyDecisionMessage(action),
                     buildReviewItemFromPolicy(entity, request));
         }
         return null;
@@ -503,6 +503,26 @@ public class RiskControlServiceImpl implements RiskControlService {
             return normalized;
         }
         return "INTERCEPT";
+    }
+
+    private String blocklistDecisionMessage(String action) {
+        if ("REVIEW".equals(action)) {
+            return "命中黑名单，需人工复核后再决定是否放行";
+        }
+        if ("REJECT".equals(action)) {
+            return "命中黑名单，已直接拒绝支付提交";
+        }
+        return "命中黑名单，已直接拦截支付提交";
+    }
+
+    private String policyDecisionMessage(String action) {
+        if ("REVIEW".equals(action)) {
+            return "命中高危策略，需人工复核";
+        }
+        if ("REJECT".equals(action)) {
+            return "命中高危策略，已直接拒绝";
+        }
+        return "命中高危策略，已直接拦截";
     }
 
     private String buildReviewItem(BlocklistEntity entity, RiskDecisionRequestDTO request) {
