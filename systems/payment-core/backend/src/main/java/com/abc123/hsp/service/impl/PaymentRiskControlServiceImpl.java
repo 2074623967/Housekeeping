@@ -102,8 +102,22 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         result.setRiskTag(normalizeOptional(result.getRiskTag(), RISK_TAG_MAX_LENGTH));
         result.setReviewNo(normalizeOptional(result.getReviewNo(), REVIEW_NO_MAX_LENGTH));
         result.setEventNo(normalizeOptional(result.getEventNo(), EVENT_NO_MAX_LENGTH));
-        result.setMessage(normalizeOptional(result.getMessage(), MESSAGE_MAX_LENGTH));
+        normalizeOptional(result.getMessage(), MESSAGE_MAX_LENGTH);
+        result.setMessage(decisionMessage(decision));
         return result;
+    }
+
+    private String decisionMessage(String decision) {
+        if ("PASS".equals(decision)) {
+            return "风控准入通过";
+        }
+        if ("REVIEW".equals(decision)) {
+            return "支付需要人工风控复核";
+        }
+        if ("REJECT".equals(decision)) {
+            return "支付被风控拒绝";
+        }
+        return "支付被风控拦截";
     }
 
     private String normalizeRequired(String value, int maxLength) {

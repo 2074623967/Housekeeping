@@ -52,7 +52,22 @@ class PaymentRiskControlServiceImplTest {
         assertNull(result.getRiskTag());
         assertEquals("REVIEW-001", result.getReviewNo());
         assertEquals("RISK-EVT-001", result.getEventNo());
-        assertEquals("allow payment", result.getMessage());
+        assertEquals("风控准入通过", result.getMessage());
+    }
+
+    @Test
+    void shouldReplaceExternalDecisionMessageWithPlatformText() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskDecisionResultDTO data = decision("REVIEW", "warn");
+        data.setMessage("jdbc:mysql://risk.internal/payment password=risk-secret-token");
+        stubResponse(restTemplate, "0", data);
+
+        PaymentRiskDecisionResultDTO result = service(restTemplate)
+                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+
+        assertEquals("支付需要人工风控复核", result.getMessage());
+        org.junit.jupiter.api.Assertions.assertFalse(result.getMessage().contains("risk-secret-token"));
+        org.junit.jupiter.api.Assertions.assertFalse(result.getMessage().contains("jdbc:mysql"));
     }
 
     @Test

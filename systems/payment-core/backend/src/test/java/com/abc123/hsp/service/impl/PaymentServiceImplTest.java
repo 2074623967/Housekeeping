@@ -49,6 +49,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -2778,7 +2779,7 @@ class PaymentServiceImplTest {
         riskDecision.setReviewNo("REVIEW-2001");
         riskDecision.setEventNo("RISK-EVT-2001");
         riskDecision.setRiskTag("疑似高风险手机号");
-        riskDecision.setMessage("命中黑名单，需人工复核");
+        riskDecision.setMessage("支付需要人工风控复核");
 
         when(paymentMapper.findPrepay("PRE-RISK-001")).thenReturn(prepayOrder);
         when(paymentMapper.findDetail("PAY-RISK-001")).thenReturn(paymentDetail);
@@ -2809,6 +2810,15 @@ class PaymentServiceImplTest {
         verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
         verify(paymentMapper, times(1)).updatePaymentStatus("PAY-RISK-001", "RISK_REVIEW", "warn", "");
         verify(paymentMapper, times(1)).updatePrepayStatusByPaymentOrderId("PAY-RISK-001", "待风控复核", "warn");
+        ArgumentCaptor<String> eventPayloadCaptor = ArgumentCaptor.forClass(String.class);
+        verify(paymentMapper).insertEvent(
+                anyString(),
+                eq("PAYMENT_RISK_REVIEW"),
+                eq("PAY-RISK-001"),
+                eq("ORD-RISK-001"),
+                eventPayloadCaptor.capture());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                eventPayloadCaptor.getValue().contains("支付需要人工风控复核"));
         org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-001", result.getPrepayOrderNo());
     }
 
