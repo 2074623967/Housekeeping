@@ -83,10 +83,19 @@ class PaymentCompensationSchedulerTest {
     @Test
     void shouldReconcileIssueAlertReceiptsWhenExplicitlyEnabled() {
         new PaymentCompensationScheduler(
-                paymentTaskCenterService, false, false, false, false, false, true)
+                paymentTaskCenterService, false, false, false, false, false, true, true)
                 .reconcileIssueAlertReceipts();
 
         verify(paymentTaskCenterService).runAutoReconcileIssueAlertReceipts();
+    }
+
+    @Test
+    void shouldRequireQueryCapabilityForAutomaticIssueAlertReceiptReconcile() {
+        new PaymentCompensationScheduler(
+                paymentTaskCenterService, false, false, false, false, false, true, false)
+                .reconcileIssueAlertReceipts();
+
+        verify(paymentTaskCenterService, never()).runAutoReconcileIssueAlertReceipts();
     }
 
     @Test

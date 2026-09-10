@@ -21,7 +21,7 @@ public class PaymentCompensationScheduler {
     private final boolean issueAlertReceiptReconcileEnabled;
 
     public PaymentCompensationScheduler(PaymentTaskCenterService paymentTaskCenterService) {
-        this(paymentTaskCenterService, false, false, false, false, false, false);
+        this(paymentTaskCenterService, false, false, false, false, false, false, false);
     }
 
     PaymentCompensationScheduler(
@@ -42,6 +42,7 @@ public class PaymentCompensationScheduler {
                 false,
                 false,
                 issueAlertAutoDispatchEnabled,
+                false,
                 false);
     }
 
@@ -53,12 +54,15 @@ public class PaymentCompensationScheduler {
             @Value("${payment.refund-query.compensation.enabled:false}") boolean pendingRefundQueryEnabled,
             @Value("${payment.refund-query.gateway-access.enabled:false}") boolean gatewayRefundQueryEnabled,
             @Value("${payment.issue-alert.auto-dispatch.enabled:false}") boolean issueAlertAutoDispatchEnabled,
-            @Value("${payment.issue-alert.receipt-reconcile.enabled:false}") boolean issueAlertReceiptReconcileEnabled) {
+            @Value("${payment.issue-alert.receipt-reconcile.enabled:false}") boolean issueAlertReceiptReconcileEnabled,
+            @Value("${payment.issue-alert.receipt-query.gateway-access.enabled:false}")
+                    boolean issueAlertReceiptQueryEnabled) {
         this.paymentTaskCenterService = paymentTaskCenterService;
         this.pendingPaymentQueryEnabled = pendingPaymentQueryEnabled && gatewayQueryEnabled;
         this.pendingRefundQueryEnabled = pendingRefundQueryEnabled && gatewayRefundQueryEnabled;
         this.issueAlertAutoDispatchEnabled = issueAlertAutoDispatchEnabled;
-        this.issueAlertReceiptReconcileEnabled = issueAlertReceiptReconcileEnabled;
+        this.issueAlertReceiptReconcileEnabled = issueAlertReceiptReconcileEnabled
+                && issueAlertReceiptQueryEnabled;
     }
 
     PaymentCompensationScheduler(
@@ -69,7 +73,7 @@ public class PaymentCompensationScheduler {
             boolean gatewayRefundQueryEnabled,
             boolean issueAlertAutoDispatchEnabled) {
         this(paymentTaskCenterService, pendingPaymentQueryEnabled, gatewayQueryEnabled,
-                pendingRefundQueryEnabled, gatewayRefundQueryEnabled, issueAlertAutoDispatchEnabled, false);
+                pendingRefundQueryEnabled, gatewayRefundQueryEnabled, issueAlertAutoDispatchEnabled, false, false);
     }
 
     PaymentCompensationScheduler(

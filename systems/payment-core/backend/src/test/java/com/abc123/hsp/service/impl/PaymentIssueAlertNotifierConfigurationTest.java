@@ -34,6 +34,18 @@ class PaymentIssueAlertNotifierConfigurationTest {
                 Boolean.FALSE,
                 resolver.getProperty("payment.issue-alert.receipt-reconcile.enabled", Boolean.class)
         );
+        Assertions.assertEquals(
+                Boolean.FALSE,
+                resolver.getProperty("payment.issue-alert.receipt-query.gateway-access.enabled", Boolean.class)
+        );
+        Assertions.assertEquals(
+                "",
+                resolver.getProperty("payment.issue-alert.receipt-query.gateway-access.query-url")
+        );
+        Assertions.assertEquals(
+                "",
+                resolver.getProperty("payment.issue-alert.receipt-query.gateway-access.access-key")
+        );
     }
 
     @Test

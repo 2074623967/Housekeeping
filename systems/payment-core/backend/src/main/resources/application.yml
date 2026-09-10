@@ -153,6 +153,15 @@ payment:
     receipt-reconcile:
       # 默认关闭；只有配置真实供应商回执查询适配器后才允许自动回查。
       enabled: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE_ENABLED:false}
+    receipt-query:
+      gateway-access:
+        # 稳定通知集成网关契约；开关、地址和访问密钥任一缺失时不声明查询能力。
+        enabled: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_GATEWAY_ENABLED:false}
+        query-url: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_GATEWAY_URL:}
+        supported-channels: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_SUPPORTED_CHANNELS:IM,SMS,EMAIL}
+        app-code: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_APP_CODE:APP_PAY_CORE}
+        access-key: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_ACCESS_KEY:}
+        timeout-ms: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_TIMEOUT_MS:2000}
     auto-dispatch:
       # 默认关闭；确认通知供应商配置与接收人范围后再启用自动外发。
       enabled: ${HSP_PAYMENT_ISSUE_ALERT_AUTO_DISPATCH_ENABLED:false}
