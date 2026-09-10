@@ -172,35 +172,35 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         builder.append("配置域,主键编码,次级编码,配置名称,状态,治理摘要,适用范围,风控/限制,运维建议,更新时间\n");
         if (shouldExportSection(normalizedSection, "CHANNELS")) {
             appendChannelRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findChannels()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findChannelsForExport()));
         }
         if (shouldExportSection(normalizedSection, "ROUTE_RULES")) {
             appendRouteRuleRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findRouteRules()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findRouteRulesForExport()));
         }
         if (shouldExportSection(normalizedSection, "PROTOCOLS")) {
             appendProtocolRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findProtocols()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findProtocolsForExport()));
         }
         if (shouldExportSection(normalizedSection, "RETURN_CODES")) {
             appendReturnCodeRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findReturnCodeMappings()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findReturnCodeMappingsForExport()));
         }
         if (shouldExportSection(normalizedSection, "GATEWAYS")) {
             appendGatewayRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findGateways()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findGatewaysForExport()));
         }
         if (shouldExportSection(normalizedSection, "CONTROL_POLICIES")) {
             appendControlPolicyRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findControlPolicies()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findControlPoliciesForExport()));
         }
         if (shouldExportSection(normalizedSection, "ALERT_PROVIDERS")) {
             appendAlertProviderRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findAlertProviders()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findAlertProvidersForExport()));
         }
         if (shouldExportSection(normalizedSection, "ISSUE_DUTY_ROSTERS")) {
             appendIssueDutyRosterRows(builder, normalizedSection,
-                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findIssueDutyRosters()));
+                    CsvExportRowLimiter.requireWithinLimit(paymentConfigMapper.findIssueDutyRostersForExport()));
         }
         return builder.toString();
     }

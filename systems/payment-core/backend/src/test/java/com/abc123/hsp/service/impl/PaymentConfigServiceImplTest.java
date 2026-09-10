@@ -946,7 +946,7 @@ class PaymentConfigServiceImplTest {
         channel.setRiskControlTag("实名校验");
         channel.setStatus("ENABLED");
         channel.setUpdatedAt("2026-08-03 10:00:00");
-        when(paymentConfigMapper.findChannels()).thenReturn(Arrays.asList(channel));
+        when(paymentConfigMapper.findChannelsForExport()).thenReturn(Arrays.asList(channel));
 
         String csv = new PaymentConfigServiceImpl(paymentConfigMapper).exportGovernanceSnapshotCsv("CHANNELS");
 
@@ -954,7 +954,7 @@ class PaymentConfigServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"支付渠道\""));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"wx_h5\""));
         org.junit.jupiter.api.Assertions.assertFalse(csv.contains("\"路由规则\""));
-        verify(paymentConfigMapper).findChannels();
+        verify(paymentConfigMapper).findChannelsForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
     }
 
@@ -962,21 +962,21 @@ class PaymentConfigServiceImplTest {
     void shouldExportAllGovernanceSectionsWithoutQueryingProtocolOptions() {
         new PaymentConfigServiceImpl(paymentConfigMapper).exportGovernanceSnapshotCsv("ALL");
 
-        verify(paymentConfigMapper).findChannels();
-        verify(paymentConfigMapper).findRouteRules();
-        verify(paymentConfigMapper).findProtocols();
-        verify(paymentConfigMapper).findReturnCodeMappings();
-        verify(paymentConfigMapper).findGateways();
-        verify(paymentConfigMapper).findControlPolicies();
-        verify(paymentConfigMapper).findAlertProviders();
-        verify(paymentConfigMapper).findIssueDutyRosters();
+        verify(paymentConfigMapper).findChannelsForExport();
+        verify(paymentConfigMapper).findRouteRulesForExport();
+        verify(paymentConfigMapper).findProtocolsForExport();
+        verify(paymentConfigMapper).findReturnCodeMappingsForExport();
+        verify(paymentConfigMapper).findGatewaysForExport();
+        verify(paymentConfigMapper).findControlPoliciesForExport();
+        verify(paymentConfigMapper).findAlertProvidersForExport();
+        verify(paymentConfigMapper).findIssueDutyRostersForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
     }
 
     @Test
     void shouldRejectGovernanceSectionExportAboveLimit() {
         PaymentChannelConfigDTO channel = new PaymentChannelConfigDTO();
-        when(paymentConfigMapper.findChannels()).thenReturn(Collections.nCopies(1001, channel));
+        when(paymentConfigMapper.findChannelsForExport()).thenReturn(Collections.nCopies(1001, channel));
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
@@ -984,7 +984,7 @@ class PaymentConfigServiceImplTest {
                         .exportGovernanceSnapshotCsv("CHANNELS"));
 
         org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("超过1000条"));
-        verify(paymentConfigMapper).findChannels();
+        verify(paymentConfigMapper).findChannelsForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
     }
 

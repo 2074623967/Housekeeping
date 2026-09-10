@@ -60,6 +60,9 @@ public interface PaymentConfigMapper {
      */
     List<PaymentChannelConfigDTO> findChannels();
 
+    /** 查询支付渠道配置，供治理快照导出。 */
+    List<PaymentChannelConfigDTO> findChannelsForExport();
+
     /** 按渠道编码查询完整运行配置。 */
     PaymentChannelConfigEntity findChannelByCode(@Param("channelCode") String channelCode);
 
@@ -100,6 +103,9 @@ public interface PaymentConfigMapper {
      * 查询支付路由规则配置。
      */
     List<PaymentRouteRuleConfigDTO> findRouteRules();
+
+    /** 查询支付路由规则配置，供治理快照导出。 */
+    List<PaymentRouteRuleConfigDTO> findRouteRulesForExport();
 
     /**
      * 按规则编码查询支付路由规则。
@@ -147,6 +153,9 @@ public interface PaymentConfigMapper {
      */
     List<PaymentProtocolConfigDTO> findProtocols();
 
+    /** 查询支付协议配置，供治理快照导出。 */
+    List<PaymentProtocolConfigDTO> findProtocolsForExport();
+
     /**
      * 查询支付协议类型字典。
      */
@@ -161,6 +170,9 @@ public interface PaymentConfigMapper {
      * 查询渠道返回码映射配置。
      */
     List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappings();
+
+    /** 查询渠道返回码映射配置，供治理快照导出。 */
+    List<PaymentChannelReturnCodeConfigDTO> findReturnCodeMappingsForExport();
 
     /**
      * 加锁查询渠道返回码映射，供批量导入基线复验。
@@ -204,6 +216,9 @@ public interface PaymentConfigMapper {
      */
     List<PaymentGatewayConfigDTO> findGateways();
 
+    /** 查询支付网关接入配置，供治理快照导出。 */
+    List<PaymentGatewayConfigDTO> findGatewaysForExport();
+
     /** 按网关编码查询完整运行配置。 */
     PaymentGatewayConfigEntity findGatewayByCode(@Param("gatewayCode") String gatewayCode);
 
@@ -245,6 +260,9 @@ public interface PaymentConfigMapper {
      */
     List<PaymentControlPolicyDTO> findControlPolicies();
 
+    /** 查询支付控制策略配置，供治理快照导出。 */
+    List<PaymentControlPolicyDTO> findControlPoliciesForExport();
+
     /** 按来源应用标识加锁查询完整支付控制策略。 */
     PaymentControlPolicyEntity findControlPolicyBySourceAppIdForUpdate(
             @Param("sourceAppId") String sourceAppId);
@@ -277,6 +295,9 @@ public interface PaymentConfigMapper {
      */
     List<PaymentAlertProviderConfigDTO> findAlertProviders();
 
+    /** 查询告警通知供应商配置，供治理快照导出。 */
+    List<PaymentAlertProviderConfigDTO> findAlertProvidersForExport();
+
     /** 按供应商编码加锁查询完整运行配置。 */
     PaymentAlertProviderConfigEntity findAlertProviderByCodeForUpdate(
             @Param("providerCode") String providerCode);
@@ -296,6 +317,9 @@ public interface PaymentConfigMapper {
      * 查询异常告警值班路由配置。
      */
     List<PaymentIssueDutyRosterDTO> findIssueDutyRosters();
+
+    /** 查询异常告警值班路由配置，供治理快照导出。 */
+    List<PaymentIssueDutyRosterDTO> findIssueDutyRostersForExport();
 
     /** 按路由编码加锁查询完整值班路由运行配置。 */
     PaymentIssueDutyRosterEntity findIssueDutyRosterByCodeForUpdate(
