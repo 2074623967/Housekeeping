@@ -1265,6 +1265,53 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectMissingSubmitAdapterBeforeWritingChannelSubmissionFacts() {
+        PrepayOrderDTO prepay = new PrepayOrderDTO();
+        prepay.setPrepayOrderNo("PRE-NO-ADAPTER");
+        prepay.setPaymentOrderId("PAY-NO-ADAPTER");
+        prepay.setPayScene("HOME_CLEAN");
+        prepay.setAmount("¥168.00");
+        prepay.setCustomerName("测试客户");
+        when(paymentMapper.findPrepay("PRE-NO-ADAPTER")).thenReturn(prepay);
+
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-NO-ADAPTER");
+        detail.setStatus("PREPAY_CREATED");
+        when(paymentMapper.findDetail("PAY-NO-ADAPTER")).thenReturn(detail);
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any())).thenReturn(routeDecision);
+        org.mockito.Mockito.doThrow(new BusinessException(
+                ErrorCode.PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING,
+                "no payment channel submit adapter available"))
+                .when(paymentChannelSubmitService).ensureAdapterAvailable("wx_h5");
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-NO-ADAPTER");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING, exception.getCode());
+        verify(paymentMapper, never()).findOrderNoByPrepayOrderNo(anyString());
+        verify(paymentMapper, never()).updatePrepayToPaying(anyString());
+        verify(paymentMapper, never()).insertRouteRecord(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentChannelSubmitService, never()).submit(
+                org.mockito.ArgumentMatchers.any(PaymentChannelSubmitRequestDTO.class));
+    }
+
+    @Test
     void shouldRejectOversizedSubmitIdempotencyKeyBeforeControlAndChannelCalls() {
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-IDEMP-LONG");

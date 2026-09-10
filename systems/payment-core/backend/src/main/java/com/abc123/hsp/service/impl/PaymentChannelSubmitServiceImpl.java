@@ -25,6 +25,16 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
     }
 
     @Override
+    public void ensureAdapterAvailable(String channelCode) {
+        for (PaymentChannelSubmitAdapter adapter : adapters) {
+            if (adapter.supports(channelCode)) {
+                return;
+            }
+        }
+        throw adapterMissing();
+    }
+
+    @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         for (PaymentChannelSubmitAdapter adapter : adapters) {
             if (adapter.supports(request.getResolvedChannelCode())) {
@@ -32,7 +42,11 @@ public class PaymentChannelSubmitServiceImpl implements PaymentChannelSubmitServ
                         request.getResolvedChannelCode(), adapter.submit(request));
             }
         }
-        throw new BusinessException(
+        throw adapterMissing();
+    }
+
+    private BusinessException adapterMissing() {
+        return new BusinessException(
                 ErrorCode.PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING,
                 "no payment channel submit adapter available"
         );

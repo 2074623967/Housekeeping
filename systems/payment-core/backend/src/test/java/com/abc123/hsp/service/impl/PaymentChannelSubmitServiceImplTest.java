@@ -1,7 +1,10 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.abc123.hsp.common.BusinessException;
+import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.dto.PaymentChannelReturnCodeConfigDTO;
@@ -9,6 +12,7 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -18,6 +22,20 @@ import org.mockito.Mockito;
  * 渠道下单适配器选择测试。
  */
 class PaymentChannelSubmitServiceImplTest {
+
+    @Test
+    void shouldFailClosedWhenNoSubmitAdapterSupportsChannel() {
+        PaymentChannelSubmitServiceImpl service = new PaymentChannelSubmitServiceImpl(
+                Collections.emptyList(),
+                new PaymentChannelReturnCodeStandardizer(
+                        Mockito.mock(PaymentConfigMapper.class), new ObjectMapper()));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.ensureAdapterAvailable("wx_h5"));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_ADAPTER_MISSING, exception.getCode());
+    }
 
     @Test
     void shouldSelectWechatSubmitAdapterByChannelCode() {

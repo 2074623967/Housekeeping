@@ -89,7 +89,7 @@ payment:
     timeout-ms: ${HSP_PAYMENT_OPS_CONFIG_TIMEOUT_MS:2000}
   channel-query:
     gateway-access:
-      # 生产环境启用后由 gateway-access 返回渠道交易事实；关闭时保留现有本地模拟适配器。
+      # 生产环境启用后由 gateway-access 返回渠道交易事实；本地模拟适配器仅在 demo profile 注册。
       enabled: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED:false}
       query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://127.0.0.1:18150/api/gateway/payment-orders/query}
       supported-channels: ${HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}

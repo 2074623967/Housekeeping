@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
  * 微信 H5 支付渠道模拟适配器。
  */
 @Component
+@Profile("demo")
 @Order(10)
 public class WechatH5PaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
 

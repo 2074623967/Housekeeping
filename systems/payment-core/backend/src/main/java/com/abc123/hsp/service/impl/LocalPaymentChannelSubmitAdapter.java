@@ -3,6 +3,7 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
  * 本地兜底渠道下单适配器。
  */
 @Component
+@Profile("demo")
 @Order(1000)
 public class LocalPaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
 

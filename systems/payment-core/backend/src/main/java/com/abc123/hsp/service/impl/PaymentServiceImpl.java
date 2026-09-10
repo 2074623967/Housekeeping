@@ -522,6 +522,7 @@ public class PaymentServiceImpl implements PaymentService {
             // 相同幂等键的提交已经落库时，直接返回当前预付单，避免重复下发支付尝试。
             return currentPrepay;
         }
+        paymentChannelSubmitService.ensureAdapterAvailable(resolvedChannelCode);
         String orderNo = paymentMapper.findOrderNoByPrepayOrderNo(request.getPrepayOrderNo());
         String routeNo = buildBusinessNo("RTR");
         String attemptNo = buildBusinessNo("ATT");
