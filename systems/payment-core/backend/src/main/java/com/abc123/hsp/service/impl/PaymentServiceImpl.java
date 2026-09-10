@@ -82,6 +82,8 @@ public class PaymentServiceImpl implements PaymentService {
     private static final int CALLBACK_TRADE_STATUS_MAX_LENGTH = 32;
     private static final int CALLBACK_CHANNEL_TRANSACTION_NO_MAX_LENGTH = 128;
     private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
+    private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final String CUSTOMER_SELF_SERVICE_OPERATOR = "customer-self-service";
 
     private static final int SUBMIT_CONCURRENCY_TOKEN_EXPIRE_SECONDS = 120;
 
@@ -947,6 +949,16 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional(noRollbackFor = BusinessException.class)
     @Override
     public PaymentDetailDTO query(PaymentQueryRequestDTO request) {
+        return queryInternal(request, CUSTOMER_SELF_SERVICE_OPERATOR);
+    }
+
+    @Transactional(noRollbackFor = BusinessException.class)
+    @Override
+    public PaymentDetailDTO query(PaymentQueryRequestDTO request, String operator) {
+        return queryInternal(request, normalizeOperationOperator(operator));
+    }
+
+    private PaymentDetailDTO queryInternal(PaymentQueryRequestDTO request, String operator) {
         if (request == null) {
             throw invalidPaymentRequest("支付查单请求不能为空");
         }
@@ -956,8 +968,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
-        PaymentChannelQueryResultDTO queryResult = queryChannel(detail);
+        try {
+            paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
+        } catch (BusinessException exception) {
+            recordChannelQueryFailure(detail, exception, operator);
+            throw exception;
+        }
+        PaymentChannelQueryResultDTO queryResult = queryChannel(detail, operator);
         boolean requiresSettlement = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())
                 && !"SUCCESS".equalsIgnoreCase(detail.getStatus());
         if (requiresSettlement) {
@@ -972,7 +989,7 @@ public class PaymentServiceImpl implements PaymentService {
             BusinessException queryFailure = new BusinessException(
                     ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                     "channel transaction number is required to settle a successful query");
-            recordChannelQueryFailure(detail, queryFailure);
+            recordChannelQueryFailure(detail, queryFailure, operator);
             throw queryFailure;
         }
         applyReturnCodeStandardization(detail, queryResult);
@@ -988,7 +1005,7 @@ public class PaymentServiceImpl implements PaymentService {
                 queryResult.getReturnCodeMappingMatched());
         detail.setChannelTransactionNo(channelTransactionNo);
         detail.setQuerySource(queryResult.getQuerySource());
-        recordChannelQuery(detail, queryResult);
+        recordChannelQuery(detail, queryResult, operator);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || !"SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())) {
             return outwardDetail(detail);
@@ -1010,8 +1027,9 @@ public class PaymentServiceImpl implements PaymentService {
                 detail.getPaymentOrderId(), "支付成功", "success");
         settleOrderAndBill(detail);
         String eventNo = buildBusinessNo("EVT");
-        String eventPayload = "{\"channel\":\"" + detail.getChannel()
-                + "\",\"source\":\"ACTIVE_QUERY\"}";
+        String eventPayload = "{\"channel\":\"" + escapeJson(detail.getChannel())
+                + "\",\"source\":\"ACTIVE_QUERY\",\"initiatedBy\":\""
+                + escapeJson(operator) + "\"}";
         paymentMapper.insertEvent(
                 eventNo,
                 "PAYMENT_SUCCESS",
@@ -1031,19 +1049,19 @@ public class PaymentServiceImpl implements PaymentService {
         return outwardDetail(latestDetail);
     }
 
-    private PaymentChannelQueryResultDTO queryChannel(PaymentDetailDTO detail) {
+    private PaymentChannelQueryResultDTO queryChannel(PaymentDetailDTO detail, String operator) {
         try {
             return PaymentChannelQueryResultValidator.validateAndNormalize(
                     paymentChannelQueryService.query(detail));
         } catch (BusinessException exception) {
-            recordChannelQueryFailure(detail, exception);
+            recordChannelQueryFailure(detail, exception, operator);
             throw exception;
         } catch (RuntimeException exception) {
             BusinessException queryFailure = new BusinessException(
                     ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                     "payment channel query failed unexpectedly",
                     exception);
-            recordChannelQueryFailure(detail, queryFailure);
+            recordChannelQueryFailure(detail, queryFailure, operator);
             throw queryFailure;
         }
     }
@@ -1070,7 +1088,8 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void recordChannelQuery(
             PaymentDetailDTO detail,
-            PaymentChannelQueryResultDTO queryResult) {
+            PaymentChannelQueryResultDTO queryResult,
+            String operator) {
         String notifyNo = buildBusinessNo("QRY");
         String responsePayload = buildChannelQueryResponsePayload(queryResult);
         String statusType = "SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus()) ? "success" : "info";
@@ -1079,19 +1098,12 @@ public class PaymentServiceImpl implements PaymentService {
                 detail.getPaymentOrderId(),
                 detail.getChannel(),
                 queryResult.getTradeStatus(),
-                "{\"querySource\":\"" + escapeJson(queryResult.getQuerySource()) + "\"}",
+                "{\"querySource\":\"" + escapeJson(queryResult.getQuerySource())
+                        + "\",\"initiatedBy\":\"" + escapeJson(operator) + "\"}",
                 responsePayload,
                 "已查单",
                 statusType);
-        recordNotifyProcessLog(
-                notifyNo,
-                detail.getPaymentOrderId(),
-                detail.getOrderNo(),
-                null,
-                detail.getChannel(),
-                queryResult.getTradeStatus(),
-                "已查单",
-                statusType);
+        recordQueryProcessLog(notifyNo, detail, queryResult.getTradeStatus(), "已查单", statusType, operator);
     }
 
     private String buildChannelQueryResponsePayload(PaymentChannelQueryResultDTO queryResult) {
@@ -1125,7 +1137,8 @@ public class PaymentServiceImpl implements PaymentService {
         detail.setReturnCodeMappingMatched(queryResult.getReturnCodeMappingMatched());
     }
 
-    private void recordChannelQueryFailure(PaymentDetailDTO detail, BusinessException exception) {
+    private void recordChannelQueryFailure(
+            PaymentDetailDTO detail, BusinessException exception, String operator) {
         String notifyNo = buildBusinessNo("QRY");
         String responsePayload = "{\"code\":\"" + escapeJson(exception.getCode())
                 + "\",\"message\":\"channel query failed\"}";
@@ -1134,19 +1147,12 @@ public class PaymentServiceImpl implements PaymentService {
                 detail.getPaymentOrderId(),
                 detail.getChannel(),
                 "QUERY_FAILED",
-                "{\"querySource\":\"CHANNEL_QUERY\"}",
+                "{\"querySource\":\"CHANNEL_QUERY\",\"initiatedBy\":\""
+                        + escapeJson(operator) + "\"}",
                 responsePayload,
                 "查单失败",
                 "danger");
-        recordNotifyProcessLog(
-                notifyNo,
-                detail.getPaymentOrderId(),
-                detail.getOrderNo(),
-                null,
-                detail.getChannel(),
-                "QUERY_FAILED",
-                "查单失败",
-                "danger");
+        recordQueryProcessLog(notifyNo, detail, "QUERY_FAILED", "查单失败", "danger", operator);
     }
 
     private String escapeJson(String value) {
@@ -1178,6 +1184,16 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     @Override
     public PaymentDetailDTO close(PaymentCloseRequestDTO request) {
+        return closeInternal(request, CUSTOMER_SELF_SERVICE_OPERATOR);
+    }
+
+    @Transactional
+    @Override
+    public PaymentDetailDTO close(PaymentCloseRequestDTO request, String operator) {
+        return closeInternal(request, normalizeOperationOperator(operator));
+    }
+
+    private PaymentDetailDTO closeInternal(PaymentCloseRequestDTO request, String operator) {
         if (request == null) {
             throw invalidPaymentRequest("支付关闭请求不能为空");
         }
@@ -1210,11 +1226,12 @@ public class PaymentServiceImpl implements PaymentService {
         // 关闭支付单时同步记录事件，后续可以从事件轨迹里看到是谁、什么时候关闭的。
         paymentMapper.updatePrepayStatusByPaymentOrderId(request.getPaymentOrderId(), "已关闭", "danger");
         String eventNo = buildBusinessNo("EVT");
-        String eventPayload = "{\"close\":\"manual\"}";
+        String eventPayload = "{\"close\":\"manual\",\"initiatedBy\":\""
+                + escapeJson(operator) + "\"}";
         paymentMapper.insertEvent(
                 eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), eventPayload);
         recordEventProcessLog(
-                eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo());
+                eventNo, "PAYMENT_CLOSED", request.getPaymentOrderId(), detail.getOrderNo(), operator);
         paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "MANUAL_CLOSE");
         return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
@@ -1246,6 +1263,15 @@ public class PaymentServiceImpl implements PaymentService {
             String eventType,
             String paymentOrderId,
             String orderNo) {
+        recordEventProcessLog(eventNo, eventType, paymentOrderId, orderNo, "payment-core");
+    }
+
+    private void recordEventProcessLog(
+            String eventNo,
+            String eventType,
+            String paymentOrderId,
+            String orderNo,
+            String source) {
         String statusType = "PAYMENT_CLOSED".equals(eventType) ? "warn" : "info";
         recordProcessLog(
                 eventNo,
@@ -1256,7 +1282,26 @@ public class PaymentServiceImpl implements PaymentService {
                 "业务事件",
                 statusType,
                 "事件类型=" + eventType,
-                "payment-core");
+                source);
+    }
+
+    private void recordQueryProcessLog(
+            String notifyNo,
+            PaymentDetailDTO detail,
+            String queryStatus,
+            String statusLabel,
+            String statusType,
+            String operator) {
+        recordProcessLog(
+                notifyNo,
+                detail.getPaymentOrderId(),
+                detail.getOrderNo(),
+                null,
+                "PAYMENT_NOTIFY",
+                "主动查单",
+                statusType,
+                "查单状态=" + queryStatus + "；处理状态=" + statusLabel,
+                operator);
     }
 
     private void recordProcessLog(
@@ -1402,6 +1447,10 @@ public class PaymentServiceImpl implements PaymentService {
 
     private BusinessException invalidPaymentRequest(String message) {
         return new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, message);
+    }
+
+    private String normalizeOperationOperator(String operator) {
+        return normalizeRequiredRequestField(operator, "操作人", OPERATOR_MAX_LENGTH);
     }
 
     /**

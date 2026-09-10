@@ -811,8 +811,10 @@ export const paymentApi = {
   },
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
   prepay: (payload) => postJson("/api/payments/prepay", payload),
-  query: (paymentOrderId) => postJson("/api/payments/query", { paymentOrderId }),
-  close: (paymentOrderId) => postJson("/api/payments/close", { paymentOrderId })
+  query: (paymentOrderId, operator) =>
+    postJson("/api/payments/admin/query", { paymentOrderId, operator }),
+  close: (paymentOrderId, operator) =>
+    postJson("/api/payments/admin/close", { paymentOrderId, operator })
 };
 
 export const refundApi = {

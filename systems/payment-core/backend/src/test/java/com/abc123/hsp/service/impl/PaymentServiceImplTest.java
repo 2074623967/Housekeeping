@@ -119,6 +119,12 @@ class PaymentServiceImplTest {
         com.abc123.hsp.dto.PaymentCloseRequestDTO closeRequest =
                 new com.abc123.hsp.dto.PaymentCloseRequestDTO();
         closeRequest.setPaymentOrderId(String.join("", Collections.nCopies(65, "P")));
+        com.abc123.hsp.dto.PaymentQueryRequestDTO blankOperatorQuery =
+                new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        blankOperatorQuery.setPaymentOrderId("PAY-QUERY-OPERATOR");
+        com.abc123.hsp.dto.PaymentCloseRequestDTO oversizedOperatorClose =
+                new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        oversizedOperatorClose.setPaymentOrderId("PAY-CLOSE-OPERATOR");
 
         BusinessException detailException = assertThrows(
                 BusinessException.class, () -> service.detail(" "));
@@ -128,6 +134,11 @@ class PaymentServiceImplTest {
                 BusinessException.class, () -> service.query(queryRequest));
         BusinessException closeException = assertThrows(
                 BusinessException.class, () -> service.close(closeRequest));
+        BusinessException blankOperatorException = assertThrows(
+                BusinessException.class, () -> service.query(blankOperatorQuery, " "));
+        BusinessException oversizedOperatorException = assertThrows(
+                BusinessException.class, () -> service.close(
+                        oversizedOperatorClose, String.join("", Collections.nCopies(65, "O"))));
 
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_REQUEST_INVALID, detailException.getCode());
@@ -137,6 +148,10 @@ class PaymentServiceImplTest {
                 ErrorCode.PAYMENT_REQUEST_INVALID, queryException.getCode());
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_REQUEST_INVALID, closeException.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, blankOperatorException.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, oversizedOperatorException.getCode());
         verifyNoInteractions(paymentMapper, paymentChannelQueryRateLimitService);
     }
 
@@ -2026,9 +2041,18 @@ class PaymentServiceImplTest {
                 paymentChannelRoutingService,
                 paymentChannelQueryService,
                 paymentChannelSubmitService)
-                .close(request);
+                .close(request, " 财务运营 ");
 
         verify(paymentMapper, times(1)).releaseSubmitConcurrencyToken("PAY-CLOSE-1", "MANUAL_CLOSE");
+        verify(paymentMapper).insertEvent(
+                anyString(),
+                eq("PAYMENT_CLOSED"),
+                eq("PAY-CLOSE-1"),
+                eq("ORD-CLOSE-1"),
+                eq("{\"close\":\"manual\",\"initiatedBy\":\"财务运营\"}"));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "业务事件".equals(log.getProcessStage())
+                        && "财务运营".equals(log.getSource())));
     }
 
     @Test
@@ -2146,7 +2170,7 @@ class PaymentServiceImplTest {
                 paymentChannelQueryService,
                 paymentChannelSubmitService,
                 paymentEventDispatchService)
-                .query(request);
+                .query(request, " 支付运营 ");
 
         verify(paymentMapper).updatePaymentAttemptStatusByPaymentOrderId(
                 "PAY-QUERY-001", "成功", "success");
@@ -2161,7 +2185,8 @@ class PaymentServiceImplTest {
                 eq("PAYMENT_SUCCESS"),
                 eq("PAY-QUERY-001"),
                 eq("ORD-QUERY-001"),
-                eq("{\"channel\":\"wx_h5\",\"source\":\"ACTIVE_QUERY\"}"));
+                eq("{\"channel\":\"wx_h5\",\"source\":\"ACTIVE_QUERY\","
+                        + "\"initiatedBy\":\"支付运营\"}"));
         verify(paymentEventDispatchService).publishPaymentSuccess(anyString(), eq("PAY-QUERY-001"));
         verify(paymentMapper).releaseSubmitConcurrencyToken(
                 "PAY-QUERY-001", "ACTIVE_QUERY_SUCCESS");
@@ -2201,6 +2226,7 @@ class PaymentServiceImplTest {
 
         com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
         request.setPaymentOrderId("PAY-QUERY-002");
+        request.setOperator("forged-operator");
 
         PaymentDetailDTO result = new PaymentServiceImpl(
                 paymentMapper,
@@ -2224,7 +2250,8 @@ class PaymentServiceImplTest {
         verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-002"), eq("wx_h5"), eq("USERPAYING"),
-                eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\"}"),
+                eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
                 eq("{\"code\":\"SUCCESS\",\"channelReturnCode\":\"USERPAYING\","
                         + "\"standardizedCode\":\"PAYMENT-CHANNEL-1001\","
                         + "\"standardizedMessage\":\"用户支付中\","
@@ -2252,13 +2279,18 @@ class PaymentServiceImplTest {
                 paymentChannelQueryService,
                 paymentChannelSubmitService,
                 paymentEventDispatchService)
-                .query(request));
+                .query(request, "payment-query-scheduler"));
 
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-FAIL"), eq("wx_h5"), eq("QUERY_FAILED"),
-                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\","
+                        + "\"initiatedBy\":\"payment-query-scheduler\"}"),
                 eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
                 eq("查单失败"), eq("danger"));
+        verify(paymentMapper).insertPaymentProcessLog(argThat(log ->
+                "主动查单".equals(log.getProcessStage())
+                        && "payment-query-scheduler".equals(log.getSource())
+                        && "ERROR".equals(log.getLogLevel())));
     }
 
     @Test
@@ -2284,7 +2316,8 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof IllegalStateException);
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-RUNTIME-FAIL"), eq("wx_h5"), eq("QUERY_FAILED"),
-                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
                 eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
                 eq("查单失败"), eq("danger"));
     }
@@ -2313,7 +2346,8 @@ class PaymentServiceImplTest {
                 ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-MISSING-TXN"), eq("wx_h5"), eq("QUERY_FAILED"),
-                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
                 eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
                 eq("查单失败"), eq("danger"));
         verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
@@ -2352,7 +2386,8 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-CALLBACK-TXN"), eq("wx_h5"), eq("SUCCESS"),
-                eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\"}"),
+                eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
                 org.mockito.ArgumentMatchers.contains("\"code\":\"SUCCESS\""),
                 eq("已查单"), eq("success"));
     }
@@ -2381,7 +2416,8 @@ class PaymentServiceImplTest {
                 ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-INVALID"), eq("wx_h5"), eq("QUERY_FAILED"),
-                eq("{\"querySource\":\"CHANNEL_QUERY\"}"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
                 eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
                 eq("查单失败"), eq("danger"));
         verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(

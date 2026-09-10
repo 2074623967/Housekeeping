@@ -938,7 +938,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             PaymentQueryRequestDTO request = new PaymentQueryRequestDTO();
             request.setPaymentOrderId(paymentOrderId);
             try {
-                PaymentDetailDTO result = paymentService.query(request);
+                PaymentDetailDTO result = paymentService.query(request, triggeredBy);
                 if (result != null && "SUCCESS".equalsIgnoreCase(result.getStatus())) {
                     successCount++;
                 } else {

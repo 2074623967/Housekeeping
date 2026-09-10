@@ -10,6 +10,7 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
+const operationOperator = ref("");
 
 const paymentRecordDetailRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
@@ -119,9 +120,14 @@ function canRunClose() {
 }
 
 async function handleQuery() {
+  const operator = operationOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activeAction.value = "query";
   try {
-    const paymentDetail = await paymentApi.query(route.params.paymentOrderId);
+    const paymentDetail = await paymentApi.query(route.params.paymentOrderId, operator);
     actionMessage.value = `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
     await loadDetail();
   } catch (error) {
@@ -132,9 +138,14 @@ async function handleQuery() {
 }
 
 async function handleClose() {
+  const operator = operationOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activeAction.value = "close";
   try {
-    const paymentDetail = await paymentApi.close(route.params.paymentOrderId);
+    const paymentDetail = await paymentApi.close(route.params.paymentOrderId, operator);
     actionMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${route.params.paymentOrderId} 已关闭。`
       : `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
@@ -181,6 +192,12 @@ onMounted(loadDetail);
     </div>
 
     <section class="panel">
+      <div class="toolbar compact-toolbar">
+        <div class="field">
+          <label>操作人</label>
+          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" />
+        </div>
+      </div>
       <div v-if="errorMessage" class="error-banner">
         支付单详情加载失败：{{ errorMessage }}
       </div>

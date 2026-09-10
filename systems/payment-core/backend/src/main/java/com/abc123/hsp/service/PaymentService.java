@@ -58,7 +58,17 @@ public interface PaymentService {
     PaymentDetailDTO query(PaymentQueryRequestDTO request);
 
     /**
+     * 由后台人工或内部任务发起主动查单。
+     */
+    PaymentDetailDTO query(PaymentQueryRequestDTO request, String operator);
+
+    /**
      * 关闭支付单。
      */
     PaymentDetailDTO close(PaymentCloseRequestDTO request);
+
+    /**
+     * 由后台人工发起关闭支付单。
+     */
+    PaymentDetailDTO close(PaymentCloseRequestDTO request, String operator);
 }

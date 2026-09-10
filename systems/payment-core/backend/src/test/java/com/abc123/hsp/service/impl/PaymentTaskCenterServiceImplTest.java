@@ -254,7 +254,9 @@ class PaymentTaskCenterServiceImplTest {
     void shouldQueryPendingPaymentsAndIsolateSinglePaymentFailure() {
         when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 20, 100))
                 .thenReturn(Arrays.asList("PAY-QUERY-1", "PAY-QUERY-2", "PAY-QUERY-3"));
-        when(paymentService.query(org.mockito.ArgumentMatchers.any()))
+        when(paymentService.query(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("支付运营")))
                 .thenAnswer(invocation -> {
                     com.abc123.hsp.dto.PaymentQueryRequestDTO request = invocation.getArgument(0);
                     if ("PAY-QUERY-3".equals(request.getPaymentOrderId())) {
@@ -277,6 +279,9 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(1, result.getWarningCount());
         Assertions.assertEquals(1, result.getFailCount());
         verify(paymentTaskCenterMapper).findPendingPaymentOrderIdsForManualQuery(30, 20, 100);
+        verify(paymentService, org.mockito.Mockito.times(3)).query(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("支付运营"));
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PAYMENT_PENDING_QUERY".equals(entity.getTaskCode())
                         && "P2".equals(entity.getSeverityLevel())
@@ -313,7 +318,11 @@ class PaymentTaskCenterServiceImplTest {
         when(paymentTaskCenterMapper.acquireTaskLease(
                 eq("PAYMENT_PENDING_QUERY"), leaseOwner("payment-query-scheduler"), eq(120))).thenReturn(1);
         when(paymentTaskCenterMapper.findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 20, 100))
-                .thenReturn(Collections.emptyList());
+                .thenReturn(Collections.singletonList("PAY-AUTO-QUERY-1"));
+        when(paymentService.query(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq("payment-query-scheduler")))
+                .thenReturn(new PaymentDetailDTO());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
 
@@ -321,6 +330,10 @@ class PaymentTaskCenterServiceImplTest {
 
         verify(paymentTaskCenterMapper).initTaskLease("PAYMENT_PENDING_QUERY");
         verify(paymentTaskCenterMapper).findDuePendingPaymentOrderIdsForQuery(30, 60, 2, 900, 20, 100);
+        verify(paymentService).query(
+                org.mockito.ArgumentMatchers.argThat(
+                        request -> "PAY-AUTO-QUERY-1".equals(request.getPaymentOrderId())),
+                org.mockito.ArgumentMatchers.eq("payment-query-scheduler"));
         ArgumentCaptor<String> leaseOwnerCaptor = ArgumentCaptor.forClass(String.class);
         verify(paymentTaskCenterMapper).acquireTaskLease(
                 eq("PAYMENT_PENDING_QUERY"), leaseOwnerCaptor.capture(), eq(120));

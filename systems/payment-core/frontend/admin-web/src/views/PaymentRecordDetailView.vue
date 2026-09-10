@@ -10,6 +10,7 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
+const operationOperator = ref("");
 
 const recordType = computed(() => route.query.recordType || "ALL");
 const recordTypeLabel = computed(() => {
@@ -112,10 +113,15 @@ const operationSuggestions = computed(() => {
 });
 
 async function handleQueryPayment() {
+  const operator = operationOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activeAction.value = "query";
   actionMessage.value = "";
   try {
-    await paymentApi.query(route.params.paymentOrderId);
+    await paymentApi.query(route.params.paymentOrderId, operator);
     await loadDetail();
     actionMessage.value = `支付单 ${route.params.paymentOrderId} 已完成主动查单，详情数据已刷新。`;
   } catch (error) {
@@ -147,6 +153,12 @@ onMounted(loadDetail);
     </div>
 
     <section class="panel">
+      <div class="toolbar compact-toolbar">
+        <div class="field">
+          <label>操作人</label>
+          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" />
+        </div>
+      </div>
       <div v-if="errorMessage" class="error-banner">支付记录详情加载失败：{{ errorMessage }}</div>
       <div v-if="actionMessage" class="state-banner">{{ actionMessage }}</div>
       <div v-if="isLoading" class="state-box">支付记录详情加载中...</div>

@@ -11,6 +11,7 @@ const errorMessage = ref("");
 const actionMessage = ref("");
 const activePaymentOrderId = ref("");
 const activeAction = ref("");
+const operationOperator = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
@@ -92,10 +93,15 @@ function canRunClose(item) {
 }
 
 async function handleQuery(paymentOrderId) {
+  const operator = operationOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
   try {
-    const paymentDetail = await paymentApi.query(paymentOrderId);
+    const paymentDetail = await paymentApi.query(paymentOrderId, operator);
     actionMessage.value = `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
     await refreshList();
   } catch (error) {
@@ -107,10 +113,15 @@ async function handleQuery(paymentOrderId) {
 }
 
 async function handleClose(paymentOrderId) {
+  const operator = operationOperator.value.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "close";
   try {
-    const paymentDetail = await paymentApi.close(paymentOrderId);
+    const paymentDetail = await paymentApi.close(paymentOrderId, operator);
     actionMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${paymentOrderId} 已关闭。`
       : `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
@@ -202,6 +213,10 @@ onMounted(refreshList);
             <option>CLOSED</option>
             <option>PREPAY_CREATED</option>
           </select>
+        </div>
+        <div class="field">
+          <label>操作人</label>
+          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="applyFilters">查询</button>

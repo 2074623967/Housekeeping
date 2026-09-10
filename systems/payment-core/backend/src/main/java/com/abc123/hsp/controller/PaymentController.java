@@ -154,11 +154,29 @@ public class PaymentController {
     }
 
     /**
+     * 后台人工主动查单，操作人必须显式提供并写入审计轨迹。
+     */
+    @PostMapping("/admin/query")
+    public ApiResponse<PaymentDetailDTO> adminQuery(@RequestBody PaymentQueryRequestDTO request) {
+        return ApiResponse.success(paymentService.query(
+                request, request == null ? null : request.getOperator()));
+    }
+
+    /**
      * 人工关闭尚未提交渠道的支付单；渠道结果不确定时必须先查单。
      */
     @PostMapping("/close")
     public ApiResponse<PaymentDetailDTO> close(@RequestBody PaymentCloseRequestDTO request) {
         return ApiResponse.success(paymentService.close(request));
+    }
+
+    /**
+     * 后台人工关闭支付单，操作人必须显式提供并写入审计轨迹。
+     */
+    @PostMapping("/admin/close")
+    public ApiResponse<PaymentDetailDTO> adminClose(@RequestBody PaymentCloseRequestDTO request) {
+        return ApiResponse.success(paymentService.close(
+                request, request == null ? null : request.getOperator()));
     }
 
     /**

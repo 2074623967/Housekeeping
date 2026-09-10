@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentListQueryDTO;
+import com.abc123.hsp.dto.PaymentCloseRequestDTO;
+import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.service.PaymentService;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +32,40 @@ class PaymentControllerTest {
 
     @Mock
     private HttpServletRequest servletRequest;
+
+    @Test
+    void shouldKeepPublicQueryAndCloseOnSelfServicePath() {
+        PaymentController controller = new PaymentController(paymentService);
+        PaymentQueryRequestDTO queryRequest = new PaymentQueryRequestDTO();
+        queryRequest.setPaymentOrderId("PAY-QUERY-PUBLIC");
+        queryRequest.setOperator("forged-operator");
+        PaymentCloseRequestDTO closeRequest = new PaymentCloseRequestDTO();
+        closeRequest.setPaymentOrderId("PAY-CLOSE-PUBLIC");
+        closeRequest.setOperator("forged-operator");
+
+        controller.query(queryRequest);
+        controller.close(closeRequest);
+
+        verify(paymentService).query(queryRequest);
+        verify(paymentService).close(closeRequest);
+    }
+
+    @Test
+    void shouldForwardExplicitOperatorsFromAdminEndpoints() {
+        PaymentController controller = new PaymentController(paymentService);
+        PaymentQueryRequestDTO queryRequest = new PaymentQueryRequestDTO();
+        queryRequest.setPaymentOrderId("PAY-QUERY-ADMIN");
+        queryRequest.setOperator(" 支付运营 ");
+        PaymentCloseRequestDTO closeRequest = new PaymentCloseRequestDTO();
+        closeRequest.setPaymentOrderId("PAY-CLOSE-ADMIN");
+        closeRequest.setOperator(" 财务运营 ");
+
+        controller.adminQuery(queryRequest);
+        controller.adminClose(closeRequest);
+
+        verify(paymentService).query(queryRequest, " 支付运营 ");
+        verify(paymentService).close(closeRequest, " 财务运营 ");
+    }
 
     @Test
     void shouldExportPayments() {
