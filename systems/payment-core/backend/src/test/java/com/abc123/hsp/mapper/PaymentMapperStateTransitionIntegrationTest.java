@@ -110,6 +110,38 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldBoundCleanupOfRetryMarkersThatLostExpiryCloseEligibility() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            mapper.recordExpiryCloseFailure("PAY-OLDER", "first failure", 60, 2, 3600);
+            mapper.recordExpiryCloseFailure("PAY-UNSUBMITTED", "second failure", 60, 2, 3600);
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_order SET status = 'SUCCESS' "
+                        + "WHERE payment_order_id = 'PAY-OLDER'");
+                statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) "
+                        + "VALUES ('PAY-UNSUBMITTED')");
+            }
+
+            assertEquals(1, mapper.deleteStaleExpiryCloseRetries(1));
+            assertEquals(1, countExpiryCloseRetries(session));
+            assertEquals(1, mapper.deleteStaleExpiryCloseRetries(1));
+            assertEquals(0, countExpiryCloseRetries(session));
+        }
+    }
+
+    @Test
+    void shouldKeepRetryMarkerWhilePaymentRemainsEligibleForExpiryClose() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            mapper.recordExpiryCloseFailure("PAY-OLDER", "first failure", 60, 2, 3600);
+
+            assertEquals(0, mapper.deleteStaleExpiryCloseRetries(100));
+            assertEquals(1, countExpiryCloseRetries(session));
+        }
+    }
+
+    @Test
     void shouldOnlyRecoverLegacyExpiryCloseFromTrustedChannelSuccess() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -136,6 +168,15 @@ class PaymentMapperStateTransitionIntegrationTest {
 
             assertEquals(1, mapper.markUnsubmittedPaymentClosed("PAY-MANUAL-CLOSEABLE"));
             assertEquals(0, mapper.markUnsubmittedPaymentClosed("PAY-SUBMITTED"));
+        }
+    }
+
+    private int countExpiryCloseRetries(SqlSession session) throws Exception {
+        try (Statement statement = session.getConnection().createStatement();
+             java.sql.ResultSet resultSet = statement.executeQuery(
+                     "SELECT COUNT(1) FROM t_payment_expiry_close_retry")) {
+            resultSet.next();
+            return resultSet.getInt(1);
         }
     }
 

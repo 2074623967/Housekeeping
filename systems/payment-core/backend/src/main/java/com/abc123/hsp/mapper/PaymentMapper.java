@@ -54,6 +54,11 @@ public interface PaymentMapper {
     int deleteExpiryCloseRetry(@Param("paymentOrderId") String paymentOrderId);
 
     /**
+     * 有界清理已经失去超时关单资格的重试标记。
+     */
+    int deleteStaleExpiryCloseRetries(@Param("batchSize") int batchSize);
+
+    /**
      * 查询支付单详情。
      */
     PaymentDetailDTO findDetail(@Param("paymentOrderId") String paymentOrderId);

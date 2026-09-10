@@ -158,6 +158,26 @@ class PaymentExpiryTaskServiceImplTest {
 
         verify(paymentMapper).findExpiredPayments(1);
         verify(paymentMapper).findExpiredPayments(1000);
+        verify(paymentMapper).deleteStaleExpiryCloseRetries(1);
+        verify(paymentMapper).deleteStaleExpiryCloseRetries(1000);
+    }
+
+    @Test
+    void shouldContinueClosingWhenStaleRetryCleanupFails() {
+        ExpiredPaymentDTO payment = buildPayment("PAY-CLOSE", "ORD-CLOSE");
+        when(paymentMapper.deleteStaleExpiryCloseRetries(100))
+                .thenThrow(new IllegalStateException("cleanup failed"));
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-CLOSE")).thenReturn(1);
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+
+        PaymentExpiryCloseResultDTO result = service(100, 60, 2, 3600).closeExpiredPayments();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getSuccessCount());
+        verify(paymentMapper).findExpiredPayments(100);
+        verify(paymentMapper).markExpiredUnsubmittedPaymentClosed("PAY-CLOSE");
     }
 
     @Test

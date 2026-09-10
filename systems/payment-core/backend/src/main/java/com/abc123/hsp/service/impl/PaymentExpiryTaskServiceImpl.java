@@ -52,6 +52,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
 
     @Override
     public PaymentExpiryCloseResultDTO closeExpiredPayments() {
+        cleanupStaleRetries();
         List<ExpiredPaymentDTO> expiredPayments = paymentMapper.findExpiredPayments(batchSize);
         PaymentExpiryCloseResultDTO result = new PaymentExpiryCloseResultDTO();
         result.setProcessedCount(expiredPayments.size());
@@ -72,6 +73,14 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
             }
         }
         return result;
+    }
+
+    private void cleanupStaleRetries() {
+        try {
+            paymentMapper.deleteStaleExpiryCloseRetries(batchSize);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Failed to clean stale expiry close retry markers", exception);
+        }
     }
 
     private boolean closeExpiredPayment(ExpiredPaymentDTO payment) {
