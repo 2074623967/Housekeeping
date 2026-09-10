@@ -2689,6 +2689,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 配置环境变量为 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_MIN_AGE_SECONDS / RETRY_INTERVAL_SECONDS / RETRY_BACKOFF_FACTOR / MAX_RETRY_INTERVAL_SECONDS / MAX_ATTEMPTS / BATCH_SIZE / CLAIM_TIMEOUT_SECONDS`，默认依次为 `60 / 60 / 2 / 900 / 10 / 100 / 30`，非正值收敛为 `1`。
 6. 本地自动化只证明候选 SQL、CAS、有限失败状态和退避计算；不证明生产 MySQL 在线迁移、锁等待、真实供应商查询节奏、最终送达或稳定性通过。
 
+### 14.84 任务中心告警回执回查队列指标契约
+
+1. `GET /api/admin/payment-tasks/overview` 在既有 `pendingIssueAlertReceiptCount` 和最老等待分钟数之外，新增 `dueIssueAlertReceiptCount / backingOffIssueAlertReceiptCount / queryingIssueAlertReceiptCount / exhaustedIssueAlertReceiptCount` 四项整数指标。
+2. 四项指标只统计外部通知通道、投递状态为“已派发”、供应商状态为 `ACCEPTED` 且仍待确认的日志，并复用回查任务的首次等待、最大次数和 claim 超时配置，前端不得自行按时间计算。
+3. “可执行”表示已过首次等待、未耗尽次数、下一次时间已到且不存在有效 claim；过期 `QUERYING` claim 重新归入可执行。“退避中”表示下一次时间晚于当前时间且不存在有效 claim；“查询中”只表示 claim 尚未超时；“自动次数耗尽”排除仍在执行的人工 claim。
+4. 首次等待窗口内的记录仍计入待回查总数，但不计入四个执行状态；因此页面不得假设四项之和恒等于总数。自动次数耗尽不关闭人工核查入口，也不表示供应商已失败或最终送达。
+5. 这些指标只反映 payment-core 数据库中的任务调度状态，不证明通知集成网关可用、真实供应商已受理或送达、人员已响应或生产稳定性通过。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。
