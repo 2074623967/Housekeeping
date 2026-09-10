@@ -75,6 +75,29 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
         assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
     }
 
+    @Test
+    void shouldRejectControlCharacterInGatewayAcceptance() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001\n");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse response =
+                new GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> adapter(restTemplate).submit(request()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+    }
+
     private GatewayAccessPaymentChannelSubmitAdapter adapter(RestTemplate restTemplate) {
         return new GatewayAccessPaymentChannelSubmitAdapter(
                 true, "http://gateway/submit", "wx_h5", "APP_PAY_CORE", "secret", restTemplate);

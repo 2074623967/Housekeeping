@@ -295,6 +295,26 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectChannelRefundNoControlCharacterBeforePersistingAcceptedTrace() {
+        RefundChannelSubmitRequestDTO request = refundSubmitRequest();
+        RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
+        result.setChannelRefundNo("RCH-REF-001\n");
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
+                .thenReturn(refundEvent("PENDING", 0));
+        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundChannelSubmitService.submit(request)).thenReturn(result);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+
+        Assertions.assertFalse(success);
+        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
+        verify(paymentEventMapper).markPublishUnknown("EVTR-001");
+        verify(paymentEventMapper, never()).markPublishFailed("EVTR-001");
+    }
+
+    @Test
     void shouldPublishPaymentSuccessToAmqpWithTraceableMessageProperties() {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);

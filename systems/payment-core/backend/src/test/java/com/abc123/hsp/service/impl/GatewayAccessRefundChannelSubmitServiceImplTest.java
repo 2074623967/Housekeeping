@@ -88,6 +88,29 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
         assertTrue(exception.isResultUnknown());
     }
 
+    @Test
+    void shouldRejectControlCharacterInGatewayAcceptanceAsUnknown() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        RefundChannelSubmitResultDTO data = new RefundChannelSubmitResultDTO();
+        data.setChannelRefundNo("WX-R-1001\n");
+        data.setStatus("PROCESSING");
+        data.setStatusType("warn");
+        GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse response =
+                new GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+
+        RefundChannelSubmitException exception = assertThrows(
+                RefundChannelSubmitException.class, () -> adapter(restTemplate).submit(request()));
+
+        assertEquals(ErrorCode.REFUND_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertTrue(exception.isResultUnknown());
+    }
+
     private void assertFailure(GatewayAccessRefundChannelSubmitServiceImpl service) {
         RefundChannelSubmitException exception = assertThrows(
                 RefundChannelSubmitException.class, () -> service.submit(request()));

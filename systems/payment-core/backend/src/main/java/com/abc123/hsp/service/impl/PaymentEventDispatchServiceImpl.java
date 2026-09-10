@@ -409,14 +409,14 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         if (!StringUtils.hasText(channelRefundNo)) {
             throw new IllegalArgumentException("渠道退款号不能为空");
         }
+        for (int index = 0; index < channelRefundNo.length(); index++) {
+            if (Character.isISOControl(channelRefundNo.charAt(index))) {
+                throw new IllegalArgumentException("渠道退款号不能包含控制字符");
+            }
+        }
         String normalized = channelRefundNo.trim();
         if (normalized.length() > CHANNEL_REFUND_NO_MAX_LENGTH) {
             throw new IllegalArgumentException("渠道退款号长度不能超过128字符");
-        }
-        for (int index = 0; index < normalized.length(); index++) {
-            if (Character.isISOControl(normalized.charAt(index))) {
-                throw new IllegalArgumentException("渠道退款号不能包含控制字符");
-            }
         }
         return normalized;
     }

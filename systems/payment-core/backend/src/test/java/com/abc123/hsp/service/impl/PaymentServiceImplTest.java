@@ -2404,7 +2404,7 @@ class PaymentServiceImplTest {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-INVALID", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-QUERY-INVALID")).thenReturn(detail);
         PaymentChannelQueryResultDTO invalidResult = queryResult(
-                "SUCCESS", "WX-QUERY-INVALID", "GATEWAY\nINJECTED");
+                "SUCCESS", "WX-QUERY-INVALID", "GATEWAY_ACCESS_HTTP\n");
         when(paymentChannelQueryService.query(detail)).thenReturn(invalidResult);
 
         com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();

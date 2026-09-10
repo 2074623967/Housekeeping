@@ -112,8 +112,11 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
         if (!StringUtils.hasText(value)) {
             throw submitFailed("gateway-access returned no " + fieldName);
         }
+        if (containsIsoControl(value)) {
+            throw submitFailed("gateway-access returned an invalid " + fieldName);
+        }
         String normalized = value.trim();
-        if (normalized.length() > maxLength || containsIsoControl(normalized)) {
+        if (normalized.length() > maxLength) {
             throw submitFailed("gateway-access returned an invalid " + fieldName);
         }
         return normalized;

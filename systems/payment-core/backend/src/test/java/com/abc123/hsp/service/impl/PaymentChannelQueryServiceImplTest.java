@@ -85,6 +85,26 @@ class PaymentChannelQueryServiceImplTest {
     }
 
     @Test
+    void shouldRejectRawControlCharacterBeforeStandardizationLookup() {
+        PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        result.setChannelReturnCode("USERPAYING\n");
+        when(adapter.query(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(
+                        Arrays.asList(adapter),
+                        new PaymentChannelReturnCodeStandardizer(mapper, new ObjectMapper()))
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verifyNoInteractions(mapper);
+    }
+
+    @Test
     void shouldRejectEmptyAdapterResultAsInvalidChannelQuery() {
         PaymentConfigMapper mapper = Mockito.mock(PaymentConfigMapper.class);
         PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
@@ -112,6 +132,27 @@ class PaymentChannelQueryServiceImplTest {
         when(adapter.query(any())).thenReturn(result);
         when(standardizer.standardizeQuery(eq("wx_h5"), eq(result))).thenAnswer(invocation -> {
             result.setStandardizedMessage(repeat('M', 257));
+            return result;
+        });
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(Arrays.asList(adapter), standardizer)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+    }
+
+    @Test
+    void shouldRejectControlCharacterAddedByStandardization() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        when(adapter.query(any())).thenReturn(result);
+        when(standardizer.standardizeQuery(eq("wx_h5"), eq(result))).thenAnswer(invocation -> {
+            result.setStandardizedMessage("用户支付中\n");
             return result;
         });
 

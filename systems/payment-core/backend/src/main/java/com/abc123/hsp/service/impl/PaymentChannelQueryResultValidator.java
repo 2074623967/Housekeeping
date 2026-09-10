@@ -55,17 +55,20 @@ final class PaymentChannelQueryResultValidator {
     }
 
     private static String normalizeOptional(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidResult();
+            }
+        }
         if (!StringUtils.hasText(value)) {
             return null;
         }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw invalidResult();
-        }
-        for (int index = 0; index < normalized.length(); index++) {
-            if (Character.isISOControl(normalized.charAt(index))) {
-                throw invalidResult();
-            }
         }
         return normalized;
     }
