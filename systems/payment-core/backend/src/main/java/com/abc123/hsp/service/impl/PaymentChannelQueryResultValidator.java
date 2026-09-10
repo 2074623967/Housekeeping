@@ -3,6 +3,9 @@ package com.abc123.hsp.service.impl;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelQueryResultDTO;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.util.StringUtils;
 
 /**
@@ -19,6 +22,15 @@ final class PaymentChannelQueryResultValidator {
     private static final int HANDLING_SUGGESTION_MAX_LENGTH = 256;
     private static final int BOOLEAN_TEXT_MAX_LENGTH = 16;
     private static final int MAPPING_VERSION_MAX_LENGTH = 32;
+    private static final List<String> TRADE_STATUSES = Arrays.asList(
+            "PREPAY_CREATED",
+            "RISK_REVIEW",
+            "RISK_BLOCKED",
+            "RISK_REJECTED",
+            "WAIT_CALLBACK",
+            "SUCCESS",
+            "CLOSED",
+            "FAIL");
 
     private PaymentChannelQueryResultValidator() {
     }
@@ -27,7 +39,12 @@ final class PaymentChannelQueryResultValidator {
         if (result == null) {
             throw invalidResult();
         }
-        result.setTradeStatus(normalizeRequired(result.getTradeStatus(), TRADE_STATUS_MAX_LENGTH));
+        String tradeStatus = normalizeRequired(result.getTradeStatus(), TRADE_STATUS_MAX_LENGTH)
+                .toUpperCase(Locale.ROOT);
+        if (!TRADE_STATUSES.contains(tradeStatus)) {
+            throw invalidResult();
+        }
+        result.setTradeStatus(tradeStatus);
         result.setChannelTransactionNo(normalizeOptional(
                 result.getChannelTransactionNo(), CHANNEL_TRANSACTION_NO_MAX_LENGTH));
         result.setQuerySource(normalizeRequired(result.getQuerySource(), QUERY_SOURCE_MAX_LENGTH));

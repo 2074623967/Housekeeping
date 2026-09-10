@@ -123,6 +123,42 @@ class PaymentChannelQueryServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeSupportedRawTradeStatusBeforeStandardization() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        result.setTradeStatus(" success ");
+        when(adapter.query(any())).thenReturn(result);
+        when(standardizer.standardizeQuery("wx_h5", result)).thenReturn(result);
+
+        PaymentChannelQueryResultDTO actual = new PaymentChannelQueryServiceImpl(
+                Arrays.asList(adapter), standardizer).query(paymentDetail());
+
+        assertEquals("SUCCESS", actual.getTradeStatus());
+    }
+
+    @Test
+    void shouldRejectUnknownRawTradeStatusBeforeStandardization() {
+        PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
+        PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(
+                PaymentChannelReturnCodeStandardizer.class);
+        when(adapter.supports("wx_h5")).thenReturn(true);
+        PaymentChannelQueryResultDTO result = queryResult();
+        result.setTradeStatus("UNKNOWN_REMOTE");
+        when(adapter.query(any())).thenReturn(result);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentChannelQueryServiceImpl(Arrays.asList(adapter), standardizer)
+                        .query(paymentDetail()));
+
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verifyNoInteractions(standardizer);
+    }
+
+    @Test
     void shouldRejectOversizedStandardizedMessageBeforeReturningResult() {
         PaymentChannelQueryAdapter adapter = Mockito.mock(PaymentChannelQueryAdapter.class);
         PaymentChannelReturnCodeStandardizer standardizer = Mockito.mock(

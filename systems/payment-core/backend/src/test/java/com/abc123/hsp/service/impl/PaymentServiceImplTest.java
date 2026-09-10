@@ -2220,7 +2220,7 @@ class PaymentServiceImplTest {
         when(paymentMapper.findNotifyLogs("PAY-QUERY-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-QUERY-002")).thenReturn(Collections.emptyList());
         PaymentChannelQueryResultDTO standardizedResult =
-                queryResult("USERPAYING", "WX-QUERY-002", "GATEWAY_ACCESS_HTTP");
+                queryResult("WAIT_CALLBACK", "WX-QUERY-002", "GATEWAY_ACCESS_HTTP");
         standardizedResult.setChannelReturnCode("USERPAYING");
         standardizedResult.setStandardizedCode("PAYMENT-CHANNEL-1001");
         standardizedResult.setStandardizedMessage("用户支付中");
@@ -2256,7 +2256,7 @@ class PaymentServiceImplTest {
                 anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
         verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
         verify(paymentMapper).insertNotifyLog(
-                anyString(), eq("PAY-QUERY-002"), eq("wx_h5"), eq("USERPAYING"),
+                anyString(), eq("PAY-QUERY-002"), eq("wx_h5"), eq("WAIT_CALLBACK"),
                 eq("{\"querySource\":\"GATEWAY_ACCESS_HTTP\","
                         + "\"initiatedBy\":\"customer-self-service\"}"),
                 eq("{\"code\":\"SUCCESS\",\"channelReturnCode\":\"USERPAYING\","
