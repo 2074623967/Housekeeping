@@ -14,6 +14,8 @@ import com.abc123.hsp.service.PaymentIssueAlertNotifier;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
+import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -74,6 +76,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT = "RECEIPT_CONFLICT";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
     private static final List<String> PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED", "FAILED");
+    private static final PaymentSensitiveDataMasker SENSITIVE_DATA_MASKER =
+            new PaymentSensitiveDataMasker(new ObjectMapper());
 
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private PaymentTaskLeaseService paymentTaskLeaseService;
@@ -1160,7 +1164,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         PaymentIssueAlertDeliveryResultDTO queryResult;
         try {
             receiptQueryRateLimitService.acquire(acceptedLog.getAlertChannel(), acceptedLog.getAlertNo());
-            queryResult = adapter.query(acceptedLog);
+            queryResult = normalizeReceiptQueryResult(adapter.query(acceptedLog));
         } catch (BusinessException exception) {
             String result = ErrorCode.PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED
                     .equals(exception.getCode())
@@ -1192,13 +1196,51 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (queryResult == null || !StringUtils.hasText(queryResult.getProviderDeliveryStatus())) {
             return RECEIPT_QUERY_RESULT_EMPTY;
         }
-        if ("DELIVERED".equalsIgnoreCase(queryResult.getProviderDeliveryStatus())
-                && StringUtils.hasText(queryResult.getProviderReceiptNo())
-                && StringUtils.hasText(acceptedLog.getProviderReceiptNo())
-                && !acceptedLog.getProviderReceiptNo().trim().equals(queryResult.getProviderReceiptNo().trim())) {
+        if (hasReceiptConflict(acceptedLog, queryResult)) {
             return RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT;
         }
-        return queryResult.getProviderDeliveryStatus().trim().toUpperCase();
+        return queryResult.getProviderDeliveryStatus();
+    }
+
+    private PaymentIssueAlertDeliveryResultDTO normalizeReceiptQueryResult(
+            PaymentIssueAlertDeliveryResultDTO queryResult) {
+        if (queryResult == null) {
+            return null;
+        }
+        validateDeliveryResultCharacters(queryResult);
+        queryResult.setProviderReceiptNo(normalizeReceiptQueryField(
+                queryResult.getProviderReceiptNo(), PROVIDER_RECEIPT_NO_MAX_LENGTH));
+        queryResult.setProviderDeliveryMessage(normalizeReceiptQueryField(
+                queryResult.getProviderDeliveryMessage(), PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH));
+        String receiptSnapshot = normalizeReceiptQueryField(
+                queryResult.getProviderReceiptSnapshot(), PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH);
+        queryResult.setProviderReceiptSnapshot(
+                SENSITIVE_DATA_MASKER.maskProviderReceiptSnapshot(receiptSnapshot));
+        queryResult.setRenderedContentSnapshot(null);
+        if (!StringUtils.hasText(queryResult.getProviderDeliveryStatus())) {
+            queryResult.setProviderDeliveryStatus(null);
+            return queryResult;
+        }
+        String deliveryStatus = queryResult.getProviderDeliveryStatus().trim().toUpperCase(Locale.ROOT);
+        if (!PROVIDER_DELIVERY_STATUSES.contains(deliveryStatus)) {
+            throw new IllegalArgumentException("回执查询适配器返回了不支持的投递状态");
+        }
+        queryResult.setProviderDeliveryStatus(deliveryStatus);
+        return queryResult;
+    }
+
+    private String normalizeReceiptQueryField(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException("回执查询适配器返回字段超过容量限制");
+        }
+        return normalized;
     }
 
     private void completeReceiptQueryAttempt(PaymentIssueAlertLogEntity acceptedLog,
@@ -1260,12 +1302,21 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private boolean isConfirmedDeliveredResult(PaymentIssueAlertLogEntity acceptedLog,
                                                PaymentIssueAlertDeliveryResultDTO queryResult) {
         if (queryResult == null
-                || !"DELIVERED".equalsIgnoreCase(queryResult.getProviderDeliveryStatus())) {
+                || !"DELIVERED".equals(queryResult.getProviderDeliveryStatus())) {
+            return false;
+        }
+        return !hasReceiptConflict(acceptedLog, queryResult);
+    }
+
+    private boolean hasReceiptConflict(PaymentIssueAlertLogEntity acceptedLog,
+                                       PaymentIssueAlertDeliveryResultDTO queryResult) {
+        if (queryResult == null
+                || !"DELIVERED".equals(queryResult.getProviderDeliveryStatus())
+                || !StringUtils.hasText(acceptedLog.getProviderReceiptNo())) {
             return false;
         }
         return !StringUtils.hasText(queryResult.getProviderReceiptNo())
-                || !StringUtils.hasText(acceptedLog.getProviderReceiptNo())
-                || acceptedLog.getProviderReceiptNo().trim().equals(queryResult.getProviderReceiptNo().trim());
+                || !acceptedLog.getProviderReceiptNo().trim().equals(queryResult.getProviderReceiptNo());
     }
 
     private PaymentIssueAlertLogEntity buildReceiptUpdate(PaymentIssueAlertLogEntity acceptedLog,

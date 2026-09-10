@@ -826,7 +826,12 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
-                buildDeliveryResult("IM-RECEIPT-001", "DELIVERED", "供应商查询确认送达", ""));
+                buildDeliveryResult(
+                        "IM-RECEIPT-001",
+                        "DELIVERED",
+                        "供应商查询确认送达",
+                        "",
+                        "CUSTOM:{\"accessKey\":\"secret\",\"status\":\"DELIVERED\"}"));
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -847,6 +852,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
         Assertions.assertEquals("IM-RECEIPT-001", captor.getValue().getProviderReceiptNo());
         Assertions.assertEquals("供应商查询确认送达", captor.getValue().getProviderDeliveryMessage());
+        Assertions.assertEquals(
+                "CUSTOM:{\"accessKey\":\"[REDACTED]\",\"status\":\"DELIVERED\"}",
+                captor.getValue().getProviderReceiptSnapshot());
         Assertions.assertEquals("已确认", captor.getValue().getAckStatus());
         Assertions.assertEquals("支付运营", captor.getValue().getAckOperator());
         Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getReceiptQueryCount());
@@ -1024,6 +1032,72 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldRejectDeliveredReceiptWithoutPersistedProviderReceiptCorrelation() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
+        acceptedLog.setProviderReceiptNo("IM-RECEIPT-001");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))
+                .thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery("PIA-IM-001", 0, true, 10, 30)).thenReturn(1);
+        when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-001", 1, "RECEIPT_CONFLICT", 60, 10)).thenReturn(1);
+        when(receiptQueryAdapter.supports("IM")).thenReturn(true);
+        when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
+                buildDeliveryResult(null, "DELIVERED", "供应商查询确认送达", ""));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter)
+        ).reconcileDeliveryReceipts("payment-core-admin");
+
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-001", 1, "RECEIPT_CONFLICT", 60, 10);
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldNormalizeAndValidateReceiptQueryResultsAtServiceBoundary() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))
+                .thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery("PIA-IM-001", 0, true, 10, 30))
+                .thenReturn(1, 1, 1, 1);
+        when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
+                eq("PIA-IM-001"), eq(1), org.mockito.ArgumentMatchers.anyString(), eq(60), eq(10)))
+                .thenReturn(1);
+        when(receiptQueryAdapter.supports("IM")).thenReturn(true);
+        when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
+                buildDeliveryResult("IM-RECEIPT-001", " UNKNOWN_REMOTE ", "未知状态", ""),
+                buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "污染字段\n", ""),
+                buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", repeated("M", 256), ""),
+                buildDeliveryResult(" IM-RECEIPT-001 ", " accepted ", " 供应商仍在处理 ", ""));
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter)
+        );
+
+        PaymentTaskActionResultDTO unknownResult = service.reconcileDeliveryReceipts("payment-core-admin");
+        PaymentTaskActionResultDTO pollutedResult = service.reconcileDeliveryReceipts("payment-core-admin");
+        PaymentTaskActionResultDTO oversizedResult = service.reconcileDeliveryReceipts("payment-core-admin");
+        PaymentTaskActionResultDTO normalizedResult = service.reconcileDeliveryReceipts("payment-core-admin");
+
+        verify(paymentTaskCenterMapper, times(3)).completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-001", 1, "QUERY_ERROR", 60, 10);
+        verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
+                "PIA-IM-001", 1, "ACCEPTED", 60, 10);
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(1, unknownResult.getFailCount());
+        Assertions.assertEquals(1, pollutedResult.getFailCount());
+        Assertions.assertEquals(1, oversizedResult.getFailCount());
+        Assertions.assertEquals(1, normalizedResult.getFailCount());
     }
 
     @Test
