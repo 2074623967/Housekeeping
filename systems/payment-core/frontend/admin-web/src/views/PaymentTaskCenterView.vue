@@ -4,6 +4,8 @@ import { paymentTaskCenterApi } from "../api/client";
 
 const overview = ref({
   expiredPaymentCount: 0,
+  dueExpiredPaymentCount: 0,
+  backingOffExpiredPaymentCount: 0,
   pendingCallbackCount: 0,
   pendingQueryBacklogCount: 0,
   duePendingQueryCount: 0,
@@ -172,6 +174,7 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">待超时关单</div>
             <div class="detail-value">{{ overview.expiredPaymentCount }}</div>
+            <div class="meta">可执行 {{ overview.dueExpiredPaymentCount }} · 失败退避中 {{ overview.backingOffExpiredPaymentCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">待收口支付中</div>

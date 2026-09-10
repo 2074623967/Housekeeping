@@ -27,5 +27,11 @@ class PaymentExpiryConfigurationTest {
                 Integer.valueOf(100),
                 resolver.getProperty("payment.expiry-close.batch-size", Integer.class)
         );
+        Assertions.assertEquals(Integer.valueOf(60), resolver.getProperty(
+                "payment.expiry-close.retry-interval-seconds", Integer.class));
+        Assertions.assertEquals(Integer.valueOf(2), resolver.getProperty(
+                "payment.expiry-close.retry-backoff-factor", Integer.class));
+        Assertions.assertEquals(Integer.valueOf(3600), resolver.getProperty(
+                "payment.expiry-close.max-retry-interval-seconds", Integer.class));
     }
 }

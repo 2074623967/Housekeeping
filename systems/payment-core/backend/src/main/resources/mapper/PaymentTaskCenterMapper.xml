@@ -7,11 +7,11 @@
     <select id="findOverviewSummary" resultType="com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO">
         SELECT
             COALESCE((
-                SELECT COUNT(1)
+                SELECT COUNT(DISTINCT p.payment_order_id)
                 FROM t_payment_order p
                 INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
                 WHERE p.status = 'PREPAY_CREATED'
-                  AND p.channel_transaction_no IS NULL
+                  AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
                   AND pr.expires_at &lt; NOW()
                   AND NOT EXISTS (
                     SELECT 1
@@ -73,6 +73,38 @@
                 WHERE (issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
                    OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
             ), 0) AS overdueIssueCount
+    </select>
+
+    <select id="countDueExpiredPayments" resultType="int">
+        SELECT COUNT(DISTINCT p.payment_order_id)
+        FROM t_payment_order p
+        INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        LEFT JOIN t_payment_expiry_close_retry retry ON retry.payment_order_id = p.payment_order_id
+        WHERE p.status = 'PREPAY_CREATED'
+          AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
+          AND pr.expires_at &lt; NOW()
+          AND (retry.next_retry_at IS NULL OR retry.next_retry_at &lt;= NOW())
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = p.payment_order_id
+          )
+    </select>
+
+    <select id="countBackingOffExpiredPayments" resultType="int">
+        SELECT COUNT(DISTINCT p.payment_order_id)
+        FROM t_payment_order p
+        INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+        INNER JOIN t_payment_expiry_close_retry retry ON retry.payment_order_id = p.payment_order_id
+        WHERE p.status = 'PREPAY_CREATED'
+          AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
+          AND pr.expires_at &lt; NOW()
+          AND retry.next_retry_at > NOW()
+          AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt pa
+            WHERE pa.payment_order_id = p.payment_order_id
+          )
     </select>
 
     <select id="countUnknownRefundSubmitEvents" resultType="int">

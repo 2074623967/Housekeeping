@@ -7,6 +7,8 @@ import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -19,19 +21,33 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(PaymentExpiryTaskServiceImpl.class);
     private static final int MAX_BATCH_SIZE = 1000;
+    private static final int MAX_FAILURE_MESSAGE_LENGTH = 512;
 
     private final PaymentMapper paymentMapper;
     private final TransactionTemplate transactionTemplate;
     private final int batchSize;
+    private final int retryIntervalSeconds;
+    private final int retryBackoffFactor;
+    private final int maxRetryIntervalSeconds;
 
     public PaymentExpiryTaskServiceImpl(PaymentMapper paymentMapper,
                                         PlatformTransactionManager transactionManager,
-                                        @Value("${payment.expiry-close.batch-size:100}") int batchSize) {
+                                        @Value("${payment.expiry-close.batch-size:100}") int batchSize,
+                                        @Value("${payment.expiry-close.retry-interval-seconds:60}")
+                                        int retryIntervalSeconds,
+                                        @Value("${payment.expiry-close.retry-backoff-factor:2}")
+                                        int retryBackoffFactor,
+                                        @Value("${payment.expiry-close.max-retry-interval-seconds:3600}")
+                                        int maxRetryIntervalSeconds) {
         this.paymentMapper = paymentMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.batchSize = Math.min(Math.max(batchSize, 1), MAX_BATCH_SIZE);
+        this.retryIntervalSeconds = Math.max(retryIntervalSeconds, 1);
+        this.retryBackoffFactor = Math.max(retryBackoffFactor, 1);
+        this.maxRetryIntervalSeconds = Math.max(maxRetryIntervalSeconds, this.retryIntervalSeconds);
     }
 
     @Override
@@ -48,6 +64,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
                     result.setSkippedCount(result.getSkippedCount() + 1);
                 }
             } catch (RuntimeException exception) {
+                recordFailure(payment.getPaymentOrderId(), exception);
                 result.setFailCount(result.getFailCount() + 1);
                 if (result.getFailedPaymentOrderIds().size() < 3) {
                     result.getFailedPaymentOrderIds().add(payment.getPaymentOrderId());
@@ -60,6 +77,7 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
     private boolean closeExpiredPayment(ExpiredPaymentDTO payment) {
         int closedRows = paymentMapper.markExpiredUnsubmittedPaymentClosed(payment.getPaymentOrderId());
         if (closedRows == 0) {
+            paymentMapper.deleteExpiryCloseRetry(payment.getPaymentOrderId());
             return false;
         }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(payment.getPaymentOrderId(), "已关闭", "danger");
@@ -81,6 +99,31 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
         processLog.setMessage("事件类型=PAYMENT_EXPIRED_CLOSED");
         processLog.setSource("payment-core");
         paymentMapper.insertPaymentProcessLog(processLog);
+        paymentMapper.deleteExpiryCloseRetry(payment.getPaymentOrderId());
         return true;
+    }
+
+    private void recordFailure(String paymentOrderId, RuntimeException exception) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> paymentMapper.recordExpiryCloseFailure(
+                    paymentOrderId,
+                    failureMessage(exception),
+                    retryIntervalSeconds,
+                    retryBackoffFactor,
+                    maxRetryIntervalSeconds));
+        } catch (RuntimeException markerException) {
+            LOGGER.warn("Failed to persist expiry close retry marker, paymentOrderId={}",
+                    paymentOrderId, markerException);
+        }
+    }
+
+    private String failureMessage(RuntimeException exception) {
+        String message = exception.getClass().getSimpleName();
+        if (exception.getMessage() != null && !exception.getMessage().trim().isEmpty()) {
+            message += ": " + exception.getMessage().trim();
+        }
+        return message.length() <= MAX_FAILURE_MESSAGE_LENGTH
+                ? message
+                : message.substring(0, MAX_FAILURE_MESSAGE_LENGTH);
     }
 }

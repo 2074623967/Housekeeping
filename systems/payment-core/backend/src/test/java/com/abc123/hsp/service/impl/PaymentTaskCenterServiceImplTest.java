@@ -89,6 +89,25 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExposeExpiryCloseBackoffMetricsInOverview() {
+        PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
+        summary.setExpiredPaymentCount(9);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(summary);
+        when(paymentTaskCenterMapper.countDueExpiredPayments()).thenReturn(6);
+        when(paymentTaskCenterMapper.countBackingOffExpiredPayments()).thenReturn(3);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(6, overview.getDueExpiredPaymentCount());
+        Assertions.assertEquals(3, overview.getBackingOffExpiredPaymentCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_EXPIRY".equals(alert.getAlertType())
+                        && alert.getAlertMessage().contains("可执行 6 笔")
+                        && alert.getAlertMessage().contains("失败退避中 3 笔")));
+    }
+
+    @Test
     void shouldExposeIssueAlertReceiptQueryQueueMetricsInOverview() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countDueIssueAlertReceipts(60, 10, 30)).thenReturn(7);

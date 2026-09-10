@@ -89,9 +89,12 @@
                p.channel_transaction_no AS channelTransactionNo
         FROM t_payment_order p
                  INNER JOIN t_prepay_order pr ON pr.payment_order_id = p.payment_order_id
+                 LEFT JOIN t_payment_expiry_close_retry retry
+                           ON retry.payment_order_id = p.payment_order_id
         WHERE p.status = 'PREPAY_CREATED'
-          AND p.channel_transaction_no IS NULL
+          AND NULLIF(TRIM(p.channel_transaction_no), '') IS NULL
           AND pr.expires_at &lt; NOW()
+          AND (retry.next_retry_at IS NULL OR retry.next_retry_at &lt;= NOW())
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa
@@ -101,6 +104,44 @@
         ORDER BY MIN(pr.expires_at)
         LIMIT #{batchSize}
     </select>
+
+    <insert id="recordExpiryCloseFailure">
+        INSERT INTO t_payment_expiry_close_retry(
+            payment_order_id,
+            retry_count,
+            retry_interval_seconds,
+            next_retry_at,
+            last_error_message,
+            last_failed_at,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{paymentOrderId},
+            1,
+            #{initialIntervalSeconds},
+            TIMESTAMPADD(SECOND, #{initialIntervalSeconds}, NOW()),
+            #{errorMessage},
+            NOW(),
+            NOW(),
+            NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            retry_count = retry_count + 1,
+            next_retry_at = TIMESTAMPADD(
+                SECOND,
+                LEAST(#{maxIntervalSeconds}, retry_interval_seconds * #{backoffFactor}),
+                NOW()
+            ),
+            retry_interval_seconds = LEAST(#{maxIntervalSeconds}, retry_interval_seconds * #{backoffFactor}),
+            last_error_message = #{errorMessage},
+            last_failed_at = NOW(),
+            updated_at = NOW()
+    </insert>
+
+    <delete id="deleteExpiryCloseRetry">
+        DELETE FROM t_payment_expiry_close_retry
+        WHERE payment_order_id = #{paymentOrderId}
+    </delete>
 
     <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentDetailDTO">
         SELECT p.payment_order_id AS paymentOrderId,
@@ -190,7 +231,7 @@
 
     <insert id="insertPaymentOrder">
         INSERT INTO t_payment_order(payment_order_id, order_no, customer_name, amount, payment_method, channel_code, channel_transaction_no, status, status_type, created_at)
-        VALUES (#{paymentOrderId}, #{orderNo}, #{customerName}, #{amount}, '待选渠道', #{channelCode}, '', 'PREPAY_CREATED', 'info', NOW())
+        VALUES (#{paymentOrderId}, #{orderNo}, #{customerName}, #{amount}, '待选渠道', #{channelCode}, NULL, 'PREPAY_CREATED', 'info', NOW())
     </insert>
 
     <insert id="insertPrepayOrder">
@@ -327,7 +368,7 @@
             status_type = 'danger'
         WHERE payment_order_id = #{paymentOrderId}
           AND status = 'PREPAY_CREATED'
-          AND channel_transaction_no IS NULL
+          AND NULLIF(TRIM(channel_transaction_no), '') IS NULL
           AND EXISTS (
             SELECT 1
             FROM t_prepay_order pr
@@ -347,7 +388,7 @@
             status_type = 'danger'
         WHERE payment_order_id = #{paymentOrderId}
           AND status IN ('PREPAY_CREATED', 'RISK_REVIEW', 'RISK_BLOCKED', 'RISK_REJECTED')
-          AND channel_transaction_no IS NULL
+          AND NULLIF(TRIM(channel_transaction_no), '') IS NULL
           AND NOT EXISTS (
             SELECT 1
             FROM t_payment_attempt pa

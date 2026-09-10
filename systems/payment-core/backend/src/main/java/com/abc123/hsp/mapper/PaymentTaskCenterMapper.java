@@ -23,6 +23,16 @@ public interface PaymentTaskCenterMapper {
     PaymentTaskCenterOverviewDTO findOverviewSummary();
 
     /**
+     * 统计当前可执行超时关单的支付单。
+     */
+    int countDueExpiredPayments();
+
+    /**
+     * 统计当前处于关单失败退避窗口的支付单。
+     */
+    int countBackingOffExpiredPayments();
+
+    /**
      * 统计必须查单或人工核查的退款提交未知事件。
      */
     int countUnknownRefundSubmitEvents();

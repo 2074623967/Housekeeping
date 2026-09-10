@@ -40,6 +40,20 @@ public interface PaymentMapper {
     List<ExpiredPaymentDTO> findExpiredPayments(@Param("batchSize") int batchSize);
 
     /**
+     * 原子登记超时关单失败并推进下次重试时间。
+     */
+    int recordExpiryCloseFailure(@Param("paymentOrderId") String paymentOrderId,
+                                 @Param("errorMessage") String errorMessage,
+                                 @Param("initialIntervalSeconds") int initialIntervalSeconds,
+                                 @Param("backoffFactor") int backoffFactor,
+                                 @Param("maxIntervalSeconds") int maxIntervalSeconds);
+
+    /**
+     * 清除已经收口或已失去关单资格的支付单重试标记。
+     */
+    int deleteExpiryCloseRetry(@Param("paymentOrderId") String paymentOrderId);
+
+    /**
      * 查询支付单详情。
      */
     PaymentDetailDTO findDetail(@Param("paymentOrderId") String paymentOrderId);

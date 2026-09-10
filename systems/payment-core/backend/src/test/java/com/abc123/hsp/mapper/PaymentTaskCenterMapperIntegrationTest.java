@@ -149,6 +149,16 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldSeparateDueAndBackingOffExpiryCloseBacklogs() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(2, mapper.countDueExpiredPayments());
+            assertEquals(1, mapper.countBackingOffExpiredPayments());
+        }
+    }
+
+    @Test
     void shouldSummarizeRecentPaymentAndRefundQueryTrendWithinLookbackWindow() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -447,16 +457,20 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_refund_operation_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
+            statement.execute("DROP TABLE IF EXISTS t_payment_expiry_close_retry");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
-                    + "channel_code VARCHAR(64), status VARCHAR(32), created_at DATETIME)");
+                    + "channel_code VARCHAR(64), channel_transaction_no VARCHAR(128), "
+                    + "status VARCHAR(32), created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "payment_order_id VARCHAR(64), expires_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "attempt_status VARCHAR(32), created_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_expiry_close_retry ("
+                    + "payment_order_id VARCHAR(64) NOT NULL UNIQUE, next_retry_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_notify_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, notify_no VARCHAR(64), "
                     + "payment_order_id VARCHAR(64), "
@@ -521,6 +535,19 @@ public class PaymentTaskCenterMapperIntegrationTest {
             insertPayment(connection, "PAY-FRESH-ATTEMPT", "wx_h5", now.minusMinutes(20));
             insertPaymentAttempt(connection, "PAY-FRESH-ATTEMPT", now);
             insertPaymentWithoutAttempt(connection, "PAY-NO-ATTEMPT", "wx_h5", now.minusMinutes(20));
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, channel_code, channel_transaction_no, status, created_at) VALUES "
+                    + "('PAY-EXPIRY-DUE', 'wx_h5', NULL, 'PREPAY_CREATED', NOW()),"
+                    + "('PAY-EXPIRY-RETRY-DUE', 'wx_h5', NULL, 'PREPAY_CREATED', NOW()),"
+                    + "('PAY-EXPIRY-BACKOFF', 'wx_h5', NULL, 'PREPAY_CREATED', NOW())");
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES "
+                    + "('PAY-EXPIRY-DUE', TIMESTAMPADD(MINUTE, -10, NOW())),"
+                    + "('PAY-EXPIRY-RETRY-DUE', TIMESTAMPADD(MINUTE, -9, NOW())),"
+                    + "('PAY-EXPIRY-BACKOFF', TIMESTAMPADD(MINUTE, -8, NOW()))");
+            statement.executeUpdate("INSERT INTO t_payment_expiry_close_retry("
+                    + "payment_order_id, next_retry_at) VALUES "
+                    + "('PAY-EXPIRY-RETRY-DUE', TIMESTAMPADD(SECOND, -1, NOW())),"
+                    + "('PAY-EXPIRY-BACKOFF', TIMESTAMPADD(MINUTE, 5, NOW()))");
             statement.executeUpdate("INSERT INTO t_payment_event("
                     + "event_no, payment_order_id, biz_no, event_type, publish_status, "
                     + "last_published_at, created_at) "

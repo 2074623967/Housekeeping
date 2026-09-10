@@ -273,6 +273,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Override
     public PaymentTaskCenterOverviewDTO overview() {
         PaymentTaskCenterOverviewDTO overview = paymentTaskCenterMapper.findOverviewSummary();
+        overview.setDueExpiredPaymentCount(paymentTaskCenterMapper.countDueExpiredPayments());
+        overview.setBackingOffExpiredPaymentCount(paymentTaskCenterMapper.countBackingOffExpiredPayments());
         overview.setUnknownRefundSubmitEventCount(
                 paymentTaskCenterMapper.countUnknownRefundSubmitEvents());
         overview.setPendingQueryBacklogCount(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(
@@ -1138,6 +1140,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private List<PaymentAlertItemDTO> buildFocusAlerts(PaymentTaskCenterOverviewDTO overview) {
         List<PaymentAlertItemDTO> alerts = new ArrayList<>();
         int expiredPaymentCount = valueOrZero(overview.getExpiredPaymentCount());
+        int dueExpiredPaymentCount = valueOrZero(overview.getDueExpiredPaymentCount());
+        int backingOffExpiredPaymentCount = valueOrZero(overview.getBackingOffExpiredPaymentCount());
         int pendingCallbackCount = valueOrZero(overview.getPendingCallbackCount());
         int pendingQueryBacklogCount = valueOrZero(overview.getPendingQueryBacklogCount());
         int duePendingQueryCount = valueOrZero(overview.getDuePendingQueryCount());
@@ -1171,7 +1175,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "PAYMENT_EXPIRY",
                 "超时支付待关闭",
                 expiredPaymentCount,
-                expiredPaymentCount > 0 ? "存在超时但未收口的支付单，建议先执行超时关单" : "暂无超时支付待关闭",
+                expiredPaymentCount > 0
+                        ? String.format("存在 %d 笔超时支付：可执行 %d 笔、失败退避中 %d 笔",
+                        expiredPaymentCount, dueExpiredPaymentCount, backingOffExpiredPaymentCount)
+                        : "暂无超时支付待关闭",
                 "/payment-task-center",
                 expiredPaymentCount > 10 ? "P1" : "P2",
                 expiredPaymentCount > 10 ? "danger" : "warn"

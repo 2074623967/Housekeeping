@@ -47,7 +47,7 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
         PaymentExpiryCloseResultDTO result =
-                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 100).closeExpiredPayments();
+                service(100, 60, 2, 3600).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getSuccessCount());
@@ -90,7 +90,7 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
 
         PaymentExpiryCloseResultDTO result =
-                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 100).closeExpiredPayments();
+                service(100, 60, 2, 3600).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(3, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(2, result.getSuccessCount());
@@ -98,9 +98,15 @@ class PaymentExpiryTaskServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getFailCount());
         org.junit.jupiter.api.Assertions.assertEquals(Collections.singletonList("PAY-FAIL"),
                 result.getFailedPaymentOrderIds());
-        verify(transactionManager, times(2)).commit(transactionStatus);
+        verify(transactionManager, times(3)).commit(transactionStatus);
         verify(transactionManager).rollback(transactionStatus);
         verify(paymentMapper).markExpiredUnsubmittedPaymentClosed("PAY-LAST");
+        verify(paymentMapper).recordExpiryCloseFailure(
+                org.mockito.ArgumentMatchers.eq("PAY-FAIL"),
+                org.mockito.ArgumentMatchers.contains("database write failed"),
+                org.mockito.ArgumentMatchers.eq(60),
+                org.mockito.ArgumentMatchers.eq(2),
+                org.mockito.ArgumentMatchers.eq(3600));
 
         ArgumentCaptor<String> eventNoCaptor = ArgumentCaptor.forClass(String.class);
         verify(paymentMapper, times(2)).insertEvent(
@@ -123,7 +129,7 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
         PaymentExpiryCloseResultDTO result =
-                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 100).closeExpiredPayments();
+                service(100, 60, 2, 3600).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(0, result.getSuccessCount());
@@ -139,6 +145,7 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
+        verify(paymentMapper).deleteExpiryCloseRetry("PAY-RACING");
     }
 
     @Test
@@ -146,11 +153,82 @@ class PaymentExpiryTaskServiceImplTest {
         when(paymentMapper.findExpiredPayments(1)).thenReturn(Collections.emptyList());
         when(paymentMapper.findExpiredPayments(1000)).thenReturn(Collections.emptyList());
 
-        new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 0).closeExpiredPayments();
-        new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 1001).closeExpiredPayments();
+        service(0, 60, 2, 3600).closeExpiredPayments();
+        service(1001, 60, 2, 3600).closeExpiredPayments();
 
         verify(paymentMapper).findExpiredPayments(1);
         verify(paymentMapper).findExpiredPayments(1000);
+    }
+
+    @Test
+    void shouldClampRetryPolicyAndContinueWhenFailureMarkerCannotBeSaved() {
+        ExpiredPaymentDTO payment = buildPayment("PAY-FAIL", "ORD-FAIL");
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-FAIL"))
+                .thenThrow(new IllegalStateException("database write failed"));
+        when(paymentMapper.recordExpiryCloseFailure(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt()))
+                .thenThrow(new IllegalStateException("retry marker failed"));
+
+        PaymentExpiryCloseResultDTO result = service(100, 0, 0, 0).closeExpiredPayments();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getFailCount());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                Collections.singletonList("PAY-FAIL"), result.getFailedPaymentOrderIds());
+        verify(paymentMapper).recordExpiryCloseFailure(
+                org.mockito.ArgumentMatchers.eq("PAY-FAIL"),
+                org.mockito.ArgumentMatchers.contains("database write failed"),
+                org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.eq(1),
+                org.mockito.ArgumentMatchers.eq(1));
+        verify(transactionManager, times(2)).rollback(transactionStatus);
+    }
+
+    @Test
+    void shouldBoundPersistedFailureMessage() {
+        ExpiredPaymentDTO payment = buildPayment("PAY-LONG-ERROR", "ORD-LONG-ERROR");
+        StringBuilder longMessage = new StringBuilder();
+        for (int index = 0; index < 600; index++) {
+            longMessage.append('x');
+        }
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
+        when(transactionManager.getTransaction(
+                org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
+        when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-LONG-ERROR"))
+                .thenThrow(new IllegalStateException(longMessage.toString()));
+
+        service(100, 60, 2, 3600).closeExpiredPayments();
+
+        ArgumentCaptor<String> failureMessageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(paymentMapper).recordExpiryCloseFailure(
+                org.mockito.ArgumentMatchers.eq("PAY-LONG-ERROR"),
+                failureMessageCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq(60),
+                org.mockito.ArgumentMatchers.eq(2),
+                org.mockito.ArgumentMatchers.eq(3600));
+        org.junit.jupiter.api.Assertions.assertEquals(512, failureMessageCaptor.getValue().length());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                failureMessageCaptor.getValue().startsWith("IllegalStateException: "));
+    }
+
+    private PaymentExpiryTaskServiceImpl service(int batchSize,
+                                                  int retryIntervalSeconds,
+                                                  int retryBackoffFactor,
+                                                  int maxRetryIntervalSeconds) {
+        return new PaymentExpiryTaskServiceImpl(
+                paymentMapper,
+                transactionManager,
+                batchSize,
+                retryIntervalSeconds,
+                retryBackoffFactor,
+                maxRetryIntervalSeconds);
     }
 
     private ExpiredPaymentDTO buildPayment(String paymentOrderId, String orderNo) {
