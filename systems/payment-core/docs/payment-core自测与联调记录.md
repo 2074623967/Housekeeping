@@ -7234,3 +7234,30 @@
 1. payment-core 原有退款主动查单、自动补偿、退避、限流和状态收口现在有了真实存在且失败闭合的 gateway-access HTTP 出口，不再依赖错误的服务地址。
 2. 本地受控 stub 只验证代理链路和稳定契约，不是微信、支付宝或银行真实退款查单；真实请求映射、签名验签、商户应用绑定、密钥轮换和网络来源控制仍未完成。
 3. 退款 `SUCCESS` 仍只表示可信上游状态返回后的本地收口；真实资金到账、支付机构账单、对账差异、会计分录和财务审批必须另行验证。
+
+## 245. 2026-09-10 gateway-access 退款提交代理边界 V1.0 验证
+
+### 245.1 本轮补强
+
+1. `gateway-access` 新增 `POST /api/gateway/refunds/submit`，复用应用、访问凭证、权限、网关、有效证书和发布路由门禁；微信、支付宝和银行退款提交 URL 默认均为空并失败闭合。
+2. `payment-core` 新增非 demo 的 gateway-access 退款提交实现，开关默认关闭、访问凭证默认留空；原本无条件注册的本地退款模拟实现改为只在 `demo` profile 注册。
+3. 两端只接受包含渠道退款号和有限受理状态的明确响应；网关拒绝、超时或响应非法返回 `PAYMENT-1049`，由既有 outbox 保持退款处理中并进入未知结果核查，不能据此认定渠道未受理或直接重复退款。
+4. gateway-access 审计与 payment-core 响应留痕均保持最小化，不保存访问密钥、完整请求、上游原始响应或异常原文。
+
+### 245.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway-access 定向测试 | `mvn -Dtest=GatewayRefundControllerTest,RefundOrderSubmitServiceImplTest test` | 通过 | 覆盖 Controller 委派、默认失败闭合、金额校验、明确受理和非法响应 |
+| payment-core 定向测试 | `mvn -Dtest=GatewayAccessRefundChannelSubmitServiceImplTest,LocalRefundChannelSubmitServiceImplTest,PaymentEventDispatchServiceImplTest test` | 通过 | 覆盖配置完整性、最小留痕、业务失败和既有未知结果 outbox 语义 |
+| gateway-access 全量测试 | `mvn test` | 通过 | `46` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 全量测试 | `mvn test` | 通过 | `641` 个用例，`0` failures、`0` errors、`0` skipped |
+| 本地固定响应冒烟 | gateway-access `18090` 转发到 stub `19091` | 通过 | 正确凭证返回 `WX-REF-SMOKE-001 / PROCESSING`；错误凭证返回 `GATEWAY_ACCESS_DENIED`；stub 校验退款单、支付单、订单和渠道字段 |
+| 补丁检查 | `git diff --check` | 通过 | Java、YAML、测试和文档无空白符错误 |
+| 真实环境验证 | 微信/支付宝/银行退款协议、生产凭证、网络、幂等、到账和对账 | 未执行 | 不记录真实退款受理、生产部署、资金到账、对账或财务验收通过 |
+
+### 245.3 当前判断
+
+1. 默认环境不再把本地模拟退款号当作渠道受理事实；真实代理未启用或配置不完整时会暴露可定位错误并保留退款处理中状态。
+2. 本地固定响应仅证明 payment-core 到 gateway-access 再到稳定上游契约的转发与拒绝边界，不是任何支付机构真实退款联调。
+3. 下一步仍需实现具体渠道请求映射、签名验签、商户应用绑定、生产密钥托管与轮换，并以真实渠道幂等、主动查单、账单和财务核验闭合资金风险。

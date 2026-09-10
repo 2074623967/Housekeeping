@@ -2542,6 +2542,16 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. payment-core 配置项为 `HSP_PAYMENT_REFUND_QUERY_GATEWAY_ENABLED / HSP_PAYMENT_REFUND_QUERY_GATEWAY_URL / HSP_PAYMENT_REFUND_QUERY_SUPPORTED_CHANNELS / HSP_PAYMENT_REFUND_QUERY_GATEWAY_APP_CODE / HSP_PAYMENT_REFUND_QUERY_GATEWAY_ACCESS_KEY / HSP_PAYMENT_REFUND_QUERY_TIMEOUT_MS`；gateway-access 上游配置为 `HSP_GATEWAY_WX_REFUND_QUERY_URL / HSP_GATEWAY_ALIPAY_REFUND_QUERY_URL / HSP_GATEWAY_BANK_REFUND_QUERY_URL`。
 6. 本地受控上游冒烟只证明稳定 HTTP 转发、凭证拒绝和退款号关联校验，不代表真实退款渠道协议、签名验签、生产密钥托管、来源 IP 白名单、退款到账、对账或财务验收完成。
 
+### 14.72 gateway-access 退款提交代理契约
+
+1. 非 `demo` 环境的退款下发使用 `GatewayAccessRefundChannelSubmitServiceImpl`；`LocalRefundChannelSubmitServiceImpl` 只在 `demo` profile 注册，默认环境不再生成模拟渠道退款号。
+2. `payment.refund-submit.gateway-access.enabled=false` 为默认值。开关、提交 URL、应用编码、访问密钥或渠道允许列表任一不完整时返回 `PAYMENT-1049`，退款保持 `PROCESSING`，既有 `REFUND_SUBMIT` outbox 进入失败/死信核查路径。
+3. 配置完整后，payment-core 携带 `X-Gateway-App-Code / X-Gateway-Access-Key`，向 `POST /api/gateway/refunds/submit` 发送退款单、原支付单、原订单、退款金额、方式、原因与原支付渠道。gateway-access 复用应用、权限、网关、有效证书和发布路由门禁。
+4. 只有网关业务码为 `0`，且结果包含 `channelRefundNo / status / statusType` 时才接受；状态只允许 `PROCESSING / SUCCESS`。payment-core 只保存渠道、渠道退款号和来源组成的最小留痕，不保存访问密钥或上游原始报文。
+5. 网关拒绝、超时、空响应或字段非法统一按 `PAYMENT-1049` 失败闭合。外部渠道可能已经受理时不得据此自动重复退款，应保留处理中状态并结合稳定 `refundOrderId` 幂等、主动查单和人工核查收口。
+6. payment-core 配置为 `HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ENABLED / HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_URL / HSP_PAYMENT_REFUND_SUBMIT_SUPPORTED_CHANNELS / HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_APP_CODE / HSP_PAYMENT_REFUND_SUBMIT_GATEWAY_ACCESS_KEY / HSP_PAYMENT_REFUND_SUBMIT_TIMEOUT_MS`；gateway-access 上游配置为 `HSP_GATEWAY_WX_REFUND_SUBMIT_URL / HSP_GATEWAY_ALIPAY_REFUND_SUBMIT_URL / HSP_GATEWAY_BANK_REFUND_SUBMIT_URL`，均默认失败闭合。
+7. 本地固定响应 stub 只证明稳定 HTTP 转发、错误凭证拒绝和关联字段传递，不代表真实退款协议、签名验签、渠道幂等、生产凭证、退款到账、对账或财务验收完成。
+
 支付详情和路由执行结果会返回 `opsConfigSnapshotVersion`。当支付提交请求缺少支付方式或渠道并从
 `ops-config-system` 补齐配置时，该字段记录实际消费的配置快照版本；显式传入全部路由输入时可以为空。
 
@@ -2585,6 +2595,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1046` | 退款渠道查单失败、结果非法/不完整、关联键不一致或退款尚未具备查单条件 |
 | `PAYMENT-1047` | 当前退款渠道共享查单固定窗口配额已耗尽 |
 | `PAYMENT-1048` | gateway-access 支付提交失败或未返回可确认的渠道受理事实；必须先查单，禁止自动重提 |
+| `PAYMENT-1049` | gateway-access 退款提交未配置、调用失败或未返回可确认的渠道受理事实；保持处理中并先查单核验 |
 
 联调说明：
 

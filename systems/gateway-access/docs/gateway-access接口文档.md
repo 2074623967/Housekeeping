@@ -178,3 +178,38 @@
 | `HSP_GATEWAY_BANK_REFUND_QUERY_URL` | 线下银行 |
 
 当前接口只闭合稳定 HTTP 代理契约，不代表微信、支付宝或银行真实退款协议、签名验签、生产凭证、网络白名单、退款到账、对账或财务验收已经完成。
+
+## 11. 退款订单提交代理
+
+### `POST /api/gateway/refunds/submit`
+
+请求头与其他交易代理一致，必须提供 `X-Gateway-App-Code` 和 `X-Gateway-Access-Key`。
+
+请求体：
+
+```json
+{
+  "refundOrderId": "REF202609100001",
+  "paymentOrderId": "PAY202609100001",
+  "orderNo": "ORD202609100001",
+  "customerName": "客户姓名",
+  "refundAmount": 68.00,
+  "refundMethod": "ORIGINAL_ROUTE",
+  "refundReason": "客户申请退款",
+  "channelCode": "wx_h5"
+}
+```
+
+退款金额必须为正数且最多两位小数；标识、退款方式与渠道为必填，文本执行长度和 ISO 控制字符校验。代理前复用接入应用、权限、网关、有效证书和发布路由门禁。
+
+成功响应必须同时包含 `channelRefundNo / status / statusType`，其中 `status` 只允许 `PROCESSING / SUCCESS`。空响应、上游业务码非 `0`、字段缺失或非法均不视为明确受理；超时统一返回 `GATEWAY_UPSTREAM_UNAVAILABLE` 并提示先查单再重试。
+
+退款提交上游由以下环境变量显式配置，默认均为空：
+
+| 环境变量 | 渠道 |
+| --- | --- |
+| `HSP_GATEWAY_WX_REFUND_SUBMIT_URL` | 微信 H5 |
+| `HSP_GATEWAY_ALIPAY_REFUND_SUBMIT_URL` | 支付宝 H5 |
+| `HSP_GATEWAY_BANK_REFUND_SUBMIT_URL` | 线下银行 |
+
+每次请求尽力写入 `REFUND_SUBMIT` 最小审计，不保存访问密钥、请求报文、上游原始响应或异常原文。本接口只形成稳定代理契约，不证明具体渠道协议、签名验签、幂等受理、生产密钥托管、退款到账、对账或财务验收完成。
