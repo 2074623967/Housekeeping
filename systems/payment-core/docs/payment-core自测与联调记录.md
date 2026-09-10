@@ -8066,3 +8066,26 @@
 
 1. 通知器必须提供明确结果才能形成受理或送达事实，缺失和非法结果不会再被默认值掩盖；候选供应商降级语义保持不变。
 2. 本地自动化不证明真实供应商受理、最终送达、人员响应、生产网络或稳定性，`release/v1.0.0` 继续冻结。
+
+## 280. 2026-09-11 告警供应商状态有限集合 V1.0 验证
+
+### 280.1 本轮补强
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 在控制字符检查后将通知器状态执行 `trim + upper-case`，只接受 `ACCEPTED / DELIVERED / FAILED` 三种内部标准状态。
+2. 未知状态沿结果契约失败分支保存固定脱敏 `SEND_EXCEPTION`，不把供应商未识别文本写入告警日志，并继续同通道候选供应商 fallback。
+3. 带首尾空格的小写合法状态统一落库为大写值，与任务中心及回执补查 Mapper 对 `ACCEPTED` 的精确条件一致。
+
+### 280.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警派发定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `39` 个用例；覆盖未知状态拒绝、合法 `failed / accepted` 归一化与候选降级 |
+| payment-core 全量测试 | `mvn test` | 通过 | `738` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper 条件复核 | 检索 `provider_delivery_status = 'ACCEPTED'` | 通过 | 归一化落库值与回执候选、积压和监控 SQL 精确匹配 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 280.3 当前判断
+
+1. 派发成功判断、持久化状态和回执补查选择已使用同一有限集合口径，未知供应商状态不会污染运营查询。
+2. 本地测试不证明真实供应商码表、受理、最终送达、人员响应或生产稳定性，`release/v1.0.0` 继续冻结。
