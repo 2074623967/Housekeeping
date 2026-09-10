@@ -2932,6 +2932,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 单笔事务抛出运行时异常计入 `failCount`，并最多附带前三个失败支付单号；其他候选继续执行。非空正常批次满足 `processedCount = successCount + warningCount + failCount`。
 4. 自动调度与人工触发共享该统计语义。warning 表示执行期资格变化，不表示渠道处理、关闭成功或资金事实；接口消费者应刷新支付详情读取最终状态。
 
+### 14.116 超时关单批次容量契约
+
+1. 超时关单候选查询接受服务端内部 `batchSize`，SQL 按预付单最早过期时间升序后执行参数化 `LIMIT`；该参数不作为外部 API 请求字段开放。
+2. `payment.expiry-close.batch-size` 默认 `100`，可由 `HSP_PAYMENT_EXPIRY_CLOSE_BATCH_SIZE` 覆盖；服务端最终取值范围固定为 `1..1000`。
+3. `processedCount` 仅表示本轮有界候选数。返回结果中的 `overview.expiredPaymentCount` 为执行后重新查询的当前积压，两者不能互相替代，也不能据单轮成功数推导全量收口。
+4. 超出批次的候选留待后续轮次，按最早过期优先；本地契约不承诺生产单轮耗时、积压清零 SLA、持续失败候选公平性或真实渠道关单。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

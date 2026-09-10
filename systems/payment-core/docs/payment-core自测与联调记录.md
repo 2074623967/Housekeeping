@@ -8272,3 +8272,26 @@
 
 1. 超时关单任务的计数已与持久化事实对齐：扫描候选、实际关闭、资格变化跳过和事务失败不再混为一类，任务中心 warning 也能暴露竞争跳过。
 2. 本地 mock 与 H2/MyBatis 既有测试不证明生产 MySQL 锁竞争、多实例调度、真实渠道关单或资金状态，`release/v1.0.0` 继续冻结。
+
+## 289. 2026-09-11 超时关单有界批次 V1.0 验证
+
+### 289.1 本轮补强
+
+1. `PaymentMapper.findExpiredPayments` 接收参数化 `batchSize` 并在按最早过期时间排序后执行 `LIMIT`，不再一次性加载全部历史积压。
+2. `PaymentExpiryTaskServiceImpl` 注入 `payment.expiry-close.batch-size`，默认 `100`，运行时夹取到 `1..1000`；`application.yml` 增加对应环境变量入口。
+3. 超出本轮上限的候选留待后续轮次处理，现有资格复验、逐笔事务、竞争跳过统计和任务中心结果语义保持不变。
+
+### 289.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 超时关单有界批次定向测试 | `mvn -Dtest=PaymentExpiryTaskServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentExpirySchedulerTest,PaymentMapperStateTransitionIntegrationTest,PaymentExpiryConfigurationTest test` | 通过 | `44` 个用例；覆盖默认值、上下界夹取、参数化 LIMIT、最早过期优先及既有关单编排 |
+| payment-core 全量测试 | `mvn test` | 通过 | `769` 个用例，`0` failures、`0` errors、`0` skipped |
+| SQL 参数绑定检查 | `PaymentMapperSqlBindingSafetyTest` 与差异审查 | 通过 | 所有 Mapper XML 禁止 `${...}`，批次上限使用 `#{batchSize}` |
+| 补丁检查 | `git diff --check` | 通过 | Java、YAML、Mapper XML 与测试无空白符错误 |
+| 数据库与前端结构 | 变更范围检查 | 未重复执行 | 本轮无表、索引、schema、迁移或前端代码变化 |
+
+### 289.3 当前判断
+
+1. 超时关单单轮工作量和内存输入已经有界，默认按最早过期的 `100` 笔逐轮收敛；配置错误不能绕过 `1000` 笔硬上限。
+2. 本地测试不证明生产 MySQL 执行计划、索引效率、租约周期内完成、持续失败候选不会积压或多实例吞吐，`release/v1.0.0` 继续冻结。
