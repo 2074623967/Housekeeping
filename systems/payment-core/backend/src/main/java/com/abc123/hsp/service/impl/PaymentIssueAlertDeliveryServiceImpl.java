@@ -74,6 +74,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String RECEIPT_QUERY_RESULT_QUERY_ERROR = "QUERY_ERROR";
     private static final String RECEIPT_QUERY_RESULT_EMPTY = "EMPTY";
     private static final String RECEIPT_QUERY_RESULT_RECEIPT_CONFLICT = "RECEIPT_CONFLICT";
+    private static final String ITEM_TRANSACTION_FAILURE_CODE = "PAYMENT_ISSUE_ALERT_ITEM_TRANSACTION_FAILED";
     private static final List<String> SUCCESSFUL_PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED");
     private static final List<String> PROVIDER_DELIVERY_STATUSES = Arrays.asList("ACCEPTED", "DELIVERED", "FAILED");
     private static final PaymentSensitiveDataMasker SENSITIVE_DATA_MASKER =
@@ -1383,9 +1384,19 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private <T> T executeInItemTransaction(Supplier<T> action) {
         if (itemTransactionTemplate == null) {
-            return action.get();
+            return executeItemAction(action);
         }
-        return itemTransactionTemplate.execute(status -> action.get());
+        return itemTransactionTemplate.execute(status -> executeItemAction(action));
+    }
+
+    private <T> T executeItemAction(Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (RuntimeException exception) {
+            throw exception instanceof SanitizedItemTransactionException
+                    ? exception
+                    : new SanitizedItemTransactionException(exception);
+        }
     }
 
     private void recordFailedAlertNo(List<String> failedAlertNos, String alertNo) {
@@ -1515,6 +1526,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         result.setFailCount(0);
         result.setSummaryComment("检测到其他实例已持有任务租约，本次自动任务跳过执行。");
         return result;
+    }
+
+    private static final class SanitizedItemTransactionException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private SanitizedItemTransactionException(RuntimeException exception) {
+            super(ITEM_TRANSACTION_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+        }
+
+        private static String exceptionName(RuntimeException exception) {
+            String simpleName = exception.getClass().getSimpleName();
+            return simpleName.isEmpty() ? RuntimeException.class.getSimpleName() : simpleName;
+        }
     }
 
     private interface AutoTaskRunner {

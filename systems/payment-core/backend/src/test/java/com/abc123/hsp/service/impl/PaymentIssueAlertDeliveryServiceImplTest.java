@@ -7,6 +7,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentAlertProviderConfigDTO;
@@ -30,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 支付交易异常告警派发服务测试。
@@ -1294,6 +1298,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
     @Test
     void shouldRollbackFailedReceiptReconcileAndContinueWithNextReceipt() {
+        String sensitiveMessage = "jdbc:mysql://internal/payment password=receipt-secret\ninvalid SQL";
         PaymentIssueAlertLogEntity first = buildAcceptedLog("PIA-IM-FAIL", "PIA-OUTBOX-FAIL");
         PaymentIssueAlertLogEntity second = buildAcceptedLog("PIA-IM-NEXT", "PIA-OUTBOX-NEXT");
         when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100)).thenReturn(Arrays.asList(first, second));
@@ -1308,27 +1313,46 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 .thenAnswer(invocation -> {
                     PaymentIssueAlertLogEntity update = invocation.getArgument(0);
                     if ("PIA-OUTBOX-FAIL".equals(update.getAlertNo())) {
-                        throw new IllegalStateException("source acknowledgement failed");
+                        throw new IllegalStateException(sensitiveMessage);
                     }
                     return 1;
                 });
         when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
-        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
-                paymentTaskCenterMapper,
-                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
-                Collections.singletonList(receiptQueryAdapter),
-                transactionManager
-        ).reconcileDeliveryReceipts("payment-core-admin");
+        Logger transactionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(TransactionTemplate.class);
+        ListAppender<ILoggingEvent> transactionAppender = new ListAppender<>();
+        transactionAppender.start();
+        transactionLogger.addAppender(transactionAppender);
+        try {
+            PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                    paymentTaskCenterMapper,
+                    Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                    Collections.singletonList(receiptQueryAdapter),
+                    transactionManager
+            ).reconcileDeliveryReceipts("payment-core-admin");
 
-        Assertions.assertEquals(2, result.getProcessedCount());
-        Assertions.assertEquals(1, result.getSuccessCount());
-        Assertions.assertEquals(1, result.getFailCount());
-        Assertions.assertTrue(result.getSummaryComment().contains("PIA-IM-FAIL"));
-        verify(paymentTaskCenterMapper, times(2))
-                .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
-        verify(transactionManager).rollback(transactionStatus);
-        verify(transactionManager).commit(transactionStatus);
+            Assertions.assertEquals(2, result.getProcessedCount());
+            Assertions.assertEquals(1, result.getSuccessCount());
+            Assertions.assertEquals(1, result.getFailCount());
+            Assertions.assertTrue(result.getSummaryComment().contains("PIA-IM-FAIL"));
+            verify(paymentTaskCenterMapper, times(2))
+                    .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
+            verify(transactionManager).rollback(transactionStatus);
+            verify(transactionManager).commit(transactionStatus);
+            Assertions.assertTrue(transactionAppender.list.stream().anyMatch(event ->
+                    event.getThrowableProxy() != null
+                            && "PAYMENT_ISSUE_ALERT_ITEM_TRANSACTION_FAILED:IllegalStateException"
+                            .equals(event.getThrowableProxy().getMessage())
+                            && event.getThrowableProxy().getCause() == null
+                            && event.getThrowableProxy().getStackTraceElementProxyArray().length == 0));
+            Assertions.assertTrue(transactionAppender.list.stream().noneMatch(event ->
+                    event.getFormattedMessage().contains("receipt-secret")
+                            || (event.getThrowableProxy() != null
+                            && String.valueOf(event.getThrowableProxy().getMessage()).contains("receipt-secret"))));
+        } finally {
+            transactionLogger.detachAppender(transactionAppender);
+            transactionAppender.stop();
+        }
     }
 
     private PaymentIssueAlertLogEntity buildAcceptedLog(String alertNo, String sourceAlertNo) {
