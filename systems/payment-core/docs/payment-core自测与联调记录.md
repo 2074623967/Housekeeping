@@ -8744,3 +8744,25 @@
 
 1. payment-core 不再接受无法关联人工审核单的 `REVIEW` 决策，待风控复核状态具备最小跨系统追踪键。
 2. 本轮无前端、Mapper、schema 或迁移变化；静态核对和本地 mock 不证明真实审核动作、跨系统数据一致、生产网络或稳定性，`release/v1.0.0` 继续冻结。
+
+## 310. 2026-09-11 风控拦截事件关联完整性 V1.0 验证
+
+### 310.1 本轮补强
+
+1. `PaymentRiskControlServiceImpl` 对规范化后的 `INTERCEPT` 决策增加 `eventNo` 条件必填校验，复用既有控制字符与 `64` 字符容量边界。
+2. 缺少风险事件号的外部响应固定按风控结果非法处理；合法事件号去除首尾空格后交付支付主流程。
+3. `REVIEW` 继续以 `reviewNo` 为必填关联键；当前存在无追踪号的策略直接拒绝路径，故本轮未收紧 `REJECT`，避免虚构跨系统契约。
+
+### 310.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 风控适配器与支付主流程定向测试 | `mvn -Dtest=PaymentRiskControlServiceImplTest,PaymentServiceImplTest test` | 通过 | `80` 个用例；覆盖 `INTERCEPT` 缺失事件号固定拒绝、合法事件号规范化及支付主流程回归 |
+| payment-core 全量测试 | `mvn test` | 通过 | `791` 个用例，`0` failures、`0` errors、`0` skipped |
+| 跨系统静态契约核对 | risk-control-system Service 与接口、设计文档 | 通过 | 当前直接拦截路径生成事件号；直接拒绝路径不具备统一追踪键 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 310.3 当前判断
+
+1. payment-core 不再接受无法关联风险事件的 `INTERCEPT` 决策，外部结果在进入支付主流程前失败闭合。
+2. 本轮无前端、Mapper、schema 或迁移变化；静态核对和本地 mock 不证明风险事件真实存在、真实拦截、跨系统生产一致或稳定性，`release/v1.0.0` 继续冻结。
