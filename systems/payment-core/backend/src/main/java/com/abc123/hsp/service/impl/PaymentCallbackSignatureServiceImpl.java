@@ -41,6 +41,8 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     private static final int CALLBACK_SIGNATURE_MAX_LENGTH = 8192;
     private static final String BIZ_TYPE_PAYMENT = "PAYMENT";
     private static final String BIZ_TYPE_REFUND = "REFUND";
+    private static final String VERIFICATION_FAILURE_CATEGORY =
+            "PAYMENT_CALLBACK_VERIFICATION_FAILED";
 
     private final boolean required;
     private final long nonceTtlSeconds;
@@ -143,7 +145,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         try {
             return Long.parseLong(timestamp.trim());
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, "callback timestamp is invalid", exception);
+            throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, "callback timestamp is invalid");
         }
     }
 
@@ -153,7 +155,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             differenceSeconds = Math.subtractExact(nowSeconds, timestampSeconds);
         } catch (ArithmeticException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
-                    "callback timestamp is out of allowed window", exception);
+                    "callback timestamp is out of allowed window");
         }
         if (differenceSeconds > allowedWindowSeconds || differenceSeconds < -allowedWindowSeconds) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID,
@@ -239,7 +241,8 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         } catch (BusinessException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new IllegalStateException("unable to verify callback signature", exception);
+            throw new SanitizedCallbackVerificationException(
+                    VERIFICATION_FAILURE_CATEGORY + ":" + exception.getClass().getSimpleName());
         }
     }
 
@@ -265,13 +268,13 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             decodedSignature = Base64.getDecoder().decode(actualSignature);
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
-                    "callback RSA signature encoding is invalid", exception);
+                    "callback RSA signature encoding is invalid");
         }
         try {
             return signature.verify(decodedSignature);
         } catch (SignatureException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID,
-                    "callback RSA signature is invalid", exception);
+                    "callback RSA signature is invalid");
         }
     }
 
@@ -284,7 +287,14 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
             return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decodedKey));
         } catch (IllegalArgumentException | GeneralSecurityException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_CALLBACK_CREDENTIAL_INVALID,
-                    "callback RSA public key is invalid", exception);
+                    "callback RSA public key is invalid");
+        }
+    }
+
+    private static final class SanitizedCallbackVerificationException extends RuntimeException {
+
+        private SanitizedCallbackVerificationException(String message) {
+            super(message, null, false, false);
         }
     }
 }

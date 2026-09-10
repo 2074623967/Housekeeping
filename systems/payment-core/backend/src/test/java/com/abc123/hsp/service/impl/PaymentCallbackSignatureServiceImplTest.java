@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -115,6 +116,32 @@ class PaymentCallbackSignatureServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, exception.getCode());
+        assertEquals("callback timestamp is out of allowed window", exception.getMessage());
+        assertNull(exception.getCause());
+    }
+
+    @Test
+    void shouldRejectMalformedTimestampWithoutRetainingInputCause() throws Exception {
+        PaymentCallbackRequestDTO request = buildRequest(
+                "wx_h5",
+                "test-secret",
+                "nonce-malformed-time",
+                "1234secret-token");
+        when(paymentCallbackSecurityMapper.findCallbackSecurityProfileByChannelCode("wx_h5"))
+                .thenReturn(buildHmacProfile("wx_h5", "test-secret"));
+        PaymentCallbackSignatureServiceImpl service = new PaymentCallbackSignatureServiceImpl(
+                paymentCallbackSecurityMapper,
+                true,
+                601
+        );
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
+        assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, exception.getCode());
+        assertEquals("callback timestamp is invalid", exception.getMessage());
+        assertNull(exception.getCause());
+        verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
+        verify(paymentCallbackSecurityMapper, never())
+                .insertCallbackNonce("wx_h5", "nonce-malformed-time", "PAYMENT", "PAY-TEST-001", 601);
     }
 
     @Test
@@ -134,6 +161,8 @@ class PaymentCallbackSignatureServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.verify("wx_h5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_TIMESTAMP_INVALID, exception.getCode());
+        assertEquals("callback timestamp is out of allowed window", exception.getMessage());
+        assertNull(exception.getCause());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
                 .insertCallbackNonce("wx_h5", "nonce-overflow", "PAYMENT", "PAY-TEST-001", 601);
@@ -237,6 +266,8 @@ class PaymentCallbackSignatureServiceImplTest {
                 BusinessException.class,
                 () -> service.verify("alipay_h5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
+        assertEquals("callback RSA signature encoding is invalid", exception.getMessage());
+        assertNull(exception.getCause());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
                 .insertCallbackNonce("alipay_h5", "nonce-rsa-signature", "PAYMENT", "PAY-TEST-001", 601);
@@ -264,6 +295,8 @@ class PaymentCallbackSignatureServiceImplTest {
                 BusinessException.class,
                 () -> service.verify("alipay_h5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_SIGNATURE_INVALID, exception.getCode());
+        assertEquals("callback RSA signature is invalid", exception.getMessage());
+        assertNull(exception.getCause());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
                 .insertCallbackNonce("alipay_h5", "nonce-rsa-length", "PAYMENT", "PAY-TEST-001", 601);
@@ -288,6 +321,8 @@ class PaymentCallbackSignatureServiceImplTest {
                 BusinessException.class,
                 () -> service.verify("alipay_h5", request));
         assertEquals(ErrorCode.PAYMENT_CALLBACK_CREDENTIAL_INVALID, exception.getCode());
+        assertEquals("callback RSA public key is invalid", exception.getMessage());
+        assertNull(exception.getCause());
         verify(paymentCallbackSecurityMapper, never()).deleteExpiredNonce(anyString(), anyString());
         verify(paymentCallbackSecurityMapper, never())
                 .insertCallbackNonce("alipay_h5", "nonce-rsa-key", "PAYMENT", "PAY-TEST-001", 601);
