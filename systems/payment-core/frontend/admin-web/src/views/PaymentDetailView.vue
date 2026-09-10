@@ -111,11 +111,6 @@ function isActionRunning(actionName) {
   return activeAction.value === actionName;
 }
 
-function canRunCallback() {
-  return Boolean(detail.value?.channel)
-    && (detail.value?.status === "WAIT_CALLBACK" || detail.value?.status === "PAYING");
-}
-
 function canRunClose() {
   return ["PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED"]
     .includes(detail.value?.status)
@@ -131,23 +126,6 @@ async function handleQuery() {
     await loadDetail();
   } catch (error) {
     actionMessage.value = `主动查单失败：${error.message}`;
-  } finally {
-    activeAction.value = "";
-  }
-}
-
-async function handleCallback() {
-  activeAction.value = "callback";
-  try {
-    const paymentDetail = await paymentApi.callback(
-      detail.value.channel,
-      route.params.paymentOrderId,
-      detail.value.channelTransactionNo
-    );
-    actionMessage.value = `支付单 ${route.params.paymentOrderId} 已模拟回调，当前状态为 ${paymentDetail.status}。`;
-    await loadDetail();
-  } catch (error) {
-    actionMessage.value = `模拟回调失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
@@ -195,9 +173,6 @@ onMounted(loadDetail);
         </button>
         <button class="button secondary" :disabled="!!activeAction" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
-        </button>
-        <button class="button secondary" :disabled="!!activeAction || !canRunCallback()" @click="handleCallback">
-          {{ isActionRunning("callback") ? "回调中..." : "模拟回调" }}
         </button>
         <button class="button primary" :disabled="!!activeAction || !canRunClose()" @click="handleClose">
           {{ isActionRunning("close") ? "关闭中..." : "关闭支付单" }}
@@ -249,7 +224,7 @@ onMounted(loadDetail);
             </div>
             <div class="ops-card">
               <div class="ops-row"><span>主动查单</span><span>始终可用，用于拉取渠道或本地最新状态</span></div>
-              <div class="ops-row"><span>模拟回调</span><span>{{ canRunCallback() ? "当前可执行" : "仅 WAIT_CALLBACK / PAYING 状态可执行" }}</span></div>
+              <div class="ops-row"><span>渠道回调</span><span>仅接收真实渠道签名通知，页面不提供人工收口动作</span></div>
               <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "已提交渠道或已终态支付单不可本地关闭" }}</span></div>
             </div>
           </section>

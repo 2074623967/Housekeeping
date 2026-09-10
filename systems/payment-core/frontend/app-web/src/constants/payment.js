@@ -35,7 +35,7 @@ export const PAYMENT_RESULT_STATE_META = {
   },
   pending: {
     title: "支付处理中",
-    hint: "渠道回调可能稍有延迟，可主动查单或模拟回调完成联调。"
+    hint: "渠道回调可能稍有延迟，可主动查单刷新真实支付结果。"
   }
 };
 

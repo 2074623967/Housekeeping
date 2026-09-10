@@ -43,14 +43,6 @@ function postJson(url, payload) {
   return request(url, buildJsonRequestOptions("POST", payload));
 }
 
-function buildSuccessCallbackPayload(paymentOrderId, channelTransactionNo) {
-  return {
-    paymentOrderId,
-    channelTransactionNo: channelTransactionNo || `SIM${Date.now()}`,
-    tradeStatus: "SUCCESS"
-  };
-}
-
 export const dashboardApi = {
   getSummary: () => request("/api/dashboard/summary")
 };
@@ -812,11 +804,7 @@ export const paymentApi = {
   getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
   prepay: (payload) => postJson("/api/payments/prepay", payload),
   query: (paymentOrderId) => postJson("/api/payments/query", { paymentOrderId }),
-  close: (paymentOrderId) => postJson("/api/payments/close", { paymentOrderId }),
-  callback: (channelCode, paymentOrderId, channelTransactionNo) => postJson(
-    `/api/payments/callback/${channelCode}`,
-    buildSuccessCallbackPayload(paymentOrderId, channelTransactionNo)
-  )
+  close: (paymentOrderId) => postJson("/api/payments/close", { paymentOrderId })
 };
 
 export const refundApi = {

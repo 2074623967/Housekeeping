@@ -91,10 +91,6 @@ function canRunClose(item) {
     && !item.channelTransactionNo;
 }
 
-function canRunCallback(item) {
-  return Boolean(item.channel) && ["WAIT_CALLBACK", "PAYING"].includes(item.status);
-}
-
 async function handleQuery(paymentOrderId) {
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
@@ -121,25 +117,6 @@ async function handleClose(paymentOrderId) {
     await refreshList();
   } catch (error) {
     actionMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}`;
-  } finally {
-    activePaymentOrderId.value = "";
-    activeAction.value = "";
-  }
-}
-
-async function handleCallback(item) {
-  activePaymentOrderId.value = item.paymentOrderId;
-  activeAction.value = "callback";
-  try {
-    const paymentDetail = await paymentApi.callback(
-      item.channel,
-      item.paymentOrderId,
-      item.channelTransactionNo
-    );
-    actionMessage.value = `支付单 ${item.paymentOrderId} 已按渠道 ${item.channel} 模拟回调，当前状态为 ${paymentDetail.status}。`;
-    await refreshList();
-  } catch (error) {
-    actionMessage.value = `支付单 ${item.paymentOrderId} 模拟回调失败：${error.message}`;
   } finally {
     activePaymentOrderId.value = "";
     activeAction.value = "";
@@ -270,9 +247,6 @@ onMounted(refreshList);
                     <button class="link-button" @click="openDetail(item.paymentOrderId)">详情</button>
                     <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleQuery(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
-                    </button>
-                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId || !canRunCallback(item)" @click="handleCallback(item)">
-                      {{ isActionRunning(item.paymentOrderId, "callback") ? "回调中..." : "回调" }}
                     </button>
                     <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "close") ? "关闭中..." : "关闭" }}

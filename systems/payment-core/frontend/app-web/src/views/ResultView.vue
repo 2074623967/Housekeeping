@@ -5,7 +5,6 @@ import { paymentApi } from "../api/client";
 import {
   canClosePaymentLocally,
   PAYMENT_RESULT_STATE_META,
-  resolvePaymentChannelCode,
   resolvePaymentResultState
 } from "../constants/payment";
 import { persistPaymentAccessToken, withoutAccessToken } from "../constants/paymentSession";
@@ -22,21 +21,18 @@ const TERMINAL_COPY = {
     heroLabel: "App 支付结果",
     homeLabel: "返回收银台",
     queryLabel: "查询最新状态",
-    callbackLabel: "模拟成功回调",
     closeLabel: "关闭支付单"
   },
   h5: {
     heroLabel: "H5 支付结果",
     homeLabel: "回到支付页",
     queryLabel: "刷新支付结果",
-    callbackLabel: "模拟成功回调",
     closeLabel: "结束本次支付"
   },
   pc: {
     heroLabel: "PC 支付结果",
     homeLabel: "返回 PC 收银台",
     queryLabel: "刷新桌面端支付结果",
-    callbackLabel: "模拟成功回调",
     closeLabel: "关闭当前支付单"
   }
 };
@@ -75,32 +71,15 @@ const feedbackMessage = ref("");
 const paymentDetail = ref(null);
 const detailLoading = ref(true);
 const queryLoading = ref(false);
-const callbackLoading = ref(false);
 const closeLoading = ref(false);
 const lastAction = ref("");
 
 const terminalCopy = computed(() => TERMINAL_COPY[props.terminalVariant] || TERMINAL_COPY.app);
 const bizSceneMeta = computed(() => BIZ_SCENE_META[resolveBizType()] || BIZ_SCENE_META["balance-pay"]);
 const isPcVariant = computed(() => props.terminalVariant === "pc");
-const callbackChannelCode = computed(() => {
-  if (paymentDetail.value?.channel) {
-    return paymentDetail.value.channel;
-  }
-  if (paymentDetail.value?.paymentMethod) {
-    return resolvePaymentChannelCode(paymentDetail.value.paymentMethod);
-  }
-  if (typeof route.query.paymentMethod === "string" && route.query.paymentMethod.trim()) {
-    return resolvePaymentChannelCode(route.query.paymentMethod.trim());
-  }
-  return "WX_H5";
-});
 const resultTitle = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].title);
 const resultHint = computed(() => PAYMENT_RESULT_STATE_META[resultState.value].hint);
 const resultBadgeClass = computed(() => `status-${paymentDetail.value?.statusType || "info"}`);
-const canMockCallback = computed(() => {
-  const status = paymentDetail.value?.status;
-  return status === "WAIT_CALLBACK" || status === "PAYING";
-});
 const canClosePayment = computed(() => {
   return canClosePaymentLocally(
     paymentDetail.value?.status,
@@ -148,7 +127,7 @@ const nextStepChecklist = computed(() => {
       "本次支付已被策略拦截，需先调整订单、金额或支付方式后再尝试。",
       "建议后台联查风险策略、限额规则、黑名单和客户端来源信息。",
       "如确认误拦截，应先处理风控配置，再重新发起新的预付单。",
-      "不要直接模拟成功回调，以免绕过真实风控闭环。"
+      "不要人工改写支付结果，以免绕过真实风控闭环。"
     ];
   }
   if (resultState.value === "risk_rejected") {
@@ -156,7 +135,7 @@ const nextStepChecklist = computed(() => {
       "本次支付已被风控拒绝，需由运营明确拒绝原因并通知用户。",
       "建议核对风险复核意见、订单业务背景和用户投诉处理方案。",
       "如需继续交易，应重新生成新支付单并在风控侧完成放行后再发起。",
-      "不要继续对当前支付单执行成功回调联调。"
+      "不要继续对当前支付单人工制造成功终态。"
     ];
   }
   if (resultState.value === "prepay_created") {
@@ -170,9 +149,9 @@ const nextStepChecklist = computed(() => {
   if (resultState.value === "wait_callback") {
     return [
       bizSceneMeta.value.pendingHint,
-      "支付请求已提交成功，当前应优先等待回调或执行主动查单。",
+      "支付请求已提交成功，当前应等待真实渠道回调或执行主动查单。",
       "若后台与用户端状态不一致，先核对支付请求、回调轨迹和事件出站状态。",
-      "如需模拟联调，只在 WAIT_CALLBACK / PAYING 状态下执行成功回调。"
+      "页面不能人工指定支付成功；长时间未收口时请转运营排查渠道通知和查单记录。"
     ];
   }
   return [
@@ -272,24 +251,6 @@ async function queryResult() {
   }
 }
 
-async function mockSuccessCallback() {
-  callbackLoading.value = true;
-  try {
-    paymentDetail.value = await paymentApi.callback(callbackChannelCode.value, {
-      paymentOrderId: route.params.paymentOrderId,
-      channelTransactionNo: paymentDetail.value?.channelTransactionNo || `SIM${Date.now()}`,
-      tradeStatus: "SUCCESS"
-    });
-    syncStatusByDetail();
-    feedbackMessage.value = `已按渠道 ${callbackChannelCode.value} 模拟成功回调并完成状态收口。`;
-    lastAction.value = "模拟成功回调";
-  } catch (error) {
-    feedbackMessage.value = error.message;
-  } finally {
-    callbackLoading.value = false;
-  }
-}
-
 async function closePayment() {
   closeLoading.value = true;
   try {
@@ -360,7 +321,7 @@ function resolveBizType() {
         <div class="section-heading">
           <div>
             <h3>结果摘要</h3>
-            <p>当前支付单的交易收口状态、渠道流水和联调动作都会在这里更新。</p>
+            <p>当前支付单的交易收口状态、渠道流水和处理动作都会在这里更新。</p>
           </div>
           <span class="support-tag">交易闭环已留痕</span>
         </div>
@@ -397,10 +358,6 @@ function resolveBizType() {
           <div class="summary-item">
             <span>渠道编码</span>
             <strong>{{ paymentDetail?.channel || "-" }}</strong>
-          </div>
-          <div class="summary-item">
-            <span>回调模拟渠道</span>
-            <strong>{{ callbackChannelCode }}</strong>
           </div>
           <div class="summary-item">
             <span>渠道流水号</span>
@@ -489,9 +446,6 @@ function resolveBizType() {
           </button>
           <button class="action-button secondary" @click="backToBusinessEntry">
             返回业务入口
-          </button>
-          <button class="action-button secondary" :disabled="callbackLoading || !canMockCallback" @click="mockSuccessCallback">
-            {{ callbackLoading ? "回调中..." : terminalCopy.callbackLabel }}
           </button>
           <button class="action-button ghost" :disabled="closeLoading || !canClosePayment" @click="closePayment">
             {{ closeLoading ? "关闭中..." : terminalCopy.closeLabel }}
