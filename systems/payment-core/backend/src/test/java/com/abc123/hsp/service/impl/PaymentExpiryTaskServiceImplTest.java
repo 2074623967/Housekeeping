@@ -41,13 +41,13 @@ class PaymentExpiryTaskServiceImplTest {
         payment.setPaymentOrderId("PAY-EXPIRED");
         payment.setOrderNo("ORD-EXPIRED");
         payment.setChannelTransactionNo("CHANNEL-EXPIRED");
-        when(paymentMapper.findExpiredPayments()).thenReturn(Collections.singletonList(payment));
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
         when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-EXPIRED")).thenReturn(1);
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
         PaymentExpiryCloseResultDTO result =
-                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager).closeExpiredPayments();
+                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 100).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getSuccessCount());
@@ -78,7 +78,7 @@ class PaymentExpiryTaskServiceImplTest {
         ExpiredPaymentDTO first = buildPayment("PAY-FIRST", "ORD-FIRST");
         ExpiredPaymentDTO failed = buildPayment("PAY-FAIL", "ORD-FAIL");
         ExpiredPaymentDTO last = buildPayment("PAY-LAST", "ORD-LAST");
-        when(paymentMapper.findExpiredPayments()).thenReturn(Arrays.asList(first, failed, last));
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Arrays.asList(first, failed, last));
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
         org.mockito.Mockito.doAnswer(invocation -> {
@@ -90,7 +90,7 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString());
 
         PaymentExpiryCloseResultDTO result =
-                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager).closeExpiredPayments();
+                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 100).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(3, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(2, result.getSuccessCount());
@@ -117,13 +117,13 @@ class PaymentExpiryTaskServiceImplTest {
     @Test
     void shouldSkipSideEffectsWhenPaymentBecameIneligibleAfterCandidateQuery() {
         ExpiredPaymentDTO payment = buildPayment("PAY-RACING", "ORD-RACING");
-        when(paymentMapper.findExpiredPayments()).thenReturn(Collections.singletonList(payment));
+        when(paymentMapper.findExpiredPayments(100)).thenReturn(Collections.singletonList(payment));
         when(paymentMapper.markExpiredUnsubmittedPaymentClosed("PAY-RACING")).thenReturn(0);
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
 
         PaymentExpiryCloseResultDTO result =
-                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager).closeExpiredPayments();
+                new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 100).closeExpiredPayments();
 
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getProcessedCount());
         org.junit.jupiter.api.Assertions.assertEquals(0, result.getSuccessCount());
@@ -139,6 +139,18 @@ class PaymentExpiryTaskServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldClampConfiguredBatchSizeToSafeBounds() {
+        when(paymentMapper.findExpiredPayments(1)).thenReturn(Collections.emptyList());
+        when(paymentMapper.findExpiredPayments(1000)).thenReturn(Collections.emptyList());
+
+        new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 0).closeExpiredPayments();
+        new PaymentExpiryTaskServiceImpl(paymentMapper, transactionManager, 1001).closeExpiredPayments();
+
+        verify(paymentMapper).findExpiredPayments(1);
+        verify(paymentMapper).findExpiredPayments(1000);
     }
 
     private ExpiredPaymentDTO buildPayment(String paymentOrderId, String orderNo) {

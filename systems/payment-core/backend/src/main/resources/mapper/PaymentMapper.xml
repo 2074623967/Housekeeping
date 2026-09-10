@@ -99,6 +99,7 @@
           )
         GROUP BY p.payment_order_id, p.order_no, p.channel_transaction_no
         ORDER BY MIN(pr.expires_at)
+        LIMIT #{batchSize}
     </select>
 
     <select id="findDetail" resultType="com.abc123.hsp.dto.PaymentDetailDTO">

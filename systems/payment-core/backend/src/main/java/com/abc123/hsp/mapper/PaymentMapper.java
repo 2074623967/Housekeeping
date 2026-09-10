@@ -37,7 +37,7 @@ public interface PaymentMapper {
     /**
      * 查询已经超过收银台失效时间且仍未收口的支付单。
      */
-    List<ExpiredPaymentDTO> findExpiredPayments();
+    List<ExpiredPaymentDTO> findExpiredPayments(@Param("batchSize") int batchSize);
 
     /**
      * 查询支付单详情。

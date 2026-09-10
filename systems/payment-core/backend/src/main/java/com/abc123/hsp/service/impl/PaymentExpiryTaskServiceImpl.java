@@ -7,6 +7,7 @@ import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -18,19 +19,24 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
 
+    private static final int MAX_BATCH_SIZE = 1000;
+
     private final PaymentMapper paymentMapper;
     private final TransactionTemplate transactionTemplate;
+    private final int batchSize;
 
     public PaymentExpiryTaskServiceImpl(PaymentMapper paymentMapper,
-                                        PlatformTransactionManager transactionManager) {
+                                        PlatformTransactionManager transactionManager,
+                                        @Value("${payment.expiry-close.batch-size:100}") int batchSize) {
         this.paymentMapper = paymentMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.batchSize = Math.min(Math.max(batchSize, 1), MAX_BATCH_SIZE);
     }
 
     @Override
     public PaymentExpiryCloseResultDTO closeExpiredPayments() {
-        List<ExpiredPaymentDTO> expiredPayments = paymentMapper.findExpiredPayments();
+        List<ExpiredPaymentDTO> expiredPayments = paymentMapper.findExpiredPayments(batchSize);
         PaymentExpiryCloseResultDTO result = new PaymentExpiryCloseResultDTO();
         result.setProcessedCount(expiredPayments.size());
         for (ExpiredPaymentDTO payment : expiredPayments) {

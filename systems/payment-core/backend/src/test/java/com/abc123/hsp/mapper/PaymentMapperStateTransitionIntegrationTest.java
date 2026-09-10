@@ -52,8 +52,10 @@ class PaymentMapperStateTransitionIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
 
-            assertEquals(1, mapper.findExpiredPayments().size());
-            assertEquals("PAY-UNSUBMITTED", mapper.findExpiredPayments().get(0).getPaymentOrderId());
+            assertEquals(1, mapper.findExpiredPayments(1).size());
+            assertEquals("PAY-OLDER", mapper.findExpiredPayments(1).get(0).getPaymentOrderId());
+            assertEquals(2, mapper.findExpiredPayments(100).size());
+            assertEquals(1, mapper.markExpiredUnsubmittedPaymentClosed("PAY-OLDER"));
             assertEquals(1, mapper.markExpiredUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
             assertEquals(0, mapper.markExpiredUnsubmittedPaymentClosed("PAY-SUBMITTED"));
         }
@@ -106,6 +108,7 @@ class PaymentMapperStateTransitionIntegrationTest {
             statement.execute("CREATE TABLE t_payment_event (payment_order_id VARCHAR(64), event_type VARCHAR(64))");
             statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, order_no, status, status_type) "
                     + "VALUES ('PAY-UNSUBMITTED', 'ORD-1', 'PREPAY_CREATED', 'info'), "
+                    + "('PAY-OLDER', 'ORD-0', 'PREPAY_CREATED', 'info'), "
                     + "('PAY-SUBMITTED', 'ORD-2', 'WAIT_CALLBACK', 'warn'), "
                     + "('PAY-MANUAL-CLOSED', 'ORD-3', 'CLOSED', 'danger'), "
                     + "('PAY-EXPIRED-CLOSED', 'ORD-4', 'CLOSED', 'danger'), "
@@ -113,6 +116,7 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "('PAY-MANUAL-CLOSEABLE', 'ORD-6', 'RISK_REVIEW', 'warn')");
             statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES "
                     + "('PAY-UNSUBMITTED', TIMESTAMPADD(MINUTE, -5, NOW())), "
+                    + "('PAY-OLDER', TIMESTAMPADD(MINUTE, -10, NOW())), "
                     + "('PAY-SUBMITTED', TIMESTAMPADD(MINUTE, -5, NOW()))");
             statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES "
                     + "('PAY-SUBMITTED'), ('PAY-LEGACY-SUBMITTED-CLOSED')");

@@ -53,6 +53,7 @@ payment:
       batch-size: ${HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_BATCH_SIZE:1000}
   expiry-close:
     fixed-delay-ms: ${HSP_PAYMENT_EXPIRY_CLOSE_DELAY_MS:60000}
+    batch-size: ${HSP_PAYMENT_EXPIRY_CLOSE_BATCH_SIZE:100}
   event-retry:
     fixed-delay-ms: ${HSP_PAYMENT_EVENT_RETRY_DELAY_MS:300000}
   refund-retry:
