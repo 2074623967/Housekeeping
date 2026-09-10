@@ -47,7 +47,7 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeTaskCode = ref("");
-const taskOperator = ref("payment-core-admin");
+const taskOperator = ref("");
 const filters = ref({
   taskCode: "",
   runMode: "全部",

@@ -31,6 +31,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentIssueServiceImpl implements PaymentIssueService {
 
+    private static final int OPERATOR_MAX_LENGTH = 64;
+
     private final PaymentIssueMapper paymentIssueMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
     private final int receiptQueryMinAgeSeconds;
@@ -146,6 +148,8 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Transactional
     public PaymentIssueAlertLogRowDTO acknowledgeAlert(String alertNo, PaymentIssueAlertAcknowledgeRequestDTO request) {
         String normalizedAlertNo = requireText(alertNo, "告警编号不能为空");
+        String operator = request == null ? null : request.getOperator();
+        String normalizedOperator = normalizeOperator(operator, "确认人不能为空");
         PaymentIssueAlertLogRowDTO alertLog = paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
         if (alertLog == null) {
             throw new IllegalArgumentException("支付异常告警不存在：" + normalizedAlertNo);
@@ -156,8 +160,6 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if ("已确认".equals(alertLog.getAckStatus())) {
             return maskedAlertLogCopy(alertLog);
         }
-        String operator = request == null ? null : request.getOperator();
-        String normalizedOperator = requireText(operator, "确认人不能为空");
         paymentIssueMapper.acknowledgeAlertByAlertNo(normalizedAlertNo, normalizedOperator);
         acknowledgeSourceAlertIfNeeded(alertLog, normalizedOperator);
         return maskedAlertLogCopy(paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo));
@@ -171,7 +173,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         }
         String actionType = requireText(request.getActionType(), "处理动作不能为空");
         String assignee = requireText(request.getAssignee(), "处理人不能为空");
-        String operator = StringUtils.hasText(request.getOperator()) ? request.getOperator().trim() : assignee;
+        String operator = normalizeOperator(request.getOperator(), "操作人不能为空");
         String remark = StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : "批量处理";
         HandlingStatus handlingStatus = resolveHandlingStatus(actionType);
         for (String issueNo : request.getIssueNos()) {
@@ -251,6 +253,14 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             throw new IllegalArgumentException(message);
         }
         return text.trim();
+    }
+
+    private String normalizeOperator(String operator, String requiredMessage) {
+        String normalized = requireText(operator, requiredMessage);
+        if (normalized.length() > OPERATOR_MAX_LENGTH) {
+            throw new IllegalArgumentException("操作人长度不能超过64字符");
+        }
+        return normalized;
     }
 
     private String csv(String value) {

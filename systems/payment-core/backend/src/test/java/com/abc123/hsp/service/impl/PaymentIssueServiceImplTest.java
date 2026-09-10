@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentIssueActionRequestDTO;
@@ -247,15 +248,36 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidAcknowledgeOperatorBeforeReadingAlert() {
+        PaymentIssueAlertAcknowledgeRequestDTO blankRequest = new PaymentIssueAlertAcknowledgeRequestDTO();
+        blankRequest.setOperator("   ");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .acknowledgeAlert("PIA-ACK-001", blankRequest));
+
+        PaymentIssueAlertAcknowledgeRequestDTO longRequest = new PaymentIssueAlertAcknowledgeRequestDTO();
+        longRequest.setOperator(String.join("", Collections.nCopies(65, "a")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .acknowledgeAlert("PIA-ACK-001", longRequest));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
     void shouldMaskAlreadyAcknowledgedAlertWithoutChangingMapperDto() {
         PaymentIssueAlertLogRowDTO acknowledgedRow = new PaymentIssueAlertLogRowDTO();
         acknowledgedRow.setAlertNo("PIA-ACKED-001");
         acknowledgedRow.setAckStatus("已确认");
         acknowledgedRow.setProviderReceiptSnapshot("provider response: 13800138000");
         when(paymentIssueMapper.findAlertLogByAlertNo("PIA-ACKED-001")).thenReturn(acknowledgedRow);
+        PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
+        request.setOperator(" 支付运营 ");
 
         PaymentIssueAlertLogRowDTO result = new PaymentIssueServiceImpl(paymentIssueMapper)
-                .acknowledgeAlert("PIA-ACKED-001", null);
+                .acknowledgeAlert("PIA-ACKED-001", request);
 
         assertEquals("[REDACTED]", result.getProviderReceiptSnapshot());
         assertEquals("provider response: 13800138000", acknowledgedRow.getProviderReceiptSnapshot());
@@ -269,7 +291,7 @@ class PaymentIssueServiceImplTest {
         when(paymentIssueMapper.findAlertLogByAlertNo("PIA-NOACK-001")).thenReturn(noAckRow);
 
         PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
-        request.setOperator("支付运营");
+        request.setOperator(" 支付运营 ");
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -291,7 +313,7 @@ class PaymentIssueServiceImplTest {
         request.setIssueNos(Arrays.asList("ISSUE-WAIT-PAY-001"));
         request.setActionType("分派处理人");
         request.setAssignee("后端值班");
-        request.setOperator("支付运营");
+        request.setOperator(" 支付运营 ");
         request.setRemark("请先主动查单并核对回调");
 
         new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request);
@@ -338,10 +360,39 @@ class PaymentIssueServiceImplTest {
         request.setIssueNos(Arrays.asList("ISSUE-WAIT-PAY-001"));
         request.setActionType("未知动作");
         request.setAssignee("后端值班");
+        request.setOperator("支付运营");
 
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request)
         );
+    }
+
+    @Test
+    void shouldRejectMissingBatchActionOperatorBeforeReadingIssues() {
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Collections.singletonList("ISSUE-WAIT-PAY-001"));
+        request.setActionType("分派处理人");
+        request.setAssignee("后端值班");
+        request.setOperator("   ");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldRejectOverlongBatchActionOperatorBeforeReadingIssues() {
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Collections.singletonList("ISSUE-WAIT-PAY-001"));
+        request.setActionType("分派处理人");
+        request.setAssignee("后端值班");
+        request.setOperator(String.join("", Collections.nCopies(65, "a")));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request));
+        verifyNoInteractions(paymentIssueMapper);
     }
 }

@@ -18,7 +18,7 @@ const responsibilitySummaries = ref([]);
 const actionForm = ref({
   actionType: "分派处理人",
   assignee: "支付运营",
-  operator: "支付运营",
+  operator: "",
   remark: "请按建议动作完成排查并回写处理结果"
 });
 const filters = ref({
@@ -125,13 +125,18 @@ async function submitBatchAction() {
     actionMessage.value = "请先选择需要处理的异常。";
     return;
   }
+  const operator = actionForm.value.operator.trim();
+  if (!operator) {
+    actionMessage.value = "请先输入操作人。";
+    return;
+  }
   actionMessage.value = "";
   try {
     const result = await paymentIssueApi.batchAction({
       issueNos: selectedIssueNos.value,
       actionType: actionForm.value.actionType,
       assignee: actionForm.value.assignee,
-      operator: actionForm.value.operator,
+      operator,
       remark: actionForm.value.remark
     });
     items.value = result.items;
@@ -232,7 +237,7 @@ onMounted(loadIssues);
         </div>
         <div class="field">
           <label>操作人</label>
-          <input v-model="actionForm.operator" placeholder="请输入操作人" />
+          <input v-model="actionForm.operator" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="field wide-field">
           <label>处理备注</label>

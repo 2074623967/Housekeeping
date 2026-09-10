@@ -14,7 +14,7 @@ const activeAlertNo = ref("");
 const activeReceiptQueryAlertNo = ref("");
 const errorMessage = ref("");
 const successMessage = ref("");
-const ackOperator = ref("payment-core-admin");
+const ackOperator = ref("");
 const filters = ref({
   alertNo: route.query.alertNo || "",
   issueNo: route.query.issueNo || "",
@@ -302,7 +302,7 @@ onMounted(loadAlertLogs);
           </select>
         </div>
         <div class="field">
-          <label>默认操作人</label>
+          <label>操作人</label>
           <input v-model="ackOperator" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="toolbar-actions">
