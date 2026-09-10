@@ -8156,3 +8156,27 @@
 
 1. 平台交易状态与渠道返回码已在查单入口明确分层，合法状态规范化与未知状态失败闭合使用同一共享边界。
 2. 本地 mock 与自动化不证明真实 gateway-access、渠道状态码表、查询结果、资金到账、生产网络或稳定性，`release/v1.0.0` 继续冻结。
+
+## 284. 2026-09-11 支付提交结果共享校验 V1.0 验证
+
+### 284.1 本轮补强
+
+1. `PaymentChannelSubmitServiceImpl` 对任意 `PaymentChannelSubmitAdapter` 返回值执行统一首层校验，再对返回码标准化结果执行二次校验。
+2. 必填字段、原始控制字符、数据库字段容量和 `info / warn / danger / success` 状态类型有限集合在共享边界收口，具体适配器不能把未识别文本直接交给支付主流程。
+3. 非法结果发生在渠道调用之后时保持结果未知语义，只更新既有支付尝试与预付单待确认状态，不保存不可信渠道流水、响应快照或成功事实。
+
+### 284.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付提交联合定向测试 | `mvn -Dtest=PaymentChannelSubmitServiceImplTest,GatewayAccessPaymentChannelSubmitAdapterTest,PaymentChannelReturnCodeStandardizerTest,PaymentServiceImplTest test` | 通过 | `86` 个用例；覆盖空结果、原始控制字符、未知状态类型、标准化后二次校验和主流程未知结果保护 |
+| payment-core 全量测试 | `mvn test` | 通过 | `748` 个用例，`0` failures、`0` errors、`0` skipped |
+| 标准化前隔离 | Mockito 调用验证 | 通过 | 原始结果非法时返回码 Mapper 零访问 |
+| 资金事实隔离 | Mockito 调用验证 | 通过 | 不更新渠道流水、返回码快照，不创建提交事件或通知记录 |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无前端、Mapper、schema 或迁移变化 |
+
+### 284.3 当前判断
+
+1. 支付提交已形成“具体适配器校验 + 共享 Service 首层校验 + 返回码标准化后二次校验 + 主流程结果未知保护”的防御链。
+2. 本地 mock 与自动化不证明真实 gateway-access、渠道受理、资金到账、生产网络或稳定性，`release/v1.0.0` 继续冻结。

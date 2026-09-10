@@ -2896,6 +2896,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 空白、未知或不在有限集合内的交易状态统一返回 `PAYMENT_CHANNEL_QUERY_FAILED`，且必须在返回码标准化查询、快照保存、支付状态更新和成功事件派发前失败。
 4. 本地契约测试不证明真实 gateway-access、渠道状态码表、查询结果、资金到账、生产网络或稳定性。
 
+### 14.111 支付提交适配器结果契约
+
+1. `PaymentChannelSubmitAdapter.submit` 必须返回非空结果，且 `channelTransactionNo / attemptStatus / attemptStatusType / channelReturnCode` 均为必填；状态类型规范化为小写后只允许 `info / warn / danger / success`。
+2. 渠道流水号最长 `128`、尝试状态和类型最长 `32`、渠道返回码最长 `64`、响应快照最长 `2048` 个字符；标准码最长 `64`，标准文案与处理建议最长 `256`，布尔文案最长 `16`，映射版本最长 `32`。所有字符串在去空格前拒绝 ISO 控制字符。
+3. 共享 Service 在返回码映射前校验原始结果，并在映射后再次校验新增字段与响应快照；任一阶段失败均返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，原始非法结果不得触发返回码 Mapper 查询。
+4. 渠道调用后的校验失败不能证明渠道未受理，支付主流程保持结果未知并等待主动查单，不绑定非法渠道流水或形成提交成功事实。本地测试不证明真实渠道受理、资金到账、生产网络或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
