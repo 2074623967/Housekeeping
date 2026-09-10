@@ -18,9 +18,18 @@ const isLoading = ref(true);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
+
+function previousLocalDate() {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 const runForm = ref({
-  bizDate: "2026-07-19",
-  triggeredBy: "finance-ops",
+  bizDate: previousLocalDate(),
+  triggeredBy: "",
   runMode: "MANUAL"
 });
 
@@ -37,10 +46,15 @@ async function loadOverview() {
 }
 
 async function runBatch() {
+  const triggeredBy = runForm.value.triggeredBy.trim();
+  if (!triggeredBy) {
+    actionMessage.value = "请先输入触发人。";
+    return;
+  }
   activeAction.value = "run";
   actionMessage.value = "";
   try {
-    overview.value = await paymentDayEndApi.runBatch(runForm.value);
+    overview.value = await paymentDayEndApi.runBatch({ ...runForm.value, triggeredBy });
     actionMessage.value = `已触发 ${runForm.value.bizDate} 的支付日终处理。`;
   } catch (error) {
     actionMessage.value = `支付日终处理触发失败：${error.message}`;
@@ -187,13 +201,12 @@ onMounted(loadOverview);
               <label>运行方式</label>
               <select v-model="runForm.runMode">
                 <option value="MANUAL">MANUAL</option>
-                <option value="AUTO">AUTO</option>
                 <option value="RERUN">RERUN</option>
               </select>
             </div>
             <div class="field wide-field">
               <label>触发人</label>
-              <input v-model.trim="runForm.triggeredBy" placeholder="finance-ops" />
+              <input v-model.trim="runForm.triggeredBy" maxlength="64" placeholder="请输入触发人" />
             </div>
             <div class="toolbar-actions">
               <button class="button primary" :disabled="activeAction === 'run'" @click="runBatch">触发跑批</button>

@@ -51,7 +51,7 @@ public class PaymentDayEndController {
      * 手动触发支付日终处理。
      */
     @PostMapping("/run")
-    public ApiResponse<PaymentDayEndOverviewDTO> run(@RequestBody(required = false) PaymentDayEndRunRequestDTO request) {
+    public ApiResponse<PaymentDayEndOverviewDTO> run(@RequestBody PaymentDayEndRunRequestDTO request) {
         return ApiResponse.success(paymentDayEndService.run(request));
     }
 }

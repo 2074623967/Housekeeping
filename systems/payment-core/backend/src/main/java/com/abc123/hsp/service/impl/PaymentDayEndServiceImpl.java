@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ import org.springframework.util.StringUtils;
 public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final int TRIGGERED_BY_MAX_LENGTH = 64;
 
     private final PaymentDayEndMapper paymentDayEndMapper;
 
@@ -56,11 +58,16 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     @Override
     @Transactional
     public PaymentDayEndOverviewDTO run(PaymentDayEndRunRequestDTO request) {
+        if (request == null) {
+            throw new IllegalArgumentException("日终处理请求不能为空");
+        }
+        String triggeredBy = normalizeTriggeredBy(request.getTriggeredBy());
+        String runMode = normalizeManualRunMode(request.getRunMode());
         String bizDate = resolveBizDate(request);
         PaymentDayEndBatchEntity entity = new PaymentDayEndBatchEntity();
         entity.setBatchNo(buildBatchNo());
         entity.setBizDate(bizDate);
-        entity.setRunMode(resolveRunMode(request));
+        entity.setRunMode(runMode);
         entity.setPaymentTotalCount(defaultZero(paymentDayEndMapper.countPaymentsByDate(bizDate)));
         entity.setPaymentSuccessCount(defaultZero(paymentDayEndMapper.countSuccessPaymentsByDate(bizDate)));
         entity.setPaymentSuccessAmount(defaultAmount(paymentDayEndMapper.sumSuccessPaymentAmountByDate(bizDate)));
@@ -76,7 +83,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         entity.setInternalAbnormalCount(defaultZero(paymentDayEndMapper.countInternalAbnormalByDate(bizDate)));
         entity.setPendingRefundCount(defaultZero(paymentDayEndMapper.countPendingRefundByDate(bizDate)));
         entity.setPendingRefundAmount(defaultAmount(paymentDayEndMapper.sumPendingRefundAmountByDate(bizDate)));
-        entity.setTriggeredBy(resolveTriggeredBy(request));
+        entity.setTriggeredBy(triggeredBy);
         entity.setSummaryComment(buildSummaryComment(entity));
         entity.setBatchStatus(resolveBatchStatus(entity));
         entity.setBatchStatusType(resolveBatchStatusType(entity.getBatchStatus()));
@@ -132,18 +139,26 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         }
     }
 
-    private String resolveTriggeredBy(PaymentDayEndRunRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getTriggeredBy())) {
-            return "system-auto";
+    private String normalizeTriggeredBy(String triggeredBy) {
+        if (!StringUtils.hasText(triggeredBy)) {
+            throw new IllegalArgumentException("日终处理触发人不能为空");
         }
-        return request.getTriggeredBy().trim();
+        String normalized = triggeredBy.trim();
+        if (normalized.length() > TRIGGERED_BY_MAX_LENGTH) {
+            throw new IllegalArgumentException("日终处理触发人不能超过64个字符");
+        }
+        return normalized;
     }
 
-    private String resolveRunMode(PaymentDayEndRunRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getRunMode())) {
+    private String normalizeManualRunMode(String runMode) {
+        if (!StringUtils.hasText(runMode)) {
             return "MANUAL";
         }
-        return request.getRunMode().trim();
+        String normalized = runMode.trim().toUpperCase(Locale.ROOT);
+        if (!"MANUAL".equals(normalized) && !"RERUN".equals(normalized)) {
+            throw new IllegalArgumentException("手工日终运行方式只支持MANUAL或RERUN");
+        }
+        return normalized;
     }
 
     private String buildSummaryComment(PaymentDayEndBatchEntity entity) {

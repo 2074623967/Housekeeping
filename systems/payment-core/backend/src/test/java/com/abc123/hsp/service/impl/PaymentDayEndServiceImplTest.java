@@ -112,8 +112,8 @@ class PaymentDayEndServiceImplTest {
 
         PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
         request.setBizDate(bizDate);
-        request.setRunMode("AUTO");
-        request.setTriggeredBy("system");
+        request.setRunMode(" rerun ");
+        request.setTriggeredBy(" finance-ops ");
 
         new PaymentDayEndServiceImpl(paymentDayEndMapper).run(request);
 
@@ -124,6 +124,31 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), captor.getValue().getPaymentTotalCount());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getPaymentSuccessGapCount());
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("68.00"), captor.getValue().getPendingRefundAmount());
+        org.junit.jupiter.api.Assertions.assertEquals("RERUN", captor.getValue().getRunMode());
+        org.junit.jupiter.api.Assertions.assertEquals("finance-ops", captor.getValue().getTriggeredBy());
+    }
+
+    @Test
+    void shouldRejectInvalidManualTriggerBeforeReadingDayEndFacts() {
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
+        PaymentDayEndRunRequestDTO blankOperator = new PaymentDayEndRunRequestDTO();
+        blankOperator.setTriggeredBy("   ");
+        PaymentDayEndRunRequestDTO oversizedOperator = new PaymentDayEndRunRequestDTO();
+        oversizedOperator.setTriggeredBy(String.join("", Collections.nCopies(65, "A")));
+        PaymentDayEndRunRequestDTO automaticMode = new PaymentDayEndRunRequestDTO();
+        automaticMode.setTriggeredBy("finance-ops");
+        automaticMode.setRunMode("AUTO");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(null));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(blankOperator));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(oversizedOperator));
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(automaticMode));
+
+        org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
     }
 
     @Test
