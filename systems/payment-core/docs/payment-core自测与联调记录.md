@@ -7722,3 +7722,27 @@
 1. 支付日终人工入口已消除默认系统身份和人工 `AUTO` 的来源矛盾，非法来源声明不会触发任何日终事实查询或批次写入。
 2. 当前只形成自声明操作人的本地审计边界；自动日终仍未实现，可信身份、权限、生产日终与正式对账均需后续真实能力和证据。
 3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断未解除，`release/v1.0.0` 继续冻结。
+
+## 265. 2026-09-10 支付事件重发操作人审计 V1.0 验证
+
+### 265.1 本轮补强
+
+1. 单笔事件重发请求增加必填操作人，任务中心人工批量和自动事件重试分别逐事件传递规范化人工来源与 `payment-event-scheduler`；非法值在候选读取或投递前失败。
+2. 事件表新增最近成功重发操作人与时间，Mapper、两份 schema 和幂等迁移保持一致；列表、CSV、管理端表格及详情快照展示同一审计事实。
+3. 重发入口使用事件行锁串行化同事件并发投递；只有派发成功且审计更新命中一行才提交，失败、未知结果和审计写入异常不伪造成功重发记录。
+
+### 265.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 事件重发联合定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest,PaymentEventRepublishAuditMapperIntegrationTest,PaymentEventServiceImplTest,PaymentEventControllerTest,PaymentEventRetryTaskServiceImplTest,PaymentTaskCenterServiceImplTest test` | 通过 | `71` 个用例，`0` failures、`0` errors、`0` skipped；覆盖操作人前置校验、人工/自动来源、SQL 持久化、异常隔离与行锁重发 |
+| payment-core 全量测试 | `mvn test` | 通过 | `707` 个用例，`0` failures、`0` errors、`0` skipped |
+| admin-web 生产构建 | `npm run build` | 通过 | Vite 转换 `68` 个模块；仅有既有大于 `500 kB` 的 chunk 警告 |
+| 结构与补丁检查 | `xmllint --noout PaymentEventMapper.xml`、双 schema 片段比对、`git diff --check` | 通过 | Mapper XML 合法，运行 schema 字段一致，增量脚本使用 `information_schema` 幂等补列 |
+| 外部与生产事实 | 可信身份、生产 MySQL 迁移、真实下游消费、退款渠道受理和稳定观察 | 未执行 | 不记录可信授权、生产迁移、最终消费、渠道处理或正式放行通过 |
+
+### 265.3 当前判断
+
+1. 支付事件重发已从“只有次数与状态”补齐到“人工/自动来源逐事件可见”，并为同事件重发增加数据库并发串行化。
+2. 最近重发审计只证明 payment-core 成功执行既有派发链路并更新内部状态，不能替代下游幂等消费、账务入账、退款受理或生产稳定性证据。
+3. release 的候选发布说明、正式签字、发布后现场核验和稳定观察四项阻断未解除，`release/v1.0.0` 继续冻结。

@@ -444,6 +444,17 @@ t_order
 
 索引 `idx_issue_alert_receipt_query(provider_delivery_status, alert_status, next_receipt_query_at, receipt_query_count, created_at)` 支撑自动候选扫描。claim、失败完成和送达完成均校验次数，旧执行者不能覆盖新 claim；运行库由 `database/migrations/2026-09-10-add-issue-alert-receipt-query-retry.sql` 通过 `information_schema` 幂等补列和补索引。生产执行前仍需验证在线 DDL、锁影响、备份和回滚。
 
+### 4.23 支付事件成功重发审计字段
+
+`t_payment_event` 在既有发布状态、重试次数和时间之外增加：
+
+| 字段 | 说明 |
+| --- | --- |
+| `last_republish_operator` | 最近一次成功重发的人工自声明操作人或自动调度身份，最长 `64` 个字符；旧记录允许为空 |
+| `last_republished_at` | 最近一次成功重发审计写入的数据库时间；失败尝试不更新 |
+
+一致性规则：重发事务先使用 `event_no` 唯一索引锁定事件行，既有派发成功后再更新两项审计字段；审计更新不为一行时整体失败，避免发布状态与来源分离提交。运行库通过 `database/migrations/2026-09-10-add-payment-event-republish-audit.sql` 以 `information_schema` 幂等补列。当前只完成 H2/MySQL 兼容 SQL 测试，生产执行仍需评估在线 DDL、锁等待、备份与回滚。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
