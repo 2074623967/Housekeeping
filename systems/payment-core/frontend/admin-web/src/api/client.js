@@ -144,7 +144,10 @@ export const paymentIssueApi = {
     });
     return `/api/payment-issues/alerts/export?${params.toString()}`;
   },
-  acknowledgeAlert: (alertNo, payload) => postJson(`/api/payment-issues/alerts/${alertNo}/acknowledge`, payload),
+  acknowledgeAlert: (alertNo, payload) => postJson(
+    `/api/payment-issues/alerts/${encodeURIComponent(alertNo)}/acknowledge`,
+    payload
+  ),
   reconcileAlertReceipt: (alertNo, payload) => postJson(
     `/api/payment-task-center/reconcile-issue-alert-receipts/${encodeURIComponent(alertNo)}`,
     payload

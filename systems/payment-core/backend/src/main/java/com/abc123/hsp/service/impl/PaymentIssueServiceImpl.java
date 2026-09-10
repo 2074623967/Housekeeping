@@ -14,8 +14,10 @@ import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
@@ -31,6 +33,11 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentIssueServiceImpl implements PaymentIssueService {
 
+    private static final int ISSUE_ACTION_BATCH_MAX_SIZE = 100;
+    private static final int ISSUE_NO_MAX_LENGTH = 128;
+    private static final int ALERT_NO_MAX_LENGTH = 64;
+    private static final int ASSIGNEE_MAX_LENGTH = 64;
+    private static final int REMARK_MAX_LENGTH = 255;
     private static final int OPERATOR_MAX_LENGTH = 64;
 
     private final PaymentIssueMapper paymentIssueMapper;
@@ -147,7 +154,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     @Override
     @Transactional
     public PaymentIssueAlertLogRowDTO acknowledgeAlert(String alertNo, PaymentIssueAlertAcknowledgeRequestDTO request) {
-        String normalizedAlertNo = requireText(alertNo, "告警编号不能为空");
+        String normalizedAlertNo = normalizeText(alertNo, "告警编号", ALERT_NO_MAX_LENGTH, false);
         String operator = request == null ? null : request.getOperator();
         String normalizedOperator = normalizeOperator(operator, "确认人不能为空");
         PaymentIssueAlertLogRowDTO alertLog = paymentIssueMapper.findAlertLogByAlertNo(normalizedAlertNo);
@@ -171,13 +178,22 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (request == null || request.getIssueNos() == null || request.getIssueNos().isEmpty()) {
             throw new IllegalArgumentException("异常编号不能为空");
         }
-        String actionType = requireText(request.getActionType(), "处理动作不能为空");
-        String assignee = requireText(request.getAssignee(), "处理人不能为空");
-        String operator = normalizeOperator(request.getOperator(), "操作人不能为空");
-        String remark = StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : "批量处理";
+        if (request.getIssueNos().size() > ISSUE_ACTION_BATCH_MAX_SIZE) {
+            throw new IllegalArgumentException("单次最多处理100条异常");
+        }
+        String actionType = normalizeText(request.getActionType(), "处理动作", 32, false);
         HandlingStatus handlingStatus = resolveHandlingStatus(actionType);
-        for (String issueNo : request.getIssueNos()) {
-            String normalizedIssueNo = requireText(issueNo, "异常编号不能为空");
+        String assignee = normalizeText(request.getAssignee(), "处理人", ASSIGNEE_MAX_LENGTH, false);
+        String operator = normalizeOperator(request.getOperator(), "操作人不能为空");
+        String remark = normalizeText(request.getRemark(), "处理备注", REMARK_MAX_LENGTH, true);
+        List<String> normalizedIssueNos = request.getIssueNos().stream()
+                .map(issueNo -> normalizeText(issueNo, "异常编号", ISSUE_NO_MAX_LENGTH, false))
+                .collect(Collectors.toList());
+        Set<String> distinctIssueNos = new HashSet<>(normalizedIssueNos);
+        if (distinctIssueNos.size() != normalizedIssueNos.size()) {
+            throw new IllegalArgumentException("异常编号不能重复");
+        }
+        for (String normalizedIssueNo : normalizedIssueNos) {
             PaymentIssueRowDTO issue = paymentIssueMapper.findByIssueNo(normalizedIssueNo);
             if (issue == null) {
                 throw new IllegalArgumentException("支付交易异常不存在：" + normalizedIssueNo);
@@ -199,6 +215,27 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             }
         }
         return list(new PaymentIssueQueryDTO());
+    }
+
+    private String normalizeText(String text, String fieldName, int maxLength, boolean defaultRemark) {
+        if (text != null) {
+            for (int index = 0; index < text.length(); index++) {
+                if (Character.isISOControl(text.charAt(index))) {
+                    throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+                }
+            }
+        }
+        if (!StringUtils.hasText(text)) {
+            if (defaultRemark) {
+                return "批量处理";
+            }
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        String normalized = text.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
+        }
+        return normalized;
     }
 
     private PaymentIssueQueryDTO normalizeQuery(PaymentIssueQueryDTO query) {

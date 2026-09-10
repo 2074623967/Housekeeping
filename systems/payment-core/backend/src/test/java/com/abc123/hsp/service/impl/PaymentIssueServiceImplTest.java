@@ -20,6 +20,8 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -400,5 +402,101 @@ class PaymentIssueServiceImplTest {
                 IllegalArgumentException.class,
                 () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request));
         verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldRejectOversizedBatchBeforeReadingIssues() {
+        PaymentIssueActionRequestDTO request = validBatchActionRequest();
+        request.setIssueNos(IntStream.rangeClosed(1, 101)
+                .mapToObj(index -> "ISSUE-" + index)
+                .collect(Collectors.toList()));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldRejectInvalidBatchFieldsBeforeReadingIssues() {
+        PaymentIssueActionRequestDTO overlongIssueNo = validBatchActionRequest();
+        overlongIssueNo.setIssueNos(Arrays.asList("ISSUE-001", String.join("", Collections.nCopies(129, "a"))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(overlongIssueNo));
+
+        PaymentIssueActionRequestDTO duplicateIssueNo = validBatchActionRequest();
+        duplicateIssueNo.setIssueNos(Arrays.asList(" ISSUE-001 ", "ISSUE-001"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(duplicateIssueNo));
+
+        PaymentIssueActionRequestDTO controlAssignee = validBatchActionRequest();
+        controlAssignee.setAssignee("支付\u0085运营");
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(controlAssignee));
+
+        PaymentIssueActionRequestDTO overlongRemark = validBatchActionRequest();
+        overlongRemark.setRemark(String.join("", Collections.nCopies(256, "a")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(overlongRemark));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldUseDefaultRemarkAndNormalizedBatchFields() {
+        PaymentIssueRowDTO issue = new PaymentIssueRowDTO();
+        issue.setIssueNo("ISSUE-001");
+        issue.setPaymentOrderId("PAY-001");
+        issue.setIssueType("待回调未收口");
+        when(paymentIssueMapper.findByIssueNo("ISSUE-001")).thenReturn(issue);
+        when(paymentIssueMapper.findAll(any(PaymentIssueQueryDTO.class))).thenReturn(Collections.emptyList());
+        when(paymentIssueMapper.count(any(PaymentIssueQueryDTO.class))).thenReturn(0L);
+        PaymentIssueActionRequestDTO request = validBatchActionRequest();
+        request.setIssueNos(Collections.singletonList(" ISSUE-001 "));
+        request.setAssignee(" 后端值班 ");
+        request.setRemark("   ");
+
+        new PaymentIssueServiceImpl(paymentIssueMapper).batchAction(request);
+
+        verify(paymentIssueMapper).insertActionLog(
+                anyString(),
+                org.mockito.ArgumentMatchers.eq("ISSUE-001"),
+                org.mockito.ArgumentMatchers.eq("PAY-001"),
+                org.mockito.ArgumentMatchers.eq("待回调未收口"),
+                org.mockito.ArgumentMatchers.eq("分派处理人"),
+                org.mockito.ArgumentMatchers.eq("后端值班"),
+                org.mockito.ArgumentMatchers.eq("已分派"),
+                org.mockito.ArgumentMatchers.eq("info"),
+                org.mockito.ArgumentMatchers.eq("批量处理"),
+                org.mockito.ArgumentMatchers.eq("支付运营"));
+    }
+
+    @Test
+    void shouldRejectInvalidAlertNoBeforeReadingAlert() {
+        PaymentIssueAlertAcknowledgeRequestDTO request = new PaymentIssueAlertAcknowledgeRequestDTO();
+        request.setOperator("支付运营");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .acknowledgeAlert(String.join("", Collections.nCopies(65, "a")), request));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentIssueServiceImpl(paymentIssueMapper)
+                        .acknowledgeAlert("PIA-\u0085-001", request));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    private PaymentIssueActionRequestDTO validBatchActionRequest() {
+        PaymentIssueActionRequestDTO request = new PaymentIssueActionRequestDTO();
+        request.setIssueNos(Collections.singletonList("ISSUE-001"));
+        request.setActionType("分派处理人");
+        request.setAssignee("后端值班");
+        request.setOperator("支付运营");
+        request.setRemark("排查并跟进");
+        return request;
     }
 }

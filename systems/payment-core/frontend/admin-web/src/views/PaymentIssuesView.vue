@@ -233,7 +233,7 @@ onMounted(loadIssues);
         </div>
         <div class="field">
           <label>处理人</label>
-          <input v-model="actionForm.assignee" placeholder="如 支付运营 / 后端值班" />
+          <input v-model="actionForm.assignee" maxlength="64" placeholder="如 支付运营 / 后端值班" />
         </div>
         <div class="field">
           <label>操作人</label>
@@ -241,7 +241,7 @@ onMounted(loadIssues);
         </div>
         <div class="field wide-field">
           <label>处理备注</label>
-          <input v-model="actionForm.remark" placeholder="请写清楚处理结论、排查方向或交接说明" />
+          <input v-model="actionForm.remark" maxlength="255" placeholder="请写清楚处理结论、排查方向或交接说明" />
         </div>
         <div class="toolbar-actions">
           <button class="button primary" @click="submitBatchAction">批量处理选中异常</button>
