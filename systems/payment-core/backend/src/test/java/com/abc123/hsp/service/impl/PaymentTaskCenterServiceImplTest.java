@@ -106,6 +106,23 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRunSpecifiedIssueAlertReceiptQueryAndRefreshOverview() {
+        PaymentTaskActionResultDTO actionResult = new PaymentTaskActionResultDTO();
+        actionResult.setProcessedCount(1);
+        when(paymentIssueAlertDeliveryService.reconcileDeliveryReceipt("PIA-IM-001"))
+                .thenReturn(actionResult);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService()
+                .runReconcileIssueAlertReceipt("PIA-IM-001");
+
+        verify(paymentIssueAlertDeliveryService).reconcileDeliveryReceipt("PIA-IM-001");
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertNotNull(result.getOverview());
+    }
+
+    @Test
     void shouldExposeUnknownRefundSubmitAsImmediateP1Alert() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countUnknownRefundSubmitEvents()).thenReturn(2);

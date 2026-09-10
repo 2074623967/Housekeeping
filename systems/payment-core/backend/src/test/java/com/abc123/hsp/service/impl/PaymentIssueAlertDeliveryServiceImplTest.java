@@ -827,6 +827,56 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldReconcileSpecifiedReceiptWithPersistedAttemptCount() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-SINGLE", "PIA-OUTBOX-SINGLE");
+        acceptedLog.setReceiptQueryCount(4);
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogByAlertNo("PIA-IM-SINGLE"))
+                .thenReturn(acceptedLog);
+        when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery("PIA-IM-SINGLE", 4, true, 10, 30))
+                .thenReturn(1);
+        when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class)))
+                .thenReturn(1);
+        when(receiptQueryAdapter.supports("IM")).thenReturn(true);
+        when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
+                buildDeliveryResult("IM-RECEIPT-SINGLE", "DELIVERED", "供应商查询确认送达", ""));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter),
+                receiptQueryRateLimitService
+        ).reconcileDeliveryReceipt(" PIA-IM-SINGLE ");
+
+        verify(paymentTaskCenterMapper).claimIssueAlertReceiptQuery("PIA-IM-SINGLE", 4, true, 10, 30);
+        verify(receiptQueryRateLimitService).acquire("IM", "PIA-IM-SINGLE");
+        verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(1, result.getSuccessCount());
+    }
+
+    @Test
+    void shouldRejectSpecifiedReceiptThatIsNotPendingConfirmation() {
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogByAlertNo("PIA-ACKED"))
+                .thenReturn(null);
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        IllegalArgumentException exception = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt("PIA-ACKED"));
+
+        Assertions.assertTrue(exception.getMessage().contains("当前状态不允许"));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).claimIssueAlertReceiptQuery(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
     void shouldFailClosedWhenNoReceiptQueryAdapterIsAvailable() {
         PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
         when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))

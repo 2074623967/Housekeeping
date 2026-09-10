@@ -12,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -150,6 +151,15 @@ public class PaymentTaskCenterController {
     @PostMapping("/reconcile-issue-alert-receipts")
     public ApiResponse<PaymentTaskActionResultDTO> runReconcileIssueAlertReceipts() {
         return ApiResponse.success(paymentTaskCenterService.runReconcileIssueAlertReceipts());
+    }
+
+    /**
+     * 手动执行指定异常告警的供应商回执回查。
+     */
+    @PostMapping("/reconcile-issue-alert-receipts/{alertNo}")
+    public ApiResponse<PaymentTaskActionResultDTO> runReconcileIssueAlertReceipt(
+            @PathVariable String alertNo) {
+        return ApiResponse.success(paymentTaskCenterService.runReconcileIssueAlertReceipt(alertNo));
     }
 
     /**

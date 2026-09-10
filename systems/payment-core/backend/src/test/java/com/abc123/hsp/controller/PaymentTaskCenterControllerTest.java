@@ -83,6 +83,7 @@ class PaymentTaskCenterControllerTest {
         when(paymentTaskCenterService.runEscalateOverdueIssues()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runDispatchIssueAlerts()).thenReturn(resultDTO);
         when(paymentTaskCenterService.runReconcileIssueAlertReceipts()).thenReturn(resultDTO);
+        when(paymentTaskCenterService.runReconcileIssueAlertReceipt("PIA-001")).thenReturn(resultDTO);
         when(paymentTaskCenterService.runControlPolicySelfChecks()).thenReturn(resultDTO);
 
         assertEquals(4, controller.runCloseExpiredPayments().getData().getProcessedCount());
@@ -94,6 +95,7 @@ class PaymentTaskCenterControllerTest {
         assertEquals(4, controller.runEscalateOverdueIssues().getData().getProcessedCount());
         assertEquals(4, controller.runDispatchIssueAlerts().getData().getProcessedCount());
         assertEquals(4, controller.runReconcileIssueAlertReceipts().getData().getProcessedCount());
+        assertEquals(4, controller.runReconcileIssueAlertReceipt("PIA-001").getData().getProcessedCount());
         assertEquals(4, controller.runControlPolicySelfChecks().getData().getProcessedCount());
 
         verify(paymentTaskCenterService).runCloseExpiredPayments();
@@ -105,6 +107,7 @@ class PaymentTaskCenterControllerTest {
         verify(paymentTaskCenterService).runEscalateOverdueIssues();
         verify(paymentTaskCenterService).runDispatchIssueAlerts();
         verify(paymentTaskCenterService).runReconcileIssueAlertReceipts();
+        verify(paymentTaskCenterService).runReconcileIssueAlertReceipt("PIA-001");
         verify(paymentTaskCenterService).runControlPolicySelfChecks();
     }
 

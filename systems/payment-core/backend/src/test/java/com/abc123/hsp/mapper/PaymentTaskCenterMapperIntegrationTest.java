@@ -376,8 +376,32 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
                     accepted.getAlertNo(), 2, "FAILED", 120, 2));
             assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
-            assertEquals(1, mapper.findAcceptedIssueAlertDeliveryLogs(10).size());
+            List<PaymentIssueAlertLogEntity> manualCandidates = mapper.findAcceptedIssueAlertDeliveryLogs(10);
+            assertEquals(1, manualCandidates.size());
+            assertEquals(Integer.valueOf(2), manualCandidates.get(0).getReceiptQueryCount());
+            PaymentIssueAlertLogEntity specified =
+                    mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(accepted.getAlertNo());
+            assertEquals(Integer.valueOf(2), specified.getReceiptQueryCount());
             assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 2, true, 2, 30));
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET ack_status = '已确认', ack_status_type = 'success' "
+                        + "WHERE alert_no = 'PIA-RECEIPT-RETRY'");
+            }
+            session.clearCache();
+            assertEquals(0, mapper.findAcceptedIssueAlertDeliveryLogs(10).size());
+            org.junit.jupiter.api.Assertions.assertNull(
+                    mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(accepted.getAlertNo()));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 3, true, 2, 30));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    accepted.getAlertNo(), 3, "FAILED", 120, 2));
+            PaymentIssueAlertLogEntity lateUpdate = new PaymentIssueAlertLogEntity();
+            lateUpdate.setAlertNo(accepted.getAlertNo());
+            lateUpdate.setProviderDeliveryStatus("DELIVERED");
+            lateUpdate.setAckStatus("已确认");
+            lateUpdate.setReceiptQueryCount(3);
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(lateUpdate));
         }
     }
 

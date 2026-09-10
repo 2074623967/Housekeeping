@@ -223,6 +223,11 @@ public interface PaymentTaskCenterMapper {
     List<PaymentIssueAlertLogEntity> findAcceptedIssueAlertDeliveryLogs(@Param("batchSize") int batchSize);
 
     /**
+     * 查询指定的待确认供应商受理告警。
+     */
+    PaymentIssueAlertLogEntity findAcceptedIssueAlertDeliveryLogByAlertNo(@Param("alertNo") String alertNo);
+
+    /**
      * 查询达到首次等待或重试退避时间、尚未耗尽自动次数的供应商受理告警。
      */
     List<PaymentIssueAlertLogEntity> findDueAcceptedIssueAlertDeliveryLogs(

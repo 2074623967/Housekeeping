@@ -23,6 +23,11 @@ public interface PaymentIssueAlertDeliveryService {
     PaymentTaskActionResultDTO reconcileDeliveryReceipts();
 
     /**
+     * 手动回查指定的供应商受理告警。
+     */
+    PaymentTaskActionResultDTO reconcileDeliveryReceipt(String alertNo);
+
+    /**
      * 自动回查已被供应商受理但尚未确认送达的异常告警。
      */
     PaymentTaskActionResultDTO autoReconcileDeliveryReceipts();

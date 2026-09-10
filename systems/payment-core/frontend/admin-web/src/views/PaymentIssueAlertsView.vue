@@ -11,6 +11,7 @@ const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
 const activeAlertNo = ref("");
+const activeReceiptQueryAlertNo = ref("");
 const errorMessage = ref("");
 const successMessage = ref("");
 const ackOperator = ref("payment-core-admin");
@@ -155,6 +156,26 @@ async function acknowledgeAlert(alertNo) {
     errorMessage.value = `确认回执失败：${error.message}`;
   } finally {
     activeAlertNo.value = "";
+  }
+}
+
+async function reconcileAlertReceipt(alertNo) {
+  activeReceiptQueryAlertNo.value = alertNo;
+  errorMessage.value = "";
+  successMessage.value = "";
+  try {
+    const result = await paymentIssueApi.reconcileAlertReceipt(alertNo);
+    const summary = result.summaryComment || `告警 ${alertNo} 回执回查已执行`;
+    await loadAlertLogs();
+    if (result.failCount > 0) {
+      errorMessage.value = summary;
+    } else {
+      successMessage.value = summary;
+    }
+  } catch (error) {
+    errorMessage.value = `回执回查失败：${error.message}`;
+  } finally {
+    activeReceiptQueryAlertNo.value = "";
   }
 }
 
@@ -344,14 +365,23 @@ onMounted(loadAlertLogs);
                   <div class="muted-text">结果 {{ item.receiptQueryResult || "-" }}</div>
                 </td>
                 <td>
-                  <button
-                    v-if="item.ackStatus === '待确认'"
-                    class="button secondary"
-                    :disabled="activeAlertNo === item.alertNo"
-                    @click="acknowledgeAlert(item.alertNo)"
-                  >
-                    {{ activeAlertNo === item.alertNo ? "确认中..." : "确认回执" }}
-                  </button>
+                  <div v-if="item.ackStatus === '待确认'" class="list-actions">
+                    <button
+                      v-if="item.receiptQueryState && item.receiptQueryState !== 'QUERYING'"
+                      class="button secondary"
+                      :disabled="activeReceiptQueryAlertNo === item.alertNo || activeAlertNo === item.alertNo"
+                      @click="reconcileAlertReceipt(item.alertNo)"
+                    >
+                      {{ activeReceiptQueryAlertNo === item.alertNo ? "回查中..." : "人工回查" }}
+                    </button>
+                    <button
+                      class="button secondary"
+                      :disabled="activeAlertNo === item.alertNo || activeReceiptQueryAlertNo === item.alertNo"
+                      @click="acknowledgeAlert(item.alertNo)"
+                    >
+                      {{ activeAlertNo === item.alertNo ? "确认中..." : "确认回执" }}
+                    </button>
+                  </div>
                   <span v-else class="muted-text">无需操作</span>
                 </td>
                 <td>{{ item.createdAt }}</td>

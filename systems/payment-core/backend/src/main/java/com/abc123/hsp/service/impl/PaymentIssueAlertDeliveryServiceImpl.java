@@ -19,6 +19,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -240,6 +241,22 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     @Transactional
     public PaymentTaskActionResultDTO reconcileDeliveryReceipts() {
         return reconcileDeliveryReceiptsByMode(RUN_MODE_MANUAL, "payment-core-admin");
+    }
+
+    @Override
+    @Transactional
+    public PaymentTaskActionResultDTO reconcileDeliveryReceipt(String alertNo) {
+        if (!StringUtils.hasText(alertNo)) {
+            throw new IllegalArgumentException("告警编号不能为空");
+        }
+        String normalizedAlertNo = alertNo.trim();
+        PaymentIssueAlertLogEntity acceptedLog =
+                paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogByAlertNo(normalizedAlertNo);
+        if (acceptedLog == null) {
+            throw new IllegalArgumentException("告警不存在或当前状态不允许回执回查");
+        }
+        return reconcileDeliveryReceipts(
+                Collections.singletonList(acceptedLog), RUN_MODE_MANUAL, "payment-core-admin");
     }
 
     @Override
@@ -1062,6 +1079,12 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         receiptQueryClaimTimeoutSeconds,
                         receiptQueryBatchSize)
                 : paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(receiptQueryBatchSize);
+        return reconcileDeliveryReceipts(acceptedLogs, runMode, triggeredBy);
+    }
+
+    private PaymentTaskActionResultDTO reconcileDeliveryReceipts(List<PaymentIssueAlertLogEntity> acceptedLogs,
+                                                                 String runMode,
+                                                                 String triggeredBy) {
         int successCount = 0;
         int failCount = 0;
         List<String> failedAlertNos = new ArrayList<String>();
@@ -1300,7 +1323,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setSuggestedAction(failCount > 0
                 ? "优先核对供应商回执接口、告警日志并发更新和通知通道状态"
                 : "继续保持供应商回执回查任务自动巡检");
-        entity.setRecommendedRoute("/payment-issues");
+        entity.setRecommendedRoute("/payment-issue-alerts");
         entity.setTriggeredBy(triggeredBy);
         paymentTaskCenterMapper.insertTaskRunLog(entity);
 
