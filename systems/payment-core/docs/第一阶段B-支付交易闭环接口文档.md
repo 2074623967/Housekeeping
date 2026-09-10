@@ -2680,6 +2680,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 当前窗口额度耗尽时返回内部业务错误 `PAYMENT-1051`，本条回查计为失败且不更新投递日志或来源告警；批次继续处理后续项目。拒绝事实以独立新事务保存通道、告警号和窗口配置，不写供应商报文、凭证或异常原文。
 5. 数据库固定窗口实现只提供跨实例原子占额基线，存在窗口边界突发特性。本地 H2/MySQL 兼容测试不证明生产 MySQL 锁竞争、真实网关容量、供应商配额或稳定性已经验证。
 
+### 14.83 告警供应商回执回查退避与占用契约
+
+1. 自动回查只选择已保持 `ACCEPTED` 至少 `min-age-seconds`、未达到 `max-attempts` 且 `next_receipt_query_at` 已到期的外部通道日志；单轮最多处理 `batch-size` 条。人工回查使用相同批次上限，但允许越过自动退避时间和自动次数上限。
+2. 每次调用适配器前必须按 `alertNo + receiptQueryCount` 原子 claim：次数加一，结果写为 `QUERYING`，并设置占用超时时间。候选版本已变化、仍在有效占用期或状态不再为 `ACCEPTED` 时 claim 失败，本条不调用适配器和限流服务。
+3. 未送达结果只保存有限分类 `ADAPTER_MISSING / RATE_LIMITED / QUERY_ERROR / EMPTY / RECEIPT_CONFLICT / ACCEPTED / FAILED`，不保存异常原文；下一次自动时间按 `retry-interval-seconds * retry-backoff-factor^历史次数` 计算并由 `max-retry-interval-seconds` 封顶。
+4. 失败完成与 `DELIVERED` 回写都必须匹配本次 claim 后的次数及 `QUERYING` 状态，过期执行者不能覆盖后继实例。达到自动次数上限后不再设置自动重试时间，人工核查仍可重新 claim。
+5. 配置环境变量为 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_MIN_AGE_SECONDS / RETRY_INTERVAL_SECONDS / RETRY_BACKOFF_FACTOR / MAX_RETRY_INTERVAL_SECONDS / MAX_ATTEMPTS / BATCH_SIZE / CLAIM_TIMEOUT_SECONDS`，默认依次为 `60 / 60 / 2 / 900 / 10 / 100 / 30`，非正值收敛为 `1`。
+6. 本地自动化只证明候选 SQL、CAS、有限失败状态和退避计算；不证明生产 MySQL 在线迁移、锁等待、真实供应商查询节奏、最终送达或稳定性通过。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。

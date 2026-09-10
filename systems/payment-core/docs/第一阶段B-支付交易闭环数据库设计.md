@@ -431,6 +431,19 @@ t_order
 
 事务规则：拒绝日志在 `REQUIRES_NEW` 事务中提交，并对 `BusinessException` 不回滚，确保外层将本条计为失败时仍保留容量拒绝事实。表中不保存通知网关请求、供应商响应、凭证或异常原文。
 
+### 4.22 告警投递日志回执回查状态字段
+
+`t_payment_issue_alert_log` 在既有供应商受理和送达字段之外增加以下回查调度状态：
+
+| 字段 | 说明 |
+| --- | --- |
+| `receipt_query_count` | 已成功 claim 的回查次数，默认 `0`，同时作为并发 CAS 版本 |
+| `last_receipt_query_at` | 最近一次 claim 的数据库时间，用于判断 `QUERYING` 占用是否过期 |
+| `next_receipt_query_at` | 下一次允许自动回查的数据库时间；达到上限或已送达后为空 |
+| `receipt_query_result` | `QUERYING / DELIVERED` 或受控失败与非终态分类，不保存异常原文 |
+
+索引 `idx_issue_alert_receipt_query(provider_delivery_status, alert_status, next_receipt_query_at, receipt_query_count, created_at)` 支撑自动候选扫描。claim、失败完成和送达完成均校验次数，旧执行者不能覆盖新 claim；运行库由 `database/migrations/2026-09-10-add-issue-alert-receipt-query-retry.sql` 通过 `information_schema` 幂等补列和补索引。生产执行前仍需验证在线 DDL、锁影响、备份和回滚。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
