@@ -181,6 +181,52 @@
         LIMIT 1
     </select>
 
+    <select id="findEnabledCertificateByGatewayCode"
+            resultType="com.abc123.gatewayaccess.entity.GatewayCertificateEntity">
+        SELECT id,
+               certificate_code AS certificateCode,
+               gateway_code AS gatewayCode,
+               certificate_version AS certificateVersion,
+               DATE_FORMAT(expire_at, '%Y-%m-%d') AS expireAt,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_certificate
+        WHERE gateway_code = #{gatewayCode}
+          AND status = 'ENABLED'
+        ORDER BY expire_at DESC
+        LIMIT 1
+    </select>
+
+    <select id="findEnabledReleaseRoute"
+            resultType="com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO">
+        SELECT route_code AS routeCode,
+               gateway_code AS gatewayCode,
+               environment,
+               release_strategy AS releaseStrategy,
+               traffic_percent AS trafficPercent,
+               release_window AS releaseWindow,
+               status,
+               status_type AS statusType,
+               DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+        FROM t_gateway_release_route
+        WHERE gateway_code = #{gatewayCode}
+          AND environment = #{environment}
+          AND status = 'ENABLED'
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insertAuditLog">
+        INSERT INTO t_gateway_audit_log (
+            request_id, app_code, gateway_code, operation_type, sign_type, client_ip,
+            result_status, result_status_type, risk_hint, happened_at
+        ) VALUES (
+            #{requestId}, #{appCode}, #{gatewayCode}, #{operationType}, #{signType}, #{clientIp},
+            #{resultStatus}, #{resultStatusType}, #{riskHint}, NOW()
+        )
+    </insert>
+
     <select id="findReleaseRouteByCode" resultType="com.abc123.gatewayaccess.dto.GatewayReleaseRouteDTO">
         SELECT route_code AS routeCode,
                gateway_code AS gatewayCode,

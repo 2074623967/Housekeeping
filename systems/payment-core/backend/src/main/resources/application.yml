@@ -91,8 +91,11 @@ payment:
     gateway-access:
       # 生产环境启用后由 gateway-access 返回渠道交易事实；本地模拟适配器仅在 demo profile 注册。
       enabled: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ENABLED:false}
-      query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://127.0.0.1:18150/api/gateway/payment-orders/query}
+      query-url: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_URL:http://127.0.0.1:8090/api/gateway/payment-orders/query}
       supported-channels: ${HSP_PAYMENT_CHANNEL_QUERY_SUPPORTED_CHANNELS:wx_h5,alipay_h5,offline_bank}
+      app-code: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_APP_CODE:APP_PAY_CORE}
+      # 与 gateway-access 部署配置一致；默认留空时 gateway-access 会拒绝交易请求。
+      access-key: ${HSP_PAYMENT_CHANNEL_QUERY_GATEWAY_ACCESS_KEY:}
       timeout-ms: ${HSP_PAYMENT_CHANNEL_QUERY_TIMEOUT_MS:2000}
     compensation:
       # 仅在真实 gateway-access 查单可用时开启，避免本地模拟结果产生无意义轮询日志。

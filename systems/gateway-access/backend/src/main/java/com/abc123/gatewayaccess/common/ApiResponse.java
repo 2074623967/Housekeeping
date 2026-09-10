@@ -19,6 +19,14 @@ public class ApiResponse<T> {
         return response;
     }
 
+    public static <T> ApiResponse<T> failure(String code, String message) {
+        ApiResponse<T> response = new ApiResponse<>();
+        response.code = code;
+        response.message = message;
+        response.requestId = RequestIdHolder.requestId();
+        return response;
+    }
+
     public String getCode() {
         return code;
     }

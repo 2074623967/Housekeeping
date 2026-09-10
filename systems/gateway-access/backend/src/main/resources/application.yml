@@ -17,3 +17,22 @@ mybatis:
   mapper-locations: classpath*:mapper/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+gateway:
+  transaction:
+    app-code: ${HSP_GATEWAY_PAYMENT_APP_CODE:APP_PAY_CORE}
+    permission-code: ${HSP_GATEWAY_PAYMENT_PERMISSION_CODE:PERM_PAYMENT_CORE}
+    # 默认留空，部署时必须显式注入；未配置时交易接口失败闭合。
+    access-key: ${HSP_GATEWAY_PAYMENT_ACCESS_KEY:}
+    environment: ${HSP_GATEWAY_PAYMENT_ENVIRONMENT:PROD}
+    timeout-ms: ${HSP_GATEWAY_PAYMENT_QUERY_TIMEOUT_MS:2000}
+    channels:
+      wx_h5:
+        gateway-code: GW_WX
+        payment-query-url: ${HSP_GATEWAY_WX_PAYMENT_QUERY_URL:}
+      alipay_h5:
+        gateway-code: GW_ALI
+        payment-query-url: ${HSP_GATEWAY_ALIPAY_PAYMENT_QUERY_URL:}
+      offline_bank:
+        gateway-code: GW_BANK
+        payment-query-url: ${HSP_GATEWAY_BANK_PAYMENT_QUERY_URL:}

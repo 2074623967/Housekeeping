@@ -14,6 +14,10 @@ import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
@@ -28,6 +32,8 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
     private final boolean enabled;
     private final String queryUrl;
     private final Set<String> supportedChannels;
+    private final String appCode;
+    private final String accessKey;
     private final RestTemplate restTemplate;
 
     @Autowired
@@ -36,8 +42,10 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
             @Value("${payment.channel-query.gateway-access.query-url:}") String queryUrl,
             @Value("${payment.channel-query.gateway-access.supported-channels:wx_h5,alipay_h5,offline_bank}")
                     String supportedChannels,
+            @Value("${payment.channel-query.gateway-access.app-code:APP_PAY_CORE}") String appCode,
+            @Value("${payment.channel-query.gateway-access.access-key:}") String accessKey,
             @Value("${payment.channel-query.gateway-access.timeout-ms:2000}") int timeoutMs) {
-        this(enabled, queryUrl, supportedChannels,
+        this(enabled, queryUrl, supportedChannels, appCode, accessKey,
                 AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(timeoutMs));
     }
 
@@ -46,9 +54,21 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
             String queryUrl,
             String supportedChannels,
             RestTemplate restTemplate) {
+        this(enabled, queryUrl, supportedChannels, "APP_PAY_CORE", "", restTemplate);
+    }
+
+    GatewayAccessPaymentChannelQueryAdapter(
+            boolean enabled,
+            String queryUrl,
+            String supportedChannels,
+            String appCode,
+            String accessKey,
+            RestTemplate restTemplate) {
         this.enabled = enabled;
         this.queryUrl = queryUrl;
         this.supportedChannels = parseChannels(supportedChannels);
+        this.appCode = appCode;
+        this.accessKey = accessKey;
         this.restTemplate = restTemplate;
     }
 
@@ -56,6 +76,8 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
     public boolean supports(String channelCode) {
         return enabled
                 && StringUtils.hasText(queryUrl)
+                && StringUtils.hasText(appCode)
+                && StringUtils.hasText(accessKey)
                 && StringUtils.hasText(channelCode)
                 && supportedChannels.contains(channelCode.trim().toLowerCase(Locale.ROOT));
     }
@@ -68,9 +90,18 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
         request.setChannelCode(paymentDetail.getChannel());
         request.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
         try {
-            GatewayQueryResponse response = restTemplate.postForObject(
-                    queryUrl.trim(), request, GatewayQueryResponse.class);
-            PaymentChannelQueryResultDTO result = response == null ? null : response.getData();
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Gateway-App-Code", appCode);
+            headers.set("X-Gateway-Access-Key", accessKey);
+            ResponseEntity<GatewayQueryResponse> responseEntity = restTemplate.exchange(
+                    queryUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers), GatewayQueryResponse.class);
+            GatewayQueryResponse response = responseEntity.getBody();
+            if (response == null || !"0".equals(response.getCode())) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                        "gateway-access rejected payment query");
+            }
+            PaymentChannelQueryResultDTO result = response.getData();
             if (result == null || !StringUtils.hasText(result.getTradeStatus())) {
                 throw new BusinessException(
                         ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,

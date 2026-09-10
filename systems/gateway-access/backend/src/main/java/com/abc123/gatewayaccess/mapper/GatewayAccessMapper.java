@@ -13,6 +13,7 @@ import com.abc123.gatewayaccess.entity.GatewayAppEntity;
 import com.abc123.gatewayaccess.entity.GatewayCertificateEntity;
 import com.abc123.gatewayaccess.entity.GatewayChannelEntity;
 import com.abc123.gatewayaccess.entity.GatewayPermissionEntity;
+import com.abc123.gatewayaccess.entity.GatewayAuditLogEntity;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -70,6 +71,13 @@ public interface GatewayAccessMapper {
      * 查询单个权限。
      */
     GatewayPermissionEntity findPermissionByCode(@Param("permissionCode") String permissionCode);
+
+    GatewayCertificateEntity findEnabledCertificateByGatewayCode(@Param("gatewayCode") String gatewayCode);
+
+    GatewayReleaseRouteDTO findEnabledReleaseRoute(@Param("gatewayCode") String gatewayCode,
+                                                   @Param("environment") String environment);
+
+    int insertAuditLog(GatewayAuditLogEntity auditLog);
 
     /**
      * 查询单个灰度路由。
