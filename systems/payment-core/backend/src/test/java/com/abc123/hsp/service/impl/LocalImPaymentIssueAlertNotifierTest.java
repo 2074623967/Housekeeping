@@ -151,6 +151,86 @@ class LocalImPaymentIssueAlertNotifierTest {
     }
 
     @Test
+    void shouldRedactSignatureFailureDetails() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        String sensitiveAlgorithm = "https://secret.example.com/sign token-value\nforged-log";
+
+        RuntimeException exception = Assertions.assertThrows(RuntimeException.class,
+                () -> new LocalImPaymentIssueAlertNotifier(
+                        restTemplate,
+                        "https://hooks.example.com/payment-alert",
+                        4500,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "X-Signature",
+                        "private-key-secret",
+                        sensitiveAlgorithm,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                ).send(buildDispatchItem()));
+
+        Assertions.assertEquals(
+                "PAYMENT_ISSUE_ALERT_SIGNATURE_FAILED:IllegalArgumentException",
+                exception.getMessage());
+        Assertions.assertNull(exception.getCause());
+        Assertions.assertEquals(0, exception.getStackTrace().length);
+        Assertions.assertFalse(exception.getMessage().contains("secret.example.com"));
+        Assertions.assertFalse(exception.getMessage().contains("token-value"));
+        Assertions.assertFalse(exception.getMessage().contains("forged-log"));
+        Mockito.verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void shouldRedactInvalidWebhookJsonDetails() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        String sensitiveResponse = "{\"code\":\"0\",\"token\":\"provider-secret-token\","
+                + "\"url\":\"https://secret.example.com/\nforged-log";
+        when(restTemplate.postForEntity(
+                Mockito.eq("https://hooks.example.com/payment-alert"),
+                Mockito.any(),
+                Mockito.eq(String.class)
+        )).thenReturn(new ResponseEntity<String>(sensitiveResponse, HttpStatus.OK));
+
+        RuntimeException exception = Assertions.assertThrows(RuntimeException.class,
+                () -> new LocalImPaymentIssueAlertNotifier(
+                        restTemplate,
+                        "https://hooks.example.com/payment-alert",
+                        4500,
+                        "/code",
+                        "0",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ""
+                ).send(buildDispatchItem()));
+
+        Assertions.assertTrue(exception.getMessage().startsWith(
+                "PAYMENT_ISSUE_ALERT_RESPONSE_JSON_INVALID:"));
+        Assertions.assertNull(exception.getCause());
+        Assertions.assertEquals(0, exception.getStackTrace().length);
+        Assertions.assertFalse(exception.getMessage().contains("provider-secret-token"));
+        Assertions.assertFalse(exception.getMessage().contains("secret.example.com"));
+        Assertions.assertFalse(exception.getMessage().contains("forged-log"));
+    }
+
+    @Test
     void shouldFailWhenHttpSuccessHasNoBusinessAcceptanceEvidence() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.postForEntity(Mockito.anyString(), Mockito.any(), Mockito.eq(String.class)))

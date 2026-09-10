@@ -34,6 +34,10 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
     private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
     private static final Pattern SAFE_PROVIDER_DIAGNOSTIC_PATTERN =
             Pattern.compile("[A-Za-z0-9._:/-]{1,64}");
+    private static final String SIGNATURE_FAILURE_CATEGORY =
+            "PAYMENT_ISSUE_ALERT_SIGNATURE_FAILED";
+    private static final String RESPONSE_JSON_INVALID_CATEGORY =
+            "PAYMENT_ISSUE_ALERT_RESPONSE_JSON_INVALID";
 
     /**
      * 为外部 HTTP/Webhook 通知器配置统一的连接与读取超时，避免网关长时间阻塞任务线程。
@@ -97,7 +101,7 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
             signature.update(payloadBytes);
             return Base64.getEncoder().encodeToString(signature.sign());
         } catch (Exception exception) {
-            throw new IllegalStateException("网关签名计算失败：" + exception.getMessage(), exception);
+            throw sanitizedFailure(SIGNATURE_FAILURE_CATEGORY, exception);
         }
     }
 
@@ -426,7 +430,18 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
         try {
             return OBJECT_MAPPER.readTree(responseBody);
         } catch (Exception exception) {
-            throw new IllegalStateException(channelLabel + " 网关响应体不是合法 JSON：" + exception.getMessage(), exception);
+            throw sanitizedFailure(RESPONSE_JSON_INVALID_CATEGORY, exception);
+        }
+    }
+
+    private RuntimeException sanitizedFailure(String category, Exception exception) {
+        return new SanitizedGatewayException(category + ":" + exception.getClass().getSimpleName());
+    }
+
+    private static final class SanitizedGatewayException extends RuntimeException {
+
+        private SanitizedGatewayException(String message) {
+            super(message, null, false, false);
         }
     }
 
