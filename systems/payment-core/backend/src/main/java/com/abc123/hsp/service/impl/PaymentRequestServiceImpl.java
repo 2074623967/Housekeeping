@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import com.abc123.hsp.mapper.PaymentRequestMapper;
 import com.abc123.hsp.service.PaymentRequestService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -170,7 +171,7 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

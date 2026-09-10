@@ -22,6 +22,7 @@ import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.RefundChannelQueryRateLimitService;
 import com.abc123.hsp.service.RefundChannelQueryService;
 import com.abc123.hsp.service.RefundService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -669,7 +670,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 }

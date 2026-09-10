@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentIssueResponsibilitySummaryDTO;
 import com.abc123.hsp.dto.PaymentIssueRowDTO;
 import com.abc123.hsp.mapper.PaymentIssueMapper;
 import com.abc123.hsp.service.PaymentIssueService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
@@ -311,7 +312,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (value == null) {
             return "";
         }
-        String escaped = value.replace("\"", "\"\"");
+        String escaped = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
             return "\"" + escaped + "\"";
         }

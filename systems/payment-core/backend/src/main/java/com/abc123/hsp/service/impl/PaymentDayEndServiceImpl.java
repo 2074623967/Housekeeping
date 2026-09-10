@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 import com.abc123.hsp.entity.PaymentDayEndBatchEntity;
 import com.abc123.hsp.mapper.PaymentDayEndMapper;
 import com.abc123.hsp.service.PaymentDayEndService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -348,7 +349,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import com.abc123.hsp.dto.PaymentEventRepublishRequestDTO;
 import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -186,7 +187,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

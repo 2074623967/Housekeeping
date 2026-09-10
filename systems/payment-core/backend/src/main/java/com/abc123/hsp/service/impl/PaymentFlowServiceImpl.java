@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.PaymentFlowListItemDTO;
 import com.abc123.hsp.dto.PaymentFlowQueryDTO;
 import com.abc123.hsp.mapper.PaymentFlowMapper;
 import com.abc123.hsp.service.PaymentFlowService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -112,7 +113,7 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 }

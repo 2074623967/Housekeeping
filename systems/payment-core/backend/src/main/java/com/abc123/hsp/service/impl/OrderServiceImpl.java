@@ -5,6 +5,7 @@ import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.mapper.OrderMapper;
 import com.abc123.hsp.service.OrderService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -99,7 +100,7 @@ public class OrderServiceImpl implements OrderService {
         if (value == null) {
             return "";
         }
-        String escaped = value.replace("\"", "\"\"");
+        String escaped = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n")) {
             return "\"" + escaped + "\"";
         }

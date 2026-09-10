@@ -92,6 +92,7 @@ import com.abc123.hsp.entity.PaymentReturnCodeImportReviewEntity;
 import com.abc123.hsp.entity.PaymentReturnCodeReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import java.io.IOException;
 import java.io.StringReader;
 import java.math.BigDecimal;
@@ -2225,7 +2226,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

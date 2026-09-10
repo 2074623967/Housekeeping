@@ -26,6 +26,7 @@ import com.abc123.hsp.dto.PrepayRequestDTO;
 import com.abc123.hsp.entity.PaymentProcessLogEntity;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.service.PaymentService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.PaymentCallbackSignatureService;
 import com.abc123.hsp.service.PaymentChannelRoutingService;
 import com.abc123.hsp.service.PaymentChannelQueryService;
@@ -1937,7 +1938,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

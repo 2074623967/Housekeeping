@@ -24,6 +24,7 @@ import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.PaymentTaskCenterService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundQueryTaskService;
@@ -1481,7 +1482,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

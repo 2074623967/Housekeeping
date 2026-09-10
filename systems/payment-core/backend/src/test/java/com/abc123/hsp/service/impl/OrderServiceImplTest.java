@@ -72,7 +72,7 @@ class OrderServiceImplTest {
         OrderListItemDTO item = new OrderListItemDTO();
         item.setOrderNo("ORD-001");
         item.setCustomerName("王阿姨");
-        item.setServiceType("深度保洁");
+        item.setServiceType("=HYPERLINK(\"https://example.invalid\",\"深度保洁\")");
         item.setWorkerName("李师傅");
         item.setOrderAmount("¥188.00");
         item.setPaidAmount("¥0.00");
@@ -88,6 +88,8 @@ class OrderServiceImplTest {
 
         assertTrue(csv.contains("订单号,账单号,客户名称"));
         assertTrue(csv.contains("ORD-001"));
+        assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.invalid\"\",\"\"深度保洁\"\")"));
+        assertFalse(csv.contains("\"=HYPERLINK"));
         assertTrue(csv.contains("王*"));
         assertTrue(csv.contains("李*"));
         assertFalse(csv.contains("王阿姨"));

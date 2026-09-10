@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentLogOverviewDTO;
 import com.abc123.hsp.dto.PaymentLogQueryDTO;
 import com.abc123.hsp.mapper.PaymentLogMapper;
 import com.abc123.hsp.service.PaymentLogService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import org.springframework.stereotype.Service;
 
 /**
@@ -89,7 +90,7 @@ public class PaymentLogServiceImpl implements PaymentLogService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 

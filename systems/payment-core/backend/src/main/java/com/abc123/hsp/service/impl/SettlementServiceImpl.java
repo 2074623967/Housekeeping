@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.WorkerSettlementOverviewDTO;
 import com.abc123.hsp.dto.WorkerSettlementQueryDTO;
 import com.abc123.hsp.mapper.SettlementMapper;
 import com.abc123.hsp.service.SettlementService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -128,7 +129,7 @@ public class SettlementServiceImpl implements SettlementService {
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 }

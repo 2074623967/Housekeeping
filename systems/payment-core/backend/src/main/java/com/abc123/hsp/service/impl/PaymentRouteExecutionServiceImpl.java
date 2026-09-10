@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PaymentRouteExecutionOverviewDTO;
 import com.abc123.hsp.dto.PaymentRouteExecutionQueryDTO;
 import com.abc123.hsp.mapper.PaymentRouteExecutionMapper;
 import com.abc123.hsp.service.PaymentRouteExecutionService;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -170,7 +171,7 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
     }
 
     private String csvCell(String value) {
-        String normalizedValue = value == null ? "" : value.replace("\"", "\"\"");
+        String normalizedValue = CsvExportSanitizer.preventFormula(value).replace("\"", "\"\"");
         return "\"" + normalizedValue + "\"";
     }
 }

@@ -206,14 +206,15 @@ class PaymentIssueServiceImplTest {
         row.setAckAt("2026-08-07 10:00:00");
         row.setTriggeredBy("任务中心");
         row.setCreatedAt("2026-08-07 09:30:00");
-        row.setAlertContent("支付异常告警内容");
+        row.setAlertContent("=HYPERLINK(\"https://example.invalid\",\"支付异常告警内容\")");
         row.setProviderReceiptSnapshot("HTTP 502: upstream body contains 13800138000");
         when(paymentIssueMapper.findAlertLogs(any(PaymentIssueAlertLogQueryDTO.class))).thenReturn(Collections.singletonList(row));
 
         String csv = new PaymentIssueServiceImpl(paymentIssueMapper).exportAlertLogsCsv(new PaymentIssueAlertLogQueryDTO());
 
         assertTrue(csv.contains("PIA-EXPORT-001"));
-        assertTrue(csv.contains("支付异常告警内容"));
+        assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.invalid\"\",\"\"支付异常告警内容\"\")"));
+        assertFalse(csv.contains("\"=HYPERLINK"));
         assertTrue(csv.contains("BACKING_OFF,3,2026-08-07 09:45:00,2026-08-07 09:49:00,ACCEPTED"));
         assertTrue(csv.contains("[REDACTED]"));
         assertFalse(csv.contains("13800138000"));
