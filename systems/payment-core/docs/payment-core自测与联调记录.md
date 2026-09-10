@@ -8319,3 +8319,25 @@
 
 1. 超时关单已形成“有界批次 + 逐笔事务 + 失败退避 + 到期重入 + 运营拆分计数”的本地闭环，持续失败候选不会在退避窗口内反复占用最早批次。
 2. 本地 H2、Mockito、构建和浏览器检查不证明生产 MySQL `ON DUPLICATE KEY UPDATE` 执行计划、锁竞争、多实例吞吐、积压清零 SLA、真实渠道关单或生产稳定性，`release/v1.0.0` 继续冻结。
+
+## 291. 2026-09-11 超时关单陈旧重试标记有界清理 V1.0 验证
+
+### 291.1 本轮补强
+
+1. 每次执行超时关单前先清理已经失去关单资格的 `t_payment_expiry_close_retry` 行，覆盖支付单删除、状态变化、渠道流水形成、预付单不再过期和支付尝试形成五类资格消失原因。
+2. 清理按重试表主键稳定排序并复用关单 `batchSize`，单轮最多删除 `1..1000` 行；使用嵌套派生表执行单条原子删除，避免目标表自引用限制和无界清理事务。
+3. 清理异常只记录 WARN 并继续候选查询；清理结果不进入 `processedCount / successCount / skippedCount / failCount`，避免技术维护数量污染业务关单结果。
+
+### 291.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 陈旧标记清理定向测试 | `mvn -Dtest=PaymentExpiryTaskServiceImplTest,PaymentMapperStateTransitionIntegrationTest,PaymentMapperSqlBindingSafetyTest test` | 通过 | `15` 个用例；覆盖状态变化、支付尝试形成、有界分批删除、合格标记保留、清理失败继续和参数绑定 |
+| payment-core 全量测试 | `mvn test` | 通过 | `778` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、Mapper XML、测试与文档无空白符错误 |
+| 前端与数据库结构 | 变更范围检查 | 未重复执行 | 本轮无页面、表、字段或索引变化 |
+
+### 291.3 当前判断
+
+1. 超时关单重试表现已具备资格恢复期间保留、成功或竞争时即时删除、资格在退避期消失后按轮次有界清理的完整生命周期。
+2. 本地 H2/MyBatis 只能证明 SQL 语义和容量边界，不证明生产 MySQL 执行计划、全表扫描成本、锁影响、多实例清理吞吐或生产稳定性，`release/v1.0.0` 继续冻结。
