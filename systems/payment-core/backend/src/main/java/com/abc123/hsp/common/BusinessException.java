@@ -17,6 +17,16 @@ public class BusinessException extends RuntimeException {
         this.code = code;
     }
 
+    public static BusinessException sanitized(String code, String message) {
+        return new BusinessException(code, message, null, false, false);
+    }
+
+    private BusinessException(String code, String message, Throwable cause,
+                              boolean enableSuppression, boolean writableStackTrace) {
+        super(message, cause, enableSuppression, writableStackTrace);
+        this.code = code;
+    }
+
     public String getCode() {
         return code;
     }

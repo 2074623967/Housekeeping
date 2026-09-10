@@ -259,8 +259,8 @@ public class RefundServiceImpl implements RefundService {
             throw exception;
         } catch (RuntimeException exception) {
             recordChannelQueryFailure(snapshot, operator);
-            throw new BusinessException(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
-                    "refund channel query failed unexpectedly", exception);
+            throw BusinessException.sanitized(ErrorCode.REFUND_CHANNEL_QUERY_FAILED,
+                    "refund channel query failed unexpectedly");
         }
     }
 

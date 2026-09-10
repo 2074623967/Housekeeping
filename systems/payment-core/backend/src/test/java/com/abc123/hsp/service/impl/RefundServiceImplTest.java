@@ -661,18 +661,24 @@ class RefundServiceImplTest {
     void shouldNormalizeUnexpectedRefundChannelQueryFailureAndRecordBackoffHistory() {
         RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", "CHANNEL-REF-001");
         when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(source);
-        when(refundChannelQueryService.query(source)).thenThrow(new IllegalStateException("remote timeout detail"));
+        String sensitiveDetail = "jdbc:mysql://internal-db/refund?password=query-secret\n"
+                + "select * from refund_order where token='query-token'";
+        when(refundChannelQueryService.query(source)).thenThrow(new IllegalStateException(sensitiveDetail));
 
         BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 BusinessException.class, () -> createService().query(queryRequest()));
 
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
         assertEquals("refund channel query failed unexpectedly", exception.getMessage());
-        assertTrue(exception.getCause() instanceof IllegalStateException);
+        org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveDetail));
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
+        assertEquals(0, exception.getStackTrace().length);
+        exception.addSuppressed(new IllegalStateException(sensitiveDetail));
+        assertEquals(0, exception.getSuppressed().length);
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
                         && "refund-query-operator".equals(log.getOperatorName())
-                        && !log.getOperationRemark().contains("remote timeout detail")));
+                        && !log.getOperationRemark().contains(sensitiveDetail)));
     }
 
     @Test

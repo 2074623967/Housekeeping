@@ -2398,7 +2398,9 @@ class PaymentServiceImplTest {
     void shouldNormalizeUnexpectedChannelQueryFailureAndRecordAutomaticBackoff() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-RUNTIME-FAIL", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-QUERY-RUNTIME-FAIL")).thenReturn(detail);
-        when(paymentChannelQueryService.query(detail)).thenThrow(new IllegalStateException("remote timeout detail"));
+        String sensitiveDetail = "jdbc:mysql://internal-db/payment?password=query-secret\n"
+                + "select * from payment_order where token='query-token'";
+        when(paymentChannelQueryService.query(detail)).thenThrow(new IllegalStateException(sensitiveDetail));
 
         com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
         request.setPaymentOrderId("PAY-QUERY-RUNTIME-FAIL");
@@ -2414,7 +2416,13 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(
                 ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
-        org.junit.jupiter.api.Assertions.assertTrue(exception.getCause() instanceof IllegalStateException);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment channel query failed unexpectedly", exception.getMessage());
+        org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveDetail));
+        org.junit.jupiter.api.Assertions.assertNull(exception.getCause());
+        org.junit.jupiter.api.Assertions.assertEquals(0, exception.getStackTrace().length);
+        exception.addSuppressed(new IllegalStateException(sensitiveDetail));
+        org.junit.jupiter.api.Assertions.assertEquals(0, exception.getSuppressed().length);
         verify(paymentMapper).insertNotifyLog(
                 anyString(), eq("PAY-QUERY-RUNTIME-FAIL"), eq("wx_h5"), eq("QUERY_FAILED"),
                 eq("{\"querySource\":\"CHANNEL_QUERY\","

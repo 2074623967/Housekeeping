@@ -1073,10 +1073,9 @@ public class PaymentServiceImpl implements PaymentService {
             recordChannelQueryFailure(detail, exception, operator);
             throw exception;
         } catch (RuntimeException exception) {
-            BusinessException queryFailure = new BusinessException(
+            BusinessException queryFailure = BusinessException.sanitized(
                     ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
-                    "payment channel query failed unexpectedly",
-                    exception);
+                    "payment channel query failed unexpectedly");
             recordChannelQueryFailure(detail, queryFailure, operator);
             throw queryFailure;
         }
