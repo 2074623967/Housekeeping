@@ -4,6 +4,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.dto.RefundRetryResultDTO;
 import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundService;
@@ -17,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 失败退款批次重试服务测试。
@@ -35,29 +39,49 @@ class RefundRetryTaskServiceImplTest {
 
     @Test
     void shouldContinueRetryingRefundsAfterOneTransactionFails() {
+        String sensitiveMessage = "jdbc:mysql://internal/payment password=refund-secret\ninvalid SQL";
         when(refundMapper.findFailedRefundOrderIds())
                 .thenReturn(Arrays.asList("REF-FIRST", "REF-FAIL", "REF-LAST"));
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
         org.mockito.Mockito.doAnswer(invocation -> {
             if ("REF-FAIL".equals(invocation.getArgument(0))) {
-                throw new IllegalStateException("channel submit failed");
+                throw new IllegalStateException(sensitiveMessage);
             }
             return null;
         }).when(refundService).retryForTask(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("refund-retry-scheduler"));
 
-        RefundRetryResultDTO result = new RefundRetryTaskServiceImpl(
-                refundMapper, refundService, transactionManager)
-                .retryFailedRefunds("refund-retry-scheduler");
+        Logger transactionLogger = (Logger) org.slf4j.LoggerFactory.getLogger(TransactionTemplate.class);
+        ListAppender<ILoggingEvent> transactionAppender = new ListAppender<>();
+        transactionAppender.start();
+        transactionLogger.addAppender(transactionAppender);
+        try {
+            RefundRetryResultDTO result = new RefundRetryTaskServiceImpl(
+                    refundMapper, refundService, transactionManager)
+                    .retryFailedRefunds("refund-retry-scheduler");
 
-        Assertions.assertEquals(3, result.getProcessedCount());
-        Assertions.assertEquals(2, result.getSuccessCount());
-        Assertions.assertEquals(1, result.getFailCount());
-        Assertions.assertEquals(Collections.singletonList("REF-FAIL"), result.getFailedRefundOrderIds());
-        verify(transactionManager, times(2)).commit(transactionStatus);
-        verify(transactionManager).rollback(transactionStatus);
-        verify(refundService).retryForTask("REF-LAST", "refund-retry-scheduler");
+            Assertions.assertEquals(3, result.getProcessedCount());
+            Assertions.assertEquals(2, result.getSuccessCount());
+            Assertions.assertEquals(1, result.getFailCount());
+            Assertions.assertEquals(Collections.singletonList("REF-FAIL"), result.getFailedRefundOrderIds());
+            verify(transactionManager, times(2)).commit(transactionStatus);
+            verify(transactionManager).rollback(transactionStatus);
+            verify(refundService).retryForTask("REF-LAST", "refund-retry-scheduler");
+            Assertions.assertTrue(transactionAppender.list.stream().anyMatch(event ->
+                    event.getThrowableProxy() != null
+                            && "REFUND_RETRY_TRANSACTION_FAILED:IllegalStateException"
+                            .equals(event.getThrowableProxy().getMessage())
+                            && event.getThrowableProxy().getCause() == null
+                            && event.getThrowableProxy().getStackTraceElementProxyArray().length == 0));
+            Assertions.assertTrue(transactionAppender.list.stream().noneMatch(event ->
+                    event.getFormattedMessage().contains("refund-secret")
+                            || (event.getThrowableProxy() != null
+                            && String.valueOf(event.getThrowableProxy().getMessage()).contains("refund-secret"))));
+        } finally {
+            transactionLogger.detachAppender(transactionAppender);
+            transactionAppender.stop();
+        }
     }
 }

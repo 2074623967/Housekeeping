@@ -16,6 +16,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
 
+    private static final String TRANSACTION_FAILURE_CODE = "REFUND_RETRY_TRANSACTION_FAILED";
+
     private final RefundMapper refundMapper;
     private final RefundService refundService;
     private final TransactionTemplate transactionTemplate;
@@ -36,10 +38,7 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
         result.setProcessedCount(refundOrderIds.size());
         for (String refundOrderId : refundOrderIds) {
             try {
-                transactionTemplate.execute(status -> {
-                    refundService.retryForTask(refundOrderId, triggeredBy);
-                    return null;
-                });
+                executeRetryTransaction(refundOrderId, triggeredBy);
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } catch (RuntimeException exception) {
                 result.setFailCount(result.getFailCount() + 1);
@@ -49,5 +48,36 @@ public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
             }
         }
         return result;
+    }
+
+    private void executeRetryTransaction(String refundOrderId, String triggeredBy) {
+        transactionTemplate.execute(status -> {
+            executeRetryAction(refundOrderId, triggeredBy);
+            return null;
+        });
+    }
+
+    private void executeRetryAction(String refundOrderId, String triggeredBy) {
+        try {
+            refundService.retryForTask(refundOrderId, triggeredBy);
+        } catch (RuntimeException exception) {
+            throw exception instanceof SanitizedRefundRetryTransactionException
+                    ? exception
+                    : new SanitizedRefundRetryTransactionException(exception);
+        }
+    }
+
+    private static final class SanitizedRefundRetryTransactionException extends RuntimeException {
+
+        private static final long serialVersionUID = 1L;
+
+        private SanitizedRefundRetryTransactionException(RuntimeException exception) {
+            super(TRANSACTION_FAILURE_CODE + ":" + exceptionName(exception), null, false, false);
+        }
+
+        private static String exceptionName(RuntimeException exception) {
+            String simpleName = exception.getClass().getSimpleName();
+            return simpleName.isEmpty() ? RuntimeException.class.getSimpleName() : simpleName;
+        }
     }
 }
