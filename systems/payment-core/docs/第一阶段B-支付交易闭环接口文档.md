@@ -2646,6 +2646,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. Webhook URL 已配置时继续执行既有认证、签名、超时、业务成功码、回执号、投递状态、失败码解析与敏感字段脱敏，不因 demo 门禁改变真实 HTTP 调用路径。
 5. demo 返回的 `LOCAL:<CHANNEL>:ACCEPTED` 只用于页面和流程演示，不构成真实 IM、短信或邮件供应商受理、送达、人员响应或生产稳定性证据。
 
+### 14.79 告警供应商受理证据与回执号契约
+
+1. Webhook 返回 HTTP `2xx` 只证明传输层收到响应，不能单独生成 `ACCEPTED`。通知器必须取得已识别的投递状态，或同时配置成功码 JSON Pointer 和期望值且响应完全匹配，才可确认业务受理。
+2. 已识别状态按既有有限集合归一化为 `DELIVERED / ACCEPTED / FAILED`；空状态在成功码已明确匹配时可归为 `ACCEPTED`，否则归为 `FAILED`。未知状态即使成功码匹配也失败闭合，不推测供应商语义。
+3. 成功码 Pointer 与期望值必须同时配置或同时留空，只配置一项返回 `FAILED` 并记录“成功码校验配置不完整”。HTTP 非 `2xx` 或成功码不匹配继续强制覆盖为 `FAILED`。
+4. `providerReceiptNo` 只保存供应商响应中按已配置 Pointer 解析出的非空值。未配置 Pointer、响应字段缺失或传输异常时保持为空，不再根据告警号生成看似供应商回执的本地编号。
+5. 空 HTTP 响应体使用 `HTTP_RESPONSE:EMPTY` 作为稳定快照；该分类与失败状态只证明本地调用结果，不证明供应商受理、最终送达或人工响应。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。

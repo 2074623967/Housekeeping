@@ -7410,3 +7410,27 @@
 1. 默认及非 demo 环境不再用本地回执掩盖通知网关缺失，人工与自动派发共享同一失败闭合结果。
 2. demo 能力仍可用于显式演示，但需要 profile 与配置双重开启，且其回执不得作为真实供应商证据。
 3. 真实通知供应商接入、凭证托管与轮换、生产网络、送达回执查询、升级响应和稳定性验收仍需外部环境完成。
+
+## 252. 2026-09-10 告警供应商受理证据收紧 V1.0 验证
+
+### 252.1 本轮补强
+
+1. 将 HTTP `2xx`、业务受理与最终送达分层：只有匹配成功码或已识别供应商状态可形成受理事实，无证据和未知状态统一 `FAILED`。
+2. 成功码 Pointer 与期望值要求成对配置；半配置返回稳定失败。HTTP 非 `2xx`、成功码不匹配和供应商明确失败继续优先覆盖结果。
+3. `providerReceiptNo` 只接受供应商响应真实字段，不再从内部告警号合成；字段缺失与传输异常保持为空，空响应快照固定为 `HTTP_RESPONSE:EMPTY`。
+
+### 252.2 验证结果
+
+| 项目 | 命令/方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 联合定向测试 | `mvn -Dtest=LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest,PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `54` 个用例；覆盖无证据、未知状态、半配置、真实/缺失回执、空响应、传输失败及既有成功路径 |
+| payment-core 全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `668` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试和交付文档无空白符错误 |
+| 统一门禁复判 | `node tools/release/audit_payment_core_gate.mjs --root-dir ... --pack ... --stdout-json` | 部分通过 | `canPromoteTestToMaster=true`、`canCreateRelease=false`；release 仍有候选说明、正式签字、现场核验和稳定观察结束四项真实阻断 |
+| 真实环境验证 | 真实供应商协议、生产凭证、网络、回执查询、最终送达和人工响应 | 未执行 | 不记录真实供应商受理、送达、值班响应或生产稳定性通过 |
+
+### 252.3 当前判断
+
+1. 告警出站结果不再用传输层成功推导业务受理，也不再用内部编号伪装供应商回执，失败与缺失事实均保持可观测。
+2. 供应商明确成功但不提供回执号时允许状态成立而回执为空；是否强制回执仍需结合具体供应商协议另行配置和验证。
+3. 真实供应商字段映射、凭证托管、网络、异步回执查询、最终送达和生产运维响应仍是外部交付边界。
