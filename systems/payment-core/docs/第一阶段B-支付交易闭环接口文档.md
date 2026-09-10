@@ -2734,6 +2734,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 合法操作人继续写入异常动作日志；`标记已处理` 时以同一操作人确认待确认告警。管理端异常中心、告警明细台和任务中心均不再预填固定操作人，必须由本次请求方显式输入。
 4. 前置校验与取消默认值只提升自声明审计的准确性，不证明输入者身份真实、具有处理权限或通过正式审批；可信主体仍需后续统一认证与授权上下文提供。
 
+### 14.90 退款人工动作操作人审计契约
+
+1. `POST /api/refunds/apply`、`POST /api/refunds/approve`、`POST /api/refunds/retry` 与 `POST /api/refunds/query` 均要求请求体显式提交 `operator`；该字段去除首尾空白后必填且最长 `64` 个字符。
+2. 退款申请、审核、失败重试和主动查单在任何退款 Mapper 访问前完成操作人校验。合法值分别写入 `APPLY / APPROVE / RETRY / CHANNEL_QUERY*` 操作日志，查单失败日志也保留同一发起人，不再回退固定 `payment-core-admin` 或 `channel-query`。
+3. 任务中心人工退款查单将规范化后的人工任务操作人传入每条查单请求；自动退款查单继续显式传递 `refund-query-scheduler`，失败退款自动重试继续传递既有调度身份。退款渠道可信回调仍使用内部身份 `channel-callback`。
+4. 管理端退款列表和退款详情的操作人输入默认留空，申请、审核、主动查单与失败重试在空值时不发送请求；服务端校验仍是最终边界。
+5. `operator` 仍是请求方自声明，不构成可信登录、角色授权、正式审批或不可抵赖审计证据。本契约与本地测试也不证明真实退款渠道、生产环境、到账核验或稳定性通过。
+
 联调说明：
 
 1. 页面侧接到失败响应时，应优先展示 `message`，并同时展示 `code` 与 `requestId`。
