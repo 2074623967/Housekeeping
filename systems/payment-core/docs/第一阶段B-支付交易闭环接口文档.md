@@ -3733,6 +3733,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `POST /api/payments/submit` 缺少显式终端时，User-Agent 以 `Locale.ROOT` 转为小写后执行既有移动端判断；显式终端优先级不变。
 4. 本轮不改变端点、DTO、错误码或状态机；规范化成功不证明请求来源可信、通知送达或导出数据完整。
 
+### 14.226 告警派发业务时区约束
+
+1. 异常告警外发的补发冷却、新鲜度、防重放、供应商熔断和供应商限流窗口统一以 `Asia/Shanghai` 当前时间计算，与告警记录的业务时间口径一致。
+2. 既有派发入口、请求参数、响应 DTO 和错误码保持不变；窗口命中时继续返回并记录既有 `RETRY_COOLDOWN_ACTIVE`、`FRESHNESS_WINDOW_EXPIRED` 等结果。
+3. 供应商熔断和限流查询起点仍按 `yyyy-MM-dd HH:mm:ss` 传给 Mapper，只将其当前时间来源固定为业务时区，不改变 SQL 或统计窗口配置。
+4. 本轮不新增端点或协议字段；时间窗判断正确不证明真实通知送达、供应商容量、数据库时钟或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

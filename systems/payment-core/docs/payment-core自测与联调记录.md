@@ -10797,3 +10797,26 @@
 1. 三类协议标记规范化结果由协议本身决定，不再被部署主机默认 locale 改写。
 2. 本轮不改变导出字段、告警派发状态机、支付提交请求结构、Mapper SQL 或数据库结构。
 3. 自动测试不证明生产导出数据、真实通知送达、客户端终端声明可信或生产稳定性，也不改变 release 四项真实阻断。
+
+## 399. 2026-09-12 告警派发业务时区统一 V1.0 验证
+
+### 399.1 本轮补强
+
+1. 告警补发冷却、新鲜度、防重放、供应商熔断和供应商限流的当前时间统一取 `Asia/Shanghai`，与数据库告警时间和业务配置口径保持一致。
+2. JVM 默认时区不再参与上述窗口的起止判断，避免非上海部署节点把有效告警判为过期，或把过期告警继续外发。
+3. 本轮只收口告警派发服务的时间基准，不改变窗口配置值、派发状态机、供应商选择、失败记录或租约语义。
+
+### 399.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 非业务默认时区回归 | `PaymentIssueAlertDeliveryServiceImplTest#shouldEvaluateFreshnessWindowInBusinessTimezone` | 通过 | JVM 默认时区临时切换为 `Pacific/Honolulu`，上海时间下超过 `10` 分钟窗口的告警被正确拦截，并在 `finally` 恢复默认时区 |
+| 告警派发定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `47` 个测试，`0` failures、`0` errors、`0` skipped |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `906` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白错误 |
+
+### 399.3 当前判断
+
+1. 五类告警窗口现按明确业务时区计算，部署节点默认时区不再改变派发判断结果。
+2. 本轮不改变 Controller、DTO、Mapper SQL、数据库结构、告警路由配置或外部通知协议。
+3. 自动测试不证明数据库或生产主机时钟正确、真实通知送达、供应商容量充足或生产稳定性，也不改变 release 四项真实阻断。
