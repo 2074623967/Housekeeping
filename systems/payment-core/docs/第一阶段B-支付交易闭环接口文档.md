@@ -3286,6 +3286,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 退款单号门禁由详情、审批、失败重试、人工主动查单及任务重试共用；动作备注在状态 CAS 前校验，拒绝时不改变退款状态。
 4. 本轮不新增 DTO 字段、端点或错误码，既有 `IllegalArgumentException` 响应转换、状态机与事件派发保持不变；本地测试不证明真实身份、审批、渠道受理或退款到账。
 
+### 14.166 退款列表与导出查询字段契约
+
+1. `GET /api/refunds` 与 `GET /api/refunds/export` 的参数不变；`refundOrderId / paymentOrderId / refundStatus / refundMethod` 最长分别为 `64 / 64 / 32 / 32` 个字符。
+2. 四类原始输入不得包含控制字符，合法首尾空白在查询前裁剪；空单号条件归一化为不筛选，空状态和方式归一化为“全部”。
+3. 两个端点共用服务层规范化入口，非法参数在 Mapper 访问前拒绝；列表页码与每页 `1..100` 边界、导出最多 `1000` 行加第 `1001` 行探测规则不变。
+4. 本轮不新增 DTO 字段、端点或错误码，既有 `IllegalArgumentException` 响应转换与 Mapper SQL 保持不变；本地测试不证明生产 MySQL 查询计划或真实退款资金结果。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
