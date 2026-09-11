@@ -10843,3 +10843,26 @@
 1. 日终缺省业务日期不再受部署节点默认时区影响，统计查询与批次记录保持同一上海日期口径。
 2. 本轮不改变 Controller、请求 DTO、显式日期规则、Mapper SQL、数据库结构或对账准入逻辑。
 3. 自动测试不证明历史时间数据、数据库或生产主机时钟正确，也不证明真实对账和生产稳定性，不改变 release 四项真实阻断。
+
+## 401. 2026-09-12 支付成功事件批次日期时区统一 V1.0 验证
+
+### 401.1 本轮补强
+
+1. HTTP 清分支付成功载荷和 AMQP 支付成功载荷的 `batchDate` 统一由 `currentBusinessDate()` 生成，固定使用 `Asia/Shanghai` 当前日期。
+2. 两个下游路径不再分别读取 JVM 默认日期，避免同一事件在非上海部署节点跨日时归入错误清分批次。
+3. 账务 HTTP 载荷既有契约不包含 `batchDate`，本轮不新增字段，也不改变事件重试、死信或发布确认语义。
+
+### 401.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 动态异时区回归 | `PaymentEventDispatchServiceImplTest#shouldBuildClearingBatchDateInBusinessTimezone` | 通过 | 动态选择与上海当日不同的 JVM 默认时区，验证 HTTP 清分载荷仍携带上海当日，并在 `finally` 恢复默认时区 |
+| 事件派发定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest test` | 通过 | `46` 个测试，`0` failures、`0` errors、`0` skipped |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `908` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白错误 |
+
+### 401.3 当前判断
+
+1. 支付成功事件的清分批次日期不再被部署节点默认时区改写，HTTP 与 AMQP 路径保持同一上海日期口径。
+2. 本轮不改变事件类型、端点、消息目的地、载荷其他字段、Mapper SQL、数据库结构、重试或死信状态机。
+3. 自动测试不证明真实 MQ 发布、下游受理、清分入账、资金一致或生产稳定性，也不改变 release 四项真实阻断。
