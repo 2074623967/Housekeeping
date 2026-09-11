@@ -93,6 +93,7 @@ const editingProtocolCode = ref("");
 const protocolVersionCode = ref("");
 const protocolVersions = ref([]);
 const isProtocolVersionLoading = ref(false);
+const protocolVersionError = ref("");
 let protocolVersionRequestId = 0;
 const protocolReviews = ref([]);
 const isProtocolReviewLoading = ref(false);
@@ -1717,7 +1718,7 @@ async function loadProtocolVersions(protocolCode) {
   protocolVersionCode.value = protocolCode;
   protocolVersions.value = [];
   isProtocolVersionLoading.value = true;
-  actionMessage.value = "";
+  protocolVersionError.value = "";
   try {
     const versions = await paymentConfigApi.getProtocolVersions(protocolCode);
     if (requestId === protocolVersionRequestId && protocolVersionCode.value === protocolCode) {
@@ -1725,7 +1726,7 @@ async function loadProtocolVersions(protocolCode) {
     }
   } catch (error) {
     if (requestId === protocolVersionRequestId && protocolVersionCode.value === protocolCode) {
-      actionMessage.value = `协议版本加载失败：${error.message}`;
+      protocolVersionError.value = error.message;
     }
   } finally {
     if (requestId === protocolVersionRequestId) {
@@ -1739,6 +1740,7 @@ function closeProtocolVersions() {
   protocolVersionCode.value = "";
   protocolVersions.value = [];
   isProtocolVersionLoading.value = false;
+  protocolVersionError.value = "";
 }
 
 async function rollbackProtocolVersion(version) {
@@ -1808,26 +1810,31 @@ async function handleProtocolReview(review, approved) {
   }
   activeConfigCode.value = `protocol-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: protocolReviewer.value,
+    reviewComment: protocolReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: protocolReviewer.value,
-      reviewComment: protocolReviewComment.value
-    };
-    protocolReviews.value = approved
-      ? await paymentConfigApi.approveProtocolReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectProtocolReview(review.requestNo, payload);
-    if (approved) {
-      await loadOverview();
-      if (protocolVersionCode.value) {
-        await loadProtocolVersions(protocolVersionCode.value);
-      }
+    try {
+      protocolReviews.value = approved
+        ? await paymentConfigApi.approveProtocolReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectProtocolReview(review.requestNo, payload);
+      protocolReviewComment.value = "";
+      actionMessage.value = approved
+        ? `协议复核申请 ${review.requestNo} 已通过，候选协议已写入运行态。`
+        : `协议复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `协议复核处理失败：${error.message}`;
+      return;
     }
-    protocolReviewComment.value = "";
-    actionMessage.value = approved
-      ? `协议复核申请 ${review.requestNo} 已通过，候选协议已写入运行态。`
-      : `协议复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `协议复核处理失败：${error.message}`;
+    if (!approved) {
+      return;
+    }
+    const refreshTasks = [loadOverview()];
+    if (protocolVersionCode.value) {
+      refreshTasks.push(loadProtocolVersions(protocolVersionCode.value));
+    }
+    await Promise.all(refreshTasks);
   } finally {
     activeConfigCode.value = "";
   }
@@ -3230,6 +3237,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <p class="meta">历史快照不可修改；回滚先生成候选，异人复核通过后才恢复配置并追加新版本</p>
               </div>
               <button class="button secondary" @click="closeProtocolVersions">关闭</button>
+            </div>
+            <div v-if="protocolVersionError" class="error-banner">
+              协议版本加载失败：{{ protocolVersionError }}
             </div>
             <div v-if="isProtocolVersionLoading" class="state-box">协议版本加载中...</div>
             <div v-else-if="!protocolVersions.length" class="state-box">当前暂无协议版本记录</div>
