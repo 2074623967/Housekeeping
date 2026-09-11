@@ -3726,6 +3726,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 该规则覆盖渠道、路由规则、支付协议、支付网关、控制策略、值班路由、通知供应商和九类复核申请编号，不改变各端点既有请求体与响应结构。
 4. 业务键合法只表示可进入后续存在性、状态、版本基线和 maker-checker 校验，不代表配置存在、审核通过或运行态生效。
 
+### 14.225 协议标记 locale 无关规范化约束
+
+1. `GET /api/payment-config/export` 的 `section` 继续接受既有固定分区，大小写折叠使用 `Locale.ROOT`，不新增参数值或响应字段。
+2. 异常告警 `notifyChannels` 中的固定通道标记使用 `Locale.ROOT` 转为大写，`IN_APP` 继续只表示站内 outbox，不进入外部通知器选择。
+3. `POST /api/payments/submit` 缺少显式终端时，User-Agent 以 `Locale.ROOT` 转为小写后执行既有移动端判断；显式终端优先级不变。
+4. 本轮不改变端点、DTO、错误码或状态机；规范化成功不证明请求来源可信、通知送达或导出数据完整。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

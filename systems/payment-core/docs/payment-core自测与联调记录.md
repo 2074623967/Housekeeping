@@ -10774,3 +10774,26 @@
 1. 支付配置动态路径业务键不再以无界字符串进入 Mapper，控制字符、空白和超长值在服务边界被确定拒绝。
 2. 本轮不改变 Controller 路由、请求正文校验、审核事务、配置状态、Mapper SQL 或数据库结构。
 3. 自动测试不证明配置存在、maker-checker 身份可信、真实渠道或通知配置有效，也不改变 release 四项真实阻断。
+
+## 398. 2026-09-12 协议标记 locale 无关规范化 V1.0 验证
+
+### 398.1 本轮补强
+
+1. 配置导出分区由 `Locale.ROOT` 统一转为大写，避免 `issue_duty_rosters` 在土耳其语环境中产生带点大写字母并误判为非法分区。
+2. 告警通知通道由 `Locale.ROOT` 统一转为大写，确保小写 `in_app` 在不同 JVM locale 下始终识别为站内通道且不被误派发。
+3. 支付提交的 User-Agent 使用 `Locale.ROOT` 转为小写，确保 `iPhone / Mobile` 终端判断不受服务器区域设置影响。
+
+### 398.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 土耳其语 locale 回归 | 三组新增单元测试 | 通过 | 覆盖值班路由导出、站内通道识别和 iPhone 移动端识别，并在 `finally` 恢复默认 locale |
+| 受影响定向测试 | `mvn -Dtest=PaymentConfigServiceImplTest,PaymentIssueAlertDeliveryServiceImplTest,PaymentControllerTest test` | 通过 | `122` 个测试，`0` failures、`0` errors、`0` skipped |
+| 后端全量测试 | `mvn test` | 通过 | Surefire XML 汇总 `905` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白错误 |
+
+### 398.3 当前判断
+
+1. 三类协议标记规范化结果由协议本身决定，不再被部署主机默认 locale 改写。
+2. 本轮不改变导出字段、告警派发状态机、支付提交请求结构、Mapper SQL 或数据库结构。
+3. 自动测试不证明生产导出数据、真实通知送达、客户端终端声明可信或生产稳定性，也不改变 release 四项真实阻断。
