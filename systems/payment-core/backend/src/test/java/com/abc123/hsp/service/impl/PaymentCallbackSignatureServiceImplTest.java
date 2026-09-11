@@ -410,7 +410,8 @@ class PaymentCallbackSignatureServiceImplTest {
         );
 
         assertEquals(12, service.cleanupExpiredNonces(1000));
-        verify(paymentCallbackSecurityMapper).deleteExpiredNonceBatch(1000);
+        assertEquals(12, service.cleanupExpiredNonces(1001));
+        verify(paymentCallbackSecurityMapper, org.mockito.Mockito.times(2)).deleteExpiredNonceBatch(1000);
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class, () -> service.cleanupExpiredNonces(0));
         IllegalArgumentException negativeException = assertThrows(

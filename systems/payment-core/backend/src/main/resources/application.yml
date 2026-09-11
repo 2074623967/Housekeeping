@@ -50,6 +50,7 @@ payment:
     nonce-ttl-seconds: ${HSP_PAYMENT_CALLBACK_NONCE_TTL_SECONDS:601}
     nonce-cleanup:
       fixed-delay-ms: ${HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_DELAY_MS:300000}
+      # 历史过期 nonce 单轮清理上限固定为 1000，非正配置拒绝启动。
       batch-size: ${HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_BATCH_SIZE:1000}
   expiry-close:
     fixed-delay-ms: ${HSP_PAYMENT_EXPIRY_CLOSE_DELAY_MS:60000}

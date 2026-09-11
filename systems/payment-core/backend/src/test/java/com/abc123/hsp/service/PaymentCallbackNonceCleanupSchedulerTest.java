@@ -43,6 +43,20 @@ class PaymentCallbackNonceCleanupSchedulerTest {
     }
 
     @Test
+    void shouldCapOversizedCleanupBatch() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_CALLBACK_NONCE_CLEANUP"),
+                anyString(),
+                org.mockito.ArgumentMatchers.eq(120))).thenReturn(1);
+
+        new PaymentCallbackNonceCleanupScheduler(
+                paymentCallbackSignatureService, paymentTaskCenterMapper, 1001)
+                .cleanupExpiredNonces();
+
+        verify(paymentCallbackSignatureService).cleanupExpiredNonces(1000);
+    }
+
+    @Test
     void shouldSkipCleanupWhenLeaseIsHeld() {
         new PaymentCallbackNonceCleanupScheduler(
                 paymentCallbackSignatureService, paymentTaskCenterMapper, 1000)

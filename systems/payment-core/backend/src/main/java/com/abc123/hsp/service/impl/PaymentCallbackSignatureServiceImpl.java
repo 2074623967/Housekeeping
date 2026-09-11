@@ -39,6 +39,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
     private static final int CALLBACK_TIMESTAMP_MAX_LENGTH = 20;
     private static final int CALLBACK_NONCE_MAX_LENGTH = 128;
     private static final int CALLBACK_SIGNATURE_MAX_LENGTH = 8192;
+    private static final int MAX_NONCE_CLEANUP_BATCH_SIZE = 1000;
     private static final String BIZ_TYPE_PAYMENT = "PAYMENT";
     private static final String BIZ_TYPE_REFUND = "REFUND";
     private static final String VERIFICATION_FAILURE_CATEGORY =
@@ -135,7 +136,8 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         if (batchSize <= 0) {
             throw new IllegalArgumentException("payment callback nonce cleanup batch size must be positive");
         }
-        return paymentCallbackSecurityMapper.deleteExpiredNonceBatch(batchSize);
+        return paymentCallbackSecurityMapper.deleteExpiredNonceBatch(
+                Math.min(batchSize, MAX_NONCE_CLEANUP_BATCH_SIZE));
     }
 
     /**

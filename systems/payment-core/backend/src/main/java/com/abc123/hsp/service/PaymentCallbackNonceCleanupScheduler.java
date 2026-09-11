@@ -16,6 +16,7 @@ public class PaymentCallbackNonceCleanupScheduler {
     private static final String TASK_CODE = "PAYMENT_CALLBACK_NONCE_CLEANUP";
     private static final String LEASE_OWNER_PREFIX = "payment-callback-nonce-cleanup-scheduler:";
     private static final int LEASE_SECONDS = 120;
+    private static final int MAX_BATCH_SIZE = 1000;
 
     private final PaymentCallbackSignatureService paymentCallbackSignatureService;
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
@@ -34,7 +35,7 @@ public class PaymentCallbackNonceCleanupScheduler {
         this.paymentCallbackSignatureService = paymentCallbackSignatureService;
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
-        this.batchSize = batchSize;
+        this.batchSize = Math.min(batchSize, MAX_BATCH_SIZE);
     }
 
     @Autowired
