@@ -51,6 +51,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String TASK_CODE_ISSUE_ALERT_DISPATCH = "PAYMENT_ISSUE_ALERT_DISPATCH";
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
+    private static final int MAX_DISPATCH_BATCH_SIZE = 1000;
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
     private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
     private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -86,6 +87,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private final List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters;
     private final PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService;
     private final TransactionTemplate itemTransactionTemplate;
+    private int dispatchBatchSize = 100;
     private int receiptQueryMinAgeSeconds = 60;
     private int receiptQueryRetryIntervalSeconds = 60;
     private int receiptQueryRetryBackoffFactor = 2;
@@ -121,7 +123,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                         int receiptQueryBatchSize,
                                                 @Value(
                                                         "${payment.issue-alert.receipt-query.compensation.claim-timeout-seconds:30}")
-                                                        int receiptQueryClaimTimeoutSeconds) {
+                                                        int receiptQueryClaimTimeoutSeconds,
+                                                @Value("${payment.issue-alert.dispatch.batch-size:100}")
+                                                        int dispatchBatchSize) {
         this.paymentTaskCenterMapper = paymentTaskCenterMapper;
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
@@ -137,6 +141,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 receiptQueryMaxAttempts,
                 receiptQueryBatchSize,
                 receiptQueryClaimTimeoutSeconds);
+        configureDispatchBatchSize(dispatchBatchSize);
     }
 
     @Autowired
@@ -158,6 +163,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.receiptQueryMaxAttempts = Math.max(maxAttempts, 1);
         this.receiptQueryBatchSize = Math.max(batchSize, 1);
         this.receiptQueryClaimTimeoutSeconds = Math.max(claimTimeoutSeconds, 1);
+    }
+
+    void configureDispatchBatchSize(int batchSize) {
+        this.dispatchBatchSize = Math.min(Math.max(batchSize, 1), MAX_DISPATCH_BATCH_SIZE);
     }
 
     PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -300,7 +309,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     private PaymentTaskActionResultDTO dispatchPendingAlertsByMode(String runMode, String triggeredBy) {
-        List<PaymentIssueAlertDispatchItemDTO> pendingAlerts = paymentTaskCenterMapper.findPendingOutboxAlerts();
+        List<PaymentIssueAlertDispatchItemDTO> pendingAlerts =
+                paymentTaskCenterMapper.findPendingOutboxAlerts(dispatchBatchSize);
         Map<String, PaymentIssueAlertNotifier> notifierMap = notifiers.stream()
                 .collect(Collectors.toMap(PaymentIssueAlertNotifier::channelCode, notifier -> notifier, (left, right) -> left));
 

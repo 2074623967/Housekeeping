@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
+import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
@@ -182,6 +183,34 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     "主动查单失败趋势", 60));
             assertEquals(0, mapper.countRecentUnacknowledgedQueryMonitorAlerts(
                     "主动查单限流拒绝", 60));
+        }
+    }
+
+    @Test
+    void shouldLimitPendingOutboxAlertsAndKeepOldestFirst() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET ack_status = '已确认' "
+                        + "WHERE alert_channel = 'IN_APP_OUTBOX'");
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, issue_no, issue_type, severity, alert_channel, ack_status, alert_status, "
+                        + "created_at) VALUES "
+                        + "('PIA-DISPATCH-OLDEST', 'ISSUE-DISPATCH-1', '待回调未收口', 'P1', "
+                        + "'IN_APP_OUTBOX', '待确认', '已生成', TIMESTAMPADD(MINUTE, -3, NOW())),"
+                        + "('PIA-DISPATCH-SECOND', 'ISSUE-DISPATCH-2', '待回调未收口', 'P1', "
+                        + "'IN_APP_OUTBOX', '待确认', '部分失败', TIMESTAMPADD(MINUTE, -2, NOW())),"
+                        + "('PIA-DISPATCH-LATER', 'ISSUE-DISPATCH-3', '待回调未收口', 'P1', "
+                        + "'IN_APP_OUTBOX', '待确认', '派发失败', TIMESTAMPADD(MINUTE, -1, NOW()))");
+            }
+
+            List<PaymentIssueAlertDispatchItemDTO> candidates = mapper.findPendingOutboxAlerts(2);
+
+            assertEquals(2, candidates.size());
+            assertEquals(Arrays.asList("PIA-DISPATCH-OLDEST", "PIA-DISPATCH-SECOND"),
+                    candidates.stream()
+                            .map(PaymentIssueAlertDispatchItemDTO::getAlertNo)
+                            .collect(java.util.stream.Collectors.toList()));
         }
     }
 
@@ -518,6 +547,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_issue_duty_roster ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, issue_type VARCHAR(64), severity VARCHAR(32), "
                     + "responsibility_group VARCHAR(64), receiver VARCHAR(64), "
+                    + "notify_channels VARCHAR(128), escalation_level VARCHAR(32), "
                     + "escalation_receiver VARCHAR(64), escalation_policy VARCHAR(128), "
                     + "escalation_timeout_minutes INT, schedule_tag VARCHAR(64), "
                     + "effective_start_hour INT, effective_end_hour INT, weekday_scope VARCHAR(32), "

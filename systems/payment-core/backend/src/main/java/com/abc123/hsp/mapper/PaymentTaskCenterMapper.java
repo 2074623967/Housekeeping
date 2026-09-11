@@ -210,7 +210,7 @@ public interface PaymentTaskCenterMapper {
     /**
      * 查询待从站内 outbox 派发到真实通知通道的告警。
      */
-    List<PaymentIssueAlertDispatchItemDTO> findPendingOutboxAlerts();
+    List<PaymentIssueAlertDispatchItemDTO> findPendingOutboxAlerts(@Param("batchSize") int batchSize);
 
     /**
      * 新增任务执行日志。

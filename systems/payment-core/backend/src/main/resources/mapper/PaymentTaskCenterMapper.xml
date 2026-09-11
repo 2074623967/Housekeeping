@@ -1066,6 +1066,7 @@
           AND alert_status IN ('已生成', '部分失败', '派发失败')
           AND COALESCE(outbox.ack_status, '待确认') = '待确认'
         ORDER BY outbox.created_at ASC, outbox.id ASC
+        LIMIT #{batchSize}
     </select>
 
     <select id="hasSuccessfulIssueAlertChannelDelivery" resultType="boolean">

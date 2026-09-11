@@ -62,7 +62,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldDispatchAllChannelsSuccessfully() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -119,9 +119,30 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         verify(paymentTaskCenterMapper).initTaskLease("PAYMENT_ISSUE_ALERT_DISPATCH");
         verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
-        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).findPendingOutboxAlerts();
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).findPendingOutboxAlerts(100);
         Assertions.assertEquals("PAYMENT_ISSUE_ALERT_DISPATCH", result.getTaskCode());
         Assertions.assertTrue(result.getSummaryComment().contains("任务租约"));
+    }
+
+    @Test
+    void shouldUseDefaultAndClampDispatchBatchSize() {
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(1)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(1000)).thenReturn(Collections.emptyList());
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        service.dispatchPendingAlerts("payment-core-admin");
+        service.configureDispatchBatchSize(0);
+        service.dispatchPendingAlerts("payment-core-admin");
+        service.configureDispatchBatchSize(1001);
+        service.dispatchPendingAlerts("payment-core-admin");
+
+        verify(paymentTaskCenterMapper).findPendingOutboxAlerts(100);
+        verify(paymentTaskCenterMapper).findPendingOutboxAlerts(1);
+        verify(paymentTaskCenterMapper).findPendingOutboxAlerts(1000);
     }
 
     @Test
@@ -163,7 +184,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         item.setNotifyChannels("IN_APP,IM");
         item.setEscalationLevel("L2");
         item.setScheduleTag("交易链路白班");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -191,7 +212,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldMarkPartialFailureWhenOneChannelFails() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,SMS,EMAIL");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -223,7 +244,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldDispatchOnlyConfiguredChannels() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -245,7 +266,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldRenderExtendedTemplateVariablesAndFallbackUnknownPlaceholder() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,SMS");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -279,7 +300,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldMarkUnsupportedChannelAsFailure() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,VOICE");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -307,7 +328,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldSkipChannelAlreadyDispatchedSuccessfullyWhenRetrying() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,SMS");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -329,7 +350,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldBlockReplayWhenRecentSuccessfulDeliveryStillInProtectionWindow() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -364,7 +385,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
         item.setCreatedAt("2026-07-29 09:00:00");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -396,7 +417,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         item.setNotifyChannels("IN_APP,IM");
         item.setReceiver("支付技术负责人");
         item.setAlertContent("升级来源告警 PIA-OUTBOX-001 已超过 30 分钟未确认，请升级跟进。");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -424,7 +445,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM,SMS");
         item.setAckStatus("已确认");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -449,7 +470,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldMarkFailureWhenProviderConfigMissingForChannel() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -471,7 +492,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldSkipRetryWhenFailureCountExceedsConfiguredLimit() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -496,7 +517,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldSkipRetryWhenCooldownWindowNotElapsed() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -525,7 +546,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldApplyExponentialRetryCooldownWhenBackoffConfigured() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -559,7 +580,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldBlockDispatchWhenProviderRateLimitReached() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -584,7 +605,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldFallbackToNextProviderWhenPrimaryProviderFails() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -621,7 +642,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldFallbackToNextProviderWhenPrimaryProviderReturnsFailedStatus() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -656,7 +677,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldBoundCustomNotifierResultBeforePersistingAndFallback() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -695,7 +716,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldRejectMissingAndControlOnlyNotifierStatusWithoutFalseAcceptance() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -750,7 +771,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldFallbackToNextProviderWhenPrimaryProviderReturnsTransportFailureResult() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -787,7 +808,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     void shouldFallbackToBackupProviderWhenPrimaryProviderCircuitOpen() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(smsNotifier.channelCode()).thenReturn("SMS");
         when(emailNotifier.channelCode()).thenReturn("EMAIL");
@@ -1237,7 +1258,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
     @Test
     void shouldGenerateUniqueTaskLogNumbersWithoutMillisecondCollision() {
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.emptyList());
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
                 Arrays.asList(imNotifier, smsNotifier, emailNotifier)
@@ -1263,7 +1284,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertDispatchItemDTO second = buildDispatchItem();
         second.setAlertNo("PIA-OUTBOX-NEXT");
         second.setNotifyChannels("IM");
-        when(paymentTaskCenterMapper.findPendingOutboxAlerts()).thenReturn(Arrays.asList(first, second));
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Arrays.asList(first, second));
         when(imNotifier.channelCode()).thenReturn("IM");
         when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
                 .thenReturn(Collections.singletonList(buildProvider(
