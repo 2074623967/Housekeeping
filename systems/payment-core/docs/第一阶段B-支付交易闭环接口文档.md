@@ -3677,6 +3677,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 编号合法但告警不存在或状态不允许时继续返回既有业务失败；本轮不修改响应 DTO、错误包装、回查占用、限流或供应商适配器协议。
 4. 接口成功只表示本次回查任务按当前适配器结果处理，不代表通知真实送达、接收人确认或生产链路验收。
 
+### 14.218 管理端动态路径段编码约束
+
+1. `GET /api/payment-records/{paymentOrderId}`、`GET /api/payments/{paymentOrderId}`、`GET /api/refunds/{refundOrderId}` 与 `PUT /api/payment-config/issue-duty-rosters/{rosterCode}` 的客户端业务键必须使用 URL 路径段编码。
+2. 编码只保护 URL 结构，不改变端点、HTTP 方法、请求体、响应 DTO 或错误码；服务端继续按各业务键的容量与字符规则独立校验。
+3. 值班路由 PUT 仍提交完整候选并进入既有审核流程，路径编码不构成配置已写入运行态的证据。
+4. 详情 GET 成功只返回当前服务端记录事实，不代表支付到账、退款到账或账务一致。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
