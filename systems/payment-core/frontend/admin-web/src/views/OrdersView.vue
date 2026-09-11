@@ -1,15 +1,19 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { orderApi, paymentApi } from "../api/client";
 
 const items = ref([]);
 const isLoading = ref(true);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const hasLoadedData = ref(false);
+const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const actionResultMessage = ref("");
 const launchPayload = ref(null);
 const activeOrderNo = ref("");
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
   orderNo: "",
@@ -19,8 +23,25 @@ const filters = ref({
 
 const appWebBaseUrl = "http://127.0.0.1:5175";
 
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+const isWriteDisabled = computed(() => (
+  !hasLoadedData.value || isLoading.value || isSnapshotStale.value || Boolean(activeOrderNo.value)
+));
+
 function buildCashierUrl(prepayOrderNo) {
   return `${appWebBaseUrl}/cashier/${prepayOrderNo}`;
+}
+
+function buildQuery() {
+  return {
+    orderNo: filters.value.orderNo,
+    serviceType: filters.value.serviceType,
+    orderStatus: filters.value.orderStatus,
+    pageNo: pageNo.value,
+    pageSize
+  };
 }
 
 function resetFilters() {
@@ -38,21 +59,30 @@ function applyFilters() {
   loadOrders();
 }
 
-async function loadOrders() {
+async function loadOrders(afterAction = false, query = buildQuery()) {
   isLoading.value = true;
-  errorMessage.value = "";
   try {
-    const result = await orderApi.getList({
-      orderNo: filters.value.orderNo,
-      serviceType: filters.value.serviceType,
-      orderStatus: filters.value.orderStatus,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await orderApi.getList(query);
     items.value = result.items;
     total.value = result.total;
+    loadedPageNo.value = query.pageNo;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    if (!afterAction) {
+      actionErrorMessage.value = "";
+      actionResultMessage.value = "";
+    }
   } catch (error) {
-    errorMessage.value = error.message;
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = "";
+    }
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
     isLoading.value = false;
   }
@@ -80,8 +110,10 @@ function exportOrders() {
 }
 
 async function launchPayment(orderNo) {
+  const query = buildQuery();
   activeOrderNo.value = orderNo;
-  actionMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const prepay = await paymentApi.prepay({
       orderNo,
@@ -93,10 +125,11 @@ async function launchPayment(orderNo) {
       paymentOrderId: prepay.paymentOrderId,
       cashierUrl: buildCashierUrl(prepay.prepayOrderNo)
     };
-    actionMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
-    await loadOrders();
+    actionResultMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
+    actionRefreshErrorMessage.value = "";
+    await loadOrders(true, query);
   } catch (error) {
-    actionMessage.value = `发起支付失败：${error.message}`;
+    actionErrorMessage.value = `发起支付失败：${error.message}`;
   } finally {
     activeOrderNo.value = "";
   }
@@ -116,25 +149,34 @@ onMounted(loadOrders);
         <h2>订单中心</h2>
         <p>查看家政订单、支付状态和履约进展，并从订单侧发起支付</p>
       </div>
-      <button class="button primary" @click="exportOrders">导出订单</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading || Boolean(activeOrderNo)" @click="loadOrders()">刷新</button>
+        <button class="button primary" @click="exportOrders">导出订单</button>
+      </div>
     </div>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        订单数据加载失败：{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "订单数据刷新失败，当前展示上次成功快照：" : "订单数据加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="state-banner">
-        {{ actionMessage }}
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        发起支付结果已保留，但订单列表刷新失败，当前展示上次成功快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="state-banner">
+        {{ actionResultMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="Boolean(activeOrderNo)" />
         </div>
         <div class="field">
           <label>服务品类</label>
-          <select v-model="filters.serviceType">
+          <select v-model="filters.serviceType" :disabled="Boolean(activeOrderNo)">
             <option>全部</option>
             <option>深度保洁</option>
             <option>月嫂套餐</option>
@@ -143,7 +185,7 @@ onMounted(loadOrders);
         </div>
         <div class="field">
           <label>订单状态</label>
-          <select v-model="filters.orderStatus">
+          <select v-model="filters.orderStatus" :disabled="Boolean(activeOrderNo)">
             <option>全部</option>
             <option>待支付</option>
             <option>待履约</option>
@@ -155,8 +197,8 @@ onMounted(loadOrders);
           <input value="当前支持订单号、品类、状态筛选" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="loadOrders">刷新</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading || Boolean(activeOrderNo)" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isLoading || Boolean(activeOrderNo)" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -174,6 +216,8 @@ onMounted(loadOrders);
       </div>
 
       <div v-if="isLoading" class="state-box">订单数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的订单快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的订单数据</div>
 
@@ -252,7 +296,7 @@ onMounted(loadOrders);
                   </a>
                   <button
                     class="link-button"
-                    :disabled="activeOrderNo === item.orderNo || !canLaunchPayment(item)"
+                    :disabled="isWriteDisabled || !canLaunchPayment(item)"
                     @click="launchPayment(item.orderNo)"
                   >
                     {{
@@ -269,11 +313,11 @@ onMounted(loadOrders);
           </tbody>
         </table>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条订单</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="pageNo === 1 || isLoading || Boolean(activeOrderNo) || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || Boolean(activeOrderNo) || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
