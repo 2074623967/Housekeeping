@@ -1262,6 +1262,14 @@
 4. 事件派发定向测试应不少于 `35` 个，payment-core 全量不少于 `810` 个；补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
 5. 本地 Mockito 不证明生产数据真实缺失、数据库状态实际更新、人工处置完成或生产稳定性。
 
+### 4.166 事件人工重发状态门禁
+
+1. 分别构造已 `SUCCESS` 的支付成功事件和退款提交事件，从人工重发入口执行，验证返回失败且 HTTP、AMQP、退款渠道调用次数均为零。
+2. 验证拒绝路径不调用 `markPublishSuccess / markPublishFailed / markPublishDeadLetter`，并联合回归上层只在派发返回成功时记录成功重发审计。
+3. 回归 `PENDING / FAILED / DEAD_LETTER` 普通重发路径保持可用，退款 `UNKNOWN` 继续进入 `PAYMENT-1050` 专用查单与人工核查分支；空状态和未知状态应失败闭合。
+4. `PaymentEventDispatchServiceImplTest` 与 `PaymentEventServiceImplTest` 联合定向测试应不少于 `45` 个，payment-core 全量不少于 `812` 个；补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
+5. 本地 Mockito 不证明生产事件状态、真实 HTTP、RabbitMQ 或退款渠道调用、历史审计正确、资金结果或稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

@@ -9001,3 +9001,24 @@
 
 1. 缺失支付明细的确定性失败不再无限停留于自动重试候选，达到既有上限后可由死信与人工处置流程接管。
 2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地 Mockito 不证明真实数据缺失、生产死信落库、人工处置或稳定性，`release/v1.0.0` 继续冻结。
+
+## 322. 2026-09-11 事件人工重发状态门禁 V1.0 验证
+
+### 322.1 本轮补强
+
+1. `PaymentEventDispatchServiceImpl.republish` 对支付成功和退款提交事件增加服务端最终状态门禁，普通重发只接受 `PENDING / FAILED / DEAD_LETTER`。
+2. 已 `SUCCESS`、空状态或未知状态的事件直接返回失败，不调用 HTTP、AMQP 或退款渠道，也不更新发布状态，避免上层写入与真实执行不符的成功重发审计。
+3. 退款 `UNKNOWN` 继续进入既有 `PAYMENT-1050` 专用查单和人工核查分支，本轮不改变未知渠道结果的保护语义。
+
+### 322.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 事件重发联合定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest,PaymentEventServiceImplTest test` | 通过 | `45` 个用例；覆盖服务端拒绝成功支付与成功退款再次调用下游 |
+| payment-core 全量测试 | `mvn test` | 通过 | `812` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 322.3 当前判断
+
+1. 前端禁用状态不再是唯一保护，服务端能够拒绝直接接口调用或并发旧页面对已成功事件的重复派发，并阻止虚假成功重发审计。
+2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地 Mockito 不证明生产事件状态、真实渠道或消息系统未被历史重复调用、资金结果或稳定性，`release/v1.0.0` 继续冻结。
