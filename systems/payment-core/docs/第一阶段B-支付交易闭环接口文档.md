@@ -3567,6 +3567,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 支付记录详情 GET 返回 `PaymentRecordDetailDTO`，主动查单 POST 返回 `PaymentDetailDTO`；两者结构与语义不同，前端不得以查单响应覆盖支付记录详情，只能展示查单状态结论并独立刷新记录详情。
 5. 同页任一人工动作未完成期间不得并发调用其他动作或刷新；旧快照期间继续失败关闭写入口。前端门禁不替代服务端操作人校验、状态资格、事务、幂等与渠道结果核验，本轮不新增端点或 DTO 字段。
 
+### 14.204 订单发起支付前端消费契约
+
+1. `GET /api/orders` 与 `POST /api/payments/prepay` 的参数、响应 DTO、错误码和服务端状态机保持不变；列表返回分页 `OrderListItemDTO`，预付单 POST 返回 `PrepayOrderDTO`。
+2. 前端仅在订单列表业务成功后建立可操作快照；首次失败不得用空数组表示正常空结果，已有快照刷新失败时保留数据但禁止发起支付和翻页。合法成功空列表仍按业务空态消费。
+3. 预付单 POST 与后续订单列表 GET 是两个独立请求事实；POST 成功后必须保留 `prepayOrderNo / paymentOrderId` 与收银台入口，GET 失败不得进入发起支付失败分支。
+4. `PrepayOrderDTO` 不覆盖订单行的服务品类、服务者、订单/履约状态、聚合支付状态等完整字段，前端不得据此构造新的 `OrderListItemDTO` 或推导当前筛选命中。
+5. 同页任一预付单请求未完成期间不得并发发起其他订单支付或改变查询快照；前端门禁不替代服务端订单资格、幂等、异参冲突、事务和并发锁，本轮不新增端点或 DTO 字段。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
