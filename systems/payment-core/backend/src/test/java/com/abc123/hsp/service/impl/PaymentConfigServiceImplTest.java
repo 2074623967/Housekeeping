@@ -219,6 +219,34 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldValidateRouteRuleSampleAmountCapacity() {
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        PaymentRouteRuleValidationRequestDTO request = new PaymentRouteRuleValidationRequestDTO();
+        request.setMatchExpression("amount>=0");
+
+        request.setAmount(null);
+        org.junit.jupiter.api.Assertions.assertTrue(service.validateRouteRule(request).getMatched());
+
+        request.setAmount(java.math.BigDecimal.ZERO);
+        org.junit.jupiter.api.Assertions.assertTrue(service.validateRouteRule(request).getMatched());
+
+        request.setAmount(new java.math.BigDecimal("9999999999999999.990"));
+        org.junit.jupiter.api.Assertions.assertTrue(service.validateRouteRule(request).getMatched());
+
+        java.math.BigDecimal[] invalidAmounts = {
+                new java.math.BigDecimal("-0.01"),
+                new java.math.BigDecimal("0.001"),
+                new java.math.BigDecimal("10000000000000000.00")
+        };
+        for (java.math.BigDecimal invalidAmount : invalidAmounts) {
+            request.setAmount(invalidAmount);
+            IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                    IllegalArgumentException.class, () -> service.validateRouteRule(request));
+            org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("16 位整数和 2 位小数"));
+        }
+    }
+
+    @Test
     void shouldDetectRouteDivergenceShadowingPotentialCollisionAndInvalidExpression() {
         PaymentRouteRuleConfigDTO first = buildConflictRule(
                 "RULE_FIRST", "HOME_CLEAN/H5", "terminal = H5", "wx_h5", 1, "ENABLED");

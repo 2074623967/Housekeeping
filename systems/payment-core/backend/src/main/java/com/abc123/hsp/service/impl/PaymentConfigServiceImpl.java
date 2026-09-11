@@ -132,8 +132,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private static final String STATUS_ENABLED = "ENABLED";
     private static final String STATUS_DISABLED = "DISABLED";
-    private static final int CHANNEL_DAILY_LIMIT_MAX_SCALE = 2;
-    private static final BigDecimal MAX_CHANNEL_DAILY_LIMIT = new BigDecimal("9999999999999999.99");
+    private static final int CONFIG_MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_CONFIG_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final int RETURN_CODE_IMPORT_MAX_BYTES = 512 * 1024;
     private static final int RETURN_CODE_IMPORT_MAX_ROWS = 500;
     private static final List<String> RETURN_CODE_IMPORT_HEADERS = Collections.unmodifiableList(Arrays.asList(
@@ -488,6 +488,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (request == null || !StringUtils.hasText(request.getMatchExpression())) {
             throw new IllegalArgumentException("路由规则表达式不能为空");
         }
+        validateRouteSampleAmount(request.getAmount());
         String expression = request.getMatchExpression().trim();
         boolean valid = PaymentRouteExpressionEvaluator.isValid(expression);
         PaymentRouteRuleValidationDTO result = new PaymentRouteRuleValidationDTO();
@@ -508,6 +509,18 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         result.setMatched(Boolean.valueOf(matched));
         result.setMessage(matched ? "表达式合法，样例上下文命中" : "表达式合法，样例上下文未命中");
         return result;
+    }
+
+    private void validateRouteSampleAmount(BigDecimal amount) {
+        if (amount == null) {
+            return;
+        }
+        BigDecimal normalizedAmount = amount.stripTrailingZeros();
+        if (amount.compareTo(BigDecimal.ZERO) < 0
+                || normalizedAmount.scale() > CONFIG_MONEY_MAX_SCALE
+                || amount.compareTo(MAX_CONFIG_MONEY_AMOUNT) > 0) {
+            throw new IllegalArgumentException("路由样例金额最多支持 16 位整数和 2 位小数，且不能小于0");
+        }
     }
 
     @Override
@@ -3943,8 +3956,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("单日限额不能小于0");
         }
         BigDecimal normalizedDailyLimit = dailyLimit.stripTrailingZeros();
-        if (normalizedDailyLimit.scale() > CHANNEL_DAILY_LIMIT_MAX_SCALE
-                || dailyLimit.compareTo(MAX_CHANNEL_DAILY_LIMIT) > 0) {
+        if (normalizedDailyLimit.scale() > CONFIG_MONEY_MAX_SCALE
+                || dailyLimit.compareTo(MAX_CONFIG_MONEY_AMOUNT) > 0) {
             throw new IllegalArgumentException("单日限额最多支持 16 位整数和 2 位小数");
         }
         entity.setDailyLimit(dailyLimit);

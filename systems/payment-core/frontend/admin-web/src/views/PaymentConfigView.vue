@@ -262,7 +262,7 @@ function createRouteRuleForm() {
     sampleRequestedChannelCode: "",
     samplePayScene: "HOME_CLEAN",
     sampleTerminal: "H5",
-    sampleAmount: 100,
+    sampleAmount: "100",
     sampleCustomerName: "个人客户"
   };
 }
@@ -691,6 +691,11 @@ function startEditRouteRule(rule) {
 }
 
 async function validateRouteRuleForm() {
+  const sampleAmount = normalizeNonNegativePaymentAmountInput(routeRuleForm.value.sampleAmount);
+  if (sampleAmount === null) {
+    actionMessage.value = "路由表达式校验失败：样例金额最多支持 16 位整数和 2 位小数。";
+    return;
+  }
   activeConfigCode.value = editingRouteRuleCode.value || routeRuleForm.value.ruleCode || "ROUTE_RULE_VALIDATION";
   actionMessage.value = "";
   try {
@@ -700,7 +705,7 @@ async function validateRouteRuleForm() {
       requestedChannelCode: routeRuleForm.value.sampleRequestedChannelCode,
       payScene: routeRuleForm.value.samplePayScene,
       terminal: routeRuleForm.value.sampleTerminal,
-      amount: Number(routeRuleForm.value.sampleAmount || 0),
+      amount: sampleAmount,
       customerName: routeRuleForm.value.sampleCustomerName
     });
     actionMessage.value = `路由表达式校验：${result.message}`;
@@ -2577,7 +2582,7 @@ function exportGovernanceSnapshot(section = "ALL") {
               </label>
               <label>
                 样例金额
-                <input v-model.number="routeRuleForm.sampleAmount" type="number" min="0" step="0.01" />
+                <input v-model="routeRuleForm.sampleAmount" type="number" min="0" step="0.01" />
               </label>
               <label>
                 样例客户名称
