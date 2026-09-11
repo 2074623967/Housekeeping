@@ -3481,6 +3481,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 合法请求以独立 `GatewayRefundSubmitRequest` 发送且不修改调用方 DTO；该合同 DTO 不包含内部 `refundStatus / submittedChannelCode / channelRefundNo`。既有响应校验和受理结果规范化保持不变。
 5. 可能已触达上游的网络、空响应或非确定拒绝继续返回 `resultUnknown=true` 并要求先查单；本轮不新增端点、外部 DTO 字段、错误码、Mapper、schema 或迁移，本地测试不证明真实退款受理或到账。
 
+### 14.193 支付成功事件参与方字段契约
+
+1. `PaymentEventDispatchServiceImpl` 派发支付成功事件时要求 `orderNo / customerName` 必填，最长分别为 `64 / 128` 个字符；订单查询返回的 `workerName` 可为空，非空时最长为 `128` 个字符。
+2. 三类原始字段在裁剪前拒绝 ISO 控制字符；服务者名称为空时归一化为“待分配服务者”，其余合法字段裁剪首尾空白。非法值在清分 HTTP、账务 HTTP 或 AMQP 调用前进入既有事件失败状态机。
+3. 规范化值通过局部参数同时传入清分载荷、账务载荷和 AMQP 载荷，不修改查询得到的原 `PaymentDetailDTO`；三种出站路径的订单号、客户名称和服务者名称口径一致。
+4. 支付单号匹配、成功状态、渠道与渠道流水号、金额、HTTP/AMQP 配置和 publisher confirm 等既有校验保持不变；HTTP 模式下清分成功后账务失败仍可能由事件重试再次调用清分。
+5. 本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移；本地测试不证明真实清分、真实入账、消息送达、资金结果、账务一致性或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
