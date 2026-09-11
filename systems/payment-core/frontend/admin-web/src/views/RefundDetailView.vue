@@ -7,11 +7,18 @@ const route = useRoute();
 const router = useRouter();
 const detail = ref(null);
 const isLoading = ref(true);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const hasLoadedData = ref(false);
+const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const actionResultMessage = ref("");
 const actionRemark = ref("");
 const actionOperator = ref("");
 const activeAction = ref("");
+
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
 
 const paymentDetailRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
@@ -85,13 +92,24 @@ const operationSuggestions = computed(() => {
   return suggestions;
 });
 
-async function loadDetail() {
+async function loadDetail(afterAction = false) {
   isLoading.value = true;
-  errorMessage.value = "";
   try {
     detail.value = await refundApi.getDetail(route.params.refundOrderId);
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    if (!afterAction) {
+      actionErrorMessage.value = "";
+      actionResultMessage.value = "";
+    }
   } catch (error) {
-    errorMessage.value = error.message;
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = "";
+    }
   } finally {
     isLoading.value = false;
   }
@@ -100,18 +118,24 @@ async function loadDetail() {
 async function runAction(actionName, actionLabel, actionRunner) {
   const operator = actionOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
   activeAction.value = actionName;
-  actionMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
-    await actionRunner(route.params.refundOrderId, operator, actionRemark.value);
-    await loadDetail();
-    actionMessage.value = `退款单 ${route.params.refundOrderId} 已${actionLabel}。`;
+    const refundDetail = await actionRunner(route.params.refundOrderId, operator, actionRemark.value);
+    detail.value = refundDetail;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    actionResultMessage.value = `退款单 ${route.params.refundOrderId} 已${actionLabel}，当前状态为 ${refundDetail.status}。`;
     actionRemark.value = "";
+    await loadDetail(true);
   } catch (error) {
-    actionMessage.value = `退款单 ${route.params.refundOrderId} ${actionLabel}失败：${error.message}`;
+    actionErrorMessage.value = `退款单 ${route.params.refundOrderId} ${actionLabel}失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
@@ -132,17 +156,25 @@ onMounted(loadDetail);
         <button class="button secondary" :disabled="!paymentDetailRoute" @click="router.push(paymentDetailRoute)">查看支付单详情</button>
         <button class="button secondary" :disabled="!paymentRecordDetailRoute" @click="router.push(paymentRecordDetailRoute)">查看支付记录详情</button>
         <button class="button secondary" :disabled="!paymentLogRoute" @click="router.push(paymentLogRoute)">查看处理日志</button>
+        <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
       </div>
     </div>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        退款详情加载失败：{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "退款详情刷新失败，当前展示上次成功快照：" : "退款详情加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="success-banner">
-        {{ actionMessage }}
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        退款动作结果已更新当前详情，但详情刷新失败，当前展示动作响应快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="success-banner">
+        {{ actionResultMessage }}
       </div>
       <div v-if="isLoading" class="state-box">退款详情加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的退款详情快照</div>
 
       <template v-else-if="detail">
         <div class="detail-card-grid">
@@ -244,16 +276,16 @@ onMounted(loadDetail);
           <div class="toolbar compact-toolbar">
             <div class="field">
               <label>操作人</label>
-              <input v-model="actionOperator" maxlength="64" placeholder="请输入操作人" />
+              <input v-model="actionOperator" maxlength="64" placeholder="请输入操作人" :disabled="Boolean(activeAction) || isSnapshotStale" />
             </div>
             <div class="field wide-field">
               <label>操作备注</label>
-              <input v-model="actionRemark" placeholder="请输入审核意见、失败原因或重试说明" />
+              <input v-model="actionRemark" placeholder="请输入审核意见、失败原因或重试说明" :disabled="Boolean(activeAction) || isSnapshotStale" />
             </div>
             <div class="toolbar-actions">
-              <button class="button primary" :disabled="activeAction === 'approve' || detail.status !== 'REVIEWING'" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
-              <button class="button primary" :disabled="activeAction === 'query' || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
-              <button class="button secondary" :disabled="activeAction === 'retry' || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
+              <button class="button primary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'REVIEWING'" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
+              <button class="button primary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
+              <button class="button secondary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
           </div>
         </div>

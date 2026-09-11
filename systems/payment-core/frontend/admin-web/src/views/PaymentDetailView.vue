@@ -7,10 +7,17 @@ const route = useRoute();
 const router = useRouter();
 const detail = ref(null);
 const isLoading = ref(true);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const hasLoadedData = ref(false);
+const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const actionResultMessage = ref("");
 const activeAction = ref("");
 const operationOperator = ref("");
+
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
 
 const paymentRecordDetailRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
@@ -96,13 +103,24 @@ const operationSuggestions = computed(() => {
   return suggestions;
 });
 
-async function loadDetail() {
+async function loadDetail(afterAction = false) {
   isLoading.value = true;
-  errorMessage.value = "";
   try {
     detail.value = await paymentApi.getDetail(route.params.paymentOrderId);
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    if (!afterAction) {
+      actionErrorMessage.value = "";
+      actionResultMessage.value = "";
+    }
   } catch (error) {
-    errorMessage.value = error.message;
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = "";
+    }
   } finally {
     isLoading.value = false;
   }
@@ -122,16 +140,23 @@ function canRunClose() {
 async function handleQuery() {
   const operator = operationOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
   activeAction.value = "query";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const paymentDetail = await paymentApi.query(route.params.paymentOrderId, operator);
-    actionMessage.value = `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
-    await loadDetail();
+    detail.value = paymentDetail;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    actionResultMessage.value = `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
+    await loadDetail(true);
   } catch (error) {
-    actionMessage.value = `主动查单失败：${error.message}`;
+    actionErrorMessage.value = `主动查单失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
@@ -140,18 +165,25 @@ async function handleQuery() {
 async function handleClose() {
   const operator = operationOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
   activeAction.value = "close";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const paymentDetail = await paymentApi.close(route.params.paymentOrderId, operator);
-    actionMessage.value = paymentDetail.status === "CLOSED"
+    detail.value = paymentDetail;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    actionResultMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${route.params.paymentOrderId} 已关闭。`
       : `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
-    await loadDetail();
+    await loadDetail(true);
   } catch (error) {
-    actionMessage.value = `关闭支付单失败：${error.message}`;
+    actionErrorMessage.value = `关闭支付单失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
@@ -182,10 +214,11 @@ onMounted(loadDetail);
         <button class="button secondary" @click="router.push(`/payment-logs?paymentOrderId=${route.params.paymentOrderId}`)">
           查看处理日志
         </button>
-        <button class="button secondary" :disabled="!!activeAction" @click="handleQuery">
+        <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
+        <button class="button secondary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
         </button>
-        <button class="button primary" :disabled="!!activeAction || !canRunClose()" @click="handleClose">
+        <button class="button primary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunClose()" @click="handleClose">
           {{ isActionRunning("close") ? "关闭中..." : "关闭支付单" }}
         </button>
       </div>
@@ -195,16 +228,23 @@ onMounted(loadDetail);
       <div class="toolbar compact-toolbar">
         <div class="field">
           <label>操作人</label>
-          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" />
+          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" :disabled="Boolean(activeAction) || !hasLoadedData || isSnapshotStale" />
         </div>
       </div>
-      <div v-if="errorMessage" class="error-banner">
-        支付单详情加载失败：{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "支付单详情刷新失败，当前展示上次成功快照：" : "支付单详情加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="state-banner">
-        {{ actionMessage }}
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        人工动作结果已更新当前支付单，但详情刷新失败，当前展示动作响应快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="state-banner">
+        {{ actionResultMessage }}
       </div>
       <div v-if="isLoading" class="state-box">支付单详情加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付单详情快照</div>
       <template v-else-if="detail">
         <div class="detail-card-grid">
           <div class="detail-card">
