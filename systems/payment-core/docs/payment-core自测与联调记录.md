@@ -9880,3 +9880,26 @@
 1. 共享风控客户端不再依赖支付主流程预先清洗请求，污染或超出跨系统容量的评估上下文不会发往 `risk-control-system`。
 2. 本轮无前端代码、端点、DTO、Mapper SQL、schema 或迁移变化；本地 mock 不证明真实风控策略、跨进程网络、人工复核、渠道受理、资金结果或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 362. 2026-09-12 gateway 支付提交请求边界 V1.0 验证
+
+### 362.1 本轮补强
+
+1. `GatewayAccessPaymentChannelSubmitAdapter` 对齐 gateway-access 支付提交契约，在 HTTP 前校验十个必填字符串、两个可选字符串和金额。
+2. 支付单号、预付单号、订单号、支付场景、客户名称、支付方式、来源应用、请求渠道、真实渠道、终端、客户端 IP 和幂等键分别限制为 `64 / 64 / 64 / 32 / 128 / 32 / 64 / 64 / 64 / 32 / 64 / 128` 个字符，原始值在裁剪前拒绝 ISO 控制字符。
+3. 金额必须大于 `0`、有效小数位不超过 `2` 且不超过 `9999999999999999.99`；合法请求使用新 DTO 副本出站，调用方对象不被修改，响应摘要与出站真实渠道一致。
+
+### 362.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway 支付提交适配器定向测试 | `mvn -Dtest=GatewayAccessPaymentChannelSubmitAdapterTest test` | 通过 | `6` 个用例；覆盖空请求、必填空白、可选控制字符、超长、金额空值/零值/精度/上限、HTTP 零交互及规范化副本 |
+| payment-core 全量测试 | `mvn test` | 通过 | `887` 个用例，`0` failures、`0` errors、`0` skipped |
+| 干净 Java 8 测试编译 | `mvn -Dmaven.compiler.forceJavacCompilerUse=true -Dmaven.compiler.showWarnings=true -Dmaven.compiler.compilerArgs=-Xlint:unchecked clean test-compile` | 通过 | 新增代码无 unchecked 警告；仍有两条仓库既有 Lombok 警告 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 362.3 当前判断
+
+1. payment-core 的 gateway 支付提交 HTTP 适配器不再依赖调用方预先清洗完整请求，污染或超出远端契约容量的字段不会发送到网关。
+2. 支付主流程异常仍按结果未知处理并要求主动查单，不把适配器本地校验结果扩张为安全重试依据；本地测试不证明真实渠道、资金结果或生产稳定性。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。

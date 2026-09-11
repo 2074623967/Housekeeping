@@ -3449,6 +3449,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 合法请求以独立规范化副本发往 `POST /api/risk-control/decisions/evaluate`，不得修改调用方持有的 DTO；禁用态本地放行、启用态地址缺失错误及响应可信边界保持不变。
 5. 本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移；本地测试不证明真实风控策略、网络连通、人工复核、渠道受理、资金结果或生产稳定性。
 
+### 14.189 gateway 支付提交请求字段契约
+
+1. `GatewayAccessPaymentChannelSubmitAdapter.submit` 要求 `paymentOrderId / prepayOrderNo / orderNo / payScene / paymentMethod / sourceAppId / resolvedChannelCode / terminal / clientIp / idempotencyKey` 必填，`customerName / requestedChannelCode` 可选。
+2. 按 DTO 顺序，十二类字符串最长分别为 `64 / 64 / 64 / 32 / 128 / 32 / 64 / 64 / 64 / 32 / 64 / 128` 个字符；原始值在裁剪前拒绝 ISO 控制字符，可选纯空白字段归一化为 `null`。
+3. `amount` 必须大于 `0`、去除末尾零后的有效小数位不超过两位且不超过 `9999999999999999.99`。任一请求字段非法均返回 `PAYMENT_CHANNEL_SUBMIT_FAILED`，并在 gateway-access HTTP 调用前失败关闭。
+4. 合法请求以独立规范化副本发送，响应摘要的 `channelCode` 使用同一规范化 `resolvedChannelCode`；调用方 DTO 不被修改，既有响应校验、返回码标准化和结果未知保护保持不变。
+5. 本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移；本地测试不证明真实网关、渠道受理、资金结果、账务一致性或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
