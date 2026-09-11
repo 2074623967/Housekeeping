@@ -121,6 +121,30 @@ class PaymentDeadLetterTaskServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidListQueryFieldsBeforeMapperAccess() {
+        PaymentDeadLetterTaskQueryDTO oversizedStatus = query(
+                repeat("S", 33), null, null);
+        PaymentDeadLetterTaskQueryDTO controlStatus = query(
+                "PENDING_REVIEW\n", null, null);
+        PaymentDeadLetterTaskQueryDTO oversizedTargetSystem = query(
+                null, repeat("T", 65), null);
+        PaymentDeadLetterTaskQueryDTO controlTargetSystem = query(
+                null, "clearing-system\n", null);
+        PaymentDeadLetterTaskQueryDTO oversizedMessageId = query(
+                null, null, repeat("M", 129));
+        PaymentDeadLetterTaskQueryDTO controlMessageId = query(
+                null, null, "MSG-001\n");
+
+        assertThrows(IllegalArgumentException.class, () -> service().list(oversizedStatus));
+        assertThrows(IllegalArgumentException.class, () -> service().list(controlStatus));
+        assertThrows(IllegalArgumentException.class, () -> service().list(oversizedTargetSystem));
+        assertThrows(IllegalArgumentException.class, () -> service().list(controlTargetSystem));
+        assertThrows(IllegalArgumentException.class, () -> service().list(oversizedMessageId));
+        assertThrows(IllegalArgumentException.class, () -> service().list(controlMessageId));
+        verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
+    }
+
+    @Test
     void shouldMaskActionResponseWithoutChangingReplaySource() {
         PaymentDeadLetterTaskEntity task = replayTask();
         when(paymentDeadLetterTaskMapper.markReadyToReplay("DLQ-001", "支付运营", "核对完成"))
@@ -282,6 +306,22 @@ class PaymentDeadLetterTaskServiceImplTest {
         request.setOperator(operator);
         request.setResolutionNote(resolutionNote);
         return request;
+    }
+
+    private PaymentDeadLetterTaskQueryDTO query(String taskStatus, String targetSystem, String messageId) {
+        PaymentDeadLetterTaskQueryDTO query = new PaymentDeadLetterTaskQueryDTO();
+        query.setTaskStatus(taskStatus);
+        query.setTargetSystem(targetSystem);
+        query.setMessageId(messageId);
+        return query;
+    }
+
+    private String repeat(String value, int times) {
+        StringBuilder builder = new StringBuilder(value.length() * times);
+        for (int index = 0; index < times; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 
     private PaymentDeadLetterTaskEntity replayTask() {

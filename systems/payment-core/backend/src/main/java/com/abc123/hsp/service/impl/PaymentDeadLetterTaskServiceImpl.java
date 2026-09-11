@@ -37,6 +37,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private static final String STATUS_MANUAL_RESOLVED = "MANUAL_RESOLVED";
     private static final String STATUS_REPLAYED = "REPLAYED";
     private static final int TASK_NO_MAX_LENGTH = 64;
+    private static final int TASK_STATUS_MAX_LENGTH = 32;
+    private static final int TARGET_SYSTEM_MAX_LENGTH = 64;
+    private static final int MESSAGE_ID_MAX_LENGTH = 128;
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int RESOLUTION_NOTE_MAX_LENGTH = 512;
     private static final int DEFAULT_CONFIRM_TIMEOUT_MS = 5000;
@@ -171,9 +174,12 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
 
     private PaymentDeadLetterTaskQueryDTO normalizeQuery(PaymentDeadLetterTaskQueryDTO query) {
         PaymentDeadLetterTaskQueryDTO normalizedQuery = query == null ? new PaymentDeadLetterTaskQueryDTO() : query;
-        normalizedQuery.setTaskStatus(trimToNull(normalizedQuery.getTaskStatus()));
-        normalizedQuery.setTargetSystem(trimToNull(normalizedQuery.getTargetSystem()));
-        normalizedQuery.setMessageId(trimToNull(normalizedQuery.getMessageId()));
+        normalizedQuery.setTaskStatus(normalizeOptionalQueryField(
+                normalizedQuery.getTaskStatus(), TASK_STATUS_MAX_LENGTH, "任务状态"));
+        normalizedQuery.setTargetSystem(normalizeOptionalQueryField(
+                normalizedQuery.getTargetSystem(), TARGET_SYSTEM_MAX_LENGTH, "目标系统"));
+        normalizedQuery.setMessageId(normalizeOptionalQueryField(
+                normalizedQuery.getMessageId(), MESSAGE_ID_MAX_LENGTH, "消息ID"));
         normalizedQuery.setPageNo(Math.max(normalizedQuery.getPageNo(), 1));
         normalizedQuery.setPageSize(Math.min(Math.max(normalizedQuery.getPageSize(), 1), 100));
         return normalizedQuery;
@@ -240,8 +246,18 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         return false;
     }
 
-    private String trimToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
+    private String normalizeOptionalQueryField(String value, int maxLength, String fieldName) {
+        if (value != null && containsIsoControl(value)) {
+            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String buildFailureNote() {
