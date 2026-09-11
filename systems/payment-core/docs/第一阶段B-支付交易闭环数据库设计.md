@@ -1097,6 +1097,13 @@ t_order
 3. 空条件、默认筛选、分页、客户与服务者姓名脱敏和 CSV 容量保护口径不变。
 4. 本地测试不证明生产 MySQL 查询计划、真实订单履约、渠道受理、支付入账或稳定性，仍需正式环境核验。
 
+### 4.114 支付请求查询字段边界
+
+1. `t_payment_attempt.attempt_no / payment_order_id / channel_code / terminal / client_ip / attempt_status` 与 `t_payment_order.order_no` 继续使用 `VARCHAR(64) / VARCHAR(64) / VARCHAR(64) / VARCHAR(32) / VARCHAR(64) / VARCHAR(32) / VARCHAR(64)`；本轮不新增表、字段、索引、Mapper SQL、schema 或迁移。
+2. 服务层在列表、总览和导出 SQL 前先拒绝七类原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper。
+3. 请求状态别名、重复支付单统计、缺失响应统计、终端与渠道去重、敏感字段脱敏和 CSV 容量保护口径不变。
+4. 本地测试不证明生产 MySQL 查询计划、真实渠道请求、渠道受理、支付入账或稳定性，仍需正式环境核验。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
