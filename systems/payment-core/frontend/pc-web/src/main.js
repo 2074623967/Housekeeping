@@ -10,8 +10,8 @@ const routes = [
   { path: "/withdraw", component: BusinessEntryView, props: { terminalVariant: "pc", sceneType: "withdraw" } },
   { path: "/transfer", component: BusinessEntryView, props: { terminalVariant: "pc", sceneType: "transfer" } },
   { path: "/balance-pay", component: BusinessEntryView, props: { terminalVariant: "pc", sceneType: "balance-pay" } },
-  { path: "/cashier/:prepayOrderNo", component: () => import("./views/CashierView.vue") },
-  { path: "/payment-result/:paymentOrderId", component: () => import("./views/ResultView.vue") }
+  { path: "/cashier/:prepayOrderNo", name: "cashier", component: () => import("./views/CashierView.vue") },
+  { path: "/payment-result/:paymentOrderId", name: "payment-result", component: () => import("./views/ResultView.vue") }
 ];
 
 const router = createRouter({

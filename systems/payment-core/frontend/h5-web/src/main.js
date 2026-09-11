@@ -12,8 +12,8 @@ const routes = [
   { path: "/withdraw", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "withdraw" } },
   { path: "/transfer", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "transfer" } },
   { path: "/balance-pay", component: BusinessEntryView, props: { terminalVariant: "h5", sceneType: "balance-pay" } },
-  { path: "/cashier/:prepayOrderNo", component: CashierView },
-  { path: "/payment-result/:paymentOrderId", component: ResultView }
+  { path: "/cashier/:prepayOrderNo", name: "cashier", component: CashierView },
+  { path: "/payment-result/:paymentOrderId", name: "payment-result", component: ResultView }
 ];
 
 const router = createRouter({

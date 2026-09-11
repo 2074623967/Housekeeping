@@ -8,6 +8,7 @@ import {
   resolvePaymentResultState
 } from "../constants/payment";
 import { persistPaymentAccessToken, withoutAccessToken } from "../constants/paymentSession";
+import { buildCashierRoute } from "../router/paymentRoutes";
 
 const props = defineProps({
   terminalVariant: {
@@ -277,10 +278,7 @@ function backToCashier() {
   if (typeof route.query.bizType === "string" && route.query.bizType.trim()) {
     cashierRouteQuery.bizType = route.query.bizType.trim();
   }
-  router.push({
-    path: `/cashier/${prepayOrderNo}`,
-    query: cashierRouteQuery
-  });
+  router.push(buildCashierRoute(prepayOrderNo, cashierRouteQuery));
 }
 
 function backToBusinessEntry() {

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { persistPaymentAccessToken } from "../constants/paymentSession";
+import { buildCashierRoute } from "../router/paymentRoutes";
 
 const props = defineProps({
   terminalVariant: {
@@ -179,12 +180,7 @@ async function createPrepay() {
       amount: Number(form.value.amount),
       cashierTitle: sceneMeta.value.cashierTitle
     });
-    router.push({
-      path: `/cashier/${prepay.prepayOrderNo}`,
-      query: {
-        bizType: props.sceneType
-      }
-    });
+    router.push(buildCashierRoute(prepay.prepayOrderNo, { bizType: props.sceneType }));
   } catch (error) {
     message.value = error.message;
   } finally {

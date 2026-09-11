@@ -12,6 +12,7 @@ import {
   readPaymentAccessToken,
   withoutAccessToken
 } from "../constants/paymentSession";
+import { buildPaymentResultRoute } from "../router/paymentRoutes";
 
 const props = defineProps({
   terminalVariant: {
@@ -353,13 +354,13 @@ async function queryCurrentPayment() {
     latestQueriedDetail.value = detail;
     message.value = `已查询支付单 ${cashier.value.paymentOrderId} 的最新状态：${detail.status}。`;
     if (detail.status === "SUCCESS" || detail.status === "CLOSED") {
-      router.push({
-        path: `/payment-result/${detail.paymentOrderId}`,
-        query: buildResultRouteQuery(
+      router.push(buildPaymentResultRoute(
+        detail.paymentOrderId,
+        buildResultRouteQuery(
           detail.prepayOrderNo || cashier.value.prepayOrderNo,
           detail.paymentMethod || selectedPaymentMethod.value
         )
-      });
+      ));
     }
   } catch (error) {
     message.value = error.message;
@@ -390,10 +391,10 @@ async function pay() {
       terminal: terminalMeta.value.terminalCode,
       idempotencyKey: idempotencyKey.value
     });
-    router.push({
-      path: `/payment-result/${submitResult?.paymentOrderId}`,
-      query: buildResultRouteQuery(submitResult?.prepayOrderNo, selectedPaymentMethod.value)
-    });
+    router.push(buildPaymentResultRoute(
+      submitResult?.paymentOrderId,
+      buildResultRouteQuery(submitResult?.prepayOrderNo, selectedPaymentMethod.value)
+    ));
   } catch (error) {
     try {
       cashier.value = await paymentApi.getCashier(route.params.prepayOrderNo);
