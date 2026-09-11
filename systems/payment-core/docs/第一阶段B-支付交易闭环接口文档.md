@@ -3504,6 +3504,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `trends / channelMetrics / alerts` 允许为空数组，前端分别显示空状态；`summary` 缺失字段继续使用既有零值兜底，不新增错误码或隐式成功事实。
 4. 本轮不修改 Controller、Service、DTO、Mapper SQL、schema 或迁移；本地 mock 不证明真实指标采集、告警生成、渠道状态或生产稳定性。
 
+### 14.196 运营风险总览展示兼容契约
+
+1. 支付交易异常、支付路由执行结果和支付配置中心继续消费各自既有接口与字段；共享样式只恢复 `overview-panel / overview-grid / overview-card / overview-title` 的展示语义。
+2. `danger / warn / info` 继续作为前端视觉状态修饰类，业务风险等级、数量与说明仍由原页面数据模型提供，不通过 CSS 推导或修改接口事实。
+3. 空值、加载失败和接口异常继续沿用各页面既有处理，本轮不新增端点、DTO 字段、错误码、Mapper SQL、schema 或迁移。
+4. 生产构建与本地浏览器计算样式通过不代表真实异常、路由或配置治理事实已核验。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
