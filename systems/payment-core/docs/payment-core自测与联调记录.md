@@ -8860,7 +8860,7 @@
 ### 315.1 本轮补强
 
 1. 共用 `RestTemplate` 工厂将所有传入超时统一夹在 `1..60000ms`，同时用于连接超时和读取超时。
-2. 支付提交/查单、退款提交/查单、风控、运营配置、告警回执及三类通知共十类 HTTP 出站路径自动复用该边界，不新增并行客户端配置。
+2. 支付提交/查单、退款提交/查单、支付成功下游投递、风控、运营配置、告警回执及三类通知共十一类 HTTP 出站路径自动复用该边界，不新增并行客户端配置。
 3. IM、短信和邮件通知失败摘要保存归一化值；`timeout-ms=0` 的行为测试确认摘要显示 `timeout=1ms`。
 
 ### 315.2 验证结果
@@ -8875,3 +8875,24 @@
 
 1. payment-core 自有 HTTP 出站客户端不再接受无限或超过一分钟的连接/读取等待配置，默认配置行为保持不变。
 2. 本轮无前端、Mapper、schema 或迁移变化；本地测试不证明真实网络超时精度、上游取消、线程池容量、生产参数合理或稳定性，`release/v1.0.0` 继续冻结。
+
+## 316. 2026-09-11 支付成功下游投递超时可配置 V1.0 验证
+
+### 316.1 本轮补强
+
+1. `PaymentEventDispatchServiceImpl` 自动装配入口新增 `payment.event-dispatch.http-timeout-ms`，替代支付成功 HTTP 下游投递的硬编码 `3000ms`。
+2. `application.yml` 通过 `HSP_PAYMENT_EVENT_DISPATCH_HTTP_TIMEOUT_MS` 提供环境覆盖，默认保持 `3000ms`；实际客户端继续使用共享 `1..60000ms` 连接与读取超时边界。
+3. 新增配置契约测试，验证仓库默认配置可解析为 `3000`，并回归事件投递实现和共享 HTTP 客户端。
+
+### 316.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 事件投递与超时边界定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest,PaymentEventDispatchConfigurationTest,AbstractLocalPaymentIssueAlertNotifierTest test` | 通过 | `29` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 全量测试 | `mvn test` | 通过 | `800` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 316.3 当前判断
+
+1. 支付成功事件 HTTP 下游投递具备环境级超时配置，同时保持统一有界行为和原 `3000ms` 默认兼容性。
+2. 本轮无前端、Mapper、schema 或迁移变化；本地测试不证明真实清分或会计系统连通、事件送达、外部受理、生产参数合理或稳定性，`release/v1.0.0` 继续冻结。
