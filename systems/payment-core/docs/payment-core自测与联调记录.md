@@ -10889,3 +10889,27 @@
 1. 退款单号和操作日志号的时间前缀不再被部署节点默认时区改写，业务可读日期保持上海口径。
 2. 本轮不改变退款申请、审核、渠道提交、回调、查单、事件、Mapper SQL、数据库结构或编号唯一性策略。
 3. 自动测试不证明真实退款受理、资金退回、到账核验或生产稳定性，也不改变 release 四项真实阻断。
+
+## 403. 2026-09-12 API 请求追踪号时区统一 V1.0 验证
+
+### 403.1 本轮补强
+
+1. `RequestIdHolder` 的时间格式器固定使用 `Asia/Shanghai`，不再通过 `ZoneId.systemDefault()` 在类加载时缓存部署节点时区。
+2. 请求号继续采用 `REQ + yyyyMMddHHmmssSSS + 8位UUID`，格式、长度、字符集与并发唯一性策略不变。
+3. `ApiResponse.success/failure` 继续使用同一生成器，不改变任何业务响应字段或错误处理路径。
+
+### 403.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 隔离类加载异时区回归 | `RequestIdHolderTest#shouldGenerateRequestIdInBusinessTimezone` | 通过 | 在动态选择的异时区下用独立类加载器重新初始化生成器，验证请求号仍以上海业务日期开头，并在 `finally` 恢复默认时区 |
+| 并发唯一性回归 | `RequestIdHolderTest#shouldGenerateUniqueRequestIdsConcurrently` | 通过 | 并行生成 `10,000` 个请求号，集合无重复且全部符合既有格式 |
+| 请求号定向测试 | `mvn -Dtest=RequestIdHolderTest test` | 通过 | `2` 个测试，`0` failures、`0` errors、`0` skipped |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `910` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白错误 |
+
+### 403.3 当前判断
+
+1. API 请求追踪号时间前缀不再受部署节点默认时区或类加载时点影响，统一保持上海业务时间口径。
+2. 本轮不改变端点、响应 DTO、业务状态、Mapper SQL、数据库结构、日志关联或异常映射。
+3. 自动测试不证明请求真实来源、业务完成、审计审批或生产稳定性，也不改变 release 四项真实阻断。
