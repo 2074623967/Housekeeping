@@ -3209,6 +3209,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `PaymentTaskActionResultDTO.processedCount / successCount / failCount` 只表示本轮执行结果；单笔失败继续隔离，摘要最多展示三个失败退款单号，不新增接口字段或自动循环清空承诺。
 4. 成功计数仍只代表本地重试和渠道提交链路完成，不代表渠道最终受理或退款到账；本地测试不证明生产 MySQL 吞吐、真实渠道结果或稳定性。
 
+### 14.155 异常告警派发有界批次契约
+
+1. 人工与自动异常告警派发共用服务端批次容量；默认值为 `100`，部署环境可通过 `HSP_PAYMENT_ISSUE_ALERT_DISPATCH_BATCH_SIZE` 覆盖，实际值限制在 `1..1000`。
+2. 每轮按 `created_at ASC, id ASC` 选择最早且仍待确认的 `IN_APP_OUTBOX` 告警；超过批次的告警不改写状态，留待后续调度或人工轮次。
+3. `PaymentTaskActionResultDTO.processedCount / successCount / warningCount / failCount` 只表示本轮执行结果；自动任务租约、逐告警失败隔离、成功通道防重、供应商降级和最多三个失败告警号保持不变，不新增接口字段或自动循环清空承诺。
+4. 成功或部分成功计数只代表本地派发链路及已记录的供应商响应，不代表最终送达；本地测试不证明生产 MySQL 吞吐、真实供应商受理、送达、资费结果或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

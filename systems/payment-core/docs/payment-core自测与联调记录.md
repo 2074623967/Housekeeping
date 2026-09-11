@@ -9130,3 +9130,25 @@
 
 1. 失败退款积压不再一次性加载并占用完整任务租约，任务结果继续表达单轮实际处理结果，剩余失败退款由后续人工或自动轮次承接。
 2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实渠道受理、退款到账、积压吞吐或稳定性，`release/v1.0.0` 继续冻结。
+
+## 328. 2026-09-11 异常告警派发有界批次 V1.0 验证
+
+### 328.1 本轮补强
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 新增 `payment.issue-alert.dispatch.batch-size`，默认 `100`，非正配置按 `1`、超过上限按 `1000` 执行，人工与自动派发共用该容量。
+2. `PaymentTaskCenterMapper.findPendingOutboxAlerts` 改为接收批次参数，按 `created_at ASC, id ASC` 选择最早的待确认 outbox 告警，超过批次的告警保持原状态等待后续轮次。
+3. 自动任务租约、逐告警事务隔离、供应商路由与降级、成功通道防重、投递回执和任务中心本轮统计保持不变。
+
+### 328.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警派发联合定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest,PaymentIssueAlertNotifierConfigurationTest,PaymentTaskCenterMapperIntegrationTest,PaymentCompensationSchedulerTest test` | 通过 | `74` 个用例；覆盖实际 SQL 截断与最老优先、默认值、上下界、租约跳过和既有派发语义 |
+| payment-core 全量测试 | `mvn test` | 通过 | `826` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout PaymentTaskCenterMapper.xml` | 通过 | XML 结构有效 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 328.3 当前判断
+
+1. 告警积压不再被一次性加载并持续占用单轮任务窗口，任务结果继续表达本轮实际处理结果，剩余 outbox 告警由后续人工或自动轮次承接。
+2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实供应商受理或送达、积压吞吐、资费结果或稳定性，`release/v1.0.0` 继续冻结。
