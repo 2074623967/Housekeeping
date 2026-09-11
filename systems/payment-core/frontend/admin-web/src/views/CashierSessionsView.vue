@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { cashierSessionApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const items = ref([]);
 const selectedItem = ref(null);
@@ -319,7 +320,7 @@ onMounted(loadCashierSessions);
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="`/orders?orderNo=${selectedItem.orderNo}`">查看订单</RouterLink>
-              <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
               <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
               <a
                 class="link-button"

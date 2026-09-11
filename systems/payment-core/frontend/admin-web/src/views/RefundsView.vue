@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { refundApi } from "../api/client";
+import { refundDetailRoute } from "../router/detailRoutes";
 
 const items = ref([]);
 const selectedItem = ref(null);
@@ -377,7 +378,7 @@ onMounted(loadRefunds);
                 <td>
                   <div class="list-actions">
                     <button class="link-button" @click="pickItem(item)">快照</button>
-                    <RouterLink class="link-button" :to="`/refunds/${item.refundOrderId}`">详情</RouterLink>
+                    <RouterLink class="link-button" :to="refundDetailRoute(item.refundOrderId)">详情</RouterLink>
                     <button
                       class="link-button"
                       :disabled="isWriteDisabled || item.status !== 'PROCESSING'"

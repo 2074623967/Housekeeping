@@ -2,6 +2,10 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { refundApi } from "../api/client";
+import {
+  paymentDetailRoute as buildPaymentDetailRoute,
+  paymentRecordDetailRoute as buildPaymentRecordDetailRoute
+} from "../router/detailRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -24,14 +28,14 @@ const paymentDetailRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
     return "";
   }
-  return `/payments/${detail.value.paymentOrderId}`;
+  return buildPaymentDetailRoute(detail.value.paymentOrderId);
 });
 
 const paymentRecordDetailRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
     return "";
   }
-  return `/payment-records/${detail.value.paymentOrderId}?recordType=ALL`;
+  return buildPaymentRecordDetailRoute(detail.value.paymentOrderId);
 });
 
 const paymentLogRoute = computed(() => {

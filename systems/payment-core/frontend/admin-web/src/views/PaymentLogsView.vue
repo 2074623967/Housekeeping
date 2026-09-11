@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentLogApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const items = ref([]);
@@ -293,7 +294,7 @@ onMounted(loadPaymentLogs);
               <tr v-for="item in items" :key="item.logNo">
                 <td>{{ item.logNo }}</td>
                 <td>
-                  <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                  <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
                     {{ item.paymentOrderId }}
                   </RouterLink>
                 </td>
@@ -332,7 +333,7 @@ onMounted(loadPaymentLogs);
               <div class="ops-row"><span>当前过滤命中</span><span>{{ metrics.callbackKeywordCount }} 条回调相关日志</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
               <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
               <RouterLink class="link-button" :to="`/payment-requests?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付请求</RouterLink>
               <RouterLink class="link-button" :to="`/payment-events?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付事件</RouterLink>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { orderApi, paymentApi } from "../api/client";
+import { paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
 
 const items = ref([]);
 const isLoading = ref(true);
@@ -268,13 +269,13 @@ onMounted(loadOrders);
                 <div class="list-actions">
                   <span>{{ item.orderStatus === "待支付" ? "待发起" : "已生成支付链路" }}</span>
                   <span>{{ item.billNo ? `账单 ${item.billNo}` : "尚未生成账单" }}</span>
-                  <RouterLink v-if="item.latestPaymentOrderId" class="link-button" :to="`/payments/${item.latestPaymentOrderId}`">
+                  <RouterLink v-if="item.latestPaymentOrderId" class="link-button" :to="paymentDetailRoute(item.latestPaymentOrderId)">
                     查看支付单
                   </RouterLink>
                   <RouterLink
                     v-if="item.latestPaymentOrderId"
                     class="link-button"
-                    :to="`/payment-records/${item.latestPaymentOrderId}?recordType=ALL`"
+                    :to="paymentRecordDetailRoute(item.latestPaymentOrderId)"
                   >
                     查看支付记录
                   </RouterLink>

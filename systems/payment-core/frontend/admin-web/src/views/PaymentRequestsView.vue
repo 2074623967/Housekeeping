@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentRequestApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const overview = ref({
@@ -307,7 +308,7 @@ onMounted(loadPaymentRequests);
                 <tr>
                   <td>{{ item.requestNo }}</td>
                   <td>
-                    <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                    <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
                       {{ item.paymentOrderId }}
                     </RouterLink>
                   </td>
@@ -372,7 +373,7 @@ onMounted(loadPaymentRequests);
               <div class="ops-row"><span>典型场景</span><span>重复提交、渠道超时、终端切换导致的重试、缺响应报文</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
               <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
               <RouterLink class="link-button" :to="`/cashier-sessions?paymentOrderId=${selectedItem.paymentOrderId}`">查看会话</RouterLink>
               <RouterLink class="link-button" :to="`/payment-routes?paymentOrderId=${selectedItem.paymentOrderId}`">查看路由结果</RouterLink>

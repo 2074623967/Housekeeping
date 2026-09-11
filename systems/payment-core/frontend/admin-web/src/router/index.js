@@ -65,11 +65,11 @@ const routes = [
           recordType: "BANK_CARD"
         }
       },
-      { path: "payment-records/:paymentOrderId", component: PaymentRecordDetailView },
+      { path: "payment-records/:paymentOrderId", name: "payment-record-detail", component: PaymentRecordDetailView },
       { path: "payments", component: PaymentsView },
-      { path: "payments/:paymentOrderId", component: PaymentDetailView },
+      { path: "payments/:paymentOrderId", name: "payment-detail", component: PaymentDetailView },
       { path: "refunds", component: RefundsView },
-      { path: "refunds/:refundOrderId", component: RefundDetailView },
+      { path: "refunds/:refundOrderId", name: "refund-detail", component: RefundDetailView },
       { path: "payment-config", component: PaymentConfigView },
       { path: "payment-monitor", component: PaymentMonitorView },
       { path: "payment-task-center", component: PaymentTaskCenterView },

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const router = useRouter();
 const items = ref([]);
@@ -109,7 +110,7 @@ function goToPage(nextPage) {
 }
 
 function openDetail(paymentOrderId) {
-  router.push(`/payments/${paymentOrderId}`);
+  router.push(paymentDetailRoute(paymentOrderId));
 }
 
 function pickItem(item) {

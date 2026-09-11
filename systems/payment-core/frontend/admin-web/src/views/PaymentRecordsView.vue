@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentRecordApi } from "../api/client";
+import { paymentRecordDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -115,10 +116,7 @@ function goToPage(nextPage) {
 }
 
 function openPayment(row) {
-  router.push({
-    path: `/payment-records/${row.paymentOrderId}`,
-    query: { recordType: pageConfig.value.recordType }
-  });
+  router.push(paymentRecordDetailRoute(row.paymentOrderId, pageConfig.value.recordType));
 }
 
 function pickRow(row) {

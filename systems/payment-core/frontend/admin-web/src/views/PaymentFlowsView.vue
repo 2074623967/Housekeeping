@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentFlowApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -100,7 +101,7 @@ function goToPage(nextPage) {
 }
 
 function openPaymentDetail(paymentOrderId) {
-  router.push(`/payments/${paymentOrderId}`);
+  router.push(paymentDetailRoute(paymentOrderId));
 }
 
 function openPaymentRequests(paymentOrderId) {

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentEventApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const items = ref([]);
@@ -415,7 +416,7 @@ onMounted(loadEvents);
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信，{{ metrics.unknownTotal }} 条结果未知</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
               <RouterLink class="link-button" :to="`/payment-logs?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付日志</RouterLink>
               <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
               <RouterLink class="link-button" to="/payment-dead-letter-tasks">查看死信补偿任务</RouterLink>

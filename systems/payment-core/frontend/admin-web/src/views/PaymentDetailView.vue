@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
+import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -23,7 +24,7 @@ const paymentRecordDetailRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
     return "";
   }
-  return `/payment-records/${detail.value.paymentOrderId}?recordType=ALL`;
+  return buildPaymentRecordDetailRoute(detail.value.paymentOrderId);
 });
 
 const orderRoute = computed(() => {

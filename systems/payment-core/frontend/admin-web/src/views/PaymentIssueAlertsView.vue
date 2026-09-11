@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentIssueApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const items = ref([]);
@@ -352,7 +353,7 @@ onMounted(loadAlertLogs);
                 </td>
                 <td>{{ item.issueNo }}</td>
                 <td>
-                  <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                  <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
                     {{ item.paymentOrderId }}
                   </RouterLink>
                 </td>
@@ -424,7 +425,7 @@ onMounted(loadAlertLogs);
             <div class="ops-card">
               <div class="ops-title">联查入口</div>
               <div class="list-actions">
-                <RouterLink class="link-button" :to="`/payments/${selectedItem.paymentOrderId}`">查看支付单</RouterLink>
+                <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
                 <RouterLink class="link-button" :to="`/payment-issues?issueNo=${selectedItem.issueNo}`">查看异常中心</RouterLink>
                 <RouterLink class="link-button" :to="`/payment-logs?paymentOrderId=${selectedItem.paymentOrderId}`">查看处理日志</RouterLink>
               </div>

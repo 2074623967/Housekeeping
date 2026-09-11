@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
+import { paymentDetailRoute } from "../router/detailRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -142,7 +143,7 @@ function openIssue(item) {
     router.push(item.recommendedRoute);
     return;
   }
-  router.push(`/payments/${item.paymentOrderId}`);
+  router.push(paymentDetailRoute(item.paymentOrderId));
 }
 
 function toggleIssueSelection(issueNo, checked) {
@@ -392,7 +393,7 @@ onMounted(loadIssues);
               </td>
               <td>{{ item.issueNo }}</td>
               <td>
-                <RouterLink class="link-button" :to="`/payments/${item.paymentOrderId}`">
+                <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
                   {{ item.paymentOrderId }}
                 </RouterLink>
               </td>
