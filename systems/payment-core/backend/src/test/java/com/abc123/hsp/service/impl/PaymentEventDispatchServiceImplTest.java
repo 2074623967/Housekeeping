@@ -756,6 +756,58 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentSuccessEventWhenPaymentIsNotSuccessful() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setStatus("WAIT_CALLBACK");
+        PaymentEventListItemDTO event = paymentEvent("EVT-NOT-SUCCESS", 0);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-NOT-SUCCESS")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVT-NOT-SUCCESS")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-NOT-SUCCESS", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-NOT-SUCCESS");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldRejectPaymentSuccessEventWhenPaymentDetailBelongsToAnotherPayment() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setPaymentOrderId("PAY-OTHER");
+        PaymentEventListItemDTO event = paymentEvent("EVT-PAYMENT-MISMATCH", 0);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-PAYMENT-MISMATCH")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVT-PAYMENT-MISMATCH")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-PAYMENT-MISMATCH", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-PAYMENT-MISMATCH");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
     void shouldStopAtClearingFailureWithoutPostingAccounting() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();
@@ -967,6 +1019,7 @@ class PaymentEventDispatchServiceImplTest {
         detail.setOrderNo("ORD-001");
         detail.setCustomerName("张女士");
         detail.setAmount("¥168.00");
+        detail.setStatus("SUCCESS");
         return detail;
     }
 

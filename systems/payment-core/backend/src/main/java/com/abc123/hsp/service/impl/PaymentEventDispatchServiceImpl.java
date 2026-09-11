@@ -522,6 +522,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             return false;
         }
         try {
+            validatePaymentSuccessDetail(paymentOrderId, detail);
             BigDecimal amount = parsePaymentSuccessAmount(detail.getAmount());
             String workerName = paymentMapper.findWorkerNameByOrderNo(detail.getOrderNo());
             validateDispatchMode();
@@ -539,6 +540,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         } catch (RuntimeException exception) {
             markFailedOrDeadLetter(eventNo);
             return false;
+        }
+    }
+
+    private void validatePaymentSuccessDetail(String paymentOrderId, PaymentDetailDTO detail) {
+        if (!Objects.equals(paymentOrderId, detail.getPaymentOrderId())
+                || !"SUCCESS".equals(detail.getStatus())) {
+            throw new IllegalArgumentException("支付成功事件与支付单终态不一致");
         }
     }
 
