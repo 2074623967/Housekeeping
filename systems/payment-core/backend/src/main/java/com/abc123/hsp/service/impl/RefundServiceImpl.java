@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
@@ -55,6 +56,7 @@ public class RefundServiceImpl implements RefundService {
     private static final String STATUS_FAIL = "FAIL";
     private static final String PAYMENT_STATUS_SUCCESS = "SUCCESS";
     private static final DateTimeFormatter REFUND_NO_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
     private static final String CALLBACK_OPERATOR = "channel-callback";
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
@@ -671,7 +673,7 @@ public class RefundServiceImpl implements RefundService {
 
     private static String buildBusinessNo(String prefix) {
         return prefix
-                + LocalDateTime.now().format(REFUND_NO_FORMATTER)
+                + LocalDateTime.now(BUSINESS_ZONE_ID).format(REFUND_NO_FORMATTER)
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
     }
 

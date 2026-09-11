@@ -31,8 +31,12 @@ import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.RefundChannelQueryRateLimitService;
 import com.abc123.hsp.service.RefundChannelQueryService;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -180,6 +184,30 @@ class RefundServiceImplTest {
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "APPLY".equals(log.getActionCode())
                         && "refund-applicant".equals(log.getOperatorName())));
+    }
+
+    @Test
+    void shouldBuildRefundBusinessNoInBusinessTimezone() {
+        ZoneId businessZone = ZoneId.of("Asia/Shanghai");
+        LocalDate businessToday = LocalDate.now(businessZone);
+        ZoneId alternativeZone = ZoneId.of("Pacific/Kiritimati");
+        if (businessToday.equals(LocalDate.now(alternativeZone))) {
+            alternativeZone = ZoneId.of("Etc/GMT+12");
+        }
+        assertFalse(businessToday.equals(LocalDate.now(alternativeZone)));
+
+        TimeZone previousTimeZone = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone(alternativeZone));
+
+            com.abc123.hsp.entity.RefundOperationLogEntity log = RefundServiceImpl.buildOperationLog(
+                    "REF-001", "APPLY", "发起退款", "INIT", "REVIEWING", "finance-ops", "退款申请");
+
+            assertTrue(log.getLogNo().startsWith(
+                    "ROL" + businessToday.format(DateTimeFormatter.BASIC_ISO_DATE)));
+        } finally {
+            TimeZone.setDefault(previousTimeZone);
+        }
     }
 
     @Test
