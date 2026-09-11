@@ -3434,6 +3434,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 非法标识沿用既有参数错误响应并在 Mapper、渠道适配器或下游调用前拒绝；事件状态、重发操作人、事务传播、失败退避、死信及审计字段契约不变。
 4. 本地测试不证明真实渠道受理、下游投递、资金结果、账务一致性或生产稳定性，仍需正式环境核验。
 
+### 14.187 运营配置快照请求维度字段契约
+
+1. payment-core 调用既有 `GET /api/ops-config/effective-snapshot` 时，`businessCode / payType / terminalType` 均要求非空且最长 `64` 个字符，原始值不得包含 ISO 控制字符，合法首尾空白在 URI 构造前裁剪。
+2. 非法三维请求不发起 HTTP，客户端继续返回无快照；支付请求仅在需要快照补齐缺省支付方式时使用既有 `PAYMENT_OPS_CONFIG_SNAPSHOT_INVALID` 收口，不新增端点、DTO 字段或错误码。
+3. 统一响应 `code=0`、请求与响应三维忽略大小写匹配、非负快照版本、主备渠道、路由策略和启用控制项完整性契约不变。
+4. 本地测试不证明真实 ops-config 发布、跨进程网络、缓存或刷新一致性、渠道受理和生产稳定性，仍需正式环境核验。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
