@@ -10,9 +10,11 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const activeAlertNo = ref("");
 const activeReceiptQueryAlertNo = ref("");
-const errorMessage = ref("");
+const loadErrorMessage = ref("");
+const actionErrorMessage = ref("");
 const successMessage = ref("");
 const ackOperator = ref("");
 const filters = ref({
@@ -112,9 +114,10 @@ function exportAlertLogs() {
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
-async function loadAlertLogs() {
+async function loadAlertLogs(preferredAlertNo = selectedItem.value?.alertNo) {
   isLoading.value = true;
-  errorMessage.value = "";
+  loadErrorMessage.value = "";
+  actionErrorMessage.value = "";
   try {
     const result = await paymentIssueApi.getAlertLogs({
       alertNo: filters.value.alertNo,
@@ -130,9 +133,12 @@ async function loadAlertLogs() {
     });
     items.value = result.items;
     total.value = result.total;
-    selectedItem.value = result.items[0] || null;
+    selectedItem.value = result.items.find((item) => item.alertNo === preferredAlertNo)
+      || result.items[0]
+      || null;
+    hasLoadedData.value = true;
   } catch (error) {
-    errorMessage.value = `异常告警明细加载失败：${error.message}`;
+    loadErrorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
@@ -140,20 +146,20 @@ async function loadAlertLogs() {
 
 async function acknowledgeAlert(alertNo) {
   if (!ackOperator.value.trim()) {
-    errorMessage.value = "请先输入确认人";
+    actionErrorMessage.value = "请先输入确认人";
     return;
   }
   activeAlertNo.value = alertNo;
-  errorMessage.value = "";
+  actionErrorMessage.value = "";
   successMessage.value = "";
   try {
     await paymentIssueApi.acknowledgeAlert(alertNo, {
       operator: ackOperator.value.trim()
     });
+    await loadAlertLogs(alertNo);
     successMessage.value = `告警 ${alertNo} 已确认回执`;
-    await loadAlertLogs();
   } catch (error) {
-    errorMessage.value = `确认回执失败：${error.message}`;
+    actionErrorMessage.value = `确认回执失败：${error.message}`;
   } finally {
     activeAlertNo.value = "";
   }
@@ -161,25 +167,25 @@ async function acknowledgeAlert(alertNo) {
 
 async function reconcileAlertReceipt(alertNo) {
   if (!ackOperator.value.trim()) {
-    errorMessage.value = "请先输入操作人";
+    actionErrorMessage.value = "请先输入操作人";
     return;
   }
   activeReceiptQueryAlertNo.value = alertNo;
-  errorMessage.value = "";
+  actionErrorMessage.value = "";
   successMessage.value = "";
   try {
     const result = await paymentIssueApi.reconcileAlertReceipt(alertNo, {
       operator: ackOperator.value.trim()
     });
     const summary = result.summaryComment || `告警 ${alertNo} 回执回查已执行`;
-    await loadAlertLogs();
+    await loadAlertLogs(alertNo);
     if (result.failCount > 0) {
-      errorMessage.value = summary;
+      actionErrorMessage.value = summary;
     } else {
       successMessage.value = summary;
     }
   } catch (error) {
-    errorMessage.value = `回执回查失败：${error.message}`;
+    actionErrorMessage.value = `回执回查失败：${error.message}`;
   } finally {
     activeReceiptQueryAlertNo.value = "";
   }
@@ -224,12 +230,15 @@ onMounted(loadAlertLogs);
     </div>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "异常告警明细刷新失败，当前展示上次成功快照：" : "异常告警明细加载失败：" }}{{ loadErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">{{ actionErrorMessage }}</div>
       <div v-if="successMessage" class="success-banner">
         {{ successMessage }}
       </div>
 
-      <div class="detail-card-grid">
+      <div v-if="hasLoadedData" class="detail-card-grid">
         <div v-for="card in metricCards" :key="card.title" class="detail-card">
           <div class="detail-label">{{ card.title }}</div>
           <div class="detail-value">{{ card.value }}</div>
@@ -312,6 +321,7 @@ onMounted(loadAlertLogs);
       </div>
 
       <div v-if="isLoading" class="state-box">异常告警明细加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的异常告警明细快照</div>
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的异常告警明细</div>
 
       <div v-else class="detail-layout">
@@ -375,14 +385,14 @@ onMounted(loadAlertLogs);
                     <button
                       v-if="item.receiptQueryState && item.receiptQueryState !== 'QUERYING'"
                       class="button secondary"
-                      :disabled="activeReceiptQueryAlertNo === item.alertNo || activeAlertNo === item.alertNo"
+                      :disabled="Boolean(activeReceiptQueryAlertNo || activeAlertNo) || Boolean(loadErrorMessage) || !hasLoadedData"
                       @click="reconcileAlertReceipt(item.alertNo)"
                     >
                       {{ activeReceiptQueryAlertNo === item.alertNo ? "回查中..." : "人工回查" }}
                     </button>
                     <button
                       class="button secondary"
-                      :disabled="activeAlertNo === item.alertNo || activeReceiptQueryAlertNo === item.alertNo"
+                      :disabled="Boolean(activeAlertNo || activeReceiptQueryAlertNo) || Boolean(loadErrorMessage) || !hasLoadedData"
                       @click="acknowledgeAlert(item.alertNo)"
                     >
                       {{ activeAlertNo === item.alertNo ? "确认中..." : "确认回执" }}
@@ -446,12 +456,12 @@ onMounted(loadAlertLogs);
         </aside>
       </div>
 
-      <div class="pager">
+      <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条异常告警明细</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="pageNo === 1 || Boolean(loadErrorMessage)" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || Boolean(loadErrorMessage)" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>

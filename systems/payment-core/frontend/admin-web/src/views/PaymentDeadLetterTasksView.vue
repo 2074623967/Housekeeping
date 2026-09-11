@@ -8,8 +8,10 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const activeAction = ref("");
-const errorMessage = ref("");
+const loadErrorMessage = ref("");
+const actionErrorMessage = ref("");
 const successMessage = ref("");
 const operator = ref("");
 const resolutionNote = ref("");
@@ -75,7 +77,8 @@ function pickItem(item) {
 
 async function loadTasks(preferredTaskNo = selectedItem.value?.taskNo) {
   isLoading.value = true;
-  errorMessage.value = "";
+  loadErrorMessage.value = "";
+  actionErrorMessage.value = "";
   try {
     const result = await paymentDeadLetterTaskApi.getList({
       ...filters.value,
@@ -87,8 +90,9 @@ async function loadTasks(preferredTaskNo = selectedItem.value?.taskNo) {
     selectedItem.value = result.items.find((item) => item.taskNo === preferredTaskNo)
       || result.items[0]
       || null;
+    hasLoadedData.value = true;
   } catch (error) {
-    errorMessage.value = `死信补偿任务加载失败：${error.message}`;
+    loadErrorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
@@ -98,31 +102,35 @@ async function runAction(item, action) {
   const normalizedOperator = operator.value.trim();
   const normalizedNote = resolutionNote.value.trim();
   if (!normalizedOperator) {
-    errorMessage.value = "请先输入处置人";
+    actionErrorMessage.value = "请先输入处置人";
     return;
   }
   if (!normalizedNote) {
-    errorMessage.value = "请先输入处置说明";
+    actionErrorMessage.value = "请先输入处置说明";
     return;
   }
   activeAction.value = `${item.taskNo}:${action}`;
-  errorMessage.value = "";
+  actionErrorMessage.value = "";
   successMessage.value = "";
   const payload = { operator: normalizedOperator, resolutionNote: normalizedNote };
   try {
     if (action === "ready") {
       await paymentDeadLetterTaskApi.markReadyToReplay(item.taskNo, payload);
-      successMessage.value = `任务 ${item.taskNo} 已通过复核，等待定向重放`;
     } else if (action === "resolve") {
       await paymentDeadLetterTaskApi.resolveManually(item.taskNo, payload);
-      successMessage.value = `任务 ${item.taskNo} 已人工结案`;
     } else {
       await paymentDeadLetterTaskApi.replay(item.taskNo, payload);
-      successMessage.value = `任务 ${item.taskNo} 已执行定向重放，请继续核对目标系统`;
     }
     await loadTasks(item.taskNo);
+    if (action === "ready") {
+      successMessage.value = `任务 ${item.taskNo} 已通过复核，等待定向重放`;
+    } else if (action === "resolve") {
+      successMessage.value = `任务 ${item.taskNo} 已人工结案`;
+    } else {
+      successMessage.value = `任务 ${item.taskNo} 已执行定向重放，请继续核对目标系统`;
+    }
   } catch (error) {
-    errorMessage.value = `死信任务操作失败：${error.message}`;
+    actionErrorMessage.value = `死信任务操作失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
@@ -164,7 +172,7 @@ onMounted(loadTasks);
       <button class="button secondary" :disabled="isLoading" @click="loadTasks()">刷新</button>
     </div>
 
-    <section class="detail-card-grid">
+    <section v-if="hasLoadedData" class="detail-card-grid">
       <article v-for="card in metricCards" :key="card.title" class="detail-card">
         <div class="detail-label">{{ card.title }}</div>
         <div class="detail-value">{{ card.value }}</div>
@@ -176,7 +184,10 @@ onMounted(loadTasks);
       <div class="notice-banner">
         重放只表示 payment-core 已向原消费者路由重新发布消息，不代表目标系统已消费、入账或完成业务处理。
       </div>
-      <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "死信补偿任务刷新失败，当前展示上次成功快照：" : "死信补偿任务加载失败：" }}{{ loadErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">{{ actionErrorMessage }}</div>
       <div v-if="successMessage" class="success-banner">{{ successMessage }}</div>
 
       <div class="filter-grid action-grid">
@@ -220,6 +231,7 @@ onMounted(loadTasks);
       </div>
 
       <div v-if="isLoading" class="state-box">死信补偿任务加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的死信补偿任务快照</div>
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的死信补偿任务</div>
 
       <div v-else class="detail-layout">
@@ -253,19 +265,19 @@ onMounted(loadTasks);
                     <button
                       v-if="canReview(item)"
                       class="link-button"
-                      :disabled="Boolean(activeAction)"
+                      :disabled="Boolean(activeAction) || Boolean(loadErrorMessage) || !hasLoadedData"
                       @click="runAction(item, 'ready')"
                     >允许重放</button>
                     <button
                       v-if="canReview(item)"
                       class="link-button"
-                      :disabled="Boolean(activeAction)"
+                      :disabled="Boolean(activeAction) || Boolean(loadErrorMessage) || !hasLoadedData"
                       @click="runAction(item, 'resolve')"
                     >人工结案</button>
                     <button
                       v-if="item.taskStatus === 'READY_TO_REPLAY'"
                       class="link-button"
-                      :disabled="Boolean(activeAction)"
+                      :disabled="Boolean(activeAction) || Boolean(loadErrorMessage) || !hasLoadedData"
                       @click="runAction(item, 'replay')"
                     >{{ activeAction === `${item.taskNo}:replay` ? "重放中..." : "执行重放" }}</button>
                     <span v-if="!canReview(item) && item.taskStatus !== 'READY_TO_REPLAY'" class="muted-text">无需操作</span>
@@ -313,12 +325,12 @@ onMounted(loadTasks);
         </aside>
       </div>
 
-      <div class="pager">
+      <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条死信补偿任务</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="pageNo === 1 || Boolean(loadErrorMessage)" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || Boolean(loadErrorMessage)" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>
