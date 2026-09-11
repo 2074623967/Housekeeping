@@ -20,6 +20,7 @@ import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.abc123.hsp.service.RefundChannelSubmitException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -887,6 +888,96 @@ class PaymentEventDispatchServiceImplTest {
         verify(restTemplate, never()).postForEntity(any(), any(), any());
         verify(rabbitTemplate, never()).invoke(any());
         verify(paymentEventMapper).markPublishFailed("EVT-TRACE-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldRejectInvalidPaymentSuccessPartyFieldsBeforeCallingDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-PARTY-INVALID", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentEventMapper.findByEventNo("EVT-PARTY-INVALID")).thenReturn(event);
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate);
+
+        detail.setOrderNo("ORD-001\n");
+        service.publishPaymentSuccess("EVT-PARTY-INVALID", "PAY-001");
+
+        detail.setOrderNo("ORD-001");
+        detail.setCustomerName(String.join("", Collections.nCopies(129, "C")));
+        service.publishPaymentSuccess("EVT-PARTY-INVALID", "PAY-001");
+
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, org.mockito.Mockito.times(2)).markPublishFailed("EVT-PARTY-INVALID");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldNormalizePaymentSuccessPartyFieldsBeforeHttpDispatch() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setOrderNo(" ORD-001 ");
+        detail.setCustomerName(" 张女士 ");
+        PaymentEventListItemDTO event = paymentEvent("EVT-PARTY-NORMALIZED", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn(" 李阿姨 ");
+        when(restTemplate.postForEntity(any(String.class), any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(paymentEventMapper.markPublishSuccess("EVT-PARTY-NORMALIZED")).thenReturn(1);
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate).publishPaymentSuccess("EVT-PARTY-NORMALIZED", "PAY-001");
+
+        verify(restTemplate, org.mockito.Mockito.times(2)).postForEntity(
+                any(String.class), payloadCaptor.capture(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        ObjectMapper objectMapper = new ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode clearingPayload =
+                objectMapper.valueToTree(payloadCaptor.getAllValues().get(0));
+        com.fasterxml.jackson.databind.JsonNode accountingPayload =
+                objectMapper.valueToTree(payloadCaptor.getAllValues().get(1));
+        Assertions.assertEquals("ORD-001", clearingPayload.get("orderNo").asText());
+        Assertions.assertEquals("张女士", clearingPayload.get("customerName").asText());
+        Assertions.assertEquals("李阿姨", clearingPayload.get("workerName").asText());
+        Assertions.assertEquals("ORD-001", accountingPayload.get("orderNo").asText());
+        Assertions.assertEquals("张女士", accountingPayload.get("customerName").asText());
+        Assertions.assertEquals(" ORD-001 ", detail.getOrderNo());
+        Assertions.assertEquals(" 张女士 ", detail.getCustomerName());
+        verify(paymentEventMapper).markPublishSuccess("EVT-PARTY-NORMALIZED");
+    }
+
+    @Test
+    void shouldRejectInvalidWorkerNameBeforeCallingDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-WORKER-INVALID", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("worker\nname");
+        when(paymentEventMapper.findByEventNo("EVT-WORKER-INVALID")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate).publishPaymentSuccess("EVT-WORKER-INVALID", "PAY-001");
+
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-WORKER-INVALID");
         verify(paymentEventMapper, never()).markPublishSuccess(any());
     }
 

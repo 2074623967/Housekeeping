@@ -44,6 +44,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final int CHANNEL_TRANSACTION_NO_MAX_LENGTH = 128;
     private static final int EVENT_NO_MAX_LENGTH = 64;
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int CUSTOMER_NAME_MAX_LENGTH = 128;
+    private static final int WORKER_NAME_MAX_LENGTH = 128;
     private static final int REFUND_ORDER_ID_MAX_LENGTH = 64;
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int DOWNSTREAM_URL_MAX_LENGTH = 2048;
@@ -551,14 +554,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         try {
             validatePaymentSuccessDetail(paymentOrderId, detail);
             BigDecimal amount = parsePaymentSuccessAmount(detail.getAmount());
-            String workerName = paymentMapper.findWorkerNameByOrderNo(detail.getOrderNo());
+            String orderNo = detail.getOrderNo().trim();
+            String customerName = detail.getCustomerName().trim();
+            String workerName = normalizeWorkerName(paymentMapper.findWorkerNameByOrderNo(orderNo));
             validateDispatchMode();
             if (usesAmqp()) {
-                publishToAmqp(eventNo, detail, workerName, amount);
+                publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName, workerName, amount);
             } else {
                 validateHttpDispatchConfiguration();
-                postForSuccess(clearingUrl, buildClearingPayload(detail, workerName, amount));
-                postForSuccess(accountingUrl, buildAccountingPayload(detail, amount));
+                postForSuccess(clearingUrl, buildClearingPayload(
+                        detail.getPaymentOrderId(), orderNo, customerName, workerName, amount));
+                postForSuccess(accountingUrl, buildAccountingPayload(
+                        detail.getPaymentOrderId(), orderNo, customerName, amount));
             }
             if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
                 throw new IllegalStateException("支付成功事件成功状态更新失败");
@@ -573,11 +580,23 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private void validatePaymentSuccessDetail(String paymentOrderId, PaymentDetailDTO detail) {
         if (!Objects.equals(paymentOrderId, detail.getPaymentOrderId())
                 || !"SUCCESS".equals(detail.getStatus())
+                || !isValidConfiguredText(detail.getOrderNo(), ORDER_NO_MAX_LENGTH)
+                || !isValidConfiguredText(detail.getCustomerName(), CUSTOMER_NAME_MAX_LENGTH)
                 || !isValidConfiguredText(detail.getChannel(), CHANNEL_CODE_MAX_LENGTH)
                 || !isValidConfiguredText(
                         detail.getChannelTransactionNo(), CHANNEL_TRANSACTION_NO_MAX_LENGTH)) {
             throw new IllegalArgumentException("支付成功事件与支付事实不一致");
         }
+    }
+
+    private String normalizeWorkerName(String workerName) {
+        if (!StringUtils.hasText(workerName)) {
+            return "待分配服务者";
+        }
+        if (!isValidConfiguredText(workerName, WORKER_NAME_MAX_LENGTH)) {
+            throw new IllegalArgumentException("支付成功事件服务者名称非法");
+        }
+        return workerName.trim();
     }
 
     private BigDecimal parsePaymentSuccessAmount(String amountText) {
@@ -610,7 +629,12 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return "amqp".equalsIgnoreCase(dispatchMode == null ? "" : dispatchMode.trim());
     }
 
-    private void publishToAmqp(String eventNo, PaymentDetailDTO detail, String workerName, BigDecimal amount) {
+    private void publishToAmqp(String eventNo,
+                               String paymentOrderId,
+                               String orderNo,
+                               String customerName,
+                               String workerName,
+                               BigDecimal amount) {
         if (rabbitTemplate == null || objectMapper == null
                 || !isValidConfiguredText(paymentSuccessExchange, AMQP_DESTINATION_MAX_LENGTH)
                 || !isValidConfiguredText(paymentSuccessRoutingKey, AMQP_DESTINATION_MAX_LENGTH)
@@ -618,13 +642,14 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             throw new IllegalStateException("AMQP 支付成功事件配置不完整");
         }
         try {
-            final String payload = objectMapper.writeValueAsString(buildAmqpPayload(detail, workerName, amount));
+            final String payload = objectMapper.writeValueAsString(
+                    buildAmqpPayload(paymentOrderId, orderNo, customerName, workerName, amount));
             rabbitTemplate.invoke(operations -> {
                 operations.convertAndSend(
                         paymentSuccessExchange.trim(),
                         paymentSuccessRoutingKey.trim(),
                         payload,
-                        buildMessagePostProcessor(eventNo, detail.getPaymentOrderId()));
+                        buildMessagePostProcessor(eventNo, paymentOrderId));
                 operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
                 return null;
             });
@@ -633,16 +658,20 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
     }
 
-    private Map<String, Object> buildAmqpPayload(PaymentDetailDTO detail, String workerName, BigDecimal amount) {
+    private Map<String, Object> buildAmqpPayload(String paymentOrderId,
+                                                 String orderNo,
+                                                 String customerName,
+                                                 String workerName,
+                                                 BigDecimal amount) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("businessChainId", businessChainId(detail.getPaymentOrderId()));
+        payload.put("businessChainId", businessChainId(paymentOrderId));
         payload.put("accountNo", accountingPaymentSuccessAccountNo);
-        payload.put("paymentOrderId", detail.getPaymentOrderId());
-        payload.put("orderNo", detail.getOrderNo());
+        payload.put("paymentOrderId", paymentOrderId);
+        payload.put("orderNo", orderNo);
         payload.put("batchDate", LocalDate.now().toString());
-        payload.put("customerName", detail.getCustomerName());
+        payload.put("customerName", customerName);
         payload.put("merchantName", "家政平台");
-        payload.put("workerName", StringUtils.hasText(workerName) ? workerName : "待分配服务者");
+        payload.put("workerName", workerName);
         payload.put("amount", amount);
         return payload;
     }
@@ -710,25 +739,32 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         return "0".equals(code.trim());
     }
 
-    private PaymentSuccessClearingPayload buildClearingPayload(PaymentDetailDTO detail, String workerName, BigDecimal amount) {
+    private PaymentSuccessClearingPayload buildClearingPayload(String paymentOrderId,
+                                                               String orderNo,
+                                                               String customerName,
+                                                               String workerName,
+                                                               BigDecimal amount) {
         return new PaymentSuccessClearingPayload(
-                businessChainId(detail.getPaymentOrderId()),
-                detail.getPaymentOrderId(),
-                detail.getOrderNo(),
+                businessChainId(paymentOrderId),
+                paymentOrderId,
+                orderNo,
                 LocalDate.now().toString(),
-                detail.getCustomerName(),
+                customerName,
                 "家政平台",
-                StringUtils.hasText(workerName) ? workerName : "待分配服务者",
+                workerName,
                 amount);
     }
 
-    private PaymentSuccessAccountingPayload buildAccountingPayload(PaymentDetailDTO detail, BigDecimal amount) {
+    private PaymentSuccessAccountingPayload buildAccountingPayload(String paymentOrderId,
+                                                                   String orderNo,
+                                                                   String customerName,
+                                                                   BigDecimal amount) {
         return new PaymentSuccessAccountingPayload(
-                businessChainId(detail.getPaymentOrderId()),
+                businessChainId(paymentOrderId),
                 accountingPaymentSuccessAccountNo,
-                detail.getPaymentOrderId(),
-                detail.getOrderNo(),
-                detail.getCustomerName(),
+                paymentOrderId,
+                orderNo,
+                customerName,
                 amount);
     }
 
