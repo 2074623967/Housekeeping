@@ -19,6 +19,16 @@ public interface PaymentDeadLetterTaskService {
         }
     }
 
+    /** 无法安全持久化或重放的永久消息元数据错误。 */
+    final class InvalidDeadLetterMessageException extends IllegalArgumentException {
+
+        private static final long serialVersionUID = 1L;
+
+        public InvalidDeadLetterMessageException() {
+            super("死信消息元数据非法");
+        }
+    }
+
     void intake(Message message, String deadLetterRoutingKey);
 
     PageResultDTO<PaymentDeadLetterTaskEntity> list(PaymentDeadLetterTaskQueryDTO query);

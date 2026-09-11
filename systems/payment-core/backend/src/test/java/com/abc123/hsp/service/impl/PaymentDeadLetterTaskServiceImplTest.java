@@ -39,8 +39,8 @@ class PaymentDeadLetterTaskServiceImplTest {
     void shouldCreateTraceableTaskForDedicatedDeadLetterRoute() {
         PaymentDeadLetterTaskServiceImpl service = service();
         MessageProperties properties = new MessageProperties();
-        properties.setMessageId("MSG-001");
-        properties.setCorrelationId("CORR-001");
+        properties.setMessageId(" MSG-001 ");
+        properties.setCorrelationId(" CORR-001 ");
         properties.setHeader("x-retry-count", 3);
         properties.setHeader("Authorization", "Bearer secret-token");
 
@@ -51,6 +51,7 @@ class PaymentDeadLetterTaskServiceImplTest {
         verify(paymentDeadLetterTaskMapper).insertIgnore(captor.capture());
         PaymentDeadLetterTaskEntity task = captor.getValue();
         assertEquals("MSG-001", task.getMessageId());
+        assertEquals("CORR-001", task.getCorrelationId());
         assertEquals("clearing-system", task.getTargetSystem());
         assertEquals("payment.trade.replay", task.getReplayExchange());
         assertEquals("payment.success.clearing.replay.v1", task.getReplayRoutingKey());
@@ -91,6 +92,28 @@ class PaymentDeadLetterTaskServiceImplTest {
 
         assertEquals("不支持的死信路由", exception.getMessage());
         org.junit.jupiter.api.Assertions.assertFalse(exception.getMessage().contains(sensitiveRoutingKey));
+        verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
+    }
+
+    @Test
+    void shouldRejectInvalidDeadLetterMetadataBeforeMapperAccess() {
+        MessageProperties invalidMessageIdProperties = new MessageProperties();
+        invalidMessageIdProperties.setMessageId("MSG-001\n");
+        MessageProperties oversizedCorrelationProperties = new MessageProperties();
+        oversizedCorrelationProperties.setCorrelationId(repeat("C", 129));
+
+        PaymentDeadLetterTaskService.InvalidDeadLetterMessageException messageIdException = assertThrows(
+                PaymentDeadLetterTaskService.InvalidDeadLetterMessageException.class,
+                () -> service().intake(new Message(new byte[0], invalidMessageIdProperties),
+                        "payment.success.clearing.dlq.v1"));
+        assertThrows(PaymentDeadLetterTaskService.InvalidDeadLetterMessageException.class,
+                () -> service().intake(new Message(new byte[0], oversizedCorrelationProperties),
+                        "payment.success.clearing.dlq.v1"));
+        assertThrows(PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException.class,
+                () -> service().intake(new Message(new byte[0], new MessageProperties()),
+                        "payment.success.clearing.dlq." + repeat("R", 100) + ".v1"));
+
+        assertEquals("死信消息元数据非法", messageIdException.getMessage());
         verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
     }
 
@@ -233,6 +256,22 @@ class PaymentDeadLetterTaskServiceImplTest {
         service().replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
 
         verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+    }
+
+    @Test
+    void shouldRejectInvalidPersistedReplayMetadataBeforeBrokerAccess() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        task.setReplayRoutingKey("payment.success.clearing.replay.v1\n");
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+
+        PaymentDeadLetterTaskEntity result = service().replay(
+                "DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
+
+        verifyNoInteractions(rabbitTemplate);
+        verify(paymentDeadLetterTaskMapper).markReplayFailed("DLQ-001", "重放发送失败：[REDACTED]");
+        assertEquals("DLQ-001", result.getTaskNo());
     }
 
     @Test

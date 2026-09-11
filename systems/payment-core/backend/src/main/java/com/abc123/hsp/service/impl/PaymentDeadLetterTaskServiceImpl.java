@@ -40,6 +40,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private static final int TASK_STATUS_MAX_LENGTH = 32;
     private static final int TARGET_SYSTEM_MAX_LENGTH = 64;
     private static final int MESSAGE_ID_MAX_LENGTH = 128;
+    private static final int CORRELATION_ID_MAX_LENGTH = 128;
+    private static final int ROUTING_KEY_MAX_LENGTH = 128;
+    private static final int EXCHANGE_MAX_LENGTH = 128;
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int RESOLUTION_NOTE_MAX_LENGTH = 512;
     private static final int DEFAULT_CONFIRM_TIMEOUT_MS = 5000;
@@ -79,7 +82,11 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
 
     @Override
     public void intake(Message message, String deadLetterRoutingKey) {
-        ReplayRoute replayRoute = ReplayRoute.fromDeadLetterRoutingKey(deadLetterRoutingKey);
+        if (message == null || message.getBody() == null || message.getMessageProperties() == null) {
+            throw new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException();
+        }
+        String normalizedDeadLetterRoutingKey = normalizeDeadLetterRoutingKey(deadLetterRoutingKey);
+        ReplayRoute replayRoute = ReplayRoute.fromDeadLetterRoutingKey(normalizedDeadLetterRoutingKey);
         if (replayRoute == null) {
             throw new PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException();
         }
@@ -87,8 +94,9 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         PaymentDeadLetterTaskEntity entity = new PaymentDeadLetterTaskEntity();
         entity.setTaskNo("DLQ" + UUID.randomUUID().toString().replace("-", "").substring(0, 20));
         entity.setMessageId(resolveMessageId(message));
-        entity.setCorrelationId(properties.getCorrelationId());
-        entity.setDeadLetterRoutingKey(deadLetterRoutingKey);
+        entity.setCorrelationId(normalizeOptionalMessageMetadata(
+                properties.getCorrelationId(), CORRELATION_ID_MAX_LENGTH));
+        entity.setDeadLetterRoutingKey(normalizedDeadLetterRoutingKey);
         entity.setTargetSystem(replayRoute.targetSystem);
         entity.setReplayExchange(replayRoute.replayExchange);
         entity.setReplayRoutingKey(replayRoute.replayRoutingKey);
@@ -142,8 +150,22 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         }
         PaymentDeadLetterTaskEntity task = findRequiredTask(normalizedTaskNo);
         try {
+            final String replayExchange = normalizeReplayRequired(
+                    task.getReplayExchange(), EXCHANGE_MAX_LENGTH);
+            final String replayRoutingKey = normalizeReplayRequired(
+                    task.getReplayRoutingKey(), ROUTING_KEY_MAX_LENGTH);
+            final String replayMessageId = normalizeReplayRequired(
+                    task.getMessageId(), MESSAGE_ID_MAX_LENGTH);
+            final String replayCorrelationId = normalizeReplayOptional(
+                    task.getCorrelationId(), CORRELATION_ID_MAX_LENGTH);
+            if (!normalizedTaskNo.equals(normalizeReplayRequired(task.getTaskNo(), TASK_NO_MAX_LENGTH))
+                    || task.getPayloadSnapshot() == null) {
+                throw new IllegalArgumentException("死信重放快照非法");
+            }
             rabbitTemplate.invoke(operations -> {
-                operations.send(task.getReplayExchange(), task.getReplayRoutingKey(), buildReplayMessage(task));
+                operations.send(replayExchange, replayRoutingKey,
+                        buildReplayMessage(task.getPayloadSnapshot(), normalizedTaskNo,
+                                replayMessageId, replayCorrelationId));
                 operations.waitForConfirmsOrDie(publisherConfirmTimeoutMs);
                 return null;
             });
@@ -154,14 +176,17 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         return maskedTaskCopy(findRequiredTask(normalizedTaskNo));
     }
 
-    private Message buildReplayMessage(PaymentDeadLetterTaskEntity task) {
+    private Message buildReplayMessage(String payloadSnapshot,
+                                       String taskNo,
+                                       String messageId,
+                                       String correlationId) {
         MessageProperties properties = new MessageProperties();
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-        properties.setMessageId(task.getMessageId());
-        properties.setCorrelationId(task.getCorrelationId());
-        properties.setHeader("compensationTaskNo", task.getTaskNo());
+        properties.setMessageId(messageId);
+        properties.setCorrelationId(correlationId);
+        properties.setHeader("compensationTaskNo", taskNo);
         properties.setHeader("compensationReplay", true);
-        return new Message(task.getPayloadSnapshot().getBytes(StandardCharsets.UTF_8), properties);
+        return new Message(payloadSnapshot.getBytes(StandardCharsets.UTF_8), properties);
     }
 
     private PaymentDeadLetterTaskEntity findRequiredTask(String taskNo) {
@@ -210,9 +235,68 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private String resolveMessageId(Message message) {
         String messageId = message.getMessageProperties().getMessageId();
         if (StringUtils.hasText(messageId)) {
-            return messageId.trim();
+            return normalizeRequiredMessageMetadata(messageId, MESSAGE_ID_MAX_LENGTH);
         }
         return "ANON-" + UUID.nameUUIDFromBytes(message.getBody()).toString();
+    }
+
+    private String normalizeDeadLetterRoutingKey(String routingKey) {
+        if (!StringUtils.hasText(routingKey)
+                || containsIsoControl(routingKey)
+                || routingKey.length() > ROUTING_KEY_MAX_LENGTH) {
+            throw new PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException();
+        }
+        return routingKey;
+    }
+
+    private String normalizeRequiredMessageMetadata(String value, int maxLength) {
+        String normalized = normalizeOptionalMessageMetadata(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException();
+        }
+        return normalized;
+    }
+
+    private String normalizeOptionalMessageMetadata(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (containsIsoControl(value)) {
+            throw new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException();
+        }
+        String normalized = value.trim();
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        if (normalized.length() > maxLength) {
+            throw new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException();
+        }
+        return normalized;
+    }
+
+    private String normalizeReplayRequired(String value, int maxLength) {
+        String normalized = normalizeReplayOptional(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw new IllegalArgumentException("死信重放元数据非法");
+        }
+        return normalized;
+    }
+
+    private String normalizeReplayOptional(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (containsIsoControl(value)) {
+            throw new IllegalArgumentException("死信重放元数据非法");
+        }
+        String normalized = value.trim();
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException("死信重放元数据非法");
+        }
+        return normalized;
     }
 
     private String writeHeaders(Map<String, Object> headers) {

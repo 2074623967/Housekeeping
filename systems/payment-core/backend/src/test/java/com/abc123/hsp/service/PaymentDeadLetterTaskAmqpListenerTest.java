@@ -53,4 +53,16 @@ class PaymentDeadLetterTaskAmqpListenerTest {
 
         verify(channel).basicNack(13L, false, false);
     }
+
+    @Test
+    void shouldNotRequeueInvalidDeadLetterMessage() throws Exception {
+        Message message = new Message(new byte[0], new MessageProperties());
+        org.mockito.Mockito.doThrow(new PaymentDeadLetterTaskService.InvalidDeadLetterMessageException())
+                .when(paymentDeadLetterTaskService).intake(message, "payment.success.clearing.dlq.v1");
+
+        new PaymentDeadLetterTaskAmqpListener(paymentDeadLetterTaskService)
+                .consume(message, channel, 14L, "payment.success.clearing.dlq.v1");
+
+        verify(channel).basicNack(14L, false, false);
+    }
 }

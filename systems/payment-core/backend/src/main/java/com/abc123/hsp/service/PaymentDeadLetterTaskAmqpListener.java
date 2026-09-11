@@ -28,7 +28,8 @@ public class PaymentDeadLetterTaskAmqpListener {
         try {
             paymentDeadLetterTaskService.intake(message, routingKey);
             channel.basicAck(deliveryTag, false);
-        } catch (PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException exception) {
+        } catch (PaymentDeadLetterTaskService.UnsupportedDeadLetterRouteException
+                | PaymentDeadLetterTaskService.InvalidDeadLetterMessageException exception) {
             channel.basicNack(deliveryTag, false, false);
         } catch (RuntimeException exception) {
             channel.basicNack(deliveryTag, false, true);
