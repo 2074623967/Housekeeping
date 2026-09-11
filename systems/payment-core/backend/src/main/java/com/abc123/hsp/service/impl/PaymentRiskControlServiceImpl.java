@@ -5,6 +5,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
 import com.abc123.hsp.service.PaymentRiskControlService;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -20,6 +21,19 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class PaymentRiskControlServiceImpl implements PaymentRiskControlService {
 
+    private static final int BUSINESS_NO_MAX_LENGTH = 64;
+    private static final int SOURCE_SYSTEM_MAX_LENGTH = 64;
+    private static final int SCENE_CODE_MAX_LENGTH = 64;
+    private static final int PAY_SCENE_MAX_LENGTH = 32;
+    private static final int PAYMENT_METHOD_MAX_LENGTH = 32;
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int MERCHANT_NO_MAX_LENGTH = 128;
+    private static final int TERMINAL_MAX_LENGTH = 32;
+    private static final int CLIENT_IP_MAX_LENGTH = 64;
+    private static final int CLIENT_DEVICE_ID_MAX_LENGTH = 128;
+    private static final int PAYER_PHONE_MAX_LENGTH = 32;
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final int RESPONSE_CODE_MAX_LENGTH = 32;
     private static final int DECISION_MAX_LENGTH = 32;
     private static final int DECISION_TYPE_MAX_LENGTH = 32;
@@ -60,9 +74,10 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
                     "风控中心评估地址未配置，请联系资金风控团队");
         }
         try {
+            PaymentRiskDecisionRequestDTO normalizedRequest = validateAndNormalizeRequest(request);
             RiskApiResponse response = restTemplate.postForObject(
                     evaluateUrl.trim(),
-                    request,
+                    normalizedRequest,
                     RiskApiResponse.class);
             return validateAndNormalize(response);
         } catch (BusinessException exception) {
@@ -70,6 +85,62 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         } catch (RuntimeException exception) {
             throw new BusinessException(ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, "风控中心调用失败，请稍后重试或联系资金风控团队");
         }
+    }
+
+    private PaymentRiskDecisionRequestDTO validateAndNormalizeRequest(PaymentRiskDecisionRequestDTO request) {
+        if (request == null) {
+            throw invalidRequest();
+        }
+        PaymentRiskDecisionRequestDTO normalized = new PaymentRiskDecisionRequestDTO();
+        normalized.setBusinessNo(normalizeRequiredRequestField(request.getBusinessNo(), BUSINESS_NO_MAX_LENGTH));
+        normalized.setSourceSystem(normalizeRequiredRequestField(request.getSourceSystem(), SOURCE_SYSTEM_MAX_LENGTH));
+        normalized.setSceneCode(normalizeRequiredRequestField(request.getSceneCode(), SCENE_CODE_MAX_LENGTH));
+        normalized.setPayScene(normalizeRequiredRequestField(request.getPayScene(), PAY_SCENE_MAX_LENGTH));
+        normalized.setPaymentMethod(normalizeRequiredRequestField(
+                request.getPaymentMethod(), PAYMENT_METHOD_MAX_LENGTH));
+        normalized.setChannelCode(normalizeRequiredRequestField(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH));
+        normalized.setMerchantNo(normalizeRequiredRequestField(request.getMerchantNo(), MERCHANT_NO_MAX_LENGTH));
+        normalized.setTerminal(normalizeRequiredRequestField(request.getTerminal(), TERMINAL_MAX_LENGTH));
+        normalized.setClientIp(normalizeRequiredRequestField(request.getClientIp(), CLIENT_IP_MAX_LENGTH));
+        normalized.setClientDeviceId(normalizeOptionalRequestField(
+                request.getClientDeviceId(), CLIENT_DEVICE_ID_MAX_LENGTH));
+        normalized.setPayerPhone(normalizeOptionalRequestField(request.getPayerPhone(), PAYER_PHONE_MAX_LENGTH));
+        BigDecimal amount = request.getAmount();
+        if (amount == null
+                || amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.scale() > MONEY_MAX_SCALE
+                || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw invalidRequest();
+        }
+        normalized.setAmount(amount);
+        return normalized;
+    }
+
+    private String normalizeRequiredRequestField(String value, int maxLength) {
+        String normalized = normalizeOptionalRequestField(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private String normalizeOptionalRequestField(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidRequest();
+            }
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidRequest();
+        }
+        return normalized;
     }
 
     private PaymentRiskDecisionResultDTO passResult(String message) {
@@ -179,6 +250,12 @@ public class PaymentRiskControlServiceImpl implements PaymentRiskControlService 
         return new BusinessException(
                 ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE,
                 "风控中心返回结果非法，无法确认支付准入状态");
+    }
+
+    private BusinessException invalidRequest() {
+        return new BusinessException(
+                ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE,
+                "风控中心请求参数非法，无法发起支付准入评估");
     }
 
     /**

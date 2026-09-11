@@ -1,11 +1,13 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,7 +15,9 @@ import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentRiskDecisionRequestDTO;
 import com.abc123.hsp.dto.PaymentRiskDecisionResultDTO;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.web.client.RestTemplate;
 
@@ -47,6 +51,76 @@ class PaymentRiskControlServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidRequestBeforeHttpCall() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentRiskControlServiceImpl service = service(restTemplate);
+
+        assertInvalidRiskRequest(assertThrows(
+                BusinessException.class,
+                () -> service.evaluateSubmitRisk(null)));
+
+        PaymentRiskDecisionRequestDTO missingRequired = validRequest();
+        missingRequired.setBusinessNo("   ");
+        assertInvalidRiskRequest(assertThrows(
+                BusinessException.class,
+                () -> service.evaluateSubmitRisk(missingRequired)));
+
+        PaymentRiskDecisionRequestDTO invalidOptional = validRequest();
+        invalidOptional.setClientDeviceId("device\n001");
+        assertInvalidRiskRequest(assertThrows(
+                BusinessException.class,
+                () -> service.evaluateSubmitRisk(invalidOptional)));
+
+        PaymentRiskDecisionRequestDTO oversized = validRequest();
+        oversized.setMerchantNo(repeat("M", 129));
+        assertInvalidRiskRequest(assertThrows(
+                BusinessException.class,
+                () -> service.evaluateSubmitRisk(oversized)));
+
+        BigDecimal[] invalidAmounts = {
+                null,
+                BigDecimal.ZERO,
+                new BigDecimal("1.001"),
+                new BigDecimal("10000000000000000.00")
+        };
+        for (BigDecimal invalidAmount : invalidAmounts) {
+            PaymentRiskDecisionRequestDTO request = validRequest();
+            request.setAmount(invalidAmount);
+            assertInvalidRiskRequest(assertThrows(
+                    BusinessException.class,
+                    () -> service.evaluateSubmitRisk(request)));
+        }
+
+        verify(restTemplate, never()).postForObject(any(String.class), any(), any());
+    }
+
+    @Test
+    void shouldSendNormalizedRequestCopy() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        stubResponse(restTemplate, "0", decision("PASS", "success"));
+        PaymentRiskDecisionRequestDTO request = validRequest();
+        request.setBusinessNo(" PAY-001 ");
+        request.setClientDeviceId("   ");
+        request.setPayerPhone(" 13800138000 ");
+
+        service(restTemplate).evaluateSubmitRisk(request);
+
+        ArgumentCaptor<PaymentRiskDecisionRequestDTO> captor =
+                ArgumentCaptor.forClass(PaymentRiskDecisionRequestDTO.class);
+        verify(restTemplate, times(1)).postForObject(
+                eq("http://risk/decisions/evaluate"),
+                captor.capture(),
+                eq(PaymentRiskControlServiceImpl.RiskApiResponse.class));
+        PaymentRiskDecisionRequestDTO sent = captor.getValue();
+        assertNotSame(request, sent);
+        assertEquals("PAY-001", sent.getBusinessNo());
+        assertNull(sent.getClientDeviceId());
+        assertEquals("13800138000", sent.getPayerPhone());
+        assertEquals(" PAY-001 ", request.getBusinessNo());
+        assertEquals("   ", request.getClientDeviceId());
+    }
+
+    @Test
     void shouldNormalizeSuccessfulRiskDecision() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentRiskDecisionResultDTO data = decision(" pass ", " SUCCESS ");
@@ -58,7 +132,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, " 0 ", data);
 
         PaymentRiskDecisionResultDTO result = service(restTemplate)
-                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+                .evaluateSubmitRisk(validRequest());
 
         assertEquals("PASS", result.getDecision());
         assertEquals("success", result.getDecisionType());
@@ -78,7 +152,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", data);
 
         PaymentRiskDecisionResultDTO result = service(restTemplate)
-                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+                .evaluateSubmitRisk(validRequest());
 
         assertEquals("支付需要人工风控复核", result.getMessage());
         org.junit.jupiter.api.Assertions.assertFalse(result.getMessage().contains("risk-secret-token"));
@@ -94,7 +168,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertInvalidRiskResult(exception);
     }
@@ -108,7 +182,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertInvalidRiskResult(exception);
     }
@@ -122,7 +196,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertInvalidRiskResult(exception);
     }
@@ -136,7 +210,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", data);
 
         PaymentRiskDecisionResultDTO result = service(restTemplate)
-                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+                .evaluateSubmitRisk(validRequest());
 
         assertEquals("INTERCEPT", result.getDecision());
         assertEquals("danger", result.getDecisionType());
@@ -160,7 +234,7 @@ class PaymentRiskControlServiceImplTest {
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                    () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
             assertInvalidRiskResult(exception);
         }
@@ -174,7 +248,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", data);
 
         PaymentRiskDecisionResultDTO result = service(restTemplate)
-                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+                .evaluateSubmitRisk(validRequest());
 
         assertEquals("REJECT", result.getDecision());
         assertEquals("danger", result.getDecisionType());
@@ -189,7 +263,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertInvalidRiskResult(exception);
     }
@@ -203,7 +277,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", data);
 
         PaymentRiskDecisionResultDTO result = service(restTemplate)
-                .evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO());
+                .evaluateSubmitRisk(validRequest());
 
         assertEquals("REJECT", result.getDecision());
         assertEquals("POLICY_DIRECT_REJECT", result.getHitCode());
@@ -221,7 +295,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertInvalidRiskResult(exception);
     }
@@ -233,7 +307,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertInvalidRiskResult(exception);
     }
@@ -244,13 +318,13 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", decision("ALLOW", "success"));
         BusinessException unknownDecision = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
         assertInvalidRiskResult(unknownDecision);
 
         stubResponse(restTemplate, "0", decision("PASS", "primary"));
         BusinessException unknownType = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
         assertInvalidRiskResult(unknownType);
     }
 
@@ -262,7 +336,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", controlCharacter);
         BusinessException controlException = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
         assertInvalidRiskResult(controlException);
 
         PaymentRiskDecisionResultDTO oversized = decision("PASS", "success");
@@ -270,7 +344,7 @@ class PaymentRiskControlServiceImplTest {
         stubResponse(restTemplate, "0", oversized);
         BusinessException oversizedException = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
         assertInvalidRiskResult(oversizedException);
     }
 
@@ -285,7 +359,7 @@ class PaymentRiskControlServiceImplTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> service(restTemplate).evaluateSubmitRisk(new PaymentRiskDecisionRequestDTO()));
+                () -> service(restTemplate).evaluateSubmitRisk(validRequest()));
 
         assertEquals(ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, exception.getCode());
         assertEquals("风控中心调用失败，请稍后重试或联系资金风控团队", exception.getMessage());
@@ -321,6 +395,28 @@ class PaymentRiskControlServiceImplTest {
     private void assertInvalidRiskResult(BusinessException exception) {
         assertEquals(ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, exception.getCode());
         assertEquals("风控中心返回结果非法，无法确认支付准入状态", exception.getMessage());
+    }
+
+    private void assertInvalidRiskRequest(BusinessException exception) {
+        assertEquals(ErrorCode.PAYMENT_RISK_SERVICE_UNAVAILABLE, exception.getCode());
+        assertEquals("风控中心请求参数非法，无法发起支付准入评估", exception.getMessage());
+    }
+
+    private PaymentRiskDecisionRequestDTO validRequest() {
+        PaymentRiskDecisionRequestDTO request = new PaymentRiskDecisionRequestDTO();
+        request.setBusinessNo("PAY-001");
+        request.setSourceSystem("payment-core");
+        request.setSceneCode("PAY_CONSUME");
+        request.setPayScene("HOME_SERVICE");
+        request.setPaymentMethod("WECHAT");
+        request.setChannelCode("wxpay");
+        request.setMerchantNo("MERCHANT-001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+        request.setClientDeviceId("DEVICE-001");
+        request.setPayerPhone("13800138000");
+        request.setAmount(new BigDecimal("88.00"));
+        return request;
     }
 
     private String repeat(String value, int count) {
