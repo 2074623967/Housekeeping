@@ -132,6 +132,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     private static final String STATUS_ENABLED = "ENABLED";
     private static final String STATUS_DISABLED = "DISABLED";
+    private static final int CHANNEL_DAILY_LIMIT_MAX_SCALE = 2;
+    private static final BigDecimal MAX_CHANNEL_DAILY_LIMIT = new BigDecimal("9999999999999999.99");
     private static final int RETURN_CODE_IMPORT_MAX_BYTES = 512 * 1024;
     private static final int RETURN_CODE_IMPORT_MAX_ROWS = 500;
     private static final List<String> RETURN_CODE_IMPORT_HEADERS = Collections.unmodifiableList(Arrays.asList(
@@ -3925,10 +3927,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request.getRefundWindowDays(), "原路退款时效必须大于0"));
         entity.setRiskControlTag(requireImportText(request.getRiskControlTag(), "风控标签不能为空", 128));
         entity.setSceneScope(requireImportText(request.getSceneScope(), "适用场景不能为空", 128));
-        if (request.getDailyLimit() == null || request.getDailyLimit().compareTo(BigDecimal.ZERO) < 0) {
+        BigDecimal dailyLimit = request.getDailyLimit();
+        if (dailyLimit == null || dailyLimit.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("单日限额不能小于0");
         }
-        entity.setDailyLimit(request.getDailyLimit());
+        BigDecimal normalizedDailyLimit = dailyLimit.stripTrailingZeros();
+        if (normalizedDailyLimit.scale() > CHANNEL_DAILY_LIMIT_MAX_SCALE
+                || dailyLimit.compareTo(MAX_CHANNEL_DAILY_LIMIT) > 0) {
+            throw new IllegalArgumentException("单日限额最多支持 16 位整数和 2 位小数");
+        }
+        entity.setDailyLimit(dailyLimit);
         entity.setPriority(requireNonNegativeInteger(request.getPriority(), "渠道优先级不能小于0"));
         Integer routeWeight = requireNonNegativeInteger(request.getRouteWeight(), "渠道路由权重不能小于0");
         if (routeWeight.intValue() > 100) {

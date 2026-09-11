@@ -404,6 +404,53 @@ class PaymentChannelStatusReviewServiceImplTest {
     }
 
     @Test
+    void shouldValidateChannelDailyLimitCapacity() {
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+
+        PaymentChannelUpsertRequestDTO excessiveScale = channelRequest("NEW_H5", "secret-new");
+        excessiveScale.setDailyLimit(new BigDecimal("0.001"));
+        IllegalArgumentException scale = assertThrows(IllegalArgumentException.class,
+                () -> service.submitChannelReview(reviewRequest(excessiveScale)));
+        assertTrue(scale.getMessage().contains("16 位整数和 2 位小数"));
+
+        PaymentChannelUpsertRequestDTO excessiveAmount = channelRequest("NEW_H5", "secret-new");
+        excessiveAmount.setDailyLimit(new BigDecimal("10000000000000000.00"));
+        IllegalArgumentException amount = assertThrows(IllegalArgumentException.class,
+                () -> service.submitChannelReview(reviewRequest(excessiveAmount)));
+        assertTrue(amount.getMessage().contains("16 位整数和 2 位小数"));
+
+        PaymentChannelUpsertRequestDTO zero = channelRequest("ZERO_H5", "secret-zero");
+        zero.setDailyLimit(BigDecimal.ZERO);
+        service.submitChannelReview(reviewRequest(zero));
+
+        PaymentChannelUpsertRequestDTO maximum = channelRequest("MAX_H5", "secret-max");
+        maximum.setDailyLimit(new BigDecimal("9999999999999999.99"));
+        service.submitChannelReview(reviewRequest(maximum));
+
+        verify(paymentConfigMapper).insertChannelReview(org.mockito.ArgumentMatchers.argThat(
+                review -> BigDecimal.ZERO.compareTo(review.getDailyLimit()) == 0));
+        verify(paymentConfigMapper).insertChannelReview(org.mockito.ArgumentMatchers.argThat(
+                review -> new BigDecimal("9999999999999999.99").compareTo(review.getDailyLimit()) == 0));
+    }
+
+    @Test
+    void shouldRevalidateChannelDailyLimitBeforeApproval() {
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", null);
+        review.setOperationType("CREATE");
+        review.setChannelCode("new_h5");
+        review.setDailyLimit(new BigDecimal("0.001"));
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).approveChannelReview(
+                        "CSR-001", action("checker-b", "确认新增")));
+
+        assertTrue(exception.getMessage().contains("16 位整数和 2 位小数"));
+        verify(paymentConfigMapper, never()).insertChannel(any());
+        verify(paymentConfigMapper, never()).completeChannelReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void shouldRevalidateCallbackWindowAgainstCurrentNonceTtlBeforeApproval() {
         PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", null);
         review.setOperationType("CREATE");
