@@ -11,6 +11,7 @@ import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ import org.springframework.util.StringUtils;
 public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
     private static final int TRIGGERED_BY_MAX_LENGTH = 64;
 
     private final PaymentDayEndMapper paymentDayEndMapper;
@@ -133,7 +135,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     private String resolveBizDate(PaymentDayEndRunRequestDTO request) {
         String rawBizDate = request == null ? null : request.getBizDate();
         if (!StringUtils.hasText(rawBizDate)) {
-            return LocalDate.now().minusDays(1).format(DATE_FORMATTER);
+            return LocalDate.now(BUSINESS_ZONE_ID).minusDays(1).format(DATE_FORMATTER);
         }
         try {
             return LocalDate.parse(rawBizDate.trim(), DATE_FORMATTER).format(DATE_FORMATTER);

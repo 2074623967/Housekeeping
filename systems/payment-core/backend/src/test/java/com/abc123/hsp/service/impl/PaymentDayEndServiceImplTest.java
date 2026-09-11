@@ -8,8 +8,11 @@ import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
 import com.abc123.hsp.mapper.PaymentDayEndMapper;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -126,6 +129,36 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("68.00"), captor.getValue().getPendingRefundAmount());
         org.junit.jupiter.api.Assertions.assertEquals("RERUN", captor.getValue().getRunMode());
         org.junit.jupiter.api.Assertions.assertEquals("finance-ops", captor.getValue().getTriggeredBy());
+    }
+
+    @Test
+    void shouldResolveDefaultBizDateInBusinessTimezone() {
+        ZoneId businessZone = ZoneId.of("Asia/Shanghai");
+        LocalDate businessToday = LocalDate.now(businessZone);
+        ZoneId alternativeZone = ZoneId.of("Pacific/Kiritimati");
+        if (businessToday.equals(LocalDate.now(alternativeZone))) {
+            alternativeZone = ZoneId.of("Etc/GMT+12");
+        }
+        org.junit.jupiter.api.Assertions.assertNotEquals(businessToday, LocalDate.now(alternativeZone));
+
+        TimeZone previousTimeZone = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone(alternativeZone));
+            when(paymentDayEndMapper.findRecentBatches())
+                    .thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
+            PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+            request.setTriggeredBy("finance-ops");
+
+            new PaymentDayEndServiceImpl(paymentDayEndMapper).run(request);
+
+            ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
+                    ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
+            verify(paymentDayEndMapper).insertBatch(captor.capture());
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    businessToday.minusDays(1).toString(), captor.getValue().getBizDate());
+        } finally {
+            TimeZone.setDefault(previousTimeZone);
+        }
     }
 
     @Test
