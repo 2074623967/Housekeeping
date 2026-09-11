@@ -9,7 +9,7 @@ public final class RequestIdHolder {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter
             .ofPattern("yyyyMMddHHmmssSSS")
-            .withZone(ZoneId.systemDefault());
+            .withZone(ZoneId.of("Asia/Shanghai"));
 
     private RequestIdHolder() {
     }
