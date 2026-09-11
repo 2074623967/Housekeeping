@@ -807,7 +807,7 @@ export const paymentRecordApi = {
     });
     return request(`/api/payment-records?${params.toString()}`);
   },
-  getDetail: (paymentOrderId) => request(`/api/payment-records/${paymentOrderId}`)
+  getDetail: (paymentOrderId) => request(`/api/payment-records/${encodeURIComponent(paymentOrderId)}`)
 };
 
 export const paymentApi = {
@@ -843,7 +843,7 @@ export const paymentApi = {
     });
     return `/api/payments/export?${params.toString()}`;
   },
-  getDetail: (paymentOrderId) => request(`/api/payments/${paymentOrderId}`),
+  getDetail: (paymentOrderId) => request(`/api/payments/${encodeURIComponent(paymentOrderId)}`),
   prepay: (payload) => postJson("/api/payments/prepay", payload),
   query: (paymentOrderId, operator) =>
     postJson("/api/payments/admin/query", { paymentOrderId, operator }),
@@ -884,7 +884,7 @@ export const refundApi = {
     });
     return `/api/refunds/export?${params.toString()}`;
   },
-  getDetail: (refundOrderId) => request(`/api/refunds/${refundOrderId}`),
+  getDetail: (refundOrderId) => request(`/api/refunds/${encodeURIComponent(refundOrderId)}`),
   apply: (payload) => postJson("/api/refunds/apply", payload),
   approve: (refundOrderId, operator, remark = "") =>
     postJson("/api/refunds/approve", { refundOrderId, operator, remark }),
@@ -999,7 +999,7 @@ export const paymentConfigApi = {
   getProtocolVersions: (protocolCode) => request(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/versions`),
   rollbackProtocol: (protocolCode, payload) => postJson(`/api/payment-config/protocols/${encodeURIComponent(protocolCode)}/rollback`, payload),
   createIssueDutyRoster: (payload) => postJson("/api/payment-config/issue-duty-rosters", payload),
-  updateIssueDutyRoster: (rosterCode, payload) => request(`/api/payment-config/issue-duty-rosters/${rosterCode}`, buildJsonRequestOptions("PUT", payload)),
+  updateIssueDutyRoster: (rosterCode, payload) => request(`/api/payment-config/issue-duty-rosters/${encodeURIComponent(rosterCode)}`, buildJsonRequestOptions("PUT", payload)),
   getIssueDutyRosterReviews: () => request("/api/payment-config/issue-duty-rosters/reviews"),
   approveIssueDutyRosterReview: (requestNo, payload) => postJson(
     `/api/payment-config/issue-duty-rosters/reviews/${encodeURIComponent(requestNo)}/approve`,
