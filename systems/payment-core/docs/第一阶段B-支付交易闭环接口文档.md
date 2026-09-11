@@ -3575,6 +3575,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `PrepayOrderDTO` 不覆盖订单行的服务品类、服务者、订单/履约状态、聚合支付状态等完整字段，前端不得据此构造新的 `OrderListItemDTO` 或推导当前筛选命中。
 5. 同页任一预付单请求未完成期间不得并发发起其他订单支付或改变查询快照；前端门禁不替代服务端订单资格、幂等、异参冲突、事务和并发锁，本轮不新增端点或 DTO 字段。
 
+### 14.205 异常批量处理前端消费契约
+
+1. `GET /api/payment-issues`、`GET /api/payment-issues/responsibility-summary` 和 `POST /api/payment-issues/actions` 的参数、响应 DTO、错误码与服务端事务语义保持不变。
+2. 批量 POST 返回 `PageResultDTO<PaymentIssueRowDTO>`，但服务端当前使用默认 `PaymentIssueQueryDTO` 查询，不携带调用页面的筛选与页码；前端不得将其视为当前筛选页或直接覆盖现有列表。
+3. POST 业务成功只确认所选异常动作已提交；前端随后以动作发起前的查询参数并行刷新列表与责任组统计，只有两项都成功才提交新的完整页面快照。
+4. POST 与后续两项 GET 是独立请求事实；任一 GET 失败必须保留动作成功结论和旧快照，不得显示批量处理失败或推导目标行的新状态。
+5. 同页任一批量动作未完成期间不得改变选择、动作表单或筛选快照；前端门禁不替代服务端批量上限、字段规范化、事务、告警确认与并发控制，本轮不新增端点或 DTO 字段。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
