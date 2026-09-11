@@ -18,6 +18,7 @@ const gatewayReviewComment = ref("");
 const gatewayVersionCode = ref("");
 const gatewayVersions = ref([]);
 const isGatewayVersionLoading = ref(false);
+const gatewayVersionError = ref("");
 let gatewayVersionRequestId = 0;
 const editingGatewayCode = ref("");
 const gatewayForm = ref(createGatewayForm());
@@ -506,7 +507,7 @@ async function loadGatewayVersions(gatewayCode) {
   gatewayVersionCode.value = gatewayCode;
   gatewayVersions.value = [];
   isGatewayVersionLoading.value = true;
-  actionMessage.value = "";
+  gatewayVersionError.value = "";
   try {
     const versions = await paymentConfigApi.getGatewayVersions(gatewayCode);
     if (requestId === gatewayVersionRequestId && gatewayVersionCode.value === gatewayCode) {
@@ -514,7 +515,7 @@ async function loadGatewayVersions(gatewayCode) {
     }
   } catch (error) {
     if (requestId === gatewayVersionRequestId && gatewayVersionCode.value === gatewayCode) {
-      actionMessage.value = `支付网关版本加载失败：${error.message}`;
+      gatewayVersionError.value = error.message;
     }
   } finally {
     if (requestId === gatewayVersionRequestId) {
@@ -528,6 +529,7 @@ function closeGatewayVersions() {
   gatewayVersionCode.value = "";
   gatewayVersions.value = [];
   isGatewayVersionLoading.value = false;
+  gatewayVersionError.value = "";
 }
 
 async function rollbackGatewayVersion(version) {
@@ -1260,26 +1262,31 @@ async function handleGatewayReview(review, approved) {
   }
   activeConfigCode.value = `gateway-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: gatewayReviewer.value,
+    reviewComment: gatewayReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: gatewayReviewer.value,
-      reviewComment: gatewayReviewComment.value
-    };
-    gatewayReviews.value = approved
-      ? await paymentConfigApi.approveGatewayReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectGatewayReview(review.requestNo, payload);
-    if (approved) {
-      await loadOverview();
-      if (gatewayVersionCode.value) {
-        await loadGatewayVersions(gatewayVersionCode.value);
-      }
+    try {
+      gatewayReviews.value = approved
+        ? await paymentConfigApi.approveGatewayReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectGatewayReview(review.requestNo, payload);
+      gatewayReviewComment.value = "";
+      actionMessage.value = approved
+        ? `支付网关 ${review.operationType} 申请 ${review.requestNo} 已通过并应用。`
+        : `支付网关申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `支付网关复核处理失败：${error.message}`;
+      return;
     }
-    gatewayReviewComment.value = "";
-    actionMessage.value = approved
-      ? `支付网关 ${review.operationType} 申请 ${review.requestNo} 已通过并应用。`
-      : `支付网关申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `支付网关复核处理失败：${error.message}`;
+    if (!approved) {
+      return;
+    }
+    const refreshTasks = [loadOverview()];
+    if (gatewayVersionCode.value) {
+      refreshTasks.push(loadGatewayVersions(gatewayVersionCode.value));
+    }
+    await Promise.all(refreshTasks);
   } finally {
     activeConfigCode.value = "";
   }
@@ -3772,6 +3779,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <p class="meta">历史快照不可变；回滚需重新提交完整候选并经异人声明复核，当前运行态不会立即改变</p>
               </div>
               <button class="button secondary" @click="closeGatewayVersions">关闭</button>
+            </div>
+            <div v-if="gatewayVersionError" class="error-banner">
+              支付网关版本加载失败：{{ gatewayVersionError }}
             </div>
             <div v-if="isGatewayVersionLoading" class="state-box">支付网关版本加载中...</div>
             <div v-else-if="!gatewayVersions.length" class="state-box">当前暂无支付网关版本记录</div>
