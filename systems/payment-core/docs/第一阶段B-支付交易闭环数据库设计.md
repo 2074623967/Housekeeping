@@ -1048,6 +1048,13 @@ t_order
 3. 服务层在列表、责任汇总、告警明细和导出 SQL 前先拒绝原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper。
 4. 本轮不新增表、字段、索引、Mapper SQL、schema 或迁移；本地 Mockito 不证明生产 MySQL 字符集长度、查询计划、数据分布或稳定性。
 
+### 4.107 服务者结算查询字段边界
+
+1. `t_worker_settlement_order.settlement_order_id / worker_name / status / payout_status` 继续使用 `VARCHAR(64) / VARCHAR(128) / VARCHAR(32) / VARCHAR(32)`；本轮不新增表、字段、索引、Mapper SQL、schema 或迁移。
+2. 列表、总览和 CSV 导出共用的四类查询条件在服务层先拒绝原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper。
+3. 应结金额、扣减金额、实结金额、保证金影响金额及负实结笔数的既有 SQL 口径不变，应用层门禁不代替资金对账。
+4. 本地 Mockito 测试不证明生产 MySQL 查询计划、真实结算数据、出款结果或稳定性，仍需正式环境对账与核验。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

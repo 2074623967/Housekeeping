@@ -3356,6 +3356,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 所有原始值不得包含控制字符，合法首尾空白在查询前裁剪；`receiptQueryState` 在原值校验后再大写化并校验 `INITIAL_WAIT / DUE / BACKING_OFF / QUERYING / EXHAUSTED`。
 4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、默认筛选、分页、CSV 上限或告警回执脱敏；本地测试不证明生产查询计划、真实异常积压或供应商投递/回执结果。
 
+### 14.176 服务者结算查询字段契约
+
+1. `GET /api/settlements/workers`、`GET /api/settlements/workers/overview` 与 `GET /api/settlements/workers/export` 参数不变；`settlementOrderId / workerKeyword / settlementStatus / payoutStatus` 最长分别为 `64 / 128 / 32 / 32` 个字符。
+2. 四类原始输入不得包含控制字符，合法首尾空白在查询前裁剪；`null`、空条件和 `全部` 保持既有不筛选语义。
+3. 非法参数使用既有参数错误响应并在 Mapper 访问前拒绝；页码与每页 `1..100`、金额汇总、姓名脱敏和 CSV `1000` 行上限保持不变。
+4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、schema 或迁移；本地测试不证明生产结算金额、真实出款、服务者收款或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
