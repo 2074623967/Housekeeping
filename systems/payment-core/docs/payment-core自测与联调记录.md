@@ -9242,3 +9242,25 @@
 1. 错误部署值与直接服务调用均不能把单轮 nonce 清理扩大到超过 `1000` 条，剩余历史数据由后续租约调度承接。
 2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、锁等待、数据库时钟、真实多实例、积压吞吐或稳定性。
 3. 发布说明仍为候选版，正式签字审批、发布后现场核验和 master 稳定观察结论均未形成，`release/v1.0.0` 继续冻结。
+
+## 333. 2026-09-11 渠道回调时间窗发布前一致性 V1.0 验证
+
+### 333.1 本轮补强
+
+1. `PaymentConfigServiceImpl` 读取 `payment.callback.nonce-ttl-seconds`，启用态渠道候选除正数校验外，新增 `nonce TTL > 2 * notifySignWindowSec` 约束，与回调验签运行时规则保持一致。
+2. 新增/编辑候选在提交时校验，复核批准前通过既有候选重建再次校验；因此候选等待期间部署 TTL 变化时，不会沿用提交时的旧假设直接发布。
+3. 停用态候选保留历史参数并可继续走复核，以免不兼容配置阻塞安全下线；任何后续启用或启用态回滚仍需通过当前 TTL 门禁，运行时 `PAYMENT-1034` 兜底保持不变。
+
+### 333.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 渠道配置与回调联合定向测试 | `mvn -Dtest=PaymentChannelStatusReviewServiceImplTest,PaymentCallbackSignatureServiceImplTest,PaymentCallbackSignatureConfigurationTest test` | 通过 | `39` 个用例；覆盖提交拒绝、批准前按当前 TTL 复验、停用态历史参数保留与运行时兜底 |
+| payment-core 全量测试 | `mvn test` | 通过 | `836` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 333.3 当前判断
+
+1. 默认 `601` 秒 TTL 下，启用态渠道时间窗 `300` 秒可发布，`301` 秒会在候选提交或批准阶段拒绝；自定义 TTL 时按同一严格不等式计算，不硬编码页面上限。
+2. 本轮无前端代码、接口字段、Mapper SQL、schema 或迁移变化；管理端沿用既有服务端错误展示，本地测试不证明生产配置中心一致、真实审批完成、并发发布、渠道回调或多实例防重。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
