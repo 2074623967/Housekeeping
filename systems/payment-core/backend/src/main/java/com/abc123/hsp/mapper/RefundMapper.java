@@ -34,7 +34,7 @@ public interface RefundMapper {
     /**
      * 查询失败退款单号列表。
      */
-    List<String> findFailedRefundOrderIds();
+    List<String> findFailedRefundOrderIds(@Param("batchSize") int batchSize);
 
     /**
      * 查询退款单详情。

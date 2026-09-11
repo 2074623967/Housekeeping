@@ -40,7 +40,7 @@ class RefundRetryTaskServiceImplTest {
     @Test
     void shouldContinueRetryingRefundsAfterOneTransactionFails() {
         String sensitiveMessage = "jdbc:mysql://internal/payment password=refund-secret\ninvalid SQL";
-        when(refundMapper.findFailedRefundOrderIds())
+        when(refundMapper.findFailedRefundOrderIds(100))
                 .thenReturn(Arrays.asList("REF-FIRST", "REF-FAIL", "REF-LAST"));
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
@@ -83,5 +83,19 @@ class RefundRetryTaskServiceImplTest {
             transactionLogger.detachAppender(transactionAppender);
             transactionAppender.stop();
         }
+    }
+
+    @Test
+    void shouldClampConfiguredBatchSizeBeforeReadingCandidates() {
+        when(refundMapper.findFailedRefundOrderIds(1000)).thenReturn(Collections.emptyList());
+        when(refundMapper.findFailedRefundOrderIds(1)).thenReturn(Collections.emptyList());
+
+        new RefundRetryTaskServiceImpl(refundMapper, refundService, transactionManager, 1001)
+                .retryFailedRefunds("refund-retry-scheduler");
+        new RefundRetryTaskServiceImpl(refundMapper, refundService, transactionManager, 0)
+                .retryFailedRefunds("payment-core-admin");
+
+        verify(refundMapper).findFailedRefundOrderIds(1000);
+        verify(refundMapper).findFailedRefundOrderIds(1);
     }
 }

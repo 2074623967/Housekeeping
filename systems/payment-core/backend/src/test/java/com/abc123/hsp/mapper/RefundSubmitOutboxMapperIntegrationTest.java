@@ -161,6 +161,22 @@ class RefundSubmitOutboxMapperIntegrationTest {
     }
 
     @Test
+    void shouldLimitFailedRefundCandidatesToConfiguredBatchSize() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status, applied_at) VALUES "
+                    + "('REF-FAIL-001', 'FAIL', NOW()), "
+                    + "('REF-FAIL-002', 'FAIL', DATEADD('SECOND', 1, NOW()))");
+            RefundMapper mapper = session.getMapper(RefundMapper.class);
+
+            assertEquals(java.util.Collections.singletonList("REF-FAIL-001"),
+                    mapper.findFailedRefundOrderIds(1));
+            assertEquals(java.util.Arrays.asList("REF-FAIL-001", "REF-FAIL-002"),
+                    mapper.findFailedRefundOrderIds(2));
+        }
+    }
+
+    @Test
     void shouldLockCallbackSourceAndFinalizeOnlyFromProcessing() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
@@ -232,6 +248,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "status VARCHAR(32) NOT NULL, "
                     + "status_type VARCHAR(32) NOT NULL DEFAULT 'warn', "
                     + "success_at TIMESTAMP NULL, "
+                    + "applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                     + "UNIQUE(channel_code, channel_refund_no))");
             statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, channel_code, status) "
                     + "VALUES ('REF-TRACE', NULL, 'PROCESSING'), "

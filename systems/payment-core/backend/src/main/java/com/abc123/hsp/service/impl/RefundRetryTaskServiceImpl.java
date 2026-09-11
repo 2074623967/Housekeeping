@@ -5,6 +5,8 @@ import com.abc123.hsp.mapper.RefundMapper;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundService;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -16,24 +18,36 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class RefundRetryTaskServiceImpl implements RefundRetryTaskService {
 
+    private static final int DEFAULT_BATCH_SIZE = 100;
+    private static final int MAX_BATCH_SIZE = 1000;
     private static final String TRANSACTION_FAILURE_CODE = "REFUND_RETRY_TRANSACTION_FAILED";
 
     private final RefundMapper refundMapper;
     private final RefundService refundService;
     private final TransactionTemplate transactionTemplate;
+    private final int batchSize;
 
+    @Autowired
     public RefundRetryTaskServiceImpl(RefundMapper refundMapper,
                                       RefundService refundService,
-                                      PlatformTransactionManager transactionManager) {
+                                      PlatformTransactionManager transactionManager,
+                                      @Value("${payment.refund-retry.batch-size:100}") int batchSize) {
         this.refundMapper = refundMapper;
         this.refundService = refundService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.batchSize = Math.min(Math.max(batchSize, 1), MAX_BATCH_SIZE);
+    }
+
+    RefundRetryTaskServiceImpl(RefundMapper refundMapper,
+                               RefundService refundService,
+                               PlatformTransactionManager transactionManager) {
+        this(refundMapper, refundService, transactionManager, DEFAULT_BATCH_SIZE);
     }
 
     @Override
     public RefundRetryResultDTO retryFailedRefunds(String triggeredBy) {
-        List<String> refundOrderIds = refundMapper.findFailedRefundOrderIds();
+        List<String> refundOrderIds = refundMapper.findFailedRefundOrderIds(batchSize);
         RefundRetryResultDTO result = new RefundRetryResultDTO();
         result.setProcessedCount(refundOrderIds.size());
         for (String refundOrderId : refundOrderIds) {

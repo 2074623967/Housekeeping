@@ -62,6 +62,7 @@ payment:
     batch-size: ${HSP_PAYMENT_EVENT_RETRY_BATCH_SIZE:100}
   refund-retry:
     fixed-delay-ms: ${HSP_PAYMENT_REFUND_RETRY_DELAY_MS:300000}
+    batch-size: ${HSP_PAYMENT_REFUND_RETRY_BATCH_SIZE:100}
   refund-submit:
     gateway-access:
       # 默认关闭；启用前必须配置 gateway-access 的真实退款上游和共享访问凭证。

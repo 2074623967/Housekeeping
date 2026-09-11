@@ -94,6 +94,7 @@
         FROM t_refund_order
         WHERE status = 'FAIL'
         ORDER BY applied_at ASC, id ASC
+        LIMIT #{batchSize}
     </select>
 
     <select id="findByRefundOrderId" resultType="com.abc123.hsp.dto.RefundListItemDTO">
