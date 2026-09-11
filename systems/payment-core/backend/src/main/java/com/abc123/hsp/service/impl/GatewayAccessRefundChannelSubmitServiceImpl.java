@@ -4,6 +4,7 @@ import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitResultDTO;
 import com.abc123.hsp.service.RefundChannelSubmitException;
 import com.abc123.hsp.service.RefundChannelSubmitService;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -28,6 +29,7 @@ import org.springframework.web.client.RestTemplate;
 @Profile("!demo")
 public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChannelSubmitService {
 
+    private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final Set<String> STATUSES = new HashSet<>(Arrays.asList("PROCESSING", "SUCCESS"));
     private static final Set<String> STATUS_TYPES = new HashSet<>(
             Arrays.asList("info", "warn", "danger", "success"));
@@ -77,15 +79,16 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
 
     @Override
     public RefundChannelSubmitResultDTO submit(RefundChannelSubmitRequestDTO request) {
-        if (!isConfigured(request)) {
-            throw submitFailed("gateway-access refund submit is disabled or not configured", false);
-        }
         try {
+            GatewayRefundSubmitRequest normalizedRequest = validateAndNormalizeRequest(request);
+            if (!isConfigured(normalizedRequest.getChannelCode())) {
+                throw submitFailed("gateway-access refund submit is disabled or not configured", false);
+            }
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Gateway-App-Code", appCode);
             headers.set("X-Gateway-Access-Key", accessKey);
             ResponseEntity<GatewayRefundSubmitResponse> responseEntity = restTemplate.exchange(
-                    submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers),
+                    submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(normalizedRequest, headers),
                     GatewayRefundSubmitResponse.class);
             GatewayRefundSubmitResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
@@ -95,7 +98,7 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
             }
             RefundChannelSubmitResultDTO result = response.getData();
             normalizeAndValidate(result);
-            result.setResponsePayload(buildResponsePayload(request.getChannelCode(), result));
+            result.setResponsePayload(buildResponsePayload(normalizedRequest.getChannelCode(), result));
             return result;
         } catch (RefundChannelSubmitException exception) {
             throw exception;
@@ -105,14 +108,60 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         }
     }
 
-    private boolean isConfigured(RefundChannelSubmitRequestDTO request) {
+    private GatewayRefundSubmitRequest validateAndNormalizeRequest(RefundChannelSubmitRequestDTO request) {
+        if (request == null) {
+            throw invalidRequest();
+        }
+        GatewayRefundSubmitRequest normalized = new GatewayRefundSubmitRequest();
+        normalized.setRefundOrderId(requiredRequest(request.getRefundOrderId(), 64));
+        normalized.setPaymentOrderId(requiredRequest(request.getPaymentOrderId(), 64));
+        normalized.setOrderNo(requiredRequest(request.getOrderNo(), 64));
+        normalized.setCustomerName(optionalRequest(request.getCustomerName(), 128));
+        normalized.setRefundMethod(requiredRequest(request.getRefundMethod(), 32));
+        normalized.setRefundReason(optionalRequest(request.getRefundReason(), 255));
+        normalized.setChannelCode(requiredRequest(request.getChannelCode(), 64));
+        BigDecimal amount = request.getRefundAmount();
+        if (amount == null
+                || amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.stripTrailingZeros().scale() > 2
+                || amount.compareTo(MAX_AMOUNT) > 0) {
+            throw invalidRequest();
+        }
+        normalized.setRefundAmount(amount);
+        return normalized;
+    }
+
+    private String requiredRequest(String value, int maxLength) {
+        String normalized = optionalRequest(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private String optionalRequest(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (containsIsoControl(value)) {
+            throw invalidRequest();
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private boolean isConfigured(String channelCode) {
         return enabled
                 && StringUtils.hasText(submitUrl)
                 && StringUtils.hasText(appCode)
                 && StringUtils.hasText(accessKey)
-                && request != null
-                && StringUtils.hasText(request.getChannelCode())
-                && supportedChannels.contains(request.getChannelCode().trim().toLowerCase(Locale.ROOT));
+                && supportedChannels.contains(channelCode.toLowerCase(Locale.ROOT));
     }
 
     private void normalizeAndValidate(RefundChannelSubmitResultDTO result) {
@@ -172,6 +221,23 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
 
     private RefundChannelSubmitException submitFailed(String message, boolean resultUnknown) {
         return new RefundChannelSubmitException(message, resultUnknown);
+    }
+
+    private RefundChannelSubmitException invalidRequest() {
+        return submitFailed("gateway-access refund submit request is invalid", false);
+    }
+
+    @Data
+    public static class GatewayRefundSubmitRequest {
+
+        private String refundOrderId;
+        private String paymentOrderId;
+        private String orderNo;
+        private String customerName;
+        private BigDecimal refundAmount;
+        private String refundMethod;
+        private String refundReason;
+        private String channelCode;
     }
 
     @Data
