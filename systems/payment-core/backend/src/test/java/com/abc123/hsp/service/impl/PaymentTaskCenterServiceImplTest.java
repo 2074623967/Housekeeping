@@ -656,8 +656,8 @@ class PaymentTaskCenterServiceImplTest {
         candidate.setScheduleTag("交易链路白班");
         candidate.setEffectiveWindow("00:00-23:00");
         candidate.setAlertContent("支付异常 ISSUE-WAIT-PAY-001 已超过 P1 SLA，请进入异常中心处理。");
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.singletonList(candidate));
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100)).thenReturn(Collections.singletonList(candidate));
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100)).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -706,8 +706,8 @@ class PaymentTaskCenterServiceImplTest {
         escalationCandidate.setEffectiveWindow("00:00-23:00");
         escalationCandidate.setAlertContent("升级来源告警 PIA-SOURCE-001 已超过 30 分钟未确认，请升级跟进。");
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(0);
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.singletonList(escalationCandidate));
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100)).thenReturn(Collections.singletonList(escalationCandidate));
         when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -751,8 +751,8 @@ class PaymentTaskCenterServiceImplTest {
         escalationCandidate.setAlertContent("升级来源告警 PIA-SOURCE-002 已超过 30 分钟未确认，请升级跟进。原告警："
                 + repeat("原告警内容过长-", 80));
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(0);
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.singletonList(escalationCandidate));
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100)).thenReturn(Collections.singletonList(escalationCandidate));
         when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
@@ -776,8 +776,8 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldRunAutoIssueSlaEscalationTask() {
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates()).thenReturn(Collections.emptyList());
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates()).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100)).thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100)).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.acquireTaskLease(eq("PAYMENT_ISSUE_ESCALATE"), leaseOwner("payment-issue-sla-scheduler"), eq(120))).thenReturn(1);
@@ -799,14 +799,79 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldUseDefaultAndClampIssueSlaCandidateBatchSize() {
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(1))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(1000))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(1))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(1000))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+        PaymentTaskCenterServiceImpl service = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        );
+
+        service.runEscalateOverdueIssues("payment-core-admin");
+        service.configureIssueSlaCandidateBatchSize(0);
+        service.runEscalateOverdueIssues("payment-core-admin");
+        service.configureIssueSlaCandidateBatchSize(1001);
+        service.runEscalateOverdueIssues("payment-core-admin");
+
+        verify(paymentTaskCenterMapper).findOverdueIssueAlertCandidates(100);
+        verify(paymentTaskCenterMapper).findOverdueIssueAlertCandidates(1);
+        verify(paymentTaskCenterMapper).findOverdueIssueAlertCandidates(1000);
+        verify(paymentTaskCenterMapper).findUnacknowledgedIssueAlertEscalationCandidates(100);
+        verify(paymentTaskCenterMapper).findUnacknowledgedIssueAlertEscalationCandidates(1);
+        verify(paymentTaskCenterMapper).findUnacknowledgedIssueAlertEscalationCandidates(1000);
+    }
+
+    @Test
+    void shouldSkipIssueSlaCandidateQueriesWhenAutoLeaseHeldByAnotherInstance() {
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ESCALATE"),
+                leaseOwner("payment-issue-sla-scheduler"),
+                eq(120)))
+                .thenReturn(0);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        ).runAutoEscalateOverdueIssues();
+
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).findOverdueIssueAlertCandidates(
+                org.mockito.ArgumentMatchers.anyInt());
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .findUnacknowledgedIssueAlertEscalationCandidates(
+                        org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
     void shouldRollbackFailedIssueAlertAndContinueEscalationBatch() {
         PaymentIssueAlertCandidateDTO first = buildIssueAlertCandidate("ISSUE-1", "PAY-1");
         PaymentIssueAlertCandidateDTO failed = buildIssueAlertCandidate("ISSUE-FAIL", "PAY-2");
         PaymentIssueAlertCandidateDTO last = buildIssueAlertCandidate("ISSUE-3", "PAY-3");
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(3);
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates())
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100))
                 .thenReturn(Arrays.asList(first, failed, last));
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates())
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100))
                 .thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.insertIssueAlertLog(org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class)))
                 .thenAnswer(invocation -> {
@@ -865,9 +930,9 @@ class PaymentTaskCenterServiceImplTest {
     void shouldReportConcurrentDuplicateIssueAlertAsSkipped() {
         PaymentIssueAlertCandidateDTO candidate = buildIssueAlertCandidate("ISSUE-DUP", "PAY-DUP");
         when(paymentTaskCenterMapper.countOverduePaymentIssues()).thenReturn(1);
-        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates())
+        when(paymentTaskCenterMapper.findOverdueIssueAlertCandidates(100))
                 .thenReturn(Collections.singletonList(candidate));
-        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates())
+        when(paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(100))
                 .thenReturn(Collections.emptyList());
         when(paymentTaskCenterMapper.insertIssueAlertLog(
                 org.mockito.ArgumentMatchers.any(PaymentIssueAlertLogEntity.class)))

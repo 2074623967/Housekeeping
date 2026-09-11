@@ -39,6 +39,10 @@ class PaymentIssueAlertNotifierConfigurationTest {
                 resolver.getProperty("payment.issue-alert.dispatch.batch-size", Integer.class)
         );
         Assertions.assertEquals(
+                Integer.valueOf(100),
+                resolver.getProperty("payment.issue-sla.batch-size", Integer.class)
+        );
+        Assertions.assertEquals(
                 Boolean.FALSE,
                 resolver.getProperty("payment.issue-alert.receipt-query.gateway-access.enabled", Boolean.class)
         );

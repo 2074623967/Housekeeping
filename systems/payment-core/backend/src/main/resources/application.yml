@@ -154,6 +154,9 @@ payment:
     publisher-confirm-timeout-ms: ${HSP_PAYMENT_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS:5000}
     dead-letter-task-enabled: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_ENABLED:false}
     dead-letter-task-queue: ${HSP_PAYMENT_AMQP_DEAD_LETTER_TASK_QUEUE:payment.compensation.dlq-intake}
+  issue-sla:
+    # 首次告警与未确认升级候选分别使用该单轮上限，服务端限制为 1..1000。
+    batch-size: ${HSP_PAYMENT_ISSUE_SLA_BATCH_SIZE:100}
   issue-alert:
     # 默认失败闭合；只有 demo profile 显式开启后，空 Webhook 才生成本地模拟回执。
     local-receipt-enabled: false

@@ -242,6 +242,7 @@
                 AND alert_log.ack_status = '待确认'
           )
         ORDER BY issue_sla.created_at ASC, issue_no ASC
+        LIMIT #{batchSize}
     </select>
 
     <select id="findUnacknowledgedIssueAlertEscalationCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
@@ -302,6 +303,7 @@
                 )
           )
         ORDER BY source_alert.created_at ASC, source_alert.id ASC
+        LIMIT #{batchSize}
     </select>
 
     <select id="findRecentTaskRuns" resultType="com.abc123.hsp.dto.PaymentTaskRunLogItemDTO">

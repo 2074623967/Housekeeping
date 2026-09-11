@@ -286,12 +286,55 @@ public class PaymentTaskCenterMapperIntegrationTest {
 
             assertEquals(5, mapper.countUnknownRefundSubmitEvents());
             assertEquals(1, mapper.countOverduePaymentIssues());
-            List<PaymentIssueAlertCandidateDTO> candidates = mapper.findOverdueIssueAlertCandidates();
+            List<PaymentIssueAlertCandidateDTO> candidates = mapper.findOverdueIssueAlertCandidates(100);
             assertEquals(1, candidates.size());
             org.junit.jupiter.api.Assertions.assertTrue(candidates.stream().allMatch(candidate ->
                     "退款提交结果待核查".equals(candidate.getIssueType())
                             && "账务清结算联动组".equals(candidate.getResponsibilityGroup())
                             && "账清结算联动值班".equals(candidate.getReceiver())));
+        }
+    }
+
+    @Test
+    void shouldLimitOverdueIssueAlertCandidatesAndKeepOldestFirst() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_order "
+                        + "SET created_at = TIMESTAMPADD(MINUTE, -61, NOW()) "
+                        + "WHERE payment_order_id = 'PAY-NO-HISTORY'");
+            }
+
+            List<PaymentIssueAlertCandidateDTO> candidates = mapper.findOverdueIssueAlertCandidates(1);
+
+            assertEquals(1, candidates.size());
+            assertEquals("ISSUE-WAIT-PAY-NO-HISTORY", candidates.get(0).getIssueNo());
+        }
+    }
+
+    @Test
+    void shouldLimitUnacknowledgedEscalationCandidatesAndKeepOldestFirst() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log SET ack_status = '已确认' "
+                        + "WHERE alert_channel = 'IN_APP_OUTBOX'");
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, issue_no, issue_type, severity, responsibility_group, receiver, "
+                        + "alert_channel, ack_status, alert_status, alert_content, created_at) VALUES "
+                        + "('PIA-ESCALATE-OLDEST', 'ISSUE-ESCALATE-1', '待回调未收口', 'P1', "
+                        + "'支付运营组', '支付运营', 'IN_APP_OUTBOX', '待确认', '已生成', "
+                        + "'最早待升级告警', TIMESTAMPADD(MINUTE, -40, NOW())),"
+                        + "('PIA-ESCALATE-LATER', 'ISSUE-ESCALATE-2', '待回调未收口', 'P1', "
+                        + "'支付运营组', '支付运营', 'IN_APP_OUTBOX', '待确认', '已生成', "
+                        + "'较晚待升级告警', TIMESTAMPADD(MINUTE, -35, NOW()))");
+            }
+
+            List<PaymentIssueAlertCandidateDTO> candidates =
+                    mapper.findUnacknowledgedIssueAlertEscalationCandidates(1);
+
+            assertEquals(1, candidates.size());
+            assertEquals("PIA-ESCALATE-OLDEST", candidates.get(0).getSourceAlertNo());
         }
     }
 

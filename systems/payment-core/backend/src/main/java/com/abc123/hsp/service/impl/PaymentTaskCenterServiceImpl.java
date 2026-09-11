@@ -63,6 +63,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
+    private static final int MAX_ISSUE_SLA_CANDIDATE_BATCH_SIZE = 1000;
     private static final int ISSUE_ALERT_CONTENT_MAX_LENGTH = 512;
     private static final String ISSUE_ALERT_WRITE_FAILURE_CODE = "PAYMENT_ISSUE_ALERT_WRITE_FAILED";
     private static final String ISSUE_ACTIVE_GENERATION_KEY_PREFIX = "ISSUE_ACTIVE:";
@@ -100,6 +101,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final int issueAlertReceiptQueryMinAgeSeconds;
     private final int issueAlertReceiptQueryMaxAttempts;
     private final int issueAlertReceiptQueryClaimTimeoutSeconds;
+    private int issueSlaCandidateBatchSize = 100;
 
     @Autowired
     public PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -198,6 +200,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Autowired
     void setRefundQueryTaskService(RefundQueryTaskService refundQueryTaskService) {
         this.refundQueryTaskService = refundQueryTaskService;
+    }
+
+    @Autowired
+    void configureIssueSlaCandidateBatchSize(
+            @Value("${payment.issue-sla.batch-size:100}") int batchSize) {
+        this.issueSlaCandidateBatchSize = Math.min(
+                Math.max(batchSize, 1), MAX_ISSUE_SLA_CANDIDATE_BATCH_SIZE);
     }
 
     PaymentTaskCenterServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
@@ -739,8 +748,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskActionResultDTO runEscalateOverdueIssuesByMode(String runMode, String triggeredBy) {
         int overdueIssueCount = paymentTaskCenterMapper.countOverduePaymentIssues();
-        List<PaymentIssueAlertCandidateDTO> alertCandidates = paymentTaskCenterMapper.findOverdueIssueAlertCandidates();
-        List<PaymentIssueAlertCandidateDTO> escalationCandidates = paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates();
+        List<PaymentIssueAlertCandidateDTO> alertCandidates =
+                paymentTaskCenterMapper.findOverdueIssueAlertCandidates(issueSlaCandidateBatchSize);
+        List<PaymentIssueAlertCandidateDTO> escalationCandidates =
+                paymentTaskCenterMapper.findUnacknowledgedIssueAlertEscalationCandidates(
+                        issueSlaCandidateBatchSize);
         int generatedAlertCount = 0;
         int duplicateAlertCount = 0;
         int failCount = 0;

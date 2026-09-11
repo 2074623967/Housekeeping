@@ -200,12 +200,14 @@ public interface PaymentTaskCenterMapper {
     /**
      * 查询需要生成告警通知的超时异常。
      */
-    List<PaymentIssueAlertCandidateDTO> findOverdueIssueAlertCandidates();
+    List<PaymentIssueAlertCandidateDTO> findOverdueIssueAlertCandidates(
+            @Param("batchSize") int batchSize);
 
     /**
      * 查询超过升级阈值但仍未确认的异常告警。
      */
-    List<PaymentIssueAlertCandidateDTO> findUnacknowledgedIssueAlertEscalationCandidates();
+    List<PaymentIssueAlertCandidateDTO> findUnacknowledgedIssueAlertEscalationCandidates(
+            @Param("batchSize") int batchSize);
 
     /**
      * 查询待从站内 outbox 派发到真实通知通道的告警。
