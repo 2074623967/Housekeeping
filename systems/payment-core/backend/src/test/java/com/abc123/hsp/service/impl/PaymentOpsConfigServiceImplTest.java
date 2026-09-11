@@ -34,6 +34,21 @@ class PaymentOpsConfigServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidSnapshotRequestDimensionsBeforeHttpCall() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        PaymentOpsConfigServiceImpl service = service(restTemplate);
+
+        assertNull(service.loadEffectiveSnapshot("HOME\nCLEAN", "PAY_CONSUME", "APP"));
+        assertNull(service.loadEffectiveSnapshot(repeat("B", 65), "PAY_CONSUME", "APP"));
+        assertNull(service.loadEffectiveSnapshot("HOME_CLEAN", "PAY\u0085CONSUME", "APP"));
+        assertNull(service.loadEffectiveSnapshot("HOME_CLEAN", repeat("P", 65), "APP"));
+        assertNull(service.loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", "APP\n"));
+        assertNull(service.loadEffectiveSnapshot("HOME_CLEAN", "PAY_CONSUME", repeat("T", 65)));
+
+        verify(restTemplate, never()).getForObject(any(String.class), any());
+    }
+
+    @Test
     void shouldNormalizeCompleteMatchingSnapshot() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         PaymentOpsConfigSnapshotDTO snapshot = snapshot();

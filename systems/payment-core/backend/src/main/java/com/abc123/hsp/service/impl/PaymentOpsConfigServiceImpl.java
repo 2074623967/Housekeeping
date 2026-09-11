@@ -59,14 +59,16 @@ public class PaymentOpsConfigServiceImpl implements PaymentOpsConfigService {
 
     @Override
     public PaymentOpsConfigSnapshotDTO loadEffectiveSnapshot(String businessCode, String payType, String terminalType) {
-        if (!enabled || !StringUtils.hasText(baseUrl) || !StringUtils.hasText(businessCode)
-                || !StringUtils.hasText(payType) || !StringUtils.hasText(terminalType)) {
+        if (!enabled || !StringUtils.hasText(baseUrl)) {
+            return null;
+        }
+        String normalizedBusinessCode = normalizeRequired(businessCode, SCENE_CODE_MAX_LENGTH);
+        String normalizedPayType = normalizeRequired(payType, SCENE_CODE_MAX_LENGTH);
+        String normalizedTerminalType = normalizeRequired(terminalType, SCENE_CODE_MAX_LENGTH);
+        if (normalizedBusinessCode == null || normalizedPayType == null || normalizedTerminalType == null) {
             return null;
         }
         try {
-            String normalizedBusinessCode = businessCode.trim();
-            String normalizedPayType = payType.trim();
-            String normalizedTerminalType = terminalType.trim();
             String requestUrl = UriComponentsBuilder.fromHttpUrl(baseUrl.trim())
                     .queryParam("businessCode", normalizedBusinessCode)
                     .queryParam("payType", normalizedPayType)
