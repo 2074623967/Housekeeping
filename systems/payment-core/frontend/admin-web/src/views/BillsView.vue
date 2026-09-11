@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { billApi } from "../api/client";
+import { ordersRoute, paymentsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -117,11 +118,11 @@ function exportBills() {
 }
 
 function openOrders(item) {
-  router.push(`/orders?orderNo=${item.orderNo}`);
+  router.push(ordersRoute({ orderNo: item.orderNo }));
 }
 
 function openPayments(item) {
-  router.push(`/payments?orderNo=${item.orderNo}`);
+  router.push(paymentsRoute({ orderNo: item.orderNo }));
 }
 
 onMounted(loadBills);

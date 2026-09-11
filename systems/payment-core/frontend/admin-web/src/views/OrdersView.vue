@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { orderApi, paymentApi } from "../api/client";
 import { paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
+import { billsRoute } from "../router/listRoutes";
 
 const items = ref([]);
 const isLoading = ref(true);
@@ -282,7 +283,7 @@ onMounted(loadOrders);
                   <RouterLink
                     v-if="item.billNo"
                     class="link-button"
-                    :to="`/bills?billNo=${item.billNo}&orderNo=${item.orderNo}`"
+                    :to="billsRoute({ billNo: item.billNo, orderNo: item.orderNo })"
                   >
                     查看账单
                   </RouterLink>

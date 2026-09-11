@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentIssueAlertsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -430,7 +431,7 @@ onMounted(loadIssues);
                 <div class="muted-text">
                   {{ item.latestAlertReceiptSummary }}
                 </div>
-                <RouterLink class="link-button" :to="`/payment-issue-alerts?issueNo=${item.issueNo}`">
+                <RouterLink class="link-button" :to="paymentIssueAlertsRoute({ issueNo: item.issueNo })">
                   查看明细
                 </RouterLink>
               </td>

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { cashierSessionApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
 
 const items = ref([]);
 const selectedItem = ref(null);
@@ -319,9 +320,9 @@ onMounted(loadCashierSessions);
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.expiringSoonCount }} 条即将失效，{{ metrics.expiredTotal }} 条已失效</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="`/orders?orderNo=${selectedItem.orderNo}`">查看订单</RouterLink>
+              <RouterLink class="link-button" :to="ordersRoute({ orderNo: selectedItem.orderNo })">查看订单</RouterLink>
               <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
+              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
               <a
                 class="link-button"
                 :href="`/cashier/${selectedItem.prepayOrderNo}`"

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentLogApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentEventsRoute, paymentFlowsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const items = ref([]);
@@ -334,9 +335,9 @@ onMounted(loadPaymentLogs);
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
-              <RouterLink class="link-button" :to="`/payment-requests?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付请求</RouterLink>
-              <RouterLink class="link-button" :to="`/payment-events?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付事件</RouterLink>
+              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
+              <RouterLink class="link-button" :to="paymentRequestsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付请求</RouterLink>
+              <RouterLink class="link-button" :to="paymentEventsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付事件</RouterLink>
             </div>
           </div>
           <div v-else class="state-box">选择左侧日志后，可在这里查看详情与排障建议。</div>

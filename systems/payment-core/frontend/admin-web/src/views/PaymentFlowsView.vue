@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentFlowApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -105,11 +106,11 @@ function openPaymentDetail(paymentOrderId) {
 }
 
 function openPaymentRequests(paymentOrderId) {
-  router.push(`/payment-requests?paymentOrderId=${paymentOrderId}`);
+  router.push(paymentRequestsRoute({ paymentOrderId }));
 }
 
 function openPaymentLogs(paymentOrderId) {
-  router.push(`/payment-logs?paymentOrderId=${paymentOrderId}`);
+  router.push(paymentLogsRoute({ paymentOrderId }));
 }
 
 function formatValue(value) {

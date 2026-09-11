@@ -6,6 +6,7 @@ import {
   paymentDetailRoute as buildPaymentDetailRoute,
   paymentRecordDetailRoute as buildPaymentRecordDetailRoute
 } from "../router/detailRoutes";
+import { paymentLogsRoute as buildPaymentLogsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -42,7 +43,7 @@ const paymentLogRoute = computed(() => {
   if (!detail.value?.paymentOrderId) {
     return "";
   }
-  return `/payment-logs?paymentOrderId=${detail.value.paymentOrderId}`;
+  return buildPaymentLogsRoute({ paymentOrderId: detail.value.paymentOrderId });
 });
 
 const metricCards = computed(() => {

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
+import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -31,7 +32,7 @@ const orderRoute = computed(() => {
   if (!detail.value?.orderNo) {
     return "";
   }
-  return `/orders?orderNo=${detail.value.orderNo}`;
+  return ordersRoute({ orderNo: detail.value.orderNo });
 });
 
 const billRoute = computed(() => {
@@ -40,7 +41,7 @@ const billRoute = computed(() => {
   }
   const billNo = detail.value?.billNo || "";
   const orderNo = detail.value?.orderNo || "";
-  return `/bills?billNo=${billNo}&orderNo=${orderNo}`;
+  return billsRoute({ billNo, orderNo });
 });
 
 const cashierUrl = computed(() => {
@@ -202,7 +203,7 @@ onMounted(loadDetail);
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="router.push('/payments')">返回列表</button>
-        <button class="button secondary" @click="router.push(`/payment-requests?paymentOrderId=${route.params.paymentOrderId}`)">
+        <button class="button secondary" @click="router.push(paymentRequestsRoute({ paymentOrderId: route.params.paymentOrderId }))">
           查看支付请求
         </button>
         <button
@@ -212,7 +213,7 @@ onMounted(loadDetail);
         >
           查看支付记录
         </button>
-        <button class="button secondary" @click="router.push(`/payment-logs?paymentOrderId=${route.params.paymentOrderId}`)">
+        <button class="button secondary" @click="router.push(paymentLogsRoute({ paymentOrderId: route.params.paymentOrderId }))">
           查看处理日志
         </button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>

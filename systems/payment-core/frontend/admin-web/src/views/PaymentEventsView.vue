@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { paymentEventApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentFlowsRoute, paymentLogsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const items = ref([]);
@@ -417,8 +418,8 @@ onMounted(loadEvents);
             </div>
             <div class="table-inline-actions">
               <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="`/payment-logs?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付日志</RouterLink>
-              <RouterLink class="link-button" :to="`/payment-flows?paymentOrderId=${selectedItem.paymentOrderId}`">查看支付流水</RouterLink>
+              <RouterLink class="link-button" :to="paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付日志</RouterLink>
+              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
               <RouterLink class="link-button" to="/payment-dead-letter-tasks">查看死信补偿任务</RouterLink>
             </div>
           </div>

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentMonitorApi } from "../api/client";
+import { paymentFlowsRoute, paymentsRoute } from "../router/listRoutes";
 
 const router = useRouter();
 const selectedAlert = ref(null);
@@ -148,10 +149,10 @@ function openAlertRoute(actionRoute) {
 
 function openChannelDrillDown(item) {
   if ((item.pendingCount || 0) > 0) {
-    router.push(`/payments?paymentMethod=${item.paymentMethod}&status=WAIT_CALLBACK`);
+    router.push(paymentsRoute({ paymentMethod: item.paymentMethod, status: "WAIT_CALLBACK" }));
     return;
   }
-  router.push(`/payment-flows?channelCode=${item.channelCode}`);
+  router.push(paymentFlowsRoute({ channelCode: item.channelCode }));
 }
 
 function pickAlert(alert) {

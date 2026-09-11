@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentRouteApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { paymentFlowsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
 const router = useRouter();
@@ -142,11 +143,11 @@ function openPaymentDetail(paymentOrderId) {
 }
 
 function openPaymentFlows(paymentOrderId) {
-  router.push(`/payment-flows?paymentOrderId=${paymentOrderId}&flowType=路由记录`);
+  router.push(paymentFlowsRoute({ paymentOrderId, flowType: "路由记录" }));
 }
 
 function openPaymentRequests(paymentOrderId) {
-  router.push(`/payment-requests?paymentOrderId=${paymentOrderId}`);
+  router.push(paymentRequestsRoute({ paymentOrderId }));
 }
 
 function openPaymentConfig() {
