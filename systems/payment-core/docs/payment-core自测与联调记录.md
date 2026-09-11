@@ -9064,3 +9064,25 @@
 
 1. payment-core 不再把缺少渠道追踪根据的 `SUCCESS` 支付传播为跨系统成功事件，但这只是本地派发前数据门禁。
 2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地 Mockito 不证明渠道真实受理、扣款或到账、下游消费、对账完成或稳定性，`release/v1.0.0` 继续冻结。
+
+## 325. 2026-09-11 支付事件终态防回退 V1.0 验证
+
+### 325.1 本轮补强
+
+1. `PaymentEventMapper.xml` 为成功、失败、死信和未知状态更新增加允许来源状态，`SUCCESS` 不再被迟到失败结果覆盖。
+2. 成功更新继续允许退款 `UNKNOWN` 经核查后收口为 `SUCCESS`；失败仅接受 `PENDING / FAILED`，死信与未知只接受 `PENDING / FAILED / DEAD_LETTER`。
+3. `updateLastRepublishAudit` 增加 `publish_status = SUCCESS` 条件，失败事件不能单独写入成功重发操作人和时间。
+
+### 325.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 状态转换联合定向测试 | `mvn -Dtest=PaymentEventRepublishAuditMapperIntegrationTest,PaymentEventDispatchServiceImplTest,PaymentEventServiceImplTest test` | 通过 | `52` 个用例；H2 执行成功、死信、未知和审计门禁，绑定 SQL 校验失败更新来源状态 |
+| payment-core 全量测试 | `mvn test` | 通过 | `818` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout PaymentEventMapper.xml` | 通过 | XML 结构有效 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 325.3 当前判断
+
+1. 服务层锁和状态校验之外，数据库更新语句本身也开始保护成功终态与成功审计一致性，降低迟到或旁路更新造成状态回退的风险。
+2. 本轮无前端、接口字段、schema 或迁移变化；H2 与绑定 SQL 验证不等于生产 MySQL 并发压测、真实下游处理或资金结果确认，`release/v1.0.0` 继续冻结。
