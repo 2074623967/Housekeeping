@@ -3511,6 +3511,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 空值、加载失败和接口异常继续沿用各页面既有处理，本轮不新增端点、DTO 字段、错误码、Mapper SQL、schema 或迁移。
 4. 生产构建与本地浏览器计算样式通过不代表真实异常、路由或配置治理事实已核验。
 
+### 14.197 运营快照失败状态消费契约
+
+1. `GET /api/payment-monitor/overview`、`GET /api/payment-routes`、`GET /api/payment-routes/overview`、`GET /api/payment-issues` 和 `GET /api/payment-issues/responsibility-summary` 的端点、参数、响应 DTO 与错误码保持不变。
+2. 前端仅在页面所需请求全部业务成功后更新可展示快照；HTTP 失败、非 `code=0` 或无法解析响应不得用初始化零值或空数组伪装为成功结果。
+3. 页面从未成功加载时显示无可用快照；已有成功快照时，后续失败保留旧数据并显式标记其非本次成功结果。合法成功空数组仍按普通业务空态处理。
+4. 支付交易异常页面在任一当前查询错误存在期间，不得基于保留的旧列表调用 `POST /api/payment-issues/actions`；批量按钮与选择入口保持禁用。
+5. 本轮不新增后端状态、缓存字段、DTO、Mapper SQL、schema 或迁移；前端保留仅限当前页面内存生命周期，不构成服务端数据版本或生产新鲜度承诺。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
