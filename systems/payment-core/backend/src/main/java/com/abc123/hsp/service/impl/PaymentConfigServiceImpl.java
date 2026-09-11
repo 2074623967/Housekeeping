@@ -375,7 +375,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentChannelVersionDTO> listChannelVersions(String channelCode) {
-        String normalizedChannelCode = requireImportText(channelCode, "渠道编码不能为空", 64)
+        String normalizedChannelCode = requireBusinessKey(channelCode, "渠道编码")
                 .toLowerCase(Locale.ROOT);
         if (paymentConfigMapper.findChannelByCode(normalizedChannelCode) == null) {
             throw new IllegalArgumentException("支付渠道配置不存在");
@@ -387,7 +387,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentChannelReviewDTO> submitChannelRollbackReview(
             String channelCode, PaymentChannelRollbackRequestDTO request) {
-        String normalizedChannelCode = requireImportText(channelCode, "渠道编码不能为空", 64)
+        String normalizedChannelCode = requireBusinessKey(channelCode, "渠道编码")
                 .toLowerCase(Locale.ROOT);
         if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
             throw new IllegalArgumentException("回滚版本号必须大于0");
@@ -470,7 +470,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Override
     @Transactional
     public PaymentConfigOverviewDTO updateRouteRule(String ruleCode, PaymentRouteRuleUpsertRequestDTO request) {
-        String normalizedRuleCode = requireText(ruleCode, "路由规则编码不能为空");
+        String normalizedRuleCode = requireBusinessKey(ruleCode, "路由规则编码");
         PaymentRouteRuleConfigEntity current = paymentConfigMapper.findRouteRuleByCodeForUpdate(normalizedRuleCode);
         if (current == null) {
             throw new IllegalArgumentException("支付路由规则不存在");
@@ -654,7 +654,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentRouteRuleVersionDTO> listRouteRuleVersions(String ruleCode) {
-        String normalizedRuleCode = requireText(ruleCode, "路由规则编码不能为空");
+        String normalizedRuleCode = requireBusinessKey(ruleCode, "路由规则编码");
         if (paymentConfigMapper.findRouteRuleByCode(normalizedRuleCode) == null) {
             throw new IllegalArgumentException("支付路由规则不存在");
         }
@@ -665,7 +665,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentRouteRuleReviewDTO> submitRouteRuleRollbackReview(
             String ruleCode, PaymentRouteRuleRollbackRequestDTO request) {
-        String normalizedRuleCode = requireText(ruleCode, "路由规则编码不能为空");
+        String normalizedRuleCode = requireBusinessKey(ruleCode, "路由规则编码");
         if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
             throw new IllegalArgumentException("回滚版本号必须大于0");
         }
@@ -826,7 +826,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentProtocolVersionDTO> listProtocolVersions(String protocolCode) {
-        String normalizedProtocolCode = requireText(protocolCode, "协议编码不能为空");
+        String normalizedProtocolCode = requireBusinessKey(protocolCode, "协议编码");
         if (paymentConfigMapper.findProtocolByCode(normalizedProtocolCode) == null) {
             throw new IllegalArgumentException("支付协议配置不存在");
         }
@@ -837,7 +837,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentProtocolReviewDTO> submitProtocolRollbackReview(
             String protocolCode, PaymentProtocolRollbackRequestDTO request) {
-        String normalizedProtocolCode = requireText(protocolCode, "协议编码不能为空");
+        String normalizedProtocolCode = requireBusinessKey(protocolCode, "协议编码");
         if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
             throw new IllegalArgumentException("回滚版本号必须大于0");
         }
@@ -869,7 +869,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentIssueDutyRosterReviewDTO> updateIssueDutyRoster(
             String rosterCode, PaymentIssueDutyRosterUpsertRequestDTO request) {
-        return submitIssueDutyRosterReview(request, rosterCode);
+        return submitIssueDutyRosterReview(request, requireBusinessKey(rosterCode, "值班路由编码"));
     }
 
     @Override
@@ -1339,7 +1339,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentGatewayVersionDTO> listGatewayVersions(String gatewayCode) {
-        String normalizedGatewayCode = requireImportText(gatewayCode, "支付网关编码不能为空", 64)
+        String normalizedGatewayCode = requireBusinessKey(gatewayCode, "支付网关编码")
                 .toUpperCase(Locale.ROOT);
         if (paymentConfigMapper.findGatewayByCode(normalizedGatewayCode) == null) {
             throw new IllegalArgumentException("支付网关接入配置不存在");
@@ -1351,7 +1351,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentGatewayReviewDTO> submitGatewayRollbackReview(
             String gatewayCode, PaymentGatewayRollbackRequestDTO request) {
-        String normalizedGatewayCode = requireImportText(gatewayCode, "支付网关编码不能为空", 64)
+        String normalizedGatewayCode = requireBusinessKey(gatewayCode, "支付网关编码")
                 .toUpperCase(Locale.ROOT);
         if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
             throw new IllegalArgumentException("回滚版本号必须大于0");
@@ -1556,8 +1556,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentControlPolicyVersionDTO> listControlPolicyVersions(String sourceAppId) {
-        String normalizedSourceAppId = requireImportText(
-                sourceAppId, "来源应用标识不能为空", 64).toLowerCase(Locale.ROOT);
+        String normalizedSourceAppId = requireBusinessKey(sourceAppId, "来源应用标识")
+                .toLowerCase(Locale.ROOT);
         if (paymentConfigMapper.findControlPolicyBySourceAppId(normalizedSourceAppId) == null) {
             throw new IllegalArgumentException("支付控制策略配置不存在");
         }
@@ -1568,8 +1568,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentControlPolicyReviewDTO> submitControlPolicyRollbackReview(
             String sourceAppId, PaymentControlPolicyRollbackRequestDTO request) {
-        String normalizedSourceAppId = requireImportText(
-                sourceAppId, "来源应用标识不能为空", 64).toLowerCase(Locale.ROOT);
+        String normalizedSourceAppId = requireBusinessKey(sourceAppId, "来源应用标识")
+                .toLowerCase(Locale.ROOT);
         if (request == null || request.getVersionNo() == null || request.getVersionNo().intValue() <= 0) {
             throw new IllegalArgumentException("回滚版本号必须大于0");
         }
@@ -1617,7 +1617,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     @Transactional
     public List<PaymentAlertProviderReviewDTO> updateAlertProvider(
             String providerCode, PaymentAlertProviderUpsertRequestDTO request) {
-        return submitAlertProviderReview(request, providerCode);
+        return submitAlertProviderReview(request, requireBusinessKey(providerCode, "供应商配置编码"));
     }
 
     @Override
@@ -2334,7 +2334,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentProtocolReviewEntity requirePendingProtocolReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentProtocolReviewEntity review = paymentConfigMapper.findProtocolReviewForUpdate(normalizedRequestNo);
         if (review == null) {
             throw new IllegalArgumentException("支付协议复核申请不存在");
@@ -2651,7 +2651,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentRouteRuleReviewEntity requirePendingRouteRuleReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentRouteRuleReviewEntity review = paymentConfigMapper.findRouteRuleReviewForUpdate(normalizedRequestNo);
         if (review == null) {
             throw new IllegalArgumentException("路由规则复核申请不存在");
@@ -2998,7 +2998,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentAlertProviderReviewEntity requirePendingAlertProviderReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentAlertProviderReviewEntity review =
                 paymentConfigMapper.findAlertProviderReviewForUpdate(normalizedRequestNo);
         if (review == null) {
@@ -3161,7 +3161,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentIssueDutyRosterReviewEntity requirePendingIssueDutyRosterReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentIssueDutyRosterReviewEntity review =
                 paymentConfigMapper.findIssueDutyRosterReviewForUpdate(normalizedRequestNo);
         if (review == null) {
@@ -3285,6 +3285,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return text.trim();
     }
 
+    private String requireBusinessKey(String value, String fieldName) {
+        if (containsIsoControl(value)) {
+            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+        }
+        String normalized = requireText(value, fieldName + "不能为空");
+        if (normalized.length() > 64) {
+            throw new IllegalArgumentException(fieldName + "不能超过64个字符");
+        }
+        return normalized;
+    }
+
     private Integer resolvePriority(Integer priority) {
         if (priority == null) {
             return 99;
@@ -3396,7 +3407,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentChannelReviewEntity requirePendingChannelReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentChannelReviewEntity review = paymentConfigMapper.findChannelReviewForUpdate(normalizedRequestNo);
         if (review == null) {
             throw new IllegalArgumentException("支付渠道复核申请不存在");
@@ -3408,7 +3419,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentGatewayReviewEntity requirePendingGatewayReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentGatewayReviewEntity review = paymentConfigMapper.findGatewayReviewForUpdate(normalizedRequestNo);
         if (review == null) {
             throw new IllegalArgumentException("支付网关复核申请不存在");
@@ -3611,7 +3622,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentControlPolicyReviewEntity requirePendingControlPolicyReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentControlPolicyReviewEntity review =
                 paymentConfigMapper.findControlPolicyReviewForUpdate(normalizedRequestNo);
         if (review == null) {
@@ -4162,7 +4173,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentReturnCodeImportReviewEntity requirePendingReturnCodeImportReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentReturnCodeImportReviewEntity review =
                 paymentConfigMapper.findReturnCodeImportReviewForUpdate(normalizedRequestNo);
         if (review == null) {
@@ -4175,7 +4186,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private PaymentReturnCodeReviewEntity requirePendingReturnCodeReview(String requestNo) {
-        String normalizedRequestNo = requireText(requestNo, "复核申请编号不能为空");
+        String normalizedRequestNo = requireBusinessKey(requestNo, "复核申请编号");
         PaymentReturnCodeReviewEntity review =
                 paymentConfigMapper.findReturnCodeReviewForUpdate(normalizedRequestNo);
         if (review == null) {
