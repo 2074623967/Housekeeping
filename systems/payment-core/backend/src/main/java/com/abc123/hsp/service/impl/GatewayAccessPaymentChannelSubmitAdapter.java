@@ -5,6 +5,7 @@ import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
 import com.abc123.hsp.service.PaymentChannelSubmitAdapter;
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -29,6 +30,7 @@ import org.springframework.web.client.RestTemplate;
 @Order(1)
 public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelSubmitAdapter {
 
+    private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final Set<String> STATUS_TYPES = new HashSet<>(
             Arrays.asList("info", "warn", "danger", "success"));
 
@@ -75,11 +77,12 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
     @Override
     public PaymentChannelSubmitResultDTO submit(PaymentChannelSubmitRequestDTO request) {
         try {
+            PaymentChannelSubmitRequestDTO normalizedRequest = validateAndNormalizeRequest(request);
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Gateway-App-Code", appCode);
             headers.set("X-Gateway-Access-Key", accessKey);
             ResponseEntity<GatewaySubmitResponse> responseEntity = restTemplate.exchange(
-                    submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(request, headers),
+                    submitUrl.trim(), HttpMethod.POST, new HttpEntity<>(normalizedRequest, headers),
                     GatewaySubmitResponse.class);
             GatewaySubmitResponse response = responseEntity.getBody();
             if (response == null || !"0".equals(response.getCode()) || response.getData() == null) {
@@ -87,13 +90,66 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
             }
             PaymentChannelSubmitResultDTO result = response.getData();
             normalizeAndValidate(result);
-            result.setResponsePayload(buildResponsePayload(request.getResolvedChannelCode(), result));
+            result.setResponsePayload(buildResponsePayload(normalizedRequest.getResolvedChannelCode(), result));
             return result;
         } catch (BusinessException exception) {
             throw exception;
         } catch (RuntimeException exception) {
             throw submitFailed("gateway-access payment submit failed; query before retrying");
         }
+    }
+
+    private PaymentChannelSubmitRequestDTO validateAndNormalizeRequest(PaymentChannelSubmitRequestDTO request) {
+        if (request == null) {
+            throw invalidRequest();
+        }
+        PaymentChannelSubmitRequestDTO normalized = new PaymentChannelSubmitRequestDTO();
+        normalized.setPaymentOrderId(requiredRequest(request.getPaymentOrderId(), 64));
+        normalized.setPrepayOrderNo(requiredRequest(request.getPrepayOrderNo(), 64));
+        normalized.setOrderNo(requiredRequest(request.getOrderNo(), 64));
+        normalized.setPayScene(requiredRequest(request.getPayScene(), 32));
+        normalized.setCustomerName(optionalRequest(request.getCustomerName(), 128));
+        normalized.setPaymentMethod(requiredRequest(request.getPaymentMethod(), 32));
+        normalized.setSourceAppId(requiredRequest(request.getSourceAppId(), 64));
+        normalized.setRequestedChannelCode(optionalRequest(request.getRequestedChannelCode(), 64));
+        normalized.setResolvedChannelCode(requiredRequest(request.getResolvedChannelCode(), 64));
+        normalized.setTerminal(requiredRequest(request.getTerminal(), 32));
+        normalized.setClientIp(requiredRequest(request.getClientIp(), 64));
+        normalized.setIdempotencyKey(requiredRequest(request.getIdempotencyKey(), 128));
+        BigDecimal amount = request.getAmount();
+        if (amount == null
+                || amount.compareTo(BigDecimal.ZERO) <= 0
+                || amount.stripTrailingZeros().scale() > 2
+                || amount.compareTo(MAX_AMOUNT) > 0) {
+            throw invalidRequest();
+        }
+        normalized.setAmount(amount);
+        return normalized;
+    }
+
+    private String requiredRequest(String value, int maxLength) {
+        String normalized = optionalRequest(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private String optionalRequest(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        if (containsIsoControl(value)) {
+            throw invalidRequest();
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidRequest();
+        }
+        return normalized;
     }
 
     private void normalizeAndValidate(PaymentChannelSubmitResultDTO result) {
@@ -160,6 +216,10 @@ public class GatewayAccessPaymentChannelSubmitAdapter implements PaymentChannelS
 
     private BusinessException submitFailed(String message) {
         return new BusinessException(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, message);
+    }
+
+    private BusinessException invalidRequest() {
+        return submitFailed("gateway-access payment submit request is invalid");
     }
 
     @Data

@@ -2,16 +2,23 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.PaymentChannelSubmitResultDTO;
+import java.math.BigDecimal;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.http.HttpEntity;
@@ -60,6 +67,72 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
     }
 
     @Test
+    void shouldRejectInvalidRequestBeforeGatewayCall() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessPaymentChannelSubmitAdapter adapter = adapter(restTemplate);
+
+        assertInvalidRequest(assertThrows(BusinessException.class, () -> adapter.submit(null)));
+
+        PaymentChannelSubmitRequestDTO missingRequired = request();
+        missingRequired.setPaymentOrderId("   ");
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.submit(missingRequired)));
+
+        PaymentChannelSubmitRequestDTO invalidOptional = request();
+        invalidOptional.setCustomerName("customer\nname");
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.submit(invalidOptional)));
+
+        PaymentChannelSubmitRequestDTO oversized = request();
+        oversized.setPaymentMethod(repeat("M", 33));
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.submit(oversized)));
+
+        BigDecimal[] invalidAmounts = {
+                null,
+                BigDecimal.ZERO,
+                new BigDecimal("1.001"),
+                new BigDecimal("10000000000000000.00")
+        };
+        for (BigDecimal invalidAmount : invalidAmounts) {
+            PaymentChannelSubmitRequestDTO invalidAmountRequest = request();
+            invalidAmountRequest.setAmount(invalidAmount);
+            assertInvalidRequest(assertThrows(
+                    BusinessException.class, () -> adapter.submit(invalidAmountRequest)));
+        }
+
+        verify(restTemplate, never()).exchange(
+                any(String.class), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse.class));
+    }
+
+    @Test
+    void shouldSendNormalizedRequestCopy() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        AtomicReference<PaymentChannelSubmitRequestDTO> sentRequest = new AtomicReference<>();
+        stubSuccess(restTemplate, sentRequest);
+        PaymentChannelSubmitRequestDTO request = request();
+        request.setPaymentOrderId(" PAY-001 ");
+        request.setCustomerName("   ");
+        request.setRequestedChannelCode(" WX_H5 ");
+        request.setResolvedChannelCode(" wx_h5 ");
+
+        PaymentChannelSubmitResultDTO result = adapter(restTemplate).submit(request);
+
+        PaymentChannelSubmitRequestDTO sent = sentRequest.get();
+        assertNotNull(sent);
+        assertNotSame(request, sent);
+        assertEquals("PAY-001", sent.getPaymentOrderId());
+        assertNull(sent.getCustomerName());
+        assertEquals("WX_H5", sent.getRequestedChannelCode());
+        assertEquals("wx_h5", sent.getResolvedChannelCode());
+        assertTrue(result.getResponsePayload().contains("\"channelCode\":\"wx_h5\""));
+        assertEquals(" PAY-001 ", request.getPaymentOrderId());
+        assertEquals("   ", request.getCustomerName());
+        assertEquals(" wx_h5 ", request.getResolvedChannelCode());
+    }
+
+    @Test
     void shouldRejectGatewayBusinessFailure() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse response =
@@ -105,7 +178,54 @@ class GatewayAccessPaymentChannelSubmitAdapterTest {
 
     private PaymentChannelSubmitRequestDTO request() {
         PaymentChannelSubmitRequestDTO request = new PaymentChannelSubmitRequestDTO();
+        request.setPaymentOrderId("PAY-001");
+        request.setPrepayOrderNo("PREPAY-001");
+        request.setOrderNo("ORDER-001");
+        request.setPayScene("HOME_SERVICE");
+        request.setCustomerName("CUSTOMER-001");
+        request.setAmount(new BigDecimal("88.00"));
+        request.setPaymentMethod("WECHAT");
+        request.setSourceAppId("APP-HOME");
+        request.setRequestedChannelCode("wx_h5");
         request.setResolvedChannelCode("wx_h5");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+        request.setIdempotencyKey("IDEMPOTENCY-001");
         return request;
+    }
+
+    private void stubSuccess(
+            RestTemplate restTemplate,
+            AtomicReference<PaymentChannelSubmitRequestDTO> sentRequest) {
+        PaymentChannelSubmitResultDTO data = new PaymentChannelSubmitResultDTO();
+        data.setChannelTransactionNo("WX-1001");
+        data.setAttemptStatus("处理中");
+        data.setAttemptStatusType("info");
+        data.setChannelReturnCode("USERPAYING");
+        GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse response =
+                new GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse();
+        response.setCode("0");
+        response.setData(data);
+        when(restTemplate.exchange(
+                eq("http://gateway/submit"), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessPaymentChannelSubmitAdapter.GatewaySubmitResponse.class)))
+                .thenAnswer(invocation -> {
+                    HttpEntity<PaymentChannelSubmitRequestDTO> entity = invocation.getArgument(2);
+                    sentRequest.set(entity.getBody());
+                    return ResponseEntity.ok(response);
+                });
+    }
+
+    private void assertInvalidRequest(BusinessException exception) {
+        assertEquals(ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED, exception.getCode());
+        assertEquals("gateway-access payment submit request is invalid", exception.getMessage());
+    }
+
+    private String repeat(String value, int count) {
+        StringBuilder builder = new StringBuilder(value.length() * count);
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 }
