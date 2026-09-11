@@ -3497,6 +3497,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `replay` 在 broker 调用前要求持久化任务号、消息 ID、exchange 和 routing key 非空且符合 `64 / 128 / 128 / 128` 容量，可选关联 ID 最长 `128`，载荷不得为 `null`；非法 envelope 记录既有脱敏失败说明且不调用 RabbitMQ。
 5. 原始载荷重放、消息头最小化、人工复核 CAS、定向路由与 publisher confirm 保持不变；本轮不新增 HTTP 端点、DTO 字段、Mapper、schema 或迁移，本地测试不证明真实消息送达或补偿结果。
 
+### 14.195 支付监控前端消费契约
+
+1. `GET /api/payment-monitor/overview` 端点与响应 DTO 不变；`trends` 继续按 Mapper 的 `statDate DESC` 返回，前端以数组首项作为最新趋势快照。
+2. `channelMetrics[].riskLevel` 当前稳定输出 `P1 / P2 / 正常`，前端将 `P1` 计入高风险渠道，并兼容历史或替代展示值“高 / HIGH”；风险样式仍使用 `riskLevelType`。
+3. `trends / channelMetrics / alerts` 允许为空数组，前端分别显示空状态；`summary` 缺失字段继续使用既有零值兜底，不新增错误码或隐式成功事实。
+4. 本轮不修改 Controller、Service、DTO、Mapper SQL、schema 或迁移；本地 mock 不证明真实指标采集、告警生成、渠道状态或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
