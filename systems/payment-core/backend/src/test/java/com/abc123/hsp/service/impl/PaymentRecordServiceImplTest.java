@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
@@ -12,6 +13,7 @@ import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.PaymentRecordMapper;
 import java.util.Arrays;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -43,6 +45,24 @@ class PaymentRecordServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidPaymentOrderIdBeforeMapperAccess() {
+        PaymentRecordServiceImpl service = new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper);
+
+        BusinessException blankException = assertThrows(
+                BusinessException.class, () -> service.detail("  "));
+        BusinessException controlException = assertThrows(
+                BusinessException.class, () -> service.detail("PAY-001\n"));
+        BusinessException oversizedException = assertThrows(
+                BusinessException.class,
+                () -> service.detail(String.join("", Collections.nCopies(65, "P"))));
+
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, blankException.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, controlException.getCode());
+        assertEquals(ErrorCode.PAYMENT_REQUEST_INVALID, oversizedException.getCode());
+        verifyNoInteractions(paymentRecordMapper, paymentMapper);
+    }
+
+    @Test
     void shouldAssembleRouteNotifyAndEventLogsForPaymentRecordDetail() {
         PaymentRecordDetailDTO detail = new PaymentRecordDetailDTO();
         detail.setPaymentOrderId("PAY-DETAIL-001");
@@ -62,7 +82,7 @@ class PaymentRecordServiceImplTest {
                 .thenReturn(Arrays.asList("PAYMENT_CREATED", "PAYMENT_WAIT_CALLBACK"));
 
         PaymentRecordDetailDTO result =
-                new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).detail("PAY-DETAIL-001");
+                new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).detail(" PAY-DETAIL-001 ");
 
         assertEquals("PAY-DETAIL-001", result.getPaymentOrderId());
         assertEquals("user-****", result.getUserId());

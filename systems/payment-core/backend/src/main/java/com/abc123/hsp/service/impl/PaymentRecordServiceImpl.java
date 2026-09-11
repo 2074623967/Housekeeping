@@ -17,12 +17,21 @@ import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * 收款记录业务实现。
  */
 @Service
 public class PaymentRecordServiceImpl implements PaymentRecordService {
+
+    private static final int RECORD_TYPE_MAX_LENGTH = 16;
+    private static final int USER_ID_MAX_LENGTH = 128;
+    private static final int BUSINESS_ORDER_NO_MAX_LENGTH = 64;
+    private static final int PAYMENT_TYPE_MAX_LENGTH = 32;
+    private static final int PAYMENT_STATUS_MAX_LENGTH = 32;
+    private static final int PAYMENT_CHANNEL_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
 
     private final PaymentRecordMapper paymentRecordMapper;
     private final PaymentMapper paymentMapper;
@@ -44,16 +53,7 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
 
     @Override
     public PageResultDTO<PaymentRecordRowDTO> list(PaymentRecordQueryDTO query) {
-        query.setRecordType(query.getRecordType() == null ? "ALL" : query.getRecordType().trim());
-        query.setUserId(query.getUserId() == null ? null : query.getUserId().trim());
-        query.setBusinessOrderNo(query.getBusinessOrderNo() == null ? null : query.getBusinessOrderNo().trim());
-        query.setPaymentType(query.getPaymentType() == null ? null : query.getPaymentType().trim());
-        query.setPaymentStatus(query.getPaymentStatus() == null ? "全部" : query.getPaymentStatus().trim());
-        query.setPaymentChannel(query.getPaymentChannel() == null ? null : query.getPaymentChannel().trim());
-        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
-        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
-        query.setPageNo(Math.max(query.getPageNo(), 1));
-        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+        normalizeQuery(query);
         return new PageResultDTO<>(
                 maskRows(paymentRecordMapper.findAll(query)),
                 paymentRecordMapper.count(query),
@@ -62,9 +62,29 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
         );
     }
 
+    private void normalizeQuery(PaymentRecordQueryDTO query) {
+        query.setRecordType(normalizeOptionalQueryField(
+                query.getRecordType(), RECORD_TYPE_MAX_LENGTH, "记录维度", "ALL"));
+        query.setUserId(normalizeOptionalQueryField(
+                query.getUserId(), USER_ID_MAX_LENGTH, "用户ID", null));
+        query.setBusinessOrderNo(normalizeOptionalQueryField(
+                query.getBusinessOrderNo(), BUSINESS_ORDER_NO_MAX_LENGTH, "业务订单号", null));
+        query.setPaymentType(normalizeOptionalQueryField(
+                query.getPaymentType(), PAYMENT_TYPE_MAX_LENGTH, "支付类型", null));
+        query.setPaymentStatus(normalizeOptionalQueryField(
+                query.getPaymentStatus(), PAYMENT_STATUS_MAX_LENGTH, "支付状态", "全部"));
+        query.setPaymentChannel(normalizeOptionalQueryField(
+                query.getPaymentChannel(), PAYMENT_CHANNEL_MAX_LENGTH, "支付渠道", null));
+        query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
+        query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
+        query.setPageNo(Math.max(query.getPageNo(), 1));
+        query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
     @Override
     public PaymentRecordDetailDTO detail(String paymentOrderId) {
-        PaymentRecordDetailDTO detail = paymentRecordMapper.findDetail(paymentOrderId);
+        String normalizedPaymentOrderId = normalizePaymentOrderId(paymentOrderId);
+        PaymentRecordDetailDTO detail = paymentRecordMapper.findDetail(normalizedPaymentOrderId);
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
@@ -76,10 +96,49 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                 sensitiveDataMasker.maskIdempotencyKey(detail.getLatestIdempotencyKey()));
         outwardDetail.setLatestRequestPayload(sensitiveDataMasker.maskPayload(detail.getLatestRequestPayload()));
         outwardDetail.setLatestResponsePayload(sensitiveDataMasker.maskPayload(detail.getLatestResponsePayload()));
-        outwardDetail.setRouteLogs(paymentMapper.findRouteLogs(paymentOrderId));
-        outwardDetail.setNotifyLogs(paymentMapper.findNotifyLogs(paymentOrderId));
-        outwardDetail.setEventLogs(paymentMapper.findEventItems(paymentOrderId));
+        outwardDetail.setRouteLogs(paymentMapper.findRouteLogs(normalizedPaymentOrderId));
+        outwardDetail.setNotifyLogs(paymentMapper.findNotifyLogs(normalizedPaymentOrderId));
+        outwardDetail.setEventLogs(paymentMapper.findEventItems(normalizedPaymentOrderId));
         return outwardDetail;
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        rejectControlCharacters(value, fieldName);
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizePaymentOrderId(String paymentOrderId) {
+        if (!StringUtils.hasText(paymentOrderId)) {
+            throw new BusinessException(ErrorCode.PAYMENT_REQUEST_INVALID, "支付单号不能为空");
+        }
+        for (int index = 0; index < paymentOrderId.length(); index++) {
+            if (Character.isISOControl(paymentOrderId.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_REQUEST_INVALID, "支付单号不能包含控制字符");
+            }
+        }
+        String normalized = paymentOrderId.trim();
+        if (normalized.length() > PAYMENT_ORDER_ID_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_REQUEST_INVALID, "支付单号长度不能超过 64 个字符");
+        }
+        return normalized;
+    }
+
+    private void rejectControlCharacters(String value, String fieldName) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
     }
 
     private List<PaymentRecordRowDTO> maskRows(List<PaymentRecordRowDTO> rows) {
