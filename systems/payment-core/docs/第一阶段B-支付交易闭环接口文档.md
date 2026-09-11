@@ -3293,6 +3293,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 两个端点共用服务层规范化入口，非法参数在 Mapper 访问前拒绝；列表页码与每页 `1..100` 边界、导出最多 `1000` 行加第 `1001` 行探测规则不变。
 4. 本轮不新增 DTO 字段、端点或错误码，既有 `IllegalArgumentException` 响应转换与 Mapper SQL 保持不变；本地测试不证明生产 MySQL 查询计划或真实退款资金结果。
 
+### 14.167 退款回调原始字段控制字符契约
+
+1. `POST /api/refunds/callback/{channel}` 的字段不变；`channel / refundOrderId / channelRefundNo / refundStatus` 的规范化后上限分别为 `64 / 64 / 128 / 32` 个字符。
+2. 四类原始值必须先通过控制字符检查，再裁剪合法首尾空白；随后渠道转小写、退款状态转大写。末尾换行等控制字符不得由裁剪消除后继续处理。
+3. 控制字符或超长值统一返回 `REFUND_CALLBACK_REQUEST_INVALID`，并在签名验证、退款单查询和状态更新前拒绝；合法字段仍按规范化后的值参与既有验签。
+4. 本轮不新增 DTO 字段、端点或错误码，状态白名单、渠道与交易号关联、终态幂等与冲突规则保持不变；本地测试不证明真实渠道签名、回调送达或退款到账。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
