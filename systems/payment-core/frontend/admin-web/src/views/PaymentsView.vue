@@ -7,13 +7,17 @@ const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const hasLoadedData = ref(false);
+const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const actionResultMessage = ref("");
 const activePaymentOrderId = ref("");
 const activeAction = ref("");
 const operationOperator = ref("");
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
   paymentOrderId: "",
@@ -29,6 +33,21 @@ const metrics = computed(() => ({
   amountTotal: items.value.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2)
 }));
 
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+
+function buildQuery() {
+  return {
+    paymentOrderId: filters.value.paymentOrderId,
+    orderNo: filters.value.orderNo,
+    paymentMethod: filters.value.paymentMethod,
+    status: filters.value.status,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
+
 function resetFilters() {
   filters.value = {
     paymentOrderId: "",
@@ -40,23 +59,33 @@ function resetFilters() {
   refreshList();
 }
 
-async function refreshList() {
+async function refreshList(
+  preferredPaymentOrderId = selectedItem.value?.paymentOrderId,
+  afterAction = false,
+  query = buildQuery()
+) {
   isLoading.value = true;
-  errorMessage.value = "";
   try {
-    const result = await paymentApi.getList({
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      paymentMethod: filters.value.paymentMethod,
-      status: filters.value.status,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await paymentApi.getList(query);
     items.value = result.items;
     total.value = result.total;
-    selectedItem.value = result.items[0] || null;
+    selectedItem.value = result.items.find((item) => item.paymentOrderId === preferredPaymentOrderId)
+      || result.items[0]
+      || null;
+    loadedPageNo.value = query.pageNo;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
   } catch (error) {
-    errorMessage.value = error.message;
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = "";
+    }
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
     isLoading.value = false;
   }
@@ -92,20 +121,45 @@ function canRunClose(item) {
     && !item.channelTransactionNo;
 }
 
+function updatePaymentSnapshot(paymentDetail) {
+  const updatedItem = {
+    paymentOrderId: paymentDetail.paymentOrderId,
+    orderNo: paymentDetail.orderNo,
+    customerName: paymentDetail.customerName,
+    amount: paymentDetail.amount,
+    paymentMethod: paymentDetail.paymentMethod,
+    channel: paymentDetail.channel,
+    channelTransactionNo: paymentDetail.channelTransactionNo,
+    status: paymentDetail.status,
+    statusType: paymentDetail.statusType,
+    createdAt: paymentDetail.createdAt
+  };
+  items.value = items.value.map((item) => item.paymentOrderId === paymentDetail.paymentOrderId
+    ? updatedItem
+    : item);
+  selectedItem.value = updatedItem;
+}
+
 async function handleQuery(paymentOrderId) {
   const operator = operationOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
+  const query = buildQuery();
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const paymentDetail = await paymentApi.query(paymentOrderId, operator);
-    actionMessage.value = `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
-    await refreshList();
+    updatePaymentSnapshot(paymentDetail);
+    actionResultMessage.value = `支付单 ${paymentOrderId} 已完成主动查单，当前状态为 ${paymentDetail.status}。`;
+    actionRefreshErrorMessage.value = "";
+    await refreshList(paymentOrderId, true, query);
   } catch (error) {
-    actionMessage.value = `支付单 ${paymentOrderId} 查单失败：${error.message}`;
+    actionErrorMessage.value = `支付单 ${paymentOrderId} 查单失败：${error.message}`;
   } finally {
     activePaymentOrderId.value = "";
     activeAction.value = "";
@@ -115,19 +169,25 @@ async function handleQuery(paymentOrderId) {
 async function handleClose(paymentOrderId) {
   const operator = operationOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
+  const query = buildQuery();
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "close";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const paymentDetail = await paymentApi.close(paymentOrderId, operator);
-    actionMessage.value = paymentDetail.status === "CLOSED"
+    updatePaymentSnapshot(paymentDetail);
+    actionResultMessage.value = paymentDetail.status === "CLOSED"
       ? `支付单 ${paymentOrderId} 已关闭。`
       : `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
-    await refreshList();
+    actionRefreshErrorMessage.value = "";
+    await refreshList(paymentOrderId, true, query);
   } catch (error) {
-    actionMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}`;
+    actionErrorMessage.value = `支付单 ${paymentOrderId} 关闭失败：${error.message}`;
   } finally {
     activePaymentOrderId.value = "";
     activeAction.value = "";
@@ -154,10 +214,13 @@ onMounted(refreshList);
         <h2>支付单管理</h2>
         <p>统一查看支付单、支付方式、渠道交易和回调收敛情况</p>
       </div>
-      <button class="button primary" @click="exportPayments">导出支付单</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading || Boolean(activePaymentOrderId)" @click="refreshList()">刷新</button>
+        <button class="button primary" @click="exportPayments">导出支付单</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">支付单总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -177,25 +240,31 @@ onMounted(refreshList);
     </section>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        支付单数据加载失败：{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "支付单数据刷新失败，当前展示上次成功快照：" : "支付单数据加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="state-banner">
-        {{ actionMessage }}
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        人工动作结果已更新当前支付单，但列表刷新失败，其他支付单仍为上次成功快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="state-banner">
+        {{ actionResultMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" :disabled="Boolean(activePaymentOrderId)" placeholder="请输入支付单号" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" :disabled="Boolean(activePaymentOrderId)" placeholder="请输入订单号" />
         </div>
         <div class="field">
           <label>支付方式</label>
-          <select v-model="filters.paymentMethod">
+          <select v-model="filters.paymentMethod" :disabled="Boolean(activePaymentOrderId)">
             <option>全部</option>
             <option>微信</option>
             <option>支付宝</option>
@@ -205,7 +274,7 @@ onMounted(refreshList);
         </div>
         <div class="field">
           <label>支付状态</label>
-          <select v-model="filters.status">
+          <select v-model="filters.status" :disabled="Boolean(activePaymentOrderId)">
             <option>全部</option>
             <option>SUCCESS</option>
             <option>WAIT_CALLBACK</option>
@@ -216,15 +285,17 @@ onMounted(refreshList);
         </div>
         <div class="field">
           <label>操作人</label>
-          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" />
+          <input v-model.trim="operationOperator" :disabled="Boolean(activePaymentOrderId)" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading || Boolean(activePaymentOrderId)" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isLoading || Boolean(activePaymentOrderId)" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付单数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付单快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付单数据</div>
 
@@ -260,10 +331,10 @@ onMounted(refreshList);
                   <div class="list-actions">
                     <button class="link-button" @click="pickItem(item)">快照</button>
                     <button class="link-button" @click="openDetail(item.paymentOrderId)">详情</button>
-                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId" @click="handleQuery(item.paymentOrderId)">
+                    <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData" @click="handleQuery(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
                     </button>
-                    <button class="link-button" :disabled="activePaymentOrderId === item.paymentOrderId || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
+                    <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "close") ? "关闭中..." : "关闭" }}
                     </button>
                   </div>
@@ -299,11 +370,11 @@ onMounted(refreshList);
           <div v-else class="state-box">选择左侧支付单后，可在这里查看支付单快照与排障建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条支付单</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="pageNo === 1 || isLoading || Boolean(activePaymentOrderId) || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || Boolean(activePaymentOrderId) || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
