@@ -2789,6 +2789,43 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidPaymentListQueryFieldsBeforeMapperAccess() {
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+        PaymentListQueryDTO oversizedPaymentOrderId = paymentListQuery(
+                repeat("P", 65), null, null, null);
+        PaymentListQueryDTO controlPaymentOrderId = paymentListQuery(
+                "PAY-001\n", null, null, null);
+        PaymentListQueryDTO oversizedOrderNo = paymentListQuery(
+                null, repeat("O", 65), null, null);
+        PaymentListQueryDTO controlOrderNo = paymentListQuery(
+                null, "ORD-001\n", null, null);
+        PaymentListQueryDTO oversizedPaymentMethod = paymentListQuery(
+                null, null, repeat("M", 33), null);
+        PaymentListQueryDTO controlPaymentMethod = paymentListQuery(
+                null, null, "微信支付\n", null);
+        PaymentListQueryDTO oversizedStatus = paymentListQuery(
+                null, null, null, repeat("S", 33));
+        PaymentListQueryDTO controlStatus = paymentListQuery(
+                null, null, null, "SUCCESS\n");
+
+        assertPaymentRequestInvalid(() -> service.list(oversizedPaymentOrderId));
+        assertPaymentRequestInvalid(() -> service.list(controlPaymentOrderId));
+        assertPaymentRequestInvalid(() -> service.list(oversizedOrderNo));
+        assertPaymentRequestInvalid(() -> service.list(controlOrderNo));
+        assertPaymentRequestInvalid(() -> service.list(oversizedPaymentMethod));
+        assertPaymentRequestInvalid(() -> service.list(controlPaymentMethod));
+        assertPaymentRequestInvalid(() -> service.list(oversizedStatus));
+        assertPaymentRequestInvalid(() -> service.list(controlStatus));
+        assertPaymentRequestInvalid(() -> service.exportCsv(controlPaymentOrderId));
+        verifyNoInteractions(paymentMapper);
+    }
+
+    @Test
     void shouldMarkPaymentAsRiskReviewBeforeChannelSubmit() {
         PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
         prepayOrder.setPrepayOrderNo("PRE-RISK-001");
@@ -3209,6 +3246,19 @@ class PaymentServiceImplTest {
         request.setCustomerName("CUSTOMER");
         request.setCashierTitle("CASHIER");
         return request;
+    }
+
+    private PaymentListQueryDTO paymentListQuery(
+            String paymentOrderId,
+            String orderNo,
+            String paymentMethod,
+            String status) {
+        PaymentListQueryDTO query = new PaymentListQueryDTO();
+        query.setPaymentOrderId(paymentOrderId);
+        query.setOrderNo(orderNo);
+        query.setPaymentMethod(paymentMethod);
+        query.setStatus(status);
+        return query;
     }
 
     private void assertPaymentRequestInvalid(org.junit.jupiter.api.function.Executable action) {

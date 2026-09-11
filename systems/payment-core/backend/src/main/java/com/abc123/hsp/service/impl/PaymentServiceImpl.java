@@ -66,6 +66,8 @@ public class PaymentServiceImpl implements PaymentService {
     private static final int PREPAY_PAY_SCENE_MAX_LENGTH = 32;
     private static final int PREPAY_CUSTOMER_NAME_MAX_LENGTH = 128;
     private static final int PREPAY_CASHIER_TITLE_MAX_LENGTH = 128;
+    private static final int PAYMENT_LIST_PAYMENT_METHOD_MAX_LENGTH = 32;
+    private static final int PAYMENT_LIST_STATUS_MAX_LENGTH = 32;
     private static final int MONEY_MAX_SCALE = 2;
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
 
@@ -1950,10 +1952,16 @@ public class PaymentServiceImpl implements PaymentService {
      * 支付单列表统一在服务层收敛分页边界，避免全量拉取影响后台排障性能。
      */
     private void normalizeQuery(PaymentListQueryDTO query) {
-        query.setPaymentOrderId(StringUtils.hasText(query.getPaymentOrderId()) ? query.getPaymentOrderId().trim() : null);
-        query.setOrderNo(StringUtils.hasText(query.getOrderNo()) ? query.getOrderNo().trim() : null);
-        query.setPaymentMethod(StringUtils.hasText(query.getPaymentMethod()) ? query.getPaymentMethod().trim() : "全部");
-        query.setStatus(StringUtils.hasText(query.getStatus()) ? query.getStatus().trim() : "全部");
+        query.setPaymentOrderId(normalizeOptionalRequestField(
+                query.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
+        query.setOrderNo(normalizeOptionalRequestField(
+                query.getOrderNo(), "订单号", BUSINESS_ORDER_NO_MAX_LENGTH));
+        String paymentMethod = normalizeOptionalRequestField(
+                query.getPaymentMethod(), "支付方式", PAYMENT_LIST_PAYMENT_METHOD_MAX_LENGTH);
+        query.setPaymentMethod(paymentMethod == null ? "全部" : paymentMethod);
+        String status = normalizeOptionalRequestField(
+                query.getStatus(), "支付状态", PAYMENT_LIST_STATUS_MAX_LENGTH);
+        query.setStatus(status == null ? "全部" : status);
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
     }
