@@ -62,6 +62,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_ISSUE_ESCALATE = "PAYMENT_ISSUE_ESCALATE";
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
+    private static final int TASK_CODE_MAX_LENGTH = 64;
+    private static final int RUN_MODE_MAX_LENGTH = 32;
+    private static final int TASK_STATUS_MAX_LENGTH = 32;
+    private static final int SEVERITY_LEVEL_MAX_LENGTH = 32;
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final int MAX_PENDING_QUERY_BATCH_SIZE = 1000;
     private static final int MAX_ISSUE_SLA_CANDIDATE_BATCH_SIZE = 1000;
@@ -1618,6 +1622,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private PaymentTaskRunLogQueryDTO normalizeQuery(PaymentTaskRunLogQueryDTO query) {
         PaymentTaskRunLogQueryDTO normalizedQuery = query == null ? new PaymentTaskRunLogQueryDTO() : query;
+        normalizedQuery.setTaskCode(normalizeOptionalQueryField(
+                normalizedQuery.getTaskCode(), TASK_CODE_MAX_LENGTH, "任务编码"));
+        normalizedQuery.setRunMode(normalizeOptionalQueryField(
+                normalizedQuery.getRunMode(), RUN_MODE_MAX_LENGTH, "运行方式"));
+        normalizedQuery.setTaskStatus(normalizeOptionalQueryField(
+                normalizedQuery.getTaskStatus(), TASK_STATUS_MAX_LENGTH, "任务状态"));
+        normalizedQuery.setSeverityLevel(normalizeOptionalQueryField(
+                normalizedQuery.getSeverityLevel(), SEVERITY_LEVEL_MAX_LENGTH, "严重等级"));
         if (normalizedQuery.getPageNo() < 1) {
             normalizedQuery.setPageNo(1);
         }
@@ -1628,6 +1640,22 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             normalizedQuery.setPageSize(100);
         }
         return normalizedQuery;
+    }
+
+    private String normalizeOptionalQueryField(String value, int maxLength, String fieldName) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String normalizeManualOperator(String operator) {

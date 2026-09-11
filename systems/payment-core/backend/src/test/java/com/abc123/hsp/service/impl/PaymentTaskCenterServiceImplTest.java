@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Logger;
@@ -545,6 +546,58 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).findTaskRunLogsForExport(org.mockito.ArgumentMatchers.any(PaymentTaskRunLogQueryDTO.class));
         Assertions.assertTrue(csv.contains("日志号,任务编码"));
         Assertions.assertTrue(csv.contains("\"LOG-001\""));
+    }
+
+    @Test
+    void shouldRejectOversizedTaskRunQueryBeforeMapperAccess() {
+        PaymentTaskRunLogQueryDTO taskCodeQuery = new PaymentTaskRunLogQueryDTO();
+        taskCodeQuery.setTaskCode(repeat("T", 65));
+        PaymentTaskRunLogQueryDTO runModeQuery = new PaymentTaskRunLogQueryDTO();
+        runModeQuery.setRunMode(repeat("M", 33));
+        PaymentTaskRunLogQueryDTO taskStatusQuery = new PaymentTaskRunLogQueryDTO();
+        taskStatusQuery.setTaskStatus(repeat("S", 33));
+        PaymentTaskRunLogQueryDTO severityQuery = new PaymentTaskRunLogQueryDTO();
+        severityQuery.setSeverityLevel(repeat("P", 33));
+        PaymentTaskCenterServiceImpl service = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        );
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskCodeQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(runModeQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskStatusQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(severityQuery));
+        verifyNoInteractions(paymentTaskCenterMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInTaskRunQueryBeforeMapperAccess() {
+        PaymentTaskRunLogQueryDTO taskCodeQuery = new PaymentTaskRunLogQueryDTO();
+        taskCodeQuery.setTaskCode("PAYMENT_EVENT_RETRY\n");
+        PaymentTaskRunLogQueryDTO runModeQuery = new PaymentTaskRunLogQueryDTO();
+        runModeQuery.setRunMode("MANUAL\n");
+        PaymentTaskRunLogQueryDTO taskStatusQuery = new PaymentTaskRunLogQueryDTO();
+        taskStatusQuery.setTaskStatus("SUCCESS\n");
+        PaymentTaskRunLogQueryDTO severityQuery = new PaymentTaskRunLogQueryDTO();
+        severityQuery.setSeverityLevel("P2\n");
+        PaymentTaskCenterServiceImpl service = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        );
+
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskCodeQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(runModeQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskStatusQuery));
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(severityQuery));
+        verifyNoInteractions(paymentTaskCenterMapper);
     }
 
     @Test
