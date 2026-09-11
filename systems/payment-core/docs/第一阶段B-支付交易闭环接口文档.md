@@ -3420,6 +3420,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 未知记录维度兼容、默认筛选、排序、分页、敏感字段脱敏、详情轨迹和成功退款聚合保持不变；本轮不新增端点、DTO 字段、Mapper SQL、schema 或迁移。
 5. 本地测试不证明真实支付、退款到账、渠道受理、账务一致性或生产稳定性。
 
+### 14.185 任务运行日志查询字段契约
+
+1. `GET /api/payment-task-center/task-runs` 与 `GET /api/payment-task-center/task-runs/export` 参数不变；`taskCode / runMode / taskStatus / severityLevel` 最长分别为 `64 / 32 / 32 / 32` 个字符。
+2. 四类原始输入不得包含控制字符，合法首尾空白在查询前裁剪；`null`、空条件和既有 `全部` 保持不筛选语义。
+3. 非法参数使用既有参数错误响应并在 Mapper 访问前拒绝；列表分页 `1..100`、严重等级与升级信息派生和 CSV `1000` 行上限保持不变。
+4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、schema 或迁移；本地测试不证明生产调度、真实任务执行、补偿结果、告警送达或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
