@@ -8,6 +8,7 @@ const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const total = ref(0);
 const overview = ref({
@@ -118,6 +119,7 @@ async function loadPaymentRoutes() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    hasLoadedData.value = true;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -189,7 +191,7 @@ onMounted(loadPaymentRoutes);
       </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">路由记录总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -220,7 +222,7 @@ onMounted(loadPaymentRoutes);
       </article>
     </section>
 
-    <section class="panel overview-panel">
+    <section v-if="hasLoadedData" class="panel overview-panel">
       <div class="section-title">
         <h3>路由风险总览</h3>
         <span class="meta">路由排障与导出 V1.4 · {{ routeHealthPolicyText }} · 最近路由时间：{{ metrics.latestRouteAt }}</span>
@@ -246,7 +248,7 @@ onMounted(loadPaymentRoutes);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付路由执行结果加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付路由执行结果刷新失败，当前展示上次成功快照：" : "支付路由执行结果加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
@@ -318,6 +320,8 @@ onMounted(loadPaymentRoutes);
       </div>
 
       <div v-if="isLoading" class="state-box">支付路由执行结果加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付路由执行快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付路由执行记录</div>
 
@@ -418,7 +422,7 @@ onMounted(loadPaymentRoutes);
           <div v-else class="state-box">选择左侧路由记录后，可在这里查看路由快照与排障建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条路由执行记录</span>
         <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>

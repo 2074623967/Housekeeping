@@ -11,6 +11,7 @@ const pageNo = ref(1);
 const pageSize = 20;
 const isLoading = ref(true);
 const isSummaryLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const selectedIssueNos = ref([]);
@@ -86,6 +87,7 @@ async function loadIssues() {
     selectedIssueNos.value = selectedIssueNos.value.filter((issueNo) =>
       result.items.some((item) => item.issueNo === issueNo)
     );
+    hasLoadedData.value = true;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -163,7 +165,7 @@ onMounted(loadIssues);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付交易异常加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付交易异常刷新失败，当前展示上次成功快照：" : "支付交易异常加载失败：" }}{{ errorMessage }}
       </div>
       <div v-if="actionMessage" class="notice-banner">
         {{ actionMessage }}
@@ -244,11 +246,18 @@ onMounted(loadIssues);
           <input v-model="actionForm.remark" maxlength="255" placeholder="请写清楚处理结论、排查方向或交接说明" />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="submitBatchAction">批量处理选中异常</button>
+          <button
+            class="button primary"
+            :disabled="isLoading || Boolean(errorMessage) || !hasLoadedData"
+            @click="submitBatchAction"
+          >
+            批量处理选中异常
+          </button>
         </div>
       </div>
 
       <div v-if="isSummaryLoading" class="state-box">责任组统计加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的责任组统计快照</div>
       <section v-else-if="responsibilitySummaries.length" class="panel overview-panel">
         <div class="section-title">
           <h3>异常风险总览</h3>
@@ -272,7 +281,8 @@ onMounted(loadIssues);
           </article>
         </div>
       </section>
-      <div v-if="!isSummaryLoading && responsibilitySummaries.length" class="detail-card-grid">
+      <div v-else class="state-box">当前筛选范围暂无责任组统计</div>
+      <div v-if="!isSummaryLoading && hasLoadedData && responsibilitySummaries.length" class="detail-card-grid">
         <div v-for="summary in responsibilitySummaries" :key="summary.groupName" class="detail-card">
           <div class="detail-label">责任组</div>
           <div class="detail-value">{{ summary.groupName }}</div>
@@ -289,6 +299,8 @@ onMounted(loadIssues);
       </div>
 
       <div v-if="isLoading" class="state-box">支付交易异常加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付交易异常快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付交易异常</div>
 
@@ -327,6 +339,7 @@ onMounted(loadIssues);
                 <input
                   type="checkbox"
                   :checked="selectedIssueNos.includes(item.issueNo)"
+                  :disabled="Boolean(errorMessage)"
                   @change="toggleIssueSelection(item.issueNo, $event.target.checked)"
                 />
               </td>
@@ -389,7 +402,7 @@ onMounted(loadIssues);
         </table>
       </div>
 
-      <div class="pager">
+      <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条支付交易异常</span>
         <template v-if="total > pageSize">
           <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>

@@ -22,6 +22,7 @@ const overview = ref({
   alerts: []
 });
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 
 const monitorCards = computed(() => {
@@ -130,6 +131,7 @@ async function loadOverview() {
     overview.value = await paymentMonitorApi.getOverview();
     selectedAlert.value = overview.value.alerts?.[0] || null;
     selectedChannel.value = overview.value.channelMetrics?.[0] || null;
+    hasLoadedData.value = true;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -175,10 +177,12 @@ onMounted(loadOverview);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付监控数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付监控数据刷新失败，当前展示上次成功快照：" : "支付监控数据加载失败：" }}{{ errorMessage }}
       </div>
 
       <div v-if="isLoading" class="state-box">支付监控数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付监控快照</div>
 
       <template v-else>
         <div class="detail-card-grid">
