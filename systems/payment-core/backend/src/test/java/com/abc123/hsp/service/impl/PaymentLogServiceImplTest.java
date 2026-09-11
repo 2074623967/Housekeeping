@@ -1,8 +1,10 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentLogListItemDTO;
@@ -50,6 +52,56 @@ class PaymentLogServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedPaymentLogQueryBeforeMapperAccess() {
+        PaymentLogQueryDTO paymentOrderQuery = new PaymentLogQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentLogQueryDTO orderQuery = new PaymentLogQueryDTO();
+        orderQuery.setOrderNo(repeat("O", 65));
+        PaymentLogQueryDTO processStageQuery = new PaymentLogQueryDTO();
+        processStageQuery.setProcessStage(repeat("S", 33));
+        PaymentLogQueryDTO logLevelQuery = new PaymentLogQueryDTO();
+        logLevelQuery.setLogLevel(repeat("L", 17));
+        PaymentLogQueryDTO sourceQuery = new PaymentLogQueryDTO();
+        sourceQuery.setSource(repeat("C", 65));
+        PaymentLogQueryDTO keywordQuery = new PaymentLogQueryDTO();
+        keywordQuery.setKeyword(repeat("K", 16384));
+        PaymentLogServiceImpl service = new PaymentLogServiceImpl(paymentLogMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(processStageQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(logLevelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(sourceQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(keywordQuery));
+        verifyNoInteractions(paymentLogMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInPaymentLogQueryBeforeMapperAccess() {
+        PaymentLogQueryDTO paymentOrderQuery = new PaymentLogQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentLogQueryDTO orderQuery = new PaymentLogQueryDTO();
+        orderQuery.setOrderNo("ORD-001\n");
+        PaymentLogQueryDTO processStageQuery = new PaymentLogQueryDTO();
+        processStageQuery.setProcessStage("渠道回调\n");
+        PaymentLogQueryDTO logLevelQuery = new PaymentLogQueryDTO();
+        logLevelQuery.setLogLevel("ERROR\n");
+        PaymentLogQueryDTO sourceQuery = new PaymentLogQueryDTO();
+        sourceQuery.setSource("wx_h5\n");
+        PaymentLogQueryDTO keywordQuery = new PaymentLogQueryDTO();
+        keywordQuery.setKeyword("回调\n");
+        PaymentLogServiceImpl service = new PaymentLogServiceImpl(paymentLogMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(processStageQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(logLevelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(sourceQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(keywordQuery));
+        verifyNoInteractions(paymentLogMapper);
+    }
+
+    @Test
     void shouldExportCsvWithNormalizedFieldsAndEscapedMessage() {
         PaymentLogQueryDTO query = new PaymentLogQueryDTO();
         query.setSource(" payment-core ");
@@ -88,5 +140,9 @@ class PaymentLogServiceImplTest {
         assertEquals(3, result.getCallbackErrorCount());
         assertEquals(0, result.getEventWarnCount());
         verify(paymentLogMapper).findOverviewSummary(query);
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }
