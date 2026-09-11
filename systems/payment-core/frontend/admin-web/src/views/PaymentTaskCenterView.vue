@@ -46,7 +46,10 @@ const total = ref(0);
 const pageNo = ref(1);
 const pageSize = 10;
 const isLoading = ref(true);
+const isTaskRunsLoading = ref(false);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
+const taskRunsErrorMessage = ref("");
 const actionMessage = ref("");
 const activeTaskCode = ref("");
 const taskOperator = ref("");
@@ -60,9 +63,16 @@ const filters = ref({
 async function loadOverview() {
   isLoading.value = true;
   errorMessage.value = "";
+  taskRunsErrorMessage.value = "";
   try {
-    overview.value = await paymentTaskCenterApi.getOverview();
-    await loadTaskRuns();
+    const [overviewResult, taskRunResult] = await Promise.all([
+      paymentTaskCenterApi.getOverview(),
+      fetchTaskRuns()
+    ]);
+    overview.value = overviewResult;
+    taskRuns.value = taskRunResult.items;
+    total.value = taskRunResult.total;
+    hasLoadedData.value = true;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -70,8 +80,8 @@ async function loadOverview() {
   }
 }
 
-async function loadTaskRuns() {
-  const result = await paymentTaskCenterApi.getTaskRuns({
+function fetchTaskRuns() {
+  return paymentTaskCenterApi.getTaskRuns({
     taskCode: filters.value.taskCode,
     runMode: filters.value.runMode,
     taskStatus: filters.value.taskStatus,
@@ -79,8 +89,20 @@ async function loadTaskRuns() {
     pageNo: pageNo.value,
     pageSize
   });
-  taskRuns.value = result.items;
-  total.value = result.total;
+}
+
+async function loadTaskRuns() {
+  isTaskRunsLoading.value = true;
+  taskRunsErrorMessage.value = "";
+  try {
+    const result = await fetchTaskRuns();
+    taskRuns.value = result.items;
+    total.value = result.total;
+  } catch (error) {
+    taskRunsErrorMessage.value = error.message;
+  } finally {
+    isTaskRunsLoading.value = false;
+  }
 }
 
 function applyFilters() {
@@ -128,8 +150,9 @@ async function runTask(taskCode, taskName, actionRunner) {
   try {
     const result = await actionRunner({ operator: taskOperator.value.trim() });
     overview.value = result.overview;
-    await loadTaskRuns();
+    hasLoadedData.value = true;
     actionMessage.value = `${taskName}执行完成：处理 ${result.processedCount} 条，成功 ${result.successCount} 条，告警 ${result.warningCount || 0} 条，失败 ${result.failCount} 条。`;
+    await loadTaskRuns();
   } catch (error) {
     actionMessage.value = `${taskName}执行失败：${error.message}`;
   } finally {
@@ -152,13 +175,15 @@ onMounted(loadOverview);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付任务中心数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付任务中心数据刷新失败，当前展示上次成功快照：" : "支付任务中心数据加载失败：" }}{{ errorMessage }}
       </div>
       <div v-if="actionMessage" class="success-banner">
         {{ actionMessage }}
       </div>
 
       <div v-if="isLoading" class="state-box">支付任务中心数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付任务中心快照</div>
 
       <template v-else>
         <div class="detail-card-grid">
@@ -392,7 +417,7 @@ onMounted(loadOverview);
               <p>只关闭超过收银台失效时间且从未提交渠道的待支付单；已提交支付继续通过主动查单收口。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_EXPIRE_CLOSE'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_EXPIRE_CLOSE', '支付超时关单', paymentTaskCenterApi.runCloseExpiredPayments)"
               >
                 {{ activeTaskCode === "PAYMENT_EXPIRE_CLOSE" ? "执行中..." : "执行超时关单" }}
@@ -404,7 +429,7 @@ onMounted(loadOverview);
               <p>立即批量补查达到等待阈值且尚未过期的支付单，不受自动退避窗口限制；渠道确认成功时自动收口，处理中或失败结果进入任务日志继续跟进。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_PENDING_QUERY'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_PENDING_QUERY', '待回调主动查单', paymentTaskCenterApi.runPendingPaymentQueries)"
               >
                 {{ activeTaskCode === "PAYMENT_PENDING_QUERY" ? "执行中..." : "执行主动查单" }}
@@ -416,7 +441,7 @@ onMounted(loadOverview);
               <p>评估当前监控窗口内的查单失败笔数、失败率和限流拒绝次数，命中阈值时生成可由现有 IM、短信和邮件链路派发的 outbox 告警。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_QUERY_MONITOR_ALERT'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_QUERY_MONITOR_ALERT', '主动查单监控告警', paymentTaskCenterApi.runGenerateQueryMonitorAlerts)"
               >
                 {{ activeTaskCode === "PAYMENT_QUERY_MONITOR_ALERT" ? "执行中..." : "生成查单监控告警" }}
@@ -428,7 +453,7 @@ onMounted(loadOverview);
               <p>立即补查已获得渠道退款号且达到等待阈值的退款；明确终态由服务端收口，处理中或失败结果进入任务日志继续跟进。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'REFUND_PENDING_QUERY'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('REFUND_PENDING_QUERY', '处理中退款主动查单', paymentTaskCenterApi.runPendingRefundQueries)"
               >
                 {{ activeTaskCode === "REFUND_PENDING_QUERY" ? "执行中..." : "执行退款查单" }}
@@ -440,7 +465,7 @@ onMounted(loadOverview);
               <p>针对下游账户、清分、结算未成功投递的支付事件执行统一重发，减少跨系统状态分叉。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_EVENT_RETRY'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_EVENT_RETRY', '失败事件重发', paymentTaskCenterApi.runRepublishFailedEvents)"
               >
                 {{ activeTaskCode === "PAYMENT_EVENT_RETRY" ? "执行中..." : "执行事件重发" }}
@@ -452,7 +477,7 @@ onMounted(loadOverview);
               <p>将退款失败单重新推进到处理中状态，作为人工复核和后续渠道补退的统一入口。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'REFUND_FAIL_RETRY'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('REFUND_FAIL_RETRY', '失败退款重试', paymentTaskCenterApi.runRetryFailedRefunds)"
               >
                 {{ activeTaskCode === "REFUND_FAIL_RETRY" ? "执行中..." : "执行退款重试" }}
@@ -464,7 +489,7 @@ onMounted(loadOverview);
               <p>批量扫描启用中的来源应用支付控制策略，回写渠道、网关、商户号和令牌配置是否满足当前准入要求。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_CONTROL_SELF_CHECK'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_CONTROL_SELF_CHECK', '支付控制策略自动巡检', paymentTaskCenterApi.runControlPolicySelfChecks)"
               >
                 {{ activeTaskCode === "PAYMENT_CONTROL_SELF_CHECK" ? "执行中..." : "执行控制策略巡检" }}
@@ -476,7 +501,7 @@ onMounted(loadOverview);
               <p>巡检超过 SLA 的支付交易异常，将结果写入任务日志，推动运营和值班负责人跟进。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_ISSUE_ESCALATE'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_ISSUE_ESCALATE', '异常 SLA 升级巡检', paymentTaskCenterApi.runEscalateOverdueIssues)"
               >
                 {{ activeTaskCode === "PAYMENT_ISSUE_ESCALATE" ? "执行中..." : "执行 SLA 升级巡检" }}
@@ -488,7 +513,7 @@ onMounted(loadOverview);
               <p>将已生成的异常告警 outbox 派发到本地 IM、短信、邮件骨架通道，并回写派发状态，作为后续接入真实通知网关的统一入口。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_ISSUE_ALERT_DISPATCH'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_ISSUE_ALERT_DISPATCH', '异常告警派发', paymentTaskCenterApi.runDispatchIssueAlerts)"
               >
                 {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_DISPATCH" ? "执行中..." : "执行异常告警派发" }}
@@ -500,7 +525,7 @@ onMounted(loadOverview);
               <p>对已派发且仍停留在供应商受理中的异常告警执行回执回查，统一回写送达结果，减少人工逐条核对。</p>
               <button
                 class="button primary"
-                :disabled="activeTaskCode === 'PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE'"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
                 @click="runTask('PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE', '异常告警回执回查', paymentTaskCenterApi.runReconcileIssueAlertReceipts)"
               >
                 {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE" ? "执行中..." : "执行回执回查" }}
@@ -644,7 +669,12 @@ onMounted(loadOverview);
               <button class="button secondary" @click="exportTaskRuns">导出 CSV</button>
             </div>
           </div>
-          <div class="table-wrap">
+          <div v-if="taskRunsErrorMessage" class="error-banner">
+            任务执行日志刷新失败，当前展示上次成功快照：{{ taskRunsErrorMessage }}
+          </div>
+          <div v-if="isTaskRunsLoading" class="state-box">任务执行日志加载中...</div>
+          <div v-else-if="!taskRuns.length" class="state-box">当前暂无符合条件的任务执行日志</div>
+          <div v-else class="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -694,12 +724,12 @@ onMounted(loadOverview);
               </tbody>
             </table>
           </div>
-          <div class="pager">
+          <div v-if="!isTaskRunsLoading" class="pager">
             <span>共 {{ total }} 条任务日志</span>
             <template v-if="total > pageSize">
-              <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+              <button class="button secondary" :disabled="pageNo === 1 || Boolean(taskRunsErrorMessage)" @click="goToPage(pageNo - 1)">上一页</button>
               <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-              <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+              <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || Boolean(taskRunsErrorMessage)" @click="goToPage(pageNo + 1)">下一页</button>
             </template>
           </div>
         </div>

@@ -15,6 +15,7 @@ const overview = ref({
   recentBatches: []
 });
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
@@ -38,6 +39,7 @@ async function loadOverview() {
   errorMessage.value = "";
   try {
     overview.value = await paymentDayEndApi.getOverview();
+    hasLoadedData.value = true;
   } catch (error) {
     errorMessage.value = error.message;
   } finally {
@@ -55,6 +57,7 @@ async function runBatch() {
   actionMessage.value = "";
   try {
     overview.value = await paymentDayEndApi.runBatch({ ...runForm.value, triggeredBy });
+    hasLoadedData.value = true;
     actionMessage.value = `已触发 ${runForm.value.bizDate} 的支付日终处理。`;
   } catch (error) {
     actionMessage.value = `支付日终处理触发失败：${error.message}`;
@@ -86,13 +89,15 @@ onMounted(loadOverview);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付日终数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付日终数据刷新失败，当前展示上次成功快照：" : "支付日终数据加载失败：" }}{{ errorMessage }}
       </div>
       <div v-if="actionMessage" class="success-banner">
         {{ actionMessage }}
       </div>
 
       <div v-if="isLoading" class="state-box">支付日终数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付日终快照</div>
 
       <template v-else>
         <div class="detail-card-grid">
@@ -209,7 +214,13 @@ onMounted(loadOverview);
               <input v-model.trim="runForm.triggeredBy" maxlength="64" placeholder="请输入触发人" />
             </div>
             <div class="toolbar-actions">
-              <button class="button primary" :disabled="activeAction === 'run'" @click="runBatch">触发跑批</button>
+              <button
+                class="button primary"
+                :disabled="activeAction === 'run' || Boolean(errorMessage) || !hasLoadedData"
+                @click="runBatch"
+              >
+                触发跑批
+              </button>
             </div>
           </div>
         </div>
