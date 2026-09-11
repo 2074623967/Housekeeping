@@ -40,6 +40,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
     private static final int CHANNEL_REFUND_NO_MAX_LENGTH = 128;
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int CHANNEL_TRANSACTION_NO_MAX_LENGTH = 128;
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int DOWNSTREAM_URL_MAX_LENGTH = 2048;
     private static final int ACCOUNT_NO_MAX_LENGTH = 64;
@@ -545,8 +547,11 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private void validatePaymentSuccessDetail(String paymentOrderId, PaymentDetailDTO detail) {
         if (!Objects.equals(paymentOrderId, detail.getPaymentOrderId())
-                || !"SUCCESS".equals(detail.getStatus())) {
-            throw new IllegalArgumentException("支付成功事件与支付单终态不一致");
+                || !"SUCCESS".equals(detail.getStatus())
+                || !isValidConfiguredText(detail.getChannel(), CHANNEL_CODE_MAX_LENGTH)
+                || !isValidConfiguredText(
+                        detail.getChannelTransactionNo(), CHANNEL_TRANSACTION_NO_MAX_LENGTH)) {
+            throw new IllegalArgumentException("支付成功事件与支付事实不一致");
         }
     }
 

@@ -808,6 +808,58 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentSuccessEventWithoutPaymentChannel() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setChannel(" ");
+        PaymentEventListItemDTO event = paymentEvent("EVT-CHANNEL-MISSING", 0);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-CHANNEL-MISSING")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVT-CHANNEL-MISSING")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-CHANNEL-MISSING", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-CHANNEL-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
+    void shouldRejectPaymentSuccessEventWithoutChannelTransactionNo() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setChannelTransactionNo(null);
+        PaymentEventListItemDTO event = paymentEvent("EVT-TRACE-MISSING", 0);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-TRACE-MISSING")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVT-TRACE-MISSING")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-TRACE-MISSING", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-TRACE-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
     void shouldStopAtClearingFailureWithoutPostingAccounting() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();
@@ -1020,6 +1072,8 @@ class PaymentEventDispatchServiceImplTest {
         detail.setCustomerName("张女士");
         detail.setAmount("¥168.00");
         detail.setStatus("SUCCESS");
+        detail.setChannel("wx_h5");
+        detail.setChannelTransactionNo("WX-001");
         return detail;
     }
 
