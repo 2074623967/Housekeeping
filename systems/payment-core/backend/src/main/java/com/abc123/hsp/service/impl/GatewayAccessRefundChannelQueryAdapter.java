@@ -76,11 +76,8 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
 
     @Override
     public RefundChannelQueryResultDTO query(RefundCallbackSourceDTO refund) {
-        GatewayRefundQueryRequest request = new GatewayRefundQueryRequest();
-        request.setRefundOrderId(refund.getRefundOrderId());
-        request.setChannelCode(refund.getChannelCode());
-        request.setChannelRefundNo(refund.getChannelRefundNo());
         try {
+            GatewayRefundQueryRequest request = buildRequest(refund);
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Gateway-App-Code", appCode);
             headers.set("X-Gateway-Access-Key", accessKey);
@@ -101,6 +98,48 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
         } catch (RuntimeException exception) {
             throw queryFailed("gateway-access refund query failed, please retry later");
         }
+    }
+
+    private GatewayRefundQueryRequest buildRequest(RefundCallbackSourceDTO refund) {
+        if (refund == null) {
+            throw invalidRequest();
+        }
+        GatewayRefundQueryRequest request = new GatewayRefundQueryRequest();
+        request.setRefundOrderId(requiredRequest(refund.getRefundOrderId(), 64));
+        request.setChannelCode(requiredRequest(refund.getChannelCode(), 64));
+        request.setChannelRefundNo(optionalRequest(refund.getChannelRefundNo(), 128));
+        return request;
+    }
+
+    private String requiredRequest(String value, int maxLength) {
+        String normalized = optionalRequest(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private String optionalRequest(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidRequest();
+            }
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private BusinessException invalidRequest() {
+        return queryFailed("gateway-access refund query request is invalid");
     }
 
     private Set<String> parseChannels(String channels) {

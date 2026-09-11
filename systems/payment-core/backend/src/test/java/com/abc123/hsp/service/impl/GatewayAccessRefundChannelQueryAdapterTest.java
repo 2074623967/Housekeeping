@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.common.BusinessException;
@@ -104,6 +106,65 @@ class GatewayAccessRefundChannelQueryAdapterTest {
     }
 
     @Test
+    void shouldRejectInvalidRequestBeforeGatewayCall() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessRefundChannelQueryAdapter adapter = adapter(restTemplate);
+
+        assertInvalidRequest(assertThrows(BusinessException.class, () -> adapter.query(null)));
+
+        RefundCallbackSourceDTO missingRequired = refund();
+        missingRequired.setChannelCode("   ");
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.query(missingRequired)));
+
+        RefundCallbackSourceDTO invalidOptional = refund();
+        invalidOptional.setChannelRefundNo("CHANNEL-REF-001\n");
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.query(invalidOptional)));
+
+        RefundCallbackSourceDTO oversized = refund();
+        oversized.setRefundOrderId(repeat("R", 65));
+        assertInvalidRequest(assertThrows(
+                BusinessException.class, () -> adapter.query(oversized)));
+
+        verify(restTemplate, never()).exchange(
+                any(String.class), eq(HttpMethod.POST), any(HttpEntity.class),
+                eq(GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse.class));
+    }
+
+    @Test
+    void shouldSendNormalizedQueryRequestWithoutMutatingRefund() {
+        RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
+        GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse response =
+                new GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse();
+        RefundChannelQueryResultDTO data = new RefundChannelQueryResultDTO();
+        data.setRefundStatus("PROCESSING");
+        data.setChannelRefundNo("CHANNEL-REF-001");
+        response.setCode("0");
+        response.setData(data);
+        ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+        when(restTemplate.exchange(
+                eq("http://gateway/refunds/query"), eq(HttpMethod.POST), entityCaptor.capture(),
+                eq(GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryResponse.class)))
+                .thenReturn(ResponseEntity.ok(response));
+        RefundCallbackSourceDTO refund = refund();
+        refund.setRefundOrderId(" REF-001 ");
+        refund.setChannelCode(" wx_h5 ");
+        refund.setChannelRefundNo(" CHANNEL-REF-001 ");
+
+        adapter(restTemplate).query(refund);
+
+        GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryRequest sent =
+                (GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryRequest)
+                        entityCaptor.getValue().getBody();
+        assertEquals("REF-001", sent.getRefundOrderId());
+        assertEquals("wx_h5", sent.getChannelCode());
+        assertEquals("CHANNEL-REF-001", sent.getChannelRefundNo());
+        assertEquals(" REF-001 ", refund.getRefundOrderId());
+        assertEquals(" wx_h5 ", refund.getChannelCode());
+    }
+
+    @Test
     void shouldRejectEmptyOrFailedGatewayResponse() {
         RestTemplate restTemplate = Mockito.mock(RestTemplate.class);
         when(restTemplate.exchange(
@@ -163,5 +224,24 @@ class GatewayAccessRefundChannelQueryAdapterTest {
         refund.setChannelRefundNo("CHANNEL-REF-001");
         refund.setStatus("PROCESSING");
         return refund;
+    }
+
+    private GatewayAccessRefundChannelQueryAdapter adapter(RestTemplate restTemplate) {
+        return new GatewayAccessRefundChannelQueryAdapter(
+                true, "http://gateway/refunds/query", "wx_h5",
+                "APP_PAY_CORE", "secret", restTemplate);
+    }
+
+    private void assertInvalidRequest(BusinessException exception) {
+        assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
+        assertEquals("gateway-access refund query request is invalid", exception.getMessage());
+    }
+
+    private String repeat(String value, int count) {
+        StringBuilder builder = new StringBuilder(value.length() * count);
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
     }
 }
