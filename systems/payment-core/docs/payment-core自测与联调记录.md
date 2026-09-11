@@ -9108,3 +9108,25 @@
 
 1. 事件积压不再被一次性加载和长时间占用单轮任务窗口，任务日志继续表达本轮实际处理结果，而不是承诺全量积压已经清空。
 2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实积压吞吐、下游受理或稳定性，`release/v1.0.0` 继续冻结。
+
+## 327. 2026-09-11 失败退款重试有界批次 V1.0 验证
+
+### 327.1 本轮补强
+
+1. `RefundRetryTaskServiceImpl` 新增 `payment.refund-retry.batch-size`，默认 `100`，非正配置按 `1`、超过上限按 `1000` 执行。
+2. `RefundMapper.findFailedRefundOrderIds` 改为接收批次参数，按 `applied_at ASC, id ASC` 选择最早的 `FAIL` 退款，超过批次的退款保持原状态等待后续轮次。
+3. 单笔事务隔离、重试额度复验、渠道提交 outbox、异常详情脱敏和任务中心本轮统计保持不变。
+
+### 327.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 退款重试联合定向测试 | `mvn -Dtest=RefundRetryTaskServiceImplTest,RefundRetryConfigurationTest,RefundSubmitOutboxMapperIntegrationTest,RefundServiceImplTest,PaymentTaskCenterServiceImplTest,PaymentCompensationSchedulerTest test` | 通过 | `89` 个用例；覆盖实际 SQL 截断、默认值、上下界、逐笔隔离、任务中心和自动调度 |
+| payment-core 全量测试 | `mvn test` | 通过 | `824` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout RefundMapper.xml` | 通过 | XML 结构有效 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 327.3 当前判断
+
+1. 失败退款积压不再一次性加载并占用完整任务租约，任务结果继续表达单轮实际处理结果，剩余失败退款由后续人工或自动轮次承接。
+2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实渠道受理、退款到账、积压吞吐或稳定性，`release/v1.0.0` 继续冻结。

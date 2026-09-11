@@ -2155,7 +2155,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.19 失败退款重试任务结果规则
 
-1. `POST /api/payment-task-center/retry-failed-refunds` 的响应继续使用 `PaymentTaskActionResultDTO`；`processedCount` 为本轮候选数，`successCount` 为完成本地状态流转并提交渠道的数量，`failCount` 为单笔事务失败数量。
+1. `POST /api/payment-task-center/retry-failed-refunds` 的响应继续使用 `PaymentTaskActionResultDTO`；服务端按单轮容量选择失败退款，`processedCount` 为本轮候选数，`successCount` 为完成本地状态流转并提交渠道的数量，`failCount` 为单笔事务失败数量。
 2. 单笔失败不终止批次，`summaryComment` 最多列出 3 个失败退款单号；调用方应以 `failCount` 判断完整失败规模。
 3. 成功计数只表示渠道提交动作完成，不表示退款资金已到账；最终结果仍由退款回调或后续真实渠道查单确认。
 4. 真实渠道接入必须使用稳定退款单号实现幂等，并处理请求超时但渠道可能已受理的不确定状态；本地事务无法回滚外部渠道副作用。
@@ -3201,6 +3201,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 人工模式按 `created_at ASC, id ASC` 选择最早的 `FAILED` 事件；自动模式按相同顺序选择已到期的 `FAILED`，以及可自动首次派发的 `PENDING` 支付成功与退款提交事件。
 3. `PaymentTaskActionResultDTO.processedCount / successCount / failCount` 只表示本轮候选结果；超过批次的事件不被改写，留待后续调度或人工轮次，不新增接口字段或循环执行承诺。
 4. 单事件独立事务、任务租约、成功审计与失败事件摘要保持不变；本地测试不证明生产 MySQL 查询计划、批次吞吐、真实下游受理或稳定性。
+
+### 14.154 失败退款重试有界批次契约
+
+1. 人工与自动失败退款重试共用服务端批次容量；默认值为 `100`，部署环境可通过 `HSP_PAYMENT_REFUND_RETRY_BATCH_SIZE` 覆盖，实际值限制在 `1..1000`。
+2. 每轮按 `applied_at ASC, id ASC` 选择最早的 `FAIL` 退款；超过批次的退款不改写状态，留待后续调度或人工轮次。
+3. `PaymentTaskActionResultDTO.processedCount / successCount / failCount` 只表示本轮执行结果；单笔失败继续隔离，摘要最多展示三个失败退款单号，不新增接口字段或自动循环清空承诺。
+4. 成功计数仍只代表本地重试和渠道提交链路完成，不代表渠道最终受理或退款到账；本地测试不证明生产 MySQL 吞吐、真实渠道结果或稳定性。
 
 ## 15. 结论
 
