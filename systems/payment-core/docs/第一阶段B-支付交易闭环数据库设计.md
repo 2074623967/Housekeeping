@@ -1069,6 +1069,13 @@ t_order
 3. 关键字同时检索派生摘要及最大 `2048` 字符的请求/响应报文，按 `2048` 字符收敛；所有原始筛选先拒绝控制字符，再裁剪合法空白，非法条件不进入 Mapper。
 4. 本地测试不证明生产 MySQL 联合查询计划、数据分布、报文真实性、支付入账或稳定性，仍需正式环境核验。
 
+### 4.110 支付路由执行查询字段边界
+
+1. 路由执行查询继续关联 `t_payment_route_record / t_payment_order / t_prepay_order / t_payment_attempt`，本轮不新增表、字段、索引、Mapper SQL、schema 或迁移。
+2. `payment_order_id / order_no / route_rule / channel_code / payment_method / terminal / route_result` 分别按 `64 / 64 / 128 / 64 / 32 / 32 / 128` 字符收敛。
+3. 服务层在列表、总览和导出 SQL 前先拒绝原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper，最新支付尝试关联与统计 SQL 口径不变。
+4. 本地测试不证明生产 MySQL 关联查询计划、路由规则有效性、渠道健康、支付受理或稳定性，仍需正式环境核验。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

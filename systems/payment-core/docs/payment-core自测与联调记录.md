@@ -9660,3 +9660,25 @@
 1. 支付流水的列表和导出不再把超出联合投影容量或含控制字符的条件下推数据库。
 2. 本轮无前端代码、端点、DTO、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明生产查询计划、渠道报文真实性、支付入账、账务一致性或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 352. 2026-09-12 支付路由执行查询字段边界 V1.0 验证
+
+### 352.1 本轮补强
+
+1. `PaymentRouteExecutionServiceImpl` 将 `paymentOrderId / orderNo / routeRule / channelCode / paymentMethod / terminal / routeResult` 分别限制为 `64 / 64 / 128 / 64 / 32 / 32 / 128` 个字符。
+2. 七类原始值在裁剪前拒绝控制字符，超长或含控制字符的查询不访问路由执行 Mapper。
+3. 合法空白、默认筛选、排序、分页、最新支付尝试关联、路由健康概览、敏感字段脱敏和 CSV 上限保持不变。
+
+### 352.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 路由执行服务与控制器联合定向测试 | `mvn -Dtest=PaymentRouteExecutionServiceImplTest,PaymentRouteExecutionControllerTest test` | 通过 | `9` 个用例；覆盖七类筛选超长与控制字符、Mapper 零交互及既有列表/总览/导出流程 |
+| payment-core 全量测试 | `mvn test` | 通过 | `868` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 352.3 当前判断
+
+1. 路由执行的三类查询出口不再把超出目标列宽或含控制字符的条件下推数据库。
+2. 本轮无前端代码、端点、DTO、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明真实路由决策、渠道健康、支付受理、资金结果或生产稳定性。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
