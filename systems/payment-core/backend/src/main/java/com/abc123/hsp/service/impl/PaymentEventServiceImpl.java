@@ -29,6 +29,11 @@ public class PaymentEventServiceImpl implements PaymentEventService {
 
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int EVENT_NO_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int EVENT_TYPE_MAX_LENGTH = 64;
+    private static final int PUBLISH_STATUS_MAX_LENGTH = 32;
+    private static final int DOWNSTREAM_SYSTEM_MAX_LENGTH = 256;
+    private static final int EVENT_TOPIC_MAX_LENGTH = 128;
 
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -142,13 +147,11 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     public PageResultDTO<PaymentEventListItemDTO> republish(
             PaymentEventRepublishRequestDTO request,
             PaymentEventQueryDTO query) {
-        if (request == null || !StringUtils.hasText(request.getEventNo())) {
+        if (request == null) {
             throw new IllegalArgumentException("事件号不能为空");
         }
-        String eventNo = request.getEventNo().trim();
-        if (eventNo.length() > EVENT_NO_MAX_LENGTH) {
-            throw new IllegalArgumentException("事件号不能超过64个字符");
-        }
+        String eventNo = normalizeRequiredField(
+                request.getEventNo(), EVENT_NO_MAX_LENGTH, "事件号");
         String operator = normalizeOperator(request.getOperator());
         boolean published = paymentEventDispatchService.republish(eventNo, operator);
         if (!published) {
@@ -177,15 +180,55 @@ public class PaymentEventServiceImpl implements PaymentEventService {
     }
 
     private void normalizeQuery(PaymentEventQueryDTO query) {
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setEventType(query.getEventType() == null ? "全部" : query.getEventType().trim());
-        query.setPublishStatus(query.getPublishStatus() == null ? "全部" : query.getPublishStatus().trim());
-        query.setDownstreamSystem(query.getDownstreamSystem() == null ? "全部" : query.getDownstreamSystem().trim());
-        query.setEventTopic(query.getEventTopic() == null ? null : query.getEventTopic().trim());
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
+        query.setEventType(normalizeOptionalQueryField(
+                query.getEventType(), EVENT_TYPE_MAX_LENGTH, "事件类型", "全部"));
+        query.setPublishStatus(normalizeOptionalQueryField(
+                query.getPublishStatus(), PUBLISH_STATUS_MAX_LENGTH, "发布状态", "全部"));
+        query.setDownstreamSystem(normalizeOptionalQueryField(
+                query.getDownstreamSystem(), DOWNSTREAM_SYSTEM_MAX_LENGTH, "下游系统", "全部"));
+        query.setEventTopic(normalizeOptionalQueryField(
+                query.getEventTopic(), EVENT_TOPIC_MAX_LENGTH, "事件主题", null));
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        validateNoIsoControl(value, fieldName);
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredField(String value, int maxLength, String fieldName) {
+        if (value != null) {
+            validateNoIsoControl(value, fieldName);
+        }
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
+    }
+
+    private void validateNoIsoControl(String value, String fieldName) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
     }
 
     private String csvCell(String value) {

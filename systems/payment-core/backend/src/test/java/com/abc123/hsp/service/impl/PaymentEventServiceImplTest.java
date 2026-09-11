@@ -104,6 +104,68 @@ class PaymentEventServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidRepublishEventNoBeforeDispatch() {
+        PaymentEventRepublishRequestDTO oversizedEventNo = new PaymentEventRepublishRequestDTO();
+        oversizedEventNo.setEventNo(String.join("", Collections.nCopies(65, "E")));
+        oversizedEventNo.setOperator("finance-ops");
+        PaymentEventRepublishRequestDTO controlEventNo = new PaymentEventRepublishRequestDTO();
+        controlEventNo.setEventNo("EVT001\n");
+        controlEventNo.setOperator("finance-ops");
+        PaymentEventServiceImpl service = new PaymentEventServiceImpl(
+                paymentEventMapper, paymentEventDispatchService);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.republish(oversizedEventNo, new PaymentEventQueryDTO()));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.republish(controlEventNo, new PaymentEventQueryDTO()));
+        verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectOversizedEventQueryFieldsBeforeMapperAccess() {
+        PaymentEventQueryDTO paymentOrderQuery = new PaymentEventQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(String.join("", Collections.nCopies(65, "P")));
+        PaymentEventQueryDTO eventTypeQuery = new PaymentEventQueryDTO();
+        eventTypeQuery.setEventType(String.join("", Collections.nCopies(65, "E")));
+        PaymentEventQueryDTO publishStatusQuery = new PaymentEventQueryDTO();
+        publishStatusQuery.setPublishStatus(String.join("", Collections.nCopies(33, "S")));
+        PaymentEventQueryDTO downstreamQuery = new PaymentEventQueryDTO();
+        downstreamQuery.setDownstreamSystem(String.join("", Collections.nCopies(257, "D")));
+        PaymentEventQueryDTO eventTopicQuery = new PaymentEventQueryDTO();
+        eventTopicQuery.setEventTopic(String.join("", Collections.nCopies(129, "T")));
+        PaymentEventServiceImpl service = new PaymentEventServiceImpl(paymentEventMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(eventTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(publishStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(downstreamQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(eventTopicQuery));
+        verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInEventQueryFieldsBeforeMapperAccess() {
+        PaymentEventQueryDTO paymentOrderQuery = new PaymentEventQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentEventQueryDTO eventTypeQuery = new PaymentEventQueryDTO();
+        eventTypeQuery.setEventType("PAYMENT_SUCCESS\n");
+        PaymentEventQueryDTO publishStatusQuery = new PaymentEventQueryDTO();
+        publishStatusQuery.setPublishStatus("FAILED\n");
+        PaymentEventQueryDTO downstreamQuery = new PaymentEventQueryDTO();
+        downstreamQuery.setDownstreamSystem("accounting-system\n");
+        PaymentEventQueryDTO eventTopicQuery = new PaymentEventQueryDTO();
+        eventTopicQuery.setEventTopic("payment.trade\n");
+        PaymentEventServiceImpl service = new PaymentEventServiceImpl(paymentEventMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(eventTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(publishStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(downstreamQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(eventTopicQuery));
+        verifyNoInteractions(paymentEventMapper, paymentEventDispatchService);
+    }
+
+    @Test
     void shouldRejectRepublishWithoutValidOperatorBeforeDispatch() {
         PaymentEventRepublishRequestDTO blankOperator = new PaymentEventRepublishRequestDTO();
         blankOperator.setEventNo("EVT001");
