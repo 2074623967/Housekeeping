@@ -60,7 +60,7 @@ const trendSummary = computed(() => {
       trendCount: 0
     };
   }
-  const latestItem = trendItems[trendItems.length - 1];
+  const latestItem = trendItems[0];
   return {
     latestDate: latestItem.statDate,
     latestTotalCount: latestItem.totalCount,
@@ -73,11 +73,16 @@ const riskSummary = computed(() => {
   const channelMetrics = overview.value.channelMetrics || [];
   const alerts = overview.value.alerts || [];
   return {
-    highRiskChannelCount: channelMetrics.filter((item) => item.riskLevel === "高" || item.riskLevel === "HIGH").length,
+    highRiskChannelCount: channelMetrics.filter(isHighRiskChannel).length,
     pendingChannelCount: channelMetrics.filter((item) => (item.pendingCount || 0) > 0).length,
     alertP1Count: alerts.filter((item) => item.alertLevel === "P1").length
   };
 });
+
+function isHighRiskChannel(item) {
+  const riskLevel = String(item?.riskLevel || "").trim().toUpperCase();
+  return riskLevel === "P1" || riskLevel === "高";
+}
 
 const alertSuggestions = computed(() => {
   if (!selectedAlert.value) {
@@ -109,7 +114,7 @@ const channelSuggestions = computed(() => {
   if ((channel.pendingCount || 0) > 0) {
     suggestions.push("当前渠道存在待处理支付，建议优先进入支付单管理页查看回调未收口链路。");
   }
-  if (channel.riskLevel === "高" || channel.riskLevel === "HIGH") {
+  if (isHighRiskChannel(channel)) {
     suggestions.push("当前渠道为高风险，建议检查渠道可用性、商户配置和返回码分布。");
   }
   if ((channel.pendingCount || 0) === 0) {
@@ -224,6 +229,9 @@ onMounted(loadOverview);
                 </tr>
               </thead>
               <tbody>
+                <tr v-if="!overview.trends?.length">
+                  <td colspan="4" class="state-box">当前暂无支付趋势数据</td>
+                </tr>
                 <tr v-for="item in overview.trends" :key="item.statDate">
                   <td>{{ item.statDate }}</td>
                   <td>{{ item.totalCount }}</td>
@@ -249,6 +257,9 @@ onMounted(loadOverview);
                 </tr>
               </thead>
               <tbody>
+                <tr v-if="!overview.alerts?.length">
+                  <td colspan="4" class="state-box">当前暂无待处理异常告警</td>
+                </tr>
                 <tr v-for="alert in overview.alerts" :key="alert.alertType">
                   <td><span :class="['badge', alert.alertLevelType]">{{ alert.alertLevel }}</span></td>
                   <td>
@@ -286,6 +297,7 @@ onMounted(loadOverview);
               <div class="timeline-item">{{ selectedAlert.alertMessage }}</div>
               <div class="timeline-item">{{ selectedAlert.suggestedAction }}</div>
             </div>
+            <div v-else class="state-box">当前暂无告警快照</div>
           </section>
 
           <section class="panel mini">
@@ -329,6 +341,9 @@ onMounted(loadOverview);
                 </tr>
               </thead>
               <tbody>
+                <tr v-if="!overview.channelMetrics?.length">
+                  <td colspan="10" class="state-box">当前暂无渠道监控数据</td>
+                </tr>
                 <tr v-for="item in overview.channelMetrics" :key="item.channelCode + item.paymentMethod">
                   <td>
                     <button class="table-link" @click="pickChannel(item)">{{ item.channelCode }}</button>
@@ -376,7 +391,9 @@ onMounted(loadOverview);
                 </div>
               </div>
             </div>
-            <div v-else class="state-box">选择左侧渠道后，可在这里查看渠道快照和处理建议。</div>
+            <div v-else class="state-box">
+              {{ overview.channelMetrics?.length ? "选择左侧渠道后，可在这里查看渠道快照和处理建议。" : "当前暂无渠道快照" }}
+            </div>
           </aside>
         </div>
       </template>
@@ -385,6 +402,57 @@ onMounted(loadOverview);
 </template>
 
 <style scoped>
+.overview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid #dbe3f0;
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.overview-card strong {
+  color: #0f172a;
+  font-size: 28px;
+}
+
+.overview-card span {
+  color: #475569;
+  line-height: 1.6;
+}
+
+.overview-title {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.overview-card.danger {
+  border-color: #fecdd3;
+  background: #fff1f2;
+}
+
+.overview-card.warn {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.overview-card.info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 .detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) 340px;
@@ -410,6 +478,7 @@ onMounted(loadOverview);
 }
 
 @media (max-width: 1200px) {
+  .overview-grid,
   .detail-layout {
     grid-template-columns: 1fr;
   }
