@@ -20,6 +20,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class SettlementServiceImpl implements SettlementService {
 
+    private static final int SETTLEMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int WORKER_KEYWORD_MAX_LENGTH = 128;
+    private static final int SETTLEMENT_STATUS_MAX_LENGTH = 32;
+    private static final int PAYOUT_STATUS_MAX_LENGTH = 32;
+
     private final SettlementMapper settlementMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
@@ -122,12 +127,33 @@ public class SettlementServiceImpl implements SettlementService {
     }
 
     private void normalizeQuery(WorkerSettlementQueryDTO query) {
-        query.setSettlementOrderId(query.getSettlementOrderId() == null ? null : query.getSettlementOrderId().trim());
-        query.setWorkerKeyword(query.getWorkerKeyword() == null ? null : query.getWorkerKeyword().trim());
-        query.setSettlementStatus(query.getSettlementStatus() == null ? "全部" : query.getSettlementStatus().trim());
-        query.setPayoutStatus(query.getPayoutStatus() == null ? "全部" : query.getPayoutStatus().trim());
+        query.setSettlementOrderId(normalizeOptionalQueryField(
+                query.getSettlementOrderId(), SETTLEMENT_ORDER_ID_MAX_LENGTH, "结算单号", null));
+        query.setWorkerKeyword(normalizeOptionalQueryField(
+                query.getWorkerKeyword(), WORKER_KEYWORD_MAX_LENGTH, "服务者关键字", null));
+        query.setSettlementStatus(normalizeOptionalQueryField(
+                query.getSettlementStatus(), SETTLEMENT_STATUS_MAX_LENGTH, "结算状态", "全部"));
+        query.setPayoutStatus(normalizeOptionalQueryField(
+                query.getPayoutStatus(), PAYOUT_STATUS_MAX_LENGTH, "出款状态", "全部"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String csvCell(String value) {

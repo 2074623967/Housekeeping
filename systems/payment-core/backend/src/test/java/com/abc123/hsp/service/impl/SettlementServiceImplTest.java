@@ -2,8 +2,10 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.WorkerSettlementListItemDTO;
@@ -44,6 +46,44 @@ class SettlementServiceImplTest {
         assertEquals(1, query.getPageSize());
         verify(settlementMapper).findWorkerSettlements(query);
         verify(settlementMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedWorkerSettlementQueryBeforeMapperAccess() {
+        WorkerSettlementQueryDTO settlementOrderQuery = new WorkerSettlementQueryDTO();
+        settlementOrderQuery.setSettlementOrderId(repeat("S", 65));
+        WorkerSettlementQueryDTO workerQuery = new WorkerSettlementQueryDTO();
+        workerQuery.setWorkerKeyword(repeat("李", 129));
+        WorkerSettlementQueryDTO settlementStatusQuery = new WorkerSettlementQueryDTO();
+        settlementStatusQuery.setSettlementStatus(repeat("A", 33));
+        WorkerSettlementQueryDTO payoutStatusQuery = new WorkerSettlementQueryDTO();
+        payoutStatusQuery.setPayoutStatus(repeat("P", 33));
+        SettlementServiceImpl service = new SettlementServiceImpl(settlementMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.workerList(settlementOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.workerOverview(workerQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(settlementStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.workerList(payoutStatusQuery));
+        verifyNoInteractions(settlementMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInWorkerSettlementQueryBeforeMapperAccess() {
+        WorkerSettlementQueryDTO settlementOrderQuery = new WorkerSettlementQueryDTO();
+        settlementOrderQuery.setSettlementOrderId("SETTLE-001\n");
+        WorkerSettlementQueryDTO workerQuery = new WorkerSettlementQueryDTO();
+        workerQuery.setWorkerKeyword("李师傅\n");
+        WorkerSettlementQueryDTO settlementStatusQuery = new WorkerSettlementQueryDTO();
+        settlementStatusQuery.setSettlementStatus("待审核\n");
+        WorkerSettlementQueryDTO payoutStatusQuery = new WorkerSettlementQueryDTO();
+        payoutStatusQuery.setPayoutStatus("待出款\n");
+        SettlementServiceImpl service = new SettlementServiceImpl(settlementMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.workerList(settlementOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.workerOverview(workerQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(settlementStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.workerList(payoutStatusQuery));
+        verifyNoInteractions(settlementMapper);
     }
 
     @Test
@@ -106,5 +146,9 @@ class SettlementServiceImplTest {
         assertEquals(1, result.getNegativeNetSettleCount());
         assertEquals("¥0.00", result.getTotalNetSettleAmount());
         verify(settlementMapper).findWorkerOverview(query);
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }
