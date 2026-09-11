@@ -9152,3 +9152,26 @@
 
 1. 告警积压不再被一次性加载并持续占用单轮任务窗口，任务结果继续表达本轮实际处理结果，剩余 outbox 告警由后续人工或自动轮次承接。
 2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实供应商受理或送达、积压吞吐、资费结果或稳定性，`release/v1.0.0` 继续冻结。
+
+## 329. 2026-09-11 异常 SLA 候选有界批次 V1.0 验证
+
+### 329.1 本轮补强
+
+1. `PaymentTaskCenterServiceImpl` 新增 `payment.issue-sla.batch-size`，默认 `100`，非正配置按 `1`、超过上限按 `1000` 执行。
+2. `findOverdueIssueAlertCandidates` 与 `findUnacknowledgedIssueAlertEscalationCandidates` 分别按该容量查询，默认每类最多 `100` 条、单轮合计最多写入 `200` 条告警；两类容量互不占用，避免一种积压长期饿死另一种候选。
+3. 首次告警按 `issue_sla.created_at ASC, issue_no ASC`、未确认升级按 `source_alert.created_at ASC, source_alert.id ASC` 选择最老候选；超过批次的数据保持原状态，由后续轮次继续处理。
+4. 自动任务 `120` 秒租约、逐候选独立事务、生成键幂等、重复键 warning、失败隔离、内容截断及 `processedCount` 的既有“逾期异常存量 + 本轮未确认升级候选数”口径保持不变。
+
+### 329.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 异常 SLA 联合定向测试 | `mvn -Dtest=PaymentTaskCenterServiceImplTest,PaymentTaskCenterMapperIntegrationTest,PaymentIssueAlertNotifierConfigurationTest,PaymentCompensationSchedulerTest test` | 通过 | `71` 个用例；覆盖两类实际 SQL 截断与最老优先、默认值、上下界、租约未取得时零候选查询及既有升级语义 |
+| payment-core 全量测试 | `mvn test` | 通过 | `830` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout PaymentTaskCenterMapper.xml` | 通过 | XML 结构有效 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 329.3 当前判断
+
+1. 两类异常 SLA 候选均不再被一次性加载，超出容量的数据保留原状态并由后续人工或自动轮次承接；单轮最大写入量为 `2 x batchSize`，并非全量清空承诺。
+2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实通知送达、人员响应、积压吞吐、多实例调度或稳定性，`release/v1.0.0` 继续冻结。

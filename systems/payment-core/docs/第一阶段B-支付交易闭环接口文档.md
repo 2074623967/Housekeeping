@@ -3216,6 +3216,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `PaymentTaskActionResultDTO.processedCount / successCount / warningCount / failCount` 只表示本轮执行结果；自动任务租约、逐告警失败隔离、成功通道防重、供应商降级和最多三个失败告警号保持不变，不新增接口字段或自动循环清空承诺。
 4. 成功或部分成功计数只代表本地派发链路及已记录的供应商响应，不代表最终送达；本地测试不证明生产 MySQL 吞吐、真实供应商受理、送达、资费结果或稳定性。
 
+### 14.156 异常 SLA 候选有界批次契约
+
+1. `POST /api/payment-task-center/actions/escalate-overdue-issues` 及对应自动任务分别限制首次告警候选与未确认升级候选；默认每类容量为 `100`，部署环境可通过 `HSP_PAYMENT_ISSUE_SLA_BATCH_SIZE` 覆盖，实际值限制在 `1..1000`。
+2. 首次告警按 `issue_sla.created_at ASC, issue_no ASC`、未确认升级按 `source_alert.created_at ASC, source_alert.id ASC` 选择最老候选；两类分别占用完整容量，默认单轮合计最多写入 `200` 条告警，超过批次的数据不改写并留待后续轮次。
+3. `PaymentTaskActionResultDTO.processedCount` 保持“逾期异常存量 + 本轮未确认升级候选数”的既有口径；`successCount / warningCount / failCount` 继续分别表达本轮生成、并发重复跳过和失败结果，本轮不新增接口字段或自动循环清空承诺。
+4. 自动任务 `120` 秒租约、逐候选独立事务、生成键幂等、失败隔离和内容截断保持不变；本地测试不证明生产 MySQL 查询计划、真实通知送达、人员响应、多实例调度或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
