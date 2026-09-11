@@ -77,6 +77,7 @@ const editingRouteRuleCode = ref("");
 const versionRuleCode = ref("");
 const routeRuleVersions = ref([]);
 const isVersionLoading = ref(false);
+const routeRuleVersionError = ref("");
 let routeRuleVersionRequestId = 0;
 const routeRuleConflicts = ref([]);
 const isConflictLoading = ref(false);
@@ -785,26 +786,31 @@ async function handleRouteRuleReview(review, approved) {
   }
   activeConfigCode.value = `review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: reviewer.value,
+    reviewComment: reviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: reviewer.value,
-      reviewComment: reviewComment.value
-    };
-    routeRuleReviews.value = approved
-      ? await paymentConfigApi.approveRouteRuleReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectRouteRuleReview(review.requestNo, payload);
-    if (approved) {
-      await loadOverview();
-      if (versionRuleCode.value) {
-        await loadRouteRuleVersions(versionRuleCode.value);
-      }
+    try {
+      routeRuleReviews.value = approved
+        ? await paymentConfigApi.approveRouteRuleReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectRouteRuleReview(review.requestNo, payload);
+      reviewComment.value = "";
+      actionMessage.value = approved
+        ? `复核申请 ${review.requestNo} 已通过，候选规则已写入运行态。`
+        : `复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `${actionLabel}失败：${error.message}`;
+      return;
     }
-    reviewComment.value = "";
-    actionMessage.value = approved
-      ? `复核申请 ${review.requestNo} 已通过，候选规则已写入运行态。`
-      : `复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `${actionLabel}失败：${error.message}`;
+    if (!approved) {
+      return;
+    }
+    const refreshTasks = [loadOverview()];
+    if (versionRuleCode.value) {
+      refreshTasks.push(loadRouteRuleVersions(versionRuleCode.value));
+    }
+    await Promise.all(refreshTasks);
   } finally {
     activeConfigCode.value = "";
   }
@@ -815,7 +821,7 @@ async function loadRouteRuleVersions(ruleCode) {
   versionRuleCode.value = ruleCode;
   routeRuleVersions.value = [];
   isVersionLoading.value = true;
-  actionMessage.value = "";
+  routeRuleVersionError.value = "";
   try {
     const versions = await paymentConfigApi.getRouteRuleVersions(ruleCode);
     if (requestId === routeRuleVersionRequestId && versionRuleCode.value === ruleCode) {
@@ -823,7 +829,7 @@ async function loadRouteRuleVersions(ruleCode) {
     }
   } catch (error) {
     if (requestId === routeRuleVersionRequestId && versionRuleCode.value === ruleCode) {
-      actionMessage.value = `规则版本加载失败：${error.message}`;
+      routeRuleVersionError.value = error.message;
     }
   } finally {
     if (requestId === routeRuleVersionRequestId) {
@@ -855,6 +861,7 @@ function closeRouteRuleVersions() {
   versionRuleCode.value = "";
   routeRuleVersions.value = [];
   isVersionLoading.value = false;
+  routeRuleVersionError.value = "";
 }
 
 async function rollbackRouteRuleVersion(version) {
@@ -2856,6 +2863,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <p class="meta">历史快照不可修改；回滚先提交候选，复核通过后恢复配置并生成新版本</p>
               </div>
               <button class="button secondary" @click="closeRouteRuleVersions">关闭</button>
+            </div>
+            <div v-if="routeRuleVersionError" class="error-banner">
+              规则版本加载失败：{{ routeRuleVersionError }}
             </div>
             <div v-if="isVersionLoading" class="state-box">规则版本加载中...</div>
             <div v-else-if="!routeRuleVersions.length" class="state-box">当前暂无版本记录</div>
