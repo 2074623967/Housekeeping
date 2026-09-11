@@ -12,10 +12,14 @@ const pageSize = 20;
 const isLoading = ref(true);
 const isSummaryLoading = ref(true);
 const hasLoadedData = ref(false);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const actionResultMessage = ref("");
+const isActionRunning = ref(false);
 const selectedIssueNos = ref([]);
 const responsibilitySummaries = ref([]);
+const loadedPageNo = ref(1);
 const actionForm = ref({
   actionType: "分派处理人",
   assignee: "支付运营",
@@ -39,6 +43,37 @@ const issueOverview = computed(() => ({
   p2Count: responsibilitySummaries.value.reduce((sum, item) => sum + (item.p2Count || 0), 0)
 }));
 
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+const isWriteDisabled = computed(() => (
+  !hasLoadedData.value || isLoading.value || isSnapshotStale.value || isActionRunning.value
+));
+
+function buildQuery() {
+  return {
+    paymentOrderId: filters.value.paymentOrderId,
+    orderNo: filters.value.orderNo,
+    issueType: filters.value.issueType,
+    severity: filters.value.severity,
+    channelCode: filters.value.channelCode,
+    paymentMethod: filters.value.paymentMethod,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
+
+function buildSummaryQuery(query) {
+  return {
+    paymentOrderId: query.paymentOrderId,
+    orderNo: query.orderNo,
+    issueType: query.issueType,
+    severity: query.severity,
+    channelCode: query.channelCode,
+    paymentMethod: query.paymentMethod
+  };
+}
+
 function resetFilters() {
   filters.value = {
     paymentOrderId: "",
@@ -57,29 +92,12 @@ function applyFilters() {
   loadIssues();
 }
 
-async function loadIssues() {
+async function loadIssues(afterAction = false, query = buildQuery()) {
   isLoading.value = true;
   isSummaryLoading.value = true;
-  errorMessage.value = "";
   try {
-    const summaryPromise = paymentIssueApi.getResponsibilitySummary({
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      issueType: filters.value.issueType,
-      severity: filters.value.severity,
-      channelCode: filters.value.channelCode,
-      paymentMethod: filters.value.paymentMethod
-    });
-    const listPromise = paymentIssueApi.getList({
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      issueType: filters.value.issueType,
-      severity: filters.value.severity,
-      channelCode: filters.value.channelCode,
-      paymentMethod: filters.value.paymentMethod,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const summaryPromise = paymentIssueApi.getResponsibilitySummary(buildSummaryQuery(query));
+    const listPromise = paymentIssueApi.getList(query);
     const [summaryResult, result] = await Promise.all([summaryPromise, listPromise]);
     responsibilitySummaries.value = summaryResult;
     items.value = result.items;
@@ -87,9 +105,24 @@ async function loadIssues() {
     selectedIssueNos.value = selectedIssueNos.value.filter((issueNo) =>
       result.items.some((item) => item.issueNo === issueNo)
     );
+    loadedPageNo.value = query.pageNo;
     hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    if (!afterAction) {
+      actionErrorMessage.value = "";
+      actionResultMessage.value = "";
+    }
   } catch (error) {
-    errorMessage.value = error.message;
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = "";
+    }
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
     isLoading.value = false;
     isSummaryLoading.value = false;
@@ -124,29 +157,37 @@ function toggleIssueSelection(issueNo, checked) {
 
 async function submitBatchAction() {
   if (!selectedIssueNos.value.length) {
-    actionMessage.value = "请先选择需要处理的异常。";
+    actionErrorMessage.value = "请先选择需要处理的异常。";
+    actionResultMessage.value = "";
     return;
   }
   const operator = actionForm.value.operator.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
-  actionMessage.value = "";
+  const issueNos = [...selectedIssueNos.value];
+  const query = buildQuery();
+  isActionRunning.value = true;
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
-    const result = await paymentIssueApi.batchAction({
-      issueNos: selectedIssueNos.value,
+    await paymentIssueApi.batchAction({
+      issueNos,
       actionType: actionForm.value.actionType,
       assignee: actionForm.value.assignee,
       operator,
       remark: actionForm.value.remark
     });
-    items.value = result.items;
-    total.value = result.total;
     selectedIssueNos.value = [];
-    actionMessage.value = "批量处理动作已记录，异常中心列表已刷新。";
+    actionResultMessage.value = `已记录 ${issueNos.length} 条异常的批量处理动作。`;
+    actionRefreshErrorMessage.value = "";
+    await loadIssues(true, query);
   } catch (error) {
-    actionMessage.value = `批量处理失败：${error.message}`;
+    actionErrorMessage.value = `批量处理失败：${error.message}`;
+  } finally {
+    isActionRunning.value = false;
   }
 }
 
@@ -160,29 +201,35 @@ onMounted(loadIssues);
         <h2>支付交易异常中心</h2>
         <p>统一聚合支付状态、下游事件、渠道配置和超额成功收款问题，支撑运营、财务与研发排障</p>
       </div>
-      <button class="button secondary" @click="loadIssues">刷新</button>
+      <button class="button secondary" :disabled="isLoading || isActionRunning" @click="loadIssues()">刷新</button>
     </div>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        {{ hasLoadedData ? "支付交易异常刷新失败，当前展示上次成功快照：" : "支付交易异常加载失败：" }}{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "支付交易异常刷新失败，当前展示上次成功快照：" : "支付交易异常加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="notice-banner">
-        {{ actionMessage }}
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        批量处理结果已确认，但异常列表与责任组统计刷新失败，当前展示上次成功快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="success-banner">
+        {{ actionResultMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isActionRunning" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isActionRunning" />
         </div>
         <div class="field">
           <label>异常类型</label>
-          <select v-model="filters.issueType">
+          <select v-model="filters.issueType" :disabled="isActionRunning">
             <option>全部</option>
             <option>待回调未收口</option>
             <option>回调处理待跟进</option>
@@ -194,7 +241,7 @@ onMounted(loadIssues);
         </div>
         <div class="field">
           <label>严重等级</label>
-          <select v-model="filters.severity">
+          <select v-model="filters.severity" :disabled="isActionRunning">
             <option>全部</option>
             <option>P1</option>
             <option>P2</option>
@@ -202,11 +249,11 @@ onMounted(loadIssues);
         </div>
         <div class="field">
           <label>渠道编码</label>
-          <input v-model="filters.channelCode" placeholder="如 alipay_h5 / wx_jsapi" />
+          <input v-model="filters.channelCode" placeholder="如 alipay_h5 / wx_jsapi" :disabled="isActionRunning" />
         </div>
         <div class="field">
           <label>支付方式</label>
-          <select v-model="filters.paymentMethod">
+          <select v-model="filters.paymentMethod" :disabled="isActionRunning">
             <option>全部</option>
             <option>微信</option>
             <option>支付宝</option>
@@ -218,15 +265,15 @@ onMounted(loadIssues);
           <input value="该页用于支付主链路异常聚合，便于统一排障与联查" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading || isActionRunning" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isLoading || isActionRunning" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>批量动作</label>
-          <select v-model="actionForm.actionType">
+          <select v-model="actionForm.actionType" :disabled="isWriteDisabled">
             <option>分派处理人</option>
             <option>标记跟进中</option>
             <option>标记已处理</option>
@@ -235,20 +282,20 @@ onMounted(loadIssues);
         </div>
         <div class="field">
           <label>处理人</label>
-          <input v-model="actionForm.assignee" maxlength="64" placeholder="如 支付运营 / 后端值班" />
+          <input v-model="actionForm.assignee" maxlength="64" placeholder="如 支付运营 / 后端值班" :disabled="isWriteDisabled" />
         </div>
         <div class="field">
           <label>操作人</label>
-          <input v-model="actionForm.operator" maxlength="64" placeholder="请输入操作人" />
+          <input v-model="actionForm.operator" maxlength="64" placeholder="请输入操作人" :disabled="isWriteDisabled" />
         </div>
         <div class="field wide-field">
           <label>处理备注</label>
-          <input v-model="actionForm.remark" maxlength="255" placeholder="请写清楚处理结论、排查方向或交接说明" />
+          <input v-model="actionForm.remark" maxlength="255" placeholder="请写清楚处理结论、排查方向或交接说明" :disabled="isWriteDisabled" />
         </div>
         <div class="toolbar-actions">
           <button
             class="button primary"
-            :disabled="isLoading || Boolean(errorMessage) || !hasLoadedData"
+            :disabled="isWriteDisabled"
             @click="submitBatchAction"
           >
             批量处理选中异常
@@ -339,7 +386,7 @@ onMounted(loadIssues);
                 <input
                   type="checkbox"
                   :checked="selectedIssueNos.includes(item.issueNo)"
-                  :disabled="Boolean(errorMessage)"
+                  :disabled="isWriteDisabled"
                   @change="toggleIssueSelection(item.issueNo, $event.target.checked)"
                 />
               </td>
@@ -405,9 +452,9 @@ onMounted(loadIssues);
       <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条支付交易异常</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="pageNo === 1 || isLoading || isActionRunning || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || isActionRunning || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>
