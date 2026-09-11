@@ -2231,7 +2231,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!StringUtils.hasText(section)) {
             return "ALL";
         }
-        String normalized = section.trim().toUpperCase();
+        String normalized = section.trim().toUpperCase(Locale.ROOT);
         Set<String> allowedSections = new HashSet<String>(Arrays.asList(
                 "ALL",
                 "CHANNELS",

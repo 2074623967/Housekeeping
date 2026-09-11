@@ -47,6 +47,7 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -976,6 +977,23 @@ class PaymentConfigServiceImplTest {
         verify(paymentConfigMapper).findAlertProvidersForExport();
         verify(paymentConfigMapper).findIssueDutyRostersForExport();
         verifyNoMoreInteractions(paymentConfigMapper);
+    }
+
+    @Test
+    void shouldNormalizeExportSectionIndependentOfDefaultLocale() {
+        Locale previousLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            when(paymentConfigMapper.findIssueDutyRostersForExport()).thenReturn(Collections.emptyList());
+
+            new PaymentConfigServiceImpl(paymentConfigMapper)
+                    .exportGovernanceSnapshotCsv("issue_duty_rosters");
+
+            verify(paymentConfigMapper).findIssueDutyRostersForExport();
+            verifyNoMoreInteractions(paymentConfigMapper);
+        } finally {
+            Locale.setDefault(previousLocale);
+        }
     }
 
     @Test

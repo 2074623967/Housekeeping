@@ -19,6 +19,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -276,7 +277,7 @@ public class PaymentController {
         if (!StringUtils.hasText(userAgent)) {
             return "UNKNOWN";
         }
-        String lowerCaseUserAgent = userAgent.toLowerCase();
+        String lowerCaseUserAgent = userAgent.toLowerCase(Locale.ROOT);
         if (lowerCaseUserAgent.contains("iphone")
                 || lowerCaseUserAgent.contains("android")
                 || lowerCaseUserAgent.contains("mobile")) {

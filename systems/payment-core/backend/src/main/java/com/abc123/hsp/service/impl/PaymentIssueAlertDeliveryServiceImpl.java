@@ -1056,7 +1056,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             if (!StringUtils.hasText(channel)) {
                 continue;
             }
-            String normalizedChannel = channel.trim().toUpperCase();
+            String normalizedChannel = channel.trim().toUpperCase(Locale.ROOT);
             if (ROUTE_CHANNEL_IN_APP.equals(normalizedChannel)) {
                 continue;
             }

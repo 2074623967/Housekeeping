@@ -24,6 +24,7 @@ import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Locale;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -102,6 +103,29 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getProviderReceiptSnapshot().contains("ACCEPTED")));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(
                 log -> "支付运营".equals(log.getTriggeredBy())));
+    }
+
+    @Test
+    void shouldRecognizeInAppChannelIndependentOfDefaultLocale() {
+        Locale previousLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+            item.setNotifyChannels("in_app");
+            when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                    .thenReturn(Collections.singletonList(item));
+
+            PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                    paymentTaskCenterMapper,
+                    Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+            ).dispatchPendingAlerts("支付运营");
+
+            Assertions.assertEquals(1, result.getSuccessCount());
+            verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                    .findEnabledAlertProvidersByChannel(any());
+        } finally {
+            Locale.setDefault(previousLocale);
+        }
     }
 
     @Test

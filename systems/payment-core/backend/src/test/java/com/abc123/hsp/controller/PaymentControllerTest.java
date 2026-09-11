@@ -12,6 +12,7 @@ import com.abc123.hsp.dto.PaymentQueryRequestDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.service.PaymentService;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import javax.servlet.http.HttpServletRequest;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
@@ -170,5 +171,25 @@ class PaymentControllerTest {
         ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
         verify(paymentService).submit(captor.capture());
         assertEquals("UNKNOWN", captor.getValue().getClientIp());
+    }
+
+    @Test
+    void shouldResolveMobileTerminalIndependentOfDefaultLocale() {
+        Locale previousLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            PaymentController controller = new PaymentController(paymentService, "");
+            PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+            when(servletRequest.getHeader("X-Terminal")).thenReturn(null);
+            when(servletRequest.getHeader("User-Agent")).thenReturn("Mozilla/5.0 (iPhone; Mobile)");
+
+            controller.submit(request, servletRequest);
+
+            ArgumentCaptor<PaymentSubmitRequestDTO> captor = ArgumentCaptor.forClass(PaymentSubmitRequestDTO.class);
+            verify(paymentService).submit(captor.capture());
+            assertEquals("MOBILE_WEB", captor.getValue().getTerminal());
+        } finally {
+            Locale.setDefault(previousLocale);
+        }
     }
 }
