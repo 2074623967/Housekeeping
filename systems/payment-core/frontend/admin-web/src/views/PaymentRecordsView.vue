@@ -143,11 +143,11 @@ onMounted(loadRows);
         <p class="card-value">{{ metrics.total }}</p>
       </article>
       <article class="card">
-        <p class="card-title">支付成功</p>
+        <p class="card-title">本页支付成功</p>
         <p class="card-value">{{ metrics.successTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">已关闭</p>
+        <p class="card-title">本页已关闭</p>
         <p class="card-value">{{ metrics.closedTotal }}</p>
       </article>
       <article class="card">

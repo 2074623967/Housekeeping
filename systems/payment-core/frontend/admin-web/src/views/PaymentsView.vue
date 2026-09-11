@@ -232,11 +232,11 @@ onMounted(refreshList);
         <p class="card-value">{{ metrics.total }}</p>
       </article>
       <article class="card">
-        <p class="card-title">支付成功</p>
+        <p class="card-title">本页支付成功</p>
         <p class="card-value">{{ metrics.successTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">待回调</p>
+        <p class="card-title">本页待回调</p>
         <p class="card-value">{{ metrics.callbackPendingTotal }}</p>
       </article>
       <article class="card">

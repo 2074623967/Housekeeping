@@ -237,7 +237,7 @@ onMounted(loadRefunds);
         <p>查看标准退款、部分退款和已结算后退款场景</p>
       </div>
       <div class="toolbar-actions">
-        <span v-if="hasLoadedData" class="badge warn">待处理 {{ metrics.reviewingTotal }} 笔</span>
+        <span v-if="hasLoadedData" class="badge warn">本页待处理 {{ metrics.reviewingTotal }} 笔</span>
         <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="loadRefunds()">刷新</button>
         <button class="button primary" @click="exportRefunds">导出退款单</button>
       </div>
@@ -249,11 +249,11 @@ onMounted(loadRefunds);
         <p class="card-value">{{ metrics.total }}</p>
       </article>
       <article class="card">
-        <p class="card-title">待审核</p>
+        <p class="card-title">本页待审核</p>
         <p class="card-value">{{ metrics.reviewingTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">退款失败</p>
+        <p class="card-title">本页退款失败</p>
         <p class="card-value">{{ metrics.failTotal }}</p>
       </article>
       <article class="card">
