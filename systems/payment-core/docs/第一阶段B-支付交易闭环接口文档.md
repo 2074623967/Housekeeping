@@ -3691,6 +3691,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 服务端继续对解码后的预付单号、支付单号执行必填、原始控制字符和最长 `64` 字符校验，并独立判断记录存在性与业务状态。
 4. 接口成功只返回当前服务端收银台或支付记录事实，不代表渠道扣款、资金到账、账务一致或生产链路验收。
 
+### 14.220 用户端支付页面路由消费约束
+
+1. `/cashier/:prepayOrderNo` 与 `/payment-result/:paymentOrderId` 属于浏览器页面路由，不新增后端 API；三端使用同名路由和结构化路由参数。
+2. 页面路由参数由 Vue Router 编码，进入页面后仍由共享 API 客户端再次按 API 路径段编码；两层边界职责独立，不传递已编码文本到服务层。
+3. `bizType`、`terminalVariant`、`prepayOrderNo` 与 `paymentMethod` 作为查询对象传递，不得通过手工 `?`、`&` 拼接改变字段边界。
+4. 页面导航成功不改变 API 响应、支付状态机或资金事实，也不代表预付单、支付单存在或渠道处理成功。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
