@@ -3543,6 +3543,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 重发 POST 成功后先提交返回列表并更新当前事件侧栏，再独立调用总览 GET；总览 GET 失败必须保留重发成功事实并标记旧总览，不得进入重发失败分支。
 5. 同页任一重发请求未完成期间不得并发调用另一事件重发；`SUCCESS / UNKNOWN` 继续禁止重发。前端门禁不替代服务端事件行锁、状态机、publisher confirm 或下游幂等，发布确认不代表消费、入账或业务完成。
 
+### 14.201 支付单人工动作前端消费契约
+
+1. `GET /api/payments`、`POST /api/payments/admin/query` 和 `POST /api/payments/admin/close` 的参数、响应 DTO、错误码与服务端状态机保持不变；两个人工 POST 均返回完整 `PaymentDetailDTO`，列表 GET 返回 `PageResultDTO<PaymentListItemDTO>`。
+2. 前端仅在列表业务成功后建立可操作快照；首次失败不得用初始化零值或空数组表示成功，已有快照刷新失败时保留数据但禁止查单、关闭和翻页。
+3. `PaymentDetailDTO` 覆盖列表行所需的支付单号、订单号、客户、金额、支付方式、渠道、渠道流水、状态、状态样式和创建时间；人工 POST 成功后可据此先更新目标行与侧栏。
+4. 人工 POST 与后续列表 GET 是两个独立请求事实；POST 成功后 GET 失败必须保留动作结果并单独标记其他列表旧快照，不得进入查单或关闭失败分支。
+5. 同页任一人工动作未完成期间不得并发调用其他支付单查单或关闭；前端门禁不替代服务端操作人校验、状态资格、事务、幂等与渠道查询结果核验，本轮不新增端点或 DTO 字段。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
