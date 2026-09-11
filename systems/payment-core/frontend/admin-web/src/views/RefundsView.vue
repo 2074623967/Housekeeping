@@ -5,13 +5,17 @@ import { refundApi } from "../api/client";
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const hasLoadedData = ref(false);
+const loadErrorMessage = ref("");
+const actionRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const actionResultMessage = ref("");
 const activeRefundOrderId = ref("");
 const activeAction = ref("");
 const refundOperator = ref("");
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
 const pageSize = 20;
 const applyForm = ref({
   paymentOrderId: "",
@@ -33,6 +37,25 @@ const metrics = computed(() => ({
   refundAmountTotal: items.value.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0).toFixed(2)
 }));
 
+const isActionRunningOnPage = computed(() => Boolean(activeAction.value));
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+const isWriteDisabled = computed(() => (
+  !hasLoadedData.value || isLoading.value || isSnapshotStale.value || isActionRunningOnPage.value
+));
+
+function buildQuery() {
+  return {
+    refundOrderId: filters.value.refundOrderId,
+    paymentOrderId: filters.value.paymentOrderId,
+    refundStatus: filters.value.refundStatus,
+    refundMethod: filters.value.refundMethod,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
+
 function isActionRunning(refundOrderId, actionName) {
   return activeRefundOrderId.value === refundOrderId && activeAction.value === actionName;
 }
@@ -53,23 +76,37 @@ function applyFilters() {
   loadRefunds();
 }
 
-async function loadRefunds() {
+async function loadRefunds(
+  preferredRefundOrderId = selectedItem.value?.refundOrderId,
+  afterAction = false,
+  query = buildQuery()
+) {
   isLoading.value = true;
-  errorMessage.value = "";
   try {
-    const result = await refundApi.getList({
-      refundOrderId: filters.value.refundOrderId,
-      paymentOrderId: filters.value.paymentOrderId,
-      refundStatus: filters.value.refundStatus,
-      refundMethod: filters.value.refundMethod,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await refundApi.getList(query);
     items.value = result.items;
     total.value = result.total;
-    selectedItem.value = result.items[0] || null;
+    selectedItem.value = result.items.find((item) => item.refundOrderId === preferredRefundOrderId)
+      || result.items[0]
+      || null;
+    loadedPageNo.value = query.pageNo;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    actionRefreshErrorMessage.value = "";
+    if (!afterAction) {
+      actionErrorMessage.value = "";
+      actionResultMessage.value = "";
+    }
   } catch (error) {
-    errorMessage.value = error.message;
+    if (afterAction) {
+      actionRefreshErrorMessage.value = error.message;
+    } else {
+      loadErrorMessage.value = error.message;
+      actionRefreshErrorMessage.value = "";
+    }
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
     isLoading.value = false;
   }
@@ -89,14 +126,39 @@ function exportRefunds() {
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
+function toRefundListItem(refund) {
+  return {
+    refundOrderId: refund.refundOrderId,
+    paymentOrderId: refund.paymentOrderId,
+    orderNo: refund.orderNo,
+    customerName: refund.customerName,
+    refundAmount: refund.refundAmount,
+    refundMethod: refund.refundMethod,
+    status: refund.status,
+    statusType: refund.statusType,
+    appliedAt: refund.appliedAt,
+    successAt: refund.successAt
+  };
+}
+
+function updateRefundSnapshot(refund) {
+  const updatedItem = toRefundListItem(refund);
+  items.value = items.value.map((item) => item.refundOrderId === refund.refundOrderId
+    ? updatedItem
+    : item);
+  selectedItem.value = updatedItem;
+}
+
 async function handleApply() {
   const operator = refundOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
   activeAction.value = "apply";
-  actionMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const refund = await refundApi.apply({
       paymentOrderId: applyForm.value.paymentOrderId,
@@ -105,7 +167,7 @@ async function handleApply() {
       refundReason: applyForm.value.refundReason,
       operator
     });
-    actionMessage.value = `退款单 ${refund.refundOrderId} 已创建，等待审核。`;
+    actionResultMessage.value = `退款单 ${refund.refundOrderId} 已创建，等待审核。`;
     applyForm.value = {
       paymentOrderId: "",
       refundAmount: "",
@@ -113,9 +175,10 @@ async function handleApply() {
       refundReason: ""
     };
     pageNo.value = 1;
-    await loadRefunds();
+    actionRefreshErrorMessage.value = "";
+    await loadRefunds(refund.refundOrderId, true, buildQuery());
   } catch (error) {
-    actionMessage.value = `发起退款失败：${error.message}`;
+    actionErrorMessage.value = `发起退款失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
@@ -124,18 +187,23 @@ async function handleApply() {
 async function runRefundAction(refundOrderId, actionName, actionLabel, actionRunner) {
   const operator = refundOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入操作人。";
+    actionErrorMessage.value = "请先输入操作人。";
+    actionResultMessage.value = "";
     return;
   }
+  const query = buildQuery();
   activeRefundOrderId.value = refundOrderId;
   activeAction.value = actionName;
-  actionMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     const refund = await actionRunner(refundOrderId, operator);
-    actionMessage.value = `退款单 ${refund.refundOrderId} 已${actionLabel}，当前状态为 ${refund.status}。`;
-    await loadRefunds();
+    updateRefundSnapshot(refund);
+    actionResultMessage.value = `退款单 ${refund.refundOrderId} 已${actionLabel}，当前状态为 ${refund.status}。`;
+    actionRefreshErrorMessage.value = "";
+    await loadRefunds(refundOrderId, true, query);
   } catch (error) {
-    actionMessage.value = `退款单 ${refundOrderId} ${actionLabel}失败：${error.message}`;
+    actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}失败：${error.message}`;
   } finally {
     activeRefundOrderId.value = "";
     activeAction.value = "";
@@ -161,12 +229,13 @@ onMounted(loadRefunds);
         <p>查看标准退款、部分退款和已结算后退款场景</p>
       </div>
       <div class="toolbar-actions">
-        <span class="badge warn">待处理 {{ metrics.reviewingTotal }} 笔</span>
+        <span v-if="hasLoadedData" class="badge warn">待处理 {{ metrics.reviewingTotal }} 笔</span>
+        <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="loadRefunds()">刷新</button>
         <button class="button primary" @click="exportRefunds">导出退款单</button>
       </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">退款单总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -186,14 +255,20 @@ onMounted(loadRefunds);
     </section>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        退款单数据加载失败：{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "退款单数据刷新失败，当前展示上次成功快照：" : "退款单数据加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="success-banner">
-        {{ actionMessage }}
+      <div v-if="actionRefreshErrorMessage" class="error-banner">
+        退款人工动作结果已保留，但列表刷新失败，当前页面仍包含上次成功快照：{{ actionRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="success-banner">
+        {{ actionResultMessage }}
       </div>
 
-      <div class="sub-panel">
+      <div v-if="hasLoadedData" class="sub-panel">
         <div>
           <h3>发起退款</h3>
           <p>仅允许对支付成功订单发起，后端会校验累计退款金额不超过原支付金额。</p>
@@ -201,15 +276,15 @@ onMounted(loadRefunds);
         <div class="toolbar compact-toolbar">
           <div class="field">
             <label>原支付单号</label>
-            <input v-model="applyForm.paymentOrderId" placeholder="PAY202607190001" />
+            <input v-model="applyForm.paymentOrderId" :disabled="isWriteDisabled" placeholder="PAY202607190001" />
           </div>
           <div class="field">
             <label>退款金额</label>
-            <input v-model="applyForm.refundAmount" type="number" min="0.01" step="0.01" placeholder="请输入金额" />
+            <input v-model="applyForm.refundAmount" :disabled="isWriteDisabled" type="number" min="0.01" step="0.01" placeholder="请输入金额" />
           </div>
           <div class="field">
             <label>退款方式</label>
-            <select v-model="applyForm.refundMethod">
+            <select v-model="applyForm.refundMethod" :disabled="isWriteDisabled">
               <option>原路退款</option>
               <option>线下打款</option>
               <option>退转付</option>
@@ -217,14 +292,14 @@ onMounted(loadRefunds);
           </div>
           <div class="field wide-field">
             <label>退款原因</label>
-            <input v-model="applyForm.refundReason" placeholder="客户取消服务、服务未履约等" />
+            <input v-model="applyForm.refundReason" :disabled="isWriteDisabled" placeholder="客户取消服务、服务未履约等" />
           </div>
           <div class="field">
             <label>操作人</label>
-            <input v-model="refundOperator" maxlength="64" placeholder="请输入操作人" />
+            <input v-model="refundOperator" :disabled="isWriteDisabled" maxlength="64" placeholder="请输入操作人" />
           </div>
           <div class="toolbar-actions">
-            <button class="button primary" :disabled="activeAction === 'apply'" @click="handleApply">
+            <button class="button primary" :disabled="isWriteDisabled" @click="handleApply">
               {{ activeAction === "apply" ? "提交中..." : "提交退款申请" }}
             </button>
           </div>
@@ -234,15 +309,15 @@ onMounted(loadRefunds);
       <div class="toolbar">
         <div class="field">
           <label>退款单号</label>
-          <input v-model="filters.refundOrderId" placeholder="请输入退款单号" />
+          <input v-model="filters.refundOrderId" :disabled="isActionRunningOnPage" placeholder="请输入退款单号" />
         </div>
         <div class="field">
           <label>原支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入原支付单号" />
+          <input v-model="filters.paymentOrderId" :disabled="isActionRunningOnPage" placeholder="请输入原支付单号" />
         </div>
         <div class="field">
           <label>退款状态</label>
-          <select v-model="filters.refundStatus">
+          <select v-model="filters.refundStatus" :disabled="isActionRunningOnPage">
             <option>全部</option>
             <option>REVIEWING</option>
             <option>PROCESSING</option>
@@ -252,7 +327,7 @@ onMounted(loadRefunds);
         </div>
         <div class="field">
           <label>退款方式</label>
-          <select v-model="filters.refundMethod">
+          <select v-model="filters.refundMethod" :disabled="isActionRunningOnPage">
             <option>全部</option>
             <option>原路退款</option>
             <option>线下打款</option>
@@ -260,12 +335,14 @@ onMounted(loadRefunds);
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading || isActionRunningOnPage" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">退款单数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的退款单快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的退款单数据</div>
 
@@ -303,21 +380,21 @@ onMounted(loadRefunds);
                     <RouterLink class="link-button" :to="`/refunds/${item.refundOrderId}`">详情</RouterLink>
                     <button
                       class="link-button"
-                      :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'PROCESSING'"
+                      :disabled="isWriteDisabled || item.status !== 'PROCESSING'"
                       @click="runRefundAction(item.refundOrderId, 'query', '完成主动查单', refundApi.query)"
                     >
                       {{ isActionRunning(item.refundOrderId, "query") ? "查询中..." : "主动查单" }}
                     </button>
                     <button
                       class="link-button"
-                      :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'REVIEWING'"
+                      :disabled="isWriteDisabled || item.status !== 'REVIEWING'"
                       @click="runRefundAction(item.refundOrderId, 'approve', '审核通过', refundApi.approve)"
                     >
                       {{ isActionRunning(item.refundOrderId, "approve") ? "审核中..." : "审核通过" }}
                     </button>
                     <button
                       class="link-button"
-                      :disabled="activeRefundOrderId === item.refundOrderId || item.status !== 'FAIL'"
+                      :disabled="isWriteDisabled || item.status !== 'FAIL'"
                       @click="runRefundAction(item.refundOrderId, 'retry', '重新提交', refundApi.retry)"
                     >
                       {{ isActionRunning(item.refundOrderId, "retry") ? "重试中..." : "重试" }}
@@ -355,11 +432,11 @@ onMounted(loadRefunds);
           <div v-else class="state-box">选择左侧退款单后，可在这里查看退款快照与处理建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条退款单</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="pageNo === 1 || isLoading || isActionRunningOnPage || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || isActionRunningOnPage || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
