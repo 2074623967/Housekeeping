@@ -313,12 +313,23 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             return false;
         }
         if (REFUND_SUBMIT_EVENT_TYPE.equals(event.getEventType())) {
+            if (!"UNKNOWN".equals(event.getPublishStatus())
+                    && !isRepublishableStatus(event.getPublishStatus())) {
+                return false;
+            }
             return dispatchRefundSubmit(eventNo, event.getBizNo(), normalizedOperator);
         }
-        if (!PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())) {
+        if (!PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())
+                || !isRepublishableStatus(event.getPublishStatus())) {
             return false;
         }
         return dispatchPaymentSuccess(eventNo, event.getPaymentOrderId());
+    }
+
+    private boolean isRepublishableStatus(String publishStatus) {
+        return "PENDING".equals(publishStatus)
+                || "FAILED".equals(publishStatus)
+                || "DEAD_LETTER".equals(publishStatus);
     }
 
     private boolean dispatchRefundSubmit(String eventNo, String refundOrderId, String operator) {

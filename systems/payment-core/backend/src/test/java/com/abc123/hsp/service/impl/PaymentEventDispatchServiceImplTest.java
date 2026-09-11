@@ -418,6 +418,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
+        event.setPublishStatus("FAILED");
         event.setRetryCount(0);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
@@ -576,6 +577,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventNo("EVT-001");
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
+        event.setPublishStatus("FAILED");
         event.setRetryCount(0);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-001")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
@@ -605,6 +607,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventNo("EVT-RETRY-003");
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
+        event.setPublishStatus("FAILED");
         event.setRetryCount(2);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-RETRY-003")).thenReturn(event);
         when(paymentEventMapper.findByEventNo("EVT-RETRY-003")).thenReturn(event);
@@ -670,6 +673,47 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectRepublishingSuccessfulPaymentEventBeforeCallingDownstream() {
+        PaymentEventListItemDTO event = paymentEvent("EVT-SUCCESS", 1);
+        event.setPublishStatus("SUCCESS");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-SUCCESS")).thenReturn(event);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-SUCCESS", " finance-ops ");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findDetail(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+        verify(paymentEventMapper, never()).markPublishFailed(any());
+        verify(paymentEventMapper, never()).markPublishDeadLetter(any());
+    }
+
+    @Test
+    void shouldRejectRepublishingSuccessfulRefundEventBeforeCallingChannel() {
+        PaymentEventListItemDTO event = refundEvent("SUCCESS", 1);
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .republish("EVTR-001", " finance-ops ");
+
+        Assertions.assertFalse(success);
+        verify(refundMapper, never()).findChannelSubmitRequestByRefundOrderId(any());
+        verify(refundChannelSubmitService, never()).submit(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+        verify(paymentEventMapper, never()).markPublishFailed(any());
+        verify(paymentEventMapper, never()).markPublishDeadLetter(any());
+    }
+
+    @Test
     void shouldMarkFailedWhenPaymentDetailMissing() {
         when(paymentMapper.findDetail("PAY-404")).thenReturn(null);
 
@@ -718,6 +762,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventNo("EVT-CLEARING-FAIL");
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
+        event.setPublishStatus("FAILED");
         event.setRetryCount(0);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-CLEARING-FAIL")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
@@ -930,6 +975,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventNo(eventNo);
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
+        event.setPublishStatus("FAILED");
         event.setRetryCount(retryCount);
         return event;
     }
