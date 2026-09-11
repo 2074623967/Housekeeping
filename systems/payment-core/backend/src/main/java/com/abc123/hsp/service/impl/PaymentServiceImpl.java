@@ -1450,17 +1450,19 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String normalizeOptionalRequestField(String value, String fieldName, int maxLength) {
+        if (value != null) {
+            for (int index = 0; index < value.length(); index++) {
+                if (Character.isISOControl(value.charAt(index))) {
+                    throw invalidPaymentRequest(fieldName + "不能包含控制字符");
+                }
+            }
+        }
         if (!StringUtils.hasText(value)) {
             return null;
         }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw invalidPaymentRequest(fieldName + "长度不能超过 " + maxLength + " 个字符");
-        }
-        for (int index = 0; index < normalized.length(); index++) {
-            if (Character.isISOControl(normalized.charAt(index))) {
-                throw invalidPaymentRequest(fieldName + "不能包含控制字符");
-            }
         }
         return normalized;
     }

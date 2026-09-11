@@ -188,6 +188,41 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectPaymentRequestControlCharactersBeforeTrimming() {
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+        com.abc123.hsp.dto.PaymentQueryRequestDTO queryRequest =
+                new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        queryRequest.setPaymentOrderId("PAY-QUERY\n");
+        com.abc123.hsp.dto.PaymentCloseRequestDTO closeRequest =
+                new com.abc123.hsp.dto.PaymentCloseRequestDTO();
+        closeRequest.setPaymentOrderId("PAY-CLOSE\n");
+        PrepayRequestDTO orderNoRequest = validPrepayRequest();
+        orderNoRequest.setOrderNo("ORDER-001\n");
+        PrepayRequestDTO paySceneRequest = validPrepayRequest();
+        paySceneRequest.setPayScene("HOME_CLEAN\n");
+        PrepayRequestDTO customerNameRequest = validPrepayRequest();
+        customerNameRequest.setCustomerName("CUSTOMER\n");
+        PrepayRequestDTO cashierTitleRequest = validPrepayRequest();
+        cashierTitleRequest.setCashierTitle("CASHIER\n");
+
+        assertPaymentRequestInvalid(() -> service.detail("PAY-DETAIL\n"));
+        assertPaymentRequestInvalid(() -> service.cashier("PRE-001\n"));
+        assertPaymentRequestInvalid(() -> service.query(queryRequest));
+        assertPaymentRequestInvalid(() -> service.close(closeRequest));
+        assertPaymentRequestInvalid(() -> service.prepay(orderNoRequest));
+        assertPaymentRequestInvalid(() -> service.prepay(paySceneRequest));
+        assertPaymentRequestInvalid(() -> service.prepay(customerNameRequest));
+        assertPaymentRequestInvalid(() -> service.prepay(cashierTitleRequest));
+
+        verifyNoInteractions(paymentMapper, paymentChannelQueryRateLimitService);
+    }
+
+    @Test
     void shouldRejectInvalidPrepayAmountBeforeAnyMapperInteraction() {
         PrepayRequestDTO request = new PrepayRequestDTO();
         request.setOrderNo("WALLET-INVALID-AMOUNT");
@@ -3165,6 +3200,21 @@ class PaymentServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("当前支付场景未配置默认支付方式，无法提交支付", exception.getMessage());
         verify(paymentChannelRoutingService, never()).resolve(org.mockito.ArgumentMatchers.any());
         verify(paymentChannelSubmitService, never()).submit(org.mockito.ArgumentMatchers.any());
+    }
+
+    private PrepayRequestDTO validPrepayRequest() {
+        PrepayRequestDTO request = new PrepayRequestDTO();
+        request.setOrderNo("ORDER-001");
+        request.setPayScene("HOME_CLEAN");
+        request.setCustomerName("CUSTOMER");
+        request.setCashierTitle("CASHIER");
+        return request;
+    }
+
+    private void assertPaymentRequestInvalid(org.junit.jupiter.api.function.Executable action) {
+        BusinessException exception = assertThrows(BusinessException.class, action);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_REQUEST_INVALID, exception.getCode());
     }
 
     private String repeat(String value, int times) {
