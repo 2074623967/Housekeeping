@@ -186,6 +186,7 @@ payment:
         retry-backoff-factor: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RETRY_BACKOFF_FACTOR:2}
         max-retry-interval-seconds: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_MAX_RETRY_INTERVAL_SECONDS:900}
         max-attempts: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_MAX_ATTEMPTS:10}
+        # 人工与自动批量回查共用单轮候选上限，服务端限制为 1..1000；单条回查不受影响。
         batch-size: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_BATCH_SIZE:100}
         claim-timeout-seconds: ${HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_CLAIM_TIMEOUT_SECONDS:30}
     auto-dispatch:

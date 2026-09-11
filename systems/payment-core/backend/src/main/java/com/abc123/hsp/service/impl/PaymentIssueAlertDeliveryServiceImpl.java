@@ -52,6 +52,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final int MAX_DISPATCH_BATCH_SIZE = 1000;
+    private static final int MAX_RECEIPT_QUERY_BATCH_SIZE = 1000;
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
     private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
     private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -161,7 +162,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.receiptQueryRetryBackoffFactor = Math.max(retryBackoffFactor, 1);
         this.receiptQueryMaxRetryIntervalSeconds = Math.max(maxRetryIntervalSeconds, 1);
         this.receiptQueryMaxAttempts = Math.max(maxAttempts, 1);
-        this.receiptQueryBatchSize = Math.max(batchSize, 1);
+        this.receiptQueryBatchSize = Math.min(Math.max(batchSize, 1), MAX_RECEIPT_QUERY_BATCH_SIZE);
         this.receiptQueryClaimTimeoutSeconds = Math.max(claimTimeoutSeconds, 1);
     }
 

@@ -146,6 +146,42 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldUseDefaultAndClampReceiptQueryBatchSizeForManualAndAutoRuns() {
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(1))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(1000))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.acquireTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"),
+                leaseOwner("payment-issue-alert-receipt-scheduler"),
+                eq(120)))
+                .thenReturn(1);
+        when(paymentTaskCenterMapper.findDueAcceptedIssueAlertDeliveryLogs(60, 10, 30, 1000))
+                .thenReturn(Collections.emptyList());
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        service.reconcileDeliveryReceipts("payment-core-admin");
+        service.configureReceiptQueryCompensation(60, 60, 2, 900, 10, 0, 30);
+        service.reconcileDeliveryReceipts("payment-core-admin");
+        service.configureReceiptQueryCompensation(60, 60, 2, 900, 10, 1001, 30);
+        service.reconcileDeliveryReceipts("payment-core-admin");
+        service.autoReconcileDeliveryReceipts();
+
+        verify(paymentTaskCenterMapper).findAcceptedIssueAlertDeliveryLogs(100);
+        verify(paymentTaskCenterMapper).findAcceptedIssueAlertDeliveryLogs(1);
+        verify(paymentTaskCenterMapper).findAcceptedIssueAlertDeliveryLogs(1000);
+        verify(paymentTaskCenterMapper).findDueAcceptedIssueAlertDeliveryLogs(60, 10, 30, 1000);
+        verify(paymentTaskCenterMapper).releaseTaskLease(
+                eq("PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE"),
+                leaseOwner("payment-issue-alert-receipt-scheduler"));
+    }
+
+    @Test
     void shouldReleaseLeaseAfterAutoReceiptReconcile() {
         PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
         acceptedLog.setAlertNo("PIA-IM-001");
