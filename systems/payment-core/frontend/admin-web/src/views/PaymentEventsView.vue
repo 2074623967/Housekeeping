@@ -7,8 +7,11 @@ const route = useRoute();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
-const errorMessage = ref("");
-const actionMessage = ref("");
+const hasLoadedData = ref(false);
+const loadErrorMessage = ref("");
+const overviewRefreshErrorMessage = ref("");
+const actionErrorMessage = ref("");
+const successMessage = ref("");
 const total = ref(0);
 const overview = ref({
   totalEventCount: 0,
@@ -24,6 +27,7 @@ const overview = ref({
   latestPublishedAt: ""
 });
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
 const pageSize = 20;
 const activeEventNo = ref("");
 const republishOperator = ref("");
@@ -50,6 +54,27 @@ const metrics = computed(() => ({
   latestPublishedAt: overview.value.latestPublishedAt || "-"
 }));
 
+const isSnapshotStale = computed(() => Boolean(
+  hasLoadedData.value && (loadErrorMessage.value || overviewRefreshErrorMessage.value)
+));
+
+function buildQuery(includePagination = true) {
+  const query = {
+    paymentOrderId: filters.value.paymentOrderId,
+    eventType: filters.value.eventType,
+    publishStatus: filters.value.publishStatus,
+    downstreamSystem: filters.value.downstreamSystem,
+    eventTopic: filters.value.eventTopic,
+    sortField: filters.value.sortField,
+    sortOrder: filters.value.sortOrder
+  };
+  if (includePagination) {
+    query.pageNo = pageNo.value;
+    query.pageSize = pageSize;
+  }
+  return query;
+}
+
 function resetFilters() {
   filters.value = {
     paymentOrderId: "",
@@ -75,19 +100,8 @@ function pickItem(item) {
 
 async function loadEvents() {
   isLoading.value = true;
-  errorMessage.value = "";
   try {
-    const query = {
-      paymentOrderId: filters.value.paymentOrderId,
-      eventType: filters.value.eventType,
-      publishStatus: filters.value.publishStatus,
-      downstreamSystem: filters.value.downstreamSystem,
-      eventTopic: filters.value.eventTopic,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    };
+    const query = buildQuery();
     const [overviewResult, result] = await Promise.all([
       paymentEventApi.getOverview(query),
       paymentEventApi.getList(query)
@@ -99,51 +113,56 @@ async function loadEvents() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    loadedPageNo.value = pageNo.value;
+    hasLoadedData.value = true;
+    loadErrorMessage.value = "";
+    overviewRefreshErrorMessage.value = "";
   } catch (error) {
-    errorMessage.value = error.message;
+    loadErrorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
     isLoading.value = false;
   }
 }
 
 function exportEvents() {
-  const exportUrl = paymentEventApi.buildExportUrl({
-    paymentOrderId: filters.value.paymentOrderId,
-    eventType: filters.value.eventType,
-    publishStatus: filters.value.publishStatus,
-    downstreamSystem: filters.value.downstreamSystem,
-    eventTopic: filters.value.eventTopic,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  const exportUrl = paymentEventApi.buildExportUrl(buildQuery(false));
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 async function republish(item) {
   const operator = republishOperator.value.trim();
   if (!operator) {
-    actionMessage.value = "请先输入重发操作人。";
+    actionErrorMessage.value = "请先输入重发操作人。";
     return;
   }
   activeEventNo.value = item.eventNo;
-  actionMessage.value = "";
+  actionErrorMessage.value = "";
+  successMessage.value = "";
   try {
-    const result = await paymentEventApi.republish(item.eventNo, operator, {
-      paymentOrderId: filters.value.paymentOrderId,
-      eventType: filters.value.eventType,
-      publishStatus: filters.value.publishStatus,
-      downstreamSystem: filters.value.downstreamSystem,
-      eventTopic: filters.value.eventTopic,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const query = buildQuery();
+    const result = await paymentEventApi.republish(item.eventNo, operator, query);
     items.value = result.items;
     total.value = result.total;
-    actionMessage.value = `事件 ${item.eventNo} 已重新投递。`;
+    selectedItem.value = result.items.find((candidate) => candidate.eventNo === item.eventNo)
+      || result.items[0]
+      || null;
+    successMessage.value = `事件 ${item.eventNo} 已重新投递，请继续核对下游消费与业务处理结果。`;
+
+    overviewRefreshErrorMessage.value = "";
+    try {
+      const overviewResult = await paymentEventApi.getOverview(query);
+      overview.value = {
+        ...overview.value,
+        ...overviewResult
+      };
+    } catch (error) {
+      overviewRefreshErrorMessage.value = error.message;
+    }
   } catch (error) {
-    actionMessage.value = `事件 ${item.eventNo} 重发失败：${error.message}`;
+    actionErrorMessage.value = `事件 ${item.eventNo} 重发失败：${error.message}`;
   } finally {
     activeEventNo.value = "";
   }
@@ -167,10 +186,13 @@ onMounted(loadEvents);
         <h2>支付事件出站</h2>
         <p>统一管理 payment-core 向账户、清分、结算等下游系统投递的事件边界与重发动作</p>
       </div>
-      <button class="button primary" @click="exportEvents">导出事件</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading || Boolean(activeEventNo)" @click="loadEvents">刷新</button>
+        <button class="button primary" @click="exportEvents">导出事件</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">事件总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -201,7 +223,7 @@ onMounted(loadEvents);
       </article>
     </section>
 
-    <section class="panel overview-panel">
+    <section v-if="hasLoadedData" class="panel overview-panel">
       <div class="section-title">
         <h3>出站风险总览</h3>
         <span class="meta">最近发布时间：{{ metrics.latestPublishedAt }}</span>
@@ -227,11 +249,17 @@ onMounted(loadEvents);
     </section>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        支付事件出站数据加载失败：{{ errorMessage }}
+      <div v-if="loadErrorMessage" class="error-banner">
+        {{ hasLoadedData ? "支付事件出站数据刷新失败，当前展示上次成功快照：" : "支付事件出站数据加载失败：" }}{{ loadErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="success-banner">
-        {{ actionMessage }}
+      <div v-if="overviewRefreshErrorMessage" class="error-banner">
+        事件列表已按重发结果更新，但总览刷新失败，当前总览仍为上次成功快照：{{ overviewRefreshErrorMessage }}
+      </div>
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="successMessage" class="success-banner">
+        {{ successMessage }}
       </div>
 
       <div class="toolbar">
@@ -298,12 +326,13 @@ onMounted(loadEvents);
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading || Boolean(activeEventNo)" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isLoading || Boolean(activeEventNo)" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付事件出站数据加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付事件出站快照</div>
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付事件出站数据</div>
 
       <div v-else class="detail-layout">
@@ -348,7 +377,7 @@ onMounted(loadEvents);
                   <button class="link-button" @click="pickItem(item)">快照</button>
                   <button
                     class="link-button"
-                    :disabled="activeEventNo === item.eventNo || ['SUCCESS', 'UNKNOWN'].includes(item.publishStatus)"
+                    :disabled="Boolean(activeEventNo) || isSnapshotStale || !hasLoadedData || ['SUCCESS', 'UNKNOWN'].includes(item.publishStatus)"
                     @click="republish(item)"
                   >
                     {{ item.publishStatus === "SUCCESS" ? "已发布" : item.publishStatus === "UNKNOWN" ? "待核查" : "重发" }}
@@ -395,11 +424,11 @@ onMounted(loadEvents);
           <div v-else class="state-box">选择左侧支付事件后，可在这里查看事件快照与排障建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条支付事件</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="pageNo === 1 || isLoading || Boolean(activeEventNo) || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || Boolean(activeEventNo) || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
