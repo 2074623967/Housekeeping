@@ -174,6 +174,45 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRefundAmountOutsideDatabaseCapacity() {
+        RefundApplyRequestDTO excessiveScale = refundApplyRequest(new BigDecimal("0.001"));
+        IllegalArgumentException scale = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().apply(excessiveScale));
+        assertEquals("退款金额最多支持 16 位整数和 2 位小数", scale.getMessage());
+
+        RefundApplyRequestDTO excessiveAmount = refundApplyRequest(
+                new BigDecimal("10000000000000000.00"));
+        IllegalArgumentException amount = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> createService().apply(excessiveAmount));
+        assertEquals("退款金额最多支持 16 位整数和 2 位小数", amount.getMessage());
+
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
+    void shouldAllowRefundAmountAtDatabaseCapacityBoundary() {
+        RefundApplyRequestDTO maximum = refundApplyRequest(new BigDecimal("9999999999999999.990"));
+        RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
+        source.setPaymentOrderId("PAY-001");
+        source.setOrderNo("ORD-001");
+        source.setPaidAmount(new BigDecimal("9999999999999999.99"));
+        source.setStatus("SUCCESS");
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
+        when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(BigDecimal.ZERO);
+
+        createService().apply(maximum);
+
+        verify(refundMapper).insertRefund(
+                org.mockito.ArgumentMatchers.startsWith("REF"),
+                org.mockito.ArgumentMatchers.eq(source),
+                org.mockito.ArgumentMatchers.eq(maximum),
+                org.mockito.ArgumentMatchers.eq("REVIEWING"),
+                org.mockito.ArgumentMatchers.eq("warn"));
+    }
+
+    @Test
     void shouldApproveReviewingRefund() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-001");
@@ -831,5 +870,14 @@ class RefundServiceImplTest {
         when(refundMapper.findRetrySourceForUpdate(refundOrderId)).thenReturn(retrySource);
         when(refundMapper.findPaymentSourceForUpdate(paymentOrderId)).thenReturn(paymentSource);
         when(refundMapper.sumActiveRefundAmount(paymentOrderId)).thenReturn(activeRefundAmount);
+    }
+
+    private RefundApplyRequestDTO refundApplyRequest(BigDecimal refundAmount) {
+        RefundApplyRequestDTO request = new RefundApplyRequestDTO();
+        request.setPaymentOrderId("PAY-001");
+        request.setRefundAmount(refundAmount);
+        request.setRefundMethod("原路退款");
+        request.setOperator("refund-applicant");
+        return request;
     }
 }

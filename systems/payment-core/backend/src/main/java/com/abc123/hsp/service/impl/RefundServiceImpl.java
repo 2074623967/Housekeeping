@@ -61,6 +61,8 @@ public class RefundServiceImpl implements RefundService {
     private static final int CALLBACK_REFUND_ORDER_ID_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int CALLBACK_REFUND_STATUS_MAX_LENGTH = 32;
+    private static final int MONEY_MAX_SCALE = 2;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
 
     private final RefundMapper refundMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -454,6 +456,11 @@ public class RefundServiceImpl implements RefundService {
         }
         if (request.getRefundAmount() == null || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("退款金额必须大于0");
+        }
+        BigDecimal normalizedAmount = request.getRefundAmount().stripTrailingZeros();
+        if (normalizedAmount.scale() > MONEY_MAX_SCALE
+                || request.getRefundAmount().compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new IllegalArgumentException("退款金额最多支持 16 位整数和 2 位小数");
         }
         if (!StringUtils.hasText(request.getRefundMethod())) {
             request.setRefundMethod("原路退款");
