@@ -131,6 +131,33 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             String clearingUrl,
             String accountingUrl,
             String accountingPaymentSuccessAccountNo,
+            RestTemplate restTemplate,
+            String dispatchMode,
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper) {
+        this(paymentMapper,
+                paymentEventMapper,
+                clearingUrl,
+                accountingUrl,
+                accountingPaymentSuccessAccountNo,
+                DEFAULT_MAX_RETRY_COUNT,
+                restTemplate,
+                dispatchMode,
+                "payment.trade",
+                "payment.success.v1",
+                DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS,
+                rabbitTemplate,
+                objectMapper,
+                null,
+                null);
+    }
+
+    PaymentEventDispatchServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentEventMapper paymentEventMapper,
+            String clearingUrl,
+            String accountingUrl,
+            String accountingPaymentSuccessAccountNo,
             int maxRetryCount,
             RestTemplate restTemplate) {
         this(paymentMapper,
@@ -484,6 +511,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         String workerName = paymentMapper.findWorkerNameByOrderNo(detail.getOrderNo());
         BigDecimal amount = parseAmount(detail.getAmount());
         try {
+            validateDispatchMode();
             if (usesAmqp()) {
                 publishToAmqp(eventNo, detail, workerName, amount);
                 paymentEventMapper.markPublishSuccess(eventNo);
@@ -497,6 +525,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         } catch (RuntimeException exception) {
             markFailedOrDeadLetter(eventNo);
             return false;
+        }
+    }
+
+    private void validateDispatchMode() {
+        String normalizedMode = StringUtils.hasText(dispatchMode) ? dispatchMode.trim() : "";
+        if (!"http".equalsIgnoreCase(normalizedMode) && !"amqp".equalsIgnoreCase(normalizedMode)) {
+            throw new IllegalStateException("支付成功事件派发模式配置非法");
         }
     }
 

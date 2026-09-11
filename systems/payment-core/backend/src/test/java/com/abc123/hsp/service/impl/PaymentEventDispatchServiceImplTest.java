@@ -660,6 +660,32 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectUnsupportedDispatchModeBeforeCallingEitherDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-MODE-INVALID", 0);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.findByEventNo("EVT-MODE-INVALID")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate,
+                " amqpp ",
+                rabbitTemplate,
+                new ObjectMapper()
+        ).publishPaymentSuccess("EVT-MODE-INVALID", "PAY-001");
+
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-MODE-INVALID");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-MODE-INVALID");
+    }
+
+    @Test
     void shouldRejectHttpBusinessFailureWithoutCallingAccounting() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = paymentEvent("EVT-BUSINESS-FAIL", 0);
