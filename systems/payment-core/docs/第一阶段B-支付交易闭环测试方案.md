@@ -1270,6 +1270,14 @@
 4. `PaymentEventDispatchServiceImplTest` 与 `PaymentEventServiceImplTest` 联合定向测试应不少于 `45` 个，payment-core 全量不少于 `812` 个；补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
 5. 本地 Mockito 不证明生产事件状态、真实 HTTP、RabbitMQ 或退款渠道调用、历史审计正确、资金结果或稳定性。
 
+### 4.167 支付成功事件资金终态一致性
+
+1. 构造事件指定支付单仍为 `WAIT_CALLBACK` 的场景，验证重发返回失败、服务者查询和 HTTP/AMQP 均零调用，并按重试次数标记事件失败或死信。
+2. 构造按 `PAY-001` 查询却返回 `PAY-OTHER` 明细的错配场景，验证不使用错误支付单构造业务链路号或下游载荷，也不标记发布成功。
+3. 回归支付单号一致且状态为 `SUCCESS` 的 HTTP、AMQP 和重发成功路径，确认新增门禁不改变合法载荷、发布确认与成功状态收口。
+4. `PaymentEventDispatchServiceImplTest` 与 `PaymentEventServiceImplTest` 联合定向测试应不少于 `47` 个，payment-core 全量不少于 `814` 个；补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
+5. 本地 Mockito 不证明生产支付状态、真实清分记账、RabbitMQ 消费、资金到账、跨系统一致或稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
