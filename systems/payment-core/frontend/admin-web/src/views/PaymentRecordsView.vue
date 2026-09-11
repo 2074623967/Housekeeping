@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentRecordApi } from "../api/client";
 import { paymentRecordDetailRoute } from "../router/detailRoutes";
+import { sumPaymentAmounts } from "../utils/paymentAmount";
 
 const route = useRoute();
 const router = useRouter();
@@ -28,16 +29,11 @@ const pageConfig = computed(() => ({
   recordType: route.meta.recordType || "ALL"
 }));
 
-function parseMoney(value) {
-  const amount = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(amount) ? amount : 0;
-}
-
 const metrics = computed(() => ({
   total: total.value,
   successTotal: rows.value.filter((item) => item.paymentStatus === "支付成功").length,
   closedTotal: rows.value.filter((item) => item.paymentStatus === "已关闭").length,
-  refundAmountTotal: `¥${rows.value.reduce((sum, item) => sum + parseMoney(item.refundedAmount), 0).toFixed(2)}`
+  refundAmountTotal: `¥${sumPaymentAmounts(rows.value.map((item) => item.refundedAmount))}`
 }));
 
 const columns = [

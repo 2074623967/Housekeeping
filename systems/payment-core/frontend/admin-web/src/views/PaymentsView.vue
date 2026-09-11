@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { sumPaymentAmounts } from "../utils/paymentAmount";
 
 const router = useRouter();
 const items = ref([]);
@@ -31,7 +32,7 @@ const metrics = computed(() => ({
   total: total.value,
   successTotal: items.value.filter((item) => item.status === "SUCCESS").length,
   callbackPendingTotal: items.value.filter((item) => item.status === "WAIT_CALLBACK").length,
-  amountTotal: items.value.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2)
+  amountTotal: sumPaymentAmounts(items.value.map((item) => item.amount))
 }));
 
 const isSnapshotStale = computed(() => Boolean(

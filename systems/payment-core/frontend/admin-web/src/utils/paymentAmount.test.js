@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   normalizeNonNegativePaymentAmountInput,
-  normalizePaymentAmountInput
+  normalizePaymentAmountInput,
+  sumPaymentAmounts
 } from "./paymentAmount.js";
 
 test("keeps refund amounts as exact decimal strings", () => {
@@ -33,4 +34,13 @@ test("allows exact zero and maximum channel daily limits", () => {
   assert.equal(normalizeNonNegativePaymentAmountInput("-1"), null);
   assert.equal(normalizeNonNegativePaymentAmountInput("1.001"), null);
   assert.equal(normalizeNonNegativePaymentAmountInput("10000000000000000.00"), null);
+});
+
+test("sums formatted payment amounts without binary floating point", () => {
+  assert.equal(sumPaymentAmounts(["¥0.10", "¥0.20"]), "0.30");
+  assert.equal(sumPaymentAmounts(["¥1,234.50", "¥0.50", null, "invalid"]), "1235.00");
+  assert.equal(
+    sumPaymentAmounts(["¥9,999,999,999,999,999.99", "9999999999999999.99"]),
+    "19999999999999999.98"
+  );
 });

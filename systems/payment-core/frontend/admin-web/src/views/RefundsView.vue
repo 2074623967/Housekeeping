@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
-import { normalizePaymentAmountInput } from "../utils/paymentAmount";
+import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
 
 const items = ref([]);
 const selectedItem = ref(null);
@@ -36,7 +36,7 @@ const metrics = computed(() => ({
   total: total.value,
   reviewingTotal: items.value.filter((item) => item.status === "REVIEWING").length,
   failTotal: items.value.filter((item) => item.status === "FAIL").length,
-  refundAmountTotal: items.value.reduce((sum, item) => sum + Number(item.refundAmount || 0), 0).toFixed(2)
+  refundAmountTotal: sumPaymentAmounts(items.value.map((item) => item.refundAmount))
 }));
 
 const isActionRunningOnPage = computed(() => Boolean(activeAction.value));
