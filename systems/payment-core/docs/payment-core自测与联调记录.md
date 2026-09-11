@@ -8917,3 +8917,24 @@
 
 1. payment-core 自有 AMQP publisher confirm 等待不再接受超过一分钟的运行参数，同时保持原默认和非正值兼容回退语义。
 2. 本轮无前端、配置键、Mapper、schema 或迁移变化；本地 Mockito 不证明真实 broker 确认、消息送达、消费结果、死信重放成功、生产参数合理或稳定性，`release/v1.0.0` 继续冻结。
+
+## 318. 2026-09-11 支付成功事件派发模式失败闭合 V1.0 验证
+
+### 318.1 本轮补强
+
+1. `PaymentEventDispatchServiceImpl` 在选择传输实现前校验 `payment.event-dispatch.mode`，仅允许 `http / amqp`，不再把未知值当成 HTTP。
+2. 合法模式继续忽略普通大小写和首尾空格；空值、拼写错误或其他模式进入既有事件失败/死信收口，不调用任一外部传输客户端。
+3. 回归实例同时持有 `RestTemplate` 与 `RabbitTemplate`，验证非法 `amqpp` 配置下两种客户端调用次数均为零。
+
+### 318.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付事件派发定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest test` | 通过 | `30` 个用例，覆盖非法模式零 HTTP/MQ 调用与既有两种合法模式 |
+| payment-core 全量测试 | `mvn test` | 通过 | `805` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 318.3 当前判断
+
+1. 事件派发模式部署参数错误不再触发跨协议静默降级，支付成功事件仍由既有重试和死信状态机收口。
+2. 本轮无前端、配置键、Mapper、schema 或迁移变化；本地 Mockito 不证明真实 HTTP 或 RabbitMQ 连通、事件送达、下游受理、生产配置正确或稳定性，`release/v1.0.0` 继续冻结。
