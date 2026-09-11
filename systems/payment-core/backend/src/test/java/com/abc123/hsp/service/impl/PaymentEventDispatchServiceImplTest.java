@@ -496,6 +496,80 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectMissingPaymentSuccessAmountBeforeCallingDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setAmount(null);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentEventMapper.findByEventNo("EVT-AMOUNT-MISSING"))
+                .thenReturn(paymentEvent("EVT-AMOUNT-MISSING", 0));
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-AMOUNT-MISSING", "PAY-001");
+
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-AMOUNT-MISSING");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMOUNT-MISSING");
+    }
+
+    @Test
+    void shouldRejectZeroPaymentSuccessAmountBeforeCallingDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setAmount("¥0.00");
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentEventMapper.findByEventNo("EVT-AMOUNT-ZERO"))
+                .thenReturn(paymentEvent("EVT-AMOUNT-ZERO", 0));
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-AMOUNT-ZERO", "PAY-001");
+
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(paymentEventMapper).markPublishFailed("EVT-AMOUNT-ZERO");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMOUNT-ZERO");
+    }
+
+    @Test
+    void shouldAdvanceFailureStateWhenRepublishedPaymentAmountIsMalformed() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        detail.setAmount("invalid-amount");
+        PaymentEventListItemDTO event = paymentEvent("EVT-AMOUNT-MALFORMED", 2);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-AMOUNT-MALFORMED"))
+                .thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentEventMapper.findByEventNo("EVT-AMOUNT-MALFORMED")).thenReturn(event);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-AMOUNT-MALFORMED", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(paymentEventMapper).markPublishDeadLetter("EVT-AMOUNT-MALFORMED");
+        verify(paymentEventMapper, never()).markPublishFailed("EVT-AMOUNT-MALFORMED");
+        verify(paymentEventMapper, never()).markPublishSuccess("EVT-AMOUNT-MALFORMED");
+    }
+
+    @Test
     void shouldMarkFailedWhenAccountingReturnsNon2xx() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();

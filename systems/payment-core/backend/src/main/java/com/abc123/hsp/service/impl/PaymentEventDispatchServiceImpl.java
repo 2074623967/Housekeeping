@@ -45,7 +45,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final int ACCOUNT_NO_MAX_LENGTH = 64;
     private static final int AMQP_DESTINATION_MAX_LENGTH = 255;
     private static final int DOWNSTREAM_RESPONSE_CODE_MAX_LENGTH = 32;
+    private static final int MONEY_MAX_SCALE = 2;
     private static final int DEFAULT_MAX_RETRY_COUNT = 3;
+    private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final long DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS = 5000L;
     private static final long MAX_PUBLISHER_CONFIRM_TIMEOUT_MS = 60000L;
 
@@ -508,9 +510,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             paymentEventMapper.markPublishFailed(eventNo);
             return false;
         }
-        String workerName = paymentMapper.findWorkerNameByOrderNo(detail.getOrderNo());
-        BigDecimal amount = parseAmount(detail.getAmount());
         try {
+            BigDecimal amount = parsePaymentSuccessAmount(detail.getAmount());
+            String workerName = paymentMapper.findWorkerNameByOrderNo(detail.getOrderNo());
             validateDispatchMode();
             if (usesAmqp()) {
                 publishToAmqp(eventNo, detail, workerName, amount);
@@ -527,6 +529,25 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             markFailedOrDeadLetter(eventNo);
             return false;
         }
+    }
+
+    private BigDecimal parsePaymentSuccessAmount(String amountText) {
+        if (!StringUtils.hasText(amountText)) {
+            throw new IllegalArgumentException("支付成功事件金额不能为空");
+        }
+        BigDecimal amount = new BigDecimal(amountText
+                .replace("¥", "")
+                .replace(",", "")
+                .trim());
+        BigDecimal normalizedAmount = amount.stripTrailingZeros();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("支付成功事件金额必须大于 0");
+        }
+        if (normalizedAmount.scale() > MONEY_MAX_SCALE
+                || amount.compareTo(MAX_MONEY_AMOUNT) > 0) {
+            throw new IllegalArgumentException("支付成功事件金额最多支持 16 位整数和 2 位小数");
+        }
+        return amount;
     }
 
     private void validateDispatchMode() {
