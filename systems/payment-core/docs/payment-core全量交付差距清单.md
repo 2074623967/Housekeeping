@@ -1695,6 +1695,13 @@
 3. 合法值通过独立 `GatewayQueryRequest` 规范化出站，不修改调用方持有的 `PaymentDetailDTO`。适配器定向 `8` 个测试、payment-core 全量 `889` 个测试通过，补丁检查通过。
 4. 上层 `PaymentServiceImpl.queryChannel` 仍按既有逻辑记录查单失败审计；本地 mock 不证明真实渠道查单、资金结果、账务一致性或生产稳定性，release 四项治理阻断不变。
 
+### 8.196 2026-09-12 gateway 退款主动查单请求边界进展
+
+1. `GatewayAccessRefundChannelQueryAdapter` 在 gateway-access HTTP 出站前校验退款单号和渠道编码两个必填字段，最长均为 `64` 个字符；可选渠道退款号最长为 `128` 个字符。
+2. 三类原始字符串在裁剪前拒绝 ISO 控制字符；空退款快照、必填空白、污染或超长值统一返回 `REFUND_CHANNEL_QUERY_FAILED`，且不调用 gateway-access。
+3. 合法值通过独立 `GatewayRefundQueryRequest` 规范化出站，不修改调用方持有的 `RefundCallbackSourceDTO`；提交结果未知且尚无渠道退款号的主动核查语义保持不变。适配器定向 `7` 个测试、payment-core 全量 `891` 个测试通过，补丁检查通过。
+4. 上层 `RefundServiceImpl.queryChannel` 仍按既有逻辑记录退款查单失败审计；本地 mock 不证明真实渠道退款查单、退款到账、账务一致性或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

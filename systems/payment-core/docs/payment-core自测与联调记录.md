@@ -9925,3 +9925,25 @@
 1. payment-core 的 gateway 主动查单适配器不再依赖调用方预先清洗详情，污染或超出远端契约容量的字段不会发送到网关。
 2. 上层 `PaymentServiceImpl.queryChannel` 仍按既有逻辑记录查单失败审计；本地 mock 不证明真实渠道查单、资金结果、账务一致性或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 364. 2026-09-12 gateway 退款主动查单请求边界 V1.0 验证
+
+### 364.1 本轮补强
+
+1. `GatewayAccessRefundChannelQueryAdapter` 在 HTTP 调用前校验退款快照非空，并要求 `refundOrderId / channelCode` 非空且最长均为 `64` 个字符；可选 `channelRefundNo` 最长为 `128` 个字符。
+2. 三类原始字符串在裁剪前拒绝 ISO 控制字符；空退款快照、必填空白、污染或超长值固定返回 `REFUND_CHANNEL_QUERY_FAILED`，并保证 `RestTemplate` 零交互。
+3. 合法请求使用新建的 `GatewayRefundQueryRequest` 规范化副本出站，调用方原 `RefundCallbackSourceDTO` 不被修改；提交结果未知时允许渠道退款号为空、首次绑定可信受理事实及既有响应可信边界保持不变。
+
+### 364.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway 退款查单适配器定向测试 | `mvn -Dtest=GatewayAccessRefundChannelQueryAdapterTest test` | 通过 | `7` 个用例；覆盖空退款快照、必填空白、可选控制字符、超长、HTTP 零交互、规范化副本、未知受理及网关响应边界 |
+| payment-core 全量测试 | `mvn test` | 通过 | `891` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 364.3 当前判断
+
+1. payment-core 的 gateway 退款主动查单适配器不再依赖调用方预先清洗退款快照，污染或超出远端契约容量的字段不会发送到网关。
+2. 上层 `RefundServiceImpl.queryChannel` 仍按既有逻辑记录退款查单失败审计；本地 mock 不证明真实渠道退款查单、退款到账、账务一致性或生产稳定性。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
