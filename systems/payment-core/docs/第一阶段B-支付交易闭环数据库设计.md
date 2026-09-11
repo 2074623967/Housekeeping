@@ -1174,6 +1174,13 @@ t_order
 3. 规范化仅发生在派发局部变量中，不回写 `PaymentDetailDTO`、订单或支付事件持久化事实；HTTP 清分、HTTP 账务与 AMQP 共享同一组规范化值，本轮无 Mapper SQL、schema、索引或迁移变化。
 4. 本地 mock 与静态容量核对不证明生产 MySQL、真实清分、真实入账、消息送达、跨系统一致性或生产稳定性，仍需正式环境核验。
 
+### 4.125 死信补偿消息元数据边界
+
+1. 死信接入复用 `t_payment_dead_letter_task`；路由键、消息 ID 与关联 ID 均按既有 `VARCHAR(128)` 容量校验，任务号、重放 exchange 与重放 routing key 分别按既有 `VARCHAR(64 / 128 / 128)` 容量校验。
+2. 原始控制字符与超长值在 `insertIgnore` 前拒绝，合法消息 ID 和关联 ID 以裁剪副本持久化；缺失消息 ID 继续生成确定性匿名 ID，关联 ID 继续允许为空。
+3. 人工重放读取任务后再次校验持久化 envelope 与非空载荷，非法数据仅进入既有 `REPLAY_FAILED` 失败留痕且不调用 broker；原始载荷快照不因展示脱敏或元数据规范化而改变。
+4. 本轮无 Mapper SQL、schema、索引或迁移变化；本地测试与静态列宽核对不证明生产 MySQL、真实 RabbitMQ 投递、消费者处理、补偿结果或生产稳定性。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

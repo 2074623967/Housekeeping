@@ -3489,6 +3489,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 支付单号匹配、成功状态、渠道与渠道流水号、金额、HTTP/AMQP 配置和 publisher confirm 等既有校验保持不变；HTTP 模式下清分成功后账务失败仍可能由事件重试再次调用清分。
 5. 本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移；本地测试不证明真实清分、真实入账、消息送达、资金结果、账务一致性或生产稳定性。
 
+### 14.194 死信补偿消息元数据契约
+
+1. `PaymentDeadLetterTaskService.intake` 要求消息与消息属性非空；死信路由键必须非空、匹配既有受控模式且最长 `128` 个字符，原始值在匹配前拒绝 ISO 控制字符。
+2. 已提供的 `messageId` 与可选 `correlationId` 最长均为 `128` 个字符，原始值在裁剪前拒绝 ISO 控制字符；合法值以裁剪副本入账，消息 ID 缺失时继续由消息体生成确定性匿名 ID。
+3. 非法路由抛出固定脱敏的 `UnsupportedDeadLetterRouteException`，非法消息元数据抛出固定脱敏的 `InvalidDeadLetterMessageException`；监听器对两者执行 `basicNack(requeue=false)`，其他运行时失败仍执行 `basicNack(requeue=true)`。
+4. `replay` 在 broker 调用前要求持久化任务号、消息 ID、exchange 和 routing key 非空且符合 `64 / 128 / 128 / 128` 容量，可选关联 ID 最长 `128`，载荷不得为 `null`；非法 envelope 记录既有脱敏失败说明且不调用 RabbitMQ。
+5. 原始载荷重放、消息头最小化、人工复核 CAS、定向路由与 publisher confirm 保持不变；本轮不新增 HTTP 端点、DTO 字段、Mapper、schema 或迁移，本地测试不证明真实消息送达或补偿结果。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
