@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
+import { normalizePaymentAmountInput } from "../utils/paymentAmount";
 
 const items = ref([]);
 const selectedItem = ref(null);
@@ -157,13 +158,19 @@ async function handleApply() {
     actionResultMessage.value = "";
     return;
   }
+  const refundAmount = normalizePaymentAmountInput(applyForm.value.refundAmount);
+  if (!refundAmount) {
+    actionErrorMessage.value = "退款金额必须大于 0，且最多支持 16 位整数和 2 位小数。";
+    actionResultMessage.value = "";
+    return;
+  }
   activeAction.value = "apply";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
     const refund = await refundApi.apply({
       paymentOrderId: applyForm.value.paymentOrderId,
-      refundAmount: Number(applyForm.value.refundAmount),
+      refundAmount,
       refundMethod: applyForm.value.refundMethod,
       refundReason: applyForm.value.refundReason,
       operator
