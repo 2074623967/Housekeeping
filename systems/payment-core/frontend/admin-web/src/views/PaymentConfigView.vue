@@ -58,6 +58,16 @@ const isLoading = ref(true);
 const hasLoadedOverview = ref(false);
 const overviewErrorMessage = ref("");
 const actionMessage = ref("");
+const actionMessagePresentation = computed(() => {
+  const message = actionMessage.value;
+  if (message.includes("失败") || message.includes("未通过") || message.includes("不合法")) {
+    return { className: "error-banner", role: "alert" };
+  }
+  if (message.startsWith("正在编辑") || message.startsWith("已读取") || message.includes("项待处理")) {
+    return { className: "notice-banner", role: "status" };
+  }
+  return { className: "success-banner", role: "status" };
+});
 const activeConfigCode = ref("");
 const channelReviews = ref([]);
 const isChannelReviewLoading = ref(false);
@@ -2024,7 +2034,11 @@ function exportGovernanceSnapshot(section = "ALL") {
       <div v-if="overviewErrorMessage" class="error-banner">
         {{ hasLoadedOverview ? "支付配置刷新失败，当前展示上次成功快照：" : "支付配置加载失败：" }}{{ overviewErrorMessage }}
       </div>
-      <div v-if="actionMessage" class="success-banner">
+      <div
+        v-if="actionMessage"
+        :class="actionMessagePresentation.className"
+        :role="actionMessagePresentation.role"
+      >
         {{ actionMessage }}
       </div>
 
