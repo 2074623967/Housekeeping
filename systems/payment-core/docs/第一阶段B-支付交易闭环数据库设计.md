@@ -1083,6 +1083,13 @@ t_order
 3. 服务层在列表、总览和导出 SQL 前先拒绝原始控制字符，再裁剪合法空白并按目标容量校验；非法条件不进入 Mapper，概览聚合口径不变。
 4. 本地测试不证明生产 MySQL 查询计划、字符集配置、日志完整性、外部检索平台能力或稳定性，仍需正式环境核验。
 
+### 4.112 收银台会话查询字段边界
+
+1. `t_prepay_order.prepay_order_no / payment_order_id / order_no / customer_name / pay_scene / cashier_status` 继续使用 `VARCHAR(64) / VARCHAR(64) / VARCHAR(64) / VARCHAR(128) / VARCHAR(32) / VARCHAR(32)`；本轮不新增表、字段、索引、Mapper SQL、schema 或迁移。
+2. 服务层在列表、总览和导出 SQL 前先拒绝六类原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper。
+3. 会话状态继续由持久化收银台状态与失效时间派生，临近失效、状态分组、终端去重和金额汇总 SQL 口径不变。
+4. 本地测试不证明生产 MySQL 查询计划、会话真实有效性、渠道受理、支付入账或稳定性，仍需正式环境核验。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
