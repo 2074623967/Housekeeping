@@ -1562,6 +1562,13 @@
 3. 一般字段继续返回 `PAYMENT_SUBMIT_REQUEST_INVALID`，显式幂等键继续返回 `PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID`。支付服务定向 `73` 个测试、payment-core 全量 `851` 个测试通过，补丁检查通过。
 4. 本轮无前端代码、接口字段、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明可信身份、真实网关鉴权、渠道受理、支付入账或生产稳定性，release 四项治理阻断不变。
 
+### 8.177 2026-09-11 死信人工动作控制字符裁剪绕过修复进展
+
+1. 死信任务允许重放、人工结案和执行重放三类动作共享的任务号、处置人与处置说明改为先检查原始控制字符，再裁剪合法首尾空白并校验 `64 / 64 / 512` 字符上限。
+2. 末尾换行不再被 `trim` 删除后进入任务状态 CAS、审计备注或 RabbitMQ 重放；非法输入在 Mapper 与消息代理零交互前拒绝。
+3. `PENDING_REVIEW / READY_TO_REPLAY / REPLAYING / REPLAYED / REPLAY_FAILED / MANUAL_RESOLVED` 状态机、原消费者定向路由、发布确认、失败脱敏及原始载荷重放保持不变。联合定向 `16` 个测试、payment-core 全量 `852` 个测试通过，补丁检查通过。
+4. 本轮无前端代码、接口字段、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明可信操作身份、真实审批、RabbitMQ 生产送达、下游消费结果或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
