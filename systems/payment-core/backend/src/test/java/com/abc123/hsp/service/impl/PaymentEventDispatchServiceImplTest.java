@@ -20,7 +20,10 @@ import com.abc123.hsp.service.RefundChannelSubmitService;
 import com.abc123.hsp.service.RefundChannelSubmitException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collections;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -1185,6 +1188,48 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("李阿姨", invokeGetter(clearingCaptor.getValue(), "getWorkerName"));
         Assertions.assertEquals("ACT10003", invokeGetter(accountingCaptor.getValue(), "getAccountNo"));
         Assertions.assertEquals("PAY-001", invokeGetter(accountingCaptor.getValue(), "getPaymentOrderId"));
+    }
+
+    @Test
+    void shouldBuildClearingBatchDateInBusinessTimezone() {
+        ZoneId businessZone = ZoneId.of("Asia/Shanghai");
+        LocalDate businessToday = LocalDate.now(businessZone);
+        ZoneId alternativeZone = ZoneId.of("Pacific/Kiritimati");
+        if (businessToday.equals(LocalDate.now(alternativeZone))) {
+            alternativeZone = ZoneId.of("Etc/GMT+12");
+        }
+        Assertions.assertNotEquals(businessToday, LocalDate.now(alternativeZone));
+
+        TimeZone previousTimeZone = TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone(alternativeZone));
+            PaymentDetailDTO detail = buildPaymentDetail();
+            when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+            when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+            when(paymentEventMapper.markPublishSuccess("EVT-BUSINESS-DATE")).thenReturn(1);
+            when(restTemplate.postForEntity(any(String.class), any(),
+                    eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                    .thenReturn(successResponse());
+            ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+
+            new PaymentEventDispatchServiceImpl(
+                    paymentMapper,
+                    paymentEventMapper,
+                    "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                    "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                    "ACT10003",
+                    restTemplate
+            ).publishPaymentSuccess("EVT-BUSINESS-DATE", "PAY-001");
+
+            verify(restTemplate).postForEntity(
+                    eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
+                    payloadCaptor.capture(),
+                    eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+            Assertions.assertEquals(
+                    businessToday.toString(), invokeGetter(payloadCaptor.getValue(), "getBatchDate"));
+        } finally {
+            TimeZone.setDefault(previousTimeZone);
+        }
     }
 
     private PaymentDetailDTO buildPaymentDetail() {

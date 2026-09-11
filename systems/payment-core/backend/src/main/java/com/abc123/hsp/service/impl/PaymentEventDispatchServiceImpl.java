@@ -16,6 +16,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -58,6 +59,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final long DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS = 5000L;
     private static final long MAX_PUBLISHER_CONFIRM_TIMEOUT_MS = 60000L;
+    private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
 
     private final PaymentMapper paymentMapper;
     private final PaymentEventMapper paymentEventMapper;
@@ -668,7 +670,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         payload.put("accountNo", accountingPaymentSuccessAccountNo);
         payload.put("paymentOrderId", paymentOrderId);
         payload.put("orderNo", orderNo);
-        payload.put("batchDate", LocalDate.now().toString());
+        payload.put("batchDate", currentBusinessDate());
         payload.put("customerName", customerName);
         payload.put("merchantName", "家政平台");
         payload.put("workerName", workerName);
@@ -748,11 +750,15 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 businessChainId(paymentOrderId),
                 paymentOrderId,
                 orderNo,
-                LocalDate.now().toString(),
+                currentBusinessDate(),
                 customerName,
                 "家政平台",
                 workerName,
                 amount);
+    }
+
+    private String currentBusinessDate() {
+        return LocalDate.now(BUSINESS_ZONE_ID).toString();
     }
 
     private PaymentSuccessAccountingPayload buildAccountingPayload(String paymentOrderId,
