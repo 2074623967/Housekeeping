@@ -517,8 +517,10 @@ async function handleChannelReview(review, approved) {
 
 async function loadGatewayVersions(gatewayCode) {
   const requestId = ++gatewayVersionRequestId;
+  if (gatewayVersionCode.value !== gatewayCode) {
+    gatewayVersions.value = [];
+  }
   gatewayVersionCode.value = gatewayCode;
-  gatewayVersions.value = [];
   isGatewayVersionLoading.value = true;
   gatewayVersionError.value = "";
   try {
@@ -573,8 +575,10 @@ async function rollbackGatewayVersion(version) {
 
 async function loadChannelVersions(channelCode) {
   const requestId = ++channelVersionRequestId;
+  if (channelVersionCode.value !== channelCode) {
+    channelVersions.value = [];
+  }
   channelVersionCode.value = channelCode;
-  channelVersions.value = [];
   isChannelVersionLoading.value = true;
   channelVersionError.value = "";
   try {
@@ -829,8 +833,10 @@ async function handleRouteRuleReview(review, approved) {
 
 async function loadRouteRuleVersions(ruleCode) {
   const requestId = ++routeRuleVersionRequestId;
+  if (versionRuleCode.value !== ruleCode) {
+    routeRuleVersions.value = [];
+  }
   versionRuleCode.value = ruleCode;
-  routeRuleVersions.value = [];
   isVersionLoading.value = true;
   routeRuleVersionError.value = "";
   try {
@@ -1465,8 +1471,10 @@ async function handleControlPolicyReview(review, approved) {
 
 async function loadControlPolicyVersions(sourceAppId) {
   const requestId = ++controlPolicyVersionRequestId;
+  if (controlPolicyVersionSourceAppId.value !== sourceAppId) {
+    controlPolicyVersions.value = [];
+  }
   controlPolicyVersionSourceAppId.value = sourceAppId;
-  controlPolicyVersions.value = [];
   isControlPolicyVersionLoading.value = true;
   controlPolicyVersionError.value = "";
   try {
@@ -1734,8 +1742,10 @@ async function submitProtocolForm() {
 
 async function loadProtocolVersions(protocolCode) {
   const requestId = ++protocolVersionRequestId;
+  if (protocolVersionCode.value !== protocolCode) {
+    protocolVersions.value = [];
+  }
   protocolVersionCode.value = protocolCode;
-  protocolVersions.value = [];
   isProtocolVersionLoading.value = true;
   protocolVersionError.value = "";
   try {
@@ -2398,11 +2408,11 @@ function exportGovernanceSnapshot(section = "ALL") {
             <button class="button secondary" @click="closeChannelVersions">关闭</button>
           </div>
           <div v-if="channelVersionError" class="error-banner">
-            支付渠道版本加载失败：{{ channelVersionError }}
+            {{ channelVersions.length ? "支付渠道版本刷新失败，当前展示上次成功快照：" : "支付渠道版本加载失败：" }}{{ channelVersionError }}
           </div>
           <div v-if="isChannelVersionLoading" class="state-box">支付渠道版本加载中...</div>
-          <div v-else-if="!channelVersions.length" class="state-box">当前暂无支付渠道版本记录</div>
-          <div v-else class="table-wrap">
+          <div v-else-if="!channelVersions.length && !channelVersionError" class="state-box">当前暂无支付渠道版本记录</div>
+          <div v-else-if="channelVersions.length" class="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -2898,11 +2908,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               <button class="button secondary" @click="closeRouteRuleVersions">关闭</button>
             </div>
             <div v-if="routeRuleVersionError" class="error-banner">
-              规则版本加载失败：{{ routeRuleVersionError }}
+              {{ routeRuleVersions.length ? "规则版本刷新失败，当前展示上次成功快照：" : "规则版本加载失败：" }}{{ routeRuleVersionError }}
             </div>
             <div v-if="isVersionLoading" class="state-box">规则版本加载中...</div>
-            <div v-else-if="!routeRuleVersions.length" class="state-box">当前暂无版本记录</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!routeRuleVersions.length && !routeRuleVersionError" class="state-box">当前暂无版本记录</div>
+            <div v-else-if="routeRuleVersions.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -3265,11 +3275,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               <button class="button secondary" @click="closeProtocolVersions">关闭</button>
             </div>
             <div v-if="protocolVersionError" class="error-banner">
-              协议版本加载失败：{{ protocolVersionError }}
+              {{ protocolVersions.length ? "协议版本刷新失败，当前展示上次成功快照：" : "协议版本加载失败：" }}{{ protocolVersionError }}
             </div>
             <div v-if="isProtocolVersionLoading" class="state-box">协议版本加载中...</div>
-            <div v-else-if="!protocolVersions.length" class="state-box">当前暂无协议版本记录</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!protocolVersions.length && !protocolVersionError" class="state-box">当前暂无协议版本记录</div>
+            <div v-else-if="protocolVersions.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -3834,11 +3844,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               <button class="button secondary" @click="closeGatewayVersions">关闭</button>
             </div>
             <div v-if="gatewayVersionError" class="error-banner">
-              支付网关版本加载失败：{{ gatewayVersionError }}
+              {{ gatewayVersions.length ? "支付网关版本刷新失败，当前展示上次成功快照：" : "支付网关版本加载失败：" }}{{ gatewayVersionError }}
             </div>
             <div v-if="isGatewayVersionLoading" class="state-box">支付网关版本加载中...</div>
-            <div v-else-if="!gatewayVersions.length" class="state-box">当前暂无支付网关版本记录</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!gatewayVersions.length && !gatewayVersionError" class="state-box">当前暂无支付网关版本记录</div>
+            <div v-else-if="gatewayVersions.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -4157,11 +4167,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               <button class="button secondary" @click="closeControlPolicyVersions">关闭</button>
             </div>
             <div v-if="controlPolicyVersionError" class="error-banner">
-              控制策略版本加载失败：{{ controlPolicyVersionError }}
+              {{ controlPolicyVersions.length ? "控制策略版本刷新失败，当前展示上次成功快照：" : "控制策略版本加载失败：" }}{{ controlPolicyVersionError }}
             </div>
             <div v-if="isControlPolicyVersionLoading" class="state-box">控制策略版本加载中...</div>
-            <div v-else-if="!controlPolicyVersions.length" class="state-box">当前暂无控制策略版本记录</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!controlPolicyVersions.length && !controlPolicyVersionError" class="state-box">当前暂无控制策略版本记录</div>
+            <div v-else-if="controlPolicyVersions.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
