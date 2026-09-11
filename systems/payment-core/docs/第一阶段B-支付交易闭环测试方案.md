@@ -1238,6 +1238,14 @@
 4. 事件派发定向测试应不少于 `30` 个，payment-core 全量不少于 `805` 个；补丁检查必须通过。本轮无前端、配置键、Mapper、schema 或迁移变化。
 5. 本地 Mockito 不证明生产配置正确、真实 HTTP 或 RabbitMQ 连通、消息送达、下游受理或稳定性。
 
+### 4.163 支付成功事件状态收口完整性
+
+1. 分别回归 HTTP 双下游成功与 AMQP confirm 成功，并模拟 `markPublishSuccess=1`，验证返回成功且不进入失败或死信状态。
+2. 模拟外部调用成功但 `markPublishSuccess=0`，验证重发返回失败、不会写重发成功审计，并按重试次数调用 `markPublishFailed` 或 `markPublishDeadLetter`。
+3. 回归 HTTP 部分失败、AMQP 发布失败、非法派发模式与缺失配置，确认它们继续在成功状态更新之前失败，不扩大本轮状态语义。
+4. 事件派发定向测试应不少于 `31` 个，payment-core 全量不少于 `806` 个；补丁检查必须通过。本轮无前端、Mapper SQL、schema 或迁移变化。
+5. 本地 Mockito 不证明真实外部受理、下游幂等、生产并发竞争、跨系统最终一致或稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
