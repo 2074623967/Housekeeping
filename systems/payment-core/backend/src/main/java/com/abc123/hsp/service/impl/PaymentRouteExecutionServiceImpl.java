@@ -24,6 +24,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionService {
 
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int ROUTE_RULE_MAX_LENGTH = 128;
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int PAYMENT_METHOD_MAX_LENGTH = 32;
+    private static final int TERMINAL_MAX_LENGTH = 32;
+    private static final int ROUTE_RESULT_MAX_LENGTH = 128;
+
     private final PaymentRouteExecutionMapper paymentRouteExecutionMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
     private final boolean routeHealthEnabled;
@@ -159,17 +167,41 @@ public class PaymentRouteExecutionServiceImpl implements PaymentRouteExecutionSe
     }
 
     private void normalizeQuery(PaymentRouteExecutionQueryDTO query) {
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setRouteRule(query.getRouteRule() == null ? null : query.getRouteRule().trim());
-        query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
-        query.setPaymentMethod(query.getPaymentMethod() == null ? "全部" : query.getPaymentMethod().trim());
-        query.setTerminal(query.getTerminal() == null ? "全部" : query.getTerminal().trim());
-        query.setRouteResult(query.getRouteResult() == null ? "全部" : query.getRouteResult().trim());
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
+        query.setRouteRule(normalizeOptionalQueryField(
+                query.getRouteRule(), ROUTE_RULE_MAX_LENGTH, "路由规则", null));
+        query.setChannelCode(normalizeOptionalQueryField(
+                query.getChannelCode(), CHANNEL_CODE_MAX_LENGTH, "渠道编码", null));
+        query.setPaymentMethod(normalizeOptionalQueryField(
+                query.getPaymentMethod(), PAYMENT_METHOD_MAX_LENGTH, "支付方式", "全部"));
+        query.setTerminal(normalizeOptionalQueryField(
+                query.getTerminal(), TERMINAL_MAX_LENGTH, "终端", "全部"));
+        query.setRouteResult(normalizeOptionalQueryField(
+                query.getRouteResult(), ROUTE_RESULT_MAX_LENGTH, "路由结果", "全部"));
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String csvCell(String value) {

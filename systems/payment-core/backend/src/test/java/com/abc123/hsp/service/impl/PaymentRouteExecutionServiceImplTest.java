@@ -1,8 +1,10 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentRouteExecutionListItemDTO;
@@ -55,6 +57,64 @@ class PaymentRouteExecutionServiceImplTest {
         Assertions.assertEquals(1, query.getPageSize());
         verify(paymentRouteExecutionMapper).findAll(query);
         verify(paymentRouteExecutionMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedRouteExecutionQueryBeforeMapperAccess() {
+        PaymentRouteExecutionQueryDTO paymentOrderQuery = new PaymentRouteExecutionQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentRouteExecutionQueryDTO orderQuery = new PaymentRouteExecutionQueryDTO();
+        orderQuery.setOrderNo(repeat("O", 65));
+        PaymentRouteExecutionQueryDTO routeRuleQuery = new PaymentRouteExecutionQueryDTO();
+        routeRuleQuery.setRouteRule(repeat("R", 129));
+        PaymentRouteExecutionQueryDTO channelQuery = new PaymentRouteExecutionQueryDTO();
+        channelQuery.setChannelCode(repeat("C", 65));
+        PaymentRouteExecutionQueryDTO paymentMethodQuery = new PaymentRouteExecutionQueryDTO();
+        paymentMethodQuery.setPaymentMethod(repeat("M", 33));
+        PaymentRouteExecutionQueryDTO terminalQuery = new PaymentRouteExecutionQueryDTO();
+        terminalQuery.setTerminal(repeat("T", 33));
+        PaymentRouteExecutionQueryDTO routeResultQuery = new PaymentRouteExecutionQueryDTO();
+        routeResultQuery.setRouteResult(repeat("S", 129));
+        PaymentRouteExecutionServiceImpl service =
+                new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(routeRuleQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(paymentMethodQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(routeResultQuery));
+        verifyNoInteractions(paymentRouteExecutionMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInRouteExecutionQueryBeforeMapperAccess() {
+        PaymentRouteExecutionQueryDTO paymentOrderQuery = new PaymentRouteExecutionQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentRouteExecutionQueryDTO orderQuery = new PaymentRouteExecutionQueryDTO();
+        orderQuery.setOrderNo("ORD-001\n");
+        PaymentRouteExecutionQueryDTO routeRuleQuery = new PaymentRouteExecutionQueryDTO();
+        routeRuleQuery.setRouteRule("RULE_HOME_WX\n");
+        PaymentRouteExecutionQueryDTO channelQuery = new PaymentRouteExecutionQueryDTO();
+        channelQuery.setChannelCode("wx_h5\n");
+        PaymentRouteExecutionQueryDTO paymentMethodQuery = new PaymentRouteExecutionQueryDTO();
+        paymentMethodQuery.setPaymentMethod("微信\n");
+        PaymentRouteExecutionQueryDTO terminalQuery = new PaymentRouteExecutionQueryDTO();
+        terminalQuery.setTerminal("H5\n");
+        PaymentRouteExecutionQueryDTO routeResultQuery = new PaymentRouteExecutionQueryDTO();
+        routeResultQuery.setRouteResult("命中规则路由\n");
+        PaymentRouteExecutionServiceImpl service =
+                new PaymentRouteExecutionServiceImpl(paymentRouteExecutionMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(routeRuleQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(paymentMethodQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(routeResultQuery));
+        verifyNoInteractions(paymentRouteExecutionMapper);
     }
 
     @Test
@@ -160,5 +220,9 @@ class PaymentRouteExecutionServiceImplTest {
         assertTrue(csv.contains("\"12\""));
         assertEquals("张三", item.getCustomerName());
         verify(paymentRouteExecutionMapper).findAllForExport(query);
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }
