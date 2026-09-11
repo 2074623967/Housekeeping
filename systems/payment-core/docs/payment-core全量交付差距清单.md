@@ -1464,6 +1464,13 @@
 3. 自动任务 `120` 秒租约、逐条独立事务、条件抢占、共享通道限流、指数退避、回执关联校验、失败隔离和有限摘要保持不变；定向 `77` 个测试及 payment-core 全量 `831` 个测试通过，Mapper XML 与补丁检查通过。
 4. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地测试不证明生产 MySQL 查询计划、真实供应商受理或送达、回执乱序、积压吞吐、多实例调度或生产稳定性，release 四项治理阻断不变。
 
+### 8.163 2026-09-11 支付与退款主动查单容量上限进展
+
+1. 支付与退款主动查单的人工批次和自动补偿继续分别使用单渠道容量与全局容量，默认均为每渠道 `20`、全局 `100`；四个配置值新增服务端 `1..1000` 上限，错误部署值不再放大既有候选 SQL。
+2. 支付环境变量为 `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_PER_CHANNEL_BATCH_SIZE / HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_BATCH_SIZE`，退款为 `HSP_PAYMENT_REFUND_QUERY_COMPENSATION_PER_CHANNEL_BATCH_SIZE / HSP_PAYMENT_REFUND_QUERY_COMPENSATION_BATCH_SIZE`。
+3. 既有 SQL 仍先按渠道内时间和主键排名，再按全局时间顺序截断；人工首次等待、自动指数退避、任务租约、逐笔失败隔离、共享渠道限流和任务中心本轮计数保持不变。定向 `75` 个测试及 payment-core 全量 `833` 个测试通过，Mapper XML 与补丁检查通过。
+4. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地测试不证明生产 MySQL 查询计划、真实渠道查单、资金终态、渠道容量校准、积压吞吐、多实例调度或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

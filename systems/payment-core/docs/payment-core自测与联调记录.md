@@ -9197,3 +9197,25 @@
 
 1. 错误部署值不能再把人工或自动批量回查扩大到超过 `1000` 条，单轮结果仍只表达本轮实际候选，剩余待确认回执由后续轮次承接。
 2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地测试不证明生产 MySQL 查询计划、真实供应商受理或送达、回执乱序、积压吞吐、多实例调度或稳定性，`release/v1.0.0` 继续冻结。
+
+## 331. 2026-09-11 支付与退款主动查单容量上限 V1.0 验证
+
+### 331.1 本轮补强
+
+1. `PaymentTaskCenterServiceImpl` 将支付查单的单渠道容量与全局容量统一限制在 `1..1000`，默认值保持 `20 / 100`。
+2. `RefundQueryTaskServiceImpl` 对退款查单应用同一边界，默认值同样保持 `20 / 100`；人工与自动入口共用归一化后的容量。
+3. 四段既有 Mapper SQL 已先通过 `ROW_NUMBER() OVER (PARTITION BY channel_code ...)` 限制单渠道候选，再通过稳定排序和 `LIMIT` 应用全局容量，本轮不改 SQL、状态条件或退避规则。
+
+### 331.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 主动查单联合定向测试 | `mvn -Dtest=PaymentTaskCenterServiceImplTest,RefundQueryTaskServiceImplTest,PaymentTaskCenterMapperIntegrationTest,PaymentIssueAlertNotifierConfigurationTest,PaymentCompensationSchedulerTest test` | 通过 | `75` 个用例；覆盖支付与退款容量 `0 -> 1`、`1001 -> 1000`、实际 SQL 渠道公平性、人工/自动入口和任务租约 |
+| payment-core 全量测试 | `mvn test` | 通过 | `833` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout PaymentTaskCenterMapper.xml` | 通过 | XML 结构有效，本轮未修改 Mapper SQL |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 331.3 当前判断
+
+1. 错误部署值不能再把支付或退款主动查单的单渠道与全局候选容量扩大到超过 `1000`；超过本轮容量的数据保持原状态并由后续轮次继续处理。
+2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 查询计划、真实渠道查单、资金终态、渠道容量校准、积压吞吐、多实例调度或稳定性，`release/v1.0.0` 继续冻结。

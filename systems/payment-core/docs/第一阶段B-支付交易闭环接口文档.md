@@ -3230,6 +3230,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 单条回查接口继续按 `alertNo` 精确查询，不受批量容量影响；`PaymentTaskActionResultDTO.processedCount / successCount / failCount` 继续只表达本轮批量候选或该单条结果，本轮不新增字段或自动循环清空承诺。
 4. 自动任务租约、逐条独立事务、共享通道限流、条件抢占、指数退避、回执关联校验和来源告警确认保持不变；本地测试不证明真实供应商送达、回执乱序、多实例调度或生产稳定性。
 
+### 14.158 支付与退款主动查单容量上限契约
+
+1. 支付主动查单使用 `HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_PER_CHANNEL_BATCH_SIZE / HSP_PAYMENT_CHANNEL_QUERY_COMPENSATION_BATCH_SIZE`，退款主动查单使用对应的 `HSP_PAYMENT_REFUND_QUERY_COMPENSATION_*` 配置；默认每渠道 `20`、全局 `100`，服务端均限制在 `1..1000`。
+2. 人工与自动入口共用归一化容量；候选仍先按渠道内时间和主键排名，再按全局时间顺序应用 `LIMIT`。单渠道配置大于全局配置时，最终返回数仍受全局容量约束，不自动改写部署配置。
+3. `PaymentTaskActionResultDTO.processedCount / successCount / warningCount / failCount` 继续只表达本轮候选结果；超过容量的数据不改写并留待后续轮次，本轮不新增接口字段或自动循环清空承诺。
+4. 人工首次等待、自动指数退避、任务租约、逐笔失败隔离、共享渠道限流和既有支付/退款状态机保持不变；本地测试不证明真实渠道查询、资金终态、生产容量或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
