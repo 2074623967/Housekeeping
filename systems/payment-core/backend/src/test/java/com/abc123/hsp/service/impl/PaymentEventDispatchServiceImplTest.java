@@ -688,6 +688,30 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldMarkDeadLetterWhenPaymentDetailRemainsMissingAtRetryLimit() {
+        PaymentEventListItemDTO event = paymentEvent("EVT-404", 2);
+        event.setPaymentOrderId("PAY-404");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-404")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-404")).thenReturn(null);
+        when(paymentEventMapper.findByEventNo("EVT-404")).thenReturn(event);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-404", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentEventMapper).markPublishDeadLetter("EVT-404");
+        verify(paymentEventMapper, never()).markPublishFailed("EVT-404");
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+    }
+
+    @Test
     void shouldStopAtClearingFailureWithoutPostingAccounting() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();

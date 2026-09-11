@@ -507,7 +507,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private boolean dispatchPaymentSuccess(String eventNo, String paymentOrderId) {
         PaymentDetailDTO detail = paymentMapper.findDetail(paymentOrderId);
         if (detail == null) {
-            paymentEventMapper.markPublishFailed(eventNo);
+            markFailedOrDeadLetter(eventNo);
             return false;
         }
         try {
