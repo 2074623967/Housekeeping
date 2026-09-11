@@ -2257,11 +2257,11 @@ function exportGovernanceSnapshot(section = "ALL") {
             </label>
           </div>
           <div v-if="channelReviewError" class="error-banner">
-            支付渠道复核申请加载失败：{{ channelReviewError }}
+            {{ channelReviews.length ? "支付渠道复核申请刷新失败，当前展示上次成功快照：" : "支付渠道复核申请加载失败：" }}{{ channelReviewError }}
           </div>
           <div v-if="isChannelReviewLoading" class="state-box">支付渠道复核申请加载中...</div>
-          <div v-else-if="!channelReviews.length" class="state-box">当前暂无支付渠道配置复核申请</div>
-          <div v-else class="table-wrap">
+          <div v-else-if="!channelReviews.length && !channelReviewError" class="state-box">当前暂无支付渠道配置复核申请</div>
+          <div v-else-if="channelReviews.length" class="table-wrap">
             <table>
               <thead>
                 <tr>
@@ -2628,11 +2628,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               </label>
             </div>
             <div v-if="returnCodeReviewError" class="error-banner">
-              返回码状态复核申请加载失败：{{ returnCodeReviewError }}
+              {{ returnCodeReviews.length ? "返回码状态复核申请刷新失败，当前展示上次成功快照：" : "返回码状态复核申请加载失败：" }}{{ returnCodeReviewError }}
             </div>
             <div v-if="isReturnCodeReviewLoading" class="state-box">返回码状态复核申请加载中...</div>
-            <div v-else-if="!returnCodeReviews.length" class="state-box">当前暂无返回码状态复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!returnCodeReviews.length && !returnCodeReviewError" class="state-box">当前暂无返回码状态复核申请</div>
+            <div v-else-if="returnCodeReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -2824,10 +2824,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <input v-model.trim="reviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
               </label>
             </div>
-            <div v-if="reviewErrorMessage" class="error-banner">复核申请加载失败：{{ reviewErrorMessage }}</div>
+            <div v-if="reviewErrorMessage" class="error-banner">
+              {{ routeRuleReviews.length ? "路由规则复核申请刷新失败，当前展示上次成功快照：" : "路由规则复核申请加载失败：" }}{{ reviewErrorMessage }}
+            </div>
             <div v-if="isReviewLoading" class="state-box">复核申请加载中...</div>
-            <div v-else-if="!routeRuleReviews.length" class="state-box">当前暂无路由规则复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!routeRuleReviews.length && !reviewErrorMessage" class="state-box">当前暂无路由规则复核申请</div>
+            <div v-else-if="routeRuleReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -3187,11 +3189,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               新增、修改、启停和回滚均先生成完整候选，异人复核通过后才更新运行态并追加版本。
             </div>
             <div v-if="protocolReviewErrorMessage" class="error-banner">
-              协议复核申请加载失败：{{ protocolReviewErrorMessage }}
+              {{ protocolReviews.length ? "协议复核申请刷新失败，当前展示上次成功快照：" : "协议复核申请加载失败：" }}{{ protocolReviewErrorMessage }}
             </div>
             <div v-if="isProtocolReviewLoading" class="state-box">协议复核申请加载中...</div>
-            <div v-else-if="!protocolReviews.length" class="state-box">当前暂无支付协议复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!protocolReviews.length && !protocolReviewErrorMessage" class="state-box">当前暂无支付协议复核申请</div>
+            <div v-else-if="protocolReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -3432,11 +3434,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               </label>
             </div>
             <div v-if="returnCodeImportReviewError" class="error-banner">
-              返回码导入复核申请加载失败：{{ returnCodeImportReviewError }}
+              {{ returnCodeImportReviews.length ? "返回码导入复核申请刷新失败，当前展示上次成功快照：" : "返回码导入复核申请加载失败：" }}{{ returnCodeImportReviewError }}
             </div>
             <div v-if="isReturnCodeImportReviewLoading" class="state-box">返回码导入复核申请加载中...</div>
-            <div v-else-if="!returnCodeImportReviews.length" class="state-box">当前暂无返回码导入复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!returnCodeImportReviews.length && !returnCodeImportReviewError" class="state-box">当前暂无返回码导入复核申请</div>
+            <div v-else-if="returnCodeImportReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -3688,11 +3690,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               </label>
             </div>
             <div v-if="gatewayReviewError" class="error-banner">
-              支付网关复核申请加载失败：{{ gatewayReviewError }}
+              {{ gatewayReviews.length ? "支付网关复核申请刷新失败，当前展示上次成功快照：" : "支付网关复核申请加载失败：" }}{{ gatewayReviewError }}
             </div>
             <div v-if="isGatewayReviewLoading" class="state-box">支付网关复核申请加载中...</div>
-            <div v-else-if="!gatewayReviews.length" class="state-box">当前暂无支付网关配置复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!gatewayReviews.length && !gatewayReviewError" class="state-box">当前暂无支付网关配置复核申请</div>
+            <div v-else-if="gatewayReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -4023,12 +4025,12 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <input v-model.trim="controlPolicyReviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
               </label>
             </div>
-            <div v-if="controlPolicyReviewError" class="error-box" style="margin-bottom: 16px;">
-              支付控制策略复核申请加载失败：{{ controlPolicyReviewError }}
+            <div v-if="controlPolicyReviewError" class="error-banner">
+              {{ controlPolicyReviews.length ? "支付控制策略复核申请刷新失败，当前展示上次成功快照：" : "支付控制策略复核申请加载失败：" }}{{ controlPolicyReviewError }}
             </div>
             <div v-if="isControlPolicyReviewLoading" class="state-box">支付控制策略复核申请加载中...</div>
-            <div v-else-if="!controlPolicyReviews.length" class="state-box">当前暂无支付控制策略配置复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!controlPolicyReviews.length && !controlPolicyReviewError" class="state-box">当前暂无支付控制策略配置复核申请</div>
+            <div v-else-if="controlPolicyReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -4342,11 +4344,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               </label>
             </div>
             <div v-if="alertProviderReviewError" class="error-banner">
-              供应商复核申请加载失败：{{ alertProviderReviewError }}
+              {{ alertProviderReviews.length ? "供应商复核申请刷新失败，当前展示上次成功快照：" : "供应商复核申请加载失败：" }}{{ alertProviderReviewError }}
             </div>
             <div v-if="isAlertProviderReviewLoading" class="state-box">供应商复核申请加载中...</div>
-            <div v-else-if="!alertProviderReviews.length" class="state-box">当前暂无供应商配置复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!alertProviderReviews.length && !alertProviderReviewError" class="state-box">当前暂无供应商配置复核申请</div>
+            <div v-else-if="alertProviderReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -4608,11 +4610,11 @@ function exportGovernanceSnapshot(section = "ALL") {
               </label>
             </div>
             <div v-if="issueDutyRosterReviewError" class="error-banner">
-              值班路由复核申请加载失败：{{ issueDutyRosterReviewError }}
+              {{ issueDutyRosterReviews.length ? "值班路由复核申请刷新失败，当前展示上次成功快照：" : "值班路由复核申请加载失败：" }}{{ issueDutyRosterReviewError }}
             </div>
             <div v-if="isIssueDutyRosterReviewLoading" class="state-box">值班路由复核申请加载中...</div>
-            <div v-else-if="!issueDutyRosterReviews.length" class="state-box">当前暂无值班路由配置复核申请</div>
-            <div v-else class="table-wrap">
+            <div v-else-if="!issueDutyRosterReviews.length && !issueDutyRosterReviewError" class="state-box">当前暂无值班路由配置复核申请</div>
+            <div v-else-if="issueDutyRosterReviews.length" class="table-wrap">
               <table>
                 <thead>
                   <tr>
