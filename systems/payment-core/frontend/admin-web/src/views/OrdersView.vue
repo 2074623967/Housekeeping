@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { orderApi, paymentApi } from "../api/client";
 import { paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
+import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute } from "../router/listRoutes";
 
 const items = ref([]);
@@ -23,18 +24,12 @@ const filters = ref({
   orderStatus: "全部"
 });
 
-const appWebBaseUrl = "http://127.0.0.1:5175";
-
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
 ));
 const isWriteDisabled = computed(() => (
   !hasLoadedData.value || isLoading.value || isSnapshotStale.value || Boolean(activeOrderNo.value)
 ));
-
-function buildCashierUrl(prepayOrderNo) {
-  return `${appWebBaseUrl}/cashier/${prepayOrderNo}`;
-}
 
 function buildQuery() {
   return {
@@ -125,7 +120,7 @@ async function launchPayment(orderNo) {
       orderNo,
       prepayOrderNo: prepay.prepayOrderNo,
       paymentOrderId: prepay.paymentOrderId,
-      cashierUrl: buildCashierUrl(prepay.prepayOrderNo)
+      cashierUrl: buildAppWebCashierUrl(prepay.prepayOrderNo)
     };
     actionResultMessage.value = `订单 ${orderNo} 已生成预付单，可进入收银台继续支付。`;
     actionRefreshErrorMessage.value = "";
@@ -290,7 +285,7 @@ onMounted(loadOrders);
                   <a
                     v-if="canOpenCashier(item)"
                     class="link-button"
-                    :href="buildCashierUrl(item.latestPrepayOrderNo)"
+                    :href="buildAppWebCashierUrl(item.latestPrepayOrderNo)"
                     target="_blank"
                     rel="noreferrer"
                   >

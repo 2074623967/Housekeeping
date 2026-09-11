@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
+import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 
 const route = useRoute();
@@ -48,7 +49,7 @@ const cashierUrl = computed(() => {
   if (!detail.value?.prepayOrderNo) {
     return "";
   }
-  return `http://127.0.0.1:5175/cashier/${detail.value.prepayOrderNo}`;
+  return buildAppWebCashierUrl(detail.value.prepayOrderNo);
 });
 
 const metricCards = computed(() => {

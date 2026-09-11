@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { cashierSessionApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
+import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
 
 const items = ref([]);
@@ -325,7 +326,7 @@ onMounted(loadCashierSessions);
               <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
               <a
                 class="link-button"
-                :href="`/cashier/${selectedItem.prepayOrderNo}`"
+                :href="buildAppWebCashierUrl(selectedItem.prepayOrderNo)"
                 target="_blank"
                 rel="noopener noreferrer"
               >
