@@ -40,6 +40,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int RESOLUTION_NOTE_MAX_LENGTH = 512;
     private static final int DEFAULT_CONFIRM_TIMEOUT_MS = 5000;
+    private static final int MAX_CONFIRM_TIMEOUT_MS = 60000;
     private static final Pattern PAYMENT_DLQ_PATTERN = Pattern.compile(
             "^payment\\.success\\.(clearing|accounting)\\.dlq(?:\\.([^.]+))?\\.v1$");
     private static final Pattern CLEARING_DLQ_PATTERN = Pattern.compile(
@@ -62,8 +63,7 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.sensitiveDataMasker = sensitiveDataMasker;
-        this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0
-                ? DEFAULT_CONFIRM_TIMEOUT_MS : publisherConfirmTimeoutMs;
+        this.publisherConfirmTimeoutMs = normalizePublisherConfirmTimeoutMs(publisherConfirmTimeoutMs);
     }
 
     PaymentDeadLetterTaskServiceImpl(PaymentDeadLetterTaskMapper paymentDeadLetterTaskMapper,
@@ -246,6 +246,13 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
 
     private String buildFailureNote() {
         return "重放发送失败：[REDACTED]";
+    }
+
+    private long normalizePublisherConfirmTimeoutMs(long timeoutMs) {
+        if (timeoutMs <= 0) {
+            return DEFAULT_CONFIRM_TIMEOUT_MS;
+        }
+        return Math.min(timeoutMs, MAX_CONFIRM_TIMEOUT_MS);
     }
 
     private List<PaymentDeadLetterTaskEntity> maskTasks(List<PaymentDeadLetterTaskEntity> tasks) {

@@ -161,6 +161,44 @@ class PaymentDeadLetterTaskServiceImplTest {
     }
 
     @Test
+    void shouldCapDeadLetterReplayPublisherConfirmTimeout() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
+
+        new PaymentDeadLetterTaskServiceImpl(
+                paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), 120000L)
+                .replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
+
+        verify(rabbitTemplate).waitForConfirmsOrDie(60000L);
+        verify(paymentDeadLetterTaskMapper).markReplayed("DLQ-001");
+    }
+
+    @Test
+    void shouldUseDefaultDeadLetterReplayPublisherConfirmTimeoutWhenNonPositive() {
+        PaymentDeadLetterTaskEntity task = replayTask();
+        when(paymentDeadLetterTaskMapper.markReplaying(
+                "DLQ-001", "支付运营", "已核对主数据，允许定向重放")).thenReturn(1);
+        when(paymentDeadLetterTaskMapper.findByTaskNo("DLQ-001")).thenReturn(task);
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
+
+        new PaymentDeadLetterTaskServiceImpl(
+                paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), -1L)
+                .replay("DLQ-001", action("支付运营", "已核对主数据，允许定向重放"));
+
+        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        verify(paymentDeadLetterTaskMapper).markReplayed("DLQ-001");
+    }
+
+    @Test
     void shouldRecordReplayFailureForManualFollowUp() {
         PaymentDeadLetterTaskEntity task = replayTask();
         when(paymentDeadLetterTaskMapper.markReplaying(

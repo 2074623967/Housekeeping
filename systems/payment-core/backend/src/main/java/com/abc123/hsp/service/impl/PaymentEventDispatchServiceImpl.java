@@ -46,6 +46,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final int AMQP_DESTINATION_MAX_LENGTH = 255;
     private static final int DOWNSTREAM_RESPONSE_CODE_MAX_LENGTH = 32;
     private static final int DEFAULT_MAX_RETRY_COUNT = 3;
+    private static final long DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS = 5000L;
+    private static final long MAX_PUBLISHER_CONFIRM_TIMEOUT_MS = 60000L;
 
     private final PaymentMapper paymentMapper;
     private final PaymentEventMapper paymentEventMapper;
@@ -167,7 +169,34 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 "amqp",
                 paymentSuccessExchange,
                 paymentSuccessRoutingKey,
-                5000L,
+                DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS,
+                rabbitTemplate,
+                objectMapper,
+                null,
+                null);
+    }
+
+    PaymentEventDispatchServiceImpl(
+            PaymentMapper paymentMapper,
+            PaymentEventMapper paymentEventMapper,
+            String accountingPaymentSuccessAccountNo,
+            int maxRetryCount,
+            RabbitTemplate rabbitTemplate,
+            ObjectMapper objectMapper,
+            String paymentSuccessExchange,
+            String paymentSuccessRoutingKey,
+            long publisherConfirmTimeoutMs) {
+        this(paymentMapper,
+                paymentEventMapper,
+                null,
+                null,
+                accountingPaymentSuccessAccountNo,
+                maxRetryCount,
+                null,
+                "amqp",
+                paymentSuccessExchange,
+                paymentSuccessRoutingKey,
+                publisherConfirmTimeoutMs,
                 rabbitTemplate,
                 objectMapper,
                 null,
@@ -223,9 +252,16 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         this.paymentSuccessRoutingKey = paymentSuccessRoutingKey;
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
-        this.publisherConfirmTimeoutMs = publisherConfirmTimeoutMs <= 0 ? 5000L : publisherConfirmTimeoutMs;
+        this.publisherConfirmTimeoutMs = normalizePublisherConfirmTimeoutMs(publisherConfirmTimeoutMs);
         this.refundMapper = refundMapper;
         this.refundChannelSubmitService = refundChannelSubmitService;
+    }
+
+    private long normalizePublisherConfirmTimeoutMs(long timeoutMs) {
+        if (timeoutMs <= 0) {
+            return DEFAULT_PUBLISHER_CONFIRM_TIMEOUT_MS;
+        }
+        return Math.min(timeoutMs, MAX_PUBLISHER_CONFIRM_TIMEOUT_MS);
     }
 
     @Override

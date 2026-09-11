@@ -358,6 +358,58 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldCapPaymentSuccessAmqpPublisherConfirmTimeout() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "ACT10003",
+                3,
+                rabbitTemplate,
+                new ObjectMapper(),
+                "payment.trade",
+                "payment.success.v1",
+                120000L
+        ).publishPaymentSuccess("EVT-001", "PAY-001");
+
+        verify(rabbitTemplate).waitForConfirmsOrDie(60000L);
+        verify(paymentEventMapper).markPublishSuccess("EVT-001");
+    }
+
+    @Test
+    void shouldUseDefaultPaymentSuccessAmqpPublisherConfirmTimeoutWhenNonPositive() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
+            return callback.doInRabbit(rabbitTemplate);
+        });
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "ACT10003",
+                3,
+                rabbitTemplate,
+                new ObjectMapper(),
+                "payment.trade",
+                "payment.success.v1",
+                0L
+        ).publishPaymentSuccess("EVT-001", "PAY-001");
+
+        verify(rabbitTemplate).waitForConfirmsOrDie(5000L);
+        verify(paymentEventMapper).markPublishSuccess("EVT-001");
+    }
+
+    @Test
     void shouldMarkFailedWhenAmqpPublishFails() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();
