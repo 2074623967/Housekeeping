@@ -9770,3 +9770,25 @@
 1. 支付请求的三类查询出口不再把超出查询列宽或含控制字符的条件下推数据库。
 2. 本轮无前端代码、端点、DTO、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明真实渠道请求、渠道受理、支付入账、账务一致性或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 357. 2026-09-12 支付记录查询字段边界 V1.0 验证
+
+### 357.1 本轮补强
+
+1. `PaymentRecordServiceImpl` 将列表 `recordType / userId / businessOrderNo / paymentType / paymentStatus / paymentChannel` 分别限制为 `16 / 128 / 64 / 32 / 32 / 64` 个字符。
+2. 详情 `paymentOrderId` 要求非空且最长 `64` 个字符；七类原始值在裁剪前拒绝控制字符，非法查询不访问支付记录或支付轨迹 Mapper。
+3. 详情主记录、路由、通知和事件轨迹统一使用裁剪后的支付单号；列表兼容、分页、用户引用脱敏、详情报文脱敏和成功退款聚合保持不变。
+
+### 357.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付记录联合定向测试 | `mvn -Dtest=PaymentRecordServiceListTest,PaymentRecordServiceImplTest,PaymentRecordControllerTest,PaymentRecordRefundAggregationMapperIntegrationTest test` | 通过 | `11` 个用例；覆盖六类列表筛选、详情标识、Mapper 零交互、退款聚合与详情轨迹装配 |
+| payment-core 全量测试 | `mvn test` | 通过 | `879` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 357.3 当前判断
+
+1. 支付记录列表与详情不再把超出边界或含控制字符的查询条件下推数据库，详情轨迹查询键保持一致。
+2. 本轮无前端代码、端点、DTO、Mapper SQL、schema 或迁移变化；本地测试不证明真实支付、退款到账、渠道受理、账务一致性或生产稳定性。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。

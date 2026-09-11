@@ -3412,6 +3412,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 非法参数使用既有参数错误响应并在 Mapper 访问前拒绝；排序、分页、请求总览、敏感字段脱敏和 CSV `1000` 行上限保持不变。
 4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、schema 或迁移；本地测试不证明真实渠道请求、渠道受理、支付入账或生产稳定性。
 
+### 14.184 支付记录查询字段契约
+
+1. `GET /api/payment-records` 参数不变；`recordType / userId / businessOrderNo / paymentType / paymentStatus / paymentChannel` 最长分别为 `16 / 128 / 64 / 32 / 32 / 64` 个字符。
+2. `GET /api/payment-records/{paymentOrderId}` 的支付单号要求非空且最长 `64` 个字符；列表与详情共七类原始输入不得包含控制字符，合法首尾空白在查询前裁剪。
+3. 非法列表参数使用既有参数错误响应，非法详情标识使用 `PAYMENT_REQUEST_INVALID`，且均在 Mapper 访问前拒绝；详情不存在仍使用 `PAYMENT_ORDER_NOT_FOUND`。
+4. 未知记录维度兼容、默认筛选、排序、分页、敏感字段脱敏、详情轨迹和成功退款聚合保持不变；本轮不新增端点、DTO 字段、Mapper SQL、schema 或迁移。
+5. 本地测试不证明真实支付、退款到账、渠道受理、账务一致性或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
