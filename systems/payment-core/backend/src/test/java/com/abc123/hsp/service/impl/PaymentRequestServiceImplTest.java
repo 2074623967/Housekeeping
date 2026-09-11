@@ -1,8 +1,10 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentRequestListItemDTO;
@@ -50,6 +52,62 @@ class PaymentRequestServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         verify(paymentRequestMapper).findAll(query);
         verify(paymentRequestMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedPaymentRequestQueryBeforeMapperAccess() {
+        PaymentRequestQueryDTO requestNoQuery = new PaymentRequestQueryDTO();
+        requestNoQuery.setRequestNo(repeat("R", 65));
+        PaymentRequestQueryDTO paymentOrderQuery = new PaymentRequestQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentRequestQueryDTO orderQuery = new PaymentRequestQueryDTO();
+        orderQuery.setOrderNo(repeat("O", 65));
+        PaymentRequestQueryDTO channelQuery = new PaymentRequestQueryDTO();
+        channelQuery.setChannelCode(repeat("C", 65));
+        PaymentRequestQueryDTO terminalQuery = new PaymentRequestQueryDTO();
+        terminalQuery.setTerminal(repeat("T", 33));
+        PaymentRequestQueryDTO clientIpQuery = new PaymentRequestQueryDTO();
+        clientIpQuery.setClientIp(repeat("I", 65));
+        PaymentRequestQueryDTO statusQuery = new PaymentRequestQueryDTO();
+        statusQuery.setRequestStatus(repeat("S", 33));
+        PaymentRequestServiceImpl service = new PaymentRequestServiceImpl(paymentRequestMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(requestNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(clientIpQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(statusQuery));
+        verifyNoInteractions(paymentRequestMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInPaymentRequestQueryBeforeMapperAccess() {
+        PaymentRequestQueryDTO requestNoQuery = new PaymentRequestQueryDTO();
+        requestNoQuery.setRequestNo("REQ-001\n");
+        PaymentRequestQueryDTO paymentOrderQuery = new PaymentRequestQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentRequestQueryDTO orderQuery = new PaymentRequestQueryDTO();
+        orderQuery.setOrderNo("ORD-001\n");
+        PaymentRequestQueryDTO channelQuery = new PaymentRequestQueryDTO();
+        channelQuery.setChannelCode("wx_h5\n");
+        PaymentRequestQueryDTO terminalQuery = new PaymentRequestQueryDTO();
+        terminalQuery.setTerminal("H5\n");
+        PaymentRequestQueryDTO clientIpQuery = new PaymentRequestQueryDTO();
+        clientIpQuery.setClientIp("127.0.0.1\n");
+        PaymentRequestQueryDTO statusQuery = new PaymentRequestQueryDTO();
+        statusQuery.setRequestStatus("请求成功\n");
+        PaymentRequestServiceImpl service = new PaymentRequestServiceImpl(paymentRequestMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(requestNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(clientIpQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(statusQuery));
+        verifyNoInteractions(paymentRequestMapper);
     }
 
     @Test
@@ -119,5 +177,9 @@ class PaymentRequestServiceImplTest {
         assertEquals(2, result.getRepeatedPaymentOrderCount());
         assertEquals(0, result.getMissingResponseCount());
         verify(paymentRequestMapper).findOverviewSummary(query);
+    }
+
+    private String repeat(String value, int count) {
+        return String.join("", Collections.nCopies(count, value));
     }
 }

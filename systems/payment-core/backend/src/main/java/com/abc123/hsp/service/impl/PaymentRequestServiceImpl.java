@@ -26,6 +26,13 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentRequestServiceImpl implements PaymentRequestService {
 
+    private static final int REQUEST_NO_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int TERMINAL_MAX_LENGTH = 32;
+    private static final int CLIENT_IP_MAX_LENGTH = 64;
+    private static final int REQUEST_STATUS_MAX_LENGTH = 32;
     private static final Map<String, String> REQUEST_STATUS_ALIASES = buildRequestStatusAliases();
     private final PaymentRequestMapper paymentRequestMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
@@ -137,17 +144,41 @@ public class PaymentRequestServiceImpl implements PaymentRequestService {
     }
 
     private void normalizeQuery(PaymentRequestQueryDTO query) {
-        query.setRequestNo(query.getRequestNo() == null ? null : query.getRequestNo().trim());
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
-        query.setTerminal(query.getTerminal() == null ? null : query.getTerminal().trim());
-        query.setClientIp(query.getClientIp() == null ? null : query.getClientIp().trim());
-        query.setRequestStatus(normalizeRequestStatus(query.getRequestStatus()));
+        query.setRequestNo(normalizeOptionalQueryField(
+                query.getRequestNo(), REQUEST_NO_MAX_LENGTH, "请求编号", null));
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
+        query.setChannelCode(normalizeOptionalQueryField(
+                query.getChannelCode(), CHANNEL_CODE_MAX_LENGTH, "渠道编码", null));
+        query.setTerminal(normalizeOptionalQueryField(
+                query.getTerminal(), TERMINAL_MAX_LENGTH, "终端", null));
+        query.setClientIp(normalizeOptionalQueryField(
+                query.getClientIp(), CLIENT_IP_MAX_LENGTH, "客户端IP", null));
+        query.setRequestStatus(normalizeRequestStatus(normalizeOptionalQueryField(
+                query.getRequestStatus(), REQUEST_STATUS_MAX_LENGTH, "请求状态", "全部")));
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String normalizeRequestStatus(String requestStatus) {
