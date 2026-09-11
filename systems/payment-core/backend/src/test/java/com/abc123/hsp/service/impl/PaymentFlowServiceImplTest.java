@@ -1,8 +1,10 @@
 package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentFlowListItemDTO;
@@ -52,6 +54,62 @@ class PaymentFlowServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         verify(paymentFlowMapper).findAll(query);
         verify(paymentFlowMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedPaymentFlowQueryBeforeMapperAccess() {
+        PaymentFlowQueryDTO paymentOrderQuery = new PaymentFlowQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentFlowQueryDTO orderQuery = new PaymentFlowQueryDTO();
+        orderQuery.setOrderNo(repeat("O", 65));
+        PaymentFlowQueryDTO flowTypeQuery = new PaymentFlowQueryDTO();
+        flowTypeQuery.setFlowType(repeat("F", 33));
+        PaymentFlowQueryDTO channelQuery = new PaymentFlowQueryDTO();
+        channelQuery.setChannelCode(repeat("C", 65));
+        PaymentFlowQueryDTO terminalQuery = new PaymentFlowQueryDTO();
+        terminalQuery.setTerminal(repeat("T", 33));
+        PaymentFlowQueryDTO businessStatusQuery = new PaymentFlowQueryDTO();
+        businessStatusQuery.setBusinessStatus(repeat("S", 129));
+        PaymentFlowQueryDTO keywordQuery = new PaymentFlowQueryDTO();
+        keywordQuery.setKeyword(repeat("K", 2049));
+        PaymentFlowServiceImpl service = new PaymentFlowServiceImpl(paymentFlowMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(flowTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(businessStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(keywordQuery));
+        verifyNoInteractions(paymentFlowMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInPaymentFlowQueryBeforeMapperAccess() {
+        PaymentFlowQueryDTO paymentOrderQuery = new PaymentFlowQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentFlowQueryDTO orderQuery = new PaymentFlowQueryDTO();
+        orderQuery.setOrderNo("ORD-001\n");
+        PaymentFlowQueryDTO flowTypeQuery = new PaymentFlowQueryDTO();
+        flowTypeQuery.setFlowType("支付尝试\n");
+        PaymentFlowQueryDTO channelQuery = new PaymentFlowQueryDTO();
+        channelQuery.setChannelCode("wx_h5\n");
+        PaymentFlowQueryDTO terminalQuery = new PaymentFlowQueryDTO();
+        terminalQuery.setTerminal("H5\n");
+        PaymentFlowQueryDTO businessStatusQuery = new PaymentFlowQueryDTO();
+        businessStatusQuery.setBusinessStatus("WAIT_CALLBACK\n");
+        PaymentFlowQueryDTO keywordQuery = new PaymentFlowQueryDTO();
+        keywordQuery.setKeyword("回调\n");
+        PaymentFlowServiceImpl service = new PaymentFlowServiceImpl(paymentFlowMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(flowTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(businessStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(keywordQuery));
+        verifyNoInteractions(paymentFlowMapper);
     }
 
     @Test
@@ -138,5 +196,9 @@ class PaymentFlowServiceImplTest {
         item.setSummary(summary);
         item.setCreatedAt("2026-07-31 15:12:00");
         return item;
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }

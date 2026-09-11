@@ -22,6 +22,14 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaymentFlowServiceImpl implements PaymentFlowService {
 
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int FLOW_TYPE_MAX_LENGTH = 32;
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int TERMINAL_MAX_LENGTH = 32;
+    private static final int BUSINESS_STATUS_MAX_LENGTH = 128;
+    private static final int KEYWORD_MAX_LENGTH = 2048;
+
     private final PaymentFlowMapper paymentFlowMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
@@ -102,16 +110,41 @@ public class PaymentFlowServiceImpl implements PaymentFlowService {
     }
 
     private void normalizeQuery(PaymentFlowQueryDTO query) {
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
-        query.setTerminal(query.getTerminal() == null ? "全部" : query.getTerminal().trim());
-        query.setBusinessStatus(query.getBusinessStatus() == null ? null : query.getBusinessStatus().trim());
-        query.setKeyword(query.getKeyword() == null ? null : query.getKeyword().trim());
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
+        query.setFlowType(normalizeOptionalQueryField(
+                query.getFlowType(), FLOW_TYPE_MAX_LENGTH, "流水类型", "全部"));
+        query.setChannelCode(normalizeOptionalQueryField(
+                query.getChannelCode(), CHANNEL_CODE_MAX_LENGTH, "渠道编码", null));
+        query.setTerminal(normalizeOptionalQueryField(
+                query.getTerminal(), TERMINAL_MAX_LENGTH, "终端", "全部"));
+        query.setBusinessStatus(normalizeOptionalQueryField(
+                query.getBusinessStatus(), BUSINESS_STATUS_MAX_LENGTH, "业务状态", null));
+        query.setKeyword(normalizeOptionalQueryField(
+                query.getKeyword(), KEYWORD_MAX_LENGTH, "关键字", null));
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String csvCell(String value) {
