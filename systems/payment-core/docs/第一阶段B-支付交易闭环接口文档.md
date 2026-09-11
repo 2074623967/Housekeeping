@@ -3698,6 +3698,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `bizType`、`terminalVariant`、`prepayOrderNo` 与 `paymentMethod` 作为查询对象传递，不得通过手工 `?`、`&` 拼接改变字段边界。
 4. 页面导航成功不改变 API 响应、支付状态机或资金事实，也不代表预付单、支付单存在或渠道处理成功。
 
+### 14.221 管理端详情页面路由消费约束
+
+1. `/payments/:paymentOrderId`、`/payment-records/:paymentOrderId` 与 `/refunds/:refundOrderId` 属于管理端页面路由，不新增或修改后端 API。
+2. 页面入口使用命名路由参数，支付记录维度通过独立 `query.recordType` 传递；页面参数进入详情组件后再由已编码的 API 客户端请求服务端。
+3. 支付单、支付记录和退款详情之间的互跳只传递业务键，不复制或推断目标详情事实；服务端继续独立执行字符、容量、存在性与状态校验。
+4. 页面路由解析成功不代表详情 API 成功、支付或退款到账、账务一致或运营动作有效。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
