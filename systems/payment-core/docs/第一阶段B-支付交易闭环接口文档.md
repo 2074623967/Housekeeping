@@ -3342,6 +3342,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 非法参数使用既有参数错误响应并在 Mapper 访问前拒绝；页码与每页 `1..100` 边界、排序和响应快照脱敏保持不变。
 4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL 或死信动作状态机；本地测试不证明生产 MySQL 查询计划、真实消息积压或 RabbitMQ 投递结果。
 
+### 14.174 支付事件查询与人工重发字段契约
+
+1. `GET /api/payment-events`、`GET /api/payment-events/overview` 与 `GET /api/payment-events/export` 参数不变；`paymentOrderId / eventType / publishStatus / downstreamSystem / eventTopic` 最长分别为 `64 / 64 / 32 / 256 / 128` 个字符。
+2. 五类原始输入不得包含控制字符，合法首尾空白在查询前裁剪；`null` 和既有空条件继续表示不启用对应筛选。
+3. `POST /api/payment-events/republish` 的 `eventNo` 继续必填、裁剪后最长 `64` 个字符，原始值不得包含控制字符；非法请求在派发和审计写入前拒绝。
+4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、可重发状态、分页排序、CSV 上限或载荷脱敏；本地测试不证明生产查询计划、真实事件积压或下游投递结果。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

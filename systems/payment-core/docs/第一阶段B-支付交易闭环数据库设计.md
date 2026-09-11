@@ -1034,6 +1034,13 @@ t_order
 3. 空条件保持不筛选语义，现有参数绑定、排序、分页及响应脱敏不变，不以应用校验替代数据库索引与执行计划治理。
 4. 本地 Mockito 测试不证明生产 MySQL 字符集长度、数据分布、查询吞吐或稳定性，仍需正式环境核验。
 
+### 4.105 支付事件查询与重发事件号边界
+
+1. `t_payment_event.payment_order_id / event_type / publish_status / downstream_system / event_topic / event_no` 继续使用 `VARCHAR(64) / VARCHAR(64) / VARCHAR(32) / VARCHAR(256) / VARCHAR(128) / VARCHAR(64)`；本轮不新增表、字段、索引、Mapper SQL、schema 或迁移。
+2. 列表、总览和导出共用的五类查询条件在服务层先拒绝原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper。
+3. 人工重发事件号在事件行读取、派发和审计更新前完成同类门禁；唯一键、发布状态更新、重试次数和审计时间语义不变。
+4. 本地 Mockito 测试不证明生产 MySQL 字符集长度、查询计划、事件积压、下游投递或稳定性，仍需正式环境核验。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
