@@ -1041,6 +1041,13 @@ t_order
 3. 人工重发事件号在事件行读取、派发和审计更新前完成同类门禁；唯一键、发布状态更新、重试次数和审计时间语义不变。
 4. 本地 Mockito 测试不证明生产 MySQL 字符集长度、查询计划、事件积压、下游投递或稳定性，仍需正式环境核验。
 
+### 4.106 支付异常与告警查询字段边界
+
+1. 异常联合查询的支付单号、订单号、异常类型、严重等级、渠道编码和支付方式分别对齐 `t_payment_order` 与异常动作日志相关列的 `64 / 64 / 64 / 32 / 64 / 32` 字符宽度。
+2. `t_payment_issue_alert_log.alert_no / issue_no / payment_order_id / alert_channel / alert_status / ack_status / provider_delivery_status` 保持 `VARCHAR(64) / VARCHAR(128) / VARCHAR(64) / VARCHAR(32) / VARCHAR(32) / VARCHAR(32) / VARCHAR(64)`；派生回执回查状态按 `32` 字符收敛。
+3. 服务层在列表、责任汇总、告警明细和导出 SQL 前先拒绝原始控制字符，再裁剪合法空白并按目标列宽校验；非法条件不进入 Mapper。
+4. 本轮不新增表、字段、索引、Mapper SQL、schema 或迁移；本地 Mockito 不证明生产 MySQL 字符集长度、查询计划、数据分布或稳定性。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

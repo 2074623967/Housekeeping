@@ -9572,3 +9572,25 @@
 1. 支付事件查询不再把超出目标列宽或含控制字符的条件下推数据库，人工重发不再接受裁剪后看似合法的控制字符输入。
 2. 本轮无前端代码、接口字段、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明生产 MySQL 查询计划、真实事件积压、下游投递或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 348. 2026-09-12 支付异常与告警查询字段边界 V1.0 验证
+
+### 348.1 本轮补强
+
+1. `PaymentIssueServiceImpl` 将异常列表/责任汇总的 `paymentOrderId / orderNo / issueType / severity / channelCode / paymentMethod` 分别限制为 `64 / 64 / 64 / 32 / 64 / 32` 个字符。
+2. 告警明细列表/CSV 导出的 `alertNo / issueNo / paymentOrderId / alertChannel / alertStatus / ackStatus / providerDeliveryStatus / receiptQueryState` 分别限制为 `64 / 128 / 64 / 32 / 32 / 32 / 64 / 32` 个字符。
+3. 所有原始值在裁剪前拒绝控制字符；回执回查状态在原值门禁后再执行大写化和枚举校验，非法条件不访问 Mapper。
+
+### 348.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 支付异常服务与控制器联合定向测试 | `mvn -Dtest=PaymentIssueServiceImplTest,PaymentIssueControllerTest test` | 通过 | `32` 个用例；新增 `4` 个用例覆盖 `28` 类超长或控制字符输入、Mapper 零交互及既有列表/汇总/告警/导出流程 |
+| payment-core 全量测试 | `mvn test` | 通过 | `860` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 348.3 当前判断
+
+1. 异常中心的四类查询出口不再将超出目标列宽或含控制字符的条件下推数据库，末尾换行不能再被裁剪后变成合法回执回查状态。
+2. 本轮无前端代码、接口字段、错误码、Mapper SQL、schema 或迁移变化；本地测试不证明生产 MySQL 查询计划、真实异常积压、供应商投递/回执或生产稳定性。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。

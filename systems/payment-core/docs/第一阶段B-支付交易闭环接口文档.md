@@ -3349,6 +3349,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `POST /api/payment-events/republish` 的 `eventNo` 继续必填、裁剪后最长 `64` 个字符，原始值不得包含控制字符；非法请求在派发和审计写入前拒绝。
 4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、可重发状态、分页排序、CSV 上限或载荷脱敏；本地测试不证明生产查询计划、真实事件积压或下游投递结果。
 
+### 14.175 支付异常与告警查询字段契约
+
+1. 异常列表与责任汇总端点参数不变；`paymentOrderId / orderNo / issueType / severity / channelCode / paymentMethod` 最长分别为 `64 / 64 / 64 / 32 / 64 / 32` 个字符。
+2. 告警明细列表与 CSV 导出端点参数不变；`alertNo / issueNo / paymentOrderId / alertChannel / alertStatus / ackStatus / providerDeliveryStatus / receiptQueryState` 最长分别为 `64 / 128 / 64 / 32 / 32 / 32 / 64 / 32` 个字符。
+3. 所有原始值不得包含控制字符，合法首尾空白在查询前裁剪；`receiptQueryState` 在原值校验后再大写化并校验 `INITIAL_WAIT / DUE / BACKING_OFF / QUERYING / EXHAUSTED`。
+4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、默认筛选、分页、CSV 上限或告警回执脱敏；本地测试不证明生产查询计划、真实异常积压或供应商投递/回执结果。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
