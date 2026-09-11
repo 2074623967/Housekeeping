@@ -22,6 +22,17 @@ class PaymentChannelAmountJsonTest {
     }
 
     @Test
+    void shouldSerializeExactChannelVersionDailyLimitAsString() {
+        PaymentChannelVersionDTO version = new PaymentChannelVersionDTO();
+        version.setDailyLimit(MAXIMUM_AMOUNT);
+
+        JsonNode payload = new ObjectMapper().valueToTree(version);
+
+        Assertions.assertTrue(payload.get("dailyLimit").isTextual());
+        Assertions.assertEquals("9999999999999999.99", payload.get("dailyLimit").asText());
+    }
+
+    @Test
     void shouldDeserializeExactChannelDailyLimitFromString() throws Exception {
         PaymentChannelReviewSubmitRequestDTO request = new ObjectMapper().readValue(
                 "{\"candidate\":{\"dailyLimit\":\"9999999999999999.99\"}}",

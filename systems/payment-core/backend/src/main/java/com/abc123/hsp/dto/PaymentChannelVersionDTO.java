@@ -1,5 +1,7 @@
 package com.abc123.hsp.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import java.math.BigDecimal;
 import lombok.Data;
 
@@ -24,6 +26,7 @@ public class PaymentChannelVersionDTO {
     private String sceneScope;
     private String status;
     private String statusType;
+    @JsonSerialize(using = ToStringSerializer.class)
     private BigDecimal dailyLimit;
     private Integer priority;
     private Integer routeWeight;
