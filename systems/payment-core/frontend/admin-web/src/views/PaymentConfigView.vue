@@ -53,7 +53,8 @@ const issueDutyRosterActionReason = ref("");
 const issueDutyRosterReviewer = ref("");
 const issueDutyRosterReviewComment = ref("");
 const isLoading = ref(true);
-const errorMessage = ref("");
+const hasLoadedOverview = ref(false);
+const overviewErrorMessage = ref("");
 const actionMessage = ref("");
 const activeConfigCode = ref("");
 const channelReviews = ref([]);
@@ -320,11 +321,12 @@ function formatHolidayStrategyLabel(holidayStrategy) {
 
 async function loadOverview() {
   isLoading.value = true;
-  errorMessage.value = "";
+  overviewErrorMessage.value = "";
   try {
     applyOverview(await paymentConfigApi.getOverview());
+    hasLoadedOverview.value = true;
   } catch (error) {
-    errorMessage.value = error.message;
+    overviewErrorMessage.value = error.message;
   } finally {
     isLoading.value = false;
   }
@@ -1965,22 +1967,28 @@ function exportGovernanceSnapshot(section = "ALL") {
         <p>统一管理支付渠道、路由规则、支付协议、返回码映射和支付网关接入配置</p>
       </div>
       <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="loadOverview">刷新配置</button>
         <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
         <span class="badge info">配置中心 V1.23</span>
       </div>
     </div>
 
     <section class="panel">
-      <div v-if="errorMessage" class="error-banner">
-        支付配置加载失败：{{ errorMessage }}
+      <div v-if="overviewErrorMessage" class="error-banner">
+        {{ hasLoadedOverview ? "支付配置刷新失败，当前展示上次成功快照：" : "支付配置加载失败：" }}{{ overviewErrorMessage }}
       </div>
       <div v-if="actionMessage" class="success-banner">
         {{ actionMessage }}
       </div>
 
-      <div v-if="isLoading" class="state-box">支付配置加载中...</div>
+      <div v-if="isLoading && !hasLoadedOverview" class="state-box">支付配置加载中...</div>
+      <div v-else-if="!hasLoadedOverview" class="state-box">当前没有可展示的支付配置快照</div>
 
-      <template v-else>
+      <fieldset
+        v-if="hasLoadedOverview"
+        class="config-content"
+        :disabled="Boolean(activeConfigCode) || isLoading || Boolean(overviewErrorMessage)"
+      >
         <section class="card-grid" style="margin-bottom: 16px;">
           <article class="card">
             <p class="card-title">启用渠道数</p>
@@ -4647,7 +4655,16 @@ function exportGovernanceSnapshot(section = "ALL") {
             </table>
           </div>
         </div>
-      </template>
+      </fieldset>
     </section>
   </div>
 </template>
+
+<style scoped>
+.config-content {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+</style>
