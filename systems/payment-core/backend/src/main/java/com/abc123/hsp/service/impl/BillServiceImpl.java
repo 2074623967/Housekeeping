@@ -23,6 +23,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class BillServiceImpl implements BillService {
 
+    private static final int BILL_NO_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int CUSTOMER_NAME_MAX_LENGTH = 128;
+    private static final int BILL_STATUS_MAX_LENGTH = 32;
+
     private final BillMapper billMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
@@ -120,14 +125,35 @@ public class BillServiceImpl implements BillService {
     }
 
     private void normalizeQuery(BillQueryDTO query) {
-        query.setBillNo(query.getBillNo() == null ? null : query.getBillNo().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setCustomerName(query.getCustomerName() == null ? null : query.getCustomerName().trim());
-        query.setBillStatus(query.getBillStatus() == null ? "全部" : query.getBillStatus().trim());
+        query.setBillNo(normalizeOptionalQueryField(
+                query.getBillNo(), BILL_NO_MAX_LENGTH, "账单号", null));
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
+        query.setCustomerName(normalizeOptionalQueryField(
+                query.getCustomerName(), CUSTOMER_NAME_MAX_LENGTH, "客户名称", null));
+        query.setBillStatus(normalizeOptionalQueryField(
+                query.getBillStatus(), BILL_STATUS_MAX_LENGTH, "账单状态", "全部"));
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String csvCell(String value) {

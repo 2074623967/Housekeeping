@@ -2,8 +2,10 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.BillListItemDTO;
@@ -49,6 +51,44 @@ class BillServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         verify(billMapper).findAll(query);
         verify(billMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedBillQueryBeforeMapperAccess() {
+        BillQueryDTO billNoQuery = new BillQueryDTO();
+        billNoQuery.setBillNo(repeat("B", 65));
+        BillQueryDTO orderNoQuery = new BillQueryDTO();
+        orderNoQuery.setOrderNo(repeat("O", 65));
+        BillQueryDTO customerNameQuery = new BillQueryDTO();
+        customerNameQuery.setCustomerName(repeat("张", 129));
+        BillQueryDTO billStatusQuery = new BillQueryDTO();
+        billStatusQuery.setBillStatus(repeat("S", 33));
+        BillServiceImpl service = new BillServiceImpl(billMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(billNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(orderNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(customerNameQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(billStatusQuery));
+        verifyNoInteractions(billMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInBillQueryBeforeMapperAccess() {
+        BillQueryDTO billNoQuery = new BillQueryDTO();
+        billNoQuery.setBillNo("BILL-001\n");
+        BillQueryDTO orderNoQuery = new BillQueryDTO();
+        orderNoQuery.setOrderNo("ORD-001\n");
+        BillQueryDTO customerNameQuery = new BillQueryDTO();
+        customerNameQuery.setCustomerName("张女士\n");
+        BillQueryDTO billStatusQuery = new BillQueryDTO();
+        billStatusQuery.setBillStatus("待支付\n");
+        BillServiceImpl service = new BillServiceImpl(billMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(billNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(orderNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(customerNameQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(billStatusQuery));
+        verifyNoInteractions(billMapper);
     }
 
     @Test
@@ -115,5 +155,9 @@ class BillServiceImplTest {
         assertEquals(2L, result.getOverdueBillCount());
         assertEquals("¥0.00", result.getTotalUnpaidAmount());
         verify(billMapper).findOverview(query);
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }
