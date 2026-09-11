@@ -17,6 +17,7 @@ import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -55,6 +56,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final int MAX_RECEIPT_QUERY_BATCH_SIZE = 1000;
     private static final String SOURCE_CHANNEL_OUTBOX = "IN_APP_OUTBOX";
     private static final String ROUTE_CHANNEL_IN_APP = "IN_APP";
+    private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter ALERT_LOG_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Pattern RETRY_COUNT_PATTERN = Pattern.compile("失败重试(\\d+)次");
     private static final Pattern RETRY_COOLDOWN_PATTERN = Pattern.compile("间隔(\\d+)分钟");
@@ -513,7 +515,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         LocalDateTime latestCreatedAt = parseAlertCreatedAt(latestLog.getCreatedAt());
         int effectiveCooldownMinutes = retryGuard.resolveEffectiveCooldownMinutes(failedAttemptCount);
         if (latestCreatedAt != null && effectiveCooldownMinutes > 0
-                && LocalDateTime.now().isBefore(latestCreatedAt.plusMinutes(effectiveCooldownMinutes))) {
+                && currentBusinessTime().isBefore(latestCreatedAt.plusMinutes(effectiveCooldownMinutes))) {
             return buildFailureResult(
                     "RETRY_COOLDOWN_ACTIVE",
                     String.format("补发冷却时间未到，请等待后再重试；当前要求间隔 %d 分钟", effectiveCooldownMinutes),
@@ -536,7 +538,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (freshnessWindowMinutes <= 0) {
             return null;
         }
-        if (LocalDateTime.now().isAfter(sourceCreatedAt.plusMinutes(freshnessWindowMinutes))) {
+        if (currentBusinessTime().isAfter(sourceCreatedAt.plusMinutes(freshnessWindowMinutes))) {
             return buildFailureResult(
                     "FRESHNESS_WINDOW_EXPIRED",
                     String.format("站内告警已超过 %d 分钟发送时间窗，停止继续外发", freshnessWindowMinutes),
@@ -563,7 +565,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (protectionWindowMinutes <= 0) {
             return null;
         }
-        if (LocalDateTime.now().isAfter(latestCreatedAt.plusMinutes(protectionWindowMinutes))) {
+        if (currentBusinessTime().isAfter(latestCreatedAt.plusMinutes(protectionWindowMinutes))) {
             return null;
         }
         return buildFailureResult(
@@ -589,7 +591,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(providerConfig.getProviderCode())) {
             return null;
         }
-        String sinceTime = LocalDateTime.now()
+        String sinceTime = currentBusinessTime()
                 .minusMinutes(PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES)
                 .format(ALERT_LOG_TIME_FORMATTER);
         int failedDeliveryCount = paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(
@@ -621,7 +623,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(providerCode)) {
             return null;
         }
-        String sinceTime = LocalDateTime.now().minusMinutes(rateLimitGuard.getWindowMinutes()).format(ALERT_LOG_TIME_FORMATTER);
+        String sinceTime = currentBusinessTime()
+                .minusMinutes(rateLimitGuard.getWindowMinutes())
+                .format(ALERT_LOG_TIME_FORMATTER);
         int currentDeliveryCount = paymentTaskCenterMapper.countIssueAlertProviderDeliveriesSince(providerCode, channelCode, sinceTime);
         if (currentDeliveryCount >= rateLimitGuard.getThreshold()) {
             return buildFailureResult(
@@ -1045,6 +1049,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         } catch (DateTimeParseException ex) {
             return null;
         }
+    }
+
+    private LocalDateTime currentBusinessTime() {
+        return LocalDateTime.now(BUSINESS_ZONE_ID);
     }
 
     private List<String> resolveConfiguredChannels(String notifyChannels) {
