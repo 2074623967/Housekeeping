@@ -107,7 +107,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .republish("EVTR-001", " finance-ops ");
+                .republish(" EVTR-001 ", " finance-ops ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService).submit(request);
@@ -181,6 +181,37 @@ class PaymentEventDispatchServiceImplTest {
 
         org.mockito.Mockito.verifyNoInteractions(
                 paymentEventMapper, refundMapper, refundChannelSubmitService);
+    }
+
+    @Test
+    void shouldRejectInvalidDispatchIdentifiersBeforeReadingEvent() {
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3);
+        String oversizedIdentifier = String.join("", java.util.Collections.nCopies(65, "A"));
+
+        IllegalArgumentException blankEventNo = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.republish(" ", "finance-ops"));
+        IllegalArgumentException oversizedEventNo = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.publishPaymentSuccess(oversizedIdentifier, "PAY-001"));
+        IllegalArgumentException controlEventNo = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.publishRefundSubmit("EVTR-001\n", "REF-001", "finance-ops"));
+        IllegalArgumentException oversizedPaymentOrderId = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.publishPaymentSuccess("EVT-001", oversizedIdentifier));
+        IllegalArgumentException controlRefundOrderId = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.publishRefundSubmit("EVTR-001", "REF-001\n", "finance-ops"));
+
+        Assertions.assertEquals("事件号不能为空", blankEventNo.getMessage());
+        Assertions.assertEquals("事件号长度不能超过64字符", oversizedEventNo.getMessage());
+        Assertions.assertEquals("事件号不能包含控制字符", controlEventNo.getMessage());
+        Assertions.assertEquals("支付单号长度不能超过64字符", oversizedPaymentOrderId.getMessage());
+        Assertions.assertEquals("退款单号不能包含控制字符", controlRefundOrderId.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(
+                paymentMapper, paymentEventMapper, refundMapper, refundChannelSubmitService);
     }
 
     @Test

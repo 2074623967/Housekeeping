@@ -42,6 +42,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     private static final int CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int CHANNEL_CODE_MAX_LENGTH = 64;
     private static final int CHANNEL_TRANSACTION_NO_MAX_LENGTH = 128;
+    private static final int EVENT_NO_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int REFUND_ORDER_ID_MAX_LENGTH = 64;
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int DOWNSTREAM_URL_MAX_LENGTH = 2048;
     private static final int ACCOUNT_NO_MAX_LENGTH = 64;
@@ -297,20 +300,26 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     @Override
     public void publishPaymentSuccess(String eventNo, String paymentOrderId) {
-        dispatchPaymentSuccess(eventNo, paymentOrderId);
+        dispatchPaymentSuccess(
+                normalizeRequiredIdentifier(eventNo, "事件号", EVENT_NO_MAX_LENGTH),
+                normalizeRequiredIdentifier(paymentOrderId, "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean publishRefundSubmit(String eventNo, String refundOrderId, String operator) {
-        return dispatchRefundSubmit(eventNo, refundOrderId, normalizeOperator(operator));
+        return dispatchRefundSubmit(
+                normalizeRequiredIdentifier(eventNo, "事件号", EVENT_NO_MAX_LENGTH),
+                normalizeRequiredIdentifier(refundOrderId, "退款单号", REFUND_ORDER_ID_MAX_LENGTH),
+                normalizeOperator(operator));
     }
 
     @Override
     @Transactional
     public boolean republish(String eventNo, String operator) {
+        String normalizedEventNo = normalizeRequiredIdentifier(eventNo, "事件号", EVENT_NO_MAX_LENGTH);
         String normalizedOperator = normalizeOperator(operator);
-        PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
+        PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(normalizedEventNo);
         if (event == null) {
             return false;
         }
@@ -319,13 +328,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                     && !isRepublishableStatus(event.getPublishStatus())) {
                 return false;
             }
-            return dispatchRefundSubmit(eventNo, event.getBizNo(), normalizedOperator);
+            return dispatchRefundSubmit(normalizedEventNo, event.getBizNo(), normalizedOperator);
         }
         if (!PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())
                 || !isRepublishableStatus(event.getPublishStatus())) {
             return false;
         }
-        return dispatchPaymentSuccess(eventNo, event.getPaymentOrderId());
+        return dispatchPaymentSuccess(normalizedEventNo, event.getPaymentOrderId());
     }
 
     private boolean isRepublishableStatus(String publishStatus) {
@@ -464,6 +473,22 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         String normalized = operator.trim();
         if (normalized.length() > OPERATOR_MAX_LENGTH) {
             throw new IllegalArgumentException("事件派发操作人不能超过64个字符");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredIdentifier(String value, String fieldName, int maxLength) {
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
         }
         return normalized;
     }
