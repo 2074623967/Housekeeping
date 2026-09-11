@@ -1278,6 +1278,14 @@
 4. `PaymentEventDispatchServiceImplTest` 与 `PaymentEventServiceImplTest` 联合定向测试应不少于 `47` 个，payment-core 全量不少于 `814` 个；补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
 5. 本地 Mockito 不证明生产支付状态、真实清分记账、RabbitMQ 消费、资金到账、跨系统一致或稳定性。
 
+### 4.168 支付成功事件渠道追踪事实门禁
+
+1. 构造状态为 `SUCCESS` 但渠道编码为空白的支付明细，验证重发返回失败，服务者查询、HTTP、AMQP 和成功状态更新均不执行。
+2. 构造渠道流水号为空的成功支付明细，验证同样进入事件失败或死信，不自动生成、截断或修复追踪号。
+3. 回归具有合法渠道与渠道流水的 HTTP、AMQP 和人工重发路径，确认既有支付单号、终态、金额及下游响应门禁继续生效。
+4. `PaymentEventDispatchServiceImplTest` 与 `PaymentEventServiceImplTest` 联合定向测试应不少于 `49` 个，payment-core 全量不少于 `816` 个；补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
+5. 本地 Mockito 不证明渠道真实受理、资金扣付或到账、消息消费、对账完成、生产容量或稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
