@@ -252,6 +252,27 @@ class PaymentDeadLetterTaskServiceImplTest {
         verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
     }
 
+    @Test
+    void shouldRejectManualActionControlCharactersBeforeTrimming() {
+        IllegalArgumentException taskNoException = assertThrows(
+                IllegalArgumentException.class,
+                () -> service().markReadyToReplay(
+                        "DLQ-001\n", action("finance-ops", "核对完成")));
+        IllegalArgumentException operatorException = assertThrows(
+                IllegalArgumentException.class,
+                () -> service().markManuallyResolved(
+                        "DLQ-001", action("finance-ops\n", "人工结案")));
+        IllegalArgumentException noteException = assertThrows(
+                IllegalArgumentException.class,
+                () -> service().replay(
+                        "DLQ-001", action("finance-ops", "允许重放\n")));
+
+        assertEquals("死信任务号不能包含控制字符", taskNoException.getMessage());
+        assertEquals("处置人不能包含控制字符", operatorException.getMessage());
+        assertEquals("处置说明不能包含控制字符", noteException.getMessage());
+        verifyNoInteractions(paymentDeadLetterTaskMapper, rabbitTemplate);
+    }
+
     private PaymentDeadLetterTaskServiceImpl service() {
         return new PaymentDeadLetterTaskServiceImpl(paymentDeadLetterTaskMapper, rabbitTemplate, new ObjectMapper(), 5000L);
     }

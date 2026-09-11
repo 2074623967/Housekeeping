@@ -191,12 +191,12 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     }
 
     private String normalizeActionField(String value, int maxLength, String fieldName) {
+        if (containsIsoControl(value)) {
+            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+        }
         String normalized = value.trim();
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
-        }
-        if (containsIsoControl(normalized)) {
-            throw new IllegalArgumentException(fieldName + "不能包含控制字符");
         }
         return normalized;
     }
@@ -218,15 +218,15 @@ public class PaymentDeadLetterTaskServiceImpl implements PaymentDeadLetterTaskSe
     }
 
     private String normalizeTaskNo(String taskNo) {
+        if (taskNo != null && containsIsoControl(taskNo)) {
+            throw new IllegalArgumentException("死信任务号不能包含控制字符");
+        }
         if (!StringUtils.hasText(taskNo)) {
             throw new IllegalArgumentException("死信任务号不能为空");
         }
         String normalized = taskNo.trim();
         if (normalized.length() > TASK_NO_MAX_LENGTH) {
             throw new IllegalArgumentException("死信任务号不能超过64个字符");
-        }
-        if (containsIsoControl(normalized)) {
-            throw new IllegalArgumentException("死信任务号不能包含控制字符");
         }
         return normalized;
     }
