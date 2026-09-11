@@ -514,13 +514,14 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             validateDispatchMode();
             if (usesAmqp()) {
                 publishToAmqp(eventNo, detail, workerName, amount);
-                paymentEventMapper.markPublishSuccess(eventNo);
-                return true;
+            } else {
+                validateHttpDispatchConfiguration();
+                postForSuccess(clearingUrl, buildClearingPayload(detail, workerName, amount));
+                postForSuccess(accountingUrl, buildAccountingPayload(detail, amount));
             }
-            validateHttpDispatchConfiguration();
-            postForSuccess(clearingUrl, buildClearingPayload(detail, workerName, amount));
-            postForSuccess(accountingUrl, buildAccountingPayload(detail, amount));
-            paymentEventMapper.markPublishSuccess(eventNo);
+            if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
+                throw new IllegalStateException("支付成功事件成功状态更新失败");
+            }
             return true;
         } catch (RuntimeException exception) {
             markFailedOrDeadLetter(eventNo);

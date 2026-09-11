@@ -319,6 +319,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
         when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
             org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
             return callback.doInRabbit(rabbitTemplate);
@@ -362,6 +363,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
         when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
             org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
             return callback.doInRabbit(rabbitTemplate);
@@ -388,6 +390,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
         when(rabbitTemplate.invoke(any())).thenAnswer(invocation -> {
             org.springframework.amqp.rabbit.core.RabbitOperations.OperationsCallback<?> callback = invocation.getArgument(0);
             return callback.doInRabbit(rabbitTemplate);
@@ -471,6 +474,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse());
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
@@ -716,6 +720,39 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldFailWhenPaymentSuccessEventStatusCannotBeUpdated() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-STATUS-CONFLICT", 0);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-STATUS-CONFLICT")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVT-STATUS-CONFLICT")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(paymentEventMapper.markPublishSuccess("EVT-STATUS-CONFLICT")).thenReturn(0);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-STATUS-CONFLICT", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(paymentEventMapper).markPublishFailed("EVT-STATUS-CONFLICT");
+    }
+
+    @Test
     void shouldRejectEmptyHttpSuccessResponse() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = paymentEvent("EVT-EMPTY-RESPONSE", 0);
@@ -748,6 +785,7 @@ class PaymentEventDispatchServiceImplTest {
         PaymentDetailDTO detail = buildPaymentDetail();
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.markPublishSuccess("EVT-001")).thenReturn(1);
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
                 .thenReturn(successResponse());
         when(restTemplate.postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
