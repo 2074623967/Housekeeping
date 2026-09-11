@@ -591,6 +591,30 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectRefundCallbackControlCharactersBeforeTrimming() {
+        RefundServiceImpl service = new RefundServiceImpl(
+                refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
+                refundChannelQueryService);
+        RefundCallbackRequestDTO invalidRefundOrderId = buildCallbackRequest("SUCCESS");
+        invalidRefundOrderId.setRefundOrderId("REF-001\n");
+        RefundCallbackRequestDTO invalidChannelRefundNo = buildCallbackRequest("SUCCESS");
+        invalidChannelRefundNo.setChannelRefundNo("CHANNEL-REF-001\n");
+        RefundCallbackRequestDTO invalidStatus = buildCallbackRequest("SUCCESS\n");
+
+        assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5\n", buildCallbackRequest("SUCCESS")));
+        assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5", invalidRefundOrderId));
+        assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5", invalidChannelRefundNo));
+        assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5", invalidStatus));
+
+        org.mockito.Mockito.verifyNoInteractions(paymentCallbackSignatureService);
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
     void shouldReturnIdempotentlyForRepeatedSameFinalRefundStatus() {
         RefundCallbackRequestDTO request = buildCallbackRequest("success");
         RefundCallbackSourceDTO source = buildCallbackSource("SUCCESS", "WX_H5", "CHANNEL-REF-001");
@@ -1027,6 +1051,12 @@ class RefundServiceImplTest {
     private IllegalArgumentException queryFailure(RefundServiceImpl service, RefundQueryDTO query) {
         return org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class, () -> service.list(query));
+    }
+
+    private void assertRefundCallbackRequestInvalid(org.junit.jupiter.api.function.Executable callback) {
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, callback);
+        assertEquals(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID, exception.getCode());
     }
 
     private IllegalArgumentException applyFailure(RefundApplyRequestDTO request) {

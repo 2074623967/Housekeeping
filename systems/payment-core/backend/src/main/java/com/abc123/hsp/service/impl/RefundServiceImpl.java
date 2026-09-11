@@ -519,14 +519,14 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
                     "channel, refundOrderId, channelRefundNo and refundStatus are required");
         }
-        String normalizedChannel = channel.trim().toLowerCase(Locale.ROOT);
-        request.setRefundOrderId(request.getRefundOrderId().trim());
-        request.setChannelRefundNo(request.getChannelRefundNo().trim());
-        request.setRefundStatus(request.getRefundStatus().trim().toUpperCase(Locale.ROOT));
-        validateCallbackField(normalizedChannel, CALLBACK_CHANNEL_MAX_LENGTH);
-        validateCallbackField(request.getRefundOrderId(), REFUND_ORDER_ID_MAX_LENGTH);
-        validateCallbackField(request.getChannelRefundNo(), CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH);
-        validateCallbackField(request.getRefundStatus(), CALLBACK_REFUND_STATUS_MAX_LENGTH);
+        String normalizedChannel = normalizeCallbackField(
+                channel, CALLBACK_CHANNEL_MAX_LENGTH).toLowerCase(Locale.ROOT);
+        request.setRefundOrderId(normalizeCallbackField(
+                request.getRefundOrderId(), REFUND_ORDER_ID_MAX_LENGTH));
+        request.setChannelRefundNo(normalizeCallbackField(
+                request.getChannelRefundNo(), CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH));
+        request.setRefundStatus(normalizeCallbackField(
+                request.getRefundStatus(), CALLBACK_REFUND_STATUS_MAX_LENGTH).toUpperCase(Locale.ROOT));
         if (!STATUS_SUCCESS.equals(request.getRefundStatus()) && !STATUS_FAIL.equals(request.getRefundStatus())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
                     "refund callback status must be SUCCESS or FAIL");
@@ -534,11 +534,17 @@ public class RefundServiceImpl implements RefundService {
         return normalizedChannel;
     }
 
-    private void validateCallbackField(String value, int maxLength) {
-        if (value.length() > maxLength || containsIsoControl(value)) {
+    private String normalizeCallbackField(String value, int maxLength) {
+        if (containsIsoControl(value)) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
                     "refund callback field is invalid");
         }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
+                    "refund callback field is invalid");
+        }
+        return normalized;
     }
 
     private boolean containsIsoControl(String value) {
