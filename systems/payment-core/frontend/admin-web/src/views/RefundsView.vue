@@ -257,7 +257,7 @@ onMounted(loadRefunds);
         <p class="card-value">{{ metrics.failTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">退款金额合计</p>
+        <p class="card-title">本页退款金额</p>
         <p class="card-value">{{ metrics.refundAmountTotal }}</p>
       </article>
     </section>

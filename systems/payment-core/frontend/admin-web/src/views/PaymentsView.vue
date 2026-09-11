@@ -240,7 +240,7 @@ onMounted(refreshList);
         <p class="card-value">{{ metrics.callbackPendingTotal }}</p>
       </article>
       <article class="card">
-        <p class="card-title">实付金额合计</p>
+        <p class="card-title">本页实付金额</p>
         <p class="card-value">{{ metrics.amountTotal }}</p>
       </article>
     </section>
