@@ -3223,6 +3223,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `PaymentTaskActionResultDTO.processedCount` 保持“逾期异常存量 + 本轮未确认升级候选数”的既有口径；`successCount / warningCount / failCount` 继续分别表达本轮生成、并发重复跳过和失败结果，本轮不新增接口字段或自动循环清空承诺。
 4. 自动任务 `120` 秒租约、逐候选独立事务、生成键幂等、失败隔离和内容截断保持不变；本地测试不证明生产 MySQL 查询计划、真实通知送达、人员响应、多实例调度或稳定性。
 
+### 14.157 异常告警回执回查批次上限契约
+
+1. 人工批量回查与自动回执补偿继续使用 `payment.issue-alert.receipt-query.compensation.batch-size`；默认值为 `100`，部署环境可通过 `HSP_PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_BATCH_SIZE` 覆盖，服务端实际值限制在 `1..1000`。
+2. 人工批量入口选择全部符合状态条件中的最老一批；自动入口额外保留最小年龄、最大尝试次数、下次执行时间和抢占超时条件。超过容量的日志不改写，留待后续轮次。
+3. 单条回查接口继续按 `alertNo` 精确查询，不受批量容量影响；`PaymentTaskActionResultDTO.processedCount / successCount / failCount` 继续只表达本轮批量候选或该单条结果，本轮不新增字段或自动循环清空承诺。
+4. 自动任务租约、逐条独立事务、共享通道限流、条件抢占、指数退避、回执关联校验和来源告警确认保持不变；本地测试不证明真实供应商送达、回执乱序、多实例调度或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

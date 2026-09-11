@@ -9175,3 +9175,25 @@
 
 1. 两类异常 SLA 候选均不再被一次性加载，超出容量的数据保留原状态并由后续人工或自动轮次承接；单轮最大写入量为 `2 x batchSize`，并非全量清空承诺。
 2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实通知送达、人员响应、积压吞吐、多实例调度或稳定性，`release/v1.0.0` 继续冻结。
+
+## 330. 2026-09-11 异常告警回执回查批次上限 V1.0 验证
+
+### 330.1 本轮补强
+
+1. `PaymentIssueAlertDeliveryServiceImpl` 将 `payment.issue-alert.receipt-query.compensation.batch-size` 从仅保证正数改为统一限制在 `1..1000`，默认值保持 `100`。
+2. 人工批量回查与自动回执补偿继续共用该容量；既有两段 Mapper SQL 已具备参数化 `LIMIT` 和稳定排序，本轮不改 SQL。单条指定告警回查继续按告警号查询，不受批量容量影响。
+3. 候选之外的数据保持原状态等待后续轮次；逐条 `REQUIRES_NEW`、条件抢占、共享通道限流、退避重试、回执关联校验、来源告警确认和失败隔离保持不变。
+
+### 330.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 告警回执联合定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest,PaymentIssueAlertNotifierConfigurationTest,PaymentTaskCenterMapperIntegrationTest,PaymentCompensationSchedulerTest test` | 通过 | `77` 个用例；覆盖人工默认值与上下界、自动上限、任务租约、配置解析、既有 SQL 截断和回执补偿语义 |
+| payment-core 全量测试 | `mvn test` | 通过 | `831` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout PaymentTaskCenterMapper.xml` | 通过 | XML 结构有效，本轮未修改 Mapper SQL |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 330.3 当前判断
+
+1. 错误部署值不能再把人工或自动批量回查扩大到超过 `1000` 条，单轮结果仍只表达本轮实际候选，剩余待确认回执由后续轮次承接。
+2. 本轮无前端、接口字段、Mapper SQL、schema 或迁移变化；本地测试不证明生产 MySQL 查询计划、真实供应商受理或送达、回执乱序、积压吞吐、多实例调度或稳定性，`release/v1.0.0` 继续冻结。
