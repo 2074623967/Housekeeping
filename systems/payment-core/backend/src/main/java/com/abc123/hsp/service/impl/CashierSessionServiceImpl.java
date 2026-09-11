@@ -23,6 +23,13 @@ import org.springframework.stereotype.Service;
 @Service
 public class CashierSessionServiceImpl implements CashierSessionService {
 
+    private static final int SESSION_NO_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int CUSTOMER_NAME_MAX_LENGTH = 128;
+    private static final int TERMINAL_MAX_LENGTH = 32;
+    private static final int SESSION_STATUS_MAX_LENGTH = 32;
+
     private final CashierSessionMapper cashierSessionMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
 
@@ -124,16 +131,39 @@ public class CashierSessionServiceImpl implements CashierSessionService {
     }
 
     private void normalizeQuery(CashierSessionQueryDTO query) {
-        query.setSessionNo(query.getSessionNo() == null ? null : query.getSessionNo().trim());
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setCustomerName(query.getCustomerName() == null ? null : query.getCustomerName().trim());
-        query.setTerminal(query.getTerminal() == null ? "全部" : query.getTerminal().trim());
-        query.setSessionStatus(query.getSessionStatus() == null ? "全部" : query.getSessionStatus().trim());
+        query.setSessionNo(normalizeOptionalQueryField(
+                query.getSessionNo(), SESSION_NO_MAX_LENGTH, "会话号", null));
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), PAYMENT_ORDER_ID_MAX_LENGTH, "支付单号", null));
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
+        query.setCustomerName(normalizeOptionalQueryField(
+                query.getCustomerName(), CUSTOMER_NAME_MAX_LENGTH, "客户名称", null));
+        query.setTerminal(normalizeOptionalQueryField(
+                query.getTerminal(), TERMINAL_MAX_LENGTH, "终端", "全部"));
+        query.setSessionStatus(normalizeOptionalQueryField(
+                query.getSessionStatus(), SESSION_STATUS_MAX_LENGTH, "会话状态", "全部"));
         query.setSortField(query.getSortField() == null ? "createdAt" : query.getSortField().trim());
         query.setSortOrder(query.getSortOrder() == null ? "desc" : query.getSortOrder().trim().toLowerCase());
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String csvCell(String value) {

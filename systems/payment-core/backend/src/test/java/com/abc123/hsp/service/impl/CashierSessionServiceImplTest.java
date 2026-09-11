@@ -2,8 +2,10 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
@@ -52,6 +54,56 @@ class CashierSessionServiceImplTest {
         assertEquals("asc", query.getSortOrder());
         verify(cashierSessionMapper).findAll(query);
         verify(cashierSessionMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedCashierSessionQueryBeforeMapperAccess() {
+        CashierSessionQueryDTO sessionQuery = new CashierSessionQueryDTO();
+        sessionQuery.setSessionNo(repeat("S", 65));
+        CashierSessionQueryDTO paymentOrderQuery = new CashierSessionQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        CashierSessionQueryDTO orderQuery = new CashierSessionQueryDTO();
+        orderQuery.setOrderNo(repeat("O", 65));
+        CashierSessionQueryDTO customerQuery = new CashierSessionQueryDTO();
+        customerQuery.setCustomerName(repeat("张", 129));
+        CashierSessionQueryDTO terminalQuery = new CashierSessionQueryDTO();
+        terminalQuery.setTerminal(repeat("T", 33));
+        CashierSessionQueryDTO statusQuery = new CashierSessionQueryDTO();
+        statusQuery.setSessionStatus(repeat("C", 33));
+        CashierSessionServiceImpl service = new CashierSessionServiceImpl(cashierSessionMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(sessionQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(customerQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(statusQuery));
+        verifyNoInteractions(cashierSessionMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInCashierSessionQueryBeforeMapperAccess() {
+        CashierSessionQueryDTO sessionQuery = new CashierSessionQueryDTO();
+        sessionQuery.setSessionNo("PRE-001\n");
+        CashierSessionQueryDTO paymentOrderQuery = new CashierSessionQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        CashierSessionQueryDTO orderQuery = new CashierSessionQueryDTO();
+        orderQuery.setOrderNo("ORD-001\n");
+        CashierSessionQueryDTO customerQuery = new CashierSessionQueryDTO();
+        customerQuery.setCustomerName("张女士\n");
+        CashierSessionQueryDTO terminalQuery = new CashierSessionQueryDTO();
+        terminalQuery.setTerminal("H5\n");
+        CashierSessionQueryDTO statusQuery = new CashierSessionQueryDTO();
+        statusQuery.setSessionStatus("待支付\n");
+        CashierSessionServiceImpl service = new CashierSessionServiceImpl(cashierSessionMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(sessionQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(customerQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.overview(terminalQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(statusQuery));
+        verifyNoInteractions(cashierSessionMapper);
     }
 
     @Test
@@ -123,5 +175,9 @@ class CashierSessionServiceImplTest {
         assertEquals(2, result.getExpiringSoonCount());
         assertEquals("¥0.00", result.getTotalAmount());
         verify(cashierSessionMapper).findOverview(query);
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }
