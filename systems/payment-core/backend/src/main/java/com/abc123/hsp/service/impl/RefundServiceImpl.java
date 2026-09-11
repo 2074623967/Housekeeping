@@ -63,6 +63,9 @@ public class RefundServiceImpl implements RefundService {
     private static final int CALLBACK_REFUND_STATUS_MAX_LENGTH = 32;
     private static final int MONEY_MAX_SCALE = 2;
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int REFUND_METHOD_MAX_LENGTH = 32;
+    private static final int REFUND_REASON_MAX_LENGTH = 255;
 
     private final RefundMapper refundMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -451,9 +454,11 @@ public class RefundServiceImpl implements RefundService {
      * 校验退款申请的业务必填项和金额边界。
      */
     private void validateApplyRequest(RefundApplyRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getPaymentOrderId())) {
+        if (request == null) {
             throw new IllegalArgumentException("原支付单号不能为空");
         }
+        request.setPaymentOrderId(normalizeRequiredApplyField(
+                request.getPaymentOrderId(), "原支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
         if (request.getRefundAmount() == null || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("退款金额必须大于0");
         }
@@ -462,9 +467,39 @@ public class RefundServiceImpl implements RefundService {
                 || request.getRefundAmount().compareTo(MAX_MONEY_AMOUNT) > 0) {
             throw new IllegalArgumentException("退款金额最多支持 16 位整数和 2 位小数");
         }
-        if (!StringUtils.hasText(request.getRefundMethod())) {
-            request.setRefundMethod("原路退款");
+        String refundMethod = normalizeOptionalApplyField(
+                request.getRefundMethod(), "退款方式", REFUND_METHOD_MAX_LENGTH);
+        request.setRefundMethod(refundMethod == null ? "原路退款" : refundMethod);
+        String refundReason = normalizeOptionalApplyField(
+                request.getRefundReason(), "退款原因", REFUND_REASON_MAX_LENGTH);
+        request.setRefundReason(refundReason == null ? "" : refundReason);
+    }
+
+    private String normalizeRequiredApplyField(String value, String fieldName, int maxLength) {
+        String normalized = normalizeOptionalApplyField(value, fieldName, maxLength);
+        if (normalized == null) {
+            throw new IllegalArgumentException(fieldName + "不能为空");
         }
+        return normalized;
+    }
+
+    private String normalizeOptionalApplyField(String value, String fieldName, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
+        }
+        return normalized;
     }
 
     private String normalizeRefundCallback(String channel, RefundCallbackRequestDTO request) {

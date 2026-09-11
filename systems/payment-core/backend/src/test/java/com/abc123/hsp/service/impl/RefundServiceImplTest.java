@@ -213,6 +213,56 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeRefundApplyTextFieldsBeforePersistence() {
+        RefundApplyRequestDTO request = refundApplyRequest(new BigDecimal("20.00"));
+        request.setPaymentOrderId(" PAY-001 ");
+        request.setRefundMethod(" 原路退款 ");
+        request.setRefundReason(null);
+        RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
+        source.setPaymentOrderId("PAY-001");
+        source.setPaidAmount(new BigDecimal("20.00"));
+        source.setStatus("SUCCESS");
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
+        when(refundMapper.sumActiveRefundAmount("PAY-001")).thenReturn(BigDecimal.ZERO);
+
+        createService().apply(request);
+
+        assertEquals("PAY-001", request.getPaymentOrderId());
+        assertEquals("原路退款", request.getRefundMethod());
+        assertEquals("", request.getRefundReason());
+        verify(refundMapper).insertRefund(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.eq(source),
+                org.mockito.ArgumentMatchers.eq(request),
+                org.mockito.ArgumentMatchers.eq("REVIEWING"),
+                org.mockito.ArgumentMatchers.eq("warn"));
+    }
+
+    @Test
+    void shouldRejectInvalidRefundApplyTextFieldsBeforeMapperAccess() {
+        RefundApplyRequestDTO oversizedPaymentOrderId = refundApplyRequest(new BigDecimal("20.00"));
+        oversizedPaymentOrderId.setPaymentOrderId(String.join("", Collections.nCopies(65, "P")));
+        RefundApplyRequestDTO invalidPaymentOrderId = refundApplyRequest(new BigDecimal("20.00"));
+        invalidPaymentOrderId.setPaymentOrderId("PAY-001\n");
+        RefundApplyRequestDTO oversizedMethod = refundApplyRequest(new BigDecimal("20.00"));
+        oversizedMethod.setRefundMethod(String.join("", Collections.nCopies(33, "M")));
+        RefundApplyRequestDTO invalidMethod = refundApplyRequest(new BigDecimal("20.00"));
+        invalidMethod.setRefundMethod("原路退款\n");
+        RefundApplyRequestDTO oversizedReason = refundApplyRequest(new BigDecimal("20.00"));
+        oversizedReason.setRefundReason(String.join("", Collections.nCopies(256, "R")));
+        RefundApplyRequestDTO invalidReason = refundApplyRequest(new BigDecimal("20.00"));
+        invalidReason.setRefundReason("客户取消\n服务");
+
+        assertEquals("原支付单号长度不能超过64字符", applyFailure(oversizedPaymentOrderId).getMessage());
+        assertEquals("原支付单号不能包含控制字符", applyFailure(invalidPaymentOrderId).getMessage());
+        assertEquals("退款方式长度不能超过32字符", applyFailure(oversizedMethod).getMessage());
+        assertEquals("退款方式不能包含控制字符", applyFailure(invalidMethod).getMessage());
+        assertEquals("退款原因长度不能超过255字符", applyFailure(oversizedReason).getMessage());
+        assertEquals("退款原因不能包含控制字符", applyFailure(invalidReason).getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
     void shouldApproveReviewingRefund() {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-001");
@@ -879,5 +929,10 @@ class RefundServiceImplTest {
         request.setRefundMethod("原路退款");
         request.setOperator("refund-applicant");
         return request;
+    }
+
+    private IllegalArgumentException applyFailure(RefundApplyRequestDTO request) {
+        return org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> createService().apply(request));
     }
 }
