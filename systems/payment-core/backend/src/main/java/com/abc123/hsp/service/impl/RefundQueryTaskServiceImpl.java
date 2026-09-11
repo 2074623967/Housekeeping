@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
 
+    private static final int MAX_QUERY_BATCH_SIZE = 1000;
+
     private final PaymentTaskCenterMapper paymentTaskCenterMapper;
     private final RefundService refundService;
     private final int minAgeSeconds;
@@ -40,8 +42,8 @@ public class RefundQueryTaskServiceImpl implements RefundQueryTaskService {
         this.retryIntervalSeconds = Math.max(retryIntervalSeconds, 1);
         this.retryBackoffFactor = Math.max(retryBackoffFactor, 1);
         this.maxRetryIntervalSeconds = Math.max(maxRetryIntervalSeconds, this.retryIntervalSeconds);
-        this.perChannelBatchSize = Math.max(perChannelBatchSize, 1);
-        this.batchSize = Math.max(batchSize, 1);
+        this.perChannelBatchSize = Math.min(Math.max(perChannelBatchSize, 1), MAX_QUERY_BATCH_SIZE);
+        this.batchSize = Math.min(Math.max(batchSize, 1), MAX_QUERY_BATCH_SIZE);
     }
 
     @Override

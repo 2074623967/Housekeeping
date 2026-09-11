@@ -70,6 +70,25 @@ class RefundQueryTaskServiceImplTest {
         verify(paymentTaskCenterMapper).findDuePendingRefundOrderIdsForQuery(30, 60, 2, 900, 20, 100);
     }
 
+    @Test
+    void shouldClampGlobalAndPerChannelQueryBatchSizes() {
+        when(paymentTaskCenterMapper.findPendingRefundOrderIdsForManualQuery(30, 1, 1))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findDuePendingRefundOrderIdsForQuery(30, 60, 2, 900, 1000, 1000))
+                .thenReturn(Collections.emptyList());
+
+        new RefundQueryTaskServiceImpl(
+                paymentTaskCenterMapper, refundService, 30, 60, 2, 900, 0, 0)
+                .queryPendingRefunds("payment-core-admin");
+        new RefundQueryTaskServiceImpl(
+                paymentTaskCenterMapper, refundService, 30, 60, 2, 900, 1001, 1001)
+                .queryDueRefunds("refund-query-scheduler");
+
+        verify(paymentTaskCenterMapper).findPendingRefundOrderIdsForManualQuery(30, 1, 1);
+        verify(paymentTaskCenterMapper).findDuePendingRefundOrderIdsForQuery(
+                30, 60, 2, 900, 1000, 1000);
+    }
+
     private RefundQueryTaskServiceImpl service() {
         return new RefundQueryTaskServiceImpl(
                 paymentTaskCenterMapper, refundService, 30, 60, 2, 900, 20, 100);

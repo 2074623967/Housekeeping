@@ -371,6 +371,22 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldClampGlobalAndPerChannelPaymentQueryBatchSizes() {
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 1, 1))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findPendingPaymentOrderIdsForManualQuery(30, 1000, 1000))
+                .thenReturn(Collections.emptyList());
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        buildQueryTaskCenterService(0, 0).runPendingPaymentQueries("payment-core-admin");
+        buildQueryTaskCenterService(1001, 1001).runPendingPaymentQueries("payment-core-admin");
+
+        verify(paymentTaskCenterMapper).findPendingPaymentOrderIdsForManualQuery(30, 1, 1);
+        verify(paymentTaskCenterMapper).findPendingPaymentOrderIdsForManualQuery(30, 1000, 1000);
+    }
+
+    @Test
     void shouldQueryPendingRefundsAndRecordTaskResult() {
         RefundQueryTaskResultDTO queryResult = new RefundQueryTaskResultDTO();
         queryResult.setProcessedCount(3);
@@ -1179,6 +1195,12 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     private PaymentTaskCenterServiceImpl buildQueryTaskCenterService() {
+        return buildQueryTaskCenterService(20, 100);
+    }
+
+    private PaymentTaskCenterServiceImpl buildQueryTaskCenterService(
+            int pendingQueryPerChannelBatchSize,
+            int pendingQueryBatchSize) {
         PaymentTaskCenterServiceImpl service = new PaymentTaskCenterServiceImpl(
                 paymentTaskCenterMapper,
                 paymentExpiryTaskService,
@@ -1192,8 +1214,8 @@ class PaymentTaskCenterServiceImplTest {
                 60,
                 2,
                 900,
-                20,
-                100,
+                pendingQueryPerChannelBatchSize,
+                pendingQueryBatchSize,
                 24,
                 5,
                 30,

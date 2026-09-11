@@ -63,6 +63,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_CODE_ISSUE_ALERT_RECEIPT_RECONCILE = "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE";
     private static final String TASK_CODE_CONTROL_SELF_CHECK = "PAYMENT_CONTROL_SELF_CHECK";
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
+    private static final int MAX_PENDING_QUERY_BATCH_SIZE = 1000;
     private static final int MAX_ISSUE_SLA_CANDIDATE_BATCH_SIZE = 1000;
     private static final int ISSUE_ALERT_CONTENT_MAX_LENGTH = 512;
     private static final String ISSUE_ALERT_WRITE_FAILURE_CODE = "PAYMENT_ISSUE_ALERT_WRITE_FAILED";
@@ -173,8 +174,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         this.pendingQueryMaxRetryIntervalSeconds = Math.max(
                 pendingQueryMaxRetryIntervalSeconds,
                 this.pendingQueryRetryIntervalSeconds);
-        this.pendingQueryPerChannelBatchSize = Math.max(pendingQueryPerChannelBatchSize, 1);
-        this.pendingQueryBatchSize = Math.max(pendingQueryBatchSize, 1);
+        this.pendingQueryPerChannelBatchSize = Math.min(
+                Math.max(pendingQueryPerChannelBatchSize, 1), MAX_PENDING_QUERY_BATCH_SIZE);
+        this.pendingQueryBatchSize = Math.min(
+                Math.max(pendingQueryBatchSize, 1), MAX_PENDING_QUERY_BATCH_SIZE);
         this.queryMonitorLookbackHours = Math.min(Math.max(queryMonitorLookbackHours, 1), 168);
         this.queryFailureCountThreshold = Math.max(queryFailureCountThreshold, 1);
         this.queryFailureRateThresholdPercent = Math.min(
