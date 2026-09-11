@@ -2,8 +2,10 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.abc123.hsp.dto.OrderQueryDTO;
 import com.abc123.hsp.dto.OrderListItemDTO;
@@ -43,6 +45,38 @@ class OrderServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(100, query.getPageSize());
         verify(orderMapper).findAll(query);
         verify(orderMapper).count(query);
+    }
+
+    @Test
+    void shouldRejectOversizedOrderQueryBeforeMapperAccess() {
+        OrderQueryDTO orderNoQuery = new OrderQueryDTO();
+        orderNoQuery.setOrderNo(repeat("O", 65));
+        OrderQueryDTO serviceTypeQuery = new OrderQueryDTO();
+        serviceTypeQuery.setServiceType(repeat("S", 65));
+        OrderQueryDTO orderStatusQuery = new OrderQueryDTO();
+        orderStatusQuery.setOrderStatus(repeat("T", 33));
+        OrderServiceImpl service = new OrderServiceImpl(orderMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(orderNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(serviceTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(orderStatusQuery));
+        verifyNoInteractions(orderMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInOrderQueryBeforeMapperAccess() {
+        OrderQueryDTO orderNoQuery = new OrderQueryDTO();
+        orderNoQuery.setOrderNo("ORD-001\n");
+        OrderQueryDTO serviceTypeQuery = new OrderQueryDTO();
+        serviceTypeQuery.setServiceType("深度保洁\n");
+        OrderQueryDTO orderStatusQuery = new OrderQueryDTO();
+        orderStatusQuery.setOrderStatus("待支付\n");
+        OrderServiceImpl service = new OrderServiceImpl(orderMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(orderNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportCsv(serviceTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(orderStatusQuery));
+        verifyNoInteractions(orderMapper);
     }
 
     @Test
@@ -96,5 +130,9 @@ class OrderServiceImplTest {
         assertFalse(csv.contains("李师傅"));
         assertEquals("王阿姨", item.getCustomerName());
         assertEquals("李师傅", item.getWorkerName());
+    }
+
+    private String repeat(String value, int count) {
+        return String.join("", Collections.nCopies(count, value));
     }
 }

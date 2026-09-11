@@ -15,10 +15,13 @@ import java.util.stream.Collectors;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 @Service
 public class OrderServiceImpl implements OrderService {
+
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int SERVICE_TYPE_MAX_LENGTH = 64;
+    private static final int ORDER_STATUS_MAX_LENGTH = 32;
 
     private final OrderMapper orderMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
@@ -91,11 +94,34 @@ public class OrderServiceImpl implements OrderService {
      * 后台运营列表统一在服务层收敛分页边界，避免前端传异常分页导致慢查询。
      */
     private void normalizeQuery(OrderQueryDTO query) {
-        query.setOrderNo(StringUtils.hasText(query.getOrderNo()) ? query.getOrderNo().trim() : null);
-        query.setServiceType(StringUtils.hasText(query.getServiceType()) ? query.getServiceType().trim() : "全部");
-        query.setOrderStatus(StringUtils.hasText(query.getOrderStatus()) ? query.getOrderStatus().trim() : "全部");
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), ORDER_NO_MAX_LENGTH, "订单号", null));
+        query.setServiceType(normalizeOptionalQueryField(
+                query.getServiceType(), SERVICE_TYPE_MAX_LENGTH, "服务品类", "全部"));
+        query.setOrderStatus(normalizeOptionalQueryField(
+                query.getOrderStatus(), ORDER_STATUS_MAX_LENGTH, "订单状态", "全部"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, int maxLength, String fieldName, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.isEmpty()) {
+            return defaultValue;
+        }
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "不能超过" + maxLength + "个字符");
+        }
+        return normalized;
     }
 
     private String csv(String value) {
