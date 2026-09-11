@@ -10575,3 +10575,27 @@
 1. 九类审核列表已不再把读取失败误呈现为确定无待办，并能在刷新失败后保留可辨识旧快照。
 2. 浏览器失败恢复仍需在本机解锁后补验；当前证据只覆盖生产构建、补丁检查与静态模板状态。
 3. 本机验证不证明待办完整、审批可信或生产稳定性；release 四项真实阻断不变，`release/v1.0.0` 继续冻结。
+
+## 390. 2026-09-12 指定告警回执回查编号边界 V1.0 验证
+
+### 390.1 本轮补强
+
+1. `PaymentIssueAlertDeliveryServiceImpl.reconcileDeliveryReceipt` 使用独立 `normalizeAlertNo` 规范化路径参数，不再只做非空与 `trim`。
+2. 告警编号要求非空、原始值不含 ISO 控制字符，裁剪后长度不超过 `64`；校验先于指定告警 Mapper 查询。
+3. 新增空白、65 字符和换行污染三类失败前置用例，并保留合法首尾空格裁剪的既有成功用例。
+
+### 390.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 合法编号裁剪 | `shouldReconcileSpecifiedReceiptWithPersistedAttemptCount` | 通过 | ` PIA-IM-SINGLE ` 裁剪后查询并完成回查 |
+| 非法编号失败前置 | `shouldRejectInvalidSpecifiedReceiptAlertNumberBeforeQueryingCandidate` | 通过 | 空白、65 字符、换行污染均不调用 Mapper |
+| 服务定向测试 | `mvn -Dtest=PaymentIssueAlertDeliveryServiceImplTest test` | 通过 | `45` 个用例，`0` failures、`0` errors、`0` skipped |
+| 后端全量测试 | `mvn test` | 通过 | `900` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 390.3 当前判断
+
+1. 指定回执回查的告警编号已与数据库关键查询列容量一致，污染与超长输入不会进入 Mapper。
+2. 本轮未改变批量回查、供应商适配器、回查限流、占用 CAS 或结果状态机。
+3. 本地测试不证明真实供应商回执、通知送达、人员响应或生产稳定性；release 四项真实阻断不变，`release/v1.0.0` 继续冻结。
