@@ -84,12 +84,8 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
 
     @Override
     public PaymentChannelQueryResultDTO query(PaymentDetailDTO paymentDetail) {
-        GatewayQueryRequest request = new GatewayQueryRequest();
-        request.setPaymentOrderId(paymentDetail.getPaymentOrderId());
-        request.setOrderNo(paymentDetail.getOrderNo());
-        request.setChannelCode(paymentDetail.getChannel());
-        request.setChannelTransactionNo(paymentDetail.getChannelTransactionNo());
         try {
+            GatewayQueryRequest request = buildRequest(paymentDetail);
             HttpHeaders headers = new HttpHeaders();
             headers.set("X-Gateway-App-Code", appCode);
             headers.set("X-Gateway-Access-Key", accessKey);
@@ -118,6 +114,51 @@ public class GatewayAccessPaymentChannelQueryAdapter implements PaymentChannelQu
                     ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
                     "gateway-access query failed, please retry later");
         }
+    }
+
+    private GatewayQueryRequest buildRequest(PaymentDetailDTO paymentDetail) {
+        if (paymentDetail == null) {
+            throw invalidRequest();
+        }
+        GatewayQueryRequest request = new GatewayQueryRequest();
+        request.setPaymentOrderId(requiredRequest(paymentDetail.getPaymentOrderId(), 64));
+        request.setOrderNo(requiredRequest(paymentDetail.getOrderNo(), 64));
+        request.setChannelCode(requiredRequest(paymentDetail.getChannel(), 64));
+        request.setChannelTransactionNo(optionalRequest(paymentDetail.getChannelTransactionNo(), 128));
+        return request;
+    }
+
+    private String requiredRequest(String value, int maxLength) {
+        String normalized = optionalRequest(value, maxLength);
+        if (!StringUtils.hasText(normalized)) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private String optionalRequest(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidRequest();
+            }
+        }
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw invalidRequest();
+        }
+        return normalized;
+    }
+
+    private BusinessException invalidRequest() {
+        return new BusinessException(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                "gateway-access payment query request is invalid");
     }
 
     private Set<String> parseChannels(String channels) {
