@@ -41,6 +41,17 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     private static final int ASSIGNEE_MAX_LENGTH = 64;
     private static final int REMARK_MAX_LENGTH = 255;
     private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int ORDER_NO_MAX_LENGTH = 64;
+    private static final int ISSUE_TYPE_MAX_LENGTH = 64;
+    private static final int SEVERITY_MAX_LENGTH = 32;
+    private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+    private static final int PAYMENT_METHOD_MAX_LENGTH = 32;
+    private static final int ALERT_CHANNEL_MAX_LENGTH = 32;
+    private static final int ALERT_STATUS_MAX_LENGTH = 32;
+    private static final int ACK_STATUS_MAX_LENGTH = 32;
+    private static final int PROVIDER_DELIVERY_STATUS_MAX_LENGTH = 64;
+    private static final int RECEIPT_QUERY_STATE_MAX_LENGTH = 32;
 
     private final PaymentIssueMapper paymentIssueMapper;
     private final PaymentSensitiveDataMasker sensitiveDataMasker;
@@ -247,12 +258,18 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (query == null) {
             query = new PaymentIssueQueryDTO();
         }
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setOrderNo(query.getOrderNo() == null ? null : query.getOrderNo().trim());
-        query.setIssueType(query.getIssueType() == null ? "全部" : query.getIssueType().trim());
-        query.setSeverity(query.getSeverity() == null ? "全部" : query.getSeverity().trim());
-        query.setChannelCode(query.getChannelCode() == null ? null : query.getChannelCode().trim());
-        query.setPaymentMethod(query.getPaymentMethod() == null ? "全部" : query.getPaymentMethod().trim());
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH, null));
+        query.setOrderNo(normalizeOptionalQueryField(
+                query.getOrderNo(), "订单号", ORDER_NO_MAX_LENGTH, null));
+        query.setIssueType(normalizeOptionalQueryField(
+                query.getIssueType(), "异常类型", ISSUE_TYPE_MAX_LENGTH, "全部"));
+        query.setSeverity(normalizeOptionalQueryField(
+                query.getSeverity(), "严重等级", SEVERITY_MAX_LENGTH, "全部"));
+        query.setChannelCode(normalizeOptionalQueryField(
+                query.getChannelCode(), "渠道编码", CHANNEL_CODE_MAX_LENGTH, null));
+        query.setPaymentMethod(normalizeOptionalQueryField(
+                query.getPaymentMethod(), "支付方式", PAYMENT_METHOD_MAX_LENGTH, "全部"));
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
         return query;
@@ -262,13 +279,21 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
         if (query == null) {
             query = new PaymentIssueAlertLogQueryDTO();
         }
-        query.setAlertNo(query.getAlertNo() == null ? null : query.getAlertNo().trim());
-        query.setIssueNo(query.getIssueNo() == null ? null : query.getIssueNo().trim());
-        query.setPaymentOrderId(query.getPaymentOrderId() == null ? null : query.getPaymentOrderId().trim());
-        query.setAlertChannel(query.getAlertChannel() == null ? "全部" : query.getAlertChannel().trim());
-        query.setAlertStatus(query.getAlertStatus() == null ? "全部" : query.getAlertStatus().trim());
-        query.setAckStatus(query.getAckStatus() == null ? "全部" : query.getAckStatus().trim());
-        query.setProviderDeliveryStatus(query.getProviderDeliveryStatus() == null ? "全部" : query.getProviderDeliveryStatus().trim());
+        query.setAlertNo(normalizeOptionalQueryField(
+                query.getAlertNo(), "告警编号", ALERT_NO_MAX_LENGTH, null));
+        query.setIssueNo(normalizeOptionalQueryField(
+                query.getIssueNo(), "异常编号", ISSUE_NO_MAX_LENGTH, null));
+        query.setPaymentOrderId(normalizeOptionalQueryField(
+                query.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH, null));
+        query.setAlertChannel(normalizeOptionalQueryField(
+                query.getAlertChannel(), "告警通道", ALERT_CHANNEL_MAX_LENGTH, "全部"));
+        query.setAlertStatus(normalizeOptionalQueryField(
+                query.getAlertStatus(), "告警状态", ALERT_STATUS_MAX_LENGTH, "全部"));
+        query.setAckStatus(normalizeOptionalQueryField(
+                query.getAckStatus(), "回执状态", ACK_STATUS_MAX_LENGTH, "全部"));
+        query.setProviderDeliveryStatus(normalizeOptionalQueryField(
+                query.getProviderDeliveryStatus(), "供应商投递状态",
+                PROVIDER_DELIVERY_STATUS_MAX_LENGTH, "全部"));
         query.setReceiptQueryState(normalizeReceiptQueryState(query.getReceiptQueryState()));
         query.setReceiptQueryMinAgeSeconds(receiptQueryMinAgeSeconds);
         query.setReceiptQueryMaxAttempts(receiptQueryMaxAttempts);
@@ -279,13 +304,32 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
     }
 
     private String normalizeReceiptQueryState(String receiptQueryState) {
-        if (!StringUtils.hasText(receiptQueryState) || "全部".equals(receiptQueryState.trim())) {
+        String normalizedValue = normalizeOptionalQueryField(
+                receiptQueryState, "回执回查状态", RECEIPT_QUERY_STATE_MAX_LENGTH, "全部");
+        if (!StringUtils.hasText(normalizedValue) || "全部".equals(normalizedValue)) {
             return "全部";
         }
-        String normalized = receiptQueryState.trim().toUpperCase(Locale.ROOT);
+        String normalized = normalizedValue.toUpperCase(Locale.ROOT);
         if (!Arrays.asList("INITIAL_WAIT", "DUE", "BACKING_OFF", "QUERYING", "EXHAUSTED")
                 .contains(normalized)) {
-            throw new IllegalArgumentException("不支持的回执回查状态：" + receiptQueryState.trim());
+            throw new IllegalArgumentException("不支持的回执回查状态：" + normalizedValue);
+        }
+        return normalized;
+    }
+
+    private String normalizeOptionalQueryField(
+            String value, String fieldName, int maxLength, String defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw new IllegalArgumentException(fieldName + "不能包含控制字符");
+            }
+        }
+        String normalized = value.trim();
+        if (normalized.length() > maxLength) {
+            throw new IllegalArgumentException(fieldName + "长度不能超过" + maxLength + "字符");
         }
         return normalized;
     }

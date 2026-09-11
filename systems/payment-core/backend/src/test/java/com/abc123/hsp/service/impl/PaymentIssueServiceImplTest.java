@@ -68,6 +68,56 @@ class PaymentIssueServiceImplTest {
     }
 
     @Test
+    void shouldRejectOversizedIssueQueryFieldsBeforeMapperAccess() {
+        PaymentIssueQueryDTO paymentOrderQuery = new PaymentIssueQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentIssueQueryDTO orderQuery = new PaymentIssueQueryDTO();
+        orderQuery.setOrderNo(repeat("O", 65));
+        PaymentIssueQueryDTO issueTypeQuery = new PaymentIssueQueryDTO();
+        issueTypeQuery.setIssueType(repeat("I", 65));
+        PaymentIssueQueryDTO severityQuery = new PaymentIssueQueryDTO();
+        severityQuery.setSeverity(repeat("S", 33));
+        PaymentIssueQueryDTO channelQuery = new PaymentIssueQueryDTO();
+        channelQuery.setChannelCode(repeat("C", 65));
+        PaymentIssueQueryDTO paymentMethodQuery = new PaymentIssueQueryDTO();
+        paymentMethodQuery.setPaymentMethod(repeat("M", 33));
+        PaymentIssueServiceImpl service = new PaymentIssueServiceImpl(paymentIssueMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.responsibilitySummary(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(issueTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.responsibilitySummary(severityQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.responsibilitySummary(paymentMethodQuery));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInIssueQueryFieldsBeforeMapperAccess() {
+        PaymentIssueQueryDTO paymentOrderQuery = new PaymentIssueQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentIssueQueryDTO orderQuery = new PaymentIssueQueryDTO();
+        orderQuery.setOrderNo("ORD-001\n");
+        PaymentIssueQueryDTO issueTypeQuery = new PaymentIssueQueryDTO();
+        issueTypeQuery.setIssueType("待回调未收口\n");
+        PaymentIssueQueryDTO severityQuery = new PaymentIssueQueryDTO();
+        severityQuery.setSeverity("P1\n");
+        PaymentIssueQueryDTO channelQuery = new PaymentIssueQueryDTO();
+        channelQuery.setChannelCode("alipay_h5\n");
+        PaymentIssueQueryDTO paymentMethodQuery = new PaymentIssueQueryDTO();
+        paymentMethodQuery.setPaymentMethod("支付宝\n");
+        PaymentIssueServiceImpl service = new PaymentIssueServiceImpl(paymentIssueMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.list(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.responsibilitySummary(orderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(issueTypeQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.responsibilitySummary(severityQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.list(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.responsibilitySummary(paymentMethodQuery));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
     void shouldMaskPaymentIssueListWithoutChangingMapperDto() {
         PaymentIssueRowDTO row = new PaymentIssueRowDTO();
         row.setIssueNo("ISSUE-001");
@@ -139,6 +189,68 @@ class PaymentIssueServiceImplTest {
         assertEquals(30, normalized.getReceiptQueryClaimTimeoutSeconds());
         assertEquals(1, normalized.getPageNo());
         assertEquals(100, normalized.getPageSize());
+    }
+
+    @Test
+    void shouldRejectOversizedAlertLogQueryFieldsBeforeMapperAccess() {
+        PaymentIssueAlertLogQueryDTO alertNoQuery = new PaymentIssueAlertLogQueryDTO();
+        alertNoQuery.setAlertNo(repeat("A", 65));
+        PaymentIssueAlertLogQueryDTO issueNoQuery = new PaymentIssueAlertLogQueryDTO();
+        issueNoQuery.setIssueNo(repeat("I", 129));
+        PaymentIssueAlertLogQueryDTO paymentOrderQuery = new PaymentIssueAlertLogQueryDTO();
+        paymentOrderQuery.setPaymentOrderId(repeat("P", 65));
+        PaymentIssueAlertLogQueryDTO channelQuery = new PaymentIssueAlertLogQueryDTO();
+        channelQuery.setAlertChannel(repeat("C", 33));
+        PaymentIssueAlertLogQueryDTO alertStatusQuery = new PaymentIssueAlertLogQueryDTO();
+        alertStatusQuery.setAlertStatus(repeat("S", 33));
+        PaymentIssueAlertLogQueryDTO ackStatusQuery = new PaymentIssueAlertLogQueryDTO();
+        ackStatusQuery.setAckStatus(repeat("K", 33));
+        PaymentIssueAlertLogQueryDTO deliveryStatusQuery = new PaymentIssueAlertLogQueryDTO();
+        deliveryStatusQuery.setProviderDeliveryStatus(repeat("D", 65));
+        PaymentIssueAlertLogQueryDTO receiptStateQuery = new PaymentIssueAlertLogQueryDTO();
+        receiptStateQuery.setReceiptQueryState(repeat("R", 33));
+        PaymentIssueServiceImpl service = new PaymentIssueServiceImpl(paymentIssueMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(alertNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(issueNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(alertStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(ackStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(deliveryStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(receiptStateQuery));
+        verifyNoInteractions(paymentIssueMapper);
+    }
+
+    @Test
+    void shouldRejectControlCharactersInAlertLogQueryFieldsBeforeMapperAccess() {
+        PaymentIssueAlertLogQueryDTO alertNoQuery = new PaymentIssueAlertLogQueryDTO();
+        alertNoQuery.setAlertNo("PIA-001\n");
+        PaymentIssueAlertLogQueryDTO issueNoQuery = new PaymentIssueAlertLogQueryDTO();
+        issueNoQuery.setIssueNo("ISSUE-001\n");
+        PaymentIssueAlertLogQueryDTO paymentOrderQuery = new PaymentIssueAlertLogQueryDTO();
+        paymentOrderQuery.setPaymentOrderId("PAY-001\n");
+        PaymentIssueAlertLogQueryDTO channelQuery = new PaymentIssueAlertLogQueryDTO();
+        channelQuery.setAlertChannel("IM\n");
+        PaymentIssueAlertLogQueryDTO alertStatusQuery = new PaymentIssueAlertLogQueryDTO();
+        alertStatusQuery.setAlertStatus("已派发\n");
+        PaymentIssueAlertLogQueryDTO ackStatusQuery = new PaymentIssueAlertLogQueryDTO();
+        ackStatusQuery.setAckStatus("待确认\n");
+        PaymentIssueAlertLogQueryDTO deliveryStatusQuery = new PaymentIssueAlertLogQueryDTO();
+        deliveryStatusQuery.setProviderDeliveryStatus("ACCEPTED\n");
+        PaymentIssueAlertLogQueryDTO receiptStateQuery = new PaymentIssueAlertLogQueryDTO();
+        receiptStateQuery.setReceiptQueryState("DUE\n");
+        PaymentIssueServiceImpl service = new PaymentIssueServiceImpl(paymentIssueMapper);
+
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(alertNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(issueNoQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(paymentOrderQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(channelQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(alertStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(ackStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.listAlertLogs(deliveryStatusQuery));
+        assertThrows(IllegalArgumentException.class, () -> service.exportAlertLogsCsv(receiptStateQuery));
+        verifyNoInteractions(paymentIssueMapper);
     }
 
     @Test
@@ -534,5 +646,9 @@ class PaymentIssueServiceImplTest {
         request.setOperator("支付运营");
         request.setRemark("排查并跟进");
         return request;
+    }
+
+    private String repeat(String value, int times) {
+        return String.join("", Collections.nCopies(times, value));
     }
 }
