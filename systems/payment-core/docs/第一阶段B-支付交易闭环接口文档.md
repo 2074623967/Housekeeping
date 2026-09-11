@@ -3796,6 +3796,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 客户端使用同一 `16+2` 规则提供即时反馈，但服务端仍执行权威复验，不信任客户端校验结果；本轮不新增端点、字段或错误码。
 4. 试算请求不持久化路由规则或支付资金事实，返回命中只表示给定本地上下文下的表达式计算结果，不证明真实支付路由、渠道受理或生产稳定性。
 
+### 14.235 支付渠道版本限额响应精度约束
+
+1. `GET /api/payment-config/channels/{channelCode}/versions` 响应中的 `dailyLimit` Java 类型和字段名称保持不变，JSON 表示改为十进制字符串。
+2. 消费者应将该字段作为金额文本展示或使用十进制定点能力处理，不得先转换为 JavaScript `Number`；最大合法值为 `9999999999999999.99`。
+3. `POST /api/payment-config/channels/{channelCode}/rollback` 仍只接收版本号及复核声明字段，服务端根据版本号读取完整不可变快照，不要求客户端回传 `dailyLimit`。
+4. 本轮不新增端点或错误码，不改变版本回滚和复核契约；历史响应精确不证明版本审批可信、回滚生效或渠道真实容量。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
