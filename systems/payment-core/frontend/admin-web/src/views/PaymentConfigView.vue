@@ -1621,23 +1621,26 @@ async function handleAlertProviderReview(review, approved) {
   }
   activeConfigCode.value = `alert-provider-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: alertProviderReviewer.value,
+    reviewComment: alertProviderReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: alertProviderReviewer.value,
-      reviewComment: alertProviderReviewComment.value
-    };
-    alertProviderReviews.value = approved
-      ? await paymentConfigApi.approveAlertProviderReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectAlertProviderReview(review.requestNo, payload);
+    try {
+      alertProviderReviews.value = approved
+        ? await paymentConfigApi.approveAlertProviderReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectAlertProviderReview(review.requestNo, payload);
+      alertProviderReviewComment.value = "";
+      actionMessage.value = approved
+        ? `供应商申请 ${review.requestNo} 已通过，候选配置已写入运行态。`
+        : `供应商申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `供应商复核处理失败：${error.message}`;
+      return;
+    }
     if (approved) {
       await loadOverview();
     }
-    alertProviderReviewComment.value = "";
-    actionMessage.value = approved
-      ? `供应商申请 ${review.requestNo} 已通过，候选配置已写入运行态。`
-      : `供应商申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `供应商复核处理失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1959,23 +1962,26 @@ async function handleIssueDutyRosterReview(review, approved) {
   }
   activeConfigCode.value = `issue-duty-roster-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: issueDutyRosterReviewer.value,
+    reviewComment: issueDutyRosterReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: issueDutyRosterReviewer.value,
-      reviewComment: issueDutyRosterReviewComment.value
-    };
-    issueDutyRosterReviews.value = approved
-      ? await paymentConfigApi.approveIssueDutyRosterReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectIssueDutyRosterReview(review.requestNo, payload);
+    try {
+      issueDutyRosterReviews.value = approved
+        ? await paymentConfigApi.approveIssueDutyRosterReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectIssueDutyRosterReview(review.requestNo, payload);
+      issueDutyRosterReviewComment.value = "";
+      actionMessage.value = approved
+        ? `值班路由申请 ${review.requestNo} 已通过，候选配置已写入运行态。`
+        : `值班路由申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `值班路由复核处理失败：${error.message}`;
+      return;
+    }
     if (approved) {
       await loadOverview();
     }
-    issueDutyRosterReviewComment.value = "";
-    actionMessage.value = approved
-      ? `值班路由申请 ${review.requestNo} 已通过，候选配置已写入运行态。`
-      : `值班路由申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `值班路由复核处理失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
