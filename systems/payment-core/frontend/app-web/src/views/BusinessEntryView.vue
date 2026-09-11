@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
+import { normalizePaymentAmountInput } from "../constants/paymentAmount";
 import { persistPaymentAccessToken } from "../constants/paymentSession";
 import { buildCashierRoute } from "../router/paymentRoutes";
 
@@ -161,8 +162,9 @@ async function createPrepay() {
     message.value = "请先填写客户名称。";
     return;
   }
-  if (!Number(form.value.amount) || Number(form.value.amount) <= 0) {
-    message.value = "请输入大于 0 的金额。";
+  const normalizedAmount = normalizePaymentAmountInput(form.value.amount);
+  if (!normalizedAmount) {
+    message.value = "请输入大于 0、最多 16 位整数和 2 位小数的金额。";
     return;
   }
   if (!persistPaymentAccessToken(terminalMeta.value.sourceAppId, terminalMeta.value.accessToken)) {
@@ -177,7 +179,7 @@ async function createPrepay() {
       orderNo,
       payScene: sceneMeta.value.paySceneByTerminal[props.terminalVariant],
       customerName: form.value.customerName.trim(),
-      amount: Number(form.value.amount),
+      amount: normalizedAmount,
       cashierTitle: sceneMeta.value.cashierTitle
     });
     router.push(buildCashierRoute(prepay.prepayOrderNo, { bizType: props.sceneType }));
