@@ -267,6 +267,7 @@ class RefundServiceImplTest {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-001");
         request.setOperator(" refund-approver ");
+        request.setRemark(" 确认退款 ");
         when(refundMapper.updateRefundStatus("REF-001", "REVIEWING", "PROCESSING", "warn", false)).thenReturn(1);
         RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
         submitRequest.setRefundOrderId("REF-001");
@@ -303,8 +304,58 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("refund-approver"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "APPROVE".equals(log.getActionCode())
-                        && "refund-approver".equals(log.getOperatorName())));
+                        && "refund-approver".equals(log.getOperatorName())
+                        && "确认退款".equals(log.getOperationRemark())));
         verify(refundMapper).findByRefundOrderId("REF-001");
+    }
+
+    @Test
+    void shouldRejectInvalidRefundOrderIdBeforeMapperAccess() {
+        RefundServiceImpl service = createService();
+        RefundActionRequestDTO oversizedAction = new RefundActionRequestDTO();
+        oversizedAction.setRefundOrderId(String.join("", Collections.nCopies(65, "R")));
+        oversizedAction.setOperator("refund-approver");
+        RefundActionRequestDTO controlAction = new RefundActionRequestDTO();
+        controlAction.setRefundOrderId("REF-001\n");
+        controlAction.setOperator("refund-approver");
+
+        IllegalArgumentException oversized = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.approve(oversizedAction));
+        IllegalArgumentException control = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.approve(controlAction));
+        IllegalArgumentException oversizedDetail = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.detail(String.join("", Collections.nCopies(65, "R"))));
+        IllegalArgumentException controlDetail = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.detail("REF-001\n"));
+
+        assertEquals("退款单号长度不能超过64字符", oversized.getMessage());
+        assertEquals("退款单号不能包含控制字符", control.getMessage());
+        assertEquals("退款单号长度不能超过64字符", oversizedDetail.getMessage());
+        assertEquals("退款单号不能包含控制字符", controlDetail.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
+    void shouldRejectInvalidRefundActionRemarkBeforeStatusUpdate() {
+        RefundServiceImpl service = createService();
+        RefundActionRequestDTO oversized = new RefundActionRequestDTO();
+        oversized.setRefundOrderId("REF-001");
+        oversized.setOperator("refund-approver");
+        oversized.setRemark(String.join("", Collections.nCopies(256, "R")));
+        RefundActionRequestDTO control = new RefundActionRequestDTO();
+        control.setRefundOrderId("REF-001");
+        control.setOperator("refund-approver");
+        control.setRemark("确认退款\n");
+
+        IllegalArgumentException oversizedFailure = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.approve(oversized));
+        IllegalArgumentException controlFailure = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.approve(control));
+
+        assertEquals("操作备注长度不能超过255字符", oversizedFailure.getMessage());
+        assertEquals("操作备注不能包含控制字符", controlFailure.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
     }
 
     @Test

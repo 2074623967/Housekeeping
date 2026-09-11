@@ -58,7 +58,7 @@ public class RefundServiceImpl implements RefundService {
     private static final String CALLBACK_OPERATOR = "channel-callback";
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
-    private static final int CALLBACK_REFUND_ORDER_ID_MAX_LENGTH = 64;
+    private static final int REFUND_ORDER_ID_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int CALLBACK_REFUND_STATUS_MAX_LENGTH = 32;
     private static final int MONEY_MAX_SCALE = 2;
@@ -66,6 +66,7 @@ public class RefundServiceImpl implements RefundService {
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
     private static final int REFUND_METHOD_MAX_LENGTH = 32;
     private static final int REFUND_REASON_MAX_LENGTH = 255;
+    private static final int OPERATION_REMARK_MAX_LENGTH = 255;
 
     private final RefundMapper refundMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
@@ -457,7 +458,7 @@ public class RefundServiceImpl implements RefundService {
         if (request == null) {
             throw new IllegalArgumentException("原支付单号不能为空");
         }
-        request.setPaymentOrderId(normalizeRequiredApplyField(
+        request.setPaymentOrderId(normalizeRequiredRequestField(
                 request.getPaymentOrderId(), "原支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
         if (request.getRefundAmount() == null || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("退款金额必须大于0");
@@ -467,23 +468,23 @@ public class RefundServiceImpl implements RefundService {
                 || request.getRefundAmount().compareTo(MAX_MONEY_AMOUNT) > 0) {
             throw new IllegalArgumentException("退款金额最多支持 16 位整数和 2 位小数");
         }
-        String refundMethod = normalizeOptionalApplyField(
+        String refundMethod = normalizeOptionalRequestField(
                 request.getRefundMethod(), "退款方式", REFUND_METHOD_MAX_LENGTH);
         request.setRefundMethod(refundMethod == null ? "原路退款" : refundMethod);
-        String refundReason = normalizeOptionalApplyField(
+        String refundReason = normalizeOptionalRequestField(
                 request.getRefundReason(), "退款原因", REFUND_REASON_MAX_LENGTH);
         request.setRefundReason(refundReason == null ? "" : refundReason);
     }
 
-    private String normalizeRequiredApplyField(String value, String fieldName, int maxLength) {
-        String normalized = normalizeOptionalApplyField(value, fieldName, maxLength);
+    private String normalizeRequiredRequestField(String value, String fieldName, int maxLength) {
+        String normalized = normalizeOptionalRequestField(value, fieldName, maxLength);
         if (normalized == null) {
             throw new IllegalArgumentException(fieldName + "不能为空");
         }
         return normalized;
     }
 
-    private String normalizeOptionalApplyField(String value, String fieldName, int maxLength) {
+    private String normalizeOptionalRequestField(String value, String fieldName, int maxLength) {
         if (value == null) {
             return null;
         }
@@ -516,7 +517,7 @@ public class RefundServiceImpl implements RefundService {
         request.setChannelRefundNo(request.getChannelRefundNo().trim());
         request.setRefundStatus(request.getRefundStatus().trim().toUpperCase(Locale.ROOT));
         validateCallbackField(normalizedChannel, CALLBACK_CHANNEL_MAX_LENGTH);
-        validateCallbackField(request.getRefundOrderId(), CALLBACK_REFUND_ORDER_ID_MAX_LENGTH);
+        validateCallbackField(request.getRefundOrderId(), REFUND_ORDER_ID_MAX_LENGTH);
         validateCallbackField(request.getChannelRefundNo(), CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH);
         validateCallbackField(request.getRefundStatus(), CALLBACK_REFUND_STATUS_MAX_LENGTH);
         if (!STATUS_SUCCESS.equals(request.getRefundStatus()) && !STATUS_FAIL.equals(request.getRefundStatus())) {
@@ -564,6 +565,11 @@ public class RefundServiceImpl implements RefundService {
                                            String actionCode,
                                            String actionName) {
         String refundOrderId = requireRefundOrderId(request);
+        String remark = normalizeOptionalRequestField(
+                request.getRemark(), "操作备注", OPERATION_REMARK_MAX_LENGTH);
+        if (remark == null) {
+            remark = resolveDefaultRemark(fromStatus, status);
+        }
         int affectedRows = refundMapper.updateRefundStatus(refundOrderId, fromStatus, status, statusType, success);
         if (affectedRows == 0) {
             throw new IllegalArgumentException("退款单状态不允许执行当前操作");
@@ -575,7 +581,7 @@ public class RefundServiceImpl implements RefundService {
                 fromStatus,
                 status,
                 operator,
-                StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : resolveDefaultRemark(fromStatus, status)
+                remark
         ));
         if (STATUS_PROCESSING.equals(status)) {
             enqueueChannelSubmit(refundOrderId, operator);
@@ -623,10 +629,12 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private String requireRefundOrderId(RefundActionRequestDTO request) {
-        if (request == null || !StringUtils.hasText(request.getRefundOrderId())) {
+        if (request == null) {
             throw new IllegalArgumentException("退款单号不能为空");
         }
-        return request.getRefundOrderId().trim();
+        String refundOrderId = requireRefundOrderId(request.getRefundOrderId());
+        request.setRefundOrderId(refundOrderId);
+        return refundOrderId;
     }
 
     public static RefundOperationLogEntity buildOperationLog(String refundOrderId,
@@ -655,10 +663,8 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private String requireRefundOrderId(String refundOrderId) {
-        if (!StringUtils.hasText(refundOrderId)) {
-            throw new IllegalArgumentException("退款单号不能为空");
-        }
-        return refundOrderId.trim();
+        return normalizeRequiredRequestField(
+                refundOrderId, "退款单号", REFUND_ORDER_ID_MAX_LENGTH);
     }
 
     private String normalizeOperator(String operator) {
