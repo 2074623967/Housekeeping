@@ -33,6 +33,7 @@ const controlPolicyReviewComment = ref("");
 const controlPolicyVersionSourceAppId = ref("");
 const controlPolicyVersions = ref([]);
 const isControlPolicyVersionLoading = ref(false);
+const controlPolicyVersionError = ref("");
 let controlPolicyVersionRequestId = 0;
 const editingControlPolicyId = ref("");
 const controlPolicyForm = ref(createControlPolicyForm());
@@ -1408,26 +1409,31 @@ async function handleControlPolicyReview(review, approved) {
   }
   activeConfigCode.value = `control-policy-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: controlPolicyReviewer.value,
+    reviewComment: controlPolicyReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: controlPolicyReviewer.value,
-      reviewComment: controlPolicyReviewComment.value
-    };
-    controlPolicyReviews.value = approved
-      ? await paymentConfigApi.approveControlPolicyReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectControlPolicyReview(review.requestNo, payload);
-    if (approved) {
-      await loadOverview();
-      if (controlPolicyVersionSourceAppId.value) {
-        await loadControlPolicyVersions(controlPolicyVersionSourceAppId.value);
-      }
+    try {
+      controlPolicyReviews.value = approved
+        ? await paymentConfigApi.approveControlPolicyReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectControlPolicyReview(review.requestNo, payload);
+      controlPolicyReviewComment.value = "";
+      actionMessage.value = approved
+        ? `支付控制策略 ${review.operationType} 申请 ${review.requestNo} 已通过并应用，请重新执行自检。`
+        : `支付控制策略申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `支付控制策略复核处理失败：${error.message}`;
+      return;
     }
-    controlPolicyReviewComment.value = "";
-    actionMessage.value = approved
-      ? `支付控制策略 ${review.operationType} 申请 ${review.requestNo} 已通过并应用，请重新执行自检。`
-      : `支付控制策略申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `支付控制策略复核处理失败：${error.message}`;
+    if (!approved) {
+      return;
+    }
+    const refreshTasks = [loadOverview()];
+    if (controlPolicyVersionSourceAppId.value) {
+      refreshTasks.push(loadControlPolicyVersions(controlPolicyVersionSourceAppId.value));
+    }
+    await Promise.all(refreshTasks);
   } finally {
     activeConfigCode.value = "";
   }
@@ -1438,7 +1444,7 @@ async function loadControlPolicyVersions(sourceAppId) {
   controlPolicyVersionSourceAppId.value = sourceAppId;
   controlPolicyVersions.value = [];
   isControlPolicyVersionLoading.value = true;
-  actionMessage.value = "";
+  controlPolicyVersionError.value = "";
   try {
     const versions = await paymentConfigApi.getControlPolicyVersions(sourceAppId);
     if (requestId === controlPolicyVersionRequestId
@@ -1448,7 +1454,7 @@ async function loadControlPolicyVersions(sourceAppId) {
   } catch (error) {
     if (requestId === controlPolicyVersionRequestId
         && controlPolicyVersionSourceAppId.value === sourceAppId) {
-      actionMessage.value = `控制策略版本加载失败：${error.message}`;
+      controlPolicyVersionError.value = error.message;
     }
   } finally {
     if (requestId === controlPolicyVersionRequestId) {
@@ -1462,6 +1468,7 @@ function closeControlPolicyVersions() {
   controlPolicyVersionSourceAppId.value = "";
   controlPolicyVersions.value = [];
   isControlPolicyVersionLoading.value = false;
+  controlPolicyVersionError.value = "";
 }
 
 async function rollbackControlPolicyVersion(version) {
@@ -4102,6 +4109,9 @@ function exportGovernanceSnapshot(section = "ALL") {
                 <p class="meta">历史快照不可修改且不展示令牌原文；回滚复核通过后恢复完整配置、重置自检并追加新版本</p>
               </div>
               <button class="button secondary" @click="closeControlPolicyVersions">关闭</button>
+            </div>
+            <div v-if="controlPolicyVersionError" class="error-banner">
+              控制策略版本加载失败：{{ controlPolicyVersionError }}
             </div>
             <div v-if="isControlPolicyVersionLoading" class="state-box">控制策略版本加载中...</div>
             <div v-else-if="!controlPolicyVersions.length" class="state-box">当前暂无控制策略版本记录</div>
