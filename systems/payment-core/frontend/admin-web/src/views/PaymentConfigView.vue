@@ -978,23 +978,26 @@ async function handleReturnCodeReview(review, approved) {
   }
   activeConfigCode.value = `return-code-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: returnCodeReviewer.value,
+    reviewComment: returnCodeReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: returnCodeReviewer.value,
-      reviewComment: returnCodeReviewComment.value
-    };
-    returnCodeReviews.value = approved
-      ? await paymentConfigApi.approveReturnCodeReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectReturnCodeReview(review.requestNo, payload);
+    try {
+      returnCodeReviews.value = approved
+        ? await paymentConfigApi.approveReturnCodeReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectReturnCodeReview(review.requestNo, payload);
+      returnCodeReviewComment.value = "";
+      actionMessage.value = approved
+        ? `返回码状态申请 ${review.requestNo} 已通过并应用。`
+        : `返回码状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `返回码复核处理失败：${error.message}`;
+      return;
+    }
     if (approved) {
       await loadOverview();
     }
-    returnCodeReviewComment.value = "";
-    actionMessage.value = approved
-      ? `返回码状态申请 ${review.requestNo} 已通过并应用。`
-      : `返回码状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `返回码复核处理失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
@@ -1127,23 +1130,26 @@ async function handleReturnCodeImportReview(review, approved) {
   }
   activeConfigCode.value = `return-code-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: returnCodeImportReviewer.value,
+    reviewComment: returnCodeImportReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: returnCodeImportReviewer.value,
-      reviewComment: returnCodeImportReviewComment.value
-    };
-    returnCodeImportReviews.value = approved
-      ? await paymentConfigApi.approveReturnCodeImportReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectReturnCodeImportReview(review.requestNo, payload);
+    try {
+      returnCodeImportReviews.value = approved
+        ? await paymentConfigApi.approveReturnCodeImportReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectReturnCodeImportReview(review.requestNo, payload);
+      returnCodeImportReviewComment.value = "";
+      actionMessage.value = approved
+        ? `返回码导入申请 ${review.requestNo} 已通过并应用。`
+        : `返回码导入申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `返回码复核处理失败：${error.message}`;
+      return;
+    }
     if (approved) {
       await loadOverview();
     }
-    returnCodeImportReviewComment.value = "";
-    actionMessage.value = approved
-      ? `返回码导入申请 ${review.requestNo} 已通过并应用。`
-      : `返回码导入申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `返回码复核处理失败：${error.message}`;
   } finally {
     activeConfigCode.value = "";
   }
