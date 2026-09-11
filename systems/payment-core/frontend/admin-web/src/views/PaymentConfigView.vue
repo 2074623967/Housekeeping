@@ -67,6 +67,7 @@ const channelReviewComment = ref("");
 const channelVersionCode = ref("");
 const channelVersions = ref([]);
 const isChannelVersionLoading = ref(false);
+const channelVersionError = ref("");
 let channelVersionRequestId = 0;
 const editingChannelCode = ref("");
 const channelForm = ref(createChannelForm());
@@ -470,26 +471,31 @@ async function handleChannelReview(review, approved) {
   }
   activeConfigCode.value = `channel-review:${review.requestNo}`;
   actionMessage.value = "";
+  const payload = {
+    reviewer: channelReviewer.value,
+    reviewComment: channelReviewComment.value
+  };
   try {
-    const payload = {
-      reviewer: channelReviewer.value,
-      reviewComment: channelReviewComment.value
-    };
-    channelReviews.value = approved
-      ? await paymentConfigApi.approveChannelReview(review.requestNo, payload)
-      : await paymentConfigApi.rejectChannelReview(review.requestNo, payload);
-    if (approved) {
-      await loadOverview();
-      if (channelVersionCode.value) {
-        await loadChannelVersions(channelVersionCode.value);
-      }
+    try {
+      channelReviews.value = approved
+        ? await paymentConfigApi.approveChannelReview(review.requestNo, payload)
+        : await paymentConfigApi.rejectChannelReview(review.requestNo, payload);
+      channelReviewComment.value = "";
+      actionMessage.value = approved
+        ? `渠道状态申请 ${review.requestNo} 已通过并应用。`
+        : `渠道状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
+    } catch (error) {
+      actionMessage.value = `渠道复核处理失败：${error.message}`;
+      return;
     }
-    channelReviewComment.value = "";
-    actionMessage.value = approved
-      ? `渠道状态申请 ${review.requestNo} 已通过并应用。`
-      : `渠道状态申请 ${review.requestNo} 已驳回，运行态未改变。`;
-  } catch (error) {
-    actionMessage.value = `渠道复核处理失败：${error.message}`;
+    if (!approved) {
+      return;
+    }
+    const refreshTasks = [loadOverview()];
+    if (channelVersionCode.value) {
+      refreshTasks.push(loadChannelVersions(channelVersionCode.value));
+    }
+    await Promise.all(refreshTasks);
   } finally {
     activeConfigCode.value = "";
   }
@@ -555,7 +561,7 @@ async function loadChannelVersions(channelCode) {
   channelVersionCode.value = channelCode;
   channelVersions.value = [];
   isChannelVersionLoading.value = true;
-  actionMessage.value = "";
+  channelVersionError.value = "";
   try {
     const versions = await paymentConfigApi.getChannelVersions(channelCode);
     if (requestId === channelVersionRequestId && channelVersionCode.value === channelCode) {
@@ -563,7 +569,7 @@ async function loadChannelVersions(channelCode) {
     }
   } catch (error) {
     if (requestId === channelVersionRequestId && channelVersionCode.value === channelCode) {
-      actionMessage.value = `支付渠道版本加载失败：${error.message}`;
+      channelVersionError.value = error.message;
     }
   } finally {
     if (requestId === channelVersionRequestId) {
@@ -577,6 +583,7 @@ function closeChannelVersions() {
   channelVersionCode.value = "";
   channelVersions.value = [];
   isChannelVersionLoading.value = false;
+  channelVersionError.value = "";
 }
 
 async function rollbackChannelVersion(version) {
@@ -2335,6 +2342,9 @@ function exportGovernanceSnapshot(section = "ALL") {
               <p class="meta">历史快照不可修改且不展示回调密钥、公钥原文；回滚复核通过后恢复完整渠道配置并追加新版本</p>
             </div>
             <button class="button secondary" @click="closeChannelVersions">关闭</button>
+          </div>
+          <div v-if="channelVersionError" class="error-banner">
+            支付渠道版本加载失败：{{ channelVersionError }}
           </div>
           <div v-if="isChannelVersionLoading" class="state-box">支付渠道版本加载中...</div>
           <div v-else-if="!channelVersions.length" class="state-box">当前暂无支付渠道版本记录</div>
