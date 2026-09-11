@@ -1544,6 +1544,7 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getClientDeviceId(), "客户端设备号", SUBMIT_CLIENT_DEVICE_ID_MAX_LENGTH));
         request.setPayerPhone(normalizeOptionalSubmitField(
                 request.getPayerPhone(), "付款手机号", SUBMIT_PAYER_PHONE_MAX_LENGTH));
+        validateSubmitIdempotencyKeyControlCharacters(request.getIdempotencyKey());
         if (StringUtils.hasText(request.getIdempotencyKey())) {
             String idempotencyKey = request.getIdempotencyKey().trim();
             validateSubmitIdempotencyKey(idempotencyKey);
@@ -1559,6 +1560,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String normalizeSubmitTerminal(String terminal) {
+        validateSubmitControlCharacters(terminal, "终端标识");
         String normalized = StringUtils.hasText(terminal)
                 ? terminal.trim().toUpperCase(Locale.ROOT)
                 : "UNKNOWN";
@@ -1586,12 +1588,37 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String normalizeOptionalSubmitField(String value, String fieldName, int maxLength) {
+        validateSubmitControlCharacters(value, fieldName);
         if (!StringUtils.hasText(value)) {
             return null;
         }
         String normalized = value.trim();
         validateRequiredSubmitField(normalized, fieldName, maxLength);
         return normalized;
+    }
+
+    private void validateSubmitControlCharacters(String value, String fieldName) {
+        if (value == null) {
+            return;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isISOControl(value.charAt(index))) {
+                throw invalidSubmitRequest(fieldName + "不能包含控制字符");
+            }
+        }
+    }
+
+    private void validateSubmitIdempotencyKeyControlCharacters(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return;
+        }
+        for (int index = 0; index < idempotencyKey.length(); index++) {
+            if (Character.isISOControl(idempotencyKey.charAt(index))) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                        "支付幂等键不能包含控制字符");
+            }
+        }
     }
 
     private void validateRequiredSubmitField(String value, String fieldName, int maxLength) {

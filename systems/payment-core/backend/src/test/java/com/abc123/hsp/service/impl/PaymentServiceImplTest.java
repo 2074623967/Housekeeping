@@ -272,6 +272,60 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectSubmitControlCharactersBeforeTrimming() {
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+        PaymentSubmitRequestDTO prepayOrderNoRequest = validSubmitRequest();
+        prepayOrderNoRequest.setPrepayOrderNo("PRE-001\n");
+        PaymentSubmitRequestDTO paymentMethodRequest = validSubmitRequest();
+        paymentMethodRequest.setPaymentMethod("微信支付\n");
+        PaymentSubmitRequestDTO channelCodeRequest = validSubmitRequest();
+        channelCodeRequest.setChannelCode("wx_h5\n");
+        PaymentSubmitRequestDTO sourceAppIdRequest = validSubmitRequest();
+        sourceAppIdRequest.setSourceAppId("cashier-app\n");
+        PaymentSubmitRequestDTO merchantNoRequest = validSubmitRequest();
+        merchantNoRequest.setMerchantNo("MCH-001\n");
+        PaymentSubmitRequestDTO accessTokenRequest = validSubmitRequest();
+        accessTokenRequest.setAccessToken("TOKEN-001\n");
+        PaymentSubmitRequestDTO terminalRequest = validSubmitRequest();
+        terminalRequest.setTerminal("APP\n");
+        PaymentSubmitRequestDTO clientIpRequest = validSubmitRequest();
+        clientIpRequest.setClientIp("127.0.0.1\n");
+        PaymentSubmitRequestDTO clientDeviceIdRequest = validSubmitRequest();
+        clientDeviceIdRequest.setClientDeviceId("DEVICE-001\n");
+        PaymentSubmitRequestDTO payerPhoneRequest = validSubmitRequest();
+        payerPhoneRequest.setPayerPhone("13800138000\n");
+        PaymentSubmitRequestDTO idempotencyKeyRequest = validSubmitRequest();
+        idempotencyKeyRequest.setIdempotencyKey("IDEMP-001\n");
+
+        assertSubmitRequestInvalid(service, prepayOrderNoRequest);
+        assertSubmitRequestInvalid(service, paymentMethodRequest);
+        assertSubmitRequestInvalid(service, channelCodeRequest);
+        assertSubmitRequestInvalid(service, sourceAppIdRequest);
+        assertSubmitRequestInvalid(service, merchantNoRequest);
+        assertSubmitRequestInvalid(service, accessTokenRequest);
+        assertSubmitRequestInvalid(service, terminalRequest);
+        assertSubmitRequestInvalid(service, clientIpRequest);
+        assertSubmitRequestInvalid(service, clientDeviceIdRequest);
+        assertSubmitRequestInvalid(service, payerPhoneRequest);
+        BusinessException idempotencyException = assertThrows(
+                BusinessException.class, () -> service.submit(idempotencyKeyRequest));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_IDEMPOTENCY_KEY_INVALID,
+                idempotencyException.getCode());
+        verifyNoInteractions(
+                paymentMapper,
+                paymentChannelRoutingService,
+                paymentRiskControlService,
+                paymentSubmitRateLimitService,
+                paymentChannelSubmitService);
+    }
+
+    @Test
     void shouldRejectUnknownTerminalBeforeAnySubmitInteraction() {
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-INVALID-TERMINAL");
@@ -3259,6 +3313,29 @@ class PaymentServiceImplTest {
         query.setPaymentMethod(paymentMethod);
         query.setStatus(status);
         return query;
+    }
+
+    private PaymentSubmitRequestDTO validSubmitRequest() {
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-001");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setSourceAppId("cashier-app");
+        request.setMerchantNo("MCH-001");
+        request.setAccessToken("TOKEN-001");
+        request.setTerminal("APP");
+        request.setClientIp("127.0.0.1");
+        request.setClientDeviceId("DEVICE-001");
+        request.setPayerPhone("13800138000");
+        return request;
+    }
+
+    private void assertSubmitRequestInvalid(
+            PaymentServiceImpl service,
+            PaymentSubmitRequestDTO request) {
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_SUBMIT_REQUEST_INVALID, exception.getCode());
     }
 
     private void assertPaymentRequestInvalid(org.junit.jupiter.api.function.Executable action) {
