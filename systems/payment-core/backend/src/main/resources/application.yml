@@ -102,6 +102,7 @@ payment:
   event-dispatch:
     # http keeps existing environments stable; test/pre switch to amqp after the broker is ready.
     mode: ${HSP_PAYMENT_EVENT_DISPATCH_MODE:http}
+    http-timeout-ms: ${HSP_PAYMENT_EVENT_DISPATCH_HTTP_TIMEOUT_MS:3000}
   risk-control:
     enabled: ${HSP_PAYMENT_RISK_CONTROL_ENABLED:false}
     evaluate-url: ${HSP_PAYMENT_RISK_CONTROL_EVALUATE_URL:http://127.0.0.1:18160/api/risk-control/decisions/evaluate}

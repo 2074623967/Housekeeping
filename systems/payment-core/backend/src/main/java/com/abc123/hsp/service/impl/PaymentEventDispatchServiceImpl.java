@@ -74,6 +74,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             @Value("${payment.downstream.accounting.payment-success-account-no:ACT10003}")
             String accountingPaymentSuccessAccountNo,
             @Value("${payment.event-dispatch.mode:http}") String dispatchMode,
+            @Value("${payment.event-dispatch.http-timeout-ms:3000}") int httpTimeoutMs,
             @Value("${payment.amqp.payment-success-exchange:payment.trade}") String paymentSuccessExchange,
             @Value("${payment.amqp.payment-success-routing-key:payment.success.v1}") String paymentSuccessRoutingKey,
             @Value("${payment.amqp.publisher-confirm-timeout-ms:5000}") long publisherConfirmTimeoutMs,
@@ -87,7 +88,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 accountingUrl,
                 accountingPaymentSuccessAccountNo,
                 DEFAULT_MAX_RETRY_COUNT,
-                AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(3000),
+                AbstractLocalPaymentIssueAlertNotifier.buildRestTemplate(httpTimeoutMs),
                 dispatchMode,
                 paymentSuccessExchange,
                 paymentSuccessRoutingKey,
