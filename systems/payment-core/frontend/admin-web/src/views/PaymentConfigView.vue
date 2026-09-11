@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { paymentConfigApi } from "../api/client";
+import { normalizeNonNegativePaymentAmountInput } from "../utils/paymentAmount";
 
 const channels = ref([]);
 const routeRules = ref([]);
@@ -430,6 +431,11 @@ async function submitChannelForm() {
     actionMessage.value = "支付渠道提交复核失败：新增渠道必须填写回调验签密钥。";
     return;
   }
+  const dailyLimit = normalizeNonNegativePaymentAmountInput(channelForm.value.dailyLimit);
+  if (dailyLimit === null) {
+    actionMessage.value = "支付渠道提交复核失败：单日限额最多支持 16 位整数和 2 位小数。";
+    return;
+  }
   const channelCode = editingChannelCode.value || channelForm.value.channelCode;
   activeConfigCode.value = channelCode;
   actionMessage.value = "";
@@ -438,7 +444,7 @@ async function submitChannelForm() {
       ...channelForm.value,
       notifySignWindowSec: Number(channelForm.value.notifySignWindowSec),
       refundWindowDays: Number(channelForm.value.refundWindowDays),
-      dailyLimit: Number(channelForm.value.dailyLimit),
+      dailyLimit,
       priority: Number(channelForm.value.priority),
       routeWeight: Number(channelForm.value.routeWeight)
     };
@@ -2194,7 +2200,7 @@ function exportGovernanceSnapshot(section = "ALL") {
             </label>
             <label>
               单日限额
-              <input v-model.number="channelForm.dailyLimit" type="number" min="0" step="0.01" />
+              <input v-model="channelForm.dailyLimit" type="number" min="0" step="0.01" />
             </label>
             <label>
               优先级

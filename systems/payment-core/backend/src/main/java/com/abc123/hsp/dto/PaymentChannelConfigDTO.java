@@ -1,5 +1,7 @@
 package com.abc123.hsp.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.Data;
 
 /**
@@ -47,6 +49,7 @@ public class PaymentChannelConfigDTO {
     /** 单日限额展示值。 */
     private String dailyLimit;
     /** 单日限额原始值。 */
+    @JsonSerialize(using = ToStringSerializer.class)
     private java.math.BigDecimal dailyLimitValue;
     /** 渠道优先级。 */
     private Integer priority;

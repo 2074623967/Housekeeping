@@ -1,7 +1,7 @@
 const PAYMENT_AMOUNT_PATTERN = /^(\d*)(?:\.(\d{1,2}))?$/;
 const PAYMENT_AMOUNT_MAX_INTEGER_DIGITS = 16;
 
-export function normalizePaymentAmountInput(value) {
+function normalizePaymentAmountInputValue(value, allowZero) {
   const rawValue = typeof value === "string" ? value.trim() : String(value ?? "").trim();
   const match = PAYMENT_AMOUNT_PATTERN.exec(rawValue);
   if (!match || (!match[1] && !match[2])) {
@@ -17,5 +17,13 @@ export function normalizePaymentAmountInput(value) {
   const normalized = fractionPart === undefined
     ? integerPart
     : `${integerPart}.${fractionPart}`;
-  return /[1-9]/.test(normalized) ? normalized : null;
+  return allowZero || /[1-9]/.test(normalized) ? normalized : null;
+}
+
+export function normalizePaymentAmountInput(value) {
+  return normalizePaymentAmountInputValue(value, false);
+}
+
+export function normalizeNonNegativePaymentAmountInput(value) {
+  return normalizePaymentAmountInputValue(value, true);
 }

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizePaymentAmountInput } from "./paymentAmount.js";
+import {
+  normalizeNonNegativePaymentAmountInput,
+  normalizePaymentAmountInput
+} from "./paymentAmount.js";
 
 test("keeps refund amounts as exact decimal strings", () => {
   const maximumAmount = "9999999999999999.99";
@@ -18,4 +21,16 @@ test("rejects refund amounts outside the frontend money contract", () => {
   assert.equal(normalizePaymentAmountInput("1.001"), null);
   assert.equal(normalizePaymentAmountInput("1e3"), null);
   assert.equal(normalizePaymentAmountInput("10000000000000000.00"), null);
+});
+
+test("allows exact zero and maximum channel daily limits", () => {
+  assert.equal(normalizeNonNegativePaymentAmountInput("0"), "0");
+  assert.equal(normalizeNonNegativePaymentAmountInput("000.00"), "0.00");
+  assert.equal(
+    normalizeNonNegativePaymentAmountInput("9999999999999999.99"),
+    "9999999999999999.99"
+  );
+  assert.equal(normalizeNonNegativePaymentAmountInput("-1"), null);
+  assert.equal(normalizeNonNegativePaymentAmountInput("1.001"), null);
+  assert.equal(normalizeNonNegativePaymentAmountInput("10000000000000000.00"), null);
 });
