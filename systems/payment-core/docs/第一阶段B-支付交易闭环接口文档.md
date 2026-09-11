@@ -2162,7 +2162,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.20 失败事件重发任务结果规则
 
-1. `POST /api/payment-task-center/actions/republish-failed-events` 的响应继续使用 `PaymentTaskActionResultDTO`；人工模式处理全部 `FAILED` 事件，自动模式只处理已到重试时间的 `FAILED` 事件。
+1. `POST /api/payment-task-center/actions/republish-failed-events` 的响应继续使用 `PaymentTaskActionResultDTO`；人工模式按单轮容量处理 `FAILED` 事件，自动模式按同一容量处理已到重试时间的 `FAILED / PENDING` 支付成功与退款提交事件。
 2. `processedCount` 为本轮候选数，`successCount` 为投递服务返回成功的数量，`failCount` 包含投递返回 `false` 和单条事务抛出运行时异常的数量。
 3. 每条事件使用独立 `REQUIRES_NEW` 事务；普通投递失败写入的 `FAILED / DEAD_LETTER` 状态正常提交，意外异常回滚当前事件且不阻断后续事件。`summaryComment` 最多列出 3 个失败事件号。
 4. 本地事务无法撤销已经交付给 HTTP 或 MQ 下游的外部事件；真实下游必须以稳定 `eventNo / messageId` 实现幂等，接口成功也不等同于所有订阅方已完成业务处理。
@@ -3194,6 +3194,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 发布失败只允许来源为 `PENDING / FAILED`，死信和结果未知只允许来源为 `PENDING / FAILED / DEAD_LETTER`；任何状态更新都不得覆盖已有 `SUCCESS`。
 3. 最近成功重发审计只在事件当前为 `SUCCESS` 时更新一行，上层仍要求更新数恰好为 `1`；状态不符时整个重发事务失败，不形成孤立成功审计。
 4. 本轮不新增接口字段、错误码、状态枚举、schema 或迁移；本地测试不证明生产 MySQL 竞争、真实下游受理、资金结果或稳定性。
+
+### 14.153 支付事件重发有界批次契约
+
+1. 人工与自动事件重发候选查询统一接收服务端批次参数；默认值为 `100`，部署环境可通过 `HSP_PAYMENT_EVENT_RETRY_BATCH_SIZE` 覆盖，实际值限制在 `1..1000`。
+2. 人工模式按 `created_at ASC, id ASC` 选择最早的 `FAILED` 事件；自动模式按相同顺序选择已到期的 `FAILED`，以及可自动首次派发的 `PENDING` 支付成功与退款提交事件。
+3. `PaymentTaskActionResultDTO.processedCount / successCount / failCount` 只表示本轮候选结果；超过批次的事件不被改写，留待后续调度或人工轮次，不新增接口字段或循环执行承诺。
+4. 单事件独立事务、任务租约、成功审计与失败事件摘要保持不变；本地测试不证明生产 MySQL 查询计划、批次吞吐、真实下游受理或稳定性。
 
 ## 15. 结论
 

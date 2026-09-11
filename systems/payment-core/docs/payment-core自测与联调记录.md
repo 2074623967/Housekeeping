@@ -9086,3 +9086,25 @@
 
 1. 服务层锁和状态校验之外，数据库更新语句本身也开始保护成功终态与成功审计一致性，降低迟到或旁路更新造成状态回退的风险。
 2. 本轮无前端、接口字段、schema 或迁移变化；H2 与绑定 SQL 验证不等于生产 MySQL 并发压测、真实下游处理或资金结果确认，`release/v1.0.0` 继续冻结。
+
+## 326. 2026-09-11 支付事件重发有界批次 V1.0 验证
+
+### 326.1 本轮补强
+
+1. `PaymentEventRetryTaskServiceImpl` 新增 `payment.event-retry.batch-size`，默认 `100`，非法小值按 `1`、超大值按 `1000` 执行。
+2. 人工和自动候选 Mapper 查询均使用参数绑定的 `LIMIT`；人工仍选择 `FAILED`，自动仍选择到期的 `FAILED / PENDING` 支付成功与退款提交事件。
+3. 候选排序、逐事件独立事务、成功重发审计、最多三个失败事件号和任务中心本轮统计不变；超过批次的候选由后续轮次继续处理。
+
+### 326.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 事件重发联合定向测试 | `mvn -Dtest=PaymentEventRetryTaskServiceImplTest,PaymentEventRepublishAuditMapperIntegrationTest,RefundSubmitOutboxMapperIntegrationTest,PaymentEventRetryConfigurationTest,PaymentTaskCenterServiceImplTest,PaymentCompensationSchedulerTest test` | 通过 | `64` 个用例；覆盖实际 SQL 截断、默认值、上下界、自动/人工候选与任务中心联动 |
+| payment-core 全量测试 | `mvn test` | 通过 | `821` 个用例，`0` failures、`0` errors、`0` skipped |
+| Mapper XML 检查 | `xmllint --noout PaymentEventMapper.xml` | 通过 | XML 结构有效 |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 326.3 当前判断
+
+1. 事件积压不再被一次性加载和长时间占用单轮任务窗口，任务日志继续表达本轮实际处理结果，而不是承诺全量积压已经清空。
+2. 本轮无前端、接口字段、schema 或迁移变化；本地 H2 与 Mockito 不证明生产 MySQL 执行计划、真实积压吞吐、下游受理或稳定性，`release/v1.0.0` 继续冻结。
