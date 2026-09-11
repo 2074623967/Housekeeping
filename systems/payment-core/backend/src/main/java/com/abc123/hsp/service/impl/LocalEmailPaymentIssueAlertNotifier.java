@@ -156,7 +156,7 @@ public class LocalEmailPaymentIssueAlertNotifier extends AbstractLocalPaymentIss
                                         String failureCodeJsonPointer) {
         this.restTemplate = restTemplate;
         this.webhookUrl = webhookUrl;
-        this.timeoutMs = timeoutMs;
+        this.timeoutMs = normalizeHttpTimeoutMs(timeoutMs);
         this.successJsonPointer = successJsonPointer;
         this.successExpectedValue = successExpectedValue;
         this.receiptNoJsonPointer = receiptNoJsonPointer;

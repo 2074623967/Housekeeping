@@ -359,7 +359,7 @@ class LocalImPaymentIssueAlertNotifierTest {
         PaymentIssueAlertDeliveryResultDTO result = new LocalImPaymentIssueAlertNotifier(
                 restTemplate,
                 "https://hooks.example.com/payment-alert",
-                4500,
+                0,
                 "/code",
                 "0",
                 "/data/receiptNo",
@@ -379,6 +379,7 @@ class LocalImPaymentIssueAlertNotifierTest {
 
         Assertions.assertEquals("FAILED", result.getProviderDeliveryStatus());
         Assertions.assertNull(result.getProviderReceiptNo());
+        Assertions.assertTrue(result.getProviderDeliveryMessage().contains("timeout=1ms"));
         Assertions.assertTrue(result.getProviderDeliveryMessage().contains("transportError=[REDACTED]"));
         Assertions.assertFalse(result.getProviderDeliveryMessage().contains("Read timed out"));
         Assertions.assertEquals("HTTP_TRANSPORT_ERROR:[REDACTED]", result.getProviderReceiptSnapshot());

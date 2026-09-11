@@ -38,15 +38,22 @@ abstract class AbstractLocalPaymentIssueAlertNotifier {
             "PAYMENT_ISSUE_ALERT_SIGNATURE_FAILED";
     private static final String RESPONSE_JSON_INVALID_CATEGORY =
             "PAYMENT_ISSUE_ALERT_RESPONSE_JSON_INVALID";
+    private static final int MIN_HTTP_TIMEOUT_MS = 1;
+    private static final int MAX_HTTP_TIMEOUT_MS = 60000;
 
     /**
      * 为外部 HTTP/Webhook 通知器配置统一的连接与读取超时，避免网关长时间阻塞任务线程。
      */
     protected static RestTemplate buildRestTemplate(int timeoutMs) {
+        int normalizedTimeoutMs = normalizeHttpTimeoutMs(timeoutMs);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(timeoutMs);
-        requestFactory.setReadTimeout(timeoutMs);
+        requestFactory.setConnectTimeout(normalizedTimeoutMs);
+        requestFactory.setReadTimeout(normalizedTimeoutMs);
         return new RestTemplate(requestFactory);
+    }
+
+    protected static int normalizeHttpTimeoutMs(int timeoutMs) {
+        return Math.min(Math.max(timeoutMs, MIN_HTTP_TIMEOUT_MS), MAX_HTTP_TIMEOUT_MS);
     }
 
     /**
