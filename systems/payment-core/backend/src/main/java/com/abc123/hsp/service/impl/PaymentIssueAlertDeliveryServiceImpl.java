@@ -70,6 +70,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final int PROVIDER_RECEIPT_NO_MAX_LENGTH = 128;
     private static final int PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH = 255;
     private static final int RENDERED_CONTENT_SNAPSHOT_MAX_LENGTH = 1024;
+    private static final int ALERT_NO_MAX_LENGTH = 64;
     private static final String TRANSPORT_ERROR_MARKER = "transportError=";
     private static final String RECEIPT_QUERY_RESULT_ADAPTER_MISSING = "ADAPTER_MISSING";
     private static final String RECEIPT_QUERY_RESULT_RATE_LIMITED = "RATE_LIMITED";
@@ -262,11 +263,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     @Override
     @Transactional
     public PaymentTaskActionResultDTO reconcileDeliveryReceipt(String alertNo, String operator) {
-        if (!StringUtils.hasText(alertNo)) {
-            throw new IllegalArgumentException("告警编号不能为空");
-        }
+        String normalizedAlertNo = normalizeAlertNo(alertNo);
         String normalizedOperator = normalizeManualOperator(operator);
-        String normalizedAlertNo = alertNo.trim();
         PaymentIssueAlertLogEntity acceptedLog =
                 paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogByAlertNo(normalizedAlertNo);
         if (acceptedLog == null) {
@@ -1277,6 +1275,22 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private int normalizeReceiptQueryCount(Integer attemptCount) {
         return Math.max(attemptCount == null ? 0 : attemptCount, 0);
+    }
+
+    private String normalizeAlertNo(String alertNo) {
+        if (!StringUtils.hasText(alertNo)) {
+            throw new IllegalArgumentException("告警编号不能为空");
+        }
+        for (int index = 0; index < alertNo.length(); index++) {
+            if (Character.isISOControl(alertNo.charAt(index))) {
+                throw new IllegalArgumentException("告警编号不能包含控制字符");
+            }
+        }
+        String normalized = alertNo.trim();
+        if (normalized.length() > ALERT_NO_MAX_LENGTH) {
+            throw new IllegalArgumentException("告警编号不能超过64个字符");
+        }
+        return normalized;
     }
 
     private String normalizeManualOperator(String operator) {

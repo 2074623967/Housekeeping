@@ -1048,6 +1048,31 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidSpecifiedReceiptAlertNumberBeforeQueryingCandidate() {
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+
+        IllegalArgumentException blankException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt(" ", "支付运营"));
+        IllegalArgumentException oversizedException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt(
+                        String.join("", Collections.nCopies(65, "A")), "支付运营"));
+        IllegalArgumentException controlException = Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> service.reconcileDeliveryReceipt("PIA-IM-001\n", "支付运营"));
+
+        Assertions.assertTrue(blankException.getMessage().contains("告警编号不能为空"));
+        Assertions.assertTrue(oversizedException.getMessage().contains("告警编号不能超过64个字符"));
+        Assertions.assertTrue(controlException.getMessage().contains("告警编号不能包含控制字符"));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .findAcceptedIssueAlertDeliveryLogByAlertNo(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void shouldFailClosedWhenNoReceiptQueryAdapterIsAvailable() {
         PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog("PIA-IM-001", "PIA-OUTBOX-001");
         when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))
