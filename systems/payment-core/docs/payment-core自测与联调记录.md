@@ -10820,3 +10820,26 @@
 1. 五类告警窗口现按明确业务时区计算，部署节点默认时区不再改变派发判断结果。
 2. 本轮不改变 Controller、DTO、Mapper SQL、数据库结构、告警路由配置或外部通知协议。
 3. 自动测试不证明数据库或生产主机时钟正确、真实通知送达、供应商容量充足或生产稳定性，也不改变 release 四项真实阻断。
+
+## 400. 2026-09-12 日终缺省业务日期时区统一 V1.0 验证
+
+### 400.1 本轮补强
+
+1. 手工日终请求未传 `bizDate` 时，服务固定使用 `Asia/Shanghai` 当前日期的前一日作为缺省业务日期。
+2. 日终统计查询和批次 `bizDate` 使用同一解析结果，避免非上海部署节点在跨日时统计错误日期的数据。
+3. 显式 `bizDate` 的裁剪、`yyyy-MM-dd` 解析、运行方式和触发人校验均保持原语义。
+
+### 400.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 动态异时区回归 | `PaymentDayEndServiceImplTest#shouldResolveDefaultBizDateInBusinessTimezone` | 通过 | 动态选择与上海当日不同的 JVM 默认时区，验证批次业务日期仍为上海当日前一日，并在 `finally` 恢复默认时区 |
+| 日终服务定向测试 | `mvn -Dtest=PaymentDayEndServiceImplTest test` | 通过 | `6` 个测试，`0` failures、`0` errors、`0` skipped |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `907` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | Java、测试与文档无空白错误 |
+
+### 400.3 当前判断
+
+1. 日终缺省业务日期不再受部署节点默认时区影响，统计查询与批次记录保持同一上海日期口径。
+2. 本轮不改变 Controller、请求 DTO、显式日期规则、Mapper SQL、数据库结构或对账准入逻辑。
+3. 自动测试不证明历史时间数据、数据库或生产主机时钟正确，也不证明真实对账和生产稳定性，不改变 release 四项真实阻断。
