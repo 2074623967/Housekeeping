@@ -88,6 +88,21 @@ class PaymentChannelStatusReviewServiceImplTest {
     }
 
     @Test
+    void shouldRejectEnablingChannelWithUncoveredCallbackWindow() {
+        PaymentChannelConfigEntity current = channel("DISABLED", "MCH-001");
+        current.setNotifySignWindowSec(Integer.valueOf(301));
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelStatusReview(statusRequest(true)));
+
+        assertTrue(exception.getMessage().contains("nonce TTL"));
+        verify(paymentConfigMapper, never()).insertChannelReview(any());
+        verify(paymentConfigMapper, never()).findLatestChannelVersionNo(any());
+    }
+
+    @Test
     void shouldTranslateConcurrentPendingReviewConflict() {
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5"))
                 .thenReturn(channel("ENABLED", "MCH-001"));
@@ -275,6 +290,7 @@ class PaymentChannelStatusReviewServiceImplTest {
     void shouldSubmitAndApproveRollbackAsNewVersion() {
         PaymentChannelConfigEntity current = channel("ENABLED", "MCH-NEW");
         PaymentChannelVersionEntity target = version(channel("DISABLED", "MCH-OLD"), 1);
+        target.setNotifySignWindowSec(Integer.valueOf(301));
         when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
         when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
         when(paymentConfigMapper.findChannelVersion("wx_h5", Integer.valueOf(1))).thenReturn(target);
@@ -307,6 +323,27 @@ class PaymentChannelStatusReviewServiceImplTest {
                         && "REVIEW_ROLLBACK".equals(item.getChangeType())
                         && Integer.valueOf(1).equals(item.getSourceVersionNo())
                         && "secret".equals(item.getCallbackSecret())));
+    }
+
+    @Test
+    void shouldRejectEnabledRollbackTargetWithUncoveredCallbackWindow() {
+        PaymentChannelConfigEntity current = channel("ENABLED", "MCH-NEW");
+        PaymentChannelVersionEntity target = version(channel("ENABLED", "MCH-OLD"), 1);
+        target.setNotifySignWindowSec(Integer.valueOf(301));
+        when(paymentConfigMapper.findChannelByCodeForUpdate("wx_h5")).thenReturn(current);
+        when(paymentConfigMapper.findLatestChannelVersionNo("wx_h5")).thenReturn(Integer.valueOf(2));
+        when(paymentConfigMapper.findChannelVersion("wx_h5", Integer.valueOf(1))).thenReturn(target);
+        PaymentChannelRollbackRequestDTO request = new PaymentChannelRollbackRequestDTO();
+        request.setVersionNo(Integer.valueOf(1));
+        request.setRequester("maker-a");
+        request.setChangeReason("恢复历史渠道参数");
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelRollbackReview("WX_H5", request));
+
+        assertTrue(exception.getMessage().contains("nonce TTL"));
+        verify(paymentConfigMapper, never()).insertChannelReview(any());
     }
 
     @Test

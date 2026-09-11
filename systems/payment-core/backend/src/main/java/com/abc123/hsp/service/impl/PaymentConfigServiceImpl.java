@@ -240,6 +240,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException(candidateStatus.equals(STATUS_ENABLED)
                     ? "支付渠道已启用" : "支付渠道已停用");
         }
+        validateEnabledChannelCallbackWindow(
+                request.getEnabled().booleanValue(), current.getNotifySignWindowSec());
         ensureChannelBaseline(current);
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
@@ -404,6 +406,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             throw new IllegalArgumentException("支付渠道历史版本不存在");
         }
         PaymentChannelConfigEntity candidate = copyChannelEntity(target);
+        validateEnabledChannelCallbackWindow(
+                STATUS_ENABLED.equals(candidate.getStatus()), candidate.getNotifySignWindowSec());
         PaymentChannelReviewEntity review = new PaymentChannelReviewEntity();
         review.setRequestNo("CSR" + UUID.randomUUID().toString().replace("-", ""));
         copyChannelToReview(candidate, review);
@@ -3914,10 +3918,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request.getCertificateProfile(), "证书档案不能为空", 128));
         Integer notifySignWindowSec = requirePositiveInteger(
                 request.getNotifySignWindowSec(), "回调验签时间窗必须大于0");
-        if (request.getEnabled().booleanValue()
-                && callbackNonceTtlSeconds <= notifySignWindowSec.longValue() * 2L) {
-            throw new IllegalArgumentException("启用渠道的回调 nonce TTL 必须严格大于两倍验签时间窗");
-        }
+        validateEnabledChannelCallbackWindow(
+                request.getEnabled().booleanValue(), notifySignWindowSec);
         entity.setNotifySignWindowSec(notifySignWindowSec);
         entity.setRefundWindowDays(requirePositiveInteger(
                 request.getRefundWindowDays(), "原路退款时效必须大于0"));
@@ -3936,6 +3938,18 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
         return entity;
+    }
+
+    private void validateEnabledChannelCallbackWindow(boolean enabled, Integer notifySignWindowSec) {
+        if (!enabled) {
+            return;
+        }
+        if (notifySignWindowSec == null || notifySignWindowSec.intValue() <= 0) {
+            throw new IllegalArgumentException("回调验签时间窗必须大于0");
+        }
+        if (callbackNonceTtlSeconds <= notifySignWindowSec.longValue() * 2L) {
+            throw new IllegalArgumentException("启用渠道的回调 nonce TTL 必须严格大于两倍验签时间窗");
+        }
     }
 
     private void copyChannelToReview(PaymentChannelConfigEntity source, PaymentChannelReviewEntity target) {
