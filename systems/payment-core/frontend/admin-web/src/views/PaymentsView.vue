@@ -76,6 +76,10 @@ async function refreshList(
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
+    if (!afterAction) {
+      actionErrorMessage.value = "";
+      actionResultMessage.value = "";
+    }
   } catch (error) {
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
