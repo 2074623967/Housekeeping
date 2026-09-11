@@ -191,6 +191,7 @@
             last_published_at = NOW(),
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
+          AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER', 'UNKNOWN')
     </update>
 
     <update id="markPublishFailed">
@@ -201,6 +202,7 @@
             last_published_at = NOW(),
             next_retry_at = DATE_ADD(NOW(), INTERVAL 5 MINUTE)
         WHERE event_no = #{eventNo}
+          AND publish_status IN ('PENDING', 'FAILED')
     </update>
 
     <update id="markPublishDeadLetter">
@@ -211,6 +213,7 @@
             last_published_at = NOW(),
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
+          AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
     </update>
 
     <update id="markPublishUnknown">
@@ -221,6 +224,7 @@
             last_published_at = NOW(),
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
+          AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
     </update>
 
     <update id="updateLastRepublishAudit">
@@ -228,5 +232,6 @@
         SET last_republish_operator = #{operator},
             last_republished_at = NOW()
         WHERE event_no = #{eventNo}
+          AND publish_status = 'SUCCESS'
     </update>
 </mapper>

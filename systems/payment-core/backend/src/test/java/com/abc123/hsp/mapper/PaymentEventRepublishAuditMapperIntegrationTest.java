@@ -2,10 +2,12 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import java.io.InputStream;
 import java.sql.Statement;
+import java.util.Collections;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -51,8 +53,10 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
     @Test
     void shouldPersistAndReadLastSuccessfulRepublishOperator() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
-            assertEquals(1, session.getMapper(PaymentEventMapper.class)
-                    .updateLastRepublishAudit("EVT-AUDIT-001", "finance-ops"));
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+            assertEquals(0, mapper.updateLastRepublishAudit("EVT-AUDIT-001", "finance-ops"));
+            assertEquals(1, mapper.markPublishSuccess("EVT-AUDIT-001"));
+            assertEquals(1, mapper.updateLastRepublishAudit("EVT-AUDIT-001", "finance-ops"));
             session.commit();
         }
 
@@ -62,6 +66,41 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
 
             assertEquals("finance-ops", event.getLastRepublishOperator());
             assertNotNull(event.getLastRepublishedAt());
+        }
+    }
+
+    @Test
+    void shouldKeepSuccessfulEventTerminalWhenLateFailureUpdatesArrive() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+            assertEquals(1, mapper.markPublishSuccess("EVT-AUDIT-001"));
+            PaymentEventListItemDTO successful = mapper.findByEventNo("EVT-AUDIT-001");
+
+            assertEquals(0, mapper.markPublishDeadLetter("EVT-AUDIT-001"));
+            assertEquals(0, mapper.markPublishUnknown("EVT-AUDIT-001"));
+            String failedUpdateSql = sqlSessionFactory.getConfiguration()
+                    .getMappedStatement(PaymentEventMapper.class.getName() + ".markPublishFailed")
+                    .getBoundSql(Collections.singletonMap("eventNo", "EVT-AUDIT-001"))
+                    .getSql()
+                    .replaceAll("\\s+", " ");
+            assertTrue(failedUpdateSql.contains("AND publish_status IN ('PENDING', 'FAILED')"));
+
+            PaymentEventListItemDTO unchanged = mapper.findByEventNo("EVT-AUDIT-001");
+            assertEquals("SUCCESS", unchanged.getPublishStatus());
+            assertEquals(successful.getRetryCount(), unchanged.getRetryCount());
+        }
+    }
+
+    @Test
+    void shouldAllowReviewedUnknownEventToResolveAsSuccess() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_event SET publish_status='UNKNOWN', "
+                    + "publish_status_type='warn' WHERE event_no='EVT-AUDIT-001'");
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+
+            assertEquals(1, mapper.markPublishSuccess("EVT-AUDIT-001"));
+            assertEquals("SUCCESS", mapper.findByEventNo("EVT-AUDIT-001").getPublishStatus());
         }
     }
 
