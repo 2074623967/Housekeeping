@@ -8854,3 +8854,24 @@
 
 1. 风控端点部署参数缺失不再静默降级为准入通过，显式关闭与错误配置具备不同且可审计的业务结果。
 2. 本轮无前端、Mapper、schema 或迁移变化；本地 Mockito 不证明生产配置正确、真实风控连通、策略有效性或稳定性，`release/v1.0.0` 继续冻结。
+
+## 315. 2026-09-11 外部 HTTP 超时统一有界 V1.0 验证
+
+### 315.1 本轮补强
+
+1. 共用 `RestTemplate` 工厂将所有传入超时统一夹在 `1..60000ms`，同时用于连接超时和读取超时。
+2. 支付提交/查单、退款提交/查单、风控、运营配置、告警回执及三类通知共十类 HTTP 出站路径自动复用该边界，不新增并行客户端配置。
+3. IM、短信和邮件通知失败摘要保存归一化值；`timeout-ms=0` 的行为测试确认摘要显示 `timeout=1ms`。
+
+### 315.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 相关 HTTP 适配器联合定向测试 | `mvn -Dtest=AbstractLocalPaymentIssueAlertNotifierTest,PaymentRiskControlServiceImplTest,PaymentOpsConfigServiceImplTest,GatewayAccessPaymentChannelSubmitAdapterTest,GatewayAccessPaymentChannelQueryAdapterTest,GatewayAccessRefundChannelSubmitServiceImplTest,GatewayAccessRefundChannelQueryAdapterTest,HttpPaymentIssueAlertReceiptQueryAdapterTest,LocalImPaymentIssueAlertNotifierTest,LocalSmsPaymentIssueAlertNotifierTest,LocalEmailPaymentIssueAlertNotifierTest test` | 通过 | `79` 个用例；覆盖负数、零、正常值、超大值及通知摘要一致性 |
+| payment-core 全量测试 | `mvn test` | 通过 | `799` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 315.3 当前判断
+
+1. payment-core 自有 HTTP 出站客户端不再接受无限或超过一分钟的连接/读取等待配置，默认配置行为保持不变。
+2. 本轮无前端、Mapper、schema 或迁移变化；本地测试不证明真实网络超时精度、上游取消、线程池容量、生产参数合理或稳定性，`release/v1.0.0` 继续冻结。
