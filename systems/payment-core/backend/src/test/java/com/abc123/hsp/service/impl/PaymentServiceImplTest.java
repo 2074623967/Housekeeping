@@ -439,6 +439,7 @@ class PaymentServiceImplTest {
         assertThrows(IllegalArgumentException.class, () -> service.callback("wx_h5", callback));
         callback.setChannelTransactionNo("CHANNEL-001");
         assertThrows(IllegalArgumentException.class, () -> service.callback(repeat('C', 65), callback));
+        assertThrows(IllegalArgumentException.class, () -> service.callback("wx_h5\n", callback));
         assertThrows(IllegalArgumentException.class, () -> service.callback(" ", callback));
 
         verify(paymentCallbackSignatureService, never()).verify(

@@ -839,6 +839,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new IllegalArgumentException(
                     "channel, paymentOrderId, tradeStatus and channelTransactionNo are required");
         }
+        validateCallbackControlCharacters(channel, "channel");
         String normalizedChannel = channel.trim().toLowerCase(Locale.ROOT);
         validateCallbackField(normalizedChannel, CALLBACK_CHANNEL_MAX_LENGTH, "channel");
         validateCallbackField(request.getPaymentOrderId(), CALLBACK_PAYMENT_ORDER_ID_MAX_LENGTH, "paymentOrderId");
@@ -955,6 +956,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + " length must not exceed " + maxLength);
         }
+        validateCallbackControlCharacters(value, fieldName);
+    }
+
+    private void validateCallbackControlCharacters(String value, String fieldName) {
         for (int index = 0; index < value.length(); index++) {
             if (Character.isISOControl(value.charAt(index))) {
                 throw new IllegalArgumentException(fieldName + " must not contain control characters");
