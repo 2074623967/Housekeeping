@@ -3782,6 +3782,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. Spring/Jackson 对十进制字符串执行精确 `BigDecimal` 绑定，后端继续按金额容量、原支付单状态和累计退款额度做最终校验，不信任客户端校验结果。
 4. 本轮不新增端点、字段或错误码；金额序列化无损不证明退款渠道受理、资金退回、到账核验或生产资金一致。
 
+### 14.233 支付渠道单日限额精度约束
+
+1. 渠道总览响应字段 `dailyLimitValue` 的 Java 类型和来源仍为 `BigDecimal`，JSON 表示改为十进制字符串；展示字段 `dailyLimit` 保持既有带币种格式。
+2. 管理端提交渠道完整候选时，`candidate.dailyLimit` 使用 JSON 十进制字符串，接受 `0` 至 `9999999999999999.99` 且最多两位有效小数，不接受负数或指数形式。
+3. Spring/Jackson 将候选字符串精确绑定为 `PaymentChannelUpsertRequestDTO.dailyLimit BigDecimal`，服务端继续在提交和批准阶段复验容量，不信任客户端校验结果。
+4. 仓库内 `dailyLimitValue` 唯一消费者已同步接收字符串；其他外部消费者不得再假定该字段是 JSON 数字。精度正确不证明审核可信、配置生效或渠道真实容量。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

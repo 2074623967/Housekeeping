@@ -10963,3 +10963,28 @@
 1. 管理端退款申请不再因 JavaScript 二进制浮点表示改写用户输入金额，前端与后端的 16 位整数、2 位小数容量口径一致。
 2. 本轮不处理列表金额合计的展示精度或支付配置金额，不改变退款端点、请求字段、状态机、Mapper SQL、数据库结构、渠道提交或额度并发控制。
 3. 自动测试和构建不证明真实退款渠道受理、资金退回、到账核验、浏览器兼容性全量覆盖或生产稳定性，也不改变 release 四项真实阻断。
+
+## 406. 2026-09-12 支付渠道单日限额精度保护 V1.0 验证
+
+### 406.1 本轮补强
+
+1. 管理端渠道表单的 `dailyLimit` 不再使用 `v-model.number`，候选构造也不再调用 `Number(channelForm.value.dailyLimit)`；允许零值的金额工具以十进制字符串完成校验和提交。
+2. `PaymentChannelConfigDTO.dailyLimitValue` 的 Java 类型继续为 `BigDecimal`，通过 Jackson 字段级序列化将 JSON 表示收敛为精确字符串，避免编辑最大合法限额时在响应解析阶段丢失精度。
+3. Spring/Jackson 将候选中的限额字符串精确绑定回 `PaymentChannelUpsertRequestDTO.dailyLimit BigDecimal`；后端提交阶段容量校验、批准前复验、候选快照和版本基线保持不变。
+
+### 406.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 管理端金额工具与既有路由测试 | `npm test`（admin-web） | 通过 | 共 `7` 个测试；覆盖零额度、最大合法值、负数、三位小数和超上限拒绝 |
+| APP 既有前端测试 | `npm test`（app-web） | 通过 | `12` 个测试全部通过 |
+| 四端生产构建 | 分别执行 APP/H5/PC/admin-web `npm run build` | 通过 | 四端均成功产出；管理端仍报告既存的 `537.58 kB` 单包告警，不作为性能验收通过 |
+| 后端渠道金额定向测试 | `mvn -Dtest=PaymentChannelAmountJsonTest,PaymentChannelStatusReviewServiceImplTest test` | 通过 | `24` 个测试；覆盖最大限额响应字符串与候选请求精确 `BigDecimal` 绑定 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `914` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 前端、Java、测试与文档无空白错误 |
+
+### 406.3 当前判断
+
+1. 渠道单日限额从后端响应、管理端编辑到候选请求均保持十进制定点语义，零额度和最大合法值不会被 JavaScript 二进制浮点改写。
+2. 仓库扫描确认 `dailyLimitValue` 仅由管理端渠道编辑表单消费并已同步适配；其他自行绑定该响应字段为 JSON 数字的外部消费者需改为接收字符串。
+3. 本轮不处理路由试算金额或汇总展示，不改变数据库类型、Mapper SQL、渠道复核事务或运行态应用；自动测试不证明审批身份可信、真实渠道容量或生产稳定性，也不改变 release 四项真实阻断。
