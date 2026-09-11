@@ -62,7 +62,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
             refundMapper.upsertRefundSubmitEvent("EVTR-STABLE", "REF-001", "PAY-001");
 
             PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
-            List<String> dueEventNos = eventMapper.findDueFailedEventNos();
+            List<String> dueEventNos = eventMapper.findDueFailedEventNos(100);
             PaymentEventListItemDTO event = eventMapper.findByEventNoForUpdate("EVTR-STABLE");
 
             assertEquals(1, countRefundEventRows(session));
@@ -122,8 +122,8 @@ class RefundSubmitOutboxMapperIntegrationTest {
                 assertEquals("warn", resultSet.getString("publish_status_type"));
                 assertNull(resultSet.getTimestamp("next_retry_at"));
             }
-            assertFalse(eventMapper.findDueFailedEventNos().contains("EVTR-UNKNOWN"));
-            assertFalse(eventMapper.findAllFailedEventNos().contains("EVTR-UNKNOWN"));
+            assertFalse(eventMapper.findDueFailedEventNos(100).contains("EVTR-UNKNOWN"));
+            assertFalse(eventMapper.findAllFailedEventNos(100).contains("EVTR-UNKNOWN"));
             try (Statement statement = session.getConnection().createStatement();
                  ResultSet resultSet = statement.executeQuery(
                          "SELECT COUNT(*) FROM t_payment_event WHERE publish_status='UNKNOWN'")) {

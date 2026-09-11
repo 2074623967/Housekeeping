@@ -59,6 +59,7 @@ payment:
     max-retry-interval-seconds: ${HSP_PAYMENT_EXPIRY_CLOSE_MAX_RETRY_INTERVAL_SECONDS:3600}
   event-retry:
     fixed-delay-ms: ${HSP_PAYMENT_EVENT_RETRY_DELAY_MS:300000}
+    batch-size: ${HSP_PAYMENT_EVENT_RETRY_BATCH_SIZE:100}
   refund-retry:
     fixed-delay-ms: ${HSP_PAYMENT_REFUND_RETRY_DELAY_MS:300000}
   refund-submit:

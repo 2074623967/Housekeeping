@@ -138,6 +138,7 @@
         FROM t_payment_event
         WHERE publish_status = 'FAILED'
         ORDER BY created_at ASC, id ASC
+        LIMIT #{batchSize}
     </select>
 
     <select id="findDueFailedEventNos" resultType="string">
@@ -148,6 +149,7 @@
                    AND event_type IN ('PAYMENT_SUCCESS', 'REFUND_SUBMIT')))
           AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
         ORDER BY created_at ASC, id ASC
+        LIMIT #{batchSize}
     </select>
 
     <select id="findByEventNo" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">

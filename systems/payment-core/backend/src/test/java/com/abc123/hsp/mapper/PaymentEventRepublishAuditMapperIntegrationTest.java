@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import java.io.InputStream;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.Collections;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -101,6 +102,22 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
 
             assertEquals(1, mapper.markPublishSuccess("EVT-AUDIT-001"));
             assertEquals("SUCCESS", mapper.findByEventNo("EVT-AUDIT-001").getPublishStatus());
+        }
+    }
+
+    @Test
+    void shouldLimitRetryCandidatesToConfiguredBatchSize() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, "
+                    + "downstream_system, event_topic, publish_status, publish_status_type, retry_count, "
+                    + "event_payload, created_at) VALUES ('EVT-AUDIT-002', 'PAYMENT_SUCCESS', 'PAY-002', "
+                    + "'ORD-002', 'accounting-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 1, "
+                    + "'{}', DATEADD('SECOND', 1, NOW()))");
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+
+            assertEquals(Collections.singletonList("EVT-AUDIT-001"), mapper.findAllFailedEventNos(1));
+            assertEquals(Arrays.asList("EVT-AUDIT-001", "EVT-AUDIT-002"), mapper.findDueFailedEventNos(2));
         }
     }
 

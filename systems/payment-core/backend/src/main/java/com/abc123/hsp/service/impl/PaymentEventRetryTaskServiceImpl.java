@@ -5,6 +5,8 @@ import com.abc123.hsp.mapper.PaymentEventMapper;
 import com.abc123.hsp.service.PaymentEventDispatchService;
 import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -18,27 +20,39 @@ import org.springframework.util.StringUtils;
 public class PaymentEventRetryTaskServiceImpl implements PaymentEventRetryTaskService {
 
     private static final int OPERATOR_MAX_LENGTH = 64;
+    private static final int DEFAULT_BATCH_SIZE = 100;
+    private static final int MAX_BATCH_SIZE = 1000;
     private static final String TRANSACTION_FAILURE_CODE = "PAYMENT_EVENT_RETRY_TRANSACTION_FAILED";
 
     private final PaymentEventMapper paymentEventMapper;
     private final PaymentEventDispatchService paymentEventDispatchService;
     private final TransactionTemplate transactionTemplate;
+    private final int batchSize;
 
+    @Autowired
     public PaymentEventRetryTaskServiceImpl(PaymentEventMapper paymentEventMapper,
                                             PaymentEventDispatchService paymentEventDispatchService,
-                                            PlatformTransactionManager transactionManager) {
+                                            PlatformTransactionManager transactionManager,
+                                            @Value("${payment.event-retry.batch-size:100}") int batchSize) {
         this.paymentEventMapper = paymentEventMapper;
         this.paymentEventDispatchService = paymentEventDispatchService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.batchSize = Math.min(Math.max(batchSize, 1), MAX_BATCH_SIZE);
+    }
+
+    PaymentEventRetryTaskServiceImpl(PaymentEventMapper paymentEventMapper,
+                                     PaymentEventDispatchService paymentEventDispatchService,
+                                     PlatformTransactionManager transactionManager) {
+        this(paymentEventMapper, paymentEventDispatchService, transactionManager, DEFAULT_BATCH_SIZE);
     }
 
     @Override
     public PaymentEventRetryResultDTO retryFailedEvents(boolean automatic, String operator) {
         String normalizedOperator = normalizeOperator(operator);
         List<String> eventNos = automatic
-                ? paymentEventMapper.findDueFailedEventNos()
-                : paymentEventMapper.findAllFailedEventNos();
+                ? paymentEventMapper.findDueFailedEventNos(batchSize)
+                : paymentEventMapper.findAllFailedEventNos(batchSize);
         PaymentEventRetryResultDTO result = new PaymentEventRetryResultDTO();
         result.setProcessedCount(eventNos.size());
         for (String eventNo : eventNos) {

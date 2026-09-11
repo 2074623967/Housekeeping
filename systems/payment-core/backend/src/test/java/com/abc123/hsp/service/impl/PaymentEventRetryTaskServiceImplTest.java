@@ -41,7 +41,7 @@ class PaymentEventRetryTaskServiceImplTest {
     @Test
     void shouldIsolateUnexpectedFailureAndContinueRetryingEvents() {
         String sensitiveMessage = "jdbc:mysql://internal/payment password=event-secret\ninvalid SQL";
-        when(paymentEventMapper.findAllFailedEventNos())
+        when(paymentEventMapper.findAllFailedEventNos(100))
                 .thenReturn(Arrays.asList("EVT-SUCCESS", "EVT-THROW", "EVT-FAILED"));
         when(transactionManager.getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class))).thenReturn(transactionStatus);
@@ -92,15 +92,15 @@ class PaymentEventRetryTaskServiceImplTest {
 
     @Test
     void shouldUseDueEventsForAutomaticRetry() {
-        when(paymentEventMapper.findDueFailedEventNos()).thenReturn(Collections.emptyList());
+        when(paymentEventMapper.findDueFailedEventNos(100)).thenReturn(Collections.emptyList());
 
         PaymentEventRetryResultDTO result = new PaymentEventRetryTaskServiceImpl(
                 paymentEventMapper, paymentEventDispatchService, transactionManager)
                 .retryFailedEvents(true, "payment-event-scheduler");
 
         Assertions.assertEquals(0, result.getProcessedCount());
-        verify(paymentEventMapper).findDueFailedEventNos();
-        verify(paymentEventMapper, never()).findAllFailedEventNos();
+        verify(paymentEventMapper).findDueFailedEventNos(100);
+        verify(paymentEventMapper, never()).findAllFailedEventNos(org.mockito.ArgumentMatchers.anyInt());
         verify(transactionManager, never()).getTransaction(
                 org.mockito.ArgumentMatchers.any(TransactionDefinition.class));
     }
@@ -119,5 +119,21 @@ class PaymentEventRetryTaskServiceImplTest {
 
         org.mockito.Mockito.verifyNoInteractions(
                 paymentEventMapper, paymentEventDispatchService, transactionManager);
+    }
+
+    @Test
+    void shouldClampConfiguredBatchSizeBeforeReadingCandidates() {
+        when(paymentEventMapper.findDueFailedEventNos(1000)).thenReturn(Collections.emptyList());
+        when(paymentEventMapper.findAllFailedEventNos(1)).thenReturn(Collections.emptyList());
+
+        new PaymentEventRetryTaskServiceImpl(
+                paymentEventMapper, paymentEventDispatchService, transactionManager, 1001)
+                .retryFailedEvents(true, "payment-event-scheduler");
+        new PaymentEventRetryTaskServiceImpl(
+                paymentEventMapper, paymentEventDispatchService, transactionManager, 0)
+                .retryFailedEvents(false, "finance-ops");
+
+        verify(paymentEventMapper).findDueFailedEventNos(1000);
+        verify(paymentEventMapper).findAllFailedEventNos(1);
     }
 }

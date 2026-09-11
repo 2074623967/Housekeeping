@@ -34,12 +34,12 @@ public interface PaymentEventMapper {
     /**
      * 查询所有可人工介入的失败事件号。
      */
-    List<String> findAllFailedEventNos();
+    List<String> findAllFailedEventNos(@Param("batchSize") int batchSize);
 
     /**
      * 查询已到自动重试时间的失败事件号。
      */
-    List<String> findDueFailedEventNos();
+    List<String> findDueFailedEventNos(@Param("batchSize") int batchSize);
 
     /**
      * 按事件号查询支付事件。
