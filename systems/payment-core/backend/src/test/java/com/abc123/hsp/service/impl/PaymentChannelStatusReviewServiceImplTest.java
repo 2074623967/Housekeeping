@@ -356,7 +356,48 @@ class PaymentChannelStatusReviewServiceImplTest {
                 () -> new PaymentConfigServiceImpl(paymentConfigMapper)
                         .submitChannelReview(reviewRequest(invalidWeight)));
         assertTrue(weight.getMessage().contains("不能大于100"));
+
+        PaymentChannelUpsertRequestDTO uncoveredWindow = channelRequest("NEW_H5", "secret-new");
+        uncoveredWindow.setNotifySignWindowSec(Integer.valueOf(301));
+        IllegalArgumentException nonceTtl = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .submitChannelReview(reviewRequest(uncoveredWindow)));
+        assertTrue(nonceTtl.getMessage().contains("nonce TTL"));
         verify(paymentConfigMapper, never()).insertChannelReview(any());
+    }
+
+    @Test
+    void shouldRevalidateCallbackWindowAgainstCurrentNonceTtlBeforeApproval() {
+        PaymentChannelReviewEntity review = review("PENDING_REVIEW", "ENABLED", null);
+        review.setOperationType("CREATE");
+        review.setChannelCode("new_h5");
+        review.setNotifySignWindowSec(Integer.valueOf(500));
+        when(paymentConfigMapper.findChannelReviewForUpdate("CSR-001")).thenReturn(review);
+        PaymentConfigServiceImpl service = new PaymentConfigServiceImpl(paymentConfigMapper);
+        service.configureCallbackNonceTtlSeconds(1000L);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> service.approveChannelReview(
+                        "CSR-001", action("checker-b", "确认新增")));
+
+        assertTrue(exception.getMessage().contains("nonce TTL"));
+        verify(paymentConfigMapper, never()).insertChannel(any());
+        verify(paymentConfigMapper, never()).completeChannelReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldAllowDisabledCandidateWithLegacyCallbackWindow() {
+        PaymentChannelUpsertRequestDTO candidate = channelRequest("NEW_H5", "secret-new");
+        candidate.setEnabled(Boolean.FALSE);
+        candidate.setNotifySignWindowSec(Integer.valueOf(301));
+        when(paymentConfigMapper.findChannelReviews()).thenReturn(Collections.emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper)
+                .submitChannelReview(reviewRequest(candidate));
+
+        verify(paymentConfigMapper).insertChannelReview(org.mockito.ArgumentMatchers.argThat(
+                review -> "DISABLED".equals(review.getCandidateStatus())
+                        && Integer.valueOf(301).equals(review.getNotifySignWindowSec())));
     }
 
     private PaymentChannelStatusReviewRequestDTO statusRequest(boolean enabled) {

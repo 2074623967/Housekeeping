@@ -117,6 +117,8 @@ import java.util.UUID;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -145,9 +147,19 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             "priority"));
 
     private final PaymentConfigMapper paymentConfigMapper;
+    private long callbackNonceTtlSeconds = 601L;
 
     public PaymentConfigServiceImpl(PaymentConfigMapper paymentConfigMapper) {
         this.paymentConfigMapper = paymentConfigMapper;
+    }
+
+    @Autowired
+    void configureCallbackNonceTtlSeconds(
+            @Value("${payment.callback.nonce-ttl-seconds:601}") long callbackNonceTtlSeconds) {
+        if (callbackNonceTtlSeconds <= 0) {
+            throw new IllegalArgumentException("payment callback nonce TTL must be positive");
+        }
+        this.callbackNonceTtlSeconds = callbackNonceTtlSeconds;
     }
 
     @Override
@@ -3900,8 +3912,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setCallbackNotifyUrl(requireHttpsUrl(request.getCallbackNotifyUrl()));
         entity.setCertificateProfile(requireImportText(
                 request.getCertificateProfile(), "证书档案不能为空", 128));
-        entity.setNotifySignWindowSec(requirePositiveInteger(
-                request.getNotifySignWindowSec(), "回调验签时间窗必须大于0"));
+        Integer notifySignWindowSec = requirePositiveInteger(
+                request.getNotifySignWindowSec(), "回调验签时间窗必须大于0");
+        if (request.getEnabled().booleanValue()
+                && callbackNonceTtlSeconds <= notifySignWindowSec.longValue() * 2L) {
+            throw new IllegalArgumentException("启用渠道的回调 nonce TTL 必须严格大于两倍验签时间窗");
+        }
+        entity.setNotifySignWindowSec(notifySignWindowSec);
         entity.setRefundWindowDays(requirePositiveInteger(
                 request.getRefundWindowDays(), "原路退款时效必须大于0"));
         entity.setRiskControlTag(requireImportText(request.getRiskControlTag(), "风控标签不能为空", 128));
