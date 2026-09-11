@@ -3427,6 +3427,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 非法参数使用既有参数错误响应并在 Mapper 访问前拒绝；列表分页 `1..100`、严重等级与升级信息派生和 CSV `1000` 行上限保持不变。
 4. 本轮不新增端点、DTO 字段或错误码，不改变 Mapper SQL、schema 或迁移；本地测试不证明生产调度、真实任务执行、补偿结果、告警送达或生产稳定性。
 
+### 14.186 支付事件派发标识字段契约
+
+1. 现有 HTTP 端点、DTO 和响应结构不变；人工重发请求的 `eventNo` 仍要求非空且最长 `64` 个字符，原始值不得包含 ISO 控制字符，合法首尾空白在派发前裁剪。
+2. 共享服务 `publishPaymentSuccess(eventNo, paymentOrderId)` 对两个标识均执行相同门禁，`publishRefundSubmit(eventNo, refundOrderId, operator)` 对事件号和退款单号执行相同门禁；三类标识上限均为 `64`。
+3. 非法标识沿用既有参数错误响应并在 Mapper、渠道适配器或下游调用前拒绝；事件状态、重发操作人、事务传播、失败退避、死信及审计字段契约不变。
+4. 本地测试不证明真实渠道受理、下游投递、资金结果、账务一致性或生产稳定性，仍需正式环境核验。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
