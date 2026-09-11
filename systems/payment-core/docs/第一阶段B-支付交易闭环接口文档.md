@@ -3457,6 +3457,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 合法请求以独立规范化副本发送，响应摘要的 `channelCode` 使用同一规范化 `resolvedChannelCode`；调用方 DTO 不被修改，既有响应校验、返回码标准化和结果未知保护保持不变。
 5. 本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移；本地测试不证明真实网关、渠道受理、资金结果、账务一致性或生产稳定性。
 
+### 14.190 gateway 支付主动查单请求字段契约
+
+1. `GatewayAccessPaymentChannelQueryAdapter.query` 要求 `PaymentDetailDTO` 非空，`paymentOrderId / orderNo / channelCode` 必填且最长均为 `64` 个字符，`channelTransactionNo` 可选且最长为 `128` 个字符。
+2. 四类原始字符串在裁剪前拒绝 ISO 控制字符，可选纯空白渠道流水号归一化为 `null`；任一请求字段非法均固定返回 `PAYMENT_CHANNEL_QUERY_FAILED`，并在 gateway-access HTTP 调用前失败关闭。
+3. 合法请求以独立 `GatewayQueryRequest` 规范化副本发送，不修改调用方持有的 `PaymentDetailDTO`；既有 gateway 业务成功码、响应数据、交易状态和查询来源校验保持不变。
+4. 上层 `PaymentServiceImpl.queryChannel` 继续按既有逻辑记录查单失败审计；本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移。
+5. 本地测试不证明真实网关、渠道查单、资金结果、账务一致性或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

@@ -9903,3 +9903,25 @@
 1. payment-core 的 gateway 支付提交 HTTP 适配器不再依赖调用方预先清洗完整请求，污染或超出远端契约容量的字段不会发送到网关。
 2. 支付主流程异常仍按结果未知处理并要求主动查单，不把适配器本地校验结果扩张为安全重试依据；本地测试不证明真实渠道、资金结果或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 363. 2026-09-12 gateway 支付主动查单请求边界 V1.0 验证
+
+### 363.1 本轮补强
+
+1. `GatewayAccessPaymentChannelQueryAdapter` 在 HTTP 调用前校验详情非空，并要求 `paymentOrderId / orderNo / channelCode` 非空且最长均为 `64` 个字符；可选 `channelTransactionNo` 最长为 `128` 个字符。
+2. 四类原始字符串在裁剪前拒绝 ISO 控制字符；空详情、必填空白、污染或超长值固定返回 `PAYMENT_CHANNEL_QUERY_FAILED`，并保证 `RestTemplate` 零交互。
+3. 合法请求使用新建的 `GatewayQueryRequest` 规范化副本出站，调用方原 `PaymentDetailDTO` 不被修改；既有网关响应可信边界与查单结果规范化语义保持不变。
+
+### 363.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway 支付查单适配器定向测试 | `mvn -Dtest=GatewayAccessPaymentChannelQueryAdapterTest test` | 通过 | `8` 个用例；覆盖空详情、必填空白、可选控制字符、超长、HTTP 零交互、规范化副本及网关响应边界 |
+| payment-core 全量测试 | `mvn test` | 通过 | `889` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 363.3 当前判断
+
+1. payment-core 的 gateway 主动查单适配器不再依赖调用方预先清洗详情，污染或超出远端契约容量的字段不会发送到网关。
+2. 上层 `PaymentServiceImpl.queryChannel` 仍按既有逻辑记录查单失败审计；本地 mock 不证明真实渠道查单、资金结果、账务一致性或生产稳定性。
+3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。

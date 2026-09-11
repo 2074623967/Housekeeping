@@ -1688,6 +1688,13 @@
 3. 合法值通过独立规范化副本发送，响应摘要使用规范化后的真实渠道编码；非法请求统一返回 `PAYMENT_CHANNEL_SUBMIT_FAILED` 且不调用 gateway-access。适配器定向 `6` 个测试、payment-core 全量 `887` 个测试通过，补丁检查通过。
 4. 支付主流程在适配器调用前已创建尝试，异常仍按结果未知和主动查单口径保护，不能因本地零 HTTP 交互推导为可直接重试；本地 mock 不证明真实渠道受理、资金结果或生产稳定性，release 四项治理阻断不变。
 
+### 8.195 2026-09-12 gateway 支付主动查单请求边界进展
+
+1. `GatewayAccessPaymentChannelQueryAdapter` 在 gateway-access HTTP 出站前校验支付单号、订单号和渠道编码三个必填字段，最长均为 `64` 个字符；可选渠道流水号最长为 `128` 个字符。
+2. 四类原始字符串在裁剪前拒绝 ISO 控制字符；空详情、必填空白、污染或超长值统一返回 `PAYMENT_CHANNEL_QUERY_FAILED`，且不调用 gateway-access。
+3. 合法值通过独立 `GatewayQueryRequest` 规范化出站，不修改调用方持有的 `PaymentDetailDTO`。适配器定向 `8` 个测试、payment-core 全量 `889` 个测试通过，补丁检查通过。
+4. 上层 `PaymentServiceImpl.queryChannel` 仍按既有逻辑记录查单失败审计；本地 mock 不证明真实渠道查单、资金结果、账务一致性或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
