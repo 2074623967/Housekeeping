@@ -65,6 +65,7 @@ public class RefundServiceImpl implements RefundService {
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
     private static final int REFUND_METHOD_MAX_LENGTH = 32;
+    private static final int REFUND_STATUS_MAX_LENGTH = 32;
     private static final int REFUND_REASON_MAX_LENGTH = 255;
     private static final int OPERATION_REMARK_MAX_LENGTH = 255;
 
@@ -443,10 +444,16 @@ public class RefundServiceImpl implements RefundService {
      * 列表查询统一收敛分页边界，避免后台误传 pageSize 造成大查询。
      */
     private void normalizeQuery(RefundQueryDTO query) {
-        query.setRefundOrderId(StringUtils.hasText(query.getRefundOrderId()) ? query.getRefundOrderId().trim() : null);
-        query.setPaymentOrderId(StringUtils.hasText(query.getPaymentOrderId()) ? query.getPaymentOrderId().trim() : null);
-        query.setRefundStatus(StringUtils.hasText(query.getRefundStatus()) ? query.getRefundStatus().trim() : "全部");
-        query.setRefundMethod(StringUtils.hasText(query.getRefundMethod()) ? query.getRefundMethod().trim() : "全部");
+        query.setRefundOrderId(normalizeOptionalRequestField(
+                query.getRefundOrderId(), "退款单号", REFUND_ORDER_ID_MAX_LENGTH));
+        query.setPaymentOrderId(normalizeOptionalRequestField(
+                query.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
+        String refundStatus = normalizeOptionalRequestField(
+                query.getRefundStatus(), "退款状态", REFUND_STATUS_MAX_LENGTH);
+        query.setRefundStatus(refundStatus == null ? "全部" : refundStatus);
+        String refundMethod = normalizeOptionalRequestField(
+                query.getRefundMethod(), "退款方式", REFUND_METHOD_MAX_LENGTH);
+        query.setRefundMethod(refundMethod == null ? "全部" : refundMethod);
         query.setPageNo(Math.max(query.getPageNo(), 1));
         query.setPageSize(Math.min(Math.max(query.getPageSize(), 1), 100));
     }

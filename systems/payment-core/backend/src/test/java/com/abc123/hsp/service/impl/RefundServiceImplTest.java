@@ -122,6 +122,36 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectInvalidRefundQueryFieldsBeforeMapperAccess() {
+        RefundServiceImpl service = createService();
+        RefundQueryDTO oversizedRefundOrderId = refundQuery(
+                String.join("", Collections.nCopies(65, "R")), null, null, null);
+        RefundQueryDTO controlRefundOrderId = refundQuery("REF-001\n", null, null, null);
+        RefundQueryDTO oversizedPaymentOrderId = refundQuery(
+                null, String.join("", Collections.nCopies(65, "P")), null, null);
+        RefundQueryDTO controlPaymentOrderId = refundQuery(null, "PAY-001\n", null, null);
+        RefundQueryDTO oversizedStatus = refundQuery(
+                null, null, String.join("", Collections.nCopies(33, "S")), null);
+        RefundQueryDTO controlStatus = refundQuery(null, null, "SUCCESS\n", null);
+        RefundQueryDTO oversizedMethod = refundQuery(
+                null, null, null, String.join("", Collections.nCopies(33, "M")));
+        RefundQueryDTO controlMethod = refundQuery(null, null, null, "原路退款\n");
+
+        assertEquals("退款单号长度不能超过64字符", queryFailure(service, oversizedRefundOrderId).getMessage());
+        assertEquals("退款单号不能包含控制字符", queryFailure(service, controlRefundOrderId).getMessage());
+        assertEquals("支付单号长度不能超过64字符", queryFailure(service, oversizedPaymentOrderId).getMessage());
+        assertEquals("支付单号不能包含控制字符", queryFailure(service, controlPaymentOrderId).getMessage());
+        assertEquals("退款状态长度不能超过32字符", queryFailure(service, oversizedStatus).getMessage());
+        assertEquals("退款状态不能包含控制字符", queryFailure(service, controlStatus).getMessage());
+        assertEquals("退款方式长度不能超过32字符", queryFailure(service, oversizedMethod).getMessage());
+        assertEquals("退款方式不能包含控制字符", queryFailure(service, controlMethod).getMessage());
+        IllegalArgumentException exportFailure = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.exportCsv(controlRefundOrderId));
+        assertEquals("退款单号不能包含控制字符", exportFailure.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
     void shouldApplyRefundForSuccessfulPayment() {
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId("PAY-001");
@@ -980,6 +1010,23 @@ class RefundServiceImplTest {
         request.setRefundMethod("原路退款");
         request.setOperator("refund-applicant");
         return request;
+    }
+
+    private RefundQueryDTO refundQuery(String refundOrderId,
+                                       String paymentOrderId,
+                                       String refundStatus,
+                                       String refundMethod) {
+        RefundQueryDTO query = new RefundQueryDTO();
+        query.setRefundOrderId(refundOrderId);
+        query.setPaymentOrderId(paymentOrderId);
+        query.setRefundStatus(refundStatus);
+        query.setRefundMethod(refundMethod);
+        return query;
+    }
+
+    private IllegalArgumentException queryFailure(RefundServiceImpl service, RefundQueryDTO query) {
+        return org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.list(query));
     }
 
     private IllegalArgumentException applyFailure(RefundApplyRequestDTO request) {
