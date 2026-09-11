@@ -3237,6 +3237,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `PaymentTaskActionResultDTO.processedCount / successCount / warningCount / failCount` 继续只表达本轮候选结果；超过容量的数据不改写并留待后续轮次，本轮不新增接口字段或自动循环清空承诺。
 4. 人工首次等待、自动指数退避、任务租约、逐笔失败隔离、共享渠道限流和既有支付/退款状态机保持不变；本地测试不证明真实渠道查询、资金终态、生产容量或稳定性。
 
+### 14.159 支付回调 nonce 清理批次上限契约
+
+1. 后台清理继续使用 `payment.callback.nonce-cleanup.batch-size`，环境变量为 `HSP_PAYMENT_CALLBACK_NONCE_CLEANUP_BATCH_SIZE`；默认值与服务端最大值均为 `1000`。
+2. 非正配置在调度器构造阶段拒绝启动，超过 `1000` 的正值按 `1000` 执行；签名服务公开清理入口在调用 Mapper 前重复封顶，避免旁路调用扩大删除范围。
+3. 该容量只限制单轮内部清理，不新增或修改外部接口字段；超过容量的过期 nonce 保持原状态，由后续 `120` 秒租约调度轮次继续处理。
+4. 最早到期优先、周期续租、双层派生表删除、唯一键防重和过期复用保持不变；本地测试不证明生产 MySQL 执行计划、锁等待、数据库时钟、真实多实例、积压吞吐或稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

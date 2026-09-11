@@ -1342,6 +1342,14 @@
 4. 联合定向测试应不少于 `75` 个，payment-core 全量不少于 `833` 个；Mapper XML 与补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
 5. 本地 H2、Mockito 与配置解析不证明生产 MySQL 窗口函数执行计划、真实渠道查单、资金终态、容量校准、积压吞吐、多实例调度或生产稳定性。
 
+### 4.176 支付回调 nonce 清理批次上限
+
+1. 以批次 `1001` 构造 `PaymentCallbackNonceCleanupScheduler`，验证取得任务租约后向签名服务传入 `1000`；批次为 `0` 或负数时验证构造失败且不执行清理。
+2. 直接调用 `PaymentCallbackSignatureServiceImpl.cleanupExpiredNonces(1001)`，验证 Mapper 仅收到 `1000`；继续验证 `0 / -1` 拒绝，防止旁路调用绕过调度上限。
+3. 回归 Mapper 最早到期优先和双层派生表删除，并覆盖 `120` 秒任务租约、周期续租、唯一键防重及过期 nonce 复用；超过单轮容量的数据保持原状态并由后续调度处理。
+4. 联合定向测试应不少于 `32` 个，payment-core 全量不少于 `834` 个；`PaymentCallbackSecurityMapper.xml` 与补丁检查必须通过。本轮无前端、接口字段、Mapper SQL、schema 或迁移变化。
+5. 本地 H2、Mockito 与配置解析不证明生产 MySQL 执行计划、锁等待、数据库时钟、真实多实例、积压吞吐或生产稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
