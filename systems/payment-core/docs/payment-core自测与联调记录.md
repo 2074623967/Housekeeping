@@ -9947,3 +9947,25 @@
 1. payment-core 的 gateway 退款主动查单适配器不再依赖调用方预先清洗退款快照，污染或超出远端契约容量的字段不会发送到网关。
 2. 上层 `RefundServiceImpl.queryChannel` 仍按既有逻辑记录退款查单失败审计；本地 mock 不证明真实渠道退款查单、退款到账、账务一致性或生产稳定性。
 3. 发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。
+
+## 365. 2026-09-12 gateway 退款提交请求边界 V1.0 验证
+
+### 365.1 本轮补强
+
+1. `GatewayAccessRefundChannelSubmitServiceImpl` 在 HTTP 调用前校验请求非空，并要求 `refundOrderId / paymentOrderId / orderNo / refundMethod / channelCode` 必填；`customerName / refundReason` 保持可选。
+2. 七类字符串分别限制为 `64 / 64 / 64 / 128 / 32 / 255 / 64` 个字符，原始值在裁剪前拒绝 ISO 控制字符；金额要求大于 `0`、有效小数位不超过 `2` 且不超过 `9999999999999999.99`。
+3. 合法请求复制到只包含 gateway 合同字段的 `GatewayRefundSubmitRequest` 后规范化出站，调用方原 DTO 不被修改，内部 `refundStatus / submittedChannelCode / channelRefundNo` 不进入请求体。
+
+### 365.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| gateway 退款提交服务定向测试 | `mvn -Dtest=GatewayAccessRefundChannelSubmitServiceImplTest test` | 通过 | `7` 个用例；覆盖空请求、必填空白、可选控制字符、超长、金额空值/零值/精度/上限、HTTP 零交互、合同 DTO 与规范化副本 |
+| payment-core 全量测试 | `mvn test` | 通过 | `893` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 365.3 当前判断
+
+1. payment-core 的 gateway 退款提交服务不再依赖事件派发层预先清洗请求，也不再向跨系统边界透传内部退款状态和已绑定渠道事实。
+2. 参数非法与配置门禁仍按渠道调用前确定失败处理；网络、空响应和非确定上游拒绝仍按结果未知处理并要求先查单，不能直接重复退款。
+3. 本地 mock 不证明真实渠道受理、退款到账、账务一致性或生产稳定性；发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未闭环，`release/v1.0.0` 继续冻结。

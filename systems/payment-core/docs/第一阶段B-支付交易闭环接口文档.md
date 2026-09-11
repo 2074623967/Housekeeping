@@ -3473,6 +3473,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 既有 gateway 业务成功码、响应数据、退款状态、渠道退款号和查询来源校验保持不变；上层 `RefundServiceImpl.queryChannel` 继续按既有逻辑记录退款查单失败审计。
 5. 本轮不新增端点、DTO 字段、错误码、Mapper、schema 或迁移；本地测试不证明真实网关、渠道退款查单、退款到账、账务一致性或生产稳定性。
 
+### 14.192 gateway 退款提交请求字段契约
+
+1. `GatewayAccessRefundChannelSubmitServiceImpl.submit` 要求 `refundOrderId / paymentOrderId / orderNo / refundMethod / channelCode` 必填，`customerName / refundReason` 可选。
+2. 按出站 DTO 顺序，七类字符串最长分别为 `64 / 64 / 64 / 128 / 32 / 255 / 64` 个字符；原始值在裁剪前拒绝 ISO 控制字符，可选纯空白字段归一化为 `null`。
+3. `refundAmount` 必须大于 `0`、去除末尾零后的有效小数位不超过两位且不超过 `9999999999999999.99`。任一请求字段非法均返回 `REFUND_CHANNEL_SUBMIT_FAILED`、`resultUnknown=false`，并在 gateway-access HTTP 调用前失败关闭。
+4. 合法请求以独立 `GatewayRefundSubmitRequest` 发送且不修改调用方 DTO；该合同 DTO 不包含内部 `refundStatus / submittedChannelCode / channelRefundNo`。既有响应校验和受理结果规范化保持不变。
+5. 可能已触达上游的网络、空响应或非确定拒绝继续返回 `resultUnknown=true` 并要求先查单；本轮不新增端点、外部 DTO 字段、错误码、Mapper、schema 或迁移，本地测试不证明真实退款受理或到账。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

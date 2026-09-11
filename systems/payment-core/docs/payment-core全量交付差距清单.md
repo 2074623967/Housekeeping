@@ -1702,6 +1702,13 @@
 3. 合法值通过独立 `GatewayRefundQueryRequest` 规范化出站，不修改调用方持有的 `RefundCallbackSourceDTO`；提交结果未知且尚无渠道退款号的主动核查语义保持不变。适配器定向 `7` 个测试、payment-core 全量 `891` 个测试通过，补丁检查通过。
 4. 上层 `RefundServiceImpl.queryChannel` 仍按既有逻辑记录退款查单失败审计；本地 mock 不证明真实渠道退款查单、退款到账、账务一致性或生产稳定性，release 四项治理阻断不变。
 
+### 8.197 2026-09-12 gateway 退款提交请求边界进展
+
+1. `GatewayAccessRefundChannelSubmitServiceImpl` 在 gateway-access HTTP 出站前校验退款单号、支付单号、订单号、退款方式和渠道编码五个必填字段；客户名称与退款原因保持可选。
+2. 七类字符串分别按 `64 / 64 / 64 / 128 / 32 / 255 / 64` 个字符收敛，原始值在裁剪前拒绝 ISO 控制字符；金额要求大于 `0`、有效小数位不超过两位且不超过 `9999999999999999.99`。
+3. 合法值通过仅包含 gateway 合同八个字段的独立出站 DTO 发送，不修改调用方持有的 `RefundChannelSubmitRequestDTO`，内部退款状态、已绑定渠道和渠道退款号不再随请求出站。服务定向 `7` 个测试、payment-core 全量 `893` 个测试通过，补丁检查通过。
+4. 非法请求在 HTTP 前固定以 `REFUND_CHANNEL_SUBMIT_FAILED` 且 `resultUnknown=false` 拒绝；可能已触达上游的异常仍保持结果未知并要求先查单。本地 mock 不证明真实渠道受理、退款到账或生产稳定性，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
