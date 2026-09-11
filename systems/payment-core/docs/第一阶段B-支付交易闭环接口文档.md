@@ -3132,6 +3132,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 该配置不改变支付成功事件载荷、下游地址、投递状态机、失败重试语义或 AMQP 模式契约，也不新增对外接口字段和错误码。
 4. 本地配置与单元测试只证明参数解析和客户端构造边界，不证明真实清分或会计系统连通、请求已送达、外部系统受理或生产稳定性。
 
+### 14.144 AMQP publisher confirm 超时有界契约
+
+1. `payment.amqp.publisher-confirm-timeout-ms` 同时用于支付成功 AMQP 发布和死信定向重放，环境变量为 `HSP_PAYMENT_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS`，默认 `5000ms`。
+2. 配置值小于等于 `0` 时按既有兼容语义回退 `5000ms`，正值大于 `60000` 时按 `60000ms`，其余正值保持原值，并传给 `waitForConfirmsOrDie`。
+3. 超时或 broker 异常继续由各自状态机收口：支付成功事件标记失败或进入死信，死信重放记录受控失败并等待人工跟进；不得据此断言消息未送达或消费者未处理。
+4. 本轮不新增配置键、对外接口字段或错误码，也不改变交换机、路由键、消息头和载荷；本地测试不证明真实 broker 确认、消息送达、消费结果或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

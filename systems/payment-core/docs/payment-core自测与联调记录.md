@@ -8896,3 +8896,24 @@
 
 1. 支付成功事件 HTTP 下游投递具备环境级超时配置，同时保持统一有界行为和原 `3000ms` 默认兼容性。
 2. 本轮无前端、Mapper、schema 或迁移变化；本地测试不证明真实清分或会计系统连通、事件送达、外部受理、生产参数合理或稳定性，`release/v1.0.0` 继续冻结。
+
+## 317. 2026-09-11 AMQP 发布确认等待有界 V1.0 验证
+
+### 317.1 本轮补强
+
+1. 支付成功 AMQP 发布与死信定向重放统一限制 publisher confirm 等待时长，正的超大配置不再原样传入 RabbitMQ 客户端。
+2. `payment.amqp.publisher-confirm-timeout-ms` 和 `HSP_PAYMENT_AMQP_PUBLISHER_CONFIRM_TIMEOUT_MS` 保持原配置入口；默认及非正值回退均为 `5000ms`，正值上限为 `60000ms`。
+3. 回归直接验证两条路径传给 `waitForConfirmsOrDie` 的实际值，不改变交换机、路由键、消息载荷、失败状态或人工复核门禁。
+
+### 317.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| AMQP 发布与死信重放定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest,PaymentDeadLetterTaskServiceImplTest test` | 通过 | `42` 个用例，`0` failures、`0` errors、`0` skipped |
+| payment-core 全量测试 | `mvn test` | 通过 | `804` 个用例，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` | 通过 | 无空白错误 |
+
+### 317.3 当前判断
+
+1. payment-core 自有 AMQP publisher confirm 等待不再接受超过一分钟的运行参数，同时保持原默认和非正值兼容回退语义。
+2. 本轮无前端、配置键、Mapper、schema 或迁移变化；本地 Mockito 不证明真实 broker 确认、消息送达、消费结果、死信重放成功、生产参数合理或稳定性，`release/v1.0.0` 继续冻结。
