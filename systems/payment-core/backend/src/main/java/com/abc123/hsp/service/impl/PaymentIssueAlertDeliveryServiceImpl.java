@@ -331,13 +331,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
                             buildSourceAlertStatus(item, triggeredBy, currentOutcome));
                     if (currentOutcome.hasConfirmedDelivery()
-                            && acknowledgeSourceAlert(
+                            && !acknowledgeSourceAlert(
                                 item.getAlertNo(),
                                 item.getIssueNo(),
                                 "已确认",
                                 "success",
                                 triggeredBy,
-                                triggeredBy) <= 0) {
+                                triggeredBy)) {
                         throw new IllegalStateException("明确送达告警的来源确认失败");
                     }
                     return currentOutcome;
@@ -1412,32 +1412,39 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (acceptedLog == null || !StringUtils.hasText(acceptedLog.getSourceAlertNo())) {
             return;
         }
-        acknowledgeSourceAlert(
+        boolean acknowledged = acknowledgeSourceAlert(
                 acceptedLog.getSourceAlertNo(),
                 acceptedLog.getIssueNo(),
                 receiptUpdate.getAckStatus(),
                 receiptUpdate.getAckStatusType(),
                 receiptUpdate.getAckOperator(),
                 receiptUpdate.getTriggeredBy());
+        if (!acknowledged) {
+            throw new IllegalStateException("明确送达告警的来源确认失败");
+        }
     }
 
-    private int acknowledgeSourceAlert(String sourceAlertNo,
-                                       String issueNo,
-                                       String ackStatus,
-                                       String ackStatusType,
-                                       String ackOperator,
-                                       String triggeredBy) {
+    private boolean acknowledgeSourceAlert(String sourceAlertNo,
+                                           String issueNo,
+                                           String ackStatus,
+                                           String ackStatusType,
+                                           String ackOperator,
+                                           String triggeredBy) {
         if (!StringUtils.hasText(sourceAlertNo) || !StringUtils.hasText(issueNo)) {
-            return 0;
+            return false;
         }
+        String normalizedSourceAlertNo = sourceAlertNo.trim();
+        String normalizedIssueNo = issueNo.trim();
         PaymentIssueAlertLogEntity sourceAckUpdate = new PaymentIssueAlertLogEntity();
-        sourceAckUpdate.setAlertNo(sourceAlertNo.trim());
-        sourceAckUpdate.setIssueNo(issueNo.trim());
+        sourceAckUpdate.setAlertNo(normalizedSourceAlertNo);
+        sourceAckUpdate.setIssueNo(normalizedIssueNo);
         sourceAckUpdate.setAckStatus(ackStatus);
         sourceAckUpdate.setAckStatusType(ackStatusType);
         sourceAckUpdate.setAckOperator(ackOperator);
         sourceAckUpdate.setTriggeredBy(triggeredBy);
-        return paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
+        int affectedRows = paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
+        return affectedRows > 0 || paymentTaskCenterMapper.isMatchingSourceIssueAlertAcknowledged(
+                normalizedSourceAlertNo, normalizedIssueNo);
     }
 
     private String buildReceiptReconcileSummary(int processedCount,

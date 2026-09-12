@@ -277,6 +277,12 @@ public interface PaymentTaskCenterMapper {
     int updateSourceIssueAlertAcknowledgement(PaymentIssueAlertLogEntity entity);
 
     /**
+     * 判断同一异常的顶层站内来源告警是否已经确认。
+     */
+    boolean isMatchingSourceIssueAlertAcknowledged(@Param("alertNo") String alertNo,
+                                                    @Param("issueNo") String issueNo);
+
+    /**
      * 判断某个来源 outbox 在指定通知通道上是否已经成功派发过。
      */
     boolean hasSuccessfulIssueAlertChannelDelivery(String sourceAlertNo, String alertChannel);

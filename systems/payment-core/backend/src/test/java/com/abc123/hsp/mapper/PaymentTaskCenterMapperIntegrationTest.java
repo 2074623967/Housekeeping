@@ -481,6 +481,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
             update.setAckStatusType("success");
             update.setAckOperator("payment-core-admin");
             update.setTriggeredBy("integration-test");
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    matchingSource.getAlertNo(), matchingSource.getIssueNo()));
             assertEquals(1, mapper.updateSourceIssueAlertAcknowledgement(update));
 
             update.setAlertNo(otherIssueSource.getAlertNo());
@@ -495,6 +497,12 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     session.getConnection(), otherIssueSource.getAlertNo()).getAckStatus());
             assertEquals("待确认", findIssueAlertReceipt(
                     session.getConnection(), nestedOutbox.getAlertNo()).getAckStatus());
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    matchingSource.getAlertNo(), matchingSource.getIssueNo()));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    otherIssueSource.getAlertNo(), matchingSource.getIssueNo()));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingSourceIssueAlertAcknowledged(
+                    nestedOutbox.getAlertNo(), nestedOutbox.getIssueNo()));
         }
     }
 

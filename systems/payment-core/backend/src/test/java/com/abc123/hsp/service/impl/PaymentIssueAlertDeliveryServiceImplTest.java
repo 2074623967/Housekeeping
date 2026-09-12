@@ -192,6 +192,40 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldAcceptDirectDeliveryWhenMatchingSourceWasAlreadyConfirmed() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                .thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
+                .thenReturn(Collections.singletonList(buildProvider(
+                        "ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(
+                buildDeliveryResult(
+                        "IM-RECEIPT-DELIVERED", "DELIVERED", "企业微信已送达", "[IM] ISSUE-001"));
+        when(paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(
+                any(PaymentIssueAlertLogEntity.class))).thenReturn(0);
+        when(paymentTaskCenterMapper.isMatchingSourceIssueAlertAcknowledged(
+                "PIA-OUTBOX-001", "ISSUE-001")).thenReturn(true);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("支付运营");
+
+        verify(paymentTaskCenterMapper).isMatchingSourceIssueAlertAcknowledged(
+                "PIA-OUTBOX-001", "ISSUE-001");
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
     void shouldRecognizeInAppChannelIndependentOfDefaultLocale() {
         Locale previousLocale = Locale.getDefault();
         try {
@@ -1044,6 +1078,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 .thenReturn(Collections.singletonList(acceptedLog));
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery("PIA-IM-001", 0, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+        when(paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(
+                any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
                 buildDeliveryResult(
@@ -1123,6 +1159,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 .thenReturn(1);
         when(paymentTaskCenterMapper.updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class)))
                 .thenReturn(1);
+        when(paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(
+                any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
                 buildDeliveryResult("IM-RECEIPT-SINGLE", "DELIVERED", "供应商查询确认送达", ""));

@@ -1422,6 +1422,16 @@
           AND ack_status = '待确认'
     </update>
 
+    <select id="isMatchingSourceIssueAlertAcknowledged" resultType="boolean">
+        SELECT CASE WHEN COUNT(1) > 0 THEN TRUE ELSE FALSE END
+        FROM t_payment_issue_alert_log
+        WHERE alert_no = #{alertNo}
+          AND issue_no = #{issueNo}
+          AND alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert_no IS NULL
+          AND ack_status = '已确认'
+    </select>
+
     <insert id="initTaskLease">
         INSERT IGNORE INTO t_payment_task_lease (
             task_code,
