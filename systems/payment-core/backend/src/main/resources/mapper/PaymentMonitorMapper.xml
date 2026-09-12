@@ -149,7 +149,7 @@
                'warn' AS alertLevelType,
                COUNT(1) AS affectedCount,
                '进入支付渠道与路由页，检查停用渠道和对应路由规则。' AS suggestedAction,
-               '/payment-config' AS actionRoute
+               '/payment-config?channelStatus=DISABLED' AS actionRoute
         FROM t_payment_channel_config
         WHERE status = 'DISABLED'
         HAVING COUNT(1) &gt; 0

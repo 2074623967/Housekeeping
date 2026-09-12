@@ -1,9 +1,17 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { paymentConfigApi } from "../api/client";
 import { normalizeNonNegativePaymentAmountInput } from "../utils/paymentAmount";
+import {
+  filterPaymentConfigChannels,
+  paymentConfigChannelStatusFromQuery
+} from "../utils/paymentConfigChannelFilter";
 
+const route = useRoute();
 const channels = ref([]);
+const channelSection = ref(null);
+const channelStatusFilter = ref(paymentConfigChannelStatusFromQuery(route.query));
 const routeRules = ref([]);
 const protocols = ref([]);
 const protocolTypeOptions = ref([]);
@@ -151,6 +159,10 @@ const governanceMetrics = computed(() => ({
   enabledIssueDutyRosterCount: issueDutyRosters.value.filter((item) => item.status === "ENABLED").length,
   archivedReturnCodeCount: returnCodeMappings.value.filter((item) => item.archiveStatus === "ARCHIVED").length
 }));
+const visibleChannels = computed(() => filterPaymentConfigChannels(
+  channels.value,
+  channelStatusFilter.value
+));
 
 function createProtocolForm() {
   return {
@@ -341,6 +353,10 @@ async function loadOverview() {
   try {
     applyOverview(await paymentConfigApi.getOverview());
     hasLoadedOverview.value = true;
+    if (paymentConfigChannelStatusFromQuery(route.query) !== "全部") {
+      await nextTick();
+      channelSection.value?.scrollIntoView({ block: "start" });
+    }
   } catch (error) {
     overviewErrorMessage.value = error.message;
   } finally {
@@ -2031,6 +2047,15 @@ onMounted(() => {
   loadIssueDutyRosterReviews();
 });
 
+watch(
+  () => route.query.channelStatus,
+  async () => {
+    channelStatusFilter.value = paymentConfigChannelStatusFromQuery(route.query);
+    await nextTick();
+    channelSection.value?.scrollIntoView({ block: "start" });
+  }
+);
+
 function exportGovernanceSnapshot(section = "ALL") {
   const exportUrl = paymentConfigApi.buildExportUrl(section);
   window.open(exportUrl, "_blank", "noopener");
@@ -2124,13 +2149,21 @@ function exportGovernanceSnapshot(section = "ALL") {
           </div>
         </section>
 
-        <div class="section-title">
+        <div id="payment-channel-config" ref="channelSection" class="section-title">
           <div>
             <h3>支付渠道配置</h3>
             <p class="meta">控制渠道商户号、适用场景、默认路由权重、单日限额和启停状态</p>
           </div>
           <div class="toolbar-actions">
-            <button class="button secondary" @click="exportGovernanceSnapshot('CHANNELS')">导出渠道</button>
+            <div class="field">
+              <label for="channel-status-filter">渠道状态</label>
+              <select id="channel-status-filter" v-model="channelStatusFilter">
+                <option>全部</option>
+                <option>ENABLED</option>
+                <option>DISABLED</option>
+              </select>
+            </div>
+            <button class="button secondary" @click="exportGovernanceSnapshot('CHANNELS')">导出全部渠道</button>
             <button class="button secondary" @click="startCreateChannel">新增渠道</button>
             <button class="button secondary" @click="loadOverview">刷新</button>
           </div>
@@ -2363,7 +2396,10 @@ function exportGovernanceSnapshot(section = "ALL") {
               </tr>
             </thead>
             <tbody>
-                <tr v-for="channel in channels" :key="channel.channelCode">
+                <tr v-if="!visibleChannels.length">
+                  <td colspan="19" class="state-box">当前暂无符合状态条件的支付渠道</td>
+                </tr>
+                <tr v-for="channel in visibleChannels" :key="channel.channelCode">
                   <td>{{ channel.channelCode }}</td>
                   <td>{{ channel.channelName }}</td>
                   <td>{{ channel.paymentMethod }}</td>

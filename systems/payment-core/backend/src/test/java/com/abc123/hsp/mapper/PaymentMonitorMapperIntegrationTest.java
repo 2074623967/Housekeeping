@@ -84,6 +84,7 @@ class PaymentMonitorMapperIntegrationTest {
             assertEquals("P1", alerts.get(1).getAlertLevel());
             assertEquals("CHANNEL_DISABLED", alerts.get(2).getAlertType());
             assertEquals("P2", alerts.get(2).getAlertLevel());
+            assertEquals("/payment-config?channelStatus=DISABLED", alerts.get(2).getActionRoute());
         }
     }
 
