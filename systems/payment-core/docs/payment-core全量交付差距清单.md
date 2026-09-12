@@ -2650,6 +2650,15 @@
 5. 两份 schema 与迁移 `2026-09-12-add-payment-attempt-completed-time.sql` 同步完成。联合定向 `98` 项、后端全量 `1054` 项、`PaymentMapper.xml` 与补丁检查通过；本轮无管理端文件变化，因此未重复运行前端测试和构建。
 6. 本轮保护只在成功结果再次触达时失败闭合，尚未形成全库支付成功事实巡检、日终独立快照或运营下钻；目标 MySQL 迁移、多实例并发、历史异常分布、渠道扣款、账务入账和资金一致仍需真实环境验证，release 四项治理阻断不变。
 
+### 8.323 2026-09-12 支付成功事实主动巡检进展
+
+1. 上一版只在成功结果再次回调或主动查单时校验支付单与最新支付尝试，未再次触达的历史断裂仍会静默留存，日终和支付监控无法主动发现。
+2. 新增统一不一致集合：支付单状态为 `SUCCESS`，但按 `created_at DESC, id DESC` 选出的最新支付尝试缺失、状态不是“成功”或 `completed_at` 缺失。`CLOSED` 不纳入；单纯 `SUCCESS + success_at IS NULL` 继续由成功时间缺失集合负责，两类条件同时成立时允许分别告警。
+3. 日终按支付创建日快照 `paymentSuccessFactMismatchCount`，任一非零使批次 `WARNING` 并禁止进入对账；总览、最近批次、CSV 和 `PAYMENT_SUCCESS_FACT_MISMATCH / P1` 告警使用同一快照。历史批次新字段保持 `NULL`，要求 `RERUN`，不倒推旧事实。
+4. 支付列表、计数和 CSV 新增虚拟筛选 `SUCCESS_FACT_MISMATCH`，日终和支付监控统一下钻 `/payments?status=SUCCESS_FACT_MISMATCH`；管理端同步展示事实卡、批次列、筛选项与差异化处置建议。
+5. 两份 schema 与迁移 `2026-09-12-add-payment-success-fact-guard.sql` 同步完成。定向后端 `52` 项、后端全量 `1058` 项、管理端 `30` 项、Vite 生产构建、三份 Mapper XML 与补丁检查通过；代码提交为 `340de51b feat(payment-core): patrol payment success facts`。
+6. 本轮不自动修复历史不一致，也不证明渠道实际扣款、渠道账单、清分、账务入账或资金一致；目标 MySQL 迁移、执行计划、历史分布和运营处置仍需真实环境验证，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

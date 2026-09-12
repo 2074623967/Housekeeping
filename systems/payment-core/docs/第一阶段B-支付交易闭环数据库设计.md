@@ -1626,6 +1626,14 @@ t_order
 4. 迁移 `2026-09-12-add-refund-terminal-fact-guard.sql` 只新增批次快照字段，不回填历史批次，也不修改退款单或退款尝试。
 5. 目标 MySQL 执行前需预查字段冲突、评估在线 DDL 与相关子查询执行计划，并抽样核对历史异常集合；本地 H2 不证明生产性能、渠道到账或资金一致。
 
+### 4.188 支付成功事实主动巡检数据边界
+
+1. `t_payment_day_end_batch` 新增 `payment_success_fact_mismatch_count`。全新 schema 为 `INT NOT NULL DEFAULT 0`；增量迁移使用可空字段，历史 `NULL` 表示未采集，不伪造零值。
+2. 扫描以支付创建日为完整性归属；支付单为 `SUCCESS`，但最新支付尝试缺失、状态不是“成功”或 `completed_at` 为空时计数。最新尝试通过 `ORDER BY created_at DESC, id DESC` 稳定选取。
+3. 查询复用既有 `idx_attempt_payment_created(payment_order_id, created_at)` 与 `idx_payment_status_created(status, created_at)`，本轮不新增重复索引；同时间尝试由主键倒序稳定裁决。
+4. 迁移 `2026-09-12-add-payment-success-fact-guard.sql` 只新增批次快照字段，不回填历史批次，也不修改支付单或支付尝试。
+5. 目标 MySQL 执行前需预查字段冲突、评估在线 DDL 与相关子查询执行计划，并抽样核对历史异常集合；本地 H2 不证明生产性能、渠道扣款或资金一致。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

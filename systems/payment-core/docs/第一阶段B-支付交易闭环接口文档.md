@@ -4446,6 +4446,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 任一成功事实不完整时返回内部一致性错误，不调用渠道、不自动补写历史数据。该异常当前尚无独立列表筛选、日终快照或监控告警，需由后续主动巡检契约补齐。
 6. `CLOSED` 不纳入本契约：未提交人工关闭和过期关闭可以没有支付尝试，其一致性规则需要按关闭来源单独设计。
 
+### 14.318 支付成功事实主动巡检契约
+
+1. 支付成功事实不一致集合固定为：支付单状态为 `SUCCESS`，且不存在“按 `created_at DESC, id DESC` 选出的最新支付尝试状态为‘成功’且 `completed_at` 非空”的完整事实。
+2. `SUCCESS + success_at IS NULL` 由 `PAYMENT_SUCCESS_TIME_MISSING` 独立负责；最新尝试完整时不进入新集合，若成功时间与尝试事实均缺失则允许同时命中两个风险集合。`CLOSED` 不纳入本契约。
+3. 日终批次新增 `paymentSuccessFactMismatchCount`，按支付单 `created_at` 所在业务日采集；总览新增 `openPaymentSuccessFactMismatchCount`，最近批次和 CSV 同步返回。任一非零使批次 `WARNING` 并禁止进入对账。
+4. 历史批次未采集该字段时返回 `NULL`，总览和批次必须显示事实不完整并要求 `RERUN`；不得使用当前扫描值回填旧批次。
+5. `GET /api/payments` 与导出接口接受虚拟筛选 `SUCCESS_FACT_MISMATCH`，列表、计数和 CSV 使用同一集合；日终和支付监控告警类型为 `PAYMENT_SUCCESS_FACT_MISMATCH / P1`，动作路由固定为 `/payments?status=SUCCESS_FACT_MISMATCH`。
+6. 本契约报告 payment-core 内部结构化事实一致性，不证明渠道扣款、渠道账单、清分、账务入账、资金一致或告警处置完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
