@@ -2630,6 +2630,15 @@
 5. 监控 Mapper 验证全局 `REFUND_SUCCESS_TIME_MISSING` 告警、影响数、顺序和摘要计数；管理端验证筛选恢复、日终展示和差异化处理建议。
 6. 核对两份 schema 与独立迁移，执行五组定向后端测试、后端全量、管理端单测、Vite 构建、三份 Mapper XML 和补丁检查。目标环境另需验证在线 DDL、索引计划、历史缺失分布和真实退款到账。
 
+### 4.332 退款终态事实一致性保护
+
+1. 使用正式 `RefundMapper.xml` 将已受理最新退款尝试和退款单从 `PROCESSING` 收口为 `SUCCESS`，验证退款单 `success_at`、尝试 `attempt_status/completed_at` 均形成可读取事实。
+2. 在成功收口后尝试以 `PROCESSING -> FAIL` 重复更新，验证条件更新返回零行，既有成功终态和时间不被覆盖。
+3. 服务测试构造完整且相同的退款单/尝试终态，验证重复成功回调可以幂等返回且不重复更新或写日志。
+4. 分别构造最新尝试仍为 `ACCEPTED`、尝试完成时间缺失、成功时间缺失及失败终态残留成功时间，验证重复回调或终态主动查单显式失败，不调用渠道、不自动补写历史事实。
+5. 执行 `RefundServiceImplTest` 与 `RefundSubmitOutboxMapperIntegrationTest` 联合定向、payment-core 后端全量、`RefundMapper.xml` 和补丁检查；本轮无 HTTP、前端或 schema 变化，不重复运行管理端测试与构建。
+6. 目标环境另需验证真实 MySQL 多实例并发、历史不一致数据分布和处置流程；本地通过不得解释为渠道到账、账务冲销、资金一致或正式关账证明。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
