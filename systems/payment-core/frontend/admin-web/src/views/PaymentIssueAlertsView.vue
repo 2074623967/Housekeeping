@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentIssuesRoute, paymentLogsRoute } from "../router/listRoutes";
+import { paymentIssueAlertListFiltersFromQuery } from "../utils/paymentIssueAlertListFilters";
 
 const route = useRoute();
 const items = ref([]);
@@ -19,16 +20,7 @@ const loadErrorMessage = ref("");
 const actionErrorMessage = ref("");
 const successMessage = ref("");
 const ackOperator = ref("");
-const filters = ref({
-  alertNo: route.query.alertNo || "",
-  issueNo: route.query.issueNo || "",
-  paymentOrderId: route.query.paymentOrderId || "",
-  alertChannel: route.query.alertChannel || "全部",
-  alertStatus: route.query.alertStatus || "全部",
-  ackStatus: route.query.ackStatus || "全部",
-  providerDeliveryStatus: route.query.providerDeliveryStatus || "全部",
-  receiptQueryState: route.query.receiptQueryState || "全部"
-});
+const filters = ref(paymentIssueAlertListFiltersFromQuery(route.query));
 
 const metricCards = computed(() => [
   {
@@ -216,6 +208,27 @@ function receiptQueryStateLabel(state) {
 }
 
 onMounted(loadAlertLogs);
+
+watch(
+  () => [
+    route.query.alertNo,
+    route.query.issueNo,
+    route.query.paymentOrderId,
+    route.query.alertChannel,
+    route.query.alertStatus,
+    route.query.ackStatus,
+    route.query.providerDeliveryStatus,
+    route.query.receiptQueryState
+  ],
+  () => {
+    filters.value = paymentIssueAlertListFiltersFromQuery(route.query);
+    pageNo.value = 1;
+    selectedItem.value = null;
+    actionErrorMessage.value = "";
+    successMessage.value = "";
+    loadAlertLogs();
+  }
+);
 </script>
 
 <template>
