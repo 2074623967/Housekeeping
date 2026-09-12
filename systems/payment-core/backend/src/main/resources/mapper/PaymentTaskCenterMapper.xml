@@ -1157,6 +1157,7 @@
         WHERE delivery.source_alert_no = #{param1}
           AND delivery.alert_channel = #{param2}
           AND delivery.alert_status = '派发失败'
+          AND delivery.provider_delivery_status IN ('FAILED', 'SEND_EXCEPTION')
           AND EXISTS (
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
@@ -1198,6 +1199,7 @@
         FROM t_payment_issue_alert_log delivery
         WHERE delivery.source_alert_no = #{param1}
           AND delivery.alert_channel = #{param2}
+          AND delivery.provider_delivery_status IN ('ACCEPTED', 'DELIVERED', 'FAILED', 'SEND_EXCEPTION')
           AND EXISTS (
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
@@ -1226,6 +1228,7 @@
           AND alert_channel = #{alertChannel}
           AND created_at &gt;= STR_TO_DATE(#{sinceTime}, '%Y-%m-%d %H:%i:%s')
           AND alert_status = '派发失败'
+          AND provider_delivery_status IN ('FAILED', 'SEND_EXCEPTION')
     </select>
 
     <select id="findEnabledAlertProvidersByChannel" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">

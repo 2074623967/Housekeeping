@@ -319,6 +319,42 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldOnlyCountActualProviderAttemptsForRetryAndCircuitBreaker() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, source_alert_no, issue_no, alert_channel, alert_status, ack_status, "
+                        + "provider_code, provider_delivery_status, created_at) VALUES "
+                        + "('PIA-ATTEMPT-SOURCE', NULL, 'ISSUE-ATTEMPT', 'IN_APP_OUTBOX', "
+                        + "'派发失败', '待确认', NULL, NULL, TIMESTAMPADD(MINUTE, -20, NOW())),"
+                        + "('PIA-ATTEMPT-FAILED', 'PIA-ATTEMPT-SOURCE', 'ISSUE-ATTEMPT', 'IM', "
+                        + "'派发失败', '无需回执', 'ALERT_IM_PRIMARY', 'FAILED', "
+                        + "TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "('PIA-ATTEMPT-EXCEPTION', 'PIA-ATTEMPT-SOURCE', 'ISSUE-ATTEMPT', 'IM', "
+                        + "'派发失败', '无需回执', 'ALERT_IM_PRIMARY', 'SEND_EXCEPTION', "
+                        + "TIMESTAMPADD(MINUTE, -9, NOW())),"
+                        + "('PIA-ATTEMPT-RATE-LIMIT', 'PIA-ATTEMPT-SOURCE', 'ISSUE-ATTEMPT', 'IM', "
+                        + "'派发失败', '无需回执', 'ALERT_IM_PRIMARY', 'RATE_LIMITED', "
+                        + "TIMESTAMPADD(MINUTE, -3, NOW())),"
+                        + "('PIA-ATTEMPT-COOLDOWN', 'PIA-ATTEMPT-SOURCE', 'ISSUE-ATTEMPT', 'IM', "
+                        + "'派发失败', '无需回执', 'ALERT_IM_PRIMARY', 'RETRY_COOLDOWN_ACTIVE', "
+                        + "TIMESTAMPADD(MINUTE, -2, NOW())),"
+                        + "('PIA-ATTEMPT-CIRCUIT', 'PIA-ATTEMPT-SOURCE', 'ISSUE-ATTEMPT', 'IM', "
+                        + "'派发失败', '无需回执', 'ALERT_IM_PRIMARY', 'PROVIDER_CIRCUIT_OPEN', "
+                        + "TIMESTAMPADD(MINUTE, -1, NOW()))");
+            }
+
+            assertEquals(2, mapper.countFailedIssueAlertChannelDeliveries("PIA-ATTEMPT-SOURCE", "IM"));
+            assertEquals(2, mapper.countIssueAlertProviderFailedDeliveriesSince(
+                    "ALERT_IM_PRIMARY", "IM", "2000-01-01 00:00:00"));
+            PaymentIssueAlertLogEntity latest =
+                    mapper.findLatestIssueAlertChannelDeliveryLog("PIA-ATTEMPT-SOURCE", "IM");
+            assertEquals("PIA-ATTEMPT-EXCEPTION", latest.getAlertNo());
+        }
+    }
+
+    @Test
     void shouldCountOnlyActionableIssueAlertDeliveryBacklogs() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -827,6 +863,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".weekday'");
             statement.execute("CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR '"
                     + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".dateFormat'");
+            statement.execute("CREATE ALIAS IF NOT EXISTS STR_TO_DATE FOR '"
+                    + PaymentTaskCenterMapperIntegrationTest.class.getName() + ".strToDate'");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
@@ -1068,6 +1106,23 @@ public class PaymentTaskCenterMapperIntegrationTest {
                 .replace("%i", "mm")
                 .replace("%s", "ss");
         return timestamp.toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern(javaPattern));
+    }
+
+    public static Timestamp strToDate(String value, String pattern) {
+        if (value == null) {
+            return null;
+        }
+        String javaPattern = pattern
+                .replace("%Y", "yyyy")
+                .replace("%m", "MM")
+                .replace("%d", "dd")
+                .replace("%H", "HH")
+                .replace("%i", "mm")
+                .replace("%s", "ss");
+        LocalDateTime parsed = LocalDateTime.parse(
+                value,
+                java.time.format.DateTimeFormatter.ofPattern(javaPattern));
+        return Timestamp.valueOf(parsed);
     }
 
     private int countAlertsByGenerationKey(Connection connection, String generationKey) throws Exception {
