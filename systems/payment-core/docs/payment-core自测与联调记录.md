@@ -11788,3 +11788,34 @@
 1. 在数据集合不变的前提下，日志分页和 CSV 对三类受支持排序字段的同值记录均具有确定次序，有利于重复排障和证据比对。
 2. `id` 次排序不提供多个请求之间的数据库快照；翻页期间若新增日志，偏移分页仍可能随数据集变化，不能解释为审计快照。
 3. 本地 H2 不证明生产日志完整性、MySQL 执行计划、大数据导出、外部告警送达、真实渠道处理或资金结果；release 四项真实治理阻断不变。
+
+## 438. 2026-09-12 服务者结算列表与导出稳定排序 V1.0 验证
+
+### 438.1 本轮补强
+
+1. `SettlementMapper.findWorkerSettlements` 与 `findWorkerSettlementsForExport` 统一引用 `workerSettlementOrder`，避免页面和 CSV 独立维护排序规则。
+2. 既有账期结束日、创建时间降序后追加唯一且不可变的自增 `id DESC`，保持最近账期和最新创建记录优先的阅读方向。
+3. 该变更不改变筛选、计数、分页、CSV `1001` 行保护、响应字段、服务者姓名脱敏、API、schema、索引或迁移。
+
+### 438.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与服务定向测试 | `WorkerSettlementListMapperIntegrationTest,SettlementServiceImplTest` `7` 项通过，`0` failures、`0` errors、`0` skipped |
+| 同账期同秒跨页 | 三条结算单跨三页依次返回 `SETTLE-STABLE-003 / 002 / 001` |
+| CSV 稳定顺序 | 相同筛选条件下依次返回 `SETTLE-STABLE-003 / 002 / 001` |
+| 字段映射 | 账期为 `2026-09-01 ~ 2026-09-07`，应结、扣减、实结和保证金影响金额格式正确 |
+| 计数回归 | 正式 `count` 查询返回筛选后的 `3` 条 |
+| payment-core 后端全量测试 | `954` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `SettlementMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `6ac719c4 fix(payment-core): stabilize worker settlement ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+首次定向运行因复用的 H2 `DATE_FORMAT` 测试桩固定输出到秒而断言失败；改用日期型兼容函数后，测试类可见性又不满足 H2 反射调用要求。修正测试基础设施后连续定向与全量运行均通过，前两次失败不计为能力通过。
+
+### 438.3 当前判断
+
+1. 在数据集合不变的前提下，服务者结算分页与 CSV 对相同账期结束日和创建时间记录具有确定次序。
+2. `id` 次排序不提供多个请求之间的数据库快照；翻页期间若新增或修改结算单，偏移分页仍可能随数据集变化。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据导出、真实出款、到账、结算或对账一致性；release 四项真实治理阻断不变。

@@ -2218,6 +2218,13 @@
 3. 正式 Mapper 测试以三条创建时间、日志级别和处理阶段均相同的日志验证：创建时间降序跨三页为 `003 / 002 / 001`，日志级别升序导出为 `001 / 002 / 003`，处理阶段降序导出为 `003 / 002 / 001`；既有幂等写入和非法数据失败用例继续通过。
 4. 支付日志定向 `8` 项、payment-core 后端全量 `953` 项通过，均为 `0` failures、`0` errors、`0` skipped，Mapper XML 与补丁检查通过。本轮无 API、DTO、前端、schema、索引或迁移变化；本地 H2 不证明生产日志完整、MySQL 执行计划、跨请求快照、外部告警送达或资金结果，release 四项真实治理阻断不变。
 
+### 8.270 2026-09-12 服务者结算列表与导出稳定排序进展
+
+1. 服务者结算列表与 CSV 原先只按 `period_end DESC, created_at DESC` 排序；账期结束日和秒级创建时间均可能重复，同值记录没有确定次序，分页和重复导出的顺序不稳定。
+2. `findWorkerSettlements` 与 `findWorkerSettlementsForExport` 现在共用 `workerSettlementOrder`，统一按 `period_end DESC, created_at DESC, id DESC` 排序；筛选、计数、分页和 CSV `1001` 行保护保持不变。
+3. 正式 Mapper 测试以三条账期结束日和创建时间完全相同的结算单验证：三页依次返回 `SETTLE-STABLE-003 / 002 / 001`，CSV 返回相同顺序，计数为 `3`，账期与四类金额字段映射正常。
+4. 定向 `7` 项、payment-core 后端全量 `954` 项通过，均为 `0` failures、`0` errors、`0` skipped，Mapper XML 与补丁检查通过。本轮无 API、DTO、前端、schema、索引或迁移变化；本地 H2 不证明生产 MySQL 执行计划、大数据导出、跨请求快照、真实出款、到账、结算或对账一致性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
