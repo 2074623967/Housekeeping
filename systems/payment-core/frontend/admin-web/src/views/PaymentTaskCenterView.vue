@@ -55,6 +55,7 @@ const activeTaskCode = ref("");
 const taskOperator = ref("");
 const filters = ref({
   taskCode: "",
+  bizDate: "",
   runMode: "全部",
   taskStatus: "全部",
   severityLevel: "全部"
@@ -83,6 +84,7 @@ async function loadOverview() {
 function fetchTaskRuns() {
   return paymentTaskCenterApi.getTaskRuns({
     taskCode: filters.value.taskCode,
+    bizDate: filters.value.bizDate,
     runMode: filters.value.runMode,
     taskStatus: filters.value.taskStatus,
     severityLevel: filters.value.severityLevel,
@@ -113,6 +115,7 @@ function applyFilters() {
 function resetFilters() {
   filters.value = {
     taskCode: "",
+    bizDate: "",
     runMode: "全部",
     taskStatus: "全部",
     severityLevel: "全部"
@@ -133,6 +136,7 @@ function goToPage(nextPage) {
 function exportTaskRuns() {
   const exportUrl = paymentTaskCenterApi.buildExportUrl({
     taskCode: filters.value.taskCode,
+    bizDate: filters.value.bizDate,
     runMode: filters.value.runMode,
     taskStatus: filters.value.taskStatus,
     severityLevel: filters.value.severityLevel
@@ -639,6 +643,10 @@ onMounted(loadOverview);
               <input v-model="filters.taskCode" placeholder="如 PAYMENT_EXPIRE_CLOSE" />
             </div>
             <div class="field">
+              <label>业务日期</label>
+              <input v-model="filters.bizDate" type="date" />
+            </div>
+            <div class="field">
               <label>运行方式</label>
               <select v-model="filters.runMode">
                 <option>全部</option>
@@ -681,6 +689,7 @@ onMounted(loadOverview);
                   <th>日志号</th>
                   <th>任务编码</th>
                   <th>任务名称</th>
+                  <th>业务日期</th>
                   <th>运行方式</th>
                   <th>任务状态</th>
                   <th>严重等级</th>
@@ -702,6 +711,7 @@ onMounted(loadOverview);
                   <td>{{ item.taskLogNo }}</td>
                   <td>{{ item.taskCode }}</td>
                   <td>{{ item.taskName }}</td>
+                  <td>{{ item.bizDate || "-" }}</td>
                   <td>{{ item.runMode }}</td>
                   <td><span :class="['badge', item.taskStatusType]">{{ item.taskStatus }}</span></td>
                   <td><span :class="['badge', item.severityLevelType]">{{ item.severityLevel }}</span></td>

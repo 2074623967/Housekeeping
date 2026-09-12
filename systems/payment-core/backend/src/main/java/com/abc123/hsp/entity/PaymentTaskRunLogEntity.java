@@ -14,6 +14,8 @@ public class PaymentTaskRunLogEntity {
     private String taskCode;
     /** 任务名称。 */
     private String taskName;
+    /** 关联业务日，仅日期型任务填写。 */
+    private String bizDate;
     /** 运行方式。 */
     private String runMode;
     /** 任务状态。 */

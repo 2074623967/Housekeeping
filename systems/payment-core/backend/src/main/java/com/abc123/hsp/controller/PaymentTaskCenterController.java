@@ -47,6 +47,7 @@ public class PaymentTaskCenterController {
     @GetMapping("/task-runs")
     public ApiResponse<PageResultDTO<PaymentTaskRunLogItemDTO>> listTaskRuns(
             @RequestParam(required = false) String taskCode,
+            @RequestParam(required = false) String bizDate,
             @RequestParam(defaultValue = "全部") String runMode,
             @RequestParam(defaultValue = "全部") String taskStatus,
             @RequestParam(defaultValue = "全部") String severityLevel,
@@ -54,6 +55,7 @@ public class PaymentTaskCenterController {
             @RequestParam(defaultValue = "10") int pageSize) {
         PaymentTaskRunLogQueryDTO query = new PaymentTaskRunLogQueryDTO();
         query.setTaskCode(taskCode);
+        query.setBizDate(bizDate);
         query.setRunMode(runMode);
         query.setTaskStatus(taskStatus);
         query.setSeverityLevel(severityLevel);
@@ -68,11 +70,13 @@ public class PaymentTaskCenterController {
     @GetMapping(value = "/task-runs/export", produces = "text/csv;charset=UTF-8")
     public ResponseEntity<byte[]> exportTaskRuns(
             @RequestParam(required = false) String taskCode,
+            @RequestParam(required = false) String bizDate,
             @RequestParam(defaultValue = "全部") String runMode,
             @RequestParam(defaultValue = "全部") String taskStatus,
             @RequestParam(defaultValue = "全部") String severityLevel) {
         PaymentTaskRunLogQueryDTO query = new PaymentTaskRunLogQueryDTO();
         query.setTaskCode(taskCode);
+        query.setBizDate(bizDate);
         query.setRunMode(runMode);
         query.setTaskStatus(taskStatus);
         query.setSeverityLevel(severityLevel);

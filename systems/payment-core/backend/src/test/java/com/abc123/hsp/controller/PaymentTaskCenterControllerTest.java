@@ -53,7 +53,7 @@ class PaymentTaskCenterControllerTest {
                 new PageResultDTO<PaymentTaskRunLogItemDTO>(Collections.singletonList(itemDTO), 1L, 2, 20);
         when(paymentTaskCenterService.listTaskRuns(any(PaymentTaskRunLogQueryDTO.class))).thenReturn(resultDTO);
 
-        controller.listTaskRuns("PAYMENT_EVENT_RETRY", "MANUAL", "SUCCESS", "P2", 2, 20);
+        controller.listTaskRuns("PAYMENT_EVENT_RETRY", "2026-09-11", "MANUAL", "SUCCESS", "P2", 2, 20);
 
         ArgumentCaptor<PaymentTaskRunLogQueryDTO> queryCaptor =
                 ArgumentCaptor.forClass(PaymentTaskRunLogQueryDTO.class);
@@ -62,6 +62,7 @@ class PaymentTaskCenterControllerTest {
 
         assertNotNull(queryDTO);
         assertEquals("PAYMENT_EVENT_RETRY", queryDTO.getTaskCode());
+        assertEquals("2026-09-11", queryDTO.getBizDate());
         assertEquals("MANUAL", queryDTO.getRunMode());
         assertEquals("SUCCESS", queryDTO.getTaskStatus());
         assertEquals("P2", queryDTO.getSeverityLevel());
@@ -121,13 +122,15 @@ class PaymentTaskCenterControllerTest {
         PaymentTaskCenterController controller = new PaymentTaskCenterController(paymentTaskCenterService);
         when(paymentTaskCenterService.exportTaskRunsCsv(any(PaymentTaskRunLogQueryDTO.class))).thenReturn("task-run-csv");
 
-        String body = new String(controller.exportTaskRuns("PAYMENT_EVENT_RETRY", "MANUAL", "SUCCESS", "P2")
+        String body = new String(controller.exportTaskRuns(
+                "PAYMENT_EVENT_RETRY", "2026-09-11", "MANUAL", "SUCCESS", "P2")
                 .getBody(), java.nio.charset.StandardCharsets.UTF_8);
 
         ArgumentCaptor<PaymentTaskRunLogQueryDTO> queryCaptor =
                 ArgumentCaptor.forClass(PaymentTaskRunLogQueryDTO.class);
         verify(paymentTaskCenterService).exportTaskRunsCsv(queryCaptor.capture());
         assertEquals("PAYMENT_EVENT_RETRY", queryCaptor.getValue().getTaskCode());
+        assertEquals("2026-09-11", queryCaptor.getValue().getBizDate());
         assertEquals("MANUAL", queryCaptor.getValue().getRunMode());
         assertEquals("SUCCESS", queryCaptor.getValue().getTaskStatus());
         assertEquals("P2", queryCaptor.getValue().getSeverityLevel());

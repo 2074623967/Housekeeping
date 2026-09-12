@@ -525,6 +525,7 @@ class PaymentTaskCenterServiceImplTest {
         item.setTaskLogNo("LOG-001");
         item.setTaskCode("PAYMENT_EVENT_RETRY");
         item.setTaskName("失败事件重发");
+        item.setBizDate("2026-09-11");
         item.setRunMode("MANUAL");
         item.setTaskStatus("SUCCESS");
         item.setSeverityLevel("P2");
@@ -554,6 +555,7 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).findTaskRunLogsForExport(org.mockito.ArgumentMatchers.any(PaymentTaskRunLogQueryDTO.class));
         Assertions.assertTrue(csv.contains("日志号,任务编码"));
         Assertions.assertTrue(csv.contains("\"LOG-001\""));
+        Assertions.assertTrue(csv.contains("\"2026-09-11\""));
     }
 
     @Test
@@ -606,6 +608,29 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(taskStatusQuery));
         Assertions.assertThrows(IllegalArgumentException.class, () -> service.exportTaskRunsCsv(severityQuery));
         verifyNoInteractions(paymentTaskCenterMapper);
+    }
+
+    @Test
+    void shouldNormalizeAndRejectInvalidTaskRunBusinessDate() {
+        PaymentTaskRunLogQueryDTO validQuery = new PaymentTaskRunLogQueryDTO();
+        validQuery.setBizDate(" 2026-09-11 ");
+        when(paymentTaskCenterMapper.countTaskRunLogs(validQuery)).thenReturn(0L);
+        when(paymentTaskCenterMapper.findTaskRunLogs(validQuery)).thenReturn(Collections.emptyList());
+        PaymentTaskRunLogQueryDTO invalidQuery = new PaymentTaskRunLogQueryDTO();
+        invalidQuery.setBizDate("2026-02-30");
+        PaymentTaskCenterServiceImpl service = new PaymentTaskCenterServiceImpl(
+                paymentTaskCenterMapper,
+                paymentExpiryTaskService,
+                paymentEventRetryTaskService,
+                refundRetryTaskService,
+                paymentConfigService,
+                paymentIssueAlertDeliveryService
+        );
+
+        service.listTaskRuns(validQuery);
+
+        Assertions.assertEquals("2026-09-11", validQuery.getBizDate());
+        Assertions.assertThrows(IllegalArgumentException.class, () -> service.listTaskRuns(invalidQuery));
     }
 
     @Test
@@ -706,6 +731,7 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PAYMENT_DAY_END".equals(entity.getTaskCode())
                         && "AUTO".equals(entity.getRunMode())
+                        && "2026-09-11".equals(entity.getBizDate())
                         && "payment-day-end-scheduler".equals(entity.getTriggeredBy())
                         && "WARNING".equals(entity.getTaskStatus())
                         && "P2".equals(entity.getSeverityLevel())
@@ -751,6 +777,8 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldRecordSanitizedAutomaticDayEndFailureAndRethrow() {
         IllegalStateException failure = new IllegalStateException("database-password-secret");
+        String expectedBizDate = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))
+                .minusDays(1).toString();
         when(paymentDayEndService.runAutomatically()).thenThrow(failure);
 
         IllegalStateException thrown = Assertions.assertThrows(
@@ -761,6 +789,7 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PAYMENT_DAY_END".equals(entity.getTaskCode())
                         && "WARNING".equals(entity.getTaskStatus())
+                        && expectedBizDate.equals(entity.getBizDate())
                         && "P1".equals(entity.getSeverityLevel())
                         && entity.getFailCount() == 1
                         && "PAYMENT_DAY_END_AUTO_RUN_FAILED".equals(entity.getSummaryComment())

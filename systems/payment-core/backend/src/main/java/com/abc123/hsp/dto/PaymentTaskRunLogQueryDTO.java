@@ -10,6 +10,8 @@ public class PaymentTaskRunLogQueryDTO {
 
     /** 任务编码。 */
     private String taskCode;
+    /** 关联业务日。 */
+    private String bizDate;
     /** 运行方式。 */
     private String runMode;
     /** 任务状态。 */

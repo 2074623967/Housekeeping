@@ -310,6 +310,7 @@
         SELECT task_log_no AS taskLogNo,
                task_code AS taskCode,
                task_name AS taskName,
+               DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
                run_mode AS runMode,
                task_status AS taskStatus,
                task_status_type AS taskStatusType,
@@ -331,6 +332,7 @@
         SELECT task_log_no AS taskLogNo,
                task_code AS taskCode,
                task_name AS taskName,
+               DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
                run_mode AS runMode,
                task_status AS taskStatus,
                task_status_type AS taskStatusType,
@@ -352,6 +354,9 @@
         <where>
             <if test="taskCode != null and taskCode != ''">
                 AND task_code = #{taskCode}
+            </if>
+            <if test="bizDate != null and bizDate != ''">
+                AND biz_date = #{bizDate}
             </if>
             <if test="runMode != null and runMode != '' and runMode != '全部'">
                 AND run_mode = #{runMode}
@@ -372,6 +377,7 @@
         SELECT task_log_no AS taskLogNo,
                task_code AS taskCode,
                task_name AS taskName,
+               DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
                run_mode AS runMode,
                task_status AS taskStatus,
                task_status_type AS taskStatusType,
@@ -393,6 +399,9 @@
         <where>
             <if test="taskCode != null and taskCode != ''">
                 AND task_code = #{taskCode}
+            </if>
+            <if test="bizDate != null and bizDate != ''">
+                AND biz_date = #{bizDate}
             </if>
             <if test="runMode != null and runMode != '' and runMode != '全部'">
                 AND run_mode = #{runMode}
@@ -414,6 +423,9 @@
         <where>
             <if test="taskCode != null and taskCode != ''">
                 AND task_code = #{taskCode}
+            </if>
+            <if test="bizDate != null and bizDate != ''">
+                AND biz_date = #{bizDate}
             </if>
             <if test="runMode != null and runMode != '' and runMode != '全部'">
                 AND run_mode = #{runMode}
@@ -982,6 +994,7 @@
             task_log_no,
             task_code,
             task_name,
+            biz_date,
             run_mode,
             task_status,
             task_status_type,
@@ -1003,6 +1016,7 @@
             #{taskLogNo},
             #{taskCode},
             #{taskName},
+            #{bizDate},
             #{runMode},
             #{taskStatus},
             #{taskStatusType},

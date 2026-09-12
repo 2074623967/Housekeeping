@@ -7,7 +7,10 @@ import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
+import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
+import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
+import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -178,6 +181,43 @@ public class PaymentTaskCenterMapperIntegrationTest {
 
             assertEquals(2, mapper.countDueExpiredPayments());
             assertEquals(1, mapper.countBackingOffExpiredPayments());
+        }
+    }
+
+    @Test
+    void shouldPersistAndFilterTaskRunsByBusinessDate() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
+            entity.setTaskLogNo("PTL-DAY-END-001");
+            entity.setTaskCode("PAYMENT_DAY_END");
+            entity.setTaskName("支付日终处理");
+            entity.setBizDate("2026-09-11");
+            entity.setRunMode("AUTO");
+            entity.setTaskStatus("SUCCESS");
+            entity.setTaskStatusType("success");
+            entity.setSeverityLevel("P3");
+            entity.setSeverityLevelType("success");
+            entity.setEscalationStatus("正常");
+            entity.setEscalationStatusType("success");
+            entity.setProcessedCount(1);
+            entity.setSuccessCount(1);
+            entity.setWarningCount(0);
+            entity.setFailCount(0);
+            entity.setSummaryComment("已完成");
+            entity.setSuggestedAction("无需处理");
+            entity.setRecommendedRoute("/payment-day-end");
+            entity.setTriggeredBy("payment-day-end-scheduler");
+            assertEquals(1, mapper.insertTaskRunLog(entity));
+
+            PaymentTaskRunLogQueryDTO query = new PaymentTaskRunLogQueryDTO();
+            query.setTaskCode("PAYMENT_DAY_END");
+            query.setBizDate("2026-09-11");
+            List<PaymentTaskRunLogItemDTO> items = mapper.findTaskRunLogs(query);
+
+            assertEquals(1, mapper.countTaskRunLogs(query));
+            assertEquals(1, items.size());
+            assertEquals("2026-09-11", items.get(0).getBizDate());
         }
     }
 
@@ -928,6 +968,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
+            statement.execute("DROP TABLE IF EXISTS t_payment_task_run_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_duty_roster");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
@@ -986,6 +1027,17 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_task_lease ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_code VARCHAR(64) NOT NULL UNIQUE, "
                     + "lock_owner VARCHAR(128), lock_expires_at DATETIME, updated_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_payment_task_run_log ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_log_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "task_code VARCHAR(64) NOT NULL, task_name VARCHAR(128) NOT NULL, biz_date DATE, "
+                    + "run_mode VARCHAR(32) NOT NULL, task_status VARCHAR(32) NOT NULL, "
+                    + "task_status_type VARCHAR(32) NOT NULL, severity_level VARCHAR(32) NOT NULL, "
+                    + "severity_level_type VARCHAR(32) NOT NULL, escalation_status VARCHAR(32) NOT NULL, "
+                    + "escalation_status_type VARCHAR(32) NOT NULL, processed_count INT NOT NULL, "
+                    + "success_count INT NOT NULL, warning_count INT NOT NULL, fail_count INT NOT NULL, "
+                    + "summary_comment VARCHAR(512) NOT NULL, suggested_action VARCHAR(255) NOT NULL, "
+                    + "recommended_route VARCHAR(255) NOT NULL, triggered_by VARCHAR(64) NOT NULL, "
+                    + "started_at DATETIME NOT NULL, completed_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), source_alert_no VARCHAR(64), "
                     + "generation_key VARCHAR(191), issue_no VARCHAR(128), payment_order_id VARCHAR(64), "

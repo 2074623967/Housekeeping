@@ -31,6 +31,8 @@ import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.RefundRetryTaskService;
 import com.abc123.hsp.service.RefundQueryTaskService;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -69,6 +71,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final int RUN_MODE_MAX_LENGTH = 32;
     private static final int TASK_STATUS_MAX_LENGTH = 32;
     private static final int SEVERITY_LEVEL_MAX_LENGTH = 32;
+    private static final int BIZ_DATE_MAX_LENGTH = 10;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
     private static final int AUTO_TASK_LEASE_SECONDS = 120;
     private static final int MAX_PENDING_QUERY_BATCH_SIZE = 1000;
     private static final int MAX_ISSUE_SLA_CANDIDATE_BATCH_SIZE = 1000;
@@ -380,11 +384,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 enrichTaskRuns(CsvExportRowLimiter.requireWithinLimit(
                         paymentTaskCenterMapper.findTaskRunLogsForExport(normalizedQuery)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("日志号,任务编码,任务名称,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
+        builder.append("日志号,任务编码,任务名称,业务日期,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
         for (PaymentTaskRunLogItemDTO item : items) {
             builder.append(csvCell(item.getTaskLogNo())).append(',')
                     .append(csvCell(item.getTaskCode())).append(',')
                     .append(csvCell(item.getTaskName())).append(',')
+                    .append(csvCell(item.getBizDate())).append(',')
                     .append(csvCell(item.getRunMode())).append(',')
                     .append(csvCell(item.getTaskStatus())).append(',')
                     .append(csvCell(item.getSeverityLevel())).append(',')
@@ -430,6 +435,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (paymentDayEndService == null) {
             throw new IllegalStateException("payment day-end service is required for automatic day-end");
         }
+        String targetBizDate = LocalDate.now(BUSINESS_ZONE).minusDays(1).toString();
         PaymentDayEndAutoRunResultDTO dayEndResult;
         try {
             dayEndResult = paymentDayEndService.runAutomatically();
@@ -441,7 +447,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                         "支付日终处理",
                         RUN_MODE_AUTO,
                         "payment-day-end-scheduler",
-                        "PAYMENT_DAY_END_AUTO_RUN_FAILED");
+                        "PAYMENT_DAY_END_AUTO_RUN_FAILED",
+                        targetBizDate);
             } catch (RuntimeException recordException) {
                 exception.addSuppressed(recordException);
             }
@@ -474,7 +481,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 executed && !batchWarning ? 1 : 0,
                 batchWarning || leaseBusy ? 1 : 0,
                 0,
-                summaryComment);
+                summaryComment,
+                dayEndResult.getBizDate());
     }
 
     private void validateAutomaticDayEndResult(PaymentDayEndAutoRunResultDTO result) {
@@ -1168,10 +1176,25 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                             int warningCount,
                                                             int failCount,
                                                             String summaryComment) {
+        return buildAndRecordResult(taskCode, taskName, runMode, triggeredBy, processedCount,
+                successCount, warningCount, failCount, summaryComment, null);
+    }
+
+    private PaymentTaskActionResultDTO buildAndRecordResult(String taskCode,
+                                                            String taskName,
+                                                            String runMode,
+                                                            String triggeredBy,
+                                                            int processedCount,
+                                                            int successCount,
+                                                            int warningCount,
+                                                            int failCount,
+                                                            String summaryComment,
+                                                            String bizDate) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
         entity.setTaskLogNo(buildTaskLogNo());
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
+        entity.setBizDate(bizDate);
         entity.setRunMode(runMode);
         entity.setTaskStatus(failCount > 0 || warningCount > 0 ? TASK_STATUS_WARN : TASK_STATUS_SUCCESS);
         entity.setTaskStatusType(failCount > 0 || warningCount > 0 ? "warn" : "success");
@@ -1205,11 +1228,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                      String taskName,
                                      String runMode,
                                      String triggeredBy,
-                                     String failureCode) {
+                                     String failureCode,
+                                     String bizDate) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
         entity.setTaskLogNo(buildTaskLogNo());
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
+        entity.setBizDate(bizDate);
         entity.setRunMode(runMode);
         entity.setTaskStatus(TASK_STATUS_WARN);
         entity.setTaskStatusType("warn");
@@ -1749,6 +1774,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         PaymentTaskRunLogQueryDTO normalizedQuery = query == null ? new PaymentTaskRunLogQueryDTO() : query;
         normalizedQuery.setTaskCode(normalizeOptionalQueryField(
                 normalizedQuery.getTaskCode(), TASK_CODE_MAX_LENGTH, "任务编码"));
+        normalizedQuery.setBizDate(normalizeBizDate(normalizedQuery.getBizDate()));
         normalizedQuery.setRunMode(normalizeOptionalQueryField(
                 normalizedQuery.getRunMode(), RUN_MODE_MAX_LENGTH, "运行方式"));
         normalizedQuery.setTaskStatus(normalizeOptionalQueryField(
@@ -1765,6 +1791,18 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             normalizedQuery.setPageSize(100);
         }
         return normalizedQuery;
+    }
+
+    private String normalizeBizDate(String value) {
+        String normalized = normalizeOptionalQueryField(value, BIZ_DATE_MAX_LENGTH, "业务日期");
+        if (!hasText(normalized)) {
+            return normalized;
+        }
+        try {
+            return LocalDate.parse(normalized).toString();
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new IllegalArgumentException("业务日期格式必须为yyyy-MM-dd");
+        }
     }
 
     private String normalizeOptionalQueryField(String value, int maxLength, String fieldName) {

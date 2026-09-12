@@ -1224,6 +1224,7 @@ CREATE TABLE t_payment_task_run_log (
     task_log_no VARCHAR(64) NOT NULL COMMENT '任务日志号',
     task_code VARCHAR(64) NOT NULL COMMENT '任务编码',
     task_name VARCHAR(128) NOT NULL COMMENT '任务名称',
+    biz_date DATE DEFAULT NULL COMMENT '关联业务日',
     run_mode VARCHAR(32) NOT NULL COMMENT '运行方式',
     task_status VARCHAR(32) NOT NULL COMMENT '任务状态',
     task_status_type VARCHAR(32) NOT NULL COMMENT '任务状态样式类型',
@@ -1243,5 +1244,6 @@ CREATE TABLE t_payment_task_run_log (
     completed_at DATETIME NOT NULL COMMENT '完成时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_task_log_no (task_log_no),
-    KEY idx_task_code_started_at (task_code, started_at)
+    KEY idx_task_code_started_at (task_code, started_at),
+    KEY idx_task_code_biz_date (task_code, biz_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付任务执行日志表';

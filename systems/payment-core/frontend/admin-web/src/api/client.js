@@ -165,6 +165,7 @@ export const paymentTaskCenterApi = {
   getOverview: () => request("/api/payment-task-center/overview"),
   getTaskRuns: ({
     taskCode = "",
+    bizDate = "",
     runMode = "全部",
     taskStatus = "全部",
     severityLevel = "全部",
@@ -173,6 +174,7 @@ export const paymentTaskCenterApi = {
   } = {}) => {
     const params = new URLSearchParams({
       taskCode,
+      bizDate,
       runMode,
       taskStatus,
       severityLevel,
@@ -183,12 +185,14 @@ export const paymentTaskCenterApi = {
   },
   buildExportUrl: ({
     taskCode = "",
+    bizDate = "",
     runMode = "全部",
     taskStatus = "全部",
     severityLevel = "全部"
   } = {}) => {
     const params = new URLSearchParams({
       taskCode,
+      bizDate,
       runMode,
       taskStatus,
       severityLevel
