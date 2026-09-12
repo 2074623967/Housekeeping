@@ -53,10 +53,10 @@
         </choose>
         <choose>
             <when test="query.sortOrder == 'asc'">
-                ASC
+                ASC, id ASC
             </when>
             <otherwise>
-                DESC
+                DESC, id DESC
             </otherwise>
         </choose>
     </sql>

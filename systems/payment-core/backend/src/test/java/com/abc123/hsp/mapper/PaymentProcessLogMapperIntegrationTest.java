@@ -12,7 +12,9 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.exceptions.PersistenceException;
@@ -110,6 +112,32 @@ public class PaymentProcessLogMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldUseStableIdTieBreakerForEveryListSort() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentLogMapper mapper = session.getMapper(PaymentLogMapper.class);
+            PaymentLogQueryDTO query = new PaymentLogQueryDTO();
+            query.setPaymentOrderId("PAY-LOG-STABLE");
+            query.setPageSize(1);
+
+            assertEquals("LOG-STABLE-003", mapper.findAll(query).get(0).getLogNo());
+            query.setPageNo(2);
+            assertEquals("LOG-STABLE-002", mapper.findAll(query).get(0).getLogNo());
+            query.setPageNo(3);
+            assertEquals("LOG-STABLE-001", mapper.findAll(query).get(0).getLogNo());
+
+            query.setSortField("logLevel");
+            query.setSortOrder("asc");
+            assertEquals(Arrays.asList("LOG-STABLE-001", "LOG-STABLE-002", "LOG-STABLE-003"),
+                    logNos(mapper.findAllForExport(query)));
+            query.setSortField("processStage");
+            query.setSortOrder("desc");
+            assertEquals(Arrays.asList("LOG-STABLE-003", "LOG-STABLE-002", "LOG-STABLE-001"),
+                    logNos(mapper.findAllForExport(query)));
+            assertEquals(3L, mapper.count(query));
+        }
+    }
+
     private void parseMapper(Configuration configuration, String resource) throws Exception {
         try (InputStream mapperXml = Resources.getResourceAsStream(resource)) {
             new XMLMapperBuilder(
@@ -134,8 +162,24 @@ public class PaymentProcessLogMapperIntegrationTest {
                     + "log_level_type VARCHAR(16) NOT NULL, message TEXT NOT NULL, "
                     + "source VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL, "
                     + "UNIQUE(source_type, source_no))");
+            statement.executeUpdate("INSERT INTO t_payment_process_log "
+                    + "(log_no, payment_order_id, order_no, request_no, source_type, source_no, "
+                    + "process_stage, log_level, log_level_type, message, source, created_at) VALUES "
+                    + "('LOG-STABLE-001', 'PAY-LOG-STABLE', 'ORD-001', 'REQ-001', "
+                    + "'PAYMENT_ATTEMPT', 'ATT-001', '支付提交', 'INFO', 'info', "
+                    + "'稳定排序日志一', 'payment-core', '2026-09-12 12:00:00'), "
+                    + "('LOG-STABLE-002', 'PAY-LOG-STABLE', 'ORD-002', 'REQ-002', "
+                    + "'PAYMENT_ATTEMPT', 'ATT-002', '支付提交', 'INFO', 'info', "
+                    + "'稳定排序日志二', 'payment-core', '2026-09-12 12:00:00'), "
+                    + "('LOG-STABLE-003', 'PAY-LOG-STABLE', 'ORD-003', 'REQ-003', "
+                    + "'PAYMENT_ATTEMPT', 'ATT-003', '支付提交', 'INFO', 'info', "
+                    + "'稳定排序日志三', 'payment-core', '2026-09-12 12:00:00')");
             session.commit();
         }
+    }
+
+    private List<String> logNos(List<PaymentLogListItemDTO> logs) {
+        return logs.stream().map(PaymentLogListItemDTO::getLogNo).collect(Collectors.toList());
     }
 
     /**
