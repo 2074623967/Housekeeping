@@ -16,20 +16,20 @@ import org.springframework.scheduling.annotation.Scheduled;
 class PaymentDayEndSchedulerTest {
 
     @Mock
-    private PaymentDayEndService paymentDayEndService;
+    private PaymentTaskCenterService paymentTaskCenterService;
 
     @Test
     void shouldRunAutomaticDayEndWhenEnabled() {
-        new PaymentDayEndScheduler(paymentDayEndService, true).runPreviousBusinessDay();
+        new PaymentDayEndScheduler(paymentTaskCenterService, true).runPreviousBusinessDay();
 
-        verify(paymentDayEndService).runAutomatically();
+        verify(paymentTaskCenterService).runAutoPaymentDayEnd();
     }
 
     @Test
     void shouldSkipAutomaticDayEndByDefault() {
-        new PaymentDayEndScheduler(paymentDayEndService).runPreviousBusinessDay();
+        new PaymentDayEndScheduler(paymentTaskCenterService).runPreviousBusinessDay();
 
-        verify(paymentDayEndService, never()).runAutomatically();
+        verify(paymentTaskCenterService, never()).runAutoPaymentDayEnd();
     }
 
     @Test

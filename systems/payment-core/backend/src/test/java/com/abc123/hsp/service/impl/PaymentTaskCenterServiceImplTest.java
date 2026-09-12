@@ -17,6 +17,7 @@ import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.dto.RefundRetryResultDTO;
@@ -27,6 +28,7 @@ import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
+import com.abc123.hsp.service.PaymentDayEndService;
 import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentService;
 import com.abc123.hsp.service.RefundRetryTaskService;
@@ -55,6 +57,8 @@ class PaymentTaskCenterServiceImplTest {
     private PaymentTaskCenterMapper paymentTaskCenterMapper;
     @Mock
     private PaymentExpiryTaskService paymentExpiryTaskService;
+    @Mock
+    private PaymentDayEndService paymentDayEndService;
     @Mock
     private PaymentEventRetryTaskService paymentEventRetryTaskService;
     @Mock
@@ -688,6 +692,98 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldRecordWarningAutomaticDayEndInTaskCenter() {
+        PaymentDayEndAutoRunResultDTO dayEndResult = dayEndResult(true, null, "WARNING");
+        when(paymentDayEndService.runAutomatically()).thenReturn(dayEndResult);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEnd();
+
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getWarningCount());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_DAY_END".equals(entity.getTaskCode())
+                        && "AUTO".equals(entity.getRunMode())
+                        && "payment-day-end-scheduler".equals(entity.getTriggeredBy())
+                        && "WARNING".equals(entity.getTaskStatus())
+                        && "P2".equals(entity.getSeverityLevel())
+                        && "/payment-day-end".equals(entity.getRecommendedRoute())
+                        && entity.getSummaryComment().contains("2026-09-11")
+                        && entity.getSummaryComment().contains("WARNING")));
+    }
+
+    @Test
+    void shouldRecordExistingBatchAsSuccessfulAutomaticDayEndSkip() {
+        when(paymentDayEndService.runAutomatically())
+                .thenReturn(dayEndResult(false, "EXISTING_BATCH", null));
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEnd();
+
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getWarningCount());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "SUCCESS".equals(entity.getTaskStatus())
+                        && "P3".equals(entity.getSeverityLevel())
+                        && entity.getSummaryComment().contains("已存在日终批次")
+                        && entity.getSuggestedAction().contains("无需重复生成")));
+    }
+
+    @Test
+    void shouldRecordBusyLeaseAsAutomaticDayEndWarning() {
+        when(paymentDayEndService.runAutomatically())
+                .thenReturn(dayEndResult(false, "LEASE_BUSY", null));
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        buildQueryTaskCenterService().runAutoPaymentDayEnd();
+
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "WARNING".equals(entity.getTaskStatus())
+                        && "P2".equals(entity.getSeverityLevel())
+                        && entity.getWarningCount() == 1
+                        && entity.getSummaryComment().contains("其他实例持有")));
+    }
+
+    @Test
+    void shouldRecordSanitizedAutomaticDayEndFailureAndRethrow() {
+        IllegalStateException failure = new IllegalStateException("database-password-secret");
+        when(paymentDayEndService.runAutomatically()).thenThrow(failure);
+
+        IllegalStateException thrown = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertSame(failure, thrown);
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_DAY_END".equals(entity.getTaskCode())
+                        && "WARNING".equals(entity.getTaskStatus())
+                        && "P1".equals(entity.getSeverityLevel())
+                        && entity.getFailCount() == 1
+                        && "PAYMENT_DAY_END_AUTO_RUN_FAILED".equals(entity.getSummaryComment())
+                        && !entity.getSummaryComment().contains("database-password-secret")));
+    }
+
+    @Test
+    void shouldFailClosedAndRecordInvalidAutomaticDayEndResult() {
+        when(paymentDayEndService.runAutomatically())
+                .thenReturn(dayEndResult(false, "UNKNOWN_SKIP_REASON", null));
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertEquals("automatic day-end returned an invalid skipped result", error.getMessage());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> "PAYMENT_DAY_END_AUTO_RUN_FAILED".equals(entity.getSummaryComment())
+                        && "P1".equals(entity.getSeverityLevel())
+                        && entity.getFailCount() == 1));
+    }
+
+    @Test
     void shouldRunAutoRetryFailedRefunds() {
         RefundRetryResultDTO retryResult = new RefundRetryResultDTO();
         retryResult.setProcessedCount(1);
@@ -1287,7 +1383,18 @@ class PaymentTaskCenterServiceImplTest {
                 10,
                 30);
         service.setRefundQueryTaskService(refundQueryTaskService);
+        service.setPaymentDayEndService(paymentDayEndService);
         return service;
+    }
+
+    private PaymentDayEndAutoRunResultDTO dayEndResult(
+            boolean executed, String skipReason, String batchStatus) {
+        PaymentDayEndAutoRunResultDTO result = new PaymentDayEndAutoRunResultDTO();
+        result.setExecuted(executed);
+        result.setSkipReason(skipReason);
+        result.setBizDate("2026-09-11");
+        result.setBatchStatus(batchStatus);
+        return result;
     }
 
     private String leaseOwner(String prefix) {

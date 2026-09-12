@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
@@ -19,6 +20,7 @@ import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentExpiryTaskService;
+import com.abc123.hsp.service.PaymentDayEndService;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.PaymentEventRetryTaskService;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
@@ -54,6 +56,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_STATUS_SUCCESS = "SUCCESS";
     private static final String TASK_STATUS_WARN = "WARNING";
     private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
+    private static final String TASK_CODE_DAY_END = "PAYMENT_DAY_END";
     private static final String TASK_CODE_PENDING_QUERY = "PAYMENT_PENDING_QUERY";
     private static final String TASK_CODE_REFUND_PENDING_QUERY = "REFUND_PENDING_QUERY";
     private static final String TASK_CODE_QUERY_MONITOR_ALERT = "PAYMENT_QUERY_MONITOR_ALERT";
@@ -82,6 +85,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private final PaymentEventRetryTaskService paymentEventRetryTaskService;
     private final RefundRetryTaskService refundRetryTaskService;
     private RefundQueryTaskService refundQueryTaskService;
+    private PaymentDayEndService paymentDayEndService;
     private final PaymentConfigService paymentConfigService;
     private final PaymentIssueAlertDeliveryService paymentIssueAlertDeliveryService;
     private final String taskLeaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
@@ -207,6 +211,11 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     @Autowired
     void setRefundQueryTaskService(RefundQueryTaskService refundQueryTaskService) {
         this.refundQueryTaskService = refundQueryTaskService;
+    }
+
+    @Autowired
+    void setPaymentDayEndService(PaymentDayEndService paymentDayEndService) {
+        this.paymentDayEndService = paymentDayEndService;
     }
 
     @Autowired
@@ -414,6 +423,77 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     }
                 }
         );
+    }
+
+    @Override
+    public PaymentTaskActionResultDTO runAutoPaymentDayEnd() {
+        if (paymentDayEndService == null) {
+            throw new IllegalStateException("payment day-end service is required for automatic day-end");
+        }
+        PaymentDayEndAutoRunResultDTO dayEndResult;
+        try {
+            dayEndResult = paymentDayEndService.runAutomatically();
+            validateAutomaticDayEndResult(dayEndResult);
+        } catch (RuntimeException exception) {
+            try {
+                recordFailedTaskRun(
+                        TASK_CODE_DAY_END,
+                        "支付日终处理",
+                        RUN_MODE_AUTO,
+                        "payment-day-end-scheduler",
+                        "PAYMENT_DAY_END_AUTO_RUN_FAILED");
+            } catch (RuntimeException recordException) {
+                exception.addSuppressed(recordException);
+            }
+            throw exception;
+        }
+        boolean executed = Boolean.TRUE.equals(dayEndResult.getExecuted());
+        boolean batchWarning = executed && "WARNING".equals(dayEndResult.getBatchStatus());
+        boolean leaseBusy = PaymentDayEndAutoRunResultDTO.SKIP_REASON_LEASE_BUSY
+                .equals(dayEndResult.getSkipReason());
+        String summaryComment;
+        if (executed) {
+            summaryComment = String.format(
+                    "已自动生成 %s 支付日终批次，批次状态为 %s。",
+                    dayEndResult.getBizDate(), dayEndResult.getBatchStatus());
+        } else if (leaseBusy) {
+            summaryComment = String.format(
+                    "%s 的业务日租约由其他实例持有，本轮自动日终跳过。",
+                    dayEndResult.getBizDate());
+        } else {
+            summaryComment = String.format(
+                    "%s 已存在日终批次，本轮自动日终幂等跳过。",
+                    dayEndResult.getBizDate());
+        }
+        return buildAndRecordResult(
+                TASK_CODE_DAY_END,
+                "支付日终处理",
+                RUN_MODE_AUTO,
+                "payment-day-end-scheduler",
+                executed ? 1 : 0,
+                executed && !batchWarning ? 1 : 0,
+                batchWarning || leaseBusy ? 1 : 0,
+                0,
+                summaryComment);
+    }
+
+    private void validateAutomaticDayEndResult(PaymentDayEndAutoRunResultDTO result) {
+        if (result == null || result.getExecuted() == null || result.getBizDate() == null) {
+            throw new IllegalStateException("automatic day-end returned an incomplete result");
+        }
+        if (Boolean.TRUE.equals(result.getExecuted())) {
+            if (result.getSkipReason() != null
+                    || (!"COMPLETED".equals(result.getBatchStatus())
+                    && !"WARNING".equals(result.getBatchStatus()))) {
+                throw new IllegalStateException("automatic day-end returned an invalid executed result");
+            }
+            return;
+        }
+        if (result.getBatchStatus() != null
+                || (!PaymentDayEndAutoRunResultDTO.SKIP_REASON_EXISTING_BATCH.equals(result.getSkipReason())
+                && !PaymentDayEndAutoRunResultDTO.SKIP_REASON_LEASE_BUSY.equals(result.getSkipReason()))) {
+            throw new IllegalStateException("automatic day-end returned an invalid skipped result");
+        }
     }
 
     @Override
@@ -1121,6 +1201,33 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         return result;
     }
 
+    private void recordFailedTaskRun(String taskCode,
+                                     String taskName,
+                                     String runMode,
+                                     String triggeredBy,
+                                     String failureCode) {
+        PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
+        entity.setTaskLogNo(buildTaskLogNo());
+        entity.setTaskCode(taskCode);
+        entity.setTaskName(taskName);
+        entity.setRunMode(runMode);
+        entity.setTaskStatus(TASK_STATUS_WARN);
+        entity.setTaskStatusType("warn");
+        entity.setSeverityLevel(resolveSeverityLevel(taskCode, 0, 1, 1));
+        entity.setSeverityLevelType(resolveSeverityType(taskCode, 0, 1, 1));
+        entity.setEscalationStatus(resolveEscalationStatus(taskCode, 0, 1, 1));
+        entity.setEscalationStatusType(resolveEscalationType(taskCode, 0, 1, 1));
+        entity.setProcessedCount(1);
+        entity.setSuccessCount(0);
+        entity.setWarningCount(0);
+        entity.setFailCount(1);
+        entity.setSummaryComment(failureCode);
+        entity.setSuggestedAction(resolveSuggestedAction(taskCode, 0, 1, 1));
+        entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
+        entity.setTriggeredBy(triggeredBy);
+        paymentTaskCenterMapper.insertTaskRunLog(entity);
+    }
+
     private PaymentTaskActionResultDTO runCloseExpiredPaymentsByMode(String runMode, String triggeredBy, String modeLabel) {
         PaymentExpiryCloseResultDTO closeResult = paymentExpiryTaskService.closeExpiredPayments();
         int processedCount = closeResult.getProcessedCount();
@@ -1433,6 +1540,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private String resolveSuggestedAction(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (TASK_CODE_DAY_END.equals(taskCode)) {
+            if (failCount > 0) {
+                return "优先核对日终任务日志、数据库租约和批次写入，再由值班人员决定是否人工补跑";
+            }
+            if (warningCount > 0) {
+                return "进入支付日终页面核对批次告警或其他实例执行结果，确认主链路事实后再推进对账";
+            }
+            return processedCount > 0 ? "核对新生成日终批次及对账准入结论" : "目标业务日已有批次，无需重复生成首次快照";
+        }
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             if (failCount > 0) {
                 return "先核对超时支付单状态机与收银台过期时间，再补关单原因并复跑任务";
@@ -1499,6 +1615,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private String resolveRecommendedRoute(String taskCode) {
+        if (TASK_CODE_DAY_END.equals(taskCode)) {
+            return "/payment-day-end";
+        }
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
             return "/payment-task-center";
         }
@@ -1554,6 +1673,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
      * 根据任务类型、失败量和处理规模推导是否需要立即升级。
      */
     private boolean shouldEscalateImmediately(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (TASK_CODE_DAY_END.equals(taskCode)) {
+            return failCount > 0;
+        }
         if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
             return processedCount > 0;
         }
@@ -1591,6 +1713,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private boolean shouldFocusOnDuty(String taskCode, int warningCount, int failCount, int processedCount) {
         if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return false;
+        }
+        if (TASK_CODE_DAY_END.equals(taskCode)) {
+            return warningCount > 0;
         }
         if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
             return warningCount > 0;

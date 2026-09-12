@@ -257,9 +257,12 @@ class PaymentDayEndServiceImplTest {
         when(paymentDayEndMapper.countBatchesByDate(expectedBizDate.toString())).thenReturn(0);
         PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
 
-        boolean executed = service.runAutomatically();
+        com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO result = service.runAutomatically();
 
-        org.junit.jupiter.api.Assertions.assertTrue(executed);
+        org.junit.jupiter.api.Assertions.assertTrue(result.getExecuted());
+        org.junit.jupiter.api.Assertions.assertNull(result.getSkipReason());
+        org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertEquals("COMPLETED", result.getBatchStatus());
         ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
                 ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
         verify(paymentDayEndMapper).insertBatch(captor.capture());
@@ -275,9 +278,12 @@ class PaymentDayEndServiceImplTest {
         when(paymentDayEndMapper.countBatchesByDate(expectedBizDate.toString())).thenReturn(1);
         PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
 
-        boolean executed = service.runAutomatically();
+        com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO result = service.runAutomatically();
 
-        org.junit.jupiter.api.Assertions.assertFalse(executed);
+        org.junit.jupiter.api.Assertions.assertFalse(result.getExecuted());
+        org.junit.jupiter.api.Assertions.assertEquals("EXISTING_BATCH", result.getSkipReason());
+        org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertNull(result.getBatchStatus());
         verify(paymentDayEndMapper, org.mockito.Mockito.never()).insertBatch(org.mockito.ArgumentMatchers.any());
         verify(paymentDayEndMapper, org.mockito.Mockito.never()).countPaymentsByDate(org.mockito.ArgumentMatchers.anyString());
     }
@@ -293,9 +299,12 @@ class PaymentDayEndServiceImplTest {
                 org.mockito.ArgumentMatchers.startsWith("payment-day-end-scheduler:"),
                 org.mockito.ArgumentMatchers.eq(300))).thenReturn(null);
 
-        boolean executed = service.runAutomatically();
+        com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO result = service.runAutomatically();
 
-        org.junit.jupiter.api.Assertions.assertFalse(executed);
+        org.junit.jupiter.api.Assertions.assertFalse(result.getExecuted());
+        org.junit.jupiter.api.Assertions.assertEquals("LEASE_BUSY", result.getSkipReason());
+        org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertNull(result.getBatchStatus());
         org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
     }
 

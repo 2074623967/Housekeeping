@@ -2,6 +2,7 @@ package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
+import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
 
 /**
  * 支付日终处理服务。
@@ -19,9 +20,9 @@ public interface PaymentDayEndService {
     PaymentDayEndOverviewDTO run(PaymentDayEndRunRequestDTO request);
 
     /**
-     * 自动生成上海前一业务日的日终快照；已存在批次或执行权被占用时返回 false。
+     * 自动生成上海前一业务日的日终快照，并返回执行或跳过原因。
      */
-    boolean runAutomatically();
+    PaymentDayEndAutoRunResultDTO runAutomatically();
 
     /**
      * 导出支付日终批次快照，供财务对账和问题复盘留痕。

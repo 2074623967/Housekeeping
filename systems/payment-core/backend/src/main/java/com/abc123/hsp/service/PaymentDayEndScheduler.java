@@ -11,18 +11,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class PaymentDayEndScheduler {
 
-    private final PaymentDayEndService paymentDayEndService;
+    private final PaymentTaskCenterService paymentTaskCenterService;
     private final boolean enabled;
 
-    public PaymentDayEndScheduler(PaymentDayEndService paymentDayEndService) {
-        this(paymentDayEndService, false);
+    public PaymentDayEndScheduler(PaymentTaskCenterService paymentTaskCenterService) {
+        this(paymentTaskCenterService, false);
     }
 
     @Autowired
     public PaymentDayEndScheduler(
-            PaymentDayEndService paymentDayEndService,
+            PaymentTaskCenterService paymentTaskCenterService,
             @Value("${payment.day-end.auto.enabled:false}") boolean enabled) {
-        this.paymentDayEndService = paymentDayEndService;
+        this.paymentTaskCenterService = paymentTaskCenterService;
         this.enabled = enabled;
     }
 
@@ -34,7 +34,7 @@ public class PaymentDayEndScheduler {
             zone = "Asia/Shanghai")
     public void runPreviousBusinessDay() {
         if (enabled) {
-            paymentDayEndService.runAutomatically();
+            paymentTaskCenterService.runAutoPaymentDayEnd();
         }
     }
 }

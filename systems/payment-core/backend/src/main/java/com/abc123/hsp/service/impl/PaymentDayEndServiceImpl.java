@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
+import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
 import com.abc123.hsp.dto.PaymentDayEndAlertItemDTO;
 import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 import com.abc123.hsp.entity.PaymentDayEndBatchEntity;
@@ -99,15 +100,22 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     }
 
     @Override
-    public boolean runAutomatically() {
+    public PaymentDayEndAutoRunResultDTO runAutomatically() {
         String bizDate = LocalDate.now(BUSINESS_ZONE_ID).minusDays(1).format(DATE_FORMATTER);
-        return executeWithLease(bizDate, RUN_MODE_AUTO, AUTO_TRIGGERED_BY, true);
+        DayEndExecutionOutcome outcome = executeWithLease(
+                bizDate, RUN_MODE_AUTO, AUTO_TRIGGERED_BY, true);
+        PaymentDayEndAutoRunResultDTO result = new PaymentDayEndAutoRunResultDTO();
+        result.setExecuted(outcome.batch != null);
+        result.setSkipReason(outcome.skipReason);
+        result.setBizDate(bizDate);
+        result.setBatchStatus(outcome.batch == null ? null : outcome.batch.getBatchStatus());
+        return result;
     }
 
-    private boolean executeWithLease(String bizDate,
-                                     String runMode,
-                                     String triggeredBy,
-                                     boolean skipWhenLeaseBusy) {
+    private DayEndExecutionOutcome executeWithLease(String bizDate,
+                                                    String runMode,
+                                                    String triggeredBy,
+                                                    boolean skipWhenLeaseBusy) {
         if (paymentTaskLeaseService == null) {
             return executeRun(bizDate, runMode, triggeredBy);
         }
@@ -116,20 +124,21 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 DAY_END_LEASE_PREFIX + bizDate, leaseOwner, DAY_END_LEASE_SECONDS);
         if (lease == null) {
             if (skipWhenLeaseBusy) {
-                return false;
+                return DayEndExecutionOutcome.skipped(
+                        PaymentDayEndAutoRunResultDTO.SKIP_REASON_LEASE_BUSY);
             }
             throw new IllegalArgumentException("该业务日正在执行日终处理，请稍后重试");
         }
         try (PaymentTaskLeaseService.Lease ignored = lease) {
-            Boolean executed = runTransactionTemplate.execute(
+            return runTransactionTemplate.execute(
                     status -> executeRun(bizDate, runMode, triggeredBy));
-            return Boolean.TRUE.equals(executed);
         }
     }
 
-    private boolean executeRun(String bizDate, String runMode, String triggeredBy) {
+    private DayEndExecutionOutcome executeRun(String bizDate, String runMode, String triggeredBy) {
         if (!shouldExecuteForBizDate(bizDate, runMode)) {
-            return false;
+            return DayEndExecutionOutcome.skipped(
+                    PaymentDayEndAutoRunResultDTO.SKIP_REASON_EXISTING_BATCH);
         }
         PaymentDayEndBatchEntity entity = new PaymentDayEndBatchEntity();
         entity.setBatchNo(buildBatchNo());
@@ -155,7 +164,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         entity.setBatchStatus(resolveBatchStatus(entity));
         entity.setBatchStatusType(resolveBatchStatusType(entity.getBatchStatus()));
         paymentDayEndMapper.insertBatch(entity);
-        return true;
+        return DayEndExecutionOutcome.executed(entity);
     }
 
     private boolean shouldExecuteForBizDate(String bizDate, String runMode) {
@@ -451,5 +460,24 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     private String valueOf(Integer value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private static final class DayEndExecutionOutcome {
+
+        private final PaymentDayEndBatchEntity batch;
+        private final String skipReason;
+
+        private DayEndExecutionOutcome(PaymentDayEndBatchEntity batch, String skipReason) {
+            this.batch = batch;
+            this.skipReason = skipReason;
+        }
+
+        private static DayEndExecutionOutcome executed(PaymentDayEndBatchEntity batch) {
+            return new DayEndExecutionOutcome(batch, null);
+        }
+
+        private static DayEndExecutionOutcome skipped(String skipReason) {
+            return new DayEndExecutionOutcome(null, skipReason);
+        }
     }
 }

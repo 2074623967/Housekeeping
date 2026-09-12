@@ -37,6 +37,11 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runAutoCloseExpiredPayments();
 
     /**
+     * 自动执行支付日终任务并写入统一任务日志。
+     */
+    PaymentTaskActionResultDTO runAutoPaymentDayEnd();
+
+    /**
      * 手动补查等待回调的支付单。
      */
     PaymentTaskActionResultDTO runPendingPaymentQueries(String operator);
