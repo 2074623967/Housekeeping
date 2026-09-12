@@ -2529,6 +2529,14 @@
 4. 模式裁决、事实采集和批次插入进入同一显式事务，批次提交成功后才释放租约，避免“先释放、后提交”使下一实例看不到前一批次。新增模式错配、租约忙和提交释放顺序回归；日终定向 `11` 项、后端全量 `993` 项通过。代码提交为 `58b48cbc fix(payment-core): serialize day-end reruns`。
 5. 本轮复用 `t_payment_task_lease`，无 HTTP 字段、前端、schema、索引或迁移变化。该协议串行化服务入口，但不把每次 `RERUN` 变成同请求幂等，也不防止绕过服务直接写库；目标 MySQL 多实例锁等待、租约续期、实例崩溃和真实重检结果仍需独立验证，release 四项真实治理阻断不变。
 
+### 8.309 2026-09-12 自动日终调度进展
+
+1. 新增独立 `PaymentDayEndScheduler` 和内部 `PaymentDayEndService.runAutomatically()`，默认按 `Asia/Shanghai` 每日 `00:30` 处理前一已结束业务日；人工 HTTP 接口仍只接受 `MANUAL / RERUN`，不能伪装 `AUTO` 来源。
+2. 自动调度由 `HSP_PAYMENT_DAY_END_AUTO_ENABLED` 控制且默认关闭，cron 可通过 `HSP_PAYMENT_DAY_END_AUTO_CRON` 配置，业务时区固定为上海；代码存在不代表目标环境已经启用。
+3. 自动任务以固定系统身份 `payment-day-end-scheduler` 触发，并复用 `PAYMENT_DAY_END:{bizDate}` 数据库租约；已有任意批次或租约忙时在日终事实采集前幂等跳过，不覆盖人工或历史快照。
+4. 批次写入异常继续向调度框架传播，事务先回滚再释放租约，不将失败伪装为幂等跳过。定向 `20` 项、后端全量 `1002` 项和补丁检查通过；代码提交为 `03e089c9 feat(payment-core): schedule automatic day-end`。
+5. 本轮无 HTTP 字段、前端、schema、索引或迁移变化。生产启用前仍需验证真实时钟、目标 MySQL 多实例调度、租约竞争、账期数据水位和财务关账；本地测试不构成自动日终已生产运行、资金一致或 release 放行证明。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

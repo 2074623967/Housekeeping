@@ -4323,6 +4323,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 历史批次判断、事实采集和批次写入必须处于同一事务，事务提交后才能释放租约；事务回滚或异常退出时不得留下半成品批次，租约最终按关闭或到期语义恢复。
 6. 该契约提供同业务日服务入口串行化和运行方式防误用，不提供每次 `RERUN` 的请求级幂等。生产仍需验证目标 MySQL 多实例竞争、锁等待、租约续期与崩溃恢复，并通过权限控制禁止绕过服务直接写批次表。
 
+### 14.304 自动日终内部执行契约
+
+1. 自动日终不是新增 HTTP API。`PaymentDayEndScheduler` 只能调用内部 `PaymentDayEndService.runAutomatically()`；`POST /api/v1/payment-day-end/run` 继续只接受 `MANUAL / RERUN`，人工请求中的 `AUTO` 必须拒绝。
+2. 调度默认值为 `payment.day-end.auto.enabled=false` 和 `payment.day-end.auto.cron=0 30 0 * * *`；cron 可由环境配置，但 `@Scheduled` 时区固定为 `Asia/Shanghai`，自动业务日固定取上海当前日的前一日。
+3. 自动批次写入 `runMode=AUTO`、`triggeredBy=payment-day-end-scheduler`，不读取浏览器触发人或人工表单。目标业务日已有任意历史批次时返回未执行，不新增或覆盖批次。
+4. 自动入口复用 `PAYMENT_DAY_END:{bizDate}` 租约。租约忙时返回未执行且不读取日终事实；获得租约后，历史判断、事实采集和插入仍位于同一事务。
+5. 批次写入失败必须回滚并向调度框架抛出异常，租约随后释放或按既有到期语义恢复；不得把技术失败包装成“已有批次”或“租约忙”的幂等跳过。
+6. 默认关闭不表示能力缺失，也不表示生产已经启用。启用前必须验证主机时钟、MySQL 多实例租约竞争、数据水位、关账窗口和告警观测；本地测试结果不能替代生产调度或财务确认。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
