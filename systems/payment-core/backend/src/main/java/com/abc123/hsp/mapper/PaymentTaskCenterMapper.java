@@ -215,6 +215,12 @@ public interface PaymentTaskCenterMapper {
     List<PaymentIssueAlertDispatchItemDTO> findPendingOutboxAlerts(@Param("batchSize") int batchSize);
 
     /**
+     * 在逐条事务内锁定并复验待派发的顶层站内 outbox。
+     */
+    Boolean lockPendingOutboxAlert(@Param("alertNo") String alertNo,
+                                   @Param("issueNo") String issueNo);
+
+    /**
      * 新增任务执行日志。
      */
     int insertTaskRunLog(PaymentTaskRunLogEntity entity);

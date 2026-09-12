@@ -1115,10 +1115,23 @@
                        AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
               )
         WHERE alert_channel = 'IN_APP_OUTBOX'
+          AND outbox.source_alert_no IS NULL
           AND alert_status IN ('已生成', '部分失败', '派发失败')
           AND COALESCE(outbox.ack_status, '待确认') = '待确认'
         ORDER BY outbox.created_at ASC, outbox.id ASC
         LIMIT #{batchSize}
+    </select>
+
+    <select id="lockPendingOutboxAlert" resultType="boolean">
+        SELECT TRUE
+        FROM t_payment_issue_alert_log
+        WHERE alert_no = #{alertNo}
+          AND issue_no = #{issueNo}
+          AND alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert_no IS NULL
+          AND alert_status IN ('已生成', '部分失败', '派发失败')
+          AND COALESCE(ack_status, '待确认') = '待确认'
+        FOR UPDATE
     </select>
 
     <select id="hasSuccessfulIssueAlertChannelDelivery" resultType="boolean">
@@ -1218,6 +1231,11 @@
             ack_status_type = #{ackStatusType},
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
+          AND issue_no = #{issueNo}
+          AND alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert_no IS NULL
+          AND alert_status IN ('已生成', '部分失败', '派发失败')
+          AND COALESCE(ack_status, '待确认') = '待确认'
     </update>
 
     <select id="findAcceptedIssueAlertDeliveryLogs" resultType="com.abc123.hsp.entity.PaymentIssueAlertLogEntity">

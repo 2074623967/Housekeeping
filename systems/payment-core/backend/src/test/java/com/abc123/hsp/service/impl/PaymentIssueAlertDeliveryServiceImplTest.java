@@ -69,6 +69,66 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.isMatchingPendingSourceIssueAlert(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
                 .thenReturn(true);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.lockPendingOutboxAlert(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(true);
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
+                any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
+    }
+
+    @Test
+    void shouldSkipStaleDispatchCandidateBeforeCallingProvider() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                .thenReturn(Collections.singletonList(item));
+        when(paymentTaskCenterMapper.lockPendingOutboxAlert("PIA-OUTBOX-001", "ISSUE-001"))
+                .thenReturn(false);
+        when(imNotifier.channelCode()).thenReturn("IM");
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("支付运营");
+
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .insertIssueAlertLog(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(0, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldFailClosedWhenSourceDispatchStatusUpdateLosesEligibility() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                .thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
+                .thenReturn(Collections.singletonList(buildProvider(
+                        "ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(
+                buildDeliveryResult("IM-RECEIPT", "DELIVERED", "企业微信已送达", "[IM] ISSUE-001"));
+        when(paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class)))
+                .thenReturn(0);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("支付运营");
+
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
     }
 
     @Test

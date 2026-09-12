@@ -327,9 +327,16 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             processedCount++;
             try {
                 DispatchOutcome outcome = executeInItemTransaction(() -> {
+                    if (!Boolean.TRUE.equals(paymentTaskCenterMapper.lockPendingOutboxAlert(
+                            item.getAlertNo(), item.getIssueNo()))) {
+                        return null;
+                    }
                     DispatchOutcome currentOutcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
-                    paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
+                    int updated = paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
                             buildSourceAlertStatus(item, triggeredBy, currentOutcome));
+                    if (updated <= 0) {
+                        throw new IllegalStateException("告警来源派发状态更新失败");
+                    }
                     if (currentOutcome.hasConfirmedDelivery()
                             && !acknowledgeSourceAlert(
                                 item.getAlertNo(),
@@ -342,6 +349,10 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     }
                     return currentOutcome;
                 });
+                if (outcome == null) {
+                    processedCount--;
+                    continue;
+                }
                 if (outcome.isAllSucceeded()) {
                     successCount++;
                 } else if (outcome.hasAnySuccess()) {

@@ -224,6 +224,12 @@ public class PaymentTaskCenterMapperIntegrationTest {
                         + "'IN_APP_OUTBOX', '待确认', '部分失败', TIMESTAMPADD(MINUTE, -2, NOW())),"
                         + "('PIA-DISPATCH-LATER', 'ISSUE-DISPATCH-3', '待回调未收口', 'P1', "
                         + "'IN_APP_OUTBOX', '待确认', '派发失败', TIMESTAMPADD(MINUTE, -1, NOW()))");
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, source_alert_no, issue_no, issue_type, severity, alert_channel, "
+                        + "ack_status, alert_status, created_at) VALUES "
+                        + "('PIA-DISPATCH-NESTED', 'PIA-DISPATCH-PARENT', 'ISSUE-DISPATCH-NESTED', "
+                        + "'待回调未收口', 'P1', 'IN_APP_OUTBOX', '待确认', '已生成', "
+                        + "TIMESTAMPADD(MINUTE, -4, NOW()))");
             }
 
             List<PaymentIssueAlertDispatchItemDTO> candidates = mapper.findPendingOutboxAlerts(2);
@@ -233,6 +239,26 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     candidates.stream()
                             .map(PaymentIssueAlertDispatchItemDTO::getAlertNo)
                             .collect(java.util.stream.Collectors.toList()));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-DISPATCH-NESTED", "ISSUE-DISPATCH-NESTED")));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-DISPATCH-OLDEST", "ISSUE-DISPATCH-WRONG")));
+            org.junit.jupiter.api.Assertions.assertTrue(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-DISPATCH-OLDEST", "ISSUE-DISPATCH-1")));
+            PaymentIssueAlertLogEntity update = new PaymentIssueAlertLogEntity();
+            update.setAlertNo("PIA-DISPATCH-OLDEST");
+            update.setIssueNo("ISSUE-DISPATCH-1");
+            update.setAlertStatus("已派发");
+            update.setAlertStatusType("success");
+            update.setAckStatus("待确认");
+            update.setAckStatusType("warn");
+            update.setTriggeredBy("payment-core-admin");
+            assertEquals(1, mapper.updateIssueAlertDeliveryStatus(update));
+            org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
+                    mapper.lockPendingOutboxAlert("PIA-DISPATCH-OLDEST", "ISSUE-DISPATCH-1")));
+            update.setAlertNo("PIA-DISPATCH-NESTED");
+            update.setIssueNo("ISSUE-DISPATCH-NESTED");
+            assertEquals(0, mapper.updateIssueAlertDeliveryStatus(update));
         }
     }
 
