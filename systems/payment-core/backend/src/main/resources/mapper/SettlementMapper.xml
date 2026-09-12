@@ -21,6 +21,10 @@
         </where>
     </sql>
 
+    <sql id="workerSettlementOrder">
+        ORDER BY period_end DESC, created_at DESC, id DESC
+    </sql>
+
     <select id="findWorkerSettlements" resultType="com.abc123.hsp.dto.WorkerSettlementListItemDTO">
         SELECT settlement_order_id AS settlementOrderId,
                worker_name AS workerName,
@@ -35,7 +39,7 @@
                payout_status_type AS payoutStatusType
         FROM t_worker_settlement_order
         <include refid="workerSettlementWhere"/>
-        ORDER BY period_end DESC, created_at DESC
+        <include refid="workerSettlementOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
@@ -67,7 +71,7 @@
                payout_status_type AS payoutStatusType
         FROM t_worker_settlement_order
         <include refid="workerSettlementWhere"/>
-        ORDER BY period_end DESC, created_at DESC
+        <include refid="workerSettlementOrder"/>
         LIMIT 1001
     </select>
 
