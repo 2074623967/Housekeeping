@@ -37,6 +37,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     private static final int TRIGGERED_BY_MAX_LENGTH = 64;
     private static final int DAY_END_LEASE_SECONDS = 300;
     private static final String DAY_END_LEASE_PREFIX = "PAYMENT_DAY_END:";
+    private static final String RUN_MODE_AUTO = "AUTO";
+    private static final String AUTO_TRIGGERED_BY = "payment-day-end-scheduler";
 
     private final PaymentDayEndMapper paymentDayEndMapper;
     private final PaymentTaskLeaseService paymentTaskLeaseService;
@@ -92,27 +94,43 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         String triggeredBy = normalizeTriggeredBy(request.getTriggeredBy());
         String runMode = normalizeManualRunMode(request.getRunMode());
         String bizDate = resolveBizDate(request);
+        executeWithLease(bizDate, runMode, triggeredBy, false);
+        return overview();
+    }
+
+    @Override
+    public boolean runAutomatically() {
+        String bizDate = LocalDate.now(BUSINESS_ZONE_ID).minusDays(1).format(DATE_FORMATTER);
+        return executeWithLease(bizDate, RUN_MODE_AUTO, AUTO_TRIGGERED_BY, true);
+    }
+
+    private boolean executeWithLease(String bizDate,
+                                     String runMode,
+                                     String triggeredBy,
+                                     boolean skipWhenLeaseBusy) {
         if (paymentTaskLeaseService == null) {
-            executeRun(bizDate, runMode, triggeredBy);
-            return overview();
+            return executeRun(bizDate, runMode, triggeredBy);
         }
         String leaseOwner = triggeredBy + ":" + leaseOwnerSuffix;
         PaymentTaskLeaseService.Lease lease = paymentTaskLeaseService.tryAcquire(
                 DAY_END_LEASE_PREFIX + bizDate, leaseOwner, DAY_END_LEASE_SECONDS);
         if (lease == null) {
+            if (skipWhenLeaseBusy) {
+                return false;
+            }
             throw new IllegalArgumentException("该业务日正在执行日终处理，请稍后重试");
         }
         try (PaymentTaskLeaseService.Lease ignored = lease) {
-            runTransactionTemplate.execute(status -> {
-                executeRun(bizDate, runMode, triggeredBy);
-                return null;
-            });
-            return overview();
+            Boolean executed = runTransactionTemplate.execute(
+                    status -> executeRun(bizDate, runMode, triggeredBy));
+            return Boolean.TRUE.equals(executed);
         }
     }
 
-    private void executeRun(String bizDate, String runMode, String triggeredBy) {
-        validateRunModeForBizDate(bizDate, runMode);
+    private boolean executeRun(String bizDate, String runMode, String triggeredBy) {
+        if (!shouldExecuteForBizDate(bizDate, runMode)) {
+            return false;
+        }
         PaymentDayEndBatchEntity entity = new PaymentDayEndBatchEntity();
         entity.setBatchNo(buildBatchNo());
         entity.setBizDate(bizDate);
@@ -137,16 +155,21 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         entity.setBatchStatus(resolveBatchStatus(entity));
         entity.setBatchStatusType(resolveBatchStatusType(entity.getBatchStatus()));
         paymentDayEndMapper.insertBatch(entity);
+        return true;
     }
 
-    private void validateRunModeForBizDate(String bizDate, String runMode) {
+    private boolean shouldExecuteForBizDate(String bizDate, String runMode) {
         int existingBatchCount = defaultZero(paymentDayEndMapper.countBatchesByDate(bizDate));
+        if (RUN_MODE_AUTO.equals(runMode)) {
+            return existingBatchCount == 0;
+        }
         if (existingBatchCount > 0 && "MANUAL".equals(runMode)) {
             throw new IllegalArgumentException("该业务日已有日终批次，请使用RERUN重检");
         }
         if (existingBatchCount == 0 && "RERUN".equals(runMode)) {
             throw new IllegalArgumentException("该业务日尚无日终批次，首次执行请使用MANUAL");
         }
+        return true;
     }
 
     @Override

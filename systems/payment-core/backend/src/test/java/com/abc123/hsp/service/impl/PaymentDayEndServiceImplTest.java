@@ -219,6 +219,118 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldRollbackFailedBatchBeforeReleasingBusinessDateLease() {
+        PaymentTaskCenterMapper leaseMapper = org.mockito.Mockito.mock(PaymentTaskCenterMapper.class);
+        PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(leaseMapper);
+        org.springframework.transaction.PlatformTransactionManager transactionManager =
+                org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class);
+        org.springframework.transaction.TransactionStatus transactionStatus =
+                org.mockito.Mockito.mock(org.springframework.transaction.TransactionStatus.class);
+        when(leaseMapper.acquireTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:2026-07-19"),
+                org.mockito.ArgumentMatchers.startsWith("finance-ops:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(1);
+        when(transactionManager.getTransaction(org.mockito.ArgumentMatchers.any())).thenReturn(transactionStatus);
+        when(paymentDayEndMapper.countBatchesByDate("2026-07-19")).thenReturn(0);
+        org.mockito.Mockito.doThrow(new IllegalStateException("write failed"))
+                .when(paymentDayEndMapper).insertBatch(org.mockito.ArgumentMatchers.any());
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper, leaseService, transactionManager);
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate("2026-07-19");
+        request.setTriggeredBy("finance-ops");
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> service.run(request));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                paymentDayEndMapper, transactionManager, leaseMapper);
+        inOrder.verify(paymentDayEndMapper).insertBatch(org.mockito.ArgumentMatchers.any());
+        inOrder.verify(transactionManager).rollback(transactionStatus);
+        inOrder.verify(leaseMapper).releaseTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:2026-07-19"),
+                org.mockito.ArgumentMatchers.startsWith("finance-ops:"));
+    }
+
+    @Test
+    void shouldRunPreviousShanghaiBusinessDayAutomatically() {
+        LocalDate expectedBizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
+        when(paymentDayEndMapper.countBatchesByDate(expectedBizDate.toString())).thenReturn(0);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
+
+        boolean executed = service.runAutomatically();
+
+        org.junit.jupiter.api.Assertions.assertTrue(executed);
+        ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
+                ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
+        verify(paymentDayEndMapper).insertBatch(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), captor.getValue().getBizDate());
+        org.junit.jupiter.api.Assertions.assertEquals("AUTO", captor.getValue().getRunMode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment-day-end-scheduler", captor.getValue().getTriggeredBy());
+    }
+
+    @Test
+    void shouldSkipAutomaticDayEndWhenBusinessDateAlreadyHasBatch() {
+        LocalDate expectedBizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
+        when(paymentDayEndMapper.countBatchesByDate(expectedBizDate.toString())).thenReturn(1);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
+
+        boolean executed = service.runAutomatically();
+
+        org.junit.jupiter.api.Assertions.assertFalse(executed);
+        verify(paymentDayEndMapper, org.mockito.Mockito.never()).insertBatch(org.mockito.ArgumentMatchers.any());
+        verify(paymentDayEndMapper, org.mockito.Mockito.never()).countPaymentsByDate(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldSkipAutomaticDayEndWhenBusinessDateLeaseIsBusy() {
+        LocalDate expectedBizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
+        PaymentTaskLeaseService leaseService = org.mockito.Mockito.mock(PaymentTaskLeaseService.class);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper, leaseService, (org.springframework.transaction.support.TransactionTemplate) null);
+        when(leaseService.tryAcquire(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:" + expectedBizDate),
+                org.mockito.ArgumentMatchers.startsWith("payment-day-end-scheduler:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(null);
+
+        boolean executed = service.runAutomatically();
+
+        org.junit.jupiter.api.Assertions.assertFalse(executed);
+        org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
+    }
+
+    @Test
+    void shouldRollbackFailedAutomaticBatchBeforeReleasingBusinessDateLease() {
+        LocalDate expectedBizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
+        PaymentTaskCenterMapper leaseMapper = org.mockito.Mockito.mock(PaymentTaskCenterMapper.class);
+        PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(leaseMapper);
+        org.springframework.transaction.PlatformTransactionManager transactionManager =
+                org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class);
+        org.springframework.transaction.TransactionStatus transactionStatus =
+                org.mockito.Mockito.mock(org.springframework.transaction.TransactionStatus.class);
+        when(leaseMapper.acquireTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:" + expectedBizDate),
+                org.mockito.ArgumentMatchers.startsWith("payment-day-end-scheduler:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(1);
+        when(transactionManager.getTransaction(org.mockito.ArgumentMatchers.any())).thenReturn(transactionStatus);
+        when(paymentDayEndMapper.countBatchesByDate(expectedBizDate.toString())).thenReturn(0);
+        org.mockito.Mockito.doThrow(new IllegalStateException("write failed"))
+                .when(paymentDayEndMapper).insertBatch(org.mockito.ArgumentMatchers.any());
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper, leaseService, transactionManager);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, service::runAutomatically);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                paymentDayEndMapper, transactionManager, leaseMapper);
+        inOrder.verify(paymentDayEndMapper).insertBatch(org.mockito.ArgumentMatchers.any());
+        inOrder.verify(transactionManager).rollback(transactionStatus);
+        inOrder.verify(leaseMapper).releaseTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:" + expectedBizDate),
+                org.mockito.ArgumentMatchers.startsWith("payment-day-end-scheduler:"));
+    }
+
+    @Test
     void shouldWarnWhenOnlyPaymentSuccessGapRemains() {
         String bizDate = "2026-07-19";
         when(paymentDayEndMapper.countPaymentSuccessGapByDate(bizDate)).thenReturn(1);
