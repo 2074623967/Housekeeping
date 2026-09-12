@@ -94,6 +94,7 @@ class PaymentMonitorMapperIntegrationTest {
             assertEquals(Integer.valueOf(3), summary.getSuccessCount());
             assertEquals(Integer.valueOf(1), summary.getPendingPaymentCount());
             assertEquals(Integer.valueOf(1), summary.getClosedPaymentCount());
+            assertEquals(Integer.valueOf(3), summary.getAlertCount());
         }
     }
 
@@ -112,6 +113,26 @@ class PaymentMonitorMapperIntegrationTest {
             assertEquals("0.00%", summary.getSuccessRate());
             assertEquals("¥0.00", summary.getSuccessAmount());
             assertEquals(Integer.valueOf(2), summary.getAlertCount());
+        }
+    }
+
+    @Test
+    void shouldNotTreatPrepayCreatedPaymentAsCallbackAlert() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("DELETE FROM t_payment_order");
+            statement.executeUpdate("DELETE FROM t_refund_order");
+            statement.executeUpdate("DELETE FROM t_payment_channel_config");
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "channel_code, payment_method, status, amount) VALUES "
+                    + "('channel-a', 'method-a', 'PREPAY_CREATED', 10.00)");
+
+            PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
+            PaymentMonitorSummaryDTO summary = mapper.findSummary();
+
+            assertEquals(Integer.valueOf(1), summary.getPendingPaymentCount());
+            assertEquals(Integer.valueOf(0), summary.getAlertCount());
+            assertEquals(List.of(), mapper.findAlerts());
         }
     }
 
