@@ -3213,7 +3213,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 ### 14.154 失败退款重试有界批次契约
 
 1. 人工与自动失败退款重试共用服务端批次容量；默认值为 `100`，部署环境可通过 `HSP_PAYMENT_REFUND_RETRY_BATCH_SIZE` 覆盖，实际值限制在 `1..1000`。
-2. 每轮按 `applied_at ASC, id ASC` 选择最早的 `FAIL` 退款；超过批次的退款不改写状态，留待后续调度或人工轮次。
+2. 每轮只选择 `terminal_at IS NOT NULL` 的 `FAIL` 退款，按 `terminal_at ASC, id ASC` 优先处理最早形成的失败风险；超过批次的退款不改写状态，留待后续调度或人工轮次。缺失终态时间的历史失败退款由事实不一致告警阻断，不进入批量候选。
 3. `PaymentTaskActionResultDTO.processedCount / successCount / failCount` 只表示本轮执行结果；单笔失败继续隔离，摘要最多展示三个失败退款单号，不新增接口字段或自动循环清空承诺。
 4. 成功计数仍只代表本地重试和渠道提交链路完成，不代表渠道最终受理或退款到账；本地测试不证明生产 MySQL 吞吐、真实渠道结果或稳定性。
 
@@ -4488,6 +4488,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 失败退款非零时批次状态为 `WARNING`，总览和批次对账准入均为阻断，日终告警类型为 `REFUND_FAIL / P1`；待审核和处理中退款继续使用 `PENDING_REFUND` 的有条件准入口径。
 4. 全新 schema 两字段为非空默认零；增量迁移对历史批次使用可空字段且不回填，`NULL` 表示未采集，必须通过 `RERUN` 生成新快照。
 5. 失败金额表示退款单申请金额的本地失败快照，不证明渠道已出款、客户未到账、账务冲销完成或最终资金损失；真实原因和补退结果仍需渠道、账务与运营证据。
+
+### 14.323 失败退款批量重试候选契约
+
+1. `POST /api/payment-task-center/retry-failed-refunds` 与定时失败退款重试共用候选集合：`status = 'FAIL' AND terminal_at IS NOT NULL`，按 `terminal_at ASC, id ASC` 排序并应用既有有界批次。
+2. `terminal_at` 表示当前失败终态形成时间，优先级不再由 `applied_at` 决定；相同终态时间使用主键保证稳定顺序。查询复用 `(status, terminal_at)` 索引。
+3. `terminal_at IS NULL` 的历史失败退款不进入批量处理，任务结果的处理数也不包含它们；记录保持原状态，由 `TERMINAL_FACT_MISMATCH / P1` 告警和既有退款下钻交给人工核查。
+4. `POST /api/refunds/retry` 的单笔人工重试不调用批量候选查询，现有请求、响应和状态机契约不变；操作人员仍需基于可验证事实决定是否重试。
+5. 本契约不承诺多实例间全局严格公平，也不证明渠道补退、客户到账、账务冲销或资金一致；目标 MySQL 仍需验证真实执行计划和调度行为。
 
 ## 15. 结论
 
