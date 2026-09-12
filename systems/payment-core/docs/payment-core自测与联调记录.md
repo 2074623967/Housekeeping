@@ -11964,3 +11964,32 @@
 1. 三类告警同时存在时，运营页面首项和列表顺序具有明确、可回归的处理优先级，不再依赖 `UNION ALL` 的偶然返回顺序。
 2. 固定类型顺序不按影响笔数动态重排；影响笔数仍作为独立字段展示，若未来需要动态优先级，应另行定义等级、数量和时间的组合规则。
 3. 本地 H2 不证明生产告警数据完整、处置完成、渠道恢复、退款到账、支付成功或资金对账一致性；release 四项真实治理阻断不变。
+
+## 444. 2026-09-12 支付监控已关闭指标 V1.0 验证
+
+### 444.1 本轮补强
+
+1. `PaymentMonitorMapper.findSummary` 新增 `SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END)`，独立返回已关闭支付数量。
+2. `PaymentMonitorSummaryDTO` 和监控总览 JSON 摘要新增 `closedPaymentCount`，管理端监控页新增“已关闭支付”卡片。
+3. 监控摘要使用专用桌面五列布局，既有平板两列和手机单列规则保持有效；该变更不影响共享卡片网格的其他页面。
+
+### 444.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 监控后端定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest,PaymentMonitorControllerTest` `5` 项通过，`0` failures、`0` errors、`0` skipped |
+| 摘要状态计数 | 夹具固定返回 `totalCount=6`、`successCount=3`、`pendingPaymentCount=1`、`closedPaymentCount=1` |
+| 状态口径 | `CLOSED` 只进入已关闭计数，不进入 `SUCCESS` 或 `PREPAY_CREATED / WAIT_CALLBACK` 计数 |
+| 管理端单测 | `15` 项通过，`0` fail、`0` skipped |
+| 管理端生产构建 | 通过；产物最大 JS `542.37 kB`，保留既存超过 `500 kB` 告警 |
+| payment-core 后端全量测试 | `961` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 新增摘要响应字段和监控卡片；无状态机、schema、索引或迁移变化 |
+| 代码提交 | `a8a651fe feat(payment-core): expose closed payment monitor metric` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 444.3 当前判断
+
+1. 独立支付监控页现已同时展示待收口与已关闭数量，页面矩阵、Mapper、DTO 和前端摘要完成对齐。
+2. `closedPaymentCount` 是查询时点 payment-core 中 `CLOSED` 支付单数量，不区分超时关闭和人工关闭，也不表达渠道侧终态。
+3. 本地测试不证明生产数据完整、真实渠道关单、支付失败、资金退回、账务入账或对账一致性；release 四项真实治理阻断不变。

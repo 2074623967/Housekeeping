@@ -4060,6 +4060,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 前端应按响应数组原序展示并选择首项，不得依赖 `UNION ALL` 分支书写顺序，也不得用缺少业务规则的文本排序覆盖后端优先级。
 4. 固定顺序不表示告警已核验或处置完成，也不构成渠道恢复、退款到账、支付成功、账务入账或资金对账证明。
 
+### 14.271 支付监控已关闭指标契约
+
+1. `GET /api/payment-monitor/overview` 的 `summary` 新增整数型 `closedPaymentCount`，表示查询时点 `t_payment_order.status='CLOSED'` 的支付单数量。
+2. `closedPaymentCount` 与 `pendingPaymentCount`、`successCount` 相互独立：待处理仍只统计 `PREPAY_CREATED / WAIT_CALLBACK`，成功仍只统计 `SUCCESS`。
+3. 字段缺省展示按 `0` 处理；管理端以独立“已关闭支付”卡片展示，不改变摘要其他字段、渠道指标或告警数组契约。
+4. `CLOSED` 是 payment-core 内部支付状态，可能来自超时关闭或人工关闭；该计数不得解释为渠道侧关单确认、支付失败、资金退回或对账完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

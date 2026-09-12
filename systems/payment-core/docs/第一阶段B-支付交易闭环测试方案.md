@@ -2242,6 +2242,14 @@
 4. 执行正式 Mapper 与监控服务定向测试、payment-core 后端全量测试、Mapper XML 与补丁检查；本轮没有前端代码变化，不重复声明前端构建为本批验证。
 5. 另行验证生产 MySQL 联合查询计划和生产告警事实；本地 H2 不得证明告警处置完成、渠道恢复、退款到账、支付成功、账务入账或资金一致性。
 
+### 4.288 支付监控已关闭指标保护
+
+1. 使用正式 `PaymentMonitorMapper.xml` 同时构造 `SUCCESS`、`PREPAY_CREATED / WAIT_CALLBACK`、`CLOSED` 和其他状态支付单，验证四类状态不会互相污染计数。
+2. 验证 `findSummary` 的总量等于全部支付单，成功量只统计 `SUCCESS`，待处理量只统计 `PREPAY_CREATED / WAIT_CALLBACK`，已关闭量只统计 `CLOSED`。
+3. 回归 `PaymentMonitorSummaryDTO.closedPaymentCount` 经服务与控制器进入总览响应；管理端缺省值为 `0`，并以独立卡片展示。
+4. 执行监控 Mapper、服务和控制器定向测试、payment-core 后端全量测试、管理端单测与生产构建、Mapper XML 和补丁检查；核对桌面五列、平板两列和手机单列样式规则。
+5. 另行验证生产 MySQL 聚合计划和生产状态数据；本地 `CLOSED` 不能证明真实渠道关单、支付失败、资金退回、账务入账或资金一致性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
