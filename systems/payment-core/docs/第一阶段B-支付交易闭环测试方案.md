@@ -2093,6 +2093,15 @@
 5. 执行管理端单测与生产构建、CSV 后端定向测试、payment-core 后端全量回归及补丁检查；记录既存构建告警，不将告警隐去或包装为性能验收通过。
 6. 另行使用真实历史数据、HTTP 下游、AMQP 消费者和生产数据库核验阶段含义、下游幂等与资金结果；本地 mock 和浏览器展示不得证明真实下游接受、清分完成、账务入账或生产稳定性。
 
+### 4.270 支付成功 HTTP 非法阶段失败闭合保护
+
+1. 分别构造空白、缺失和未知 `paymentSuccessHttpStage` 的可重发支付成功事件，验证 HTTP 模式返回失败并按重试上限进入 `FAILED / DEAD_LETTER`。
+2. 对每个非法阶段断言清分和账务 HTTP 零调用、`markPaymentSuccessClearingAccepted / markPaymentSuccessHttpCompleted / markPublishSuccess` 零调用，防止异常数据被解释成首次投递。
+3. 回归 `PENDING` 依次投递、`CLEARING_ACCEPTED` 只投账务、`COMPLETED` 只补成功终态，确保失败闭合不破坏合法三态恢复。
+4. 回归 AMQP 成功与失败分支，断言其不读取阶段含义且两个 HTTP 阶段 Mapper 方法零调用；非法 HTTP 阶段不得被错误扩展为 AMQP 限制。
+5. 手工测试 DTO 必须显式模拟数据库非空默认 `PENDING`，避免用 Java 空值代表合法持久化行；执行定向和后端全量回归，并记录任何首次失败及修正原因。
+6. 另行检查生产存量数据异常值、MySQL 约束与真实下游调用审计；本地 Mockito 不得声称存量已清洗、真实下游幂等、资金结果或生产稳定性通过。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

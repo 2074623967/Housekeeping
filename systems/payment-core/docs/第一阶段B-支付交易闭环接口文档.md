@@ -3930,6 +3930,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 当 `eventType=PAYMENT_SUCCESS`、`publishStatus=SUCCESS` 且阶段为默认 `PENDING` 时，页面显示“未记录 HTTP 阶段”，因为迁移前历史事件和 AMQP 模式都可能形成该组合；展示层不得据此断言待清分，也不得回写或修正服务端阶段。
 5. 导出的原始字段和页面解释均只描述 payment-core 的持久化记录。调用方不得将标签、CSV 或排障建议解释为真实清分完成、账务入账、AMQP 消费完成或生产资金一致性证明。
 
+### 14.253 支付成功 HTTP 非法阶段派发契约
+
+1. HTTP 模式只接受 `paymentSuccessHttpStage=PENDING / CLEARING_ACCEPTED / COMPLETED`；空白、缺失、包含空白后仍为空或任何未知枚举均视为数据异常，不得回退为 `PENDING`。
+2. 非法阶段不得调用清分或账务，不得推进 HTTP 阶段或将事件标记为 `SUCCESS`；事件按既有重试计数进入 `FAILED / DEAD_LETTER`，供运营核对并修复权威数据。
+3. 正常数据库新事件仍由非空默认值 `PENDING` 起步，本轮不改变 schema、迁移、Mapper 条件更新、阶段顺序或对外请求字段。
+4. AMQP 模式不解释 `paymentSuccessHttpStage`，继续忽略该字段并按 publisher confirm 收口发布状态；HTTP 非法阶段规则不得被调用方扩展成 AMQP 发布限制。
+5. 失败闭合只阻止当前代码路径根据异常阶段产生 HTTP 副作用，不证明存量数据已清洗、真实下游未曾受理、资金一致或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

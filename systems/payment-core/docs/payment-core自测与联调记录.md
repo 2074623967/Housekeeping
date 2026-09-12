@@ -11447,3 +11447,30 @@
 1. 运营人员现在可在页面、详情、建议和 CSV 中看到一致的阶段事实，并按阶段缩小重试范围；未知或不适用数据失败闭合，不诱导盲目重发。
 2. `SUCCESS + PENDING` 不能区分迁移前 HTTP 成功事件与 AMQP 发布事件，因此保守文案是展示策略，不回写数据库，也不推导真实投递模式或下游完成状态。
 3. 本机 mock、构建和浏览器检查不证明真实下游接受、真实清分、账务入账、生产数据正确或稳定性；发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未形成，`release/v1.0.0` 继续冻结。
+
+## 426. 2026-09-12 支付成功 HTTP 非法阶段失败闭合 V1.0 验证
+
+### 426.1 本轮补强
+
+1. HTTP 派发移除空白阶段到 `PENDING` 的隐式回退，只接受 `PENDING / CLEARING_ACCEPTED / COMPLETED` 三个持久化状态。
+2. 空白、缺失和未知阶段在清分、账务及阶段推进前失败，事件继续按既有重试次数进入 `FAILED / DEAD_LETTER`；AMQP 分支仍不读取 HTTP 阶段。
+3. 两个手工构造的旧 HTTP 测试事件补齐数据库真实默认值 `PENDING`，避免测试夹具依赖 DTO 空值表达合法持久化事实。
+
+### 426.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 首次定向测试 | 未通过：`53` 项中 `1` failure、`1` error，原因是两个旧 HTTP 夹具未设置数据库默认阶段；未记录为业务能力通过 |
+| 修正后定向测试 | `PaymentEventDispatchServiceImplTest` `53` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 后端全量测试 | `943` 项通过，`0` failures、`0` errors、`0` skipped |
+| 外部副作用断言 | 空白与未知阶段均为清分/账务零调用、阶段零推进、事件成功零写入，并进入既有失败收口 |
+| AMQP 回归 | 既有测试继续通过，HTTP 阶段 Mapper 方法零调用 |
+| 结构与补丁 | 无 schema、Mapper 或迁移变化；`git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+| 代码提交 | `4dfc68d4 fix(payment-core): reject invalid success delivery stages` |
+
+### 426.3 当前判断
+
+1. HTTP 派发的权威裁决现与运营页面一致：无法识别阶段时不猜测、不调用外部系统，先保留失败事实供数据修复和人工核查。
+2. 数据库默认值保证正常新事件仍从 `PENDING` 开始；AMQP 的发布语义继续只由 `publishStatus` 与 publisher confirm 表达，不因无关 HTTP 阶段异常被阻断。
+3. 本地 Mockito 不证明生产存量数据质量、真实下游幂等、清分或账务结果、MySQL 多实例行为和稳定性；release 四项真实治理阻断不变。
