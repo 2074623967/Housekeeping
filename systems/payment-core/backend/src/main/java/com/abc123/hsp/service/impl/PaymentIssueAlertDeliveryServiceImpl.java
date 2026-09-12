@@ -1392,6 +1392,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                                            String triggeredBy) {
         PaymentIssueAlertLogEntity entity = new PaymentIssueAlertLogEntity();
         entity.setAlertNo(acceptedLog.getAlertNo());
+        entity.setSourceAlertNo(acceptedLog.getSourceAlertNo().trim());
+        entity.setIssueNo(acceptedLog.getIssueNo().trim());
         entity.setProviderReceiptSnapshot(truncate(
                 StringUtils.hasText(queryResult.getProviderReceiptSnapshot())
                         ? queryResult.getProviderReceiptSnapshot()

@@ -433,6 +433,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
 
             PaymentIssueAlertLogEntity update = new PaymentIssueAlertLogEntity();
             update.setAlertNo(accepted.getAlertNo());
+            update.setSourceAlertNo(accepted.getSourceAlertNo());
+            update.setIssueNo(accepted.getIssueNo());
             update.setProviderReceiptSnapshot("HTTP_RESPONSE:{\"status\":\"DELIVERED\"}");
             update.setProviderReceiptNo("PROVIDER-RECEIPT-001");
             update.setProviderDeliveryStatus("DELIVERED");
@@ -444,7 +446,9 @@ public class PaymentTaskCenterMapperIntegrationTest {
             update.setReceiptQueryCount(0);
             assertEquals(0, mapper.updateIssueAlertProviderReceipt(update));
             update.setReceiptQueryCount(1);
-
+            update.setSourceAlertNo("PIA-OUTBOX-MISSING");
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(update));
+            update.setSourceAlertNo(accepted.getSourceAlertNo());
             assertEquals(1, mapper.updateIssueAlertProviderReceipt(update));
             PaymentIssueAlertLogEntity persisted = findIssueAlertReceipt(
                     session.getConnection(), accepted.getAlertNo());
@@ -600,7 +604,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("UPDATE t_payment_issue_alert_log "
                         + "SET receipt_query_count = 1, receipt_query_result = 'QUERYING' "
-                        + "WHERE alert_no = 'PIA-RECEIPT-ORPHAN'");
+                        + "WHERE alert_no IN ('PIA-RECEIPT-ORPHAN', "
+                        + "'PIA-RECEIPT-NESTED-SOURCE', 'PIA-RECEIPT-ACKNOWLEDGED-SOURCE')");
             }
             assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
                     orphan.getAlertNo(), 1, "FAILED", 60, 2));
@@ -610,6 +615,22 @@ public class PaymentTaskCenterMapperIntegrationTest {
             orphanUpdate.setAckStatus("已确认");
             orphanUpdate.setReceiptQueryCount(1);
             assertEquals(0, mapper.updateIssueAlertProviderReceipt(orphanUpdate));
+            PaymentIssueAlertLogEntity nestedSourceUpdate = new PaymentIssueAlertLogEntity();
+            nestedSourceUpdate.setAlertNo(nestedSourceDelivery.getAlertNo());
+            nestedSourceUpdate.setSourceAlertNo(nestedSourceDelivery.getSourceAlertNo());
+            nestedSourceUpdate.setIssueNo(nestedSourceDelivery.getIssueNo());
+            nestedSourceUpdate.setProviderDeliveryStatus("DELIVERED");
+            nestedSourceUpdate.setAckStatus("已确认");
+            nestedSourceUpdate.setReceiptQueryCount(1);
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(nestedSourceUpdate));
+            PaymentIssueAlertLogEntity acknowledgedSourceUpdate = new PaymentIssueAlertLogEntity();
+            acknowledgedSourceUpdate.setAlertNo(acknowledgedSourceDelivery.getAlertNo());
+            acknowledgedSourceUpdate.setSourceAlertNo(acknowledgedSourceDelivery.getSourceAlertNo());
+            acknowledgedSourceUpdate.setIssueNo(acknowledgedSourceDelivery.getIssueNo());
+            acknowledgedSourceUpdate.setProviderDeliveryStatus("DELIVERED");
+            acknowledgedSourceUpdate.setAckStatus("已确认");
+            acknowledgedSourceUpdate.setReceiptQueryCount(1);
+            assertEquals(1, mapper.updateIssueAlertProviderReceipt(acknowledgedSourceUpdate));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(
                     accepted.getAlertNo(), wrongIssueSource.getAlertNo(), accepted.getIssueNo(), 0, false, 2, 30));
             assertEquals(1, mapper.claimIssueAlertReceiptQuery(

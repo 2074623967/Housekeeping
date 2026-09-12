@@ -1117,6 +1117,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         ));
         verify(paymentTaskCenterMapper).insertTaskRunLog(any(PaymentTaskRunLogEntity.class));
         Assertions.assertEquals("DELIVERED", captor.getValue().getProviderDeliveryStatus());
+        Assertions.assertEquals("PIA-OUTBOX-001", captor.getValue().getSourceAlertNo());
+        Assertions.assertEquals("ISSUE-001", captor.getValue().getIssueNo());
         Assertions.assertEquals("IM-RECEIPT-001", captor.getValue().getProviderReceiptNo());
         Assertions.assertEquals("供应商查询确认送达", captor.getValue().getProviderDeliveryMessage());
         Assertions.assertEquals(
