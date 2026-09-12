@@ -113,7 +113,7 @@
             WHERE pa.payment_order_id = p.payment_order_id
           )
         GROUP BY p.payment_order_id, p.order_no, p.channel_transaction_no
-        ORDER BY MIN(pr.expires_at)
+        ORDER BY MIN(pr.expires_at) ASC, p.payment_order_id ASC
         LIMIT #{batchSize}
     </select>
 

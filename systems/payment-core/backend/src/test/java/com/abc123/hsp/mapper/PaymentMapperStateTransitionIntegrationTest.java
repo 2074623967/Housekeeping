@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.ExpiredPaymentDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentListItemDTO;
 import com.abc123.hsp.dto.PaymentListQueryDTO;
@@ -63,6 +64,36 @@ class PaymentMapperStateTransitionIntegrationTest {
             assertEquals(1, mapper.markExpiredUnsubmittedPaymentClosed("PAY-UNSUBMITTED"));
             assertEquals(1, mapper.markExpiredUnsubmittedPaymentClosed("PAY-LEGACY-BLANK"));
             assertEquals(0, mapper.markExpiredUnsubmittedPaymentClosed("PAY-SUBMITTED"));
+        }
+    }
+
+    @Test
+    void shouldUseStablePaymentOrderIdTieBreakerForExpiredPaymentBatch() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_order SET status = 'CLOSED' "
+                    + "WHERE payment_order_id IN ('PAY-OLDER', 'PAY-LEGACY-BLANK', 'PAY-UNSUBMITTED')");
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, status, status_type) VALUES "
+                    + "('PAY-EXPIRY-STABLE-003', 'ORD-EXPIRY-STABLE-003', 'PREPAY_CREATED', 'info'), "
+                    + "('PAY-EXPIRY-STABLE-001', 'ORD-EXPIRY-STABLE-001', 'PREPAY_CREATED', 'info'), "
+                    + "('PAY-EXPIRY-STABLE-002', 'ORD-EXPIRY-STABLE-002', 'PREPAY_CREATED', 'info')");
+            statement.executeUpdate("INSERT INTO t_prepay_order(payment_order_id, expires_at) VALUES "
+                    + "('PAY-EXPIRY-STABLE-003', TIMESTAMP '2026-09-12 00:00:00'), "
+                    + "('PAY-EXPIRY-STABLE-001', TIMESTAMP '2026-09-12 00:00:00'), "
+                    + "('PAY-EXPIRY-STABLE-002', TIMESTAMP '2026-09-12 00:00:00')");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            List<ExpiredPaymentDTO> bounded = mapper.findExpiredPayments(2);
+            assertEquals(2, bounded.size());
+            assertEquals("PAY-EXPIRY-STABLE-001", bounded.get(0).getPaymentOrderId());
+            assertEquals("PAY-EXPIRY-STABLE-002", bounded.get(1).getPaymentOrderId());
+
+            List<ExpiredPaymentDTO> all = mapper.findExpiredPayments(100);
+            assertEquals(3, all.size());
+            assertEquals("PAY-EXPIRY-STABLE-001", all.get(0).getPaymentOrderId());
+            assertEquals("PAY-EXPIRY-STABLE-002", all.get(1).getPaymentOrderId());
+            assertEquals("PAY-EXPIRY-STABLE-003", all.get(2).getPaymentOrderId());
         }
     }
 
