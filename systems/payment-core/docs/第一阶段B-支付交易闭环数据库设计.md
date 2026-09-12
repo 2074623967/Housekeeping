@@ -1489,6 +1489,12 @@ t_order
 2. 服务端仍只持久化 `t_refund_order.idempotency_key`；幂等重放响应读取原退款单当前状态，不新增快照表、审计表、索引或迁移。
 3. 页面内存状态不能作为数据库申请事实、渠道受理、账务或对账证据；浏览器刷新后的恢复与过期策略需在引入客户端持久化前单独设计。
 
+### 4.172 支付非成功回调终态保护数据边界
+
+1. `markPaymentPendingFromCallback` 在单条 `UPDATE` 中写入 `WAIT_CALLBACK / warn / channel_transaction_no`，并以 `status NOT IN ('SUCCESS', 'CLOSED')` 保护支付终态。
+2. Mapper 返回受影响行数供 Service 判断是否取得状态写入权；返回 `0` 时不得继续修改 `t_payment_attempt`、`t_prepay_order` 或新增 `PAYMENT_PENDING` 事件。
+3. 本轮复用 `t_payment_order` 既有主业务单号定位和状态字段，不新增表、列、索引或迁移；H2 验证不能替代生产 MySQL 锁等待、隔离级别和多实例竞态验证。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
