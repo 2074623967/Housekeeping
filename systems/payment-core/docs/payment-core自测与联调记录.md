@@ -11586,3 +11586,30 @@
 1. 在数据集合不变的前提下，退款列表翻页与 CSV 对同秒记录具有确定次序，消除了仅因秒级申请时间导致的随机分页边界。
 2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生退款申请或数据更新，偏移分页仍可能随数据集变化，不能解释为一致性读。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、退款到账或资金一致性；release 四项真实治理阻断不变。
+
+## 431. 2026-09-12 支付列表与导出稳定排序 V1.0 验证
+
+### 431.1 本轮补强
+
+1. `PaymentMapper.findAll` 与 `findAllForExport` 统一引用 `paymentOrderListOrder`，避免页面和 CSV 重复维护排序规则。
+2. 支付创建时间仍为唯一业务排序字段，并追加 `p.id DESC` 作为唯一且不可变的次排序键；最新支付单优先的既有方向不变。
+3. 该变更不改变最近支付尝试关联、筛选、页码、导出 `1001` 行保护、响应字段、支付状态机或资金处理。
+
+### 431.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 定向测试 | `PaymentMapperStateTransitionIntegrationTest` `11` 项通过，`0` failures、`0` errors、`0` skipped |
+| 同秒跨页与导出 | 三条同秒支付单按 `p.created_at desc, p.id desc` 在三页和导出中均依次返回 `PAY-STABLE-003 / 002 / 001` |
+| 最近尝试关联回归 | 原有支付列表最近尝试状态与提交事实用例继续通过 |
+| payment-core 后端全量测试 | `947` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `b035a691 fix(payment-core): stabilize payment list ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 431.3 当前判断
+
+1. 在数据集合不变的前提下，支付列表翻页与 CSV 对同秒记录具有确定次序，消除了仅因秒级创建时间导致的随机分页边界。
+2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生支付单插入或更新，偏移分页仍可能随数据集变化，不能解释为一致性读。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、渠道受理、资金入账或生产稳定性；release 四项真实治理阻断不变。
