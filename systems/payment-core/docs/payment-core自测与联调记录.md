@@ -11641,3 +11641,31 @@
 1. 在数据集合不变的前提下，账单分页和 CSV 对所有受支持排序字段的同值记录均具有确定次序。
 2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生账单插入或更新，偏移分页仍可能随数据集变化。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、账务入账或资金一致性；release 四项真实治理阻断不变。
+
+## 433. 2026-09-12 收银台会话列表与导出稳定排序 V1.0 验证
+
+### 433.1 本轮补强
+
+1. `CashierSessionMapper.findAll` 与 `findAllForExport` 统一引用 `cashierSessionOrder`，避免页面和 CSV 重复维护动态排序。
+2. `createdAt / expiresAt / amount` 均以对应数据库字段为首排序键，以自增 `pr.id` 为同方向次排序键。
+3. 该变更不改变会话状态表达式、筛选、排序参数、分页、导出 `1001` 行保护、总览金额或响应字段。
+
+### 433.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与服务定向测试 | `CashierSessionListMapperIntegrationTest,CashierSessionServiceImplTest` `7` 项通过，`0` failures、`0` errors、`0` skipped |
+| 创建时间跨页 | 三条同秒会话按 `createdAt desc, pr.id desc` 跨三页依次返回 `PRE-STABLE-003 / 002 / 001` |
+| 失效时间导出 | 三条同值会话按升序返回 `001 / 002 / 003` |
+| 金额导出 | 三条同值会话按降序返回 `003 / 002 / 001` |
+| payment-core 后端全量测试 | `949` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `CashierSessionMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `d74617b2 fix(payment-core): stabilize cashier session ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 433.3 当前判断
+
+1. 在数据集合不变的前提下，收银台会话分页和 CSV 对三类受支持排序字段的同值记录均具有确定次序。
+2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生会话插入或更新，偏移分页仍可能随数据集变化。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、真实支付提交或渠道受理；release 四项真实治理阻断不变。

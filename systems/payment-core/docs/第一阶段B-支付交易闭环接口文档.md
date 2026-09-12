@@ -3983,6 +3983,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 列表的 `LIMIT/OFFSET` 和 CSV 的 `LIMIT 1001` 必须引用同一排序 SQL 片段；筛选、总览口径、分页边界、导出上限和响应字段不变。
 4. 稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离，也不表示账单金额已经入账、对账或结算。
 
+### 14.260 收银台会话列表与导出稳定排序契约
+
+1. 收银台会话列表与 CSV 继续支持 `sortField=createdAt / expiresAt / amount` 和 `sortOrder=asc / desc`；请求字段与默认值不变。
+2. 每个业务排序字段后必须追加数据库自增 `pr.id` 作为同方向次排序键，即升序使用 `field ASC, pr.id ASC`，降序使用 `field DESC, pr.id DESC`。
+3. 列表的 `LIMIT/OFFSET` 和 CSV 的 `LIMIT 1001` 必须引用同一排序 SQL 片段；会话状态计算、筛选、总览、分页边界、导出上限和响应字段不变。
+4. 稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离，也不表示支付已提交、渠道已受理或资金已收口。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
