@@ -155,7 +155,11 @@ function openAlertRoute(actionRoute) {
 
 function openChannelDrillDown(item) {
   if ((item.pendingCount || 0) > 0) {
-    router.push(paymentsRoute({ paymentMethod: item.paymentMethod, status: "WAIT_CALLBACK" }));
+    router.push(paymentsRoute({
+      channelCode: item.channelCode,
+      paymentMethod: item.paymentMethod,
+      status: "WAIT_CALLBACK"
+    }));
     return;
   }
   router.push(paymentFlowsRoute({ channelCode: item.channelCode }));
@@ -209,7 +213,7 @@ onMounted(loadOverview);
             <article class="overview-card danger">
               <p class="overview-title">P1 告警优先处理</p>
               <strong>{{ riskSummary.alertP1Count }}</strong>
-              <span>优先联查待回调、退款失败和停用渠道命中告警，避免主链路持续积压。</span>
+              <span>优先联查待回调和退款失败告警，避免主链路持续积压。</span>
             </article>
             <article class="overview-card warn">
               <p class="overview-title">存在待处理渠道</p>

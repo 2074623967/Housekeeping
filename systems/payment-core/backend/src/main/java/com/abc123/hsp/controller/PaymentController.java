@@ -62,6 +62,7 @@ public class PaymentController {
     public ApiResponse<PageResultDTO<PaymentListItemDTO>> list(
             @RequestParam(required = false) String paymentOrderId,
             @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String channelCode,
             @RequestParam(defaultValue = "全部") String paymentMethod,
             @RequestParam(defaultValue = "全部") String status,
             @RequestParam(defaultValue = "1") int pageNo,
@@ -69,6 +70,7 @@ public class PaymentController {
         PaymentListQueryDTO query = new PaymentListQueryDTO();
         query.setPaymentOrderId(paymentOrderId);
         query.setOrderNo(orderNo);
+        query.setChannelCode(channelCode);
         query.setPaymentMethod(paymentMethod);
         query.setStatus(status);
         query.setPageNo(pageNo);
@@ -83,6 +85,7 @@ public class PaymentController {
     public ResponseEntity<byte[]> export(
             @RequestParam(required = false) String paymentOrderId,
             @RequestParam(required = false) String orderNo,
+            @RequestParam(required = false) String channelCode,
             @RequestParam(defaultValue = "全部") String paymentMethod,
             @RequestParam(defaultValue = "全部") String status,
             @RequestParam(defaultValue = "1") int pageNo,
@@ -90,6 +93,7 @@ public class PaymentController {
         PaymentListQueryDTO query = new PaymentListQueryDTO();
         query.setPaymentOrderId(paymentOrderId);
         query.setOrderNo(orderNo);
+        query.setChannelCode(channelCode);
         query.setPaymentMethod(paymentMethod);
         query.setStatus(status);
         query.setPageNo(pageNo);

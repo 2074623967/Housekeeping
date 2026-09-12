@@ -12,6 +12,8 @@ public class PaymentListQueryDTO {
     private String paymentOrderId;
     /** 订单号。 */
     private String orderNo;
+    /** 渠道编码。 */
+    private String channelCode;
     /** 支付方式。 */
     private String paymentMethod = "全部";
     /** 支付状态。 */

@@ -73,6 +73,7 @@ public class PaymentServiceImpl implements PaymentService {
     private static final int PREPAY_CUSTOMER_NAME_MAX_LENGTH = 128;
     private static final int PREPAY_CASHIER_TITLE_MAX_LENGTH = 128;
     private static final int PAYMENT_LIST_PAYMENT_METHOD_MAX_LENGTH = 32;
+    private static final int PAYMENT_LIST_CHANNEL_CODE_MAX_LENGTH = 64;
     private static final int PAYMENT_LIST_STATUS_MAX_LENGTH = 32;
     private static final int MONEY_MAX_SCALE = 2;
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
@@ -2027,6 +2028,8 @@ public class PaymentServiceImpl implements PaymentService {
                 query.getPaymentOrderId(), "支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
         query.setOrderNo(normalizeOptionalRequestField(
                 query.getOrderNo(), "订单号", BUSINESS_ORDER_NO_MAX_LENGTH));
+        query.setChannelCode(normalizeOptionalRequestField(
+                query.getChannelCode(), "渠道编码", PAYMENT_LIST_CHANNEL_CODE_MAX_LENGTH));
         String paymentMethod = normalizeOptionalRequestField(
                 query.getPaymentMethod(), "支付方式", PAYMENT_LIST_PAYMENT_METHOD_MAX_LENGTH);
         query.setPaymentMethod(paymentMethod == null ? "全部" : paymentMethod);

@@ -76,13 +76,16 @@ class PaymentControllerTest {
         ResponseEntity<byte[]> response = controller.export(
                 "PAY-001",
                 "ORD-001",
+                "wx_h5",
                 "微信支付",
                 "SUCCESS",
                 1,
                 20
         );
 
-        verify(paymentService).exportCsv(any(PaymentListQueryDTO.class));
+        ArgumentCaptor<PaymentListQueryDTO> captor = ArgumentCaptor.forClass(PaymentListQueryDTO.class);
+        verify(paymentService).exportCsv(captor.capture());
+        assertEquals("wx_h5", captor.getValue().getChannelCode());
         assertEquals("attachment; filename=payments.csv", response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION));
         assertArrayEquals("payment-csv".getBytes(StandardCharsets.UTF_8), response.getBody());
     }
@@ -91,9 +94,11 @@ class PaymentControllerTest {
     void shouldListPayments() {
         PaymentController controller = new PaymentController(paymentService);
 
-        controller.list(null, null, "全部", "全部", 1, 20);
+        controller.list(null, null, "wx_h5", "全部", "全部", 1, 20);
 
-        verify(paymentService).list(any(PaymentListQueryDTO.class));
+        ArgumentCaptor<PaymentListQueryDTO> captor = ArgumentCaptor.forClass(PaymentListQueryDTO.class);
+        verify(paymentService).list(captor.capture());
+        assertEquals("wx_h5", captor.getValue().getChannelCode());
     }
 
     @Test

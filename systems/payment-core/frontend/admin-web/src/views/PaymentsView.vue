@@ -1,11 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { sumPaymentAmounts } from "../utils/paymentAmount";
 import { canQueryPaymentChannel } from "../utils/paymentAction";
 
+const route = useRoute();
 const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
@@ -23,10 +24,11 @@ const pageNo = ref(1);
 const loadedPageNo = ref(1);
 const pageSize = 20;
 const filters = ref({
-  paymentOrderId: "",
-  orderNo: "",
-  paymentMethod: "全部",
-  status: "全部"
+  paymentOrderId: route.query.paymentOrderId || "",
+  orderNo: route.query.orderNo || "",
+  channelCode: route.query.channelCode || "",
+  paymentMethod: route.query.paymentMethod || "全部",
+  status: route.query.status || "全部"
 });
 
 const metrics = computed(() => ({
@@ -44,6 +46,7 @@ function buildQuery() {
   return {
     paymentOrderId: filters.value.paymentOrderId,
     orderNo: filters.value.orderNo,
+    channelCode: filters.value.channelCode,
     paymentMethod: filters.value.paymentMethod,
     status: filters.value.status,
     pageNo: pageNo.value,
@@ -55,6 +58,7 @@ function resetFilters() {
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
+    channelCode: "",
     paymentMethod: "全部",
     status: "全部"
   };
@@ -216,6 +220,7 @@ function exportPayments() {
   const exportUrl = paymentApi.buildExportUrl({
     paymentOrderId: filters.value.paymentOrderId,
     orderNo: filters.value.orderNo,
+    channelCode: filters.value.channelCode,
     paymentMethod: filters.value.paymentMethod,
     status: filters.value.status
   });
@@ -279,6 +284,10 @@ onMounted(refreshList);
         <div class="field">
           <label>订单号</label>
           <input v-model="filters.orderNo" :disabled="Boolean(activePaymentOrderId)" placeholder="请输入订单号" />
+        </div>
+        <div class="field">
+          <label>渠道编码</label>
+          <input v-model="filters.channelCode" :disabled="Boolean(activePaymentOrderId)" maxlength="64" placeholder="请输入渠道编码" />
         </div>
         <div class="field">
           <label>支付方式</label>

@@ -35,6 +35,9 @@
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
             </if>
+            <if test="query.channelCode != null and query.channelCode != '' and query.channelCode != '全部'">
+                AND p.channel_code = #{query.channelCode}
+            </if>
             <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                 AND p.payment_method = #{query.paymentMethod}
             </if>
@@ -55,6 +58,9 @@
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.channelCode != null and query.channelCode != '' and query.channelCode != '全部'">
+                AND p.channel_code = #{query.channelCode}
             </if>
             <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                 AND p.payment_method = #{query.paymentMethod}
@@ -83,6 +89,9 @@
             </if>
             <if test="query.orderNo != null and query.orderNo != ''">
                 AND p.order_no LIKE CONCAT('%', #{query.orderNo}, '%')
+            </if>
+            <if test="query.channelCode != null and query.channelCode != '' and query.channelCode != '全部'">
+                AND p.channel_code = #{query.channelCode}
             </if>
             <if test="query.paymentMethod != null and query.paymentMethod != '' and query.paymentMethod != '全部'">
                 AND p.payment_method = #{query.paymentMethod}

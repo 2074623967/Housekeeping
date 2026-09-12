@@ -289,6 +289,33 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldApplyChannelFilterToPaymentListCountAndExport() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, customer_name, amount, payment_method, channel_code, "
+                    + "status, status_type, created_at) VALUES "
+                    + "('PAY-CHANNEL-WX', 'ORD-CHANNEL-FILTER', '客户一', 1.00, '微信支付', 'wx_h5', "
+                    + "'WAIT_CALLBACK', 'warn', '2026-09-12 12:00:00'), "
+                    + "('PAY-CHANNEL-ALI', 'ORD-CHANNEL-FILTER', '客户二', 2.00, '支付宝', 'alipay_h5', "
+                    + "'WAIT_CALLBACK', 'warn', '2026-09-12 12:00:00')");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setOrderNo("ORD-CHANNEL-FILTER");
+            query.setChannelCode("wx_h5");
+
+            List<PaymentListItemDTO> items = mapper.findAll(query);
+            List<PaymentListItemDTO> exportItems = mapper.findAllForExport(query);
+
+            assertEquals(1, items.size());
+            assertEquals("PAY-CHANNEL-WX", items.get(0).getPaymentOrderId());
+            assertEquals(1L, mapper.count(query));
+            assertEquals(1, exportItems.size());
+            assertEquals("PAY-CHANNEL-WX", exportItems.get(0).getPaymentOrderId());
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);

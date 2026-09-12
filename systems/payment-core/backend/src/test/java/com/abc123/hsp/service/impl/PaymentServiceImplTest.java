@@ -2956,6 +2956,7 @@ class PaymentServiceImplTest {
         PaymentListQueryDTO query = new PaymentListQueryDTO();
         query.setPaymentOrderId(" PAY-001 ");
         query.setOrderNo(" ORD-001 ");
+        query.setChannelCode(" wx_h5 ");
         query.setPaymentMethod(" 微信支付 ");
         query.setStatus(" SUCCESS ");
         PaymentListItemDTO item = new PaymentListItemDTO();
@@ -2980,6 +2981,7 @@ class PaymentServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals("PAY-001", query.getPaymentOrderId());
         org.junit.jupiter.api.Assertions.assertEquals("ORD-001", query.getOrderNo());
+        org.junit.jupiter.api.Assertions.assertEquals("wx_h5", query.getChannelCode());
         org.junit.jupiter.api.Assertions.assertEquals("微信支付", query.getPaymentMethod());
         org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", query.getStatus());
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("PAY-001"));
@@ -2998,26 +3000,32 @@ class PaymentServiceImplTest {
                 paymentChannelQueryService,
                 paymentChannelSubmitService);
         PaymentListQueryDTO oversizedPaymentOrderId = paymentListQuery(
-                repeat("P", 65), null, null, null);
+                repeat("P", 65), null, null, null, null);
         PaymentListQueryDTO controlPaymentOrderId = paymentListQuery(
-                "PAY-001\n", null, null, null);
+                "PAY-001\n", null, null, null, null);
         PaymentListQueryDTO oversizedOrderNo = paymentListQuery(
-                null, repeat("O", 65), null, null);
+                null, repeat("O", 65), null, null, null);
         PaymentListQueryDTO controlOrderNo = paymentListQuery(
-                null, "ORD-001\n", null, null);
+                null, "ORD-001\n", null, null, null);
+        PaymentListQueryDTO oversizedChannelCode = paymentListQuery(
+                null, null, repeat("C", 65), null, null);
+        PaymentListQueryDTO controlChannelCode = paymentListQuery(
+                null, null, "wx_h5\n", null, null);
         PaymentListQueryDTO oversizedPaymentMethod = paymentListQuery(
-                null, null, repeat("M", 33), null);
+                null, null, null, repeat("M", 33), null);
         PaymentListQueryDTO controlPaymentMethod = paymentListQuery(
-                null, null, "微信支付\n", null);
+                null, null, null, "微信支付\n", null);
         PaymentListQueryDTO oversizedStatus = paymentListQuery(
-                null, null, null, repeat("S", 33));
+                null, null, null, null, repeat("S", 33));
         PaymentListQueryDTO controlStatus = paymentListQuery(
-                null, null, null, "SUCCESS\n");
+                null, null, null, null, "SUCCESS\n");
 
         assertPaymentRequestInvalid(() -> service.list(oversizedPaymentOrderId));
         assertPaymentRequestInvalid(() -> service.list(controlPaymentOrderId));
         assertPaymentRequestInvalid(() -> service.list(oversizedOrderNo));
         assertPaymentRequestInvalid(() -> service.list(controlOrderNo));
+        assertPaymentRequestInvalid(() -> service.list(oversizedChannelCode));
+        assertPaymentRequestInvalid(() -> service.list(controlChannelCode));
         assertPaymentRequestInvalid(() -> service.list(oversizedPaymentMethod));
         assertPaymentRequestInvalid(() -> service.list(controlPaymentMethod));
         assertPaymentRequestInvalid(() -> service.list(oversizedStatus));
@@ -3452,11 +3460,13 @@ class PaymentServiceImplTest {
     private PaymentListQueryDTO paymentListQuery(
             String paymentOrderId,
             String orderNo,
+            String channelCode,
             String paymentMethod,
             String status) {
         PaymentListQueryDTO query = new PaymentListQueryDTO();
         query.setPaymentOrderId(paymentOrderId);
         query.setOrderNo(orderNo);
+        query.setChannelCode(channelCode);
         query.setPaymentMethod(paymentMethod);
         query.setStatus(status);
         return query;

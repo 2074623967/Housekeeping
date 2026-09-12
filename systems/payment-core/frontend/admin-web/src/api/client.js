@@ -814,6 +814,7 @@ export const paymentApi = {
   getList: ({
     paymentOrderId = "",
     orderNo = "",
+    channelCode = "",
     paymentMethod = "全部",
     status = "全部",
     pageNo = 1,
@@ -822,6 +823,7 @@ export const paymentApi = {
     const params = new URLSearchParams({
       paymentOrderId,
       orderNo,
+      channelCode,
       paymentMethod,
       status,
       pageNo: String(pageNo),
@@ -832,12 +834,14 @@ export const paymentApi = {
   buildExportUrl: ({
     paymentOrderId = "",
     orderNo = "",
+    channelCode = "",
     paymentMethod = "全部",
     status = "全部"
   } = {}) => {
     const params = new URLSearchParams({
       paymentOrderId,
       orderNo,
+      channelCode,
       paymentMethod,
       status
     });
