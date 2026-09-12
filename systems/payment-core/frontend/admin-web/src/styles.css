@@ -725,6 +725,10 @@ th {
   margin-bottom: 16px;
 }
 
+.monitor-card-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .overview-panel {
   display: grid;
   gap: 16px;

@@ -18,6 +18,8 @@ public class PaymentMonitorSummaryDTO {
     private String successAmount;
     /** 待回调支付单量。 */
     private Integer pendingPaymentCount;
+    /** 已关闭支付单量。 */
+    private Integer closedPaymentCount;
     /** 失败退款单量。 */
     private Integer failedRefundCount;
     /** 已停用渠道数。 */

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentChannelMetricDTO;
+import com.abc123.hsp.dto.PaymentMonitorSummaryDTO;
 import java.io.InputStream;
 import java.sql.Statement;
 import java.util.List;
@@ -84,6 +85,18 @@ class PaymentMonitorMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldExposeClosedPaymentsSeparatelyInMonitorSummary() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMonitorSummaryDTO summary = session.getMapper(PaymentMonitorMapper.class).findSummary();
+
+            assertEquals(Integer.valueOf(6), summary.getTotalCount());
+            assertEquals(Integer.valueOf(3), summary.getSuccessCount());
+            assertEquals(Integer.valueOf(1), summary.getPendingPaymentCount());
+            assertEquals(Integer.valueOf(1), summary.getClosedPaymentCount());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -107,7 +120,7 @@ class PaymentMonitorMapperIntegrationTest {
                     + "('channel-a', 'method-b', 'SUCCESS', 10.00), "
                     + "('channel-a', 'method-b', 'FAIL', 10.00), "
                     + "('channel-a', 'method-a', 'SUCCESS', 10.00), "
-                    + "('channel-a', 'method-a', 'FAIL', 10.00)");
+                    + "('channel-a', 'method-a', 'CLOSED', 10.00)");
             statement.executeUpdate("INSERT INTO t_refund_order(status) VALUES ('FAIL')");
             statement.executeUpdate("INSERT INTO t_payment_channel_config(status) VALUES ('DISABLED')");
             session.commit();

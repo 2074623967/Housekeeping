@@ -14,6 +14,7 @@ const overview = ref({
     successRate: "0.00%",
     successAmount: "¥0.00",
     pendingPaymentCount: 0,
+    closedPaymentCount: 0,
     failedRefundCount: 0,
     disabledChannelCount: 0,
     alertCount: 0
@@ -43,6 +44,11 @@ const monitorCards = computed(() => {
       title: "待收口支付",
       value: summary.pendingPaymentCount ?? 0,
       hint: "建议优先查单与核对回调"
+    },
+    {
+      title: "已关闭支付",
+      value: summary.closedPaymentCount ?? 0,
+      hint: "用于复盘超时关闭与人工关闭"
     },
     {
       title: "异常告警数",
@@ -186,7 +192,7 @@ onMounted(loadOverview);
       <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付监控快照</div>
 
       <template v-else>
-        <div class="detail-card-grid">
+        <div class="detail-card-grid monitor-card-grid">
           <div v-for="card in monitorCards" :key="card.title" class="detail-card">
             <div class="detail-label">{{ card.title }}</div>
             <div class="detail-value">{{ card.value }}</div>
