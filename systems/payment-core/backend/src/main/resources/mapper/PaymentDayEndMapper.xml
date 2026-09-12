@@ -138,6 +138,12 @@
         LIMIT 1001
     </select>
 
+    <select id="countBatchesByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_day_end_batch
+        WHERE biz_date = #{bizDate}
+    </select>
+
     <select id="countPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order

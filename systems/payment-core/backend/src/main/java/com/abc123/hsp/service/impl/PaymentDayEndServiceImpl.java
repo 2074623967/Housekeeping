@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 import com.abc123.hsp.entity.PaymentDayEndBatchEntity;
 import com.abc123.hsp.mapper.PaymentDayEndMapper;
 import com.abc123.hsp.service.PaymentDayEndService;
+import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import java.math.BigDecimal;
@@ -18,8 +19,10 @@ import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -32,11 +35,31 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
     private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
     private static final int TRIGGERED_BY_MAX_LENGTH = 64;
+    private static final int DAY_END_LEASE_SECONDS = 300;
+    private static final String DAY_END_LEASE_PREFIX = "PAYMENT_DAY_END:";
 
     private final PaymentDayEndMapper paymentDayEndMapper;
+    private final PaymentTaskLeaseService paymentTaskLeaseService;
+    private final TransactionTemplate runTransactionTemplate;
+    private final String leaseOwnerSuffix = UUID.randomUUID().toString().replace("-", "");
 
     public PaymentDayEndServiceImpl(PaymentDayEndMapper paymentDayEndMapper) {
+        this(paymentDayEndMapper, null, (TransactionTemplate) null);
+    }
+
+    @Autowired
+    public PaymentDayEndServiceImpl(PaymentDayEndMapper paymentDayEndMapper,
+                                    PaymentTaskLeaseService paymentTaskLeaseService,
+                                    PlatformTransactionManager transactionManager) {
+        this(paymentDayEndMapper, paymentTaskLeaseService, new TransactionTemplate(transactionManager));
+    }
+
+    PaymentDayEndServiceImpl(PaymentDayEndMapper paymentDayEndMapper,
+                             PaymentTaskLeaseService paymentTaskLeaseService,
+                             TransactionTemplate runTransactionTemplate) {
         this.paymentDayEndMapper = paymentDayEndMapper;
+        this.paymentTaskLeaseService = paymentTaskLeaseService;
+        this.runTransactionTemplate = runTransactionTemplate;
     }
 
     @Override
@@ -62,7 +85,6 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     }
 
     @Override
-    @Transactional
     public PaymentDayEndOverviewDTO run(PaymentDayEndRunRequestDTO request) {
         if (request == null) {
             throw new IllegalArgumentException("日终处理请求不能为空");
@@ -70,6 +92,27 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         String triggeredBy = normalizeTriggeredBy(request.getTriggeredBy());
         String runMode = normalizeManualRunMode(request.getRunMode());
         String bizDate = resolveBizDate(request);
+        if (paymentTaskLeaseService == null) {
+            executeRun(bizDate, runMode, triggeredBy);
+            return overview();
+        }
+        String leaseOwner = triggeredBy + ":" + leaseOwnerSuffix;
+        PaymentTaskLeaseService.Lease lease = paymentTaskLeaseService.tryAcquire(
+                DAY_END_LEASE_PREFIX + bizDate, leaseOwner, DAY_END_LEASE_SECONDS);
+        if (lease == null) {
+            throw new IllegalArgumentException("该业务日正在执行日终处理，请稍后重试");
+        }
+        try (PaymentTaskLeaseService.Lease ignored = lease) {
+            runTransactionTemplate.execute(status -> {
+                executeRun(bizDate, runMode, triggeredBy);
+                return null;
+            });
+            return overview();
+        }
+    }
+
+    private void executeRun(String bizDate, String runMode, String triggeredBy) {
+        validateRunModeForBizDate(bizDate, runMode);
         PaymentDayEndBatchEntity entity = new PaymentDayEndBatchEntity();
         entity.setBatchNo(buildBatchNo());
         entity.setBizDate(bizDate);
@@ -94,7 +137,16 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         entity.setBatchStatus(resolveBatchStatus(entity));
         entity.setBatchStatusType(resolveBatchStatusType(entity.getBatchStatus()));
         paymentDayEndMapper.insertBatch(entity);
-        return overview();
+    }
+
+    private void validateRunModeForBizDate(String bizDate, String runMode) {
+        int existingBatchCount = defaultZero(paymentDayEndMapper.countBatchesByDate(bizDate));
+        if (existingBatchCount > 0 && "MANUAL".equals(runMode)) {
+            throw new IllegalArgumentException("该业务日已有日终批次，请使用RERUN重检");
+        }
+        if (existingBatchCount == 0 && "RERUN".equals(runMode)) {
+            throw new IllegalArgumentException("该业务日尚无日终批次，首次执行请使用MANUAL");
+        }
     }
 
     @Override

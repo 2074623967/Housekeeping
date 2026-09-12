@@ -7,6 +7,8 @@ import com.abc123.hsp.dto.PaymentDayEndBatchListItemDTO;
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
 import com.abc123.hsp.mapper.PaymentDayEndMapper;
+import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
+import com.abc123.hsp.service.PaymentTaskLeaseService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -99,6 +101,7 @@ class PaymentDayEndServiceImplTest {
     @Test
     void shouldRunDayEndBatch() {
         String bizDate = "2026-07-19";
+        when(paymentDayEndMapper.countBatchesByDate(bizDate)).thenReturn(1);
         when(paymentDayEndMapper.countPaymentsByDate(bizDate)).thenReturn(2);
         when(paymentDayEndMapper.countSuccessPaymentsByDate(bizDate)).thenReturn(1);
         when(paymentDayEndMapper.sumSuccessPaymentAmountByDate(bizDate)).thenReturn(new BigDecimal("268.00"));
@@ -133,6 +136,86 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("68.00"), captor.getValue().getPendingRefundAmount());
         org.junit.jupiter.api.Assertions.assertEquals("RERUN", captor.getValue().getRunMode());
         org.junit.jupiter.api.Assertions.assertEquals("finance-ops", captor.getValue().getTriggeredBy());
+    }
+
+    @Test
+    void shouldRequireManualForFirstRunAndRerunForExistingBatch() {
+        String firstBizDate = "2026-07-17";
+        String existingBizDate = "2026-07-18";
+        when(paymentDayEndMapper.countBatchesByDate(firstBizDate)).thenReturn(0);
+        when(paymentDayEndMapper.countBatchesByDate(existingBizDate)).thenReturn(2);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
+        PaymentDayEndRunRequestDTO firstRerun = new PaymentDayEndRunRequestDTO();
+        firstRerun.setBizDate(firstBizDate);
+        firstRerun.setRunMode("RERUN");
+        firstRerun.setTriggeredBy("finance-ops");
+        PaymentDayEndRunRequestDTO duplicateManual = new PaymentDayEndRunRequestDTO();
+        duplicateManual.setBizDate(existingBizDate);
+        duplicateManual.setRunMode("MANUAL");
+        duplicateManual.setTriggeredBy("finance-ops");
+
+        IllegalArgumentException firstRerunError = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(firstRerun));
+        IllegalArgumentException duplicateManualError = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(duplicateManual));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "该业务日尚无日终批次，首次执行请使用MANUAL", firstRerunError.getMessage());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "该业务日已有日终批次，请使用RERUN重检", duplicateManualError.getMessage());
+        verify(paymentDayEndMapper, org.mockito.Mockito.never()).insertBatch(org.mockito.ArgumentMatchers.any());
+        verify(paymentDayEndMapper, org.mockito.Mockito.never()).countPaymentsByDate(org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldRejectConcurrentRunBeforeReadingDayEndFacts() {
+        PaymentTaskLeaseService leaseService = org.mockito.Mockito.mock(PaymentTaskLeaseService.class);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper, leaseService, (org.springframework.transaction.support.TransactionTemplate) null);
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate("2026-07-19");
+        request.setTriggeredBy("finance-ops");
+        when(leaseService.tryAcquire(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:2026-07-19"),
+                org.mockito.ArgumentMatchers.startsWith("finance-ops:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(null);
+
+        IllegalArgumentException error = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals("该业务日正在执行日终处理，请稍后重试", error.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
+    }
+
+    @Test
+    void shouldCommitBatchBeforeReleasingBusinessDateLease() {
+        PaymentTaskCenterMapper leaseMapper = org.mockito.Mockito.mock(PaymentTaskCenterMapper.class);
+        PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(leaseMapper);
+        org.springframework.transaction.PlatformTransactionManager transactionManager =
+                org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class);
+        org.springframework.transaction.TransactionStatus transactionStatus =
+                org.mockito.Mockito.mock(org.springframework.transaction.TransactionStatus.class);
+        when(leaseMapper.acquireTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:2026-07-19"),
+                org.mockito.ArgumentMatchers.startsWith("finance-ops:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(1);
+        when(transactionManager.getTransaction(org.mockito.ArgumentMatchers.any())).thenReturn(transactionStatus);
+        when(paymentDayEndMapper.countBatchesByDate("2026-07-19")).thenReturn(0);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper, leaseService, transactionManager);
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate("2026-07-19");
+        request.setTriggeredBy("finance-ops");
+
+        service.run(request);
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                paymentDayEndMapper, transactionManager, leaseMapper);
+        inOrder.verify(paymentDayEndMapper).insertBatch(org.mockito.ArgumentMatchers.any());
+        inOrder.verify(transactionManager).commit(transactionStatus);
+        inOrder.verify(leaseMapper).releaseTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:2026-07-19"),
+                org.mockito.ArgumentMatchers.startsWith("finance-ops:"));
     }
 
     @Test
