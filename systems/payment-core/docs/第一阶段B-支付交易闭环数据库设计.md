@@ -1669,10 +1669,17 @@ t_order
 
 ### 4.193 失败退款批量重试候选索引边界
 
-1. 批量重试候选限定 `status = 'FAIL' AND terminal_at IS NOT NULL`，按 `terminal_at ASC, id ASC` 排序；失败终态时间取代申请时间成为重试优先级依据。
+1. 批量重试候选限定退款单 `status = 'FAIL'`、`terminal_at IS NOT NULL`、`success_at IS NULL`，且最新退款尝试为 `FAIL` 并具备 `completed_at`，按 `terminal_at ASC, id ASC` 排序；失败终态时间取代申请时间成为重试优先级依据。
 2. 现有 `idx_refund_status_terminal(status, terminal_at)` 支撑状态过滤和终态时间顺序，无需新增索引或迁移；`id` 只用于相同终态时间的稳定排序。
-3. 历史 `terminal_at IS NULL` 记录不进入候选，不以 `applied_at`、`NOW()` 或渠道受理时间猜测终态，也不通过重试动作清除异常事实。
+3. 命中终态事实不一致集合的历史失败记录均不进入候选，不以 `applied_at`、`NOW()` 或渠道受理时间猜测终态，也不通过重试动作清除异常事实。
 4. 本地 H2 只验证集合、顺序和上限。目标 MySQL 上线前仍需以真实数据分布和 `EXPLAIN ANALYZE` 核验扫描行数、回表、排序和极端同时间数据表现。
+
+### 4.194 失败退款任务中心分层查询边界
+
+1. 总览分别统计全部 `FAIL`、完整终态事实候选和终态事实异常阻断。后两类是前者的互补分区，不允许遗漏或重复。
+2. 候选与阻断均以按 `created_at DESC, id DESC` 选择的最新退款尝试裁决；较早成功或失败尝试不能代替最新尝试事实。
+3. `idx_refund_status_terminal(status, terminal_at)` 和既有退款尝试业务单索引继续支撑主过滤与最新尝试定位，本轮不新增字段、索引或迁移。
+4. 总览查询新增相关子查询，上线前必须以目标 MySQL 真实失败退款规模、尝试分布和统计信息验证扫描行数、排序、回表和响应耗时；H2 结果不构成性能结论。
 
 ## 5. 状态建议
 
