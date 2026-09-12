@@ -2393,6 +2393,14 @@
 4. 正式 Mapper 测试同时构造合法来源、孤立记录、错异常来源和嵌套来源，验证只有合法记录进入自动与人工候选；服务测试验证错来源不 claim、不调用适配器且不调用限流器。代码提交为 `b7b4609c fix(payment-core): validate alert receipt sources`。
 5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 mock/H2 不证明生产 MySQL 执行计划、真实供应商送达、人员响应或生产稳定性，release 四项真实治理阻断不变。
 
+### 8.292 2026-09-12 告警回执原子 claim 来源裁决进展
+
+1. 服务前置来源查询已经能拒绝普通畸形候选，但查询与 claim 原先是两个数据库语句；两步之间若来源先被确认或外发记录来源元组变化，旧 claim 仍只按告警号和次数占用记录。
+2. claim 现在显式携带 `alertNo + sourceAlertNo + issueNo`，更新条件同时复验外发行来源元组，并在同一语句内要求来源属于同异常、顶层、待确认的 `IN_APP_OUTBOX`；资格与次数递增共享一个数据库线性化点。
+3. 同表来源集合使用带 `DISTINCT` 的物化派生查询，既保持 H2/MySQL 兼容，也阻止 MySQL 合并派生表后触发目标表更新限制；未采用 H2 不支持的 `UPDATE ... JOIN`。
+4. 正式 Mapper 测试验证错来源元组和已确认来源 claim 均返回 `0`，合法来源继续完成自动、退避、耗尽和人工强制回查；服务既有 claim 失败用例补充断言不调用适配器和共享限流器。代码提交为 `5efd2028 fix(payment-core): atomically claim alert receipts`。
+5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 H2 不证明生产 MySQL 执行计划、锁竞争、真实供应商回执或生产稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

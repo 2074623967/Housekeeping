@@ -12432,3 +12432,33 @@
 1. `source_alert_no` 已从非空标记提升为可验证的来源身份链，畸形记录不会先调用真实供应商再在最终确认阶段失败。
 2. 来源已确认后不再回查同源 `ACCEPTED` 外发日志，避免无业务收益的尝试次数和限流额度消耗。
 3. 本地 mock/H2 不证明生产 MySQL 执行计划、跨事务竞态、真实供应商受理或最终送达；release 四项真实治理阻断不变。
+
+## 460. 2026-09-12 告警回执原子 claim 来源裁决 V1.0 验证
+
+### 460.1 本轮补强
+
+1. claim 参数从告警号和次数扩展为同时携带来源告警号与异常号，数据库更新边界复验候选读取到的完整来源元组。
+2. claim 单语句同时判断外发资格与同异常顶层待确认来源资格，消除服务前置查询之后、次数递增之前的可见竞态窗口。
+3. 同表来源查询使用不可合并的 `DISTINCT` 派生集合，规避 MySQL 目标表更新限制，并保持现有 H2 MySQL 兼容测试可执行。
+
+### 460.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 参数关联 | claim 同时匹配 `alertNo / sourceAlertNo / issueNo` |
+| 错来源元组 | 对合法外发行传入另一来源号时影响行数为 `0` |
+| 已确认来源 | 外发行仍为 `ACCEPTED / 待确认`、来源已确认时 claim 返回 `0` |
+| 合法来源 | 自动 claim、防重复、退避、耗尽与人工强制回查保持通过 |
+| claim 失败副作用 | 不选择或调用回执适配器，不获取共享限流额度，不完成查询尝试 |
+| SQL 兼容策略 | `DISTINCT` 物化派生来源集合；H2 MySQL 模式正式 Mapper 测试通过 |
+| 服务与 Mapper 联合定向 | `PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterMapperIntegrationTest` `68` 项通过 |
+| payment-core 后端全量测试 | `972` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentTaskCenterMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 只扩展内部 Mapper 参数与 claim SQL；无 HTTP API、前端、schema、索引或迁移变化 |
+| 代码提交 | `5efd2028 fix(payment-core): atomically claim alert receipts` |
+
+### 460.3 当前判断
+
+1. 回查资格与尝试次数递增现在由同一数据库更新语句裁决，不再依赖服务层两次语句之间状态保持不变。
+2. claim 成功表示该语句的数据库快照中来源资格成立；随后来源被其他合法动作确认时，最终回执仍按既有已确认幂等裁决收口。
+3. 本地 H2 不证明生产 MySQL 派生表物化、执行计划、锁等待和并发吞吐；真实供应商与生产结论仍需独立证据，release 四项真实治理阻断不变。
