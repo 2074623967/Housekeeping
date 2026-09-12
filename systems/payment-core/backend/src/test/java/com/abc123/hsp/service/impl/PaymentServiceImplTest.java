@@ -1163,6 +1163,8 @@ class PaymentServiceImplTest {
         detail.setStatus("WAIT_CALLBACK");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-002")).thenReturn(detail, detail);
+        when(paymentMapper.markPaymentPendingFromCallback(
+                "PAY-CALLBACK-002", "WX-CALLBACK-002")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
@@ -1199,6 +1201,45 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString()
         );
         verify(paymentMapper, never()).releaseSubmitConcurrencyToken("PAY-CALLBACK-002", "CALLBACK_SUCCESS");
+    }
+
+    @Test
+    void shouldNotLetPendingCallbackOverwriteConcurrentSuccess() {
+        PaymentDetailDTO pendingDetail = queryDetail("PAY-CALLBACK-PENDING-RACE", "WAIT_CALLBACK");
+        PaymentDetailDTO settledDetail = queryDetail("PAY-CALLBACK-PENDING-RACE", "SUCCESS");
+        when(paymentMapper.findDetail("PAY-CALLBACK-PENDING-RACE"))
+                .thenReturn(pendingDetail, settledDetail);
+        when(paymentMapper.markPaymentPendingFromCallback(
+                "PAY-CALLBACK-PENDING-RACE", "WX-CALLBACK-PENDING-RACE")).thenReturn(0);
+        when(paymentMapper.findRouteLogs("PAY-CALLBACK-PENDING-RACE")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-CALLBACK-PENDING-RACE")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-CALLBACK-PENDING-RACE")).thenReturn(Collections.emptyList());
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-PENDING-RACE");
+        callback.setTradeStatus("PROCESSING");
+        callback.setChannelTransactionNo("WX-CALLBACK-PENDING-RACE");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback);
+
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
     }
 
     @Test

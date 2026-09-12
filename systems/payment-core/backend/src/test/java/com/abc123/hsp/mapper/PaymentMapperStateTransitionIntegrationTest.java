@@ -162,6 +162,29 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldNotLetPendingCallbackOverwriteFinalPaymentState() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(1, mapper.markPaymentPendingFromCallback(
+                    "PAY-SUBMITTED", "WX-PENDING"));
+            assertEquals(0, mapper.markPaymentPendingFromCallback(
+                    "PAY-FINAL-SUCCESS", "WX-LATE-PENDING"));
+            assertEquals(0, mapper.markPaymentPendingFromCallback(
+                    "PAY-MANUAL-CLOSED", "WX-LATE-PENDING"));
+
+            try (Statement statement = session.getConnection().createStatement();
+                 java.sql.ResultSet resultSet = statement.executeQuery(
+                         "SELECT status, channel_transaction_no FROM t_payment_order "
+                                 + "WHERE payment_order_id = 'PAY-FINAL-SUCCESS'")) {
+                resultSet.next();
+                assertEquals("SUCCESS", resultSet.getString("status"));
+                assertEquals("WX-SUCCESS", resultSet.getString("channel_transaction_no"));
+            }
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -211,7 +234,11 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "('PAY-MANUAL-CLOSED', 'ORD-3', 'CLOSED', 'danger'), "
                     + "('PAY-EXPIRED-CLOSED', 'ORD-4', 'CLOSED', 'danger'), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', 'ORD-5', 'CLOSED', 'danger'), "
-                    + "('PAY-MANUAL-CLOSEABLE', 'ORD-6', 'RISK_REVIEW', 'warn')");
+                    + "('PAY-MANUAL-CLOSEABLE', 'ORD-6', 'RISK_REVIEW', 'warn'), "
+                    + "('PAY-FINAL-SUCCESS', 'ORD-7', 'SUCCESS', 'success')");
+            statement.executeUpdate("UPDATE t_payment_order "
+                    + "SET channel_transaction_no = 'WX-SUCCESS' "
+                    + "WHERE payment_order_id = 'PAY-FINAL-SUCCESS'");
             statement.executeUpdate("INSERT INTO t_payment_order("
                     + "payment_order_id, order_no, channel_transaction_no, status, status_type) "
                     + "VALUES ('PAY-LEGACY-BLANK', 'ORD-LEGACY', '', 'PREPAY_CREATED', 'info')");

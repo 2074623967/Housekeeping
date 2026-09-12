@@ -180,6 +180,12 @@ public interface PaymentMapper {
                                             @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
+     * 非成功渠道回调原子维持待确认状态，禁止并发覆盖已经成功或关闭的终态。
+     */
+    int markPaymentPendingFromCallback(@Param("paymentOrderId") String paymentOrderId,
+                                       @Param("channelTransactionNo") String channelTransactionNo);
+
+    /**
      * 原子关闭从未向渠道提交的过期支付单，避免与并发支付提交互相覆盖。
      */
     int markExpiredUnsubmittedPaymentClosed(@Param("paymentOrderId") String paymentOrderId);

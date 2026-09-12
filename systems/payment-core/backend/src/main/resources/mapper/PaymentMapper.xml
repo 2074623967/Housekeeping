@@ -390,6 +390,15 @@
           )
     </update>
 
+    <update id="markPaymentPendingFromCallback">
+        UPDATE t_payment_order
+        SET status = 'WAIT_CALLBACK',
+            status_type = 'warn',
+            channel_transaction_no = #{channelTransactionNo}
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status NOT IN ('SUCCESS', 'CLOSED')
+    </update>
+
     <update id="markExpiredUnsubmittedPaymentClosed">
         UPDATE t_payment_order
         SET status = 'CLOSED',

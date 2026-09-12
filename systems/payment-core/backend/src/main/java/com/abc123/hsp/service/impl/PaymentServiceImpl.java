@@ -886,6 +886,10 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
         }
+        if (!paySuccess && paymentMapper.markPaymentPendingFromCallback(
+                request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
+            return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+        }
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
         String notifyNo = buildBusinessNo("NTF");
         paymentMapper.insertNotifyLog(
@@ -907,14 +911,6 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getTradeStatus(),
                 "已收口",
                 "success");
-        if (!paySuccess) {
-            paymentMapper.updatePaymentStatus(
-                    request.getPaymentOrderId(),
-                    "WAIT_CALLBACK",
-                    "warn",
-                    request.getChannelTransactionNo()
-            );
-        }
         paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
                 request.getPaymentOrderId(),
                 paySuccess ? "成功" : "待回调",
