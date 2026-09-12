@@ -407,6 +407,7 @@ public class RefundServiceImpl implements RefundService {
         if ((!success && !failed)
                 || !source.getStatus().equals(source.getAttemptStatus())
                 || !StringUtils.hasText(source.getAttemptCompletedAt())
+                || !StringUtils.hasText(source.getTerminalAt())
                 || (success && !StringUtils.hasText(source.getSuccessAt()))
                 || (failed && StringUtils.hasText(source.getSuccessAt()))) {
             throw new IllegalStateException("refund terminal facts are inconsistent");

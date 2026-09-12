@@ -428,11 +428,21 @@
     <select id="countRefundTerminalFactMismatchByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_refund_order refund_order
-        WHERE refund_order.applied_at &gt;= CAST(#{bizDate} AS DATETIME)
-          AND refund_order.applied_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
-          AND refund_order.status IN ('SUCCESS', 'FAIL')
+        WHERE refund_order.status IN ('SUCCESS', 'FAIL')
           AND (
-              (refund_order.status = 'FAIL' AND refund_order.success_at IS NOT NULL)
+              (
+                  refund_order.terminal_at &gt;= CAST(#{bizDate} AS DATETIME)
+                  AND refund_order.terminal_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
+              )
+              OR (
+                  refund_order.terminal_at IS NULL
+                  AND refund_order.applied_at &gt;= CAST(#{bizDate} AS DATETIME)
+                  AND refund_order.applied_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
+              )
+          )
+          AND (
+              refund_order.terminal_at IS NULL
+              OR (refund_order.status = 'FAIL' AND refund_order.success_at IS NOT NULL)
               OR NOT EXISTS (
                   SELECT 1
                   FROM t_refund_attempt attempt

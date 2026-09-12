@@ -138,8 +138,9 @@ class PaymentMonitorMapperIntegrationTest {
     void shouldExposeMissingRefundSuccessTimeAsGlobalP1Alert() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
-            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status, success_at) "
-                    + "VALUES ('REF-SUCCESS-TIME-MISSING', 'SUCCESS', NULL)");
+            statement.executeUpdate("INSERT INTO t_refund_order("
+                    + "refund_order_id, status, success_at, terminal_at) "
+                    + "VALUES ('REF-SUCCESS-TIME-MISSING', 'SUCCESS', NULL, CURRENT_TIMESTAMP)");
             statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, attempt_status, completed_at, created_at) "
                     + "VALUES ('REF-SUCCESS-TIME-MISSING', 'SUCCESS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
             PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
@@ -159,8 +160,9 @@ class PaymentMonitorMapperIntegrationTest {
     void shouldExposeRefundTerminalFactMismatchAsGlobalP1Alert() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
-            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status, success_at) "
-                    + "VALUES ('REF-TERMINAL-MISMATCH', 'SUCCESS', CURRENT_TIMESTAMP)");
+            statement.executeUpdate("INSERT INTO t_refund_order("
+                    + "refund_order_id, status, success_at, terminal_at) "
+                    + "VALUES ('REF-TERMINAL-MISMATCH', 'SUCCESS', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
             statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, attempt_status, completed_at, created_at) "
                     + "VALUES ('REF-TERMINAL-MISMATCH', 'ACCEPTED', NULL, CURRENT_TIMESTAMP)");
             PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
@@ -280,7 +282,7 @@ class PaymentMonitorMapperIntegrationTest {
                     + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
-                    + "status VARCHAR(32), success_at TIMESTAMP)");
+                    + "status VARCHAR(32), success_at TIMESTAMP, terminal_at TIMESTAMP)");
             statement.execute("CREATE TABLE t_refund_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
                     + "attempt_status VARCHAR(32), completed_at TIMESTAMP, created_at TIMESTAMP)");
@@ -307,7 +309,8 @@ class PaymentMonitorMapperIntegrationTest {
                     + "('PAY-004', '失败', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
                     + "('PAY-005', '成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
                     + "('PAY-006', '处理中', NULL, CURRENT_TIMESTAMP)");
-            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status) VALUES ('REF-FAIL', 'FAIL')");
+            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status, terminal_at) "
+                    + "VALUES ('REF-FAIL', 'FAIL', CURRENT_TIMESTAMP)");
             statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, attempt_status, completed_at, created_at) "
                     + "VALUES ('REF-FAIL', 'FAIL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
             statement.executeUpdate("INSERT INTO t_payment_channel_config(status) VALUES ('DISABLED')");

@@ -126,13 +126,15 @@ class RefundListMapperIntegrationTest {
              Statement statement = session.getConnection().createStatement()) {
             statement.executeUpdate("INSERT INTO t_refund_order "
                     + "(refund_order_id, payment_order_id, order_no, customer_name, refund_amount, "
-                    + "refund_method, status, status_type, applied_at, success_at) VALUES "
+                    + "refund_method, status, status_type, applied_at, success_at, terminal_at) VALUES "
                     + "('REF-TERMINAL-OK', 'PAY-T1', 'ORD-T1', '客户甲', 1.00, "
-                    + "'终态测试', 'SUCCESS', 'success', '2026-09-11 12:00:00', '2026-09-11 13:00:00'), "
+                    + "'终态测试', 'SUCCESS', 'success', '2026-09-11 12:00:00', "
+                    + "'2026-09-11 13:00:00', '2026-09-11 13:00:00'), "
                     + "('REF-TERMINAL-MISMATCH', 'PAY-T2', 'ORD-T2', '客户乙', 2.00, "
-                    + "'终态测试', 'SUCCESS', 'success', '2026-09-11 12:01:00', '2026-09-11 13:01:00'), "
+                    + "'终态测试', 'SUCCESS', 'success', '2026-09-11 12:01:00', "
+                    + "'2026-09-11 13:01:00', '2026-09-11 13:01:00'), "
                     + "('REF-TERMINAL-NO-ATTEMPT', 'PAY-T3', 'ORD-T3', '客户丙', 3.00, "
-                    + "'终态测试', 'FAIL', 'danger', '2026-09-11 12:02:00', NULL)");
+                    + "'终态测试', 'FAIL', 'danger', '2026-09-11 12:02:00', NULL, NULL)");
             statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, attempt_status, completed_at, created_at) VALUES "
                     + "('REF-TERMINAL-OK', 'SUCCESS', '2026-09-11 13:00:00', '2026-09-11 12:00:01'), "
                     + "('REF-TERMINAL-MISMATCH', 'ACCEPTED', NULL, '2026-09-11 12:01:01')");
@@ -165,7 +167,8 @@ class RefundListMapperIntegrationTest {
                     + "payment_order_id VARCHAR(64) NOT NULL, order_no VARCHAR(64) NOT NULL, "
                     + "customer_name VARCHAR(128) NOT NULL, refund_amount DECIMAL(18, 2) NOT NULL, "
                     + "refund_method VARCHAR(32) NOT NULL, status VARCHAR(32) NOT NULL, "
-                    + "status_type VARCHAR(32) NOT NULL, applied_at DATETIME NOT NULL, success_at DATETIME)");
+                    + "status_type VARCHAR(32) NOT NULL, applied_at DATETIME NOT NULL, "
+                    + "success_at DATETIME, terminal_at DATETIME)");
             statement.execute("CREATE TABLE t_refund_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64) NOT NULL, "
                     + "attempt_status VARCHAR(32) NOT NULL, completed_at DATETIME, created_at DATETIME NOT NULL)");

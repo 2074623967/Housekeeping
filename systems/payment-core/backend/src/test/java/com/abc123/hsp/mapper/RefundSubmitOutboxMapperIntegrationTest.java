@@ -354,6 +354,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "status VARCHAR(32) NOT NULL, "
                     + "status_type VARCHAR(32) NOT NULL DEFAULT 'warn', "
                     + "success_at TIMESTAMP NULL, "
+                    + "terminal_at TIMESTAMP NULL, "
                     + "applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                     + "UNIQUE(channel_code, channel_refund_no))");
             statement.executeUpdate("INSERT INTO t_refund_order("

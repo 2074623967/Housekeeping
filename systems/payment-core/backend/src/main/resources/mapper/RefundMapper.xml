@@ -11,7 +11,8 @@
     <sql id="refundTerminalFactMismatchCondition">
         status IN ('SUCCESS', 'FAIL')
         AND (
-            (status = 'FAIL' AND success_at IS NOT NULL)
+            terminal_at IS NULL
+            OR (status = 'FAIL' AND success_at IS NOT NULL)
             OR NOT EXISTS (
                 SELECT 1
                 FROM t_refund_attempt terminal_attempt
@@ -187,6 +188,10 @@
                    WHEN refund_order.success_at IS NULL THEN '-'
                    ELSE DATE_FORMAT(refund_order.success_at, '%Y-%m-%d %H:%i:%s')
                END AS successAt,
+               CASE
+                   WHEN refund_order.terminal_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(refund_order.terminal_at, '%Y-%m-%d %H:%i:%s')
+               END AS terminalAt,
                CONCAT('¥', FORMAT(payment_order.amount, 2)) AS paidAmount,
                payment_order.payment_method AS paymentMethod,
                payment_order.status AS paymentStatus,
@@ -354,6 +359,7 @@
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.status,
                refund_order.success_at AS successAt,
+               refund_order.terminal_at AS terminalAt,
                attempt.refund_attempt_no AS refundAttemptNo,
                attempt.channel_code AS channelCode,
                attempt.channel_refund_no AS channelRefundNo,
@@ -381,6 +387,7 @@
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.status,
                refund_order.success_at AS successAt,
+               refund_order.terminal_at AS terminalAt,
                attempt.refund_attempt_no AS refundAttemptNo,
                attempt.channel_code AS channelCode,
                attempt.channel_refund_no AS channelRefundNo,
@@ -593,8 +600,8 @@
     </select>
 
     <insert id="insertRefund">
-        INSERT INTO t_refund_order(refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at)
-        VALUES (#{refundOrderId}, #{source.paymentOrderId}, #{request.idempotencyKey}, #{source.orderNo}, #{source.customerName}, #{request.refundAmount}, #{request.refundMethod}, #{request.refundReason}, #{status}, #{statusType}, NOW(), NULL)
+        INSERT INTO t_refund_order(refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at, terminal_at)
+        VALUES (#{refundOrderId}, #{source.paymentOrderId}, #{request.idempotencyKey}, #{source.orderNo}, #{source.customerName}, #{request.refundAmount}, #{request.refundMethod}, #{request.refundReason}, #{status}, #{statusType}, NOW(), NULL, NULL)
     </insert>
 
     <update id="updateRefundStatus">
@@ -605,6 +612,11 @@
                 WHEN #{success} THEN COALESCE(success_at, NOW())
                 WHEN #{status} = 'PROCESSING' THEN NULL
                 ELSE success_at
+            END,
+            terminal_at = CASE
+                WHEN #{status} IN ('SUCCESS', 'FAIL') THEN COALESCE(terminal_at, NOW())
+                WHEN #{status} = 'PROCESSING' THEN NULL
+                ELSE terminal_at
             END
         WHERE refund_order_id = #{refundOrderId}
           AND status = #{fromStatus}
@@ -615,6 +627,7 @@
         SET status = 'PROCESSING',
             status_type = 'warn',
             success_at = NULL,
+            terminal_at = NULL,
             channel_code = NULL,
             channel_refund_no = NULL,
             channel_submitted_at = NULL

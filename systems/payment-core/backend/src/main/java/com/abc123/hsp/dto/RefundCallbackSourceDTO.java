@@ -16,6 +16,8 @@ public class RefundCallbackSourceDTO {
     private String status;
     /** 退款单成功时间，用于校验终态事实完整性。 */
     private String successAt;
+    /** 退款单终态时间，用于校验成功和失败账期事实。 */
+    private String terminalAt;
     /** 已受理退款渠道。 */
     private String channelCode;
     /** 已受理渠道退款单号。 */

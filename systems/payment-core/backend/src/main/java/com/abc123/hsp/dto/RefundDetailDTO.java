@@ -31,6 +31,8 @@ public class RefundDetailDTO {
     private String appliedAt;
     /** 成功时间。 */
     private String successAt;
+    /** 退款终态时间。 */
+    private String terminalAt;
     /** 原支付金额。 */
     private String paidAmount;
     /** 原支付方式。 */

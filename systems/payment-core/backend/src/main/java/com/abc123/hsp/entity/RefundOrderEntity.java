@@ -33,4 +33,6 @@ public class RefundOrderEntity {
     private String appliedAt;
     /** 退款成功时间。 */
     private String successAt;
+    /** 退款终态时间。 */
+    private String terminalAt;
 }

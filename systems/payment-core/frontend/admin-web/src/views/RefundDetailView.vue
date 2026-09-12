@@ -89,6 +89,10 @@ const operationSuggestions = computed(() => {
   if (detail.value.status === "FAIL") {
     suggestions.push("当前退款单已失败，建议结合操作日志查看失败原因，并决定是否执行失败重试。");
   }
+  if (["SUCCESS", "FAIL"].includes(detail.value.status)
+    && (!detail.value.terminalAt || detail.value.terminalAt === "-")) {
+    suggestions.push("当前退款单缺少本地终态时间，请核对可信回调、主动查单和最新退款尝试，勿用申请时间代填。");
+  }
   if (!(detail.value.operationLogs || []).length) {
     suggestions.push("当前暂无退款操作日志，建议补充申请、审核或回调动作后再做复盘。");
   }
@@ -226,6 +230,7 @@ onMounted(loadDetail);
               <div><strong>客户名称：</strong>{{ detail.customerName }}</div>
               <div><strong>申请时间：</strong>{{ detail.appliedAt }}</div>
               <div><strong>成功时间：</strong>{{ detail.successAt }}</div>
+              <div><strong>终态时间：</strong>{{ detail.terminalAt || "-" }}</div>
               <div><strong>退款原因：</strong>{{ detail.refundReason || "-" }}</div>
               <div><strong>退款渠道：</strong>{{ detail.channelCode || "-" }}</div>
               <div><strong>渠道退款号：</strong>{{ detail.channelRefundNo || "-" }}</div>
