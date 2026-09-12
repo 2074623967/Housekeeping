@@ -4,6 +4,10 @@ import { useRoute } from "vue-router";
 import { paymentEventApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentFlowsRoute, paymentLogsRoute } from "../router/listRoutes";
+import {
+  paymentEventRecommendedAction,
+  paymentSuccessHttpStageMeta
+} from "../utils/paymentEventStage";
 
 const route = useRoute();
 const items = ref([]);
@@ -349,6 +353,7 @@ onMounted(loadEvents);
                 <th>事件主题</th>
                 <th>下游系统</th>
                 <th>发布状态</th>
+                <th>HTTP 投递阶段</th>
                 <th>重试次数</th>
                 <th>最近发布时间</th>
                 <th>下次重试时间</th>
@@ -368,6 +373,11 @@ onMounted(loadEvents);
                 <td>{{ item.eventTopic }}</td>
                 <td>{{ item.downstreamSystem }}</td>
                 <td><span :class="['badge', item.publishStatusType]">{{ item.publishStatus }}</span></td>
+                <td>
+                  <span :class="['badge', paymentSuccessHttpStageMeta(item).badgeType]">
+                    {{ paymentSuccessHttpStageMeta(item).label }}
+                  </span>
+                </td>
                 <td>{{ item.retryCount }}</td>
                 <td>{{ item.lastPublishedAt || "-" }}</td>
                 <td>{{ item.nextRetryAt || "-" }}</td>
@@ -403,6 +413,10 @@ onMounted(loadEvents);
               <div class="detail-card"><span>事件主题</span><strong>{{ selectedItem.eventTopic }}</strong></div>
               <div class="detail-card"><span>下游系统</span><strong>{{ selectedItem.downstreamSystem }}</strong></div>
               <div class="detail-card"><span>发布状态</span><strong>{{ selectedItem.publishStatus }}</strong></div>
+              <div class="detail-card">
+                <span>HTTP 投递阶段</span>
+                <strong>{{ paymentSuccessHttpStageMeta(selectedItem).label }}</strong>
+              </div>
               <div class="detail-card"><span>重试次数</span><strong>{{ selectedItem.retryCount }}</strong></div>
               <div class="detail-card"><span>最近重发操作人</span><strong>{{ selectedItem.lastRepublishOperator || "-" }}</strong></div>
               <div class="detail-card"><span>最近重发时间</span><strong>{{ selectedItem.lastRepublishedAt || "-" }}</strong></div>
@@ -411,8 +425,8 @@ onMounted(loadEvents);
             </div>
             <div class="ops-card">
               <div class="ops-title">排障建议</div>
-              <div class="ops-row"><span>优先动作</span><span>{{ selectedItem.publishStatus === "UNKNOWN" ? "按退款单号向渠道查单，禁止直接重发" : "重发事件、核对下游系统状态" }}</span></div>
-              <div class="ops-row"><span>重点核对</span><span>发布状态、重试次数、下次重试时间</span></div>
+              <div class="ops-row"><span>优先动作</span><span>{{ paymentEventRecommendedAction(selectedItem) }}</span></div>
+              <div class="ops-row"><span>重点核对</span><span>发布状态、HTTP 投递阶段、重试次数、下次重试时间</span></div>
               <div class="ops-row"><span>典型场景</span><span>下游未消费、消息投递失败、补偿事件积压</span></div>
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信，{{ metrics.unknownTotal }} 条结果未知</span></div>
             </div>
@@ -560,6 +574,18 @@ onMounted(loadEvents);
 @media (max-width: 1200px) {
   .overview-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .table-wrap,
+  .detail-side {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 </style>

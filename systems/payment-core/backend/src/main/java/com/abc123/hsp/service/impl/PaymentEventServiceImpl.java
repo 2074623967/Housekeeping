@@ -122,7 +122,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
         List<PaymentEventListItemDTO> items = maskEventItems(
                 CsvExportRowLimiter.requireWithinLimit(paymentEventMapper.findAllForExport(query)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,重试次数,最近发布时间,下次重试时间,最近重发操作人,最近重发时间,事件摘要,创建时间\n");
+        builder.append("事件号,事件类型,支付单号,业务单号,事件主题,下游系统,发布状态,HTTP投递阶段,重试次数,最近发布时间,下次重试时间,最近重发操作人,最近重发时间,事件摘要,创建时间\n");
         for (PaymentEventListItemDTO item : items) {
             builder.append(csvCell(item.getEventNo())).append(',')
                     .append(csvCell(item.getEventType())).append(',')
@@ -131,6 +131,7 @@ public class PaymentEventServiceImpl implements PaymentEventService {
                     .append(csvCell(item.getEventTopic())).append(',')
                     .append(csvCell(item.getDownstreamSystem())).append(',')
                     .append(csvCell(item.getPublishStatus())).append(',')
+                    .append(csvCell(item.getPaymentSuccessHttpStage())).append(',')
                     .append(csvCell(item.getRetryCount() == null ? null : String.valueOf(item.getRetryCount()))).append(',')
                     .append(csvCell(item.getLastPublishedAt())).append(',')
                     .append(csvCell(item.getNextRetryAt())).append(',')

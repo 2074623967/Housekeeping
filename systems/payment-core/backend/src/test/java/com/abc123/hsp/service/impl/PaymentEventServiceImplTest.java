@@ -256,6 +256,7 @@ class PaymentEventServiceImplTest {
         PaymentEventListItemDTO item = new PaymentEventListItemDTO();
         item.setEventNo("EVT-001");
         item.setPublishStatus("DEAD_LETTER");
+        item.setPaymentSuccessHttpStage("CLEARING_ACCEPTED");
         item.setLastRepublishOperator("finance-ops");
         item.setLastRepublishedAt("2026-09-10 21:30:00");
         item.setEventPayload("{\"reason\":\"retry exhausted\",\"accessToken\":\"token-raw\"}");
@@ -266,6 +267,8 @@ class PaymentEventServiceImplTest {
         assertEquals("FAILED_OR_DEAD_LETTER", query.getPublishStatus());
         assertTrue(csv.contains("EVT-001"));
         assertTrue(csv.contains("DEAD_LETTER"));
+        assertTrue(csv.contains("HTTP投递阶段"));
+        assertTrue(csv.contains("CLEARING_ACCEPTED"));
         assertTrue(csv.contains("finance-ops"));
         assertTrue(csv.contains("2026-09-10 21:30:00"));
         assertTrue(csv.contains("retry exhausted"));
