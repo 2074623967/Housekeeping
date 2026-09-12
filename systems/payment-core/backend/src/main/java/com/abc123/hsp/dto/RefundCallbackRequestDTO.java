@@ -10,6 +10,8 @@ public class RefundCallbackRequestDTO {
 
     /** 退款单号。 */
     private String refundOrderId;
+    /** 本轮退款渠道尝试号。 */
+    private String refundAttemptNo;
     /** 渠道侧退款单号。 */
     private String channelRefundNo;
     /** 渠道退款状态，仅支持 SUCCESS 或 FAIL。 */

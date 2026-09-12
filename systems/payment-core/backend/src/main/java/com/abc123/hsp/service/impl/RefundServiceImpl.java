@@ -63,6 +63,7 @@ public class RefundServiceImpl implements RefundService {
     private static final int OPERATOR_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_MAX_LENGTH = 64;
     private static final int REFUND_ORDER_ID_MAX_LENGTH = 64;
+    private static final int REFUND_ATTEMPT_NO_MAX_LENGTH = 64;
     private static final int CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int CALLBACK_REFUND_STATUS_MAX_LENGTH = 32;
     private static final int MONEY_MAX_SCALE = 2;
@@ -240,7 +241,7 @@ public class RefundServiceImpl implements RefundService {
                 normalizedChannel,
                 request.getChannelRefundNo(),
                 request.getRefundStatus(),
-                null,
+                request.getRefundAttemptNo(),
                 CALLBACK_OPERATOR,
                 false);
     }
@@ -325,7 +326,7 @@ public class RefundServiceImpl implements RefundService {
         if (StringUtils.hasText(expectedRefundAttemptNo)
                 && !Objects.equals(expectedRefundAttemptNo, source.getRefundAttemptNo())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
-                    "refund query belongs to an earlier refund attempt");
+                    "channel result belongs to an earlier refund attempt");
         }
         String matchedAttemptNo = refundMapper.findAttemptNoByChannelRefundNo(
                 channel, channelRefundNo);
@@ -592,15 +593,18 @@ public class RefundServiceImpl implements RefundService {
         if (!StringUtils.hasText(channel)
                 || request == null
                 || !StringUtils.hasText(request.getRefundOrderId())
+                || !StringUtils.hasText(request.getRefundAttemptNo())
                 || !StringUtils.hasText(request.getChannelRefundNo())
                 || !StringUtils.hasText(request.getRefundStatus())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_REQUEST_INVALID,
-                    "channel, refundOrderId, channelRefundNo and refundStatus are required");
+                    "channel, refundOrderId, refundAttemptNo, channelRefundNo and refundStatus are required");
         }
         String normalizedChannel = normalizeCallbackField(
                 channel, CALLBACK_CHANNEL_MAX_LENGTH).toLowerCase(Locale.ROOT);
         request.setRefundOrderId(normalizeCallbackField(
                 request.getRefundOrderId(), REFUND_ORDER_ID_MAX_LENGTH));
+        request.setRefundAttemptNo(normalizeCallbackField(
+                request.getRefundAttemptNo(), REFUND_ATTEMPT_NO_MAX_LENGTH));
         request.setChannelRefundNo(normalizeCallbackField(
                 request.getChannelRefundNo(), CALLBACK_CHANNEL_REFUND_NO_MAX_LENGTH));
         request.setRefundStatus(normalizeCallbackField(

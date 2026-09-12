@@ -60,6 +60,7 @@ class PaymentCallbackSignatureServiceImplTest {
         String timestamp = String.valueOf(Instant.now().getEpochSecond());
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
         request.setRefundOrderId("REF-TEST-001");
+        request.setRefundAttemptNo("RFA-TEST-001");
         request.setRefundStatus("SUCCESS");
         request.setChannelRefundNo("CHANNEL-REFUND-001");
         request.setNonce("nonce-refund-001");
@@ -67,6 +68,7 @@ class PaymentCallbackSignatureServiceImplTest {
         request.setSignature(sign(String.join("|",
                 "wx_h5",
                 request.getRefundOrderId(),
+                request.getRefundAttemptNo(),
                 request.getRefundStatus(),
                 request.getChannelRefundNo(),
                 timestamp,

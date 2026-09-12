@@ -747,6 +747,8 @@ class RefundServiceImplTest {
                 refundChannelQueryService);
         RefundCallbackRequestDTO invalidRefundOrderId = buildCallbackRequest("SUCCESS");
         invalidRefundOrderId.setRefundOrderId("REF-001\n");
+        RefundCallbackRequestDTO invalidRefundAttemptNo = buildCallbackRequest("SUCCESS");
+        invalidRefundAttemptNo.setRefundAttemptNo("RFA-001\n");
         RefundCallbackRequestDTO invalidChannelRefundNo = buildCallbackRequest("SUCCESS");
         invalidChannelRefundNo.setChannelRefundNo("CHANNEL-REF-001\n");
         RefundCallbackRequestDTO invalidStatus = buildCallbackRequest("SUCCESS\n");
@@ -756,9 +758,30 @@ class RefundServiceImplTest {
         assertRefundCallbackRequestInvalid(
                 () -> service.callback("wx_h5", invalidRefundOrderId));
         assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5", invalidRefundAttemptNo));
+        assertRefundCallbackRequestInvalid(
                 () -> service.callback("wx_h5", invalidChannelRefundNo));
         assertRefundCallbackRequestInvalid(
                 () -> service.callback("wx_h5", invalidStatus));
+
+        org.mockito.Mockito.verifyNoInteractions(paymentCallbackSignatureService);
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
+    void shouldRequireBoundedRefundAttemptNoBeforeVerifyingCallback() {
+        RefundServiceImpl service = new RefundServiceImpl(
+                refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
+                refundChannelQueryService);
+        RefundCallbackRequestDTO missingAttemptNo = buildCallbackRequest("SUCCESS");
+        missingAttemptNo.setRefundAttemptNo(" ");
+        RefundCallbackRequestDTO oversizedAttemptNo = buildCallbackRequest("SUCCESS");
+        oversizedAttemptNo.setRefundAttemptNo("R".repeat(65));
+
+        assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5", missingAttemptNo));
+        assertRefundCallbackRequestInvalid(
+                () -> service.callback("wx_h5", oversizedAttemptNo));
 
         org.mockito.Mockito.verifyNoInteractions(paymentCallbackSignatureService);
         org.mockito.Mockito.verifyNoInteractions(refundMapper);
@@ -828,6 +851,35 @@ class RefundServiceImplTest {
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).finalizeRefundAttempt(
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldRejectFirstCallbackFromPreviousUnknownRefundAttempt() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        request.setRefundAttemptNo("RFA-PREVIOUS");
+        RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", null);
+        source.setSubmitEventStatus("UNKNOWN");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class,
+                () -> createService().callback("wx_h5", request));
+
+        assertEquals(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .findAttemptNoByChannelRefundNo(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .bindUnknownRefundChannelAccepted(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test
@@ -1177,6 +1229,7 @@ class RefundServiceImplTest {
     private RefundCallbackRequestDTO buildCallbackRequest(String status) {
         RefundCallbackRequestDTO request = new RefundCallbackRequestDTO();
         request.setRefundOrderId(" REF-001 ");
+        request.setRefundAttemptNo(" RFA-001 ");
         request.setChannelRefundNo(" CHANNEL-REF-001 ");
         request.setRefundStatus(status);
         request.setTimestamp("1789000000");

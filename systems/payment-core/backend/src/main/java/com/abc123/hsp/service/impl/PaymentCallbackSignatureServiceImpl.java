@@ -97,6 +97,7 @@ public class PaymentCallbackSignatureServiceImpl implements PaymentCallbackSigna
         String payload = String.join("|",
                 normalizeChannel(channel),
                 request.getRefundOrderId(),
+                request.getRefundAttemptNo(),
                 request.getRefundStatus(),
                 request.getChannelRefundNo(),
                 request.getTimestamp(),
