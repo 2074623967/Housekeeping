@@ -1621,8 +1621,8 @@ t_order
 ### 4.187 退款终态事实主动巡检数据边界
 
 1. `t_payment_day_end_batch` 新增 `refund_terminal_fact_mismatch_count`。全新 schema 为 `INT NOT NULL DEFAULT 0`；增量迁移使用可空字段，历史 `NULL` 表示未采集，不伪造零值。
-2. 扫描以退款申请日为完整性归属，终态退款存在失败残留成功时间，或不存在“最新尝试状态等于退款单状态且完成时间非空”的记录时计数。最新尝试通过 `ORDER BY created_at DESC, id DESC` 稳定选取。
-3. 查询复用既有 `idx_refund_attempt_order_created(refund_order_id, created_at, id)`；退款状态与申请日扫描使用既有 `idx_refund_status_applied(status, applied_at)`，本轮不新增重复索引。
+2. 扫描以退款终态日为完整性归属，终态退款缺少终态时间、存在失败残留成功时间，或不存在“最新尝试状态等于退款单状态且完成时间非空”的记录时计数。最新尝试通过 `ORDER BY created_at DESC, id DESC` 稳定选取。
+3. 查询复用 `idx_refund_attempt_order_created(refund_order_id, created_at, id)` 与 `idx_refund_status_terminal(status, terminal_at)`；历史终态时间缺失的申请日兜底复用 `idx_refund_status_applied(status, applied_at)`。
 4. 迁移 `2026-09-12-add-refund-terminal-fact-guard.sql` 只新增批次快照字段，不回填历史批次，也不修改退款单或退款尝试。
 5. 目标 MySQL 执行前需预查字段冲突、评估在线 DDL 与相关子查询执行计划，并抽样核对历史异常集合；本地 H2 不证明生产性能、渠道到账或资金一致。
 
@@ -1639,7 +1639,7 @@ t_order
 1. 日终查询不再使用 `DATE(created_at/success_at/applied_at)=bizDate`，统一以裸时间列比较显式日期常量，范围为左闭右开 `[当日零点, 次日零点)`。
 2. 创建事实可使用 `idx_payment_created_at` 或带状态前导列的 `idx_payment_status_created`；支付成功事实可使用 `idx_payment_status_success`；退款申请与成功事实分别具备 `idx_refund_status_applied` 和 `idx_refund_status_success`。具体索引选择由目标 MySQL 优化器决定。
 3. 本轮只修改查询形状，不新增或删除索引，不执行数据迁移，不改变字段类型、时区或历史数据。时间边界仍以数据库会话时区解释。
-4. 资源契约锁定当前 `21` 个日期范围谓词均不在索引列外包函数；集成样例覆盖业务日零点包含和次日零点排除。
+4. 资源契约在本轮初始锁定 `21` 组日期范围谓词；退款终态历史兜底后续新增 `1` 组申请日范围，当前共 `22` 组，均不在索引列外包函数。集成样例覆盖业务日零点包含和次日零点排除。
 5. 上线前必须在目标 MySQL 核验会话时区、表统计信息、基数、数据倾斜、复合索引前导列和 `EXPLAIN ANALYZE`；本地 H2 兼容测试不构成真实执行计划或性能证明。
 
 ### 4.190 支付成功事实巡检账期归属边界
@@ -1649,6 +1649,15 @@ t_order
 3. `success_at IS NULL` 的成功支付不会进入该按日集合，仍由按创建日扫描的 `missing_payment_success_time_count` 独立拦截，不从其他时间字段推断成功日。
 4. 本轮不修改表、列、索引、迁移或历史批次；已经生成的批次是不可变快照，需要通过既有重跑机制生成新批次，不原地改写。
 5. 目标 MySQL 的索引选择和扫描成本仍需真实环境验证；本地集合正确性不构成渠道、账务或资金事实证明。
+
+### 4.191 退款终态时间与巡检账期数据边界
+
+1. `t_refund_order` 新增可空 `terminal_at DATETIME` 和 `idx_refund_status_terminal(status, terminal_at)`；进行中状态为空，当前成功或失败终态必须非空。
+2. 终态状态条件更新通过 `COALESCE(terminal_at, NOW())` 保留当前终态首次本地落库时间；失败重试同时清空 `success_at`、`terminal_at` 和上一轮渠道受理轨迹。
+3. 回调锁定快照与非锁定查单快照读取 `terminal_at`。终态事实完整性要求退款单终态时间和最新尝试完成时间都存在，但不要求两个数据库时间值完全相等。
+4. 日终对 `terminal_at` 非空记录按左闭右开终态日范围扫描；`terminal_at IS NULL` 本身是异常，仅以 `applied_at` 范围作为历史重跑兜底。该兜底不代表申请时间就是终态时间。
+5. 迁移先用成功退款已有 `success_at`，再用最新匹配尝试 `completed_at` 回填；不使用 `NOW()`、申请时间、渠道受理时间或较早尝试。无法证明的值保持 `NULL` 并由告警暴露。
+6. 目标 MySQL 执行前需预查字段和索引冲突、确认退款尝试迁移已执行、评估在线 DDL/回填锁影响，并抽样核对回填集合与执行计划。
 
 ## 5. 状态建议
 

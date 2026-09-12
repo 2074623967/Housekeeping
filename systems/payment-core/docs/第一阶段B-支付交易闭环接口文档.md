@@ -4430,9 +4430,9 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.316 退款终态事实主动巡检契约
 
-1. 退款终态事实不一致集合固定为：退款单状态为 `SUCCESS/FAIL`，且失败退款残留 `success_at`，或最新退款尝试不存在、尝试状态不等于退款单状态、尝试 `completed_at` 为空。
+1. 退款终态事实不一致集合固定为：退款单状态为 `SUCCESS/FAIL`，且 `terminal_at` 缺失、失败退款残留 `success_at`，或最新退款尝试不存在、尝试状态不等于退款单状态、尝试 `completed_at` 为空。
 2. `SUCCESS + success_at IS NULL` 由 `REFUND_SUCCESS_TIME_MISSING` 单独负责；只缺成功时间且最新成功尝试完整的退款不进入新集合，避免两个告警无条件重复。
-3. 日终批次新增 `refundTerminalFactMismatchCount`，按退款单 `applied_at` 所在业务日采集；总览新增 `openRefundTerminalFactMismatchCount`，最近批次和 CSV 同步返回。任一非零使批次 `WARNING` 并禁止进入对账。
+3. 日终批次新增 `refundTerminalFactMismatchCount`，按退款单 `terminal_at` 所在业务日采集；历史终态时间缺失时按 `applied_at` 所在业务日兜底。总览新增 `openRefundTerminalFactMismatchCount`，最近批次和 CSV 同步返回。任一非零使批次 `WARNING` 并禁止进入对账。
 4. 历史批次未采集该字段时返回 `NULL`，总览和批次必须显示事实不完整并要求 `RERUN`；不得使用当前扫描值回填旧批次。
 5. `GET /api/refunds` 与导出接口接受虚拟筛选 `TERMINAL_FACT_MISMATCH`，列表、计数和 CSV 使用同一集合；日终和支付监控告警类型为 `REFUND_TERMINAL_FACT_MISMATCH / P1`，动作路由固定为 `/refunds?refundStatus=TERMINAL_FACT_MISMATCH`。
 6. 本契约报告 payment-core 内部结构化事实一致性，不证明渠道到账、渠道账单、账务冲销、资金一致或告警处置完成。
@@ -4460,7 +4460,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 1. 支付日终内部统计接口继续接收严格 `yyyy-MM-dd` 业务日期；所有创建时间、成功时间和申请时间条件统一解释为数据库会话时区下 `[bizDate 00:00:00, bizDate+1 00:00:00)`。
 2. 下界包含业务日零点，上界排除次日零点；不得使用 `23:59:59`、毫秒截断或浏览器时区补偿，避免高精度时间遗漏和相邻账期重复。
 3. 支付总量、待收口支付和支付成功时间缺失按支付创建时间范围；支付成功、支付成功事实不一致、渠道成功、内部成功、成功差异及渠道/内部异常按支付成功时间范围。
-4. 退款成功单量和金额按退款成功时间范围；退款成功时间缺失、退款终态不一致和待收口退款按退款申请时间范围。该优化不改变既有字段、响应或告警集合。
+4. 退款成功单量和金额按退款成功时间范围；退款成功时间缺失和待收口退款按申请时间范围；退款终态不一致按终态时间范围，历史终态时间缺失按申请时间兜底。该优化不改变既有字段、响应或告警集合。
 5. SQL 不得在索引时间列外包 `DATE()` 后再比较业务日；日期转换和次日计算只能作用于绑定常量，以保留范围扫描可能性。
 6. 本契约不保证目标数据库一定选择某个索引；上线前仍需以真实 MySQL 版本、统计信息、数据分布和 `EXPLAIN ANALYZE` 验证执行计划。
 
@@ -4471,6 +4471,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `SUCCESS + success_at IS NULL` 无法归入成功日，继续由 `missingPaymentSuccessTimeCount` 按创建日采集；不得用创建时间替代缺失成功时间。
 4. 本轮不改变接口字段、告警类型、下钻路由、历史批次 `NULL/RERUN` 规则或批次准入逻辑，只修正新执行批次的内部统计集合。
 5. 该契约只约束 payment-core 本地账期归属，不证明渠道扣款、渠道账单、账务入账、资金一致或正式关账。
+
+### 14.321 退款终态时间与巡检账期契约
+
+1. `t_refund_order.terminal_at` 表示 payment-core 将退款单写入当前 `SUCCESS/FAIL` 终态的本地时间。`PROCESSING -> SUCCESS/FAIL` 必须在同一条件更新中首次写入；`FAIL -> PROCESSING` 重试必须清空。
+2. 终态回调和主动查单幂等成立时，退款单 `terminalAt`、最新尝试同终态及 `attemptCompletedAt` 均必须存在；成功还要求 `successAt` 存在，失败要求 `successAt` 为空。
+3. 退款详情响应新增可空字符串字段 `terminalAt`，缺失时返回 `-`；它不是渠道到账或账务冲销时间，调用方不得据此声称资金完成。
+4. `TERMINAL_FACT_MISMATCH` 扩展为同时识别 `terminal_at IS NULL`。日终对非空值按终态日采集；空值按申请日兜底以支持重跑，但不得推断实际终态日。
+5. 增量迁移优先以成功退款 `success_at` 回填，再以最新尝试状态匹配且 `completed_at` 非空的事实补齐；其余保持 `NULL`。应用版本必须在迁移后发布。
+6. 本契约不证明历史数据均可回填、渠道真实到账、账务冲销、资金一致或正式关账。
 
 ## 15. 结论
 

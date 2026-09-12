@@ -2636,7 +2636,7 @@
 
 1. 上一版只在终态退款再次收到可信回调或主动查单时校验退款单与最新尝试，未再次触达的历史断裂仍会静默留存，日终和支付监控无法主动发现。
 2. 新增统一不一致集合：退款单已为 `SUCCESS/FAIL`，但最新退款尝试缺失、尝试状态与退款单状态不同、尝试完成时间缺失，或失败退款异常残留成功时间。成功退款仅缺少 `success_at` 继续由既有成功时间缺失告警负责，避免重复统计。
-3. 日终按退款申请日快照 `refundTerminalFactMismatchCount`，任一非零使批次 `WARNING` 并禁止进入对账；总览、最近批次、CSV 和 `REFUND_TERMINAL_FACT_MISMATCH / P1` 告警使用同一快照。历史批次新字段保持 `NULL`，要求 `RERUN`，不倒推旧事实。
+3. 日终按退款终态发生日快照 `refundTerminalFactMismatchCount`，任一非零使批次 `WARNING` 并禁止进入对账；总览、最近批次、CSV 和 `REFUND_TERMINAL_FACT_MISMATCH / P1` 告警使用同一快照。历史批次新字段保持 `NULL`，要求 `RERUN`，不倒推旧事实。
 4. 退款列表、计数和 CSV 新增虚拟筛选 `TERMINAL_FACT_MISMATCH`，日终和支付监控统一下钻 `/refunds?refundStatus=TERMINAL_FACT_MISMATCH`；管理端同步展示事实卡、批次列、筛选项与差异化处置建议。
 5. 两份 schema 与迁移 `2026-09-12-add-refund-terminal-fact-guard.sql` 同步完成。定向后端 `39` 项、后端全量 `1048` 项、管理端 `29` 项、Vite 生产构建、三份 Mapper XML 与补丁检查通过。
 6. 本轮未自动修复历史不一致，也未证明渠道实际到账、渠道账单、账务冲销或资金一致；目标 MySQL 迁移、执行计划、历史分布和运营处置仍需真实环境验证，release 四项治理阻断不变。
@@ -2663,7 +2663,7 @@
 
 1. 审计发现日终支付创建、支付成功、退款申请和退款成功共 `21` 个账期条件均使用 `DATE(time_column)=bizDate`，在索引列外包函数，数据量增长后可能削弱现有时间索引并放大日终扫描成本。
 2. 全部条件统一改为 `[bizDate 00:00:00, 次日 00:00:00)` 半开区间，索引列保持裸字段，仅对绑定日期常量执行 `CAST` 和 `TIMESTAMPADD`。支付与退款的创建日、申请日和成功日归属语义不变。
-3. 新增 Mapper 资源契约测试，锁定 `21` 组上下界并禁止恢复 `DATE(column)=bizDate`；支付与退款集成样例覆盖业务日零点包含、次日零点排除，避免优化时引入边界串账。
+3. 新增 Mapper 资源契约测试，初始锁定 `21` 组上下界并禁止恢复 `DATE(column)=bizDate`；后续退款终态历史兜底新增一组申请日范围，当前契约为 `22` 组。支付与退款集成样例覆盖业务日零点包含、次日零点排除，避免优化时引入边界串账。
 4. 复用 `idx_payment_created_at`、`idx_payment_status_created`、`idx_payment_status_success`、`idx_refund_status_applied` 和 `idx_refund_status_success`，本轮无 schema、迁移、DTO、HTTP 或前端变化。
 5. 日终联合定向 `44` 项、后端全量 `1059` 项、`PaymentDayEndMapper.xml` 与补丁检查通过；代码提交为 `114eaaf5 perf(payment-core): make day-end date ranges sargable`。首次两轮定向分别暴露 H2 不支持 `DATE_ADD` 和无法推断裸 `TIMESTAMPADD` 参数类型，改为两端兼容的显式常量转换后完整重跑，失败结果未作为通过证据。
 6. 当前环境没有目标 MySQL 实例，尚未执行 `EXPLAIN ANALYZE`、统计信息核验或生产量级压测；SQL 具备范围扫描形状不等于优化器一定选择索引，也不证明资金、账务或正式关账一致，release 四项治理阻断不变。
@@ -2675,6 +2675,15 @@
 3. 集成样例新增“前日创建、当日零点成功且最新尝试缺失”，验证异常计入成功日、不回落到创建日；次日零点正常成功继续排除在前一业务日之外。
 4. 本轮不修改批次字段、HTTP、前端、schema、索引或迁移，查询复用 `idx_payment_status_success(status, success_at)` 与既有最新尝试索引。
 5. 日终相关 `39` 项、后端全量 `1059` 项、Mapper XML 与补丁检查通过。本地 H2 只验证集合和边界，不证明目标 MySQL 执行计划、历史异常分布、渠道扣款、账务入账、资金一致或正式关账；release 四项真实治理阻断不变。
+
+### 8.326 2026-09-12 退款终态时间与巡检账期归属进展
+
+1. 退款终态事实巡检原先按申请日归属；跨日进入 `SUCCESS/FAIL` 后发生的退款单与最新尝试断裂可能既错过已执行的申请日日终，也不进入终态发生日日终。失败退款又没有统一终态时间，不能直接对称改用 `success_at`。
+2. `t_refund_order` 新增可空 `terminal_at` 和 `(status, terminal_at)` 索引。应用从 `PROCESSING` 进入 `SUCCESS/FAIL` 时首次写入本地终态时间，失败重试回到 `PROCESSING` 时清空；回调与主动查单的终态幂等校验同时要求该字段存在。
+3. 日终对有终态时间的新事实按 `terminal_at` 半开区间巡检；历史终态时间为空本身进入终态不一致集合，并仅在重跑申请日时兜底采集。全局监控与退款列表筛选同步把终态时间缺失视为 P1 结构化事实断裂。
+4. 迁移只用已有 `success_at` 或“最新尝试状态与退款单终态相同且 `completed_at` 非空”的证据回填，不使用申请时间或当前时间。无法证明的历史记录保持 `NULL`，不得伪造闭环。
+5. 退款详情接口和管理端新增本地终态时间展示；终态记录缺失时提示核对可信回调、主动查单和最新尝试，不提供直接补写入口。
+6. 核心联合定向 `69` 项、后端全量 `1062` 项、管理端 `30` 项单测和生产构建、三份 Mapper XML 与补丁检查通过。本地 H2、静态迁移契约和页面构建不证明目标 MySQL 迁移、历史跨日异常已完整归账、渠道到账、账务冲销或资金一致；release 四项真实治理阻断不变。
 
 ## 9. 最终结论
 
