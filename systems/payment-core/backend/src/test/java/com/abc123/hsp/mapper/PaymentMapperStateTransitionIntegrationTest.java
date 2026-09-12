@@ -363,6 +363,39 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldApplyPaymentSuccessFactMismatchToListCountAndExport() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, customer_name, amount, status, status_type, success_at, created_at) VALUES "
+                    + "('PAY-FACT-NORMAL', 'ORD-FACT', '客户一', 10.00, 'SUCCESS', 'success', NOW(), NOW()), "
+                    + "('PAY-FACT-NO-ATTEMPT', 'ORD-FACT', '客户二', 20.00, 'SUCCESS', 'success', NOW(), NOW()), "
+                    + "('PAY-FACT-STATUS', 'ORD-FACT', '客户三', 30.00, 'SUCCESS', 'success', NOW(), NOW()), "
+                    + "('PAY-FACT-NO-COMPLETION', 'ORD-FACT', '客户四', 40.00, 'SUCCESS', 'success', NOW(), NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_attempt("
+                    + "payment_order_id, attempt_status, completed_at, created_at) VALUES "
+                    + "('PAY-FACT-NORMAL', '成功', NOW(), '2026-09-12 10:00:00'), "
+                    + "('PAY-FACT-STATUS', '成功', NOW(), '2026-09-12 09:00:00'), "
+                    + "('PAY-FACT-STATUS', '处理中', NULL, '2026-09-12 10:00:00'), "
+                    + "('PAY-FACT-NO-COMPLETION', '成功', NULL, '2026-09-12 10:00:00')");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setOrderNo("ORD-FACT");
+            query.setStatus("SUCCESS_FACT_MISMATCH");
+
+            List<PaymentListItemDTO> items = mapper.findAll(query);
+
+            assertEquals(3, items.size());
+            assertEquals(3L, mapper.count(query));
+            assertEquals(3, mapper.findAllForExport(query).size());
+            org.junit.jupiter.api.Assertions.assertEquals(
+                    java.util.Set.of("PAY-FACT-NO-ATTEMPT", "PAY-FACT-STATUS", "PAY-FACT-NO-COMPLETION"),
+                    items.stream().map(PaymentListItemDTO::getPaymentOrderId)
+                            .collect(java.util.stream.Collectors.toSet()));
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -485,6 +518,9 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "('PAY-SUBMITTED', '待回调', TIMESTAMPADD(MINUTE, -1, NOW())), "
                     + "('PAY-SUBMITTED', '处理中', NOW()), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', '处理中', NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_attempt("
+                    + "payment_order_id, attempt_status, completed_at, created_at) "
+                    + "VALUES ('PAY-FINAL-SUCCESS', '成功', NOW(), NOW())");
             statement.executeUpdate("INSERT INTO t_payment_event(payment_order_id, event_type) "
                     + "VALUES ('PAY-EXPIRED-CLOSED', 'PAYMENT_EXPIRED_CLOSED'), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', 'PAYMENT_CLOSED')");

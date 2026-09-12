@@ -8,6 +8,23 @@
         ORDER BY p.created_at DESC, p.id DESC
     </sql>
 
+    <sql id="paymentSuccessFactMismatchCondition">
+        p.status = 'SUCCESS'
+        AND NOT EXISTS (
+            SELECT 1
+            FROM t_payment_attempt fact_attempt
+            WHERE fact_attempt.id = (
+                SELECT latest_fact_attempt.id
+                FROM t_payment_attempt latest_fact_attempt
+                WHERE latest_fact_attempt.payment_order_id = p.payment_order_id
+                ORDER BY latest_fact_attempt.created_at DESC, latest_fact_attempt.id DESC
+                LIMIT 1
+            )
+              AND fact_attempt.attempt_status = '成功'
+              AND fact_attempt.completed_at IS NOT NULL
+        )
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentListItemDTO">
         SELECT p.payment_order_id AS paymentOrderId,
                p.order_no AS orderNo,
@@ -42,6 +59,9 @@
                 AND p.payment_method = #{query.paymentMethod}
             </if>
             <choose>
+                <when test="query.status == 'SUCCESS_FACT_MISMATCH'">
+                    AND <include refid="paymentSuccessFactMismatchCondition"/>
+                </when>
                 <when test="query.status == 'SUCCESS_TIME_MISSING'">
                     AND p.status = 'SUCCESS' AND p.success_at IS NULL
                 </when>
@@ -74,6 +94,9 @@
                 AND p.payment_method = #{query.paymentMethod}
             </if>
             <choose>
+                <when test="query.status == 'SUCCESS_FACT_MISMATCH'">
+                    AND <include refid="paymentSuccessFactMismatchCondition"/>
+                </when>
                 <when test="query.status == 'SUCCESS_TIME_MISSING'">
                     AND p.status = 'SUCCESS' AND p.success_at IS NULL
                 </when>
@@ -113,6 +136,9 @@
                 AND p.payment_method = #{query.paymentMethod}
             </if>
             <choose>
+                <when test="query.status == 'SUCCESS_FACT_MISMATCH'">
+                    AND <include refid="paymentSuccessFactMismatchCondition"/>
+                </when>
                 <when test="query.status == 'SUCCESS_TIME_MISSING'">
                     AND p.status = 'SUCCESS' AND p.success_at IS NULL
                 </when>

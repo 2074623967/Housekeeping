@@ -95,6 +95,9 @@ class PaymentMonitorMapperIntegrationTest {
             statement.executeUpdate("INSERT INTO t_payment_order("
                     + "payment_order_id, channel_code, payment_method, status, amount) VALUES "
                     + "('PAY-SUCCESS-TIME-MISSING', 'channel-c', 'method-c', 'SUCCESS', 12.00)");
+            statement.executeUpdate("INSERT INTO t_payment_attempt("
+                    + "payment_order_id, attempt_status, completed_at, created_at) VALUES "
+                    + "('PAY-SUCCESS-TIME-MISSING', '成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
             PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
 
             List<PaymentAlertItemDTO> alerts = mapper.findAlerts();
@@ -104,6 +107,29 @@ class PaymentMonitorMapperIntegrationTest {
             assertEquals("P1", alerts.get(1).getAlertLevel());
             assertEquals(Integer.valueOf(1), alerts.get(1).getAffectedCount());
             assertEquals("/payments?status=SUCCESS_TIME_MISSING", alerts.get(1).getActionRoute());
+            assertEquals(Integer.valueOf(alerts.size()), mapper.findSummary().getAlertCount());
+        }
+    }
+
+    @Test
+    void shouldExposePaymentSuccessFactMismatchAsGlobalP1Alert() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, channel_code, payment_method, status, amount, success_at) VALUES "
+                    + "('PAY-SUCCESS-FACT-MISMATCH', 'channel-c', 'method-c', 'SUCCESS', 12.00, CURRENT_TIMESTAMP)");
+            statement.executeUpdate("INSERT INTO t_payment_attempt("
+                    + "payment_order_id, attempt_status, completed_at, created_at) VALUES "
+                    + "('PAY-SUCCESS-FACT-MISMATCH', '处理中', NULL, CURRENT_TIMESTAMP)");
+            PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
+
+            List<PaymentAlertItemDTO> alerts = mapper.findAlerts();
+
+            assertEquals(4, alerts.size());
+            assertEquals("PAYMENT_SUCCESS_FACT_MISMATCH", alerts.get(1).getAlertType());
+            assertEquals("P1", alerts.get(1).getAlertLevel());
+            assertEquals(Integer.valueOf(1), alerts.get(1).getAffectedCount());
+            assertEquals("/payments?status=SUCCESS_FACT_MISMATCH", alerts.get(1).getActionRoute());
             assertEquals(Integer.valueOf(alerts.size()), mapper.findSummary().getAlertCount());
         }
     }
@@ -261,7 +287,8 @@ class PaymentMonitorMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_attempt ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64))");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "attempt_status VARCHAR(64), completed_at TIMESTAMP, created_at TIMESTAMP)");
             statement.executeUpdate("INSERT INTO t_payment_order("
                     + "payment_order_id, channel_code, payment_method, status, amount) VALUES "
                     + "('PAY-001', 'channel-b', 'method-a', 'SUCCESS', 10.00), "
@@ -271,8 +298,15 @@ class PaymentMonitorMapperIntegrationTest {
                     + "('PAY-005', 'channel-a', 'method-a', 'SUCCESS', 10.00), "
                     + "('PAY-006', 'channel-a', 'method-a', 'CLOSED', 10.00)");
             statement.executeUpdate("UPDATE t_payment_order SET success_at = created_at WHERE status = 'SUCCESS'");
-            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES "
-                    + "('PAY-001'), ('PAY-001'), ('PAY-002'), ('PAY-003'), ('PAY-004'), ('PAY-005'), ('PAY-006')");
+            statement.executeUpdate("INSERT INTO t_payment_attempt("
+                    + "payment_order_id, attempt_status, completed_at, created_at) VALUES "
+                    + "('PAY-001', '成功', CURRENT_TIMESTAMP, DATEADD('SECOND', -1, CURRENT_TIMESTAMP)), "
+                    + "('PAY-001', '成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+                    + "('PAY-002', '处理中', NULL, CURRENT_TIMESTAMP), "
+                    + "('PAY-003', '成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+                    + "('PAY-004', '失败', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+                    + "('PAY-005', '成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP), "
+                    + "('PAY-006', '处理中', NULL, CURRENT_TIMESTAMP)");
             statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status) VALUES ('REF-FAIL', 'FAIL')");
             statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, attempt_status, completed_at, created_at) "
                     + "VALUES ('REF-FAIL', 'FAIL', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");

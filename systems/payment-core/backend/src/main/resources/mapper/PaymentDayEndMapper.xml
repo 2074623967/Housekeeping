@@ -39,6 +39,12 @@
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
                ) AS openMissingPaymentSuccessTimeCount,
+               (
+                   SELECT payment_success_fact_mismatch_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS openPaymentSuccessFactMismatchCount,
                COALESCE((
                    SELECT pending_refund_count
                    FROM t_payment_day_end_batch
@@ -126,6 +132,7 @@
                pending_payment_count AS pendingPaymentCount,
                CONCAT('¥', FORMAT(pending_payment_amount, 2)) AS pendingPaymentAmount,
                missing_payment_success_time_count AS missingPaymentSuccessTimeCount,
+               payment_success_fact_mismatch_count AS paymentSuccessFactMismatchCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                missing_refund_success_time_count AS missingRefundSuccessTimeCount,
@@ -161,6 +168,7 @@
                pending_payment_count AS pendingPaymentCount,
                CONCAT('¥', FORMAT(pending_payment_amount, 2)) AS pendingPaymentAmount,
                missing_payment_success_time_count AS missingPaymentSuccessTimeCount,
+               payment_success_fact_mismatch_count AS paymentSuccessFactMismatchCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                missing_refund_success_time_count AS missingRefundSuccessTimeCount,
@@ -366,6 +374,26 @@
           AND success_at IS NULL
     </select>
 
+    <select id="countPaymentSuccessFactMismatchByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order payment_order
+        WHERE DATE(payment_order.created_at) = #{bizDate}
+          AND payment_order.status = 'SUCCESS'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_attempt attempt
+              WHERE attempt.id = (
+                  SELECT latest_attempt.id
+                  FROM t_payment_attempt latest_attempt
+                  WHERE latest_attempt.payment_order_id = payment_order.payment_order_id
+                  ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                  LIMIT 1
+              )
+                AND attempt.attempt_status = '成功'
+                AND attempt.completed_at IS NOT NULL
+          )
+    </select>
+
     <select id="sumSuccessRefundAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
@@ -465,6 +493,7 @@
             pending_payment_count,
             pending_payment_amount,
             missing_payment_success_time_count,
+            payment_success_fact_mismatch_count,
             refund_success_count,
             refund_success_amount,
             missing_refund_success_time_count,
@@ -495,6 +524,7 @@
             #{pendingPaymentCount},
             #{pendingPaymentAmount},
             #{missingPaymentSuccessTimeCount},
+            #{paymentSuccessFactMismatchCount},
             #{refundSuccessCount},
             #{refundSuccessAmount},
             #{missingRefundSuccessTimeCount},

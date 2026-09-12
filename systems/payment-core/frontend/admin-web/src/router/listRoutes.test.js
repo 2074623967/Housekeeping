@@ -53,3 +53,12 @@ test("keeps the missing success-time status group in the payment list route", ()
   assert.deepEqual(resolved.query, { status: "SUCCESS_TIME_MISSING" });
   assert.equal(resolved.href, "/payments?status=SUCCESS_TIME_MISSING");
 });
+
+test("keeps the payment success-fact mismatch group in the payment list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(paymentsRoute({ status: "SUCCESS_FACT_MISMATCH" }));
+
+  assert.deepEqual(resolved.query, { status: "SUCCESS_FACT_MISMATCH" });
+  assert.equal(resolved.href, "/payments?status=SUCCESS_FACT_MISMATCH");
+});

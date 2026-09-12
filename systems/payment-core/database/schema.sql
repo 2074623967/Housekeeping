@@ -1076,6 +1076,7 @@ CREATE TABLE t_payment_day_end_batch (
     pending_payment_count INT NOT NULL DEFAULT 0 COMMENT '待收口支付数',
     pending_payment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '待收口支付金额',
     missing_payment_success_time_count INT NOT NULL DEFAULT 0 COMMENT '支付成功时间缺失数',
+    payment_success_fact_mismatch_count INT NOT NULL DEFAULT 0 COMMENT '支付成功事实不一致数',
     refund_success_count INT NOT NULL DEFAULT 0 COMMENT '退款成功单量',
     refund_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款成功金额',
     missing_refund_success_time_count INT NOT NULL DEFAULT 0 COMMENT '退款成功时间缺失数',
