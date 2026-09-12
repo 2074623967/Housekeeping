@@ -268,30 +268,41 @@ public class PaymentTaskCenterMapperIntegrationTest {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
-                        + "alert_no, source_alert_no, issue_no, alert_channel, alert_status, ack_status, created_at) "
+                        + "alert_no, source_alert_no, issue_no, alert_channel, alert_status, ack_status, "
+                        + "provider_delivery_status, created_at) "
                         + "VALUES "
                         + "('PIA-HISTORY-SOURCE', NULL, 'ISSUE-HISTORY', 'IN_APP_OUTBOX', "
-                        + "'已生成', '已确认', TIMESTAMPADD(MINUTE, -10, NOW())),"
+                        + "'已生成', '已确认', NULL, TIMESTAMPADD(MINUTE, -10, NOW())),"
                         + "('PIA-HISTORY-SUCCESS', 'PIA-HISTORY-SOURCE', 'ISSUE-HISTORY', 'IM', "
-                        + "'已派发', '待确认', TIMESTAMPADD(MINUTE, -5, NOW())),"
+                        + "'已派发', '待确认', 'ACCEPTED', TIMESTAMPADD(MINUTE, -5, NOW())),"
                         + "('PIA-HISTORY-FAILED', 'PIA-HISTORY-SOURCE', 'ISSUE-HISTORY', 'IM', "
-                        + "'派发失败', '无需回执', TIMESTAMPADD(MINUTE, -4, NOW())),"
+                        + "'派发失败', '无需回执', 'FAILED', TIMESTAMPADD(MINUTE, -4, NOW())),"
                         + "('PIA-HISTORY-WRONG-ISSUE', 'PIA-HISTORY-SOURCE', 'ISSUE-OTHER', 'IM', "
-                        + "'派发失败', '无需回执', TIMESTAMPADD(MINUTE, -1, NOW())),"
+                        + "'派发失败', '无需回执', 'FAILED', TIMESTAMPADD(MINUTE, -1, NOW())),"
                         + "('PIA-HISTORY-WRONG-SUCCESS', 'PIA-HISTORY-SOURCE', 'ISSUE-OTHER', 'SMS', "
-                        + "'已派发', '待确认', NOW()),"
+                        + "'已派发', '待确认', 'ACCEPTED', NOW()),"
+                        + "('PIA-HISTORY-NO-EVIDENCE', 'PIA-HISTORY-SOURCE', 'ISSUE-HISTORY', 'SMS', "
+                        + "'已派发', '待确认', NULL, NOW()),"
+                        + "('PIA-HISTORY-FAILED-EVIDENCE', 'PIA-HISTORY-SOURCE', 'ISSUE-HISTORY', 'EMAIL', "
+                        + "'已派发', '待确认', 'FAILED', NOW()),"
+                        + "('PIA-HISTORY-DELIVERED', 'PIA-HISTORY-SOURCE', 'ISSUE-HISTORY', 'VOICE', "
+                        + "'已派发', '待确认', 'DELIVERED', NOW()),"
                         + "('PIA-HISTORY-ORPHAN', 'PIA-HISTORY-MISSING', 'ISSUE-HISTORY', 'EMAIL', "
-                        + "'已派发', '待确认', NOW()),"
+                        + "'已派发', '待确认', 'ACCEPTED', NOW()),"
                         + "('PIA-HISTORY-NESTED', 'PIA-HISTORY-SOURCE', 'ISSUE-HISTORY', "
-                        + "'IN_APP_OUTBOX', '已生成', '待确认', NOW()),"
+                        + "'IN_APP_OUTBOX', '已生成', '待确认', NULL, NOW()),"
                         + "('PIA-HISTORY-NESTED-DELIVERY', 'PIA-HISTORY-NESTED', 'ISSUE-HISTORY', 'EMAIL', "
-                        + "'已派发', '待确认', NOW())");
+                        + "'已派发', '待确认', 'ACCEPTED', NOW())");
             }
 
             org.junit.jupiter.api.Assertions.assertTrue(
                     mapper.hasSuccessfulIssueAlertChannelDelivery("PIA-HISTORY-SOURCE", "IM"));
             org.junit.jupiter.api.Assertions.assertFalse(
                     mapper.hasSuccessfulIssueAlertChannelDelivery("PIA-HISTORY-SOURCE", "SMS"));
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    mapper.hasSuccessfulIssueAlertChannelDelivery("PIA-HISTORY-SOURCE", "EMAIL"));
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    mapper.hasSuccessfulIssueAlertChannelDelivery("PIA-HISTORY-SOURCE", "VOICE"));
             org.junit.jupiter.api.Assertions.assertFalse(
                     mapper.hasSuccessfulIssueAlertChannelDelivery("PIA-HISTORY-MISSING", "EMAIL"));
             org.junit.jupiter.api.Assertions.assertFalse(

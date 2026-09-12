@@ -631,6 +631,41 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     }
 
     @Test
+    void shouldRetryWhenRecentDispatchedLogHasNoSuccessfulProviderEvidence() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM")).thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100,
+                        "防重放窗口10分钟/时间窗5分钟")
+        ));
+        PaymentIssueAlertLogEntity latestLog = new PaymentIssueAlertLogEntity();
+        latestLog.setAlertStatus("已派发");
+        latestLog.setProviderDeliveryStatus("FAILED");
+        latestLog.setCreatedAt("2099-12-31 23:59:59");
+        when(paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog("PIA-OUTBOX-001", "IM")).thenReturn(latestLog);
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult("IM-RETRY-001", "ACCEPTED", "供应商已接单", "[IM] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("payment-core-admin");
+
+        verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
+        Assertions.assertEquals("已派发", logCaptor.getValue().getAlertStatus());
+        Assertions.assertEquals("ACCEPTED", logCaptor.getValue().getProviderDeliveryStatus());
+    }
+
+    @Test
     void shouldBlockDispatchWhenOutboxExpiredByFreshnessWindow() {
         PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
         item.setNotifyChannels("IN_APP,IM");

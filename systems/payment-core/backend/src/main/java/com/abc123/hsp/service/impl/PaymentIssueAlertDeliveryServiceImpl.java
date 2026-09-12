@@ -602,9 +602,6 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     private boolean isReplayProtectedDeliveryStatus(PaymentIssueAlertLogEntity latestLog) {
-        if ("已派发".equals(latestLog.getAlertStatus())) {
-            return true;
-        }
         return isSuccessfulProviderDeliveryStatus(latestLog.getProviderDeliveryStatus());
     }
 

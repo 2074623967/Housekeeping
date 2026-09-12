@@ -1140,6 +1140,7 @@
         WHERE delivery.source_alert_no = #{param1}
           AND delivery.alert_channel = #{param2}
           AND delivery.alert_status = '已派发'
+          AND delivery.provider_delivery_status IN ('ACCEPTED', 'DELIVERED')
           AND EXISTS (
             SELECT 1
             FROM t_payment_issue_alert_log source_alert
