@@ -12281,3 +12281,36 @@
 1. 待派发指标现在可定位到与统计条件等价的来源 outbox 集合，不再用无筛选全量日志替代处置对象。
 2. `PENDING_DISPATCH` 只是读取边界的组合条件，三种真实告警状态及派发状态迁移保持不变。
 3. 本地测试不证明真实告警积压、外部派发、供应商送达、人员确认或生产稳定性；release 四项真实治理阻断不变。
+
+## 455. 2026-09-12 异常告警待回查口径闭环 V1.0 验证
+
+### 455.1 本轮补强
+
+1. 待回查总量、最老等待和四类执行状态统一使用“有来源关联、外部通道、已派发、`ACCEPTED`、待确认”的基础谓词。
+2. 异常告警列表的状态投影与筛选补充来源关联约束，并新增只读汇总筛选 `PENDING_RECEIPT`。
+3. 无自动次数耗尽记录时，任务中心直接进入全部待回查集合；有耗尽记录时仍优先进入 `EXHAUSTED`。
+
+### 455.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端定向测试 | `PaymentTaskCenterMapperIntegrationTest,PaymentTaskCenterServiceImplTest,PaymentIssueServiceImplTest,PaymentIssueControllerTest` `89` 项通过，`0` failures、`0` errors、`0` skipped |
+| 畸形记录排除 | `source_alert_no` 非空但通道为 `IN_APP_OUTBOX`、状态为派发成功的夹具不再进入待回查总量、最老等待或明细组合筛选 |
+| 指标收敛 | 待回查总量从错误的 `8` 修正为 `7`，最老等待从错误的 `65` 分钟修正为真实外发集合的 `10` 分钟 |
+| 明细组合筛选 | `PENDING_RECEIPT` 的正式 Mapper 列表与计数均为 `7`，五类状态合计同为 `7` |
+| 任务中心动作路由 | 无耗尽记录时为 `/payment-issue-alerts?receiptQueryState=PENDING_RECEIPT`；存在耗尽记录时仍为 `EXHAUSTED` |
+| 管理端单测 | `23` 项通过，`0` failures；路由水合覆盖 `PENDING_RECEIPT` |
+| 管理端生产构建 | 通过；最大 JS 包约 `545.22 kB`，保留既有超过 `500 kB` 告警 |
+| 浏览器烟测 | `PENDING_RECEIPT` 正确显示为“待回查（全部）”，页面无运行时崩溃 |
+| 模拟数据边界 | 页面接口返回固定模拟快照，只证明路由控件行为，不证明真实待回查集合 |
+| payment-core 后端全量测试 | `967` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentTaskCenterMapper.xml / PaymentIssueMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 修正统计和查询谓词；无持久化状态机、schema、索引或迁移变化 |
+| 代码提交 | `17f87d7f fix(payment-core): align pending alert receipts` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 455.3 当前判断
+
+1. 待回查总量、年龄、分项状态与明细下钻现在基于同一可审计外发日志集合，不再受畸形站内记录污染。
+2. `PENDING_RECEIPT` 只提供全体待回查集合入口，行级返回仍使用首次等待、可执行、退避中、查询中和自动次数耗尽五种状态。
+3. 本地 H2 和模拟页面不证明真实供应商受理、最终送达、人员响应、告警处置或生产稳定性；release 四项真实治理阻断不变。

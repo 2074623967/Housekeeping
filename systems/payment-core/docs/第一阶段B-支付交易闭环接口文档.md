@@ -2707,10 +2707,10 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.85 告警明细回执回查钻取契约
 
-1. `GET /api/payment-issues/alerts` 与 `GET /api/payment-issues/alerts/export` 新增可选参数 `receiptQueryState`；允许值为 `全部 / INITIAL_WAIT / DUE / BACKING_OFF / QUERYING / EXHAUSTED`，英文值忽略大小写，未知值返回参数错误，不能静默退化为全量查询。
+1. `GET /api/payment-issues/alerts` 与 `GET /api/payment-issues/alerts/export` 新增可选参数 `receiptQueryState`；允许值为 `全部 / PENDING_RECEIPT / INITIAL_WAIT / DUE / BACKING_OFF / QUERYING / EXHAUSTED`，英文值忽略大小写，未知值返回参数错误，不能静默退化为全量查询。`PENDING_RECEIPT` 只用于查询全部待回查集合，不作为行级状态返回。
 2. 五类状态由服务端使用与补偿任务同源的首次等待、最大次数和 claim 超时配置计算。有效 claim 优先归为 `QUERYING`，其后依次判定 `EXHAUSTED`、`INITIAL_WAIT`、`BACKING_OFF` 和 `DUE`；筛选谓词与返回状态保持互斥，首次等待且 next time 在未来的记录仍只归为 `INITIAL_WAIT`。
 3. 列表行新增 `receiptQueryState / receiptQueryCount / lastReceiptQueryAt / nextReceiptQueryAt / receiptQueryResult`；CSV 在供应商回执号后按同一顺序输出回查队列状态、次数、最近时间、下次时间和有限结果，不导出异常原文或访问凭证。
-4. 任务中心发现 `exhaustedIssueAlertReceiptCount > 0` 时，“异常告警待回查”强制提升为 `P1/danger`，并跳转 `/payment-issue-alerts?receiptQueryState=EXHAUSTED`；无耗尽记录时跳转已受理且待确认列表。该升级只表示自动尝试耗尽，不表示供应商失败或最终送达。
+4. 任务中心发现 `exhaustedIssueAlertReceiptCount > 0` 时，“异常告警待回查”强制提升为 `P1/danger`，并跳转 `/payment-issue-alerts?receiptQueryState=EXHAUSTED`；无耗尽记录时跳转 `/payment-issue-alerts?receiptQueryState=PENDING_RECEIPT`。该升级只表示自动尝试耗尽，不表示供应商失败或最终送达。
 5. 人工确认回执后，前端必须使用当前筛选重新加载列表，避免已不满足待确认或耗尽条件的记录残留。接口与本地测试不证明真实供应商查询、通知送达、人员响应或生产稳定性。
 
 ### 14.86 单条告警回执人工回查契约
@@ -4143,6 +4143,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 任务中心 `PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG.actionRoute` 固定为 `/payment-issue-alerts?alertChannel=IN_APP_OUTBOX&alertStatus=PENDING_DISPATCH&ackStatus=待确认`，与来源 outbox 待派发统计条件一致。
 4. 分页列表、对应总数和 CSV 必须使用相同状态展开规则；管理端把虚拟值显示为“待派发（已生成 / 部分失败 / 派发失败）”，不得展示为新的业务状态。
 5. 组合查询只反映 payment-core 本地告警日志，不证明实际派发已执行、供应商已接收、人员已响应或告警已处置。
+
+### 14.282 异常告警待回查统一口径契约
+
+1. `pendingIssueAlertReceiptCount`、`oldestPendingIssueAlertReceiptMinutes`、四类可执行状态和明细回查状态都以同一基础集合计算：`source_alert_no IS NOT NULL`、通道不是 `IN_APP_OUTBOX`、告警状态为已派发、供应商状态为 `ACCEPTED` 且回执状态为待确认。
+2. `receiptQueryState=PENDING_RECEIPT` 是只读查询虚拟值，表示上述全部基础集合；列表、计数和 CSV 使用同一筛选谓词，返回行仍按时间、次数和 claim 状态投影五种具体队列状态。
+3. 站内来源、缺少来源关联、非已派发、非 `ACCEPTED` 或已确认记录不得进入总量、最老等待、执行状态或 `PENDING_RECEIPT` 结果，即使其他字段碰巧满足。
+4. 任务中心无耗尽记录时使用 `PENDING_RECEIPT` 下钻，存在耗尽记录时使用 `EXHAUSTED` 优先定位人工介入集合；两种路由均不改变回查调度或状态。
+5. 指标与查询只反映 payment-core 数据库事实，不构成真实供应商受理、最终送达、人员响应或生产稳定性证明。
 
 ## 15. 结论
 
