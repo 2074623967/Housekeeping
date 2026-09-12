@@ -516,6 +516,9 @@ public class PaymentTaskCenterMapperIntegrationTest {
             accepted.setAlertChannel("SMS");
             accepted.setAlertStatus("已派发");
             accepted.setProviderDeliveryStatus("ACCEPTED");
+            PaymentIssueAlertLogEntity source = buildIssueAlertLog("PIA-OUTBOX-RECEIPT-RETRY");
+            source.setGenerationKey("ISSUE_ACTIVE:PIA-OUTBOX-RECEIPT-RETRY");
+            assertEquals(1, mapper.insertIssueAlertLog(source));
             assertEquals(1, mapper.insertIssueAlertLog(accepted));
             PaymentIssueAlertLogEntity orphan = buildIssueAlertLog("PIA-RECEIPT-ORPHAN");
             orphan.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-ORPHAN");
@@ -523,15 +526,48 @@ public class PaymentTaskCenterMapperIntegrationTest {
             orphan.setAlertStatus("已派发");
             orphan.setProviderDeliveryStatus("ACCEPTED");
             assertEquals(1, mapper.insertIssueAlertLog(orphan));
+            PaymentIssueAlertLogEntity wrongIssueSource = buildIssueAlertLog("PIA-OUTBOX-WRONG-ISSUE");
+            wrongIssueSource.setGenerationKey("ISSUE_ACTIVE:PIA-OUTBOX-WRONG-ISSUE");
+            wrongIssueSource.setIssueNo("ISSUE-OTHER");
+            assertEquals(1, mapper.insertIssueAlertLog(wrongIssueSource));
+            PaymentIssueAlertLogEntity wrongIssueDelivery = buildIssueAlertLog("PIA-RECEIPT-WRONG-ISSUE");
+            wrongIssueDelivery.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-WRONG-ISSUE");
+            wrongIssueDelivery.setSourceAlertNo(wrongIssueSource.getAlertNo());
+            wrongIssueDelivery.setAlertChannel("IM");
+            wrongIssueDelivery.setAlertStatus("已派发");
+            wrongIssueDelivery.setProviderDeliveryStatus("ACCEPTED");
+            assertEquals(1, mapper.insertIssueAlertLog(wrongIssueDelivery));
+            PaymentIssueAlertLogEntity nestedSource = buildIssueAlertLog("PIA-OUTBOX-NESTED-SOURCE");
+            nestedSource.setGenerationKey("ISSUE_DELIVERY:PIA-OUTBOX-NESTED-SOURCE");
+            nestedSource.setSourceAlertNo(source.getAlertNo());
+            assertEquals(1, mapper.insertIssueAlertLog(nestedSource));
+            PaymentIssueAlertLogEntity nestedSourceDelivery = buildIssueAlertLog("PIA-RECEIPT-NESTED-SOURCE");
+            nestedSourceDelivery.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-NESTED-SOURCE");
+            nestedSourceDelivery.setSourceAlertNo(nestedSource.getAlertNo());
+            nestedSourceDelivery.setAlertChannel("EMAIL");
+            nestedSourceDelivery.setAlertStatus("已派发");
+            nestedSourceDelivery.setProviderDeliveryStatus("ACCEPTED");
+            assertEquals(1, mapper.insertIssueAlertLog(nestedSourceDelivery));
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("UPDATE t_payment_issue_alert_log "
                         + "SET created_at = TIMESTAMPADD(MINUTE, -2, NOW()) "
-                        + "WHERE alert_no IN ('PIA-RECEIPT-RETRY', 'PIA-RECEIPT-ORPHAN')");
+                        + "WHERE alert_no IN ('PIA-RECEIPT-RETRY', 'PIA-RECEIPT-ORPHAN', "
+                        + "'PIA-RECEIPT-WRONG-ISSUE', 'PIA-RECEIPT-NESTED-SOURCE')");
             }
 
             assertEquals(1, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
+            org.junit.jupiter.api.Assertions.assertTrue(mapper.isMatchingPendingSourceIssueAlert(
+                    source.getAlertNo(), accepted.getIssueNo()));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingPendingSourceIssueAlert(
+                    wrongIssueSource.getAlertNo(), wrongIssueDelivery.getIssueNo()));
+            org.junit.jupiter.api.Assertions.assertFalse(mapper.isMatchingPendingSourceIssueAlert(
+                    nestedSource.getAlertNo(), nestedSourceDelivery.getIssueNo()));
             org.junit.jupiter.api.Assertions.assertNull(
                     mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(orphan.getAlertNo()));
+            org.junit.jupiter.api.Assertions.assertNull(
+                    mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(wrongIssueDelivery.getAlertNo()));
+            org.junit.jupiter.api.Assertions.assertNull(
+                    mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(nestedSourceDelivery.getAlertNo()));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(orphan.getAlertNo(), 0, true, 2, 30));
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("UPDATE t_payment_issue_alert_log "

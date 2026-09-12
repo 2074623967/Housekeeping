@@ -240,6 +240,12 @@ public interface PaymentTaskCenterMapper {
     PaymentIssueAlertLogEntity findAcceptedIssueAlertDeliveryLogByAlertNo(@Param("alertNo") String alertNo);
 
     /**
+     * 判断外发告警是否仍关联同一异常下待确认的顶层站内来源告警。
+     */
+    boolean isMatchingPendingSourceIssueAlert(@Param("sourceAlertNo") String sourceAlertNo,
+                                              @Param("issueNo") String issueNo);
+
+    /**
      * 查询达到首次等待或重试退避时间、尚未耗尽自动次数的供应商受理告警。
      */
     List<PaymentIssueAlertLogEntity> findDueAcceptedIssueAlertDeliveryLogs(

@@ -1184,6 +1184,12 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (acceptedLog == null || !StringUtils.hasText(acceptedLog.getAlertNo())) {
             return false;
         }
+        if (!StringUtils.hasText(acceptedLog.getSourceAlertNo())
+                || !StringUtils.hasText(acceptedLog.getIssueNo())
+                || !paymentTaskCenterMapper.isMatchingPendingSourceIssueAlert(
+                        acceptedLog.getSourceAlertNo().trim(), acceptedLog.getIssueNo().trim())) {
+            return false;
+        }
         int previousAttemptCount = normalizeReceiptQueryCount(acceptedLog.getReceiptQueryCount());
         int claimed = paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 acceptedLog.getAlertNo(),

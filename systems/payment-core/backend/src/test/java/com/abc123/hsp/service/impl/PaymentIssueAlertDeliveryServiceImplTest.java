@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.TimeZone;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -62,6 +63,13 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     private PlatformTransactionManager transactionManager;
     @Mock
     private TransactionStatus transactionStatus;
+
+    @BeforeEach
+    void allowMatchingPendingSourceAlertByDefault() {
+        org.mockito.Mockito.lenient().when(paymentTaskCenterMapper.isMatchingPendingSourceIssueAlert(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(true);
+    }
 
     @Test
     void shouldDispatchAllChannelsSuccessfully() {
@@ -1288,6 +1296,36 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(1, result.getProcessedCount());
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldRejectReceiptWithMismatchedSourceBeforeClaimingOrCallingProvider() {
+        PaymentIssueAlertLogEntity acceptedLog = buildAcceptedLog(
+                "PIA-IM-WRONG-SOURCE", "PIA-OUTBOX-OTHER-ISSUE");
+        when(paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(100))
+                .thenReturn(Collections.singletonList(acceptedLog));
+        when(paymentTaskCenterMapper.isMatchingPendingSourceIssueAlert(
+                "PIA-OUTBOX-OTHER-ISSUE", "ISSUE-001")).thenReturn(false);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                Collections.singletonList(receiptQueryAdapter),
+                receiptQueryRateLimitService
+        ).reconcileDeliveryReceipts("payment-core-admin");
+
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).claimIssueAlertReceiptQuery(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt());
+        verify(receiptQueryAdapter, org.mockito.Mockito.never()).query(any(PaymentIssueAlertLogEntity.class));
+        verify(receiptQueryRateLimitService, org.mockito.Mockito.never())
+                .acquire(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
         Assertions.assertEquals(1, result.getProcessedCount());
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(1, result.getFailCount());
