@@ -2241,6 +2241,14 @@
 4. 定向 `80` 项、payment-core 后端全量 `957` 项通过，均为 `0` failures、`0` errors、`0` skipped，Mapper XML 与补丁检查通过。本轮无 API、DTO、前端、schema、索引或迁移变化。
 5. 稳定展示顺序只反映 payment-core 本地记录的插入先后，不证明渠道通知处理顺序、下游事件消费、支付成功、账务入账或资金对账一致性，release 四项真实治理阻断不变。
 
+### 8.273 2026-09-12 超时关单候选稳定排序进展
+
+1. 超时关单任务按预付单最早失效时间读取固定批次候选；原查询只按 `MIN(pr.expires_at)` 排序，相同失效时间的支付单没有唯一次序，批次边界上的候选可能在重复调度中漂移。
+2. `PaymentMapper.findExpiredPayments` 现在按 `MIN(pr.expires_at) ASC, p.payment_order_id ASC` 返回，先保持最早失效优先，再以支付单号裁决同值；超时资格、逐笔条件更新、失败退避、任务租约、批次大小和状态机保持不变。
+3. 正式 Mapper 集成测试以三条相同失效时间、逆序插入的支付单验证：`batchSize=2` 固定返回 `001 / 002`，完整批次返回 `001 / 002 / 003`。定向 `20` 项、payment-core 后端全量 `958` 项通过，均为 `0` failures、`0` errors、`0` skipped，Mapper XML 与补丁检查通过。
+4. 本轮无 API、DTO、前端、schema、索引或迁移变化；稳定候选顺序不等于多实例任务全局串行，仍依赖已有任务租约与逐笔数据库条件更新裁决。
+5. 本地 H2 不证明生产 MySQL 分组排序执行计划、并发调度、真实渠道关单、生产稳定性、资金或对账结果；统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

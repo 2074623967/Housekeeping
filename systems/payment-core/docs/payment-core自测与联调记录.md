@@ -11879,3 +11879,31 @@
 1. 对同一支付单和静态数据集，三类详情轨迹均按“创建时间、主键”从新到旧稳定展示，便于重复排障与证据比对。
 2. 自增 `id` 只裁决各事实表内部同秒记录，不表达路由、通知和事件三种事实之间的全局先后或因果关系。
 3. 本地 H2 不证明生产 MySQL 执行计划、真实渠道通知时序、下游事件消费、支付成功、账务入账或资金对账一致性；release 四项真实治理阻断不变。
+
+## 441. 2026-09-12 超时关单候选稳定排序 V1.0 验证
+
+### 441.1 本轮补强
+
+1. `PaymentMapper.findExpiredPayments` 从只按最早预付失效时间排序，调整为 `MIN(pr.expires_at) ASC, p.payment_order_id ASC`。
+2. `payment_order_id` 在每个分组中唯一且稳定，用于裁决相同最早失效时间；最早失效优先的既有方向保持不变。
+3. 该变更只影响固定批次候选的读取顺序，不改变超时资格、渠道提交事实排除、失败退避、任务租约、逐笔条件更新、批次大小、状态机、API、schema、索引或迁移。
+
+### 441.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与任务服务定向测试 | `PaymentMapperStateTransitionIntegrationTest,PaymentExpiryTaskServiceImplTest` `20` 项通过，`0` failures、`0` errors、`0` skipped |
+| 同失效时间有界批次 | 三条支付单按 `003 / 001 / 002` 插入，`batchSize=2` 固定返回 `001 / 002` |
+| 同失效时间完整批次 | `batchSize=100` 固定返回 `001 / 002 / 003` |
+| 既有路径回归 | 最早失效优先、渠道提交事实排除、失败退避、陈旧重试清理和状态迁移用例继续通过 |
+| payment-core 后端全量测试 | `958` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `229d10aa fix(payment-core): stabilize expiry close candidate ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 441.3 当前判断
+
+1. 在资格集合和数据库内容不变时，相同最早失效时间的候选具有确定顺序，固定批次边界可重复解释。
+2. 该顺序不提供多实例全局串行；并发任务仍由已有租约限制调度，并由逐笔条件更新裁决最终状态迁移。
+3. 本地 H2 不证明生产 MySQL 分组排序执行计划、并发调度、真实渠道关单、生产稳定性、资金或对账结果；release 四项真实治理阻断不变。
