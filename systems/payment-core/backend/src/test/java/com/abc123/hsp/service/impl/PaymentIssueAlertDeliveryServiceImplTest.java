@@ -23,6 +23,7 @@ import com.abc123.hsp.service.PaymentIssueAlertNotifier;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryRateLimitService;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
+import com.abc123.hsp.service.PaymentTaskLeaseService;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -40,6 +41,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -1273,6 +1276,111 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldAcquireSingleHalfOpenProbeAfterCircuitWindowExpires() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10)
+        ));
+        when(paymentTaskCenterMapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                eq("ALERT_IM_PRIMARY"), eq("IM"), any(String.class), eq(3)))
+                .thenReturn(Collections.<String>emptyList())
+                .thenReturn(Arrays.asList("FAILED", "SEND_EXCEPTION", "FAILED"));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult(
+                        "IM-PROBE-001", "ACCEPTED", "半开探针已受理", "[IM-PRIMARY] ISSUE-001"));
+        when(paymentTaskCenterMapper.acquireTaskLease(any(String.class), any(String.class), eq(30)))
+                .thenReturn(1);
+        when(paymentTaskCenterMapper.releaseTaskLease(any(String.class), any(String.class)))
+                .thenReturn(1);
+        PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+        service.setPaymentTaskLeaseService(leaseService);
+
+        PaymentTaskActionResultDTO result;
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            result = service.dispatchPendingAlerts("payment-core-admin");
+            verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                    .releaseTaskLease(any(String.class), any(String.class));
+            for (TransactionSynchronization synchronization
+                    : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED);
+            }
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        ArgumentCaptor<String> taskCodeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(paymentTaskCenterMapper).acquireTaskLease(
+                taskCodeCaptor.capture(), any(String.class), eq(30));
+        verify(paymentTaskCenterMapper).releaseTaskLease(eq(taskCodeCaptor.getValue()), any(String.class));
+        verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertTrue(taskCodeCaptor.getValue().startsWith("AP:"));
+        Assertions.assertEquals(64, taskCodeCaptor.getValue().length());
+        Assertions.assertEquals(1, result.getSuccessCount());
+    }
+
+    @Test
+    void shouldFallbackWhenAnotherInstanceOwnsHalfOpenProbe() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Arrays.asList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
+                buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup",
+                        "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
+        ));
+        when(paymentTaskCenterMapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                eq("ALERT_IM_PRIMARY"), eq("IM"), any(String.class), eq(3)))
+                .thenReturn(Collections.<String>emptyList())
+                .thenReturn(Arrays.asList("FAILED", "SEND_EXCEPTION", "FAILED"));
+        when(paymentTaskCenterMapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                eq("ALERT_IM_BACKUP"), eq("IM"), any(String.class), eq(3)))
+                .thenReturn(Collections.<String>emptyList());
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult(
+                        "IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
+        when(paymentTaskCenterMapper.acquireTaskLease(any(String.class), any(String.class), eq(30)))
+                .thenReturn(0);
+        PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
+        PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        );
+        service.setPaymentTaskLeaseService(leaseService);
+
+        PaymentTaskActionResultDTO result = service.dispatchPendingAlerts("payment-core-admin");
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> logCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper, times(2)).insertIssueAlertLog(logCaptor.capture());
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "ALERT_IM_PRIMARY".equals(log.getProviderCode())
+                        && "PROVIDER_CIRCUIT_HALF_OPEN_BUSY".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
+                "ALERT_IM_BACKUP".equals(log.getProviderCode())
+                        && "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertEquals(1, result.getSuccessCount());
     }
 
     @Test

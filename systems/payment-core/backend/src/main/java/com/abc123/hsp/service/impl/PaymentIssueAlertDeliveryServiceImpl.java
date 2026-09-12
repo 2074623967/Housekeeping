@@ -17,6 +17,9 @@ import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
 import com.abc123.hsp.service.PaymentTaskLeaseService;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -33,6 +36,8 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -40,6 +45,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /**
@@ -47,6 +54,8 @@ import org.springframework.util.StringUtils;
  */
 @Service
 public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDeliveryService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PaymentIssueAlertDeliveryServiceImpl.class);
 
     private static final String RUN_MODE_MANUAL = "MANUAL";
     private static final String RUN_MODE_AUTO = "AUTO";
@@ -69,6 +78,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern TEMPLATE_PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_]+)\\s*}}");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
+    private static final int PROVIDER_CIRCUIT_PROBE_LEASE_SECONDS = 30;
+    private static final String PROVIDER_CIRCUIT_PROBE_TASK_PREFIX = "AP:";
     private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
     private static final int PROVIDER_RECEIPT_NO_MAX_LENGTH = 128;
     private static final int PROVIDER_DELIVERY_MESSAGE_MAX_LENGTH = 255;
@@ -470,16 +481,17 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                               List<PaymentAlertProviderConfigDTO> candidateProviders) {
         for (PaymentAlertProviderConfigDTO providerConfig : candidateProviders) {
             PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
-            PaymentIssueAlertDeliveryResultDTO guardFailure = resolveDispatchGuardFailure(providerConfig, deliveryItem, channelCode);
-            if (guardFailure != null) {
+            DispatchGuard dispatchGuard = resolveDispatchGuard(providerConfig, deliveryItem, channelCode);
+            if (dispatchGuard.getFailure() != null) {
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
                         deliveryItem,
                         triggeredBy,
                         channelCode,
                         "派发失败",
                         "danger",
-                        guardFailure
+                        dispatchGuard.getFailure()
                 ));
+                dispatchGuard.closeLocalProbeLease();
                 continue;
             }
             try {
@@ -519,6 +531,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         "danger",
                         failureResult
                 ));
+            } finally {
+                dispatchGuard.closeLocalProbeLease();
             }
         }
         return null;
@@ -527,47 +541,49 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     /**
      * 根据供应商配置中的重试策略与限流策略控制补发频率，避免短时间内重复轰炸同一通道。
      */
-    private PaymentIssueAlertDeliveryResultDTO resolveDispatchGuardFailure(PaymentAlertProviderConfigDTO providerConfig,
-                                                                           PaymentIssueAlertDispatchItemDTO item,
-                                                                           String channelCode) {
-        PaymentIssueAlertDeliveryResultDTO circuitBreakerFailure = resolveProviderCircuitBreakerFailure(providerConfig, item, channelCode);
-        if (circuitBreakerFailure != null) {
-            return circuitBreakerFailure;
+    private DispatchGuard resolveDispatchGuard(PaymentAlertProviderConfigDTO providerConfig,
+                                               PaymentIssueAlertDispatchItemDTO item,
+                                               String channelCode) {
+        DispatchGuard circuitBreakerGuard = resolveProviderCircuitBreakerGuard(providerConfig, item, channelCode);
+        if (circuitBreakerGuard != null && circuitBreakerGuard.getFailure() != null) {
+            return circuitBreakerGuard;
         }
+        DispatchGuard dispatchGuard = circuitBreakerGuard == null ? DispatchGuard.allowed() : circuitBreakerGuard;
         RetryGuard retryGuard = parseRetryGuard(providerConfig.getRetryPolicy());
         PaymentIssueAlertLogEntity latestLog = paymentTaskCenterMapper.findLatestIssueAlertChannelDeliveryLog(item.getAlertNo(), channelCode);
         PaymentIssueAlertDeliveryResultDTO freshnessGuardFailure = resolveFreshnessGuardFailure(retryGuard, item);
         if (freshnessGuardFailure != null) {
-            return freshnessGuardFailure;
+            return dispatchGuard.withFailure(freshnessGuardFailure);
         }
         PaymentIssueAlertDeliveryResultDTO replayGuardFailure = resolveReplayGuardFailure(retryGuard, latestLog, item);
         if (replayGuardFailure != null) {
-            return replayGuardFailure;
+            return dispatchGuard.withFailure(replayGuardFailure);
         }
         if (!retryGuard.isEnabled()) {
-            return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+            return dispatchGuard.withFailure(resolveRateLimitGuardFailure(providerConfig, item, channelCode));
         }
         int failedAttemptCount = paymentTaskCenterMapper.countFailedIssueAlertChannelDeliveries(item.getAlertNo(), channelCode);
         if (retryGuard.hasRetryLimit() && failedAttemptCount > retryGuard.getRetryCount()) {
-            return buildFailureResult("RETRY_LIMIT_REACHED", "已达到失败补发上限，等待人工介入处理", item);
+            return dispatchGuard.withFailure(buildFailureResult(
+                    "RETRY_LIMIT_REACHED", "已达到失败补发上限，等待人工介入处理", item));
         }
         if (!retryGuard.hasCooldownMinutes()) {
-            return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+            return dispatchGuard.withFailure(resolveRateLimitGuardFailure(providerConfig, item, channelCode));
         }
         if (latestLog == null || !"派发失败".equals(latestLog.getAlertStatus())) {
-            return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+            return dispatchGuard.withFailure(resolveRateLimitGuardFailure(providerConfig, item, channelCode));
         }
         LocalDateTime latestCreatedAt = parseAlertCreatedAt(latestLog.getCreatedAt());
         int effectiveCooldownMinutes = retryGuard.resolveEffectiveCooldownMinutes(failedAttemptCount);
         if (latestCreatedAt != null && effectiveCooldownMinutes > 0
                 && currentBusinessTime().isBefore(latestCreatedAt.plusMinutes(effectiveCooldownMinutes))) {
-            return buildFailureResult(
+            return dispatchGuard.withFailure(buildFailureResult(
                     "RETRY_COOLDOWN_ACTIVE",
                     String.format("补发冷却时间未到，请等待后再重试；当前要求间隔 %d 分钟", effectiveCooldownMinutes),
                     item
-            );
+            ));
         }
-        return resolveRateLimitGuardFailure(providerConfig, item, channelCode);
+        return dispatchGuard.withFailure(resolveRateLimitGuardFailure(providerConfig, item, channelCode));
     }
 
     private PaymentIssueAlertDeliveryResultDTO resolveFreshnessGuardFailure(RetryGuard retryGuard,
@@ -627,9 +643,9 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     /**
      * 当某个供应商在短时间内连续失败过多时，先临时跳过它，交给后备供应商兜底。
      */
-    private PaymentIssueAlertDeliveryResultDTO resolveProviderCircuitBreakerFailure(PaymentAlertProviderConfigDTO providerConfig,
-                                                                                    PaymentIssueAlertDispatchItemDTO item,
-                                                                                    String channelCode) {
+    private DispatchGuard resolveProviderCircuitBreakerGuard(PaymentAlertProviderConfigDTO providerConfig,
+                                                             PaymentIssueAlertDispatchItemDTO item,
+                                                             String channelCode) {
         if (!StringUtils.hasText(providerConfig.getProviderCode())) {
             return null;
         }
@@ -643,17 +659,79 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         sinceTime,
                         PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD
                 );
-        if (recentDeliveryStatuses == null
-                || recentDeliveryStatuses.size() < PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD
-                || recentDeliveryStatuses.stream().anyMatch(this::isSuccessfulProviderDeliveryStatus)) {
+        if (hasConsecutiveProviderFailures(recentDeliveryStatuses)) {
+            return DispatchGuard.failure(buildFailureResult(
+                    "PROVIDER_CIRCUIT_OPEN",
+                    String.format("供应商近 %d 分钟内连续失败 %d 次，已临时熔断并切换候选供应商",
+                            PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES, recentDeliveryStatuses.size()),
+                    item
+            ));
+        }
+        List<String> latestDeliveryStatuses = paymentTaskCenterMapper
+                .findRecentIssueAlertProviderDeliveryStatusesSince(
+                        providerConfig.getProviderCode(),
+                        channelCode,
+                        "1970-01-01 00:00:00",
+                        PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD
+                );
+        if (!hasConsecutiveProviderFailures(latestDeliveryStatuses)) {
             return null;
         }
-        return buildFailureResult(
-                "PROVIDER_CIRCUIT_OPEN",
-                String.format("供应商近 %d 分钟内连续失败 %d 次，已临时熔断并切换候选供应商",
-                        PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES, recentDeliveryStatuses.size()),
-                item
+        PaymentTaskLeaseService.Lease probeLease = paymentTaskLeaseService.tryAcquire(
+                buildProviderCircuitProbeTaskCode(providerConfig.getProviderCode(), channelCode),
+                "alert-provider-probe:" + taskLeaseOwnerSuffix,
+                PROVIDER_CIRCUIT_PROBE_LEASE_SECONDS
         );
+        if (probeLease == null) {
+            return DispatchGuard.failure(buildFailureResult(
+                    "PROVIDER_CIRCUIT_HALF_OPEN_BUSY",
+                    "供应商熔断恢复探针已由其他实例执行，当前请求切换候选供应商",
+                    item
+            ));
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    closeProbeLeaseSafely(probeLease, providerConfig.getProviderCode(), channelCode);
+                }
+            });
+            return DispatchGuard.allowed();
+        }
+        return DispatchGuard.probe(probeLease);
+    }
+
+    private boolean hasConsecutiveProviderFailures(List<String> deliveryStatuses) {
+        return deliveryStatuses != null
+                && deliveryStatuses.size() >= PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD
+                && deliveryStatuses.stream().noneMatch(this::isSuccessfulProviderDeliveryStatus);
+    }
+
+    private String buildProviderCircuitProbeTaskCode(String providerCode, String channelCode) {
+        String scope = providerCode.trim().toUpperCase(Locale.ROOT)
+                + "|" + channelCode.trim().toUpperCase(Locale.ROOT);
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(scope.getBytes(StandardCharsets.UTF_8));
+            StringBuilder value = new StringBuilder(PROVIDER_CIRCUIT_PROBE_TASK_PREFIX);
+            for (byte current : digest) {
+                value.append(String.format(Locale.ROOT, "%02x", current & 0xff));
+            }
+            return value.substring(0, 64);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private void closeProbeLeaseSafely(PaymentTaskLeaseService.Lease probeLease,
+                                       String providerCode,
+                                       String channelCode) {
+        try {
+            probeLease.close();
+        } catch (RuntimeException exception) {
+            LOGGER.warn("告警供应商半开探针租约释放失败, providerCode={}, channelCode={}, exceptionType={}",
+                    providerCode, channelCode, exception.getClass().getName());
+        }
     }
 
     /**
@@ -1682,6 +1760,43 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
     private String buildTaskLogNo() {
         return "TL" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
+    }
+
+    private static final class DispatchGuard {
+        private final PaymentIssueAlertDeliveryResultDTO failure;
+        private final PaymentTaskLeaseService.Lease localProbeLease;
+
+        private DispatchGuard(PaymentIssueAlertDeliveryResultDTO failure,
+                              PaymentTaskLeaseService.Lease localProbeLease) {
+            this.failure = failure;
+            this.localProbeLease = localProbeLease;
+        }
+
+        private static DispatchGuard allowed() {
+            return new DispatchGuard(null, null);
+        }
+
+        private static DispatchGuard failure(PaymentIssueAlertDeliveryResultDTO failure) {
+            return new DispatchGuard(failure, null);
+        }
+
+        private static DispatchGuard probe(PaymentTaskLeaseService.Lease probeLease) {
+            return new DispatchGuard(null, probeLease);
+        }
+
+        private PaymentIssueAlertDeliveryResultDTO getFailure() {
+            return failure;
+        }
+
+        private DispatchGuard withFailure(PaymentIssueAlertDeliveryResultDTO guardFailure) {
+            return guardFailure == null ? this : new DispatchGuard(guardFailure, localProbeLease);
+        }
+
+        private void closeLocalProbeLease() {
+            if (localProbeLease != null) {
+                localProbeLease.close();
+            }
+        }
     }
 
     /**
