@@ -171,18 +171,28 @@ class RefundSubmitOutboxMapperIntegrationTest {
     }
 
     @Test
-    void shouldLimitFailedRefundCandidatesToConfiguredBatchSize() throws Exception {
+    void shouldOrderCompleteFailedRefundCandidatesByTerminalTimeAndLimitBatch() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
-            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, status, applied_at) VALUES "
-                    + "('REF-FAIL-001', 'FAIL', NOW()), "
-                    + "('REF-FAIL-002', 'FAIL', DATEADD('SECOND', 1, NOW()))");
+            statement.executeUpdate("INSERT INTO t_refund_order("
+                    + "refund_order_id, status, applied_at, terminal_at) VALUES "
+                    + "('REF-FAILED-LATER-APPLIED-EARLY', 'FAIL', NOW(), DATEADD('SECOND', 3, NOW())), "
+                    + "('REF-FAILED-EARLIER-APPLIED-LATE', 'FAIL', DATEADD('SECOND', 2, NOW()), NOW()), "
+                    + "('REF-FAILED-SAME-001', 'FAIL', DATEADD('SECOND', 3, NOW()), "
+                    + "DATEADD('SECOND', 1, NOW())), "
+                    + "('REF-FAILED-SAME-002', 'FAIL', DATEADD('SECOND', 4, NOW()), "
+                    + "DATEADD('SECOND', 1, NOW())), "
+                    + "('REF-MISSING-TERMINAL', 'FAIL', DATEADD('SECOND', -1, NOW()), NULL)");
             RefundMapper mapper = session.getMapper(RefundMapper.class);
 
-            assertEquals(java.util.Collections.singletonList("REF-FAIL-001"),
+            assertEquals(java.util.Collections.singletonList("REF-FAILED-EARLIER-APPLIED-LATE"),
                     mapper.findFailedRefundOrderIds(1));
-            assertEquals(java.util.Arrays.asList("REF-FAIL-001", "REF-FAIL-002"),
-                    mapper.findFailedRefundOrderIds(2));
+            assertEquals(java.util.Arrays.asList(
+                            "REF-FAILED-EARLIER-APPLIED-LATE",
+                            "REF-FAILED-SAME-001",
+                            "REF-FAILED-SAME-002",
+                            "REF-FAILED-LATER-APPLIED-EARLY"),
+                    mapper.findFailedRefundOrderIds(10));
         }
     }
 

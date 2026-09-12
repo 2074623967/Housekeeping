@@ -34,7 +34,7 @@ public interface RefundMapper {
     long count(@Param("query") RefundQueryDTO query);
 
     /**
-     * 查询失败退款单号列表。
+     * 按失败终态时间查询终态事实完整的退款重试候选。
      */
     List<String> findFailedRefundOrderIds(@Param("batchSize") int batchSize);
 
