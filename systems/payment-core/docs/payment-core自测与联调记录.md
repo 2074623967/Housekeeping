@@ -11420,3 +11420,30 @@
 1. 常规账务 HTTP 失败返回后，清分已接受阶段会与事件失败状态共同提交，自动补偿和人工重发只继续账务；阶段条件更新和事件行锁阻止同一事件并发越级推进。
 2. 阶段事实只描述 payment-core 已收到下游成功响应，不证明清分完成或账务入账；AMQP publisher confirm 也仍不证明消费者完成处理。
 3. 清分接受响应之后、当前事件事务提交之前若进程硬退出或数据库回滚，阶段写入可能丢失并导致清分重放，因此真实下游仍必须按稳定 `eventNo / paymentOrderId` 幂等。本地 H2/Mockito 不替代生产 MySQL、多实例、真实 HTTP、资金或稳定性验证，release 四项真实阻断不变。
+
+## 425. 2026-09-12 支付成功 HTTP 阶段运营可见性 V1.0 验证
+
+### 425.1 本轮补强
+
+1. 支付事件 CSV 在发布状态后增加 `HTTP投递阶段`，按 `paymentSuccessHttpStage` 原值导出；列表、详情和排障建议复用同一前端纯函数解释阶段。
+2. `PENDING / CLEARING_ACCEPTED / COMPLETED` 分别展示“待清分”“清分已受理”“双下游已受理”，并给出分阶段重发建议；非 `PAYMENT_SUCCESS` 显示“不适用”，非法或缺失阶段显示“阶段异常”。
+3. `PAYMENT_SUCCESS + SUCCESS + PENDING` 显示“未记录 HTTP 阶段”，避免将历史默认值或 AMQP 模式误报为待清分；支付事件页在小屏切换单列布局，表格保留独立横向滚动。
+
+### 425.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| payment-core 管理端测试 | `15` 项通过，`0` fail，覆盖三种 HTTP 阶段、历史/AMQP 保守展示、异常值、非支付成功事件和排障建议 |
+| PaymentEventServiceImplTest | `11` 项通过，`0` failures、`0` errors、`0` skipped，覆盖 CSV 新列与字段值 |
+| payment-core 后端全量测试 | `942` 项通过，`0` failures、`0` errors、`0` skipped |
+| 管理端生产构建 | 通过；保留既有 `542.21 kB` 单包大于 `500 kB` 告警 |
+| 桌面浏览器 | `1440x960` 下页面无宽度溢出，三种阶段均实际渲染 |
+| 手机浏览器 | `390x844` 下 `clientWidth/scrollWidth=390/390`，表格容器 `330px` 且内部横向滚动，阶段徽标无文字溢出 |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1` 来自 release 正式条件未闭环，其内部 `releaseBlockerCount=4` |
+| 代码提交 | `e574af37 feat(payment-core): expose success delivery stages` |
+
+### 425.3 当前判断
+
+1. 运营人员现在可在页面、详情、建议和 CSV 中看到一致的阶段事实，并按阶段缩小重试范围；未知或不适用数据失败闭合，不诱导盲目重发。
+2. `SUCCESS + PENDING` 不能区分迁移前 HTTP 成功事件与 AMQP 发布事件，因此保守文案是展示策略，不回写数据库，也不推导真实投递模式或下游完成状态。
+3. 本机 mock、构建和浏览器检查不证明真实下游接受、真实清分、账务入账、生产数据正确或稳定性；发布说明、正式签字审批、发布后现场核验和 master 稳定观察结束结论仍未形成，`release/v1.0.0` 继续冻结。

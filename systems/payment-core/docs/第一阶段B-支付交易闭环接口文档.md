@@ -3922,6 +3922,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 增量迁移将存量行默认置为 `PENDING`，不依据历史 `eventPayload`、`publishStatus` 或下游范围反推受理事实；已为 `SUCCESS` 的存量事件仍由发布终态阻止重发。
 6. HTTP 成功响应只表示接口契约上的接受。若进程在清分返回成功后、事件事务提交前退出，阶段可能仍为 `PENDING`；清分和账务必须以稳定 `eventNo / paymentOrderId` 实现幂等，接口契约不承诺 exactly-once。
 
+### 14.252 支付成功 HTTP 阶段展示与导出契约
+
+1. 支付事件列表和详情继续直接消费查询项 `paymentSuccessHttpStage`；CSV 在“发布状态”后新增“HTTP投递阶段”列，导出原始枚举值，不用页面中文标签替代接口事实。
+2. `PAYMENT_SUCCESS` 的 `PENDING / CLEARING_ACCEPTED / COMPLETED` 在管理端分别展示“待清分”“清分已受理”“双下游已受理”，排障建议分别为重发清分与账务、只重试账务、只补齐事件发布终态。
+3. 非 `PAYMENT_SUCCESS` 事件的该字段显示“不适用”。非法、空白或未知值显示“阶段异常”，要求先核对数据；不得自动降级为 `PENDING` 或给出普通重发建议。
+4. 当 `eventType=PAYMENT_SUCCESS`、`publishStatus=SUCCESS` 且阶段为默认 `PENDING` 时，页面显示“未记录 HTTP 阶段”，因为迁移前历史事件和 AMQP 模式都可能形成该组合；展示层不得据此断言待清分，也不得回写或修正服务端阶段。
+5. 导出的原始字段和页面解释均只描述 payment-core 的持久化记录。调用方不得将标签、CSV 或排障建议解释为真实清分完成、账务入账、AMQP 消费完成或生产资金一致性证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
