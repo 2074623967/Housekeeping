@@ -21,19 +21,7 @@
         </where>
     </sql>
 
-    <select id="findAll" resultType="com.abc123.hsp.dto.BillListItemDTO">
-        SELECT bill_no AS billNo,
-               order_no AS orderNo,
-               customer_name AS customerName,
-               CONCAT('¥', FORMAT(bill_amount, 2)) AS billAmount,
-               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
-               CONCAT('¥', FORMAT(bill_amount - paid_amount, 2)) AS unpaidAmount,
-               bill_status AS billStatus,
-               bill_status_type AS billStatusType,
-               DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
-        FROM t_bill
-        <include refid="billWhere"/>
+    <sql id="billOrder">
         <choose>
             <when test="query.sortField == 'dueAt'">
                 ORDER BY due_at
@@ -50,12 +38,28 @@
         </choose>
         <choose>
             <when test="query.sortOrder == 'asc'">
-                ASC
+                ASC, id ASC
             </when>
             <otherwise>
-                DESC
+                DESC, id DESC
             </otherwise>
         </choose>
+    </sql>
+
+    <select id="findAll" resultType="com.abc123.hsp.dto.BillListItemDTO">
+        SELECT bill_no AS billNo,
+               order_no AS orderNo,
+               customer_name AS customerName,
+               CONCAT('¥', FORMAT(bill_amount, 2)) AS billAmount,
+               CONCAT('¥', FORMAT(paid_amount, 2)) AS paidAmount,
+               CONCAT('¥', FORMAT(bill_amount - paid_amount, 2)) AS unpaidAmount,
+               bill_status AS billStatus,
+               bill_status_type AS billStatusType,
+               DATE_FORMAT(due_at, '%Y-%m-%d %H:%i:%s') AS dueAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_bill
+        <include refid="billWhere"/>
+        <include refid="billOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
@@ -91,28 +95,7 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_bill
         <include refid="billWhere"/>
-        <choose>
-            <when test="query.sortField == 'dueAt'">
-                ORDER BY due_at
-            </when>
-            <when test="query.sortField == 'billAmount'">
-                ORDER BY bill_amount
-            </when>
-            <when test="query.sortField == 'unpaidAmount'">
-                ORDER BY (bill_amount - paid_amount)
-            </when>
-            <otherwise>
-                ORDER BY created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="billOrder"/>
         LIMIT 1001
     </select>
 </mapper>
