@@ -216,6 +216,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
             List<PaymentTaskRunLogItemDTO> items = mapper.findTaskRunLogs(query);
 
             assertEquals(1, mapper.countTaskRunLogs(query));
+            assertEquals(1, mapper.countCompletedDayEndTaskRunsByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countCompletedDayEndTaskRunsByBizDate("2026-09-10"));
             assertEquals(1, items.size());
             assertEquals("2026-09-11", items.get(0).getBizDate());
         }

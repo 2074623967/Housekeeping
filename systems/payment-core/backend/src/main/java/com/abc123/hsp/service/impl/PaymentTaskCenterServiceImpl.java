@@ -8,6 +8,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO;
 import com.abc123.hsp.dto.PaymentControlPolicySelfCheckSummaryDTO;
 import com.abc123.hsp.dto.PaymentDetailDTO;
 import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
+import com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO;
 import com.abc123.hsp.dto.PaymentExpiryCloseResultDTO;
 import com.abc123.hsp.dto.PaymentEventRetryResultDTO;
 import com.abc123.hsp.dto.PaymentQueryRequestDTO;
@@ -59,6 +60,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     private static final String TASK_STATUS_WARN = "WARNING";
     private static final String TASK_CODE_EXPIRE_CLOSE = "PAYMENT_EXPIRE_CLOSE";
     private static final String TASK_CODE_DAY_END = "PAYMENT_DAY_END";
+    private static final String TASK_CODE_DAY_END_PATROL = "PAYMENT_DAY_END_PATROL";
     private static final String TASK_CODE_PENDING_QUERY = "PAYMENT_PENDING_QUERY";
     private static final String TASK_CODE_REFUND_PENDING_QUERY = "REFUND_PENDING_QUERY";
     private static final String TASK_CODE_QUERY_MONITOR_ALERT = "PAYMENT_QUERY_MONITOR_ALERT";
@@ -483,6 +485,120 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 0,
                 summaryComment,
                 dayEndResult.getBizDate());
+    }
+
+    @Override
+    public PaymentTaskActionResultDTO runAutoPaymentDayEndPatrol() {
+        if (paymentDayEndService == null) {
+            throw new IllegalStateException("payment day-end service is required for automatic day-end patrol");
+        }
+        String targetBizDate = LocalDate.now(BUSINESS_ZONE).minusDays(1).toString();
+        String taskLogNo = buildDayEndPatrolTaskLogNo(targetBizDate);
+        try {
+            return runAndRecordDayEndPatrol(targetBizDate, taskLogNo);
+        } catch (RuntimeException exception) {
+            try {
+                recordFailedTaskRun(
+                        TASK_CODE_DAY_END_PATROL,
+                        "支付日终巡检",
+                        RUN_MODE_AUTO,
+                        "payment-day-end-patrol-scheduler",
+                        "PAYMENT_DAY_END_PATROL_FAILED",
+                        targetBizDate);
+            } catch (DuplicateKeyException ignored) {
+                // 该业务日已由其他实例记录最终巡检结果。
+            } catch (RuntimeException recordException) {
+                exception.addSuppressed(recordException);
+            }
+            throw exception;
+        }
+    }
+
+    private PaymentTaskActionResultDTO runAndRecordDayEndPatrol(String targetBizDate, String taskLogNo) {
+        PaymentDayEndPatrolResultDTO patrolResult = paymentDayEndService.inspectPreviousBusinessDay();
+        validateDayEndPatrolResult(patrolResult, targetBizDate);
+        if (!Boolean.TRUE.equals(patrolResult.getInspected())) {
+            return buildActionResult(
+                    TASK_CODE_DAY_END_PATROL,
+                    "支付日终巡检",
+                    0,
+                    0,
+                    0,
+                    0,
+                    String.format("%s 的业务日租约由其他实例持有，本轮巡检跳过，等待后续重试。",
+                            patrolResult.getBizDate()));
+        }
+
+        int batchCount = patrolResult.getBatchCount();
+        int autoBatchCount = patrolResult.getAutoBatchCount();
+        int completedRunLogCount = paymentTaskCenterMapper
+                .countCompletedDayEndTaskRunsByBizDate(patrolResult.getBizDate());
+        int successCount = 0;
+        int warningCount = 0;
+        int failCount = 0;
+        String summaryComment;
+        if (batchCount == 0) {
+            failCount = 1;
+            summaryComment = String.format(
+                    "%s 尚无支付日终批次；巡检仅记录缺失事实，不自动补跑。",
+                    patrolResult.getBizDate());
+        } else if (autoBatchCount != completedRunLogCount) {
+            warningCount = 1;
+            summaryComment = String.format(
+                    "%s 共 %d 个日终批次，其中自动批次 %d 个、成功创建批次的自动任务日志 %d 条，数量不一致。",
+                    patrolResult.getBizDate(), batchCount, autoBatchCount, completedRunLogCount);
+        } else {
+            successCount = 1;
+            summaryComment = autoBatchCount == 0
+                    ? String.format("%s 已有 %d 个人工日终批次，自动批次与成功创建日志均为 0。",
+                    patrolResult.getBizDate(), batchCount)
+                    : String.format("%s 共 %d 个日终批次，自动批次与成功创建日志均为 %d。",
+                    patrolResult.getBizDate(), batchCount, autoBatchCount);
+        }
+        try {
+            return buildAndRecordResult(
+                    taskLogNo,
+                    TASK_CODE_DAY_END_PATROL,
+                    "支付日终巡检",
+                    RUN_MODE_AUTO,
+                    "payment-day-end-patrol-scheduler",
+                    1,
+                    successCount,
+                    warningCount,
+                    failCount,
+                    summaryComment,
+                    patrolResult.getBizDate());
+        } catch (DuplicateKeyException ignored) {
+            return buildActionResult(
+                    TASK_CODE_DAY_END_PATROL,
+                    "支付日终巡检",
+                    1,
+                    successCount,
+                    warningCount,
+                    failCount,
+                    summaryComment);
+        }
+    }
+
+    private void validateDayEndPatrolResult(PaymentDayEndPatrolResultDTO result, String targetBizDate) {
+        if (result == null || result.getInspected() == null || !targetBizDate.equals(result.getBizDate())) {
+            throw new IllegalStateException("automatic day-end patrol returned an incomplete result");
+        }
+        if (!Boolean.TRUE.equals(result.getInspected())) {
+            if (!PaymentDayEndAutoRunResultDTO.SKIP_REASON_LEASE_BUSY.equals(result.getSkipReason())
+                    || result.getBatchCount() != null || result.getAutoBatchCount() != null) {
+                throw new IllegalStateException("automatic day-end patrol returned an invalid skipped result");
+            }
+            return;
+        }
+        if (result.getSkipReason() != null
+                || result.getBatchCount() == null
+                || result.getAutoBatchCount() == null
+                || result.getBatchCount() < 0
+                || result.getAutoBatchCount() < 0
+                || result.getAutoBatchCount() > result.getBatchCount()) {
+            throw new IllegalStateException("automatic day-end patrol returned an invalid inspected result");
+        }
     }
 
     private void validateAutomaticDayEndResult(PaymentDayEndAutoRunResultDTO result) {
@@ -1190,8 +1306,23 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                             int failCount,
                                                             String summaryComment,
                                                             String bizDate) {
+        return buildAndRecordResult(buildTaskLogNo(), taskCode, taskName, runMode, triggeredBy,
+                processedCount, successCount, warningCount, failCount, summaryComment, bizDate);
+    }
+
+    private PaymentTaskActionResultDTO buildAndRecordResult(String taskLogNo,
+                                                            String taskCode,
+                                                            String taskName,
+                                                            String runMode,
+                                                            String triggeredBy,
+                                                            int processedCount,
+                                                            int successCount,
+                                                            int warningCount,
+                                                            int failCount,
+                                                            String summaryComment,
+                                                            String bizDate) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
-        entity.setTaskLogNo(buildTaskLogNo());
+        entity.setTaskLogNo(taskLogNo);
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
         entity.setBizDate(bizDate);
@@ -1211,7 +1342,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
         entity.setTriggeredBy(triggeredBy);
         paymentTaskCenterMapper.insertTaskRunLog(entity);
+        return buildActionResult(taskCode, taskName, processedCount, successCount,
+                warningCount, failCount, summaryComment);
+    }
 
+    private PaymentTaskActionResultDTO buildActionResult(String taskCode,
+                                                         String taskName,
+                                                         int processedCount,
+                                                         int successCount,
+                                                         int warningCount,
+                                                         int failCount,
+                                                         String summaryComment) {
         PaymentTaskActionResultDTO result = new PaymentTaskActionResultDTO();
         result.setTaskCode(taskCode);
         result.setTaskName(taskName);
@@ -1230,8 +1371,19 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                      String triggeredBy,
                                      String failureCode,
                                      String bizDate) {
+        paymentTaskCenterMapper.insertTaskRunLog(buildFailedTaskRun(
+                buildTaskLogNo(), taskCode, taskName, runMode, triggeredBy, failureCode, bizDate));
+    }
+
+    private PaymentTaskRunLogEntity buildFailedTaskRun(String taskLogNo,
+                                                       String taskCode,
+                                                       String taskName,
+                                                       String runMode,
+                                                       String triggeredBy,
+                                                       String failureCode,
+                                                       String bizDate) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
-        entity.setTaskLogNo(buildTaskLogNo());
+        entity.setTaskLogNo(taskLogNo);
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
         entity.setBizDate(bizDate);
@@ -1250,7 +1402,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         entity.setSuggestedAction(resolveSuggestedAction(taskCode, 0, 1, 1));
         entity.setRecommendedRoute(resolveRecommendedRoute(taskCode));
         entity.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.insertTaskRunLog(entity);
+        return entity;
     }
 
     private PaymentTaskActionResultDTO runCloseExpiredPaymentsByMode(String runMode, String triggeredBy, String modeLabel) {
@@ -1565,6 +1717,15 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private String resolveSuggestedAction(String taskCode, int warningCount, int failCount, int processedCount) {
+        if (TASK_CODE_DAY_END_PATROL.equals(taskCode)) {
+            if (failCount > 0) {
+                return "立即进入支付日终页面核对目标业务日，确认调度与租约事实后由值班人员决定是否人工补跑";
+            }
+            if (warningCount > 0) {
+                return "进入支付日终和任务中心核对自动批次与成功创建日志，排除日志缺失或重复批次";
+            }
+            return "目标业务日日终批次与自动任务日志数量已覆盖，继续按既定窗口观察";
+        }
         if (TASK_CODE_DAY_END.equals(taskCode)) {
             if (failCount > 0) {
                 return "优先核对日终任务日志、数据库租约和批次写入，再由值班人员决定是否人工补跑";
@@ -1640,7 +1801,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
     }
 
     private String resolveRecommendedRoute(String taskCode) {
-        if (TASK_CODE_DAY_END.equals(taskCode)) {
+        if (TASK_CODE_DAY_END.equals(taskCode) || TASK_CODE_DAY_END_PATROL.equals(taskCode)) {
             return "/payment-day-end";
         }
         if (TASK_CODE_EXPIRE_CLOSE.equals(taskCode)) {
@@ -1698,7 +1859,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
      * 根据任务类型、失败量和处理规模推导是否需要立即升级。
      */
     private boolean shouldEscalateImmediately(String taskCode, int warningCount, int failCount, int processedCount) {
-        if (TASK_CODE_DAY_END.equals(taskCode)) {
+        if (TASK_CODE_DAY_END.equals(taskCode) || TASK_CODE_DAY_END_PATROL.equals(taskCode)) {
             return failCount > 0;
         }
         if (TASK_CODE_QUERY_MONITOR_ALERT.equals(taskCode)) {
@@ -1739,7 +1900,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         if (shouldEscalateImmediately(taskCode, warningCount, failCount, processedCount)) {
             return false;
         }
-        if (TASK_CODE_DAY_END.equals(taskCode)) {
+        if (TASK_CODE_DAY_END.equals(taskCode) || TASK_CODE_DAY_END_PATROL.equals(taskCode)) {
             return warningCount > 0;
         }
         if (TASK_CODE_CONTROL_SELF_CHECK.equals(taskCode)) {
@@ -1843,6 +2004,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
     private String buildTaskLogNo() {
         return "PTL" + UUID.randomUUID().toString().replace("-", "").substring(0, 16).toUpperCase();
+    }
+
+    private String buildDayEndPatrolTaskLogNo(String bizDate) {
+        return "PTL-DAY-END-PATROL-" + bizDate.replace("-", "");
     }
 
     private String buildAlertLogNo() {

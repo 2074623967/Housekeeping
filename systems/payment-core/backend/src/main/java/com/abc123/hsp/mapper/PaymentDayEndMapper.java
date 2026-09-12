@@ -33,6 +33,11 @@ public interface PaymentDayEndMapper {
     Integer countBatchesByDate(@Param("bizDate") String bizDate);
 
     /**
+     * 查询指定业务日自动生成的日终批次数。
+     */
+    Integer countAutoBatchesByDate(@Param("bizDate") String bizDate);
+
+    /**
      * 查询指定业务日的支付总单量。
      */
     Integer countPaymentsByDate(@Param("bizDate") String bizDate);

@@ -144,6 +144,13 @@
         WHERE biz_date = #{bizDate}
     </select>
 
+    <select id="countAutoBatchesByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_day_end_batch
+        WHERE biz_date = #{bizDate}
+          AND run_mode = 'AUTO'
+    </select>
+
     <select id="countPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order

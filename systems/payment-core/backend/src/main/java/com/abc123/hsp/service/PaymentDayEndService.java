@@ -1,6 +1,7 @@
 package com.abc123.hsp.service;
 
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
+import com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
 import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
 
@@ -23,6 +24,11 @@ public interface PaymentDayEndService {
      * 自动生成上海前一业务日的日终快照，并返回执行或跳过原因。
      */
     PaymentDayEndAutoRunResultDTO runAutomatically();
+
+    /**
+     * 在业务日租约保护下检查上海前一业务日的批次事实。
+     */
+    PaymentDayEndPatrolResultDTO inspectPreviousBusinessDay();
 
     /**
      * 导出支付日终批次快照，供财务对账和问题复盘留痕。

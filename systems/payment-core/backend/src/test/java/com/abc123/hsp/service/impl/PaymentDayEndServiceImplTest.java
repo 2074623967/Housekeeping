@@ -309,6 +309,68 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldInspectPreviousBusinessDayBatchCounts() {
+        String bizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1).toString();
+        when(paymentDayEndMapper.countBatchesByDate(bizDate)).thenReturn(3);
+        when(paymentDayEndMapper.countAutoBatchesByDate(bizDate)).thenReturn(2);
+
+        com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO result =
+                new PaymentDayEndServiceImpl(paymentDayEndMapper).inspectPreviousBusinessDay();
+
+        org.junit.jupiter.api.Assertions.assertTrue(result.getInspected());
+        org.junit.jupiter.api.Assertions.assertNull(result.getSkipReason());
+        org.junit.jupiter.api.Assertions.assertEquals(bizDate, result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertEquals(3, result.getBatchCount());
+        org.junit.jupiter.api.Assertions.assertEquals(2, result.getAutoBatchCount());
+    }
+
+    @Test
+    void shouldSkipDayEndPatrolWhenBusinessDateLeaseIsBusy() {
+        String bizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1).toString();
+        PaymentTaskLeaseService leaseService = org.mockito.Mockito.mock(PaymentTaskLeaseService.class);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper, leaseService, (org.springframework.transaction.support.TransactionTemplate) null);
+        when(leaseService.tryAcquire(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:" + bizDate),
+                org.mockito.ArgumentMatchers.startsWith("payment-day-end-patrol-scheduler:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(null);
+
+        com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO result = service.inspectPreviousBusinessDay();
+
+        org.junit.jupiter.api.Assertions.assertFalse(result.getInspected());
+        org.junit.jupiter.api.Assertions.assertEquals("LEASE_BUSY", result.getSkipReason());
+        org.junit.jupiter.api.Assertions.assertEquals(bizDate, result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertNull(result.getBatchCount());
+        org.junit.jupiter.api.Assertions.assertNull(result.getAutoBatchCount());
+        org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
+    }
+
+    @Test
+    void shouldReleaseBusinessDateLeaseAfterDayEndPatrol() {
+        String bizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1).toString();
+        PaymentTaskCenterMapper leaseMapper = org.mockito.Mockito.mock(PaymentTaskCenterMapper.class);
+        when(leaseMapper.acquireTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:" + bizDate),
+                org.mockito.ArgumentMatchers.startsWith("payment-day-end-patrol-scheduler:"),
+                org.mockito.ArgumentMatchers.eq(300))).thenReturn(1);
+        when(paymentDayEndMapper.countBatchesByDate(bizDate)).thenReturn(1);
+        when(paymentDayEndMapper.countAutoBatchesByDate(bizDate)).thenReturn(1);
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(
+                paymentDayEndMapper,
+                new PaymentTaskLeaseService(leaseMapper),
+                (org.springframework.transaction.support.TransactionTemplate) null);
+
+        service.inspectPreviousBusinessDay();
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(paymentDayEndMapper, leaseMapper);
+        inOrder.verify(paymentDayEndMapper).countBatchesByDate(bizDate);
+        inOrder.verify(paymentDayEndMapper).countAutoBatchesByDate(bizDate);
+        inOrder.verify(leaseMapper).releaseTaskLease(
+                org.mockito.ArgumentMatchers.eq("PAYMENT_DAY_END:" + bizDate),
+                org.mockito.ArgumentMatchers.startsWith("payment-day-end-patrol-scheduler:"));
+    }
+
+    @Test
     void shouldRollbackFailedAutomaticBatchBeforeReleasingBusinessDateLease() {
         LocalDate expectedBizDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1);
         PaymentTaskCenterMapper leaseMapper = org.mockito.Mockito.mock(PaymentTaskCenterMapper.class);

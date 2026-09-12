@@ -439,6 +439,15 @@
         </where>
     </select>
 
+    <select id="countCompletedDayEndTaskRunsByBizDate" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_task_run_log
+        WHERE task_code = 'PAYMENT_DAY_END'
+          AND biz_date = #{bizDate}
+          AND processed_count &gt; 0
+          AND fail_count = 0
+    </select>
+
     <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">
         SELECT candidates.payment_order_id
         FROM (

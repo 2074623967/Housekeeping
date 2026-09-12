@@ -13,17 +13,24 @@ public class PaymentDayEndScheduler {
 
     private final PaymentTaskCenterService paymentTaskCenterService;
     private final boolean enabled;
+    private final boolean patrolEnabled;
 
     public PaymentDayEndScheduler(PaymentTaskCenterService paymentTaskCenterService) {
-        this(paymentTaskCenterService, false);
+        this(paymentTaskCenterService, false, false);
+    }
+
+    PaymentDayEndScheduler(PaymentTaskCenterService paymentTaskCenterService, boolean enabled) {
+        this(paymentTaskCenterService, enabled, false);
     }
 
     @Autowired
     public PaymentDayEndScheduler(
             PaymentTaskCenterService paymentTaskCenterService,
-            @Value("${payment.day-end.auto.enabled:false}") boolean enabled) {
+            @Value("${payment.day-end.auto.enabled:false}") boolean enabled,
+            @Value("${payment.day-end.patrol.enabled:false}") boolean patrolEnabled) {
         this.paymentTaskCenterService = paymentTaskCenterService;
         this.enabled = enabled;
+        this.patrolEnabled = patrolEnabled;
     }
 
     /**
@@ -35,6 +42,18 @@ public class PaymentDayEndScheduler {
     public void runPreviousBusinessDay() {
         if (enabled) {
             paymentTaskCenterService.runAutoPaymentDayEnd();
+        }
+    }
+
+    /**
+     * 上海凌晨检查前一业务日批次与任务日志；租约忙时由后续小时再次尝试。
+     */
+    @Scheduled(
+            cron = "${payment.day-end.patrol.cron:0 30 2-6 * * *}",
+            zone = "Asia/Shanghai")
+    public void patrolPreviousBusinessDay() {
+        if (patrolEnabled) {
+            paymentTaskCenterService.runAutoPaymentDayEndPatrol();
         }
     }
 }

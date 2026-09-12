@@ -1,6 +1,7 @@
 package com.abc123.hsp.service.impl;
 
 import com.abc123.hsp.dto.PaymentDayEndOverviewDTO;
+import com.abc123.hsp.dto.PaymentDayEndPatrolResultDTO;
 import com.abc123.hsp.dto.PaymentDayEndRunRequestDTO;
 import com.abc123.hsp.dto.PaymentDayEndAutoRunResultDTO;
 import com.abc123.hsp.dto.PaymentDayEndAlertItemDTO;
@@ -40,6 +41,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     private static final String DAY_END_LEASE_PREFIX = "PAYMENT_DAY_END:";
     private static final String RUN_MODE_AUTO = "AUTO";
     private static final String AUTO_TRIGGERED_BY = "payment-day-end-scheduler";
+    private static final String PATROL_TRIGGERED_BY = "payment-day-end-patrol-scheduler";
 
     private final PaymentDayEndMapper paymentDayEndMapper;
     private final PaymentTaskLeaseService paymentTaskLeaseService;
@@ -101,7 +103,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
     @Override
     public PaymentDayEndAutoRunResultDTO runAutomatically() {
-        String bizDate = LocalDate.now(BUSINESS_ZONE_ID).minusDays(1).format(DATE_FORMATTER);
+        String bizDate = previousBusinessDay();
         DayEndExecutionOutcome outcome = executeWithLease(
                 bizDate, RUN_MODE_AUTO, AUTO_TRIGGERED_BY, true);
         PaymentDayEndAutoRunResultDTO result = new PaymentDayEndAutoRunResultDTO();
@@ -110,6 +112,40 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         result.setBizDate(bizDate);
         result.setBatchStatus(outcome.batch == null ? null : outcome.batch.getBatchStatus());
         return result;
+    }
+
+    @Override
+    public PaymentDayEndPatrolResultDTO inspectPreviousBusinessDay() {
+        String bizDate = previousBusinessDay();
+        if (paymentTaskLeaseService == null) {
+            return inspectBusinessDay(bizDate);
+        }
+        String leaseOwner = PATROL_TRIGGERED_BY + ":" + leaseOwnerSuffix;
+        PaymentTaskLeaseService.Lease lease = paymentTaskLeaseService.tryAcquire(
+                DAY_END_LEASE_PREFIX + bizDate, leaseOwner, DAY_END_LEASE_SECONDS);
+        if (lease == null) {
+            PaymentDayEndPatrolResultDTO result = new PaymentDayEndPatrolResultDTO();
+            result.setInspected(false);
+            result.setSkipReason(PaymentDayEndAutoRunResultDTO.SKIP_REASON_LEASE_BUSY);
+            result.setBizDate(bizDate);
+            return result;
+        }
+        try (PaymentTaskLeaseService.Lease ignored = lease) {
+            return inspectBusinessDay(bizDate);
+        }
+    }
+
+    private PaymentDayEndPatrolResultDTO inspectBusinessDay(String bizDate) {
+        PaymentDayEndPatrolResultDTO result = new PaymentDayEndPatrolResultDTO();
+        result.setInspected(true);
+        result.setBizDate(bizDate);
+        result.setBatchCount(defaultZero(paymentDayEndMapper.countBatchesByDate(bizDate)));
+        result.setAutoBatchCount(defaultZero(paymentDayEndMapper.countAutoBatchesByDate(bizDate)));
+        return result;
+    }
+
+    private String previousBusinessDay() {
+        return LocalDate.now(BUSINESS_ZONE_ID).minusDays(1).format(DATE_FORMATTER);
     }
 
     private DayEndExecutionOutcome executeWithLease(String bizDate,

@@ -42,6 +42,11 @@ public interface PaymentTaskCenterService {
     PaymentTaskActionResultDTO runAutoPaymentDayEnd();
 
     /**
+     * 自动巡检前一业务日日终批次与成功创建日志。
+     */
+    PaymentTaskActionResultDTO runAutoPaymentDayEndPatrol();
+
+    /**
      * 手动补查等待回调的支付单。
      */
     PaymentTaskActionResultDTO runPendingPaymentQueries(String operator);

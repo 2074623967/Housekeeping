@@ -42,4 +42,29 @@ class PaymentDayEndSchedulerTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "${payment.day-end.auto.cron:0 30 0 * * *}", scheduled.cron());
     }
+
+    @Test
+    void shouldRunDayEndPatrolWhenEnabled() {
+        new PaymentDayEndScheduler(paymentTaskCenterService, false, true).patrolPreviousBusinessDay();
+
+        verify(paymentTaskCenterService).runAutoPaymentDayEndPatrol();
+    }
+
+    @Test
+    void shouldKeepDayEndPatrolDisabledByDefault() {
+        new PaymentDayEndScheduler(paymentTaskCenterService).patrolPreviousBusinessDay();
+
+        verify(paymentTaskCenterService, never()).runAutoPaymentDayEndPatrol();
+    }
+
+    @Test
+    void shouldScheduleDayEndPatrolInFixedShanghaiBusinessTimezone() throws NoSuchMethodException {
+        Scheduled scheduled = PaymentDayEndScheduler.class
+                .getMethod("patrolPreviousBusinessDay")
+                .getAnnotation(Scheduled.class);
+
+        org.junit.jupiter.api.Assertions.assertEquals("Asia/Shanghai", scheduled.zone());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "${payment.day-end.patrol.cron:0 30 2-6 * * *}", scheduled.cron());
+    }
 }

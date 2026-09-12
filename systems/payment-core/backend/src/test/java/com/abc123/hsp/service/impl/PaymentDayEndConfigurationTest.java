@@ -27,5 +27,9 @@ class PaymentDayEndConfigurationTest {
                 Boolean.FALSE,
                 resolver.getProperty("payment.day-end.auto.enabled", Boolean.class));
         Assertions.assertEquals("0 30 0 * * *", resolver.getProperty("payment.day-end.auto.cron"));
+        Assertions.assertEquals(
+                Boolean.FALSE,
+                resolver.getProperty("payment.day-end.patrol.enabled", Boolean.class));
+        Assertions.assertEquals("0 30 2-6 * * *", resolver.getProperty("payment.day-end.patrol.cron"));
     }
 }

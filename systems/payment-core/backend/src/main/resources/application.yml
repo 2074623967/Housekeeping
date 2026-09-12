@@ -69,6 +69,9 @@ payment:
     auto:
       enabled: ${HSP_PAYMENT_DAY_END_AUTO_ENABLED:false}
       cron: "${HSP_PAYMENT_DAY_END_AUTO_CRON:0 30 0 * * *}"
+    patrol:
+      enabled: ${HSP_PAYMENT_DAY_END_PATROL_ENABLED:false}
+      cron: "${HSP_PAYMENT_DAY_END_PATROL_CRON:0 30 2-6 * * *}"
   refund-submit:
     gateway-access:
       # 默认关闭；启用前必须配置 gateway-access 的真实退款上游和共享访问凭证。
