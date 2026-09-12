@@ -73,6 +73,16 @@ export function isPaymentSubmissionPending(cashierStatus, attemptStatus) {
     || ["渠道提交中", "结果未知，待查单"].includes(attemptStatus);
 }
 
+export function canQueryPaymentChannel(status, latestAttemptStatus) {
+  if (["SUCCESS", "CLOSED"].includes(status)) {
+    return true;
+  }
+  const normalizedAttemptStatus = typeof latestAttemptStatus === "string"
+    ? latestAttemptStatus.trim()
+    : "";
+  return status === "WAIT_CALLBACK" && Boolean(normalizedAttemptStatus && normalizedAttemptStatus !== "-");
+}
+
 export function canClosePaymentLocally(status, channelTransactionNo, attemptStatus) {
   const closeableStatuses = [
     "PREPAY_CREATED",

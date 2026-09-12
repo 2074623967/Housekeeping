@@ -684,6 +684,10 @@ class PaymentServiceImplTest {
         prepay.setPrepayOrderNo("PRE-CASHIER-001");
         prepay.setPaymentOrderId("PAY-CASHIER-001");
         when(paymentMapper.findPrepay("PRE-CASHIER-001")).thenReturn(prepay);
+        PaymentDetailDTO submissionFact = new PaymentDetailDTO();
+        submissionFact.setStatus("WAIT_CALLBACK");
+        submissionFact.setLatestAttemptStatus("处理中");
+        when(paymentMapper.findSubmissionFact("PAY-CASHIER-001")).thenReturn(submissionFact);
 
         com.abc123.hsp.dto.CashierPageDTO result = new PaymentServiceImpl(
                 paymentMapper,
@@ -694,6 +698,8 @@ class PaymentServiceImplTest {
                 .cashier("PRE-CASHIER-001");
 
         org.junit.jupiter.api.Assertions.assertEquals("PAY-CASHIER-001", result.getPaymentOrderId());
+        org.junit.jupiter.api.Assertions.assertEquals("WAIT_CALLBACK", result.getPaymentStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("处理中", result.getLatestAttemptStatus());
     }
 
     @Test
@@ -2912,6 +2918,7 @@ class PaymentServiceImplTest {
         PaymentListItemDTO item = new PaymentListItemDTO();
         item.setPaymentOrderId("PAY-001");
         item.setCustomerName("张女士");
+        item.setLatestAttemptStatus("处理中");
         when(paymentMapper.findAll(query)).thenReturn(Collections.singletonList(item));
         when(paymentMapper.count(query)).thenReturn(1L);
 
@@ -2924,6 +2931,7 @@ class PaymentServiceImplTest {
                 .list(query);
 
         org.junit.jupiter.api.Assertions.assertEquals("张*", result.getItems().get(0).getCustomerName());
+        org.junit.jupiter.api.Assertions.assertEquals("处理中", result.getItems().get(0).getLatestAttemptStatus());
         org.junit.jupiter.api.Assertions.assertEquals("张女士", item.getCustomerName());
     }
 

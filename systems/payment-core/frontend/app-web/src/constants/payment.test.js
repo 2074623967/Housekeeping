@@ -2,9 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canClosePaymentLocally,
+  canQueryPaymentChannel,
   isPaymentSubmissionPending,
   PAYMENT_RESULT_STATE_META
 } from "./payment.js";
+
+test("only queries the channel for terminal payments or submitted pending payments", () => {
+  assert.equal(canQueryPaymentChannel("SUCCESS", null), true);
+  assert.equal(canQueryPaymentChannel("CLOSED", null), true);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "处理中"), true);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", null), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", "-"), false);
+  assert.equal(canQueryPaymentChannel("WAIT_CALLBACK", " - "), false);
+  assert.equal(canQueryPaymentChannel("PREPAY_CREATED", "处理中"), false);
+  assert.equal(canQueryPaymentChannel("RISK_REJECTED", null), false);
+});
 
 test("locks submission while cashier status is not final", () => {
   assert.equal(isPaymentSubmissionPending("支付中", "-"), true);

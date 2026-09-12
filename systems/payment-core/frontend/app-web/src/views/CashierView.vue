@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import {
   canClosePaymentLocally,
+  canQueryPaymentChannel,
   isPaymentSubmissionPending,
   resolvePaymentChannelCode
 } from "../constants/payment";
@@ -212,6 +213,10 @@ const submissionPending = computed(() => {
     latestQueriedDetail.value?.latestAttemptStatus
   );
 });
+const canQueryPayment = computed(() => canQueryPaymentChannel(
+  latestQueriedDetail.value?.status || cashier.value?.paymentStatus,
+  latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
+));
 const statusClass = computed(() => {
   const statusType = cashier.value?.statusType;
   return statusType ? `status-${statusType}` : "status-info";
@@ -345,6 +350,10 @@ async function refreshCashier() {
 async function queryCurrentPayment() {
   if (!cashier.value?.paymentOrderId) {
     message.value = "当前支付单尚未生成，请先发起支付后再执行主动查单。";
+    return;
+  }
+  if (!canQueryPayment.value) {
+    message.value = "当前支付单尚未提交渠道，不能执行主动查单。";
     return;
   }
   queryLoading.value = true;
@@ -554,7 +563,7 @@ watch(selectedPaymentMethod, () => {
           <button class="action-button secondary" :disabled="refreshLoading" @click="refreshCashier">
             {{ refreshLoading ? "刷新中..." : terminalMeta.refreshLabel }}
           </button>
-          <button class="action-button secondary" :disabled="queryLoading || !cashier?.paymentOrderId" @click="queryCurrentPayment">
+          <button class="action-button secondary" :disabled="queryLoading || !cashier?.paymentOrderId || !canQueryPayment" @click="queryCurrentPayment">
             {{ queryLoading ? "查单中..." : "主动查单" }}
           </button>
           <button class="action-button ghost" :disabled="closeLoading || !canClose" @click="closeCurrentPayment">

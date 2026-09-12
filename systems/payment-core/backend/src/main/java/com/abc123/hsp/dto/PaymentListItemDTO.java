@@ -26,6 +26,8 @@ public class PaymentListItemDTO {
     private String status;
     /** 支付状态样式。 */
     private String statusType;
+    /** 最近一次支付尝试状态。 */
+    private String latestAttemptStatus;
     /** 创建时间。 */
     private String createdAt;
 }

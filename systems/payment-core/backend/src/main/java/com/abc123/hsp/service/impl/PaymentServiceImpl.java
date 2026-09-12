@@ -461,6 +461,11 @@ public class PaymentServiceImpl implements PaymentService {
         cashierPage.setTitle(prepayOrder.getCashierTitle());
         cashierPage.setStatus(prepayOrder.getCashierStatus());
         cashierPage.setStatusType(prepayOrder.getCashierStatusType());
+        PaymentDetailDTO submissionFact = paymentMapper.findSubmissionFact(prepayOrder.getPaymentOrderId());
+        if (submissionFact != null) {
+            cashierPage.setPaymentStatus(submissionFact.getStatus());
+            cashierPage.setLatestAttemptStatus(submissionFact.getLatestAttemptStatus());
+        }
         cashierPage.setExpiresAt(prepayOrder.getExpiresAt());
         cashierPage.setChannels(Arrays.asList("微信支付", "支付宝", "银行卡"));
         return cashierPage;

@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { sumPaymentAmounts } from "../utils/paymentAmount";
+import { canQueryPaymentChannel } from "../utils/paymentAction";
 
 const router = useRouter();
 const items = ref([]);
@@ -127,6 +128,10 @@ function canRunClose(item) {
     && !item.channelTransactionNo;
 }
 
+function canRunQuery(item) {
+  return canQueryPaymentChannel(item.status, item.latestAttemptStatus);
+}
+
 function updatePaymentSnapshot(paymentDetail) {
   const updatedItem = {
     paymentOrderId: paymentDetail.paymentOrderId,
@@ -136,6 +141,7 @@ function updatePaymentSnapshot(paymentDetail) {
     paymentMethod: paymentDetail.paymentMethod,
     channel: paymentDetail.channel,
     channelTransactionNo: paymentDetail.channelTransactionNo,
+    latestAttemptStatus: paymentDetail.latestAttemptStatus,
     status: paymentDetail.status,
     statusType: paymentDetail.statusType,
     createdAt: paymentDetail.createdAt
@@ -147,6 +153,12 @@ function updatePaymentSnapshot(paymentDetail) {
 }
 
 async function handleQuery(paymentOrderId) {
+  const paymentItem = items.value.find((item) => item.paymentOrderId === paymentOrderId);
+  if (!paymentItem || !canRunQuery(paymentItem)) {
+    actionErrorMessage.value = `支付单 ${paymentOrderId} 没有可供渠道查单的提交事实。`;
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = operationOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
@@ -337,7 +349,7 @@ onMounted(refreshList);
                   <div class="list-actions">
                     <button class="link-button" @click="pickItem(item)">快照</button>
                     <button class="link-button" @click="openDetail(item.paymentOrderId)">详情</button>
-                    <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData" @click="handleQuery(item.paymentOrderId)">
+                    <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData || !canRunQuery(item)" @click="handleQuery(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
                     </button>
                     <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
@@ -364,6 +376,7 @@ onMounted(refreshList);
               <div class="detail-card"><span>支付渠道</span><strong>{{ selectedItem.channel }}</strong></div>
               <div class="detail-card"><span>渠道交易号</span><strong>{{ selectedItem.channelTransactionNo || "—" }}</strong></div>
               <div class="detail-card"><span>支付状态</span><strong>{{ selectedItem.status }}</strong></div>
+              <div class="detail-card"><span>最近尝试</span><strong>{{ selectedItem.latestAttemptStatus || "—" }}</strong></div>
               <div class="detail-card"><span>创建时间</span><strong>{{ selectedItem.createdAt }}</strong></div>
             </div>
             <div class="ops-card">

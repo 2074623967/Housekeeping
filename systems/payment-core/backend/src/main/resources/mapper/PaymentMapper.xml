@@ -14,8 +14,16 @@
                p.channel_transaction_no AS channelTransactionNo,
                p.status,
                p.status_type AS statusType,
+               pa.attempt_status AS latestAttemptStatus,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_order p
+                 LEFT JOIN t_payment_attempt pa ON pa.id = (
+                    SELECT latest_pa.id
+                    FROM t_payment_attempt latest_pa
+                    WHERE latest_pa.payment_order_id = p.payment_order_id
+                    ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
+                    LIMIT 1
+                )
         <where>
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 p.payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
@@ -209,6 +217,20 @@
                     LIMIT 1
                 )
                  LEFT JOIN t_bill b ON b.order_no = p.order_no
+                 LEFT JOIN t_payment_attempt pa ON pa.id = (
+                    SELECT latest_pa.id
+                    FROM t_payment_attempt latest_pa
+                    WHERE latest_pa.payment_order_id = p.payment_order_id
+                    ORDER BY latest_pa.created_at DESC, latest_pa.id DESC
+                    LIMIT 1
+                )
+        WHERE p.payment_order_id = #{paymentOrderId}
+    </select>
+
+    <select id="findSubmissionFact" resultType="com.abc123.hsp.dto.PaymentDetailDTO">
+        SELECT p.status,
+               pa.attempt_status AS latestAttemptStatus
+        FROM t_payment_order p
                  LEFT JOIN t_payment_attempt pa ON pa.id = (
                     SELECT latest_pa.id
                     FROM t_payment_attempt latest_pa

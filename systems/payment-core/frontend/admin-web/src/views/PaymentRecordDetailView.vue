@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { paymentApi, paymentRecordApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
+import { canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -31,6 +32,11 @@ const recordTypeLabel = computed(() => {
   }
   return "统一支付记录";
 });
+
+const canRunQuery = computed(() => canQueryPaymentChannel(
+  detail.value?.paymentStatus,
+  detail.value?.latestAttemptStatus
+));
 
 async function loadDetail(afterAction = false) {
   isLoading.value = true;
@@ -133,6 +139,11 @@ const operationSuggestions = computed(() => {
 });
 
 async function handleQueryPayment() {
+  if (!canRunQuery.value) {
+    actionErrorMessage.value = "当前支付单没有可供渠道查单的提交事实。";
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = operationOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
@@ -171,7 +182,7 @@ onMounted(loadDetail);
         <button class="button secondary" @click="openPaymentRequests">查看支付请求</button>
         <button class="button secondary" @click="openPaymentLogs">查看处理日志</button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
-        <button class="button primary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale" @click="handleQueryPayment">
+        <button class="button primary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunQuery" @click="handleQueryPayment">
           {{ activeAction === "query" ? "查单中..." : "主动查单" }}
         </button>
       </div>

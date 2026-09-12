@@ -5,6 +5,7 @@ import { paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
+import { canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -140,7 +141,16 @@ function canRunClose() {
     && !detail.value?.latestAttemptStatus;
 }
 
+function canRunQuery() {
+  return canQueryPaymentChannel(detail.value?.status, detail.value?.latestAttemptStatus);
+}
+
 async function handleQuery() {
+  if (!canRunQuery()) {
+    actionErrorMessage.value = "当前支付单没有可供渠道查单的提交事实。";
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = operationOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
@@ -218,7 +228,7 @@ onMounted(loadDetail);
           查看处理日志
         </button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
-        <button class="button secondary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale" @click="handleQuery">
+        <button class="button secondary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunQuery()" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
         </button>
         <button class="button primary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunClose()" @click="handleClose">
@@ -283,7 +293,7 @@ onMounted(loadDetail);
               <span class="meta">根据支付单当前状态控制动作</span>
             </div>
             <div class="ops-card">
-              <div class="ops-row"><span>主动查单</span><span>始终可用，用于拉取渠道或本地最新状态</span></div>
+              <div class="ops-row"><span>主动查单</span><span>{{ canRunQuery() ? "当前可执行" : "仅已提交渠道或终态支付单可执行" }}</span></div>
               <div class="ops-row"><span>渠道回调</span><span>仅接收真实渠道签名通知，页面不提供人工收口动作</span></div>
               <div class="ops-row"><span>关闭支付单</span><span>{{ canRunClose() ? "当前可执行" : "已提交渠道或已终态支付单不可本地关闭" }}</span></div>
             </div>

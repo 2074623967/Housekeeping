@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import {
   canClosePaymentLocally,
+  canQueryPaymentChannel,
   PAYMENT_RESULT_STATE_META,
   resolvePaymentResultState
 } from "../constants/payment";
@@ -88,6 +89,10 @@ const canClosePayment = computed(() => {
     paymentDetail.value?.latestAttemptStatus
   );
 });
+const canQueryPayment = computed(() => canQueryPaymentChannel(
+  paymentDetail.value?.status,
+  paymentDetail.value?.latestAttemptStatus
+));
 const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const sourceAppId = computed(() => {
   if (props.terminalVariant === "pc") {
@@ -239,6 +244,10 @@ function migrateLegacyAccessToken() {
 }
 
 async function queryResult() {
+  if (!canQueryPayment.value) {
+    feedbackMessage.value = "当前支付单尚未提交渠道，不能执行主动查单。";
+    return;
+  }
   queryLoading.value = true;
   try {
     paymentDetail.value = await paymentApi.query({ paymentOrderId: route.params.paymentOrderId });
@@ -439,7 +448,7 @@ function resolveBizType() {
         </div>
 
         <div class="terminal-actions">
-          <button class="action-button primary" :disabled="queryLoading" @click="queryResult">
+          <button class="action-button primary" :disabled="queryLoading || detailLoading || !canQueryPayment" @click="queryResult">
             {{ queryLoading ? "查询中..." : terminalCopy.queryLabel }}
           </button>
           <button class="action-button secondary" @click="backToBusinessEntry">

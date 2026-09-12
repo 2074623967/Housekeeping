@@ -64,6 +64,11 @@ public interface PaymentMapper {
     PaymentDetailDTO findDetail(@Param("paymentOrderId") String paymentOrderId);
 
     /**
+     * 查询支付单状态与最近一次渠道提交事实。
+     */
+    PaymentDetailDTO findSubmissionFact(@Param("paymentOrderId") String paymentOrderId);
+
+    /**
      * 幂等初始化订单维度的预付单创建协调行。
      */
     int initPrepayCreationLock(@Param("orderNo") String orderNo);

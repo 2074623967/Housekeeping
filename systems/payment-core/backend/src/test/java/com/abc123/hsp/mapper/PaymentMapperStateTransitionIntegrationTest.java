@@ -2,9 +2,13 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentListItemDTO;
+import com.abc123.hsp.dto.PaymentListQueryDTO;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -203,6 +207,25 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldExposeLatestSubmissionFactToPaymentListAndCashier() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setPaymentOrderId("PAY-SUBMITTED");
+            query.setPageNo(1);
+            query.setPageSize(20);
+
+            List<PaymentListItemDTO> items = mapper.findAll(query);
+            PaymentDetailDTO submissionFact = mapper.findSubmissionFact("PAY-SUBMITTED");
+
+            assertEquals(1, items.size());
+            assertEquals("处理中", items.get(0).getLatestAttemptStatus());
+            assertEquals("WAIT_CALLBACK", submissionFact.getStatus());
+            assertEquals("处理中", submissionFact.getLatestAttemptStatus());
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -225,6 +248,12 @@ class PaymentMapperStateTransitionIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             Connection connection = session.getConnection();
+            statement.execute("CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR \""
+                    + PaymentConfigProtocolVersionMapperIntegrationTest.class.getName()
+                    + ".dateFormat\"");
+            statement.execute("CREATE ALIAS IF NOT EXISTS FORMAT FOR \""
+                    + PaymentReturnCodeSnapshotMapperIntegrationTest.class.getName()
+                    + ".format\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_event");
             statement.execute("DROP TABLE IF EXISTS t_payment_expiry_close_retry");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
@@ -242,8 +271,15 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "next_retry_at DATETIME NOT NULL, last_error_message VARCHAR(512) NOT NULL, "
                     + "last_failed_at DATETIME NOT NULL, created_at DATETIME NOT NULL, "
                     + "updated_at DATETIME NOT NULL, UNIQUE(payment_order_id))");
-            statement.execute("CREATE TABLE t_prepay_order (payment_order_id VARCHAR(64), expires_at DATETIME)");
-            statement.execute("CREATE TABLE t_payment_attempt (payment_order_id VARCHAR(64))");
+            statement.execute("CREATE TABLE t_prepay_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
+                    + "bill_no VARCHAR(64), order_no VARCHAR(64), customer_name VARCHAR(128), "
+                    + "amount DECIMAL(18, 2), pay_scene VARCHAR(64), cashier_title VARCHAR(128), "
+                    + "cashier_status VARCHAR(32), cashier_status_type VARCHAR(32), "
+                    + "payment_order_id VARCHAR(64), created_at DATETIME, expires_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "attempt_status VARCHAR(64), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_event (payment_order_id VARCHAR(64), event_type VARCHAR(64))");
             statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, order_no, status, status_type) "
                     + "VALUES ('PAY-UNSUBMITTED', 'ORD-1', 'PREPAY_CREATED', 'info'), "
@@ -267,8 +303,12 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "('PAY-OLDER', TIMESTAMPADD(MINUTE, -10, NOW())), "
                     + "('PAY-LEGACY-BLANK', TIMESTAMPADD(MINUTE, -7, NOW())), "
                     + "('PAY-SUBMITTED', TIMESTAMPADD(MINUTE, -5, NOW()))");
-            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES "
-                    + "('PAY-SUBMITTED'), ('PAY-LEGACY-SUBMITTED-CLOSED')");
+            statement.executeUpdate("UPDATE t_prepay_order SET prepay_order_no = 'PRE-SUBMITTED', "
+                    + "order_no = 'ORD-2', cashier_status = '支付中', cashier_status_type = 'warn', "
+                    + "created_at = NOW() WHERE payment_order_id = 'PAY-SUBMITTED'");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) VALUES "
+                    + "('PAY-SUBMITTED', '处理中', NOW()), "
+                    + "('PAY-LEGACY-SUBMITTED-CLOSED', '处理中', NOW())");
             statement.executeUpdate("INSERT INTO t_payment_event(payment_order_id, event_type) "
                     + "VALUES ('PAY-EXPIRED-CLOSED', 'PAYMENT_EXPIRED_CLOSED'), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', 'PAYMENT_CLOSED')");

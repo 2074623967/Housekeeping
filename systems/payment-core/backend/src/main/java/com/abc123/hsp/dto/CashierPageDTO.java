@@ -29,6 +29,10 @@ public class CashierPageDTO {
     private String status;
     /** 收银台状态样式。 */
     private String statusType;
+    /** 支付单状态。 */
+    private String paymentStatus;
+    /** 最近一次支付尝试状态。 */
+    private String latestAttemptStatus;
     /** 过期时间。 */
     private String expiresAt;
     /** 可选支付渠道列表。 */
