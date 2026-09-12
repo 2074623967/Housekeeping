@@ -12612,3 +12612,31 @@
 1. 本地执行状态不再单独充当供应商成功证据，去重和防重放与正式通知结果的成功集合对齐。
 2. 存量“已派发但缺少供应商成功状态”记录会被允许补发；这避免永久漏发，但不能排除证据丢失时的重复通知。
 3. 本地 mock/H2 不证明生产历史已清洗、供应商幂等、真实送达或生产稳定性；上线前需单独审计存量数据并验证幂等键，release 四项真实治理阻断不变。
+
+## 466. 2026-09-12 告警本地护栏结果隔离 V1.0 验证
+
+### 466.1 本轮补强
+
+1. 通道重试失败数和供应商熔断失败数只统计 `FAILED / SEND_EXCEPTION`，不再统计未发生通知调用的本地护栏结果。
+2. 最近派发日志只从 `ACCEPTED / DELIVERED / FAILED / SEND_EXCEPTION` 中选择，防止护栏日志刷新冷却或防重放的时间基准。
+3. Mapper 测试加入 `STR_TO_DATE` 的 H2 兼容别名，使两条供应商时间窗口统计 SQL 可被真正执行。
+
+### 466.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 真实失败 | `FAILED` 与 `SEND_EXCEPTION` 均进入通道重试与供应商熔断计数 |
+| 本地护栏 | 更新的 `RATE_LIMITED / RETRY_COOLDOWN_ACTIVE / PROVIDER_CIRCUIT_OPEN` 均不进入失败计数 |
+| 最近派发 | 上述护栏日志不抢占最近记录，结果仍为较早的 `SEND_EXCEPTION` |
+| 首次定向测试 | 失败：H2 未注册 MySQL `STR_TO_DATE`；未记为业务通过 |
+| 修正后联合定向 | `PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterMapperIntegrationTest` `73` 项通过 |
+| payment-core 后端全量测试 | `977` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentTaskCenterMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 只收紧内部历史 SQL 和扩展测试夹具；无 HTTP API、前端、schema、索引或迁移变化 |
+| 代码提交 | `2fd4e7e8 fix(payment-core): isolate alert guard outcomes` |
+
+### 466.3 当前判断
+
+1. 本地限流、冷却、防重放和熔断拒绝仍保留完整审计日志，但不再被误解为供应商已失败的外部事实。
+2. 冷却和熔断时间窗口现在能随真实失败老化而自然恢复，不被周期调度产生的护栏日志自我续期。
+3. 本地 H2 不证明生产 MySQL 执行计划、存量结果码完整、真实供应商熔断恢复或并发限流；供应商限流的原子配额预留仍是后续缺口，release 四项真实治理阻断不变。

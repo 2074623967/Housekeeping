@@ -4232,6 +4232,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 本契约不改变失败计数、最近日志读取和供应商容量统计的其他语义，不新增 HTTP API、DTO、状态、schema、索引或迁移。
 5. 存量无成功证据的已派发日志可能因此重新补发；上线前必须审计此类记录并验证供应商基于稳定告警号的幂等行为，本地测试不构成真实送达或无重复证明。
 
+### 14.293 告警真实派发结果与本地护栏隔离契约
+
+1. 通道失败重试次数只接受合法来源归属、`alert_status=派发失败` 且 `provider_delivery_status` 为 `FAILED` 或 `SEND_EXCEPTION` 的日志。
+2. 供应商熔断时间窗口同样只统计 `FAILED / SEND_EXCEPTION`；`PROVIDER_CIRCUIT_OPEN` 自身不得继续增加熔断失败数或延长熔断。
+3. 用于冷却和防重放的最近派发日志只从 `ACCEPTED / DELIVERED / FAILED / SEND_EXCEPTION` 中选择；本地护栏拒绝不得刷新最近真实调用时间。
+4. `RATE_LIMITED / RETRY_COOLDOWN_ACTIVE / RETRY_LIMIT_REACHED / REPLAY_WINDOW_ACTIVE / FRESHNESS_WINDOW_EXPIRED / PROVIDER_CIRCUIT_OPEN` 等本地结果继续作为审计日志保留，但不得冒充供应商调用失败。
+5. 该内部契约不改 HTTP API、DTO、状态字段、schema、索引或迁移；供应商限流仍需后续以原子配额预留解决并发超额窗口。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

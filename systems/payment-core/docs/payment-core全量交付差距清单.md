@@ -2441,6 +2441,14 @@
 4. 服务与 Mapper 联合定向 `72` 项、payment-core 后端全量 `976` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。代码提交为 `619490df fix(payment-core): require alert delivery evidence`。
 5. 本轮不修改供应商容量统计、HTTP API、前端、schema、索引或迁移，也不清洗存量日志。无供应商成功证据的历史将允许补发，若供应商实际已接收但证据未落库则可能重复通知；上线前必须审计此类数据并验证供应商幂等，release 四项真实治理阻断不变。
 
+### 8.298 2026-09-12 告警本地护栏结果隔离进展
+
+1. 通道重试失败数、最近派发日志和供应商熔断失败数原先都会消费本地护栏拒绝日志；`RATE_LIMITED / RETRY_COOLDOWN_ACTIVE / PROVIDER_CIRCUIT_OPEN` 等未调用供应商的结果因此可以增加失败数、刷新冷却起点，甚至让熔断自我续期。
+2. 失败计数和供应商熔断现在只认真实通知调用的 `FAILED / SEND_EXCEPTION`；最近派发只从 `ACCEPTED / DELIVERED / FAILED / SEND_EXCEPTION` 四种通知结果中选择。
+3. 正式 Mapper 测试构造 2 条真实失败和 3 条更新的本地护栏拒绝，验证通道失败数和供应商熔断失败数均为 `2`，最近真实派发仍为 `SEND_EXCEPTION`。
+4. 联合定向测试首次暴露 H2 未注册 MySQL `STR_TO_DATE` 兼容函数，按既有 Mapper 测试模式补齐真实时间解析别名后，联合定向 `73` 项、后端全量 `977` 项通过；Mapper XML 和补丁检查通过。代码提交为 `2fd4e7e8 fix(payment-core): isolate alert guard outcomes`。
+5. 本轮无 HTTP API、前端、schema、索引或迁移变化，也未把供应商限流升级为原子配额预留；生产 MySQL 时间转换、存量结果码分布、真实熔断恢复和并发限流仍需独立验证，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
