@@ -330,14 +330,15 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     DispatchOutcome currentOutcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
                     paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
                             buildSourceAlertStatus(item, triggeredBy, currentOutcome));
-                    if (currentOutcome.hasConfirmedDelivery()) {
-                        acknowledgeSourceAlert(
+                    if (currentOutcome.hasConfirmedDelivery()
+                            && acknowledgeSourceAlert(
                                 item.getAlertNo(),
                                 item.getIssueNo(),
                                 "已确认",
                                 "success",
                                 triggeredBy,
-                                triggeredBy);
+                                triggeredBy) <= 0) {
+                        throw new IllegalStateException("明确送达告警的来源确认失败");
                     }
                     return currentOutcome;
                 });
@@ -1420,14 +1421,14 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 receiptUpdate.getTriggeredBy());
     }
 
-    private void acknowledgeSourceAlert(String sourceAlertNo,
-                                        String issueNo,
-                                        String ackStatus,
-                                        String ackStatusType,
-                                        String ackOperator,
-                                        String triggeredBy) {
+    private int acknowledgeSourceAlert(String sourceAlertNo,
+                                       String issueNo,
+                                       String ackStatus,
+                                       String ackStatusType,
+                                       String ackOperator,
+                                       String triggeredBy) {
         if (!StringUtils.hasText(sourceAlertNo) || !StringUtils.hasText(issueNo)) {
-            return;
+            return 0;
         }
         PaymentIssueAlertLogEntity sourceAckUpdate = new PaymentIssueAlertLogEntity();
         sourceAckUpdate.setAlertNo(sourceAlertNo.trim());
@@ -1436,7 +1437,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         sourceAckUpdate.setAckStatusType(ackStatusType);
         sourceAckUpdate.setAckOperator(ackOperator);
         sourceAckUpdate.setTriggeredBy(triggeredBy);
-        paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
+        return paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
     }
 
     private String buildReceiptReconcileSummary(int processedCount,

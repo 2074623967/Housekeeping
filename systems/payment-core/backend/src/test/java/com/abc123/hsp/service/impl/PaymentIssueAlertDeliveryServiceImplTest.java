@@ -131,6 +131,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(
                 buildDeliveryResult(
                         "IM-RECEIPT-DELIVERED", "DELIVERED", "企业微信已送达", "[IM] ISSUE-001"));
+        when(paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(
+                any(PaymentIssueAlertLogEntity.class))).thenReturn(1);
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -154,6 +156,39 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                                 && "支付运营".equals(source.getTriggeredBy())));
         Assertions.assertEquals(1, result.getSuccessCount());
         Assertions.assertEquals(0, result.getFailCount());
+    }
+
+    @Test
+    void shouldFailDirectDeliveryWhenMatchingSourceCannotBeConfirmed() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                .thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
+                .thenReturn(Collections.singletonList(buildProvider(
+                        "ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(
+                buildDeliveryResult(
+                        "IM-RECEIPT-DELIVERED", "DELIVERED", "企业微信已送达", "[IM] ISSUE-001"));
+        when(paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(
+                any(PaymentIssueAlertLogEntity.class))).thenReturn(0);
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("支付运营");
+
+        verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class));
+        Assertions.assertEquals(0, result.getSuccessCount());
+        Assertions.assertEquals(1, result.getFailCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("PIA-OUTBOX-001"));
     }
 
     @Test
