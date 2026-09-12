@@ -11296,3 +11296,30 @@
 1. 本地实现已具备结构化退款多尝试事实，不再依赖退款单当前投影解释历史渠道请求。
 2. `refundAttemptNo` 只是每轮商户请求身份，不表示渠道已收到、受理或完成退款；`UNKNOWN` 仍必须先核查，不能直接重发。
 3. 本地 H2/MySQL 模式测试不替代生产 MySQL 迁移演练、真实渠道幂等与查单协议、退款到账、渠道账单及财务对账核验，release 四项真实阻断不变。
+
+## 420. 2026-09-12 退款查单轮次确定关联 V1.0 验证
+
+### 420.1 本轮补强
+
+1. 退款操作日志新增可空 `refundAttemptNo` 持久化列；渠道提交、提交失败/未知、主动查单、查单失败/终态、UNKNOWN 受理恢复和回调终态均记录已有尝试上下文。
+2. 自动查单退避从“退款单号 + 日志时间不早于尝试创建时间”改为按 `refundAttemptNo` 精确聚合，消除秒级时间相等导致的旧轮次次数继承。
+3. 主动查单发起时保存预期尝试号，渠道返回后在退款单行锁内与当前最新尝试复核；期间已切换尝试时拒绝旧结果，不产生受理、终态或日志副作用。
+4. MySQL 增量迁移只为唯一尝试退款回填历史渠道日志；无法可靠区分轮次的多尝试旧日志不做推断。
+
+### 420.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 定向测试 | `RefundServiceImplTest,PaymentEventDispatchServiceImplTest,PaymentTaskCenterMapperIntegrationTest` 共 `106` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 后端全量测试 | `932` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `RefundMapper.xml`、`PaymentTaskCenterMapper.xml` 的 `xmllint` 及 `git diff --check` 通过 |
+| schema 检查 | 双份 `t_refund_operation_log` 新增列和索引定义一致 |
+| 代码提交 | `7437cf1d fix(payment-core): isolate refund query attempts` |
+
+新增用例显式构造旧查询日志与新尝试 `created_at` 同秒，验证旧日志不会进入新尝试退避；另模拟外部查单期间当前尝试从 `RFA-001` 切换到 `RFA-002`，验证旧结果在任何写操作前被拒绝。
+
+### 420.3 当前判断
+
+1. 退款查询事实和自动退避已使用确定的尝试身份，不再依赖秒级时间近似关联。
+2. 单机 H2/Mockito 证明当前 Mapper 与服务分支，不证明生产 MySQL 在线 DDL、历史回填行数、多实例锁时序或真实渠道超时返回；上线前仍需备份、抽样和回滚演练。
+3. 本轮不证明真实渠道受理、退款到账、渠道账单或财务对账一致性，release 四项真实阻断不变。

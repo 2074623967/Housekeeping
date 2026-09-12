@@ -1529,7 +1529,14 @@ t_order
 3. 唯一键包括 `uk_refund_attempt_no` 与 `uk_refund_attempt_channel_no(channel_code, channel_refund_no)`，查询索引为 `idx_refund_attempt_order_created(refund_order_id, created_at, id)`；退款详情与回调按 `created_at DESC, id DESC` 选当前尝试。
 4. `t_refund_order.channel_*` 只保存当前尝试投影。投影更新必须校验目标尝试为最新、已 `ACCEPTED`，且渠道和渠道退款号与尝试事实一致；历史尝试不被覆盖。
 5. 迁移 `2026-09-12-add-refund-attempt.sql` 为既有 `PROCESSING/SUCCESS/FAIL` 退款各回填一条尝试，只读取最新旧退款提交事件，并将旧事件 `biz_no` 改为尝试号；缺失渠道使用明确占位 `legacy_unknown`，不推断真实渠道。
-6. 自动查单退避按当前尝试创建时间切分查询日志，避免新尝试继承旧尝试次数。生产执行前仍需备份、行数核对、重复事件抽样和回滚演练；本地 H2 不证明生产 MySQL 迁移结果。
+6. 自动查单退避必须按当前尝试隔离查询日志；初版时间切分已由 4.178 的明确尝试号关联替代。生产执行前仍需备份、行数核对、重复事件抽样和回滚演练；本地 H2 不证明生产 MySQL 迁移结果。
+
+### 4.178 退款操作日志尝试关联边界
+
+1. `t_refund_operation_log` 新增可空 `refund_attempt_no VARCHAR(64)`；申请、审核和失败重试等发生在尝试创建前或不属于单轮渠道交互的动作可为空，已有尝试上下文的渠道动作写入明确编号。
+2. 新增 `idx_refund_operation_attempt_action_created(refund_attempt_no, action_code, created_at)`，自动退避按当前尝试号聚合 `CHANNEL_QUERY / CHANNEL_QUERY_FAILED`，不再使用秒级 `created_at` 比较推断归属。
+3. 迁移只对恰好存在一条 `t_refund_attempt` 的退款单回填历史渠道日志；多尝试退款的旧日志无法由现有字段可靠还原轮次，保持 `NULL` 比错误归属更符合审计真实性。
+4. 多尝试旧日志不参与新轮次退避，可能在升级后产生一次额外自动查单；共享数据库渠道限流仍是容量末端保护。生产执行前必须核对空值分布、候选量和限流参数，本地测试不替代在线 DDL 与回填演练。
 
 ## 5. 状态建议
 

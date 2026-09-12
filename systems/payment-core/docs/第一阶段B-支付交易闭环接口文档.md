@@ -3883,6 +3883,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `UNKNOWN` 尝试没有渠道退款号时允许按 `refundAttemptNo + refundOrderId + channelCode` 主动查单；可信结果返回渠道退款号后先恢复当前尝试受理事实，再确认未知 outbox 和退款终态。
 5. 回调继续兼容 `refundOrderId + channelRefundNo`，但服务端会查找渠道退款号所属历史尝试；若不属于当前最新尝试，返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`，不得更新退款终态。
 
+### 14.247 退款主动查单尝试快照一致性契约
+
+1. `POST /api/refunds/query` 的请求与响应字段不变；服务端读取查询资格时同时固定当前 `refundAttemptNo`，渠道返回后必须在退款单行锁内再次确认该尝试仍为最新尝试。
+2. 外部调用期间退款终态失败并已创建新尝试时，旧查单结果固定返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`；即使渠道退款号尚未被任何历史尝试绑定，也不得将旧结果补录到新尝试。
+3. 拒绝发生在尝试受理绑定、退款单投影更新、UNKNOWN outbox 确认、退款终态更新和操作日志写入之前；共享渠道限流已在外部调用前占用的配额不回退。
+4. 渠道查询成功、失败和处理中日志均关联发起查询时的 `refundAttemptNo`；自动补偿退避仅统计当前尝试的 `CHANNEL_QUERY / CHANNEL_QUERY_FAILED`，不再按时间边界推断轮次。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
