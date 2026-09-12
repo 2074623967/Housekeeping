@@ -2433,6 +2433,14 @@
 4. 服务与 Mapper 联合定向 `71` 项、payment-core 后端全量 `975` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。代码提交为 `2e99fc1a fix(payment-core): validate alert delivery history`。
 5. 本轮无 HTTP API、Java 接口、前端、schema、索引或迁移变化；相关 `EXISTS` 的生产 MySQL 执行计划、存量畸形数据规模、真实供应商历史与生产稳定性仍需独立验证，release 四项真实治理阻断不变。
 
+### 8.297 2026-09-12 告警派发成功证据收紧进展
+
+1. 历史归属已经可验证，但通道成功去重和服务防重放原先仍只要本地 `alert_status=已派发` 即视为成功；供应商状态缺失或明确失败的畸形历史因此可以永久阻断真实补发。
+2. 成功去重现在同时要求合法顶层来源归属、本地已派发与 `provider_delivery_status IN ('ACCEPTED', 'DELIVERED')`；最近日志防重放也只认这两种经规范化的供应商成功证据。
+3. 正式 Mapper 测试覆盖同异常顶层来源下 `NULL / FAILED` 不构成成功、`ACCEPTED / DELIVERED` 继续构成成功；服务测试验证最新“已派发 + FAILED”日志不命中防重放并可调用通知器补发。
+4. 服务与 Mapper 联合定向 `72` 项、payment-core 后端全量 `976` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。代码提交为 `619490df fix(payment-core): require alert delivery evidence`。
+5. 本轮不修改供应商容量统计、HTTP API、前端、schema、索引或迁移，也不清洗存量日志。无供应商成功证据的历史将允许补发，若供应商实际已接收但证据未落库则可能重复通知；上线前必须审计此类数据并验证供应商幂等，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
