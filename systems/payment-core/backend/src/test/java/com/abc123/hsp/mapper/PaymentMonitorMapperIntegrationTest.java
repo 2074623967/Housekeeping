@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentChannelMetricDTO;
 import com.abc123.hsp.dto.PaymentMonitorSummaryDTO;
+import com.abc123.hsp.dto.PaymentTrendPointDTO;
 import java.io.InputStream;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -136,9 +138,33 @@ class PaymentMonitorMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldLimitRecentTrendsToSevenCalendarDays() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "channel_code, payment_method, status, amount, created_at) VALUES "
+                    + "('channel-a', 'method-a', 'SUCCESS', 20.00, DATEADD('DAY', -6, CURRENT_TIMESTAMP)), "
+                    + "('channel-a', 'method-a', 'SUCCESS', 30.00, DATEADD('DAY', -7, CURRENT_TIMESTAMP)), "
+                    + "('channel-a', 'method-a', 'SUCCESS', 40.00, DATEADD('DAY', 1, CURRENT_TIMESTAMP))");
+
+            List<PaymentTrendPointDTO> trends = session.getMapper(PaymentMonitorMapper.class)
+                    .findRecentTrends();
+
+            assertEquals(2, trends.size());
+            assertEquals(LocalDate.now().toString(), trends.get(0).getStatDate());
+            assertEquals(Integer.valueOf(6), trends.get(0).getTotalCount());
+            assertEquals(LocalDate.now().minusDays(6).toString(), trends.get(1).getStatDate());
+            assertEquals(Integer.valueOf(1), trends.get(1).getTotalCount());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
+            statement.execute("CREATE ALIAS IF NOT EXISTS DATE_FORMAT FOR \""
+                    + PaymentTaskCenterMapperIntegrationTest.class.getName()
+                    + ".dateFormat\"");
             statement.execute("CREATE ALIAS IF NOT EXISTS FORMAT FOR \""
                     + PaymentReturnCodeSnapshotMapperIntegrationTest.class.getName()
                     + ".format\"");
@@ -147,7 +173,8 @@ class PaymentMonitorMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64), "
-                    + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2))");
+                    + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2), "
+                    + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_channel_config ("

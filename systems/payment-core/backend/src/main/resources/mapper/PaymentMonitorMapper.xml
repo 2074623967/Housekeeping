@@ -50,6 +50,8 @@
                SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS successCount,
                CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0), 2)) AS successAmount
         FROM t_payment_order
+        WHERE created_at &gt;= CURDATE() - INTERVAL '6' DAY
+          AND created_at &lt; CURDATE() + INTERVAL '1' DAY
         GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
         ORDER BY statDate DESC
         LIMIT 7
