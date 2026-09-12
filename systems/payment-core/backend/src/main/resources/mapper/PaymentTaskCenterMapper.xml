@@ -31,6 +31,16 @@
             ), 0) AS failedEventCount,
             COALESCE((
                 SELECT COUNT(1)
+                FROM t_payment_event
+                WHERE publish_status = 'FAILED'
+            ), 0) AS retryableFailedEventCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_event
+                WHERE publish_status = 'DEAD_LETTER'
+            ), 0) AS deadLetterEventCount,
+            COALESCE((
+                SELECT COUNT(1)
                 FROM t_refund_order
                 WHERE status = 'FAIL'
             ), 0) AS failedRefundCount,

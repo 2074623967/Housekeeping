@@ -78,6 +78,28 @@ class PaymentTaskCenterServiceImplTest {
     private TransactionStatus transactionStatus;
 
     @Test
+    void shouldExposeRetryableAndDeadLetterEventsAsImmediateP1Alert() {
+        PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
+        summary.setFailedEventCount(5);
+        summary.setRetryableFailedEventCount(2);
+        summary.setDeadLetterEventCount(3);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(summary);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(2, overview.getRetryableFailedEventCount());
+        Assertions.assertEquals(3, overview.getDeadLetterEventCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_EVENT".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("可批量重发 2 条")
+                        && alert.getAlertMessage().contains("死信人工处置 3 条")
+                        && "/payment-events?publishStatus=DEAD_LETTER"
+                        .equals(alert.getActionRoute())));
+    }
+
+    @Test
     void shouldExposeRetryableAndBlockedFailedRefundsAsImmediateP1Alert() {
         PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
         summary.setFailedRefundCount(5);

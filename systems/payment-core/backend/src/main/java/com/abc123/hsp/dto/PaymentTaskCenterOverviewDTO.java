@@ -71,8 +71,12 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer issueAlertReceiptTimeoutMinutes;
     /** 最近查单小时趋势。 */
     private List<PaymentQueryTrendPointDTO> queryTrends;
-    /** 失败事件数。 */
+    /** 失败与死信事件总数。 */
     private Integer failedEventCount;
+    /** 当前可由人工批量重发的失败事件数。 */
+    private Integer retryableFailedEventCount;
+    /** 已停止批量重试、需要人工处置的死信事件数。 */
+    private Integer deadLetterEventCount;
     /** 退款提交结果未知、禁止直接重试的事件数。 */
     private Integer unknownRefundSubmitEventCount;
     /** 失败退款数。 */

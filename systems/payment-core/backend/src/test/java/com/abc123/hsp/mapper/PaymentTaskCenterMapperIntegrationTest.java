@@ -75,6 +75,33 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldPartitionFailedAndDeadLetterEventsByBatchRetryEligibility() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_event("
+                    + "event_no, payment_order_id, biz_no, event_type, publish_status, created_at) VALUES "
+                    + "('EVT-RETRYABLE-1', 'PAY-EVENT-1', 'PAY-EVENT-1', "
+                    + "'PAYMENT_SUCCESS', 'FAILED', NOW()), "
+                    + "('EVT-RETRYABLE-2', 'PAY-EVENT-2', 'PAY-EVENT-2', "
+                    + "'PAYMENT_SUCCESS', 'FAILED', NOW()), "
+                    + "('EVT-DEAD-1', 'PAY-EVENT-3', 'PAY-EVENT-3', "
+                    + "'PAYMENT_SUCCESS', 'DEAD_LETTER', NOW()), "
+                    + "('EVT-DEAD-2', 'PAY-EVENT-4', 'PAY-EVENT-4', "
+                    + "'PAYMENT_SUCCESS', 'DEAD_LETTER', NOW()), "
+                    + "('EVT-DEAD-3', 'PAY-EVENT-5', 'PAY-EVENT-5', "
+                    + "'PAYMENT_SUCCESS', 'DEAD_LETTER', NOW())");
+
+            PaymentTaskCenterOverviewDTO overview = session
+                    .getMapper(PaymentTaskCenterMapper.class)
+                    .findOverviewSummary();
+
+            assertEquals(5, overview.getFailedEventCount());
+            assertEquals(2, overview.getRetryableFailedEventCount());
+            assertEquals(3, overview.getDeadLetterEventCount());
+        }
+    }
+
+    @Test
     void shouldPartitionFailedRefundsByBatchRetryEligibility() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

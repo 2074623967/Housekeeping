@@ -33,6 +33,8 @@ const overview = ref({
   issueAlertReceiptTimeoutMinutes: 30,
   queryTrends: [],
   failedEventCount: 0,
+  retryableFailedEventCount: 0,
+  deadLetterEventCount: 0,
   unknownRefundSubmitEventCount: 0,
   failedRefundCount: 0,
   retryableFailedRefundCount: 0,
@@ -244,6 +246,7 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">失败事件</div>
             <div class="detail-value">{{ overview.failedEventCount }}</div>
+            <div class="meta">可批量重发 {{ overview.retryableFailedEventCount }} · 死信 {{ overview.deadLetterEventCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">退款提交待核查</div>
@@ -469,13 +472,13 @@ onMounted(loadOverview);
 
             <div class="sub-panel">
               <h3>失败事件重发</h3>
-              <p>针对下游账户、清分、结算未成功投递的支付事件执行统一重发，减少跨系统状态分叉。</p>
+              <p>仅批量重发仍为 FAILED 的下游投递事件；DEAD_LETTER 已停止批量重试，须进入事件页或死信补偿任务受控处置。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.retryableFailedEventCount === 0"
                 @click="runTask('PAYMENT_EVENT_RETRY', '失败事件重发', paymentTaskCenterApi.runRepublishFailedEvents)"
               >
-                {{ activeTaskCode === "PAYMENT_EVENT_RETRY" ? "执行中..." : "执行事件重发" }}
+                {{ activeTaskCode === "PAYMENT_EVENT_RETRY" ? "执行中..." : overview.retryableFailedEventCount === 0 ? "暂无可重发事件" : `执行事件重发（${overview.retryableFailedEventCount}）` }}
               </button>
             </div>
 
@@ -583,9 +586,19 @@ onMounted(loadOverview);
                   <td>近 {{ overview.queryMonitorWindowHours }} 小时共享渠道配额耗尽次数；不计入渠道失败率</td>
                 </tr>
                 <tr>
-                  <td>失败事件</td>
+                  <td>失败与死信事件总数</td>
                   <td>{{ overview.failedEventCount }}</td>
                   <td>影响账务、清分、结算跨系统同步</td>
+                </tr>
+                <tr>
+                  <td>失败事件可批量重发</td>
+                  <td>{{ overview.retryableFailedEventCount }}</td>
+                  <td>仅包含 FAILED，由任务中心有界批次重发</td>
+                </tr>
+                <tr>
+                  <td>死信事件</td>
+                  <td>{{ overview.deadLetterEventCount }}</td>
+                  <td>已退出批量重试，须进入事件页或死信补偿任务受控处置</td>
                 </tr>
                 <tr>
                   <td>退款提交结果待核查</td>

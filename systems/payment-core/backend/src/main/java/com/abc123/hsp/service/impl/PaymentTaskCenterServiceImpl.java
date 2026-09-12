@@ -1516,6 +1516,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 overview.getRecentQueryRateLimitRejectionCount());
         double recentQueryFailureRate = percentage(recentQueryFailureCount, recentQueryCount);
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
+        int retryableFailedEventCount = valueOrZero(overview.getRetryableFailedEventCount());
+        int deadLetterEventCount = valueOrZero(overview.getDeadLetterEventCount());
         int failedRefundCount = valueOrZero(overview.getFailedRefundCount());
         int retryableFailedRefundCount = valueOrZero(overview.getRetryableFailedRefundCount());
         int blockedFailedRefundCount = valueOrZero(overview.getBlockedFailedRefundCount());
@@ -1609,12 +1611,21 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         ));
         alerts.add(buildAlert(
                 "PAYMENT_EVENT",
-                "失败事件待重发",
+                "失败事件待处置",
                 failedEventCount,
-                failedEventCount > 0 ? "存在失败事件，建议重发后回看下游收口" : "暂无失败事件",
-                "/payment-task-center",
-                failedEventCount > 5 ? "P1" : "P2",
-                failedEventCount > 5 ? "danger" : "warn"
+                failedEventCount > 0
+                        ? String.format("存在 %d 条失败或死信事件：可批量重发 %d 条、死信人工处置 %d 条",
+                        failedEventCount, retryableFailedEventCount, deadLetterEventCount)
+                        : "暂无失败或死信事件",
+                deadLetterEventCount > 0
+                        ? "/payment-events?publishStatus=DEAD_LETTER"
+                        : "/payment-events?publishStatus=FAILED",
+                deadLetterEventCount > 0 || failedEventCount > 5
+                        ? "P1"
+                        : failedEventCount > 0 ? "P2" : "P3",
+                deadLetterEventCount > 0 || failedEventCount > 5
+                        ? "danger"
+                        : failedEventCount > 0 ? "warn" : "success"
         ));
         alerts.add(buildAlert(
                 "REFUND_SUBMIT_UNKNOWN",
