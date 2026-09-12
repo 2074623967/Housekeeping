@@ -2409,6 +2409,14 @@
 4. 正式 Mapper 测试验证错误来源号和嵌套来源最终更新均返回 `0`，已确认的同异常顶层来源仍可保存终态；服务测试断言最终更新对象携带来源号和异常号。代码提交为 `67b300a7 fix(payment-core): fence final alert receipts`。
 5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 H2 不证明生产 MySQL 派生表物化、执行计划、锁竞争、真实供应商回执或生产稳定性，release 四项真实治理阻断不变。
 
+### 8.294 2026-09-12 告警回执尝试完成来源围栏进展
+
+1. claim 与最终 `DELIVERED` 更新已经绑定来源身份元组，但未送达、失败或限流结果的完成尝试更新仍只要求来源号非空；错误来源、错异常或嵌套来源在被直接置为 `QUERYING` 后仍可能写入查询结果和退避时间。
+2. 完成尝试 Mapper 现在显式接收并匹配 `alertNo + sourceAlertNo + issueNo`，同一语句验证来源真实存在、属于同一异常且是顶层 `IN_APP_OUTBOX`；服务从原候选透传来源号与异常号，不在写入阶段重新推导。
+3. 来源确认状态不作为完成尝试的拒绝条件：合法 claim 后来源若被另一动作确认，本次已经发生的供应商查询结果仍可审计落库；外发行自身仍须保持已派发、`ACCEPTED`、待确认、次数匹配和 `QUERYING`。
+4. 正式 Mapper 测试验证孤立、错异常、错误来源号和嵌套来源完成尝试均返回 `0`，已确认的同异常顶层来源仍返回 `1`；既有退避、次数耗尽、人工强制、适配器缺失、查询异常和限流失败路径保持通过。代码提交为 `06d8c962 fix(payment-core): fence receipt attempt completion`。
+5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 mock/H2 不证明生产 MySQL 派生表物化、执行计划、锁竞争、真实供应商查询或生产稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
