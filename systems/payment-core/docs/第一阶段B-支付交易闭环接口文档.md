@@ -4521,6 +4521,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 管理端按钮状态与文案使用 `retryableFailedEventCount`，总风险和死信数即使不可批量执行也必须持续展示。总览与实际执行之间的状态变化由执行端重新查询候选裁决。
 5. 本轮不新增数据库字段、索引或迁移。接口字段只描述 payment-core 本地事件状态和任务资格，不证明真实 MQ 已重投、下游已消费、账务已处理或资金一致。
 
+### 14.327 超时关单当前候选展示契约
+
+1. `GET /api/payment-task-center/overview` 的 `expiredPaymentCount / dueExpiredPaymentCount / backingOffExpiredPaymentCount` 分别表示全部合格超时积压、当前已到重试时间的候选和失败退避未到期集合，并满足总数等于两类分项之和。
+2. `POST /api/payment-task-center/close-expired-payments` 与自动调度共用同一候选服务，只查询无重试标记或 `next_retry_at <= NOW()` 的记录；人工调用不越过失败退避，也不接受页面数量作为候选参数。
+3. 管理端按钮状态和文案使用 `dueExpiredPaymentCount`，总积压与退避数即使不可立即执行也必须持续展示；候选为零时禁止页面触发空批次。
+4. 总览读取与任务执行之间允许发生并发状态变化，实际 `processedCount` 以执行时 SQL 为准，不承诺等于此前页面快照，也不得为保持相等而锁住全部积压。
+5. 本轮不新增或修改 HTTP 字段、候选 SQL、状态机、schema、索引或迁移；页面固定样例不证明真实关单、渠道状态、多实例行为或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
