@@ -47,14 +47,16 @@ class PaymentDayEndPaymentSuccessFactsMapperIntegrationTest {
     }
 
     @Test
-    void shouldCountOnlySuccessOrdersWhoseLatestAttemptFactsMismatch() {
+    void shouldCountSuccessFactMismatchesBySuccessDate() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentDayEndMapper mapper = session.getMapper(PaymentDayEndMapper.class);
 
-            assertEquals(Integer.valueOf(3),
+            assertEquals(Integer.valueOf(4),
                     mapper.countPaymentSuccessFactMismatchByDate("2026-09-11"));
             assertEquals(Integer.valueOf(0),
                     mapper.countPaymentSuccessFactMismatchByDate("2026-09-12"));
+            assertEquals(Integer.valueOf(0),
+                    mapper.countPaymentSuccessFactMismatchByDate("2026-09-10"));
             assertEquals(Integer.valueOf(1),
                     mapper.countMissingPaymentSuccessTimeByDate("2026-09-11"));
         }
@@ -74,6 +76,7 @@ class PaymentDayEndPaymentSuccessFactsMapperIntegrationTest {
                     + "('PAY-NO-ATTEMPT', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 00:00:00'), "
                     + "('PAY-STATUS-MISMATCH', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 09:00:00'), "
                     + "('PAY-NO-COMPLETION', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 09:00:00'), "
+                    + "('PAY-CROSS-DAY-MISMATCH', 'SUCCESS', '2026-09-11 00:00:00', '2026-09-10 23:00:00'), "
                     + "('PAY-TIME-ONLY', 'SUCCESS', NULL, '2026-09-11 09:00:00'), "
                     + "('PAY-CLOSED', 'CLOSED', NULL, '2026-09-11 09:00:00'), "
                     + "('PAY-NEXT-DAY', 'SUCCESS', '2026-09-12 10:00:00', '2026-09-12 00:00:00')");

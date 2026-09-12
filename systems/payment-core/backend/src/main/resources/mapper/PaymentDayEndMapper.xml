@@ -390,8 +390,8 @@
     <select id="countPaymentSuccessFactMismatchByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE payment_order.created_at &gt;= CAST(#{bizDate} AS DATETIME)
-          AND payment_order.created_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND NOT EXISTS (
               SELECT 1
