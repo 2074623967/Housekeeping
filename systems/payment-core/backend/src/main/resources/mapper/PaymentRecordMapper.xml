@@ -15,6 +15,31 @@
         ) refund_summary ON refund_summary.payment_order_id = p.payment_order_id
     </sql>
 
+    <sql id="paymentRecordOrder">
+        <choose>
+            <when test="query.sortField == 'paymentAmount'">
+                ORDER BY p.amount
+            </when>
+            <when test="query.sortField == 'paidAt'">
+                ORDER BY
+                CASE WHEN p.status = 'SUCCESS' THEN p.created_at ELSE NULL END
+            </when>
+            <otherwise>
+                ORDER BY p.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC,
+                p.id ASC
+            </when>
+            <otherwise>
+                DESC,
+                p.id DESC
+            </otherwise>
+        </choose>
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentRecordRowDTO">
         SELECT p.id AS serialNo,
                p.payment_order_id AS paymentOrderId,
@@ -109,26 +134,7 @@
                 AND p.channel_code LIKE CONCAT('%', #{query.paymentChannel}, '%')
             </if>
         </where>
-        <choose>
-            <when test="query.sortField == 'paymentAmount'">
-                ORDER BY p.amount
-            </when>
-            <when test="query.sortField == 'paidAt'">
-                ORDER BY
-                CASE WHEN p.status = 'SUCCESS' THEN p.created_at ELSE NULL END
-            </when>
-            <otherwise>
-                ORDER BY p.created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="paymentRecordOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
@@ -239,13 +245,13 @@
                pa.response_payload AS latestResponsePayload
         FROM t_payment_order p
         <include refid="successRefundSummaryJoin"/>
-        LEFT JOIN t_payment_attempt pa
-            ON pa.payment_order_id = p.payment_order_id
-           AND pa.created_at = (
-               SELECT MAX(inner_pa.created_at)
-               FROM t_payment_attempt inner_pa
-               WHERE inner_pa.payment_order_id = p.payment_order_id
-           )
+        LEFT JOIN t_payment_attempt pa ON pa.id = (
+            SELECT inner_pa.id
+            FROM t_payment_attempt inner_pa
+            WHERE inner_pa.payment_order_id = p.payment_order_id
+            ORDER BY inner_pa.created_at DESC, inner_pa.id DESC
+            LIMIT 1
+        )
         WHERE p.payment_order_id = #{paymentOrderId}
         LIMIT 1
     </select>
