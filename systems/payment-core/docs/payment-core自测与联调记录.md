@@ -12345,3 +12345,32 @@
 1. 待回查监控、明细、自动调度、人工读取和条件更新现在共享同一来源关联不变量；即使绕过正常 claim 前置流程构造查询中状态，孤立外发日志也不能完成尝试或写入最终回执。
 2. 来源号只证明本地外发日志与来源告警建立关联，不证明供应商已真实受理或最终送达；生产数据仍需独立清洗与核验。
 3. 本地 H2 不证明真实供应商回执、人员响应、告警处置或生产稳定性；release 四项真实治理阻断不变。
+
+## 457. 2026-09-12 告警派发与回执状态接续 V1.0 验证
+
+### 457.1 本轮补强
+
+1. 修正外发日志生成状态：供应商 `ACCEPTED` 写为待确认，失败结果保持无需回执，使正式派发输出能进入既有回执候选。
+2. 首次派发直接取得 `DELIVERED` 时，在来源派发状态更新后确认同异常顶层 outbox；来源确认未命中则本条失败闭合。
+3. 异步回查确认来源时补齐 `issueNo`，Mapper 同时校验来源号、异常号、顶层 outbox、站内通道和待确认状态。
+
+### 457.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| `ACCEPTED` 生成状态 | 三通道外发日志均为 `已派发 / 待确认 / warn` |
+| 失败生成状态 | 主供应商 `FAILED` 日志保持 `派发失败 / 无需回执 / info`，备用 `ACCEPTED` 正确进入待确认 |
+| 首次 `DELIVERED` | 先更新来源派发状态，再以同一 `alertNo + issueNo` 确认来源，操作人使用规范化后的实际发起声明 |
+| 直接确认失败闭合 | 来源确认影响 `0` 行时批次记失败并保留来源告警号，不计成功 |
+| 来源关联防护 | 同异常顶层 outbox 更新 `1` 行；错异常和带父来源号的嵌套 outbox 均更新 `0` 行 |
+| 服务与 Mapper 联合定向 | `PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterMapperIntegrationTest` `66` 项通过 |
+| payment-core 后端全量测试 | `970` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentTaskCenterMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 调整服务状态映射、派发结果和来源确认谓词；无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `7fc7d7a1 fix(payment-core): queue accepted alert receipts`；`712f589e fix(payment-core): confirm direct alert deliveries`；`3ee427ce fix(payment-core): fail closed direct alert confirmation` |
+
+### 457.3 当前判断
+
+1. 真实派发生成的 `ACCEPTED` 日志现在与回查候选契约接通，不再依赖测试手工制造待确认状态。
+2. 首次明确 `DELIVERED` 不再悬空来源确认，且错异常、嵌套来源或并发不命中不能被报告为成功。
+3. 本地 mock 与 H2 只证明内部状态映射、调用顺序和 SQL 条件，不证明供应商真实受理、最终送达、人员响应或生产稳定性；release 四项真实治理阻断不变。

@@ -2369,6 +2369,14 @@
 4. 正式 Mapper 集成测试 `16` 项、payment-core 后端全量 `967` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。实现提交为 `b6e96d21 fix(payment-core): reject orphan alert receipts`，直接写入防护测试提交为 `ff7f5968 test(payment-core): cover orphan receipt write guards`。
 5. 本轮无 API、前端、持久化状态机、schema、索引或迁移变化；本地 H2 不证明真实供应商回执、最终送达、人员响应或生产稳定性。统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
 
+### 8.289 2026-09-12 告警派发与回执状态接续进展
+
+1. 正式派发服务原先把所有外发日志固定写为“无需回执”，导致通知器明确返回 `ACCEPTED` 后虽记录“已派发”，却不满足待回查 SQL 的“待确认”条件；既有 Mapper 测试手工构造待确认对象，未覆盖真实生成断点。
+2. 外发日志现在按供应商状态分流：`ACCEPTED` 写“待确认/warn”并进入后续回查，失败结果继续写“无需回执/info”；服务测试直接断言三通道受理和主失败、备用受理两种真实构造结果。
+3. 通知器首次明确返回 `DELIVERED` 时，派发结果携带已确认送达信号，在来源派发状态更新后、同一逐条事务内确认来源 outbox；来源确认影响 `0` 行时本条失败闭合，不再报告虚假成功。
+4. 来源确认 SQL 新增 `issue_no` 等值和 `source_alert_no IS NULL` 约束，只允许确认同一异常的顶层 `IN_APP_OUTBOX`；正式 Mapper 测试验证错异常和嵌套 outbox 均影响 `0` 行。实现提交为 `7fc7d7a1`、`712f589e`、`3ee427ce`。
+5. 服务与 Mapper 联合定向 `66` 项通过，payment-core 后端全量 `970` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 API、前端、schema、索引或迁移变化，本地 mock/H2 不证明真实供应商受理、送达、人员响应或生产稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

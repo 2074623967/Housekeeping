@@ -4160,6 +4160,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 本轮不改变任何 HTTP API、请求或响应 DTO、持久化状态值及错误码；拒绝执行表现为候选不可见、按号读取为空或条件更新影响行数为 `0`。正式 Mapper 测试必须直接覆盖 claim、完成尝试和最终回执三类写入拒绝，不能只依赖正常服务调用顺序间接证明。
 5. 该约束只保证 payment-core 不处理缺少本地来源链路的回执对象，不构成真实供应商受理、最终送达、人员响应或生产稳定性证明。
 
+### 14.284 告警派发与回执状态接续契约
+
+1. 通知器返回并经服务规范化的 `ACCEPTED` 必须落为外发日志 `alert_status=已派发`、`ack_status=待确认`、`ack_status_type=warn`，从而进入既有人工和自动回执回查；不得再写为无需回执。
+2. 派发失败及配置、限流、熔断、重放等失败闭合结果继续写 `ack_status=无需回执`、`ack_status_type=info`，不得进入待回查总量、候选或状态更新。
+3. 通知器首次响应已明确为 `DELIVERED` 时无需后续回查；服务必须在同一告警逐条事务中先保存外发日志、更新来源派发状态，再确认来源 outbox。来源确认影响 `0` 行时本条计失败并回滚当前事务。
+4. 来源确认必须同时匹配来源 `alert_no`、外发日志 `issue_no`、`alert_channel=IN_APP_OUTBOX`、`source_alert_no IS NULL` 和 `ack_status=待确认`；错异常、升级 outbox、已确认或不存在的来源不得被联动确认。
+5. 本轮不改变 HTTP API、DTO、持久化状态集合、schema、索引或迁移；本地测试结果不构成供应商真实受理、最终送达、人员响应或生产稳定性证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
