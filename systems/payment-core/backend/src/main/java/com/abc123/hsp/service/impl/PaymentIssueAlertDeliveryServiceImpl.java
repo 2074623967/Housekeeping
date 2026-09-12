@@ -1193,6 +1193,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         int previousAttemptCount = normalizeReceiptQueryCount(acceptedLog.getReceiptQueryCount());
         int claimed = paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 acceptedLog.getAlertNo(),
+                acceptedLog.getSourceAlertNo().trim(),
+                acceptedLog.getIssueNo().trim(),
                 previousAttemptCount,
                 RUN_MODE_MANUAL.equals(runMode),
                 receiptQueryMaxAttempts,

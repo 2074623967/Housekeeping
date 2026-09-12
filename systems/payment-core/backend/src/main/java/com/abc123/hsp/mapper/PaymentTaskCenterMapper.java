@@ -255,9 +255,11 @@ public interface PaymentTaskCenterMapper {
             @Param("batchSize") int batchSize);
 
     /**
-     * 在外部查询前条件占用单条回查记录并递增尝试次数。
+     * 在外部查询前按来源身份链条件占用单条回查记录并递增尝试次数。
      */
     int claimIssueAlertReceiptQuery(@Param("alertNo") String alertNo,
+                                    @Param("sourceAlertNo") String sourceAlertNo,
+                                    @Param("issueNo") String issueNo,
                                     @Param("expectedAttemptCount") int expectedAttemptCount,
                                     @Param("manual") boolean manual,
                                     @Param("maxAttempts") int maxAttempts,

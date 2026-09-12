@@ -1388,11 +1388,24 @@
             next_receipt_query_at = TIMESTAMPADD(SECOND, #{claimTimeoutSeconds}, NOW()),
             receipt_query_result = 'QUERYING'
         WHERE alert_no = #{alertNo}
-          AND source_alert_no IS NOT NULL
+          AND source_alert_no = #{sourceAlertNo}
+          AND issue_no = #{issueNo}
           AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
+          AND source_alert_no IN (
+            SELECT source_alert.alert_no
+            FROM (
+                <!-- DISTINCT 阻止 MySQL 合并同表派生查询，避免触发目标表更新限制。 -->
+                SELECT DISTINCT alert_no, issue_no
+                FROM t_payment_issue_alert_log
+                WHERE alert_channel = 'IN_APP_OUTBOX'
+                  AND source_alert_no IS NULL
+                  AND ack_status = '待确认'
+            ) source_alert
+            WHERE source_alert.issue_no = #{issueNo}
+          )
           AND receipt_query_count = #{expectedAttemptCount}
           AND (
             receipt_query_result IS NULL
