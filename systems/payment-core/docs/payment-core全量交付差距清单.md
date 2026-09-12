@@ -2659,6 +2659,15 @@
 5. 两份 schema 与迁移 `2026-09-12-add-payment-success-fact-guard.sql` 同步完成。定向后端 `52` 项、后端全量 `1058` 项、管理端 `30` 项、Vite 生产构建、三份 Mapper XML 与补丁检查通过；代码提交为 `340de51b feat(payment-core): patrol payment success facts`。
 6. 本轮不自动修复历史不一致，也不证明渠道实际扣款、渠道账单、清分、账务入账或资金一致；目标 MySQL 迁移、执行计划、历史分布和运营处置仍需真实环境验证，release 四项治理阻断不变。
 
+### 8.324 2026-09-12 支付日终账期查询可索引化进展
+
+1. 审计发现日终支付创建、支付成功、退款申请和退款成功共 `21` 个账期条件均使用 `DATE(time_column)=bizDate`，在索引列外包函数，数据量增长后可能削弱现有时间索引并放大日终扫描成本。
+2. 全部条件统一改为 `[bizDate 00:00:00, 次日 00:00:00)` 半开区间，索引列保持裸字段，仅对绑定日期常量执行 `CAST` 和 `TIMESTAMPADD`。支付与退款的创建日、申请日和成功日归属语义不变。
+3. 新增 Mapper 资源契约测试，锁定 `21` 组上下界并禁止恢复 `DATE(column)=bizDate`；支付与退款集成样例覆盖业务日零点包含、次日零点排除，避免优化时引入边界串账。
+4. 复用 `idx_payment_created_at`、`idx_payment_status_created`、`idx_payment_status_success`、`idx_refund_status_applied` 和 `idx_refund_status_success`，本轮无 schema、迁移、DTO、HTTP 或前端变化。
+5. 日终联合定向 `44` 项、后端全量 `1059` 项、`PaymentDayEndMapper.xml` 与补丁检查通过；代码提交为 `114eaaf5 perf(payment-core): make day-end date ranges sargable`。首次两轮定向分别暴露 H2 不支持 `DATE_ADD` 和无法推断裸 `TIMESTAMPADD` 参数类型，改为两端兼容的显式常量转换后完整重跑，失败结果未作为通过证据。
+6. 当前环境没有目标 MySQL 实例，尚未执行 `EXPLAIN ANALYZE`、统计信息核验或生产量级压测；SQL 具备范围扫描形状不等于优化器一定选择索引，也不证明资金、账务或正式关账一致，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
