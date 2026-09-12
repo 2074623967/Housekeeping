@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
 import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
+import { resolveRefundApplicationAttempt } from "../utils/refundApplication";
 
 const items = ref([]);
 const selectedItem = ref(null);
@@ -62,13 +63,6 @@ function buildQuery() {
 
 function isActionRunning(refundOrderId, actionName) {
   return activeRefundOrderId.value === refundOrderId && activeAction.value === actionName;
-}
-
-function generateApplyIdempotencyKey() {
-  if (globalThis.crypto?.randomUUID) {
-    return globalThis.crypto.randomUUID();
-  }
-  return `REFUND-APPLY-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function resetFilters() {
@@ -180,11 +174,12 @@ async function handleApply() {
     refundReason: applyForm.value.refundReason.trim(),
     operator
   };
-  const requestFingerprint = JSON.stringify(requestPayload);
-  if (!applyIdempotencyKey.value || applyRequestFingerprint.value !== requestFingerprint) {
-    applyIdempotencyKey.value = generateApplyIdempotencyKey();
-    applyRequestFingerprint.value = requestFingerprint;
-  }
+  const attempt = resolveRefundApplicationAttempt(requestPayload, {
+    idempotencyKey: applyIdempotencyKey.value,
+    requestFingerprint: applyRequestFingerprint.value
+  });
+  applyIdempotencyKey.value = attempt.idempotencyKey;
+  applyRequestFingerprint.value = attempt.requestFingerprint;
   activeAction.value = "apply";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
@@ -193,7 +188,7 @@ async function handleApply() {
       ...requestPayload,
       idempotencyKey: applyIdempotencyKey.value
     });
-    actionResultMessage.value = `退款单 ${refund.refundOrderId} 已创建，等待审核。`;
+    actionResultMessage.value = `退款单 ${refund.refundOrderId} 申请已受理，当前状态为 ${refund.status}。`;
     applyForm.value = {
       paymentOrderId: "",
       refundAmount: "",
