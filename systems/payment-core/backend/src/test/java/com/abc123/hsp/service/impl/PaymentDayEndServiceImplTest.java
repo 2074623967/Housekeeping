@@ -220,6 +220,34 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldRejectOpenBusinessDatesBeforeReadingDayEndFacts() {
+        LocalDate businessToday = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        PaymentDayEndRunRequestDTO currentDate = new PaymentDayEndRunRequestDTO();
+        currentDate.setBizDate(businessToday.toString());
+        currentDate.setTriggeredBy("finance-ops");
+        PaymentDayEndRunRequestDTO futureDate = new PaymentDayEndRunRequestDTO();
+        futureDate.setBizDate(businessToday.plusDays(1).toString());
+        futureDate.setTriggeredBy("finance-ops");
+        PaymentDayEndRunRequestDTO invalidCalendarDate = new PaymentDayEndRunRequestDTO();
+        invalidCalendarDate.setBizDate("2026-02-30");
+        invalidCalendarDate.setTriggeredBy("finance-ops");
+        PaymentDayEndServiceImpl service = new PaymentDayEndServiceImpl(paymentDayEndMapper);
+
+        IllegalArgumentException currentDateError = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(currentDate));
+        IllegalArgumentException futureDateError = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(futureDate));
+        IllegalArgumentException invalidCalendarDateError = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class, () -> service.run(invalidCalendarDate));
+
+        org.junit.jupiter.api.Assertions.assertEquals("业务日期必须早于上海当前日期", currentDateError.getMessage());
+        org.junit.jupiter.api.Assertions.assertEquals("业务日期必须早于上海当前日期", futureDateError.getMessage());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "业务日期格式必须为 yyyy-MM-dd", invalidCalendarDateError.getMessage());
+        org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
+    }
+
+    @Test
     void shouldBlockReconciliationWhenPrimaryFactsAreNotClosed() {
         PaymentDayEndOverviewDTO overview = new PaymentDayEndOverviewDTO();
         overview.setLatestBizDate("2026-07-20");

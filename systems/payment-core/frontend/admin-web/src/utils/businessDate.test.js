@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { previousShanghaiBusinessDate } from "./businessDate.js";
+import { isClosedShanghaiBusinessDate, previousShanghaiBusinessDate } from "./businessDate.js";
 
 test("resolves the previous business date in Asia/Shanghai", () => {
   assert.equal(
@@ -21,4 +21,14 @@ test("rejects invalid business date clocks", () => {
     () => previousShanghaiBusinessDate(new Date("invalid")),
     /valid Date/
   );
+});
+
+test("accepts only closed Shanghai business dates", () => {
+  const now = new Date("2026-09-11T16:30:00.000Z");
+
+  assert.equal(isClosedShanghaiBusinessDate("2026-09-11", now), true);
+  assert.equal(isClosedShanghaiBusinessDate("2026-09-12", now), false);
+  assert.equal(isClosedShanghaiBusinessDate("2026-09-13", now), false);
+  assert.equal(isClosedShanghaiBusinessDate("2026-02-30", now), false);
+  assert.equal(isClosedShanghaiBusinessDate("", now), false);
 });

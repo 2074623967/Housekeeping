@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.UUID;
@@ -27,7 +28,8 @@ import org.springframework.util.StringUtils;
 @Service
 public class PaymentDayEndServiceImpl implements PaymentDayEndService {
 
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
     private static final ZoneId BUSINESS_ZONE_ID = ZoneId.of("Asia/Shanghai");
     private static final int TRIGGERED_BY_MAX_LENGTH = 64;
 
@@ -138,7 +140,11 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             return LocalDate.now(BUSINESS_ZONE_ID).minusDays(1).format(DATE_FORMATTER);
         }
         try {
-            return LocalDate.parse(rawBizDate.trim(), DATE_FORMATTER).format(DATE_FORMATTER);
+            LocalDate bizDate = LocalDate.parse(rawBizDate.trim(), DATE_FORMATTER);
+            if (!bizDate.isBefore(LocalDate.now(BUSINESS_ZONE_ID))) {
+                throw new IllegalArgumentException("业务日期必须早于上海当前日期");
+            }
+            return bizDate.format(DATE_FORMATTER);
         } catch (DateTimeParseException exception) {
             throw new IllegalArgumentException("业务日期格式必须为 yyyy-MM-dd");
         }

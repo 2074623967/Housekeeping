@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { paymentDayEndApi } from "../api/client";
-import { previousShanghaiBusinessDate } from "../utils/businessDate";
+import { isClosedShanghaiBusinessDate, previousShanghaiBusinessDate } from "../utils/businessDate";
 
 const overview = ref({
   totalBatchCount: 0,
@@ -21,8 +21,9 @@ const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
 
+const latestClosedBusinessDate = previousShanghaiBusinessDate();
 const runForm = ref({
-  bizDate: previousShanghaiBusinessDate(),
+  bizDate: latestClosedBusinessDate,
   triggeredBy: "",
   runMode: "MANUAL"
 });
@@ -41,6 +42,10 @@ async function loadOverview() {
 }
 
 async function runBatch() {
+  if (!isClosedShanghaiBusinessDate(runForm.value.bizDate)) {
+    actionMessage.value = "业务日期必须早于上海当前日期。";
+    return;
+  }
   const triggeredBy = runForm.value.triggeredBy.trim();
   if (!triggeredBy) {
     actionMessage.value = "请先输入触发人。";
@@ -193,7 +198,7 @@ onMounted(loadOverview);
           <div class="toolbar compact-toolbar">
             <div class="field">
               <label>业务日期</label>
-              <input v-model.trim="runForm.bizDate" placeholder="2026-07-19" />
+              <input v-model.trim="runForm.bizDate" type="date" :max="latestClosedBusinessDate" />
             </div>
             <div class="field">
               <label>运行方式</label>
