@@ -71,12 +71,12 @@ class PaymentDayEndPaymentSuccessFactsMapperIntegrationTest {
                     + "attempt_status VARCHAR(64), completed_at DATETIME, created_at DATETIME NOT NULL)");
             statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, status, success_at, created_at) VALUES "
                     + "('PAY-NORMAL', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 09:00:00'), "
-                    + "('PAY-NO-ATTEMPT', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 09:00:00'), "
+                    + "('PAY-NO-ATTEMPT', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 00:00:00'), "
                     + "('PAY-STATUS-MISMATCH', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 09:00:00'), "
                     + "('PAY-NO-COMPLETION', 'SUCCESS', '2026-09-11 10:00:00', '2026-09-11 09:00:00'), "
                     + "('PAY-TIME-ONLY', 'SUCCESS', NULL, '2026-09-11 09:00:00'), "
                     + "('PAY-CLOSED', 'CLOSED', NULL, '2026-09-11 09:00:00'), "
-                    + "('PAY-NEXT-DAY', 'SUCCESS', '2026-09-12 10:00:00', '2026-09-12 09:00:00')");
+                    + "('PAY-NEXT-DAY', 'SUCCESS', '2026-09-12 10:00:00', '2026-09-12 00:00:00')");
             statement.executeUpdate("INSERT INTO t_payment_attempt("
                     + "payment_order_id, attempt_status, completed_at, created_at) VALUES "
                     + "('PAY-NORMAL', '成功', '2026-09-11 10:00:00', '2026-09-11 09:30:00'), "

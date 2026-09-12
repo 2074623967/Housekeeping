@@ -75,9 +75,9 @@ class PaymentDayEndRefundFactsMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64) NOT NULL, "
                     + "attempt_status VARCHAR(32) NOT NULL, completed_at DATETIME, created_at DATETIME NOT NULL)");
             statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, refund_amount, status, applied_at, success_at) VALUES "
-                    + "('REF-001', 10.00, 'SUCCESS', '2026-09-11 10:00:00', '2026-09-12 09:00:00'), "
-                    + "('REF-002', 20.00, 'SUCCESS', '2026-09-12 10:00:00', '2026-09-12 11:00:00'), "
-                    + "('REF-003', 30.00, 'SUCCESS', '2026-09-11 12:00:00', NULL), "
+                    + "('REF-001', 10.00, 'SUCCESS', '2026-09-11 10:00:00', '2026-09-12 00:00:00'), "
+                    + "('REF-002', 20.00, 'SUCCESS', '2026-09-12 00:00:00', '2026-09-12 11:00:00'), "
+                    + "('REF-003', 30.00, 'SUCCESS', '2026-09-11 00:00:00', NULL), "
                     + "('REF-004', 40.00, 'PROCESSING', '2026-09-11 13:00:00', NULL), "
                     + "('REF-005', 50.00, 'FAIL', '2026-09-11 14:00:00', '2026-09-11 15:00:00')");
             statement.executeUpdate("INSERT INTO t_refund_attempt(refund_order_id, attempt_status, completed_at, created_at) VALUES "

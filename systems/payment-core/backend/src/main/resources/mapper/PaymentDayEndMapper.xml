@@ -202,34 +202,39 @@
     <select id="countPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order
-        WHERE DATE(created_at) = #{bizDate}
+        WHERE created_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND created_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
     </select>
 
     <select id="countSuccessPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order
-        WHERE DATE(success_at) = #{bizDate}
+        WHERE success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status = 'SUCCESS'
     </select>
 
     <select id="sumSuccessPaymentAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(amount), 0)
         FROM t_payment_order
-        WHERE DATE(success_at) = #{bizDate}
+        WHERE success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status = 'SUCCESS'
     </select>
 
     <select id="countSuccessRefundsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_refund_order
-        WHERE DATE(success_at) = #{bizDate}
+        WHERE success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status = 'SUCCESS'
     </select>
 
     <select id="countChannelSuccessByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -243,7 +248,8 @@
     <select id="sumChannelSuccessAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(payment_order.amount), 0)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -257,7 +263,8 @@
     <select id="countInternalSuccessByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -271,7 +278,8 @@
     <select id="sumInternalSuccessAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(payment_order.amount), 0)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -285,7 +293,8 @@
     <select id="countPaymentSuccessGapByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND (
               NOT EXISTS (
@@ -320,7 +329,8 @@
     <select id="sumPaymentSuccessGapAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(payment_order.amount), 0)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND (
               NOT EXISTS (
@@ -355,21 +365,24 @@
     <select id="countPendingPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order
-        WHERE DATE(created_at) = #{bizDate}
+        WHERE created_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND created_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
     </select>
 
     <select id="sumPendingPaymentAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(amount), 0)
         FROM t_payment_order
-        WHERE DATE(created_at) = #{bizDate}
+        WHERE created_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND created_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
     </select>
 
     <select id="countMissingPaymentSuccessTimeByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order
-        WHERE DATE(created_at) = #{bizDate}
+        WHERE created_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND created_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status = 'SUCCESS'
           AND success_at IS NULL
     </select>
@@ -377,7 +390,8 @@
     <select id="countPaymentSuccessFactMismatchByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE payment_order.created_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.created_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND NOT EXISTS (
               SELECT 1
@@ -397,14 +411,16 @@
     <select id="sumSuccessRefundAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
-        WHERE DATE(success_at) = #{bizDate}
+        WHERE success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status = 'SUCCESS'
     </select>
 
     <select id="countMissingRefundSuccessTimeByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_refund_order
-        WHERE DATE(applied_at) = #{bizDate}
+        WHERE applied_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND applied_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status = 'SUCCESS'
           AND success_at IS NULL
     </select>
@@ -412,7 +428,8 @@
     <select id="countRefundTerminalFactMismatchByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_refund_order refund_order
-        WHERE DATE(refund_order.applied_at) = #{bizDate}
+        WHERE refund_order.applied_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND refund_order.applied_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND refund_order.status IN ('SUCCESS', 'FAIL')
           AND (
               (refund_order.status = 'FAIL' AND refund_order.success_at IS NOT NULL)
@@ -435,7 +452,8 @@
     <select id="countChannelAbnormalByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND NOT EXISTS (
               SELECT 1
@@ -449,7 +467,8 @@
     <select id="countInternalAbnormalByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.success_at) = #{bizDate}
+        WHERE payment_order.success_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND payment_order.success_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND payment_order.status = 'SUCCESS'
           AND NOT EXISTS (
               SELECT 1
@@ -463,14 +482,16 @@
     <select id="countPendingRefundByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_refund_order
-        WHERE DATE(applied_at) = #{bizDate}
+        WHERE applied_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND applied_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status NOT IN ('SUCCESS', 'FAIL')
     </select>
 
     <select id="sumPendingRefundAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
-        WHERE DATE(applied_at) = #{bizDate}
+        WHERE applied_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND applied_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
           AND status NOT IN ('SUCCESS', 'FAIL')
     </select>
 
