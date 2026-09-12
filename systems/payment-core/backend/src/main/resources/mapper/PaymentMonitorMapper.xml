@@ -95,7 +95,7 @@
                END AS riskHint
         FROM t_payment_order
         GROUP BY channel_code, payment_method
-        ORDER BY totalCount DESC, successCount DESC
+        ORDER BY totalCount DESC, successCount DESC, channel_code ASC, payment_method ASC
     </select>
 
     <select id="findAlerts" resultType="com.abc123.hsp.dto.PaymentAlertItemDTO">
