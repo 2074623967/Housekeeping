@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
+import com.abc123.hsp.dto.PaymentEventOverviewDTO;
+import com.abc123.hsp.dto.PaymentEventQueryDTO;
 import java.io.InputStream;
 import java.sql.Statement;
 import java.util.Arrays;
@@ -118,6 +120,34 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
 
             assertEquals(Collections.singletonList("EVT-AUDIT-001"), mapper.findAllFailedEventNos(1));
             assertEquals(Arrays.asList("EVT-AUDIT-001", "EVT-AUDIT-002"), mapper.findDueFailedEventNos(2));
+        }
+    }
+
+    @Test
+    void shouldUseAutomaticRetryEligibilityForOverview() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, "
+                    + "downstream_system, event_topic, publish_status, publish_status_type, retry_count, "
+                    + "next_retry_at, event_payload, created_at) VALUES "
+                    + "('EVT-PENDING-PAYMENT', 'PAYMENT_SUCCESS', 'PAY-002', 'ORD-002', "
+                    + "'accounting-system', 'payment.trade.succeeded.v1', 'PENDING', 'warn', 0, NULL, '{}', NOW()), "
+                    + "('EVT-PENDING-REFUND', 'REFUND_SUBMIT', 'PAY-003', 'RFA-003', "
+                    + "'gateway-access', 'refund.submit.v1', 'PENDING', 'warn', 0, NULL, '{}', NOW()), "
+                    + "('EVT-PENDING-UNSUPPORTED', 'PAYMENT_PENDING', 'PAY-004', 'ORD-004', "
+                    + "'payment-core-ops', 'payment.pending.v1', 'PENDING', 'warn', 0, NULL, '{}', NOW()), "
+                    + "('EVT-FAILED-FUTURE', 'PAYMENT_SUCCESS', 'PAY-005', 'ORD-005', "
+                    + "'accounting-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 1, "
+                    + "DATEADD('DAY', 1, NOW()), '{}', NOW())");
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+
+            PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+            PaymentEventOverviewDTO overview = mapper.findOverview(query);
+
+            assertEquals(3, overview.getDueRetryEventCount());
+            assertEquals(Arrays.asList(
+                    "EVT-AUDIT-001", "EVT-PENDING-PAYMENT", "EVT-PENDING-REFUND"),
+                    mapper.findDueFailedEventNos(10));
         }
     }
 

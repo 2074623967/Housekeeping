@@ -31,6 +31,13 @@
         </where>
     </sql>
 
+    <sql id="automaticRetryCandidateCondition">
+        (publish_status = 'FAILED'
+         OR (publish_status = 'PENDING'
+             AND event_type IN ('PAYMENT_SUCCESS', 'REFUND_SUBMIT')))
+        AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
         SELECT event_no AS eventNo,
                event_type AS eventType,
@@ -81,7 +88,8 @@
                SUM(CASE WHEN publish_status = 'UNKNOWN' THEN 1 ELSE 0 END) AS unknownEventCount,
                SUM(CASE WHEN publish_status IN ('FAILED', 'DEAD_LETTER') THEN 1 ELSE 0 END) AS failedOrDeadLetterCount,
                COUNT(DISTINCT downstream_system) AS distinctDownstreamCount,
-               SUM(CASE WHEN publish_status = 'FAILED' AND next_retry_at IS NOT NULL AND next_retry_at &lt;= NOW() THEN 1 ELSE 0 END) AS dueRetryEventCount,
+               SUM(CASE WHEN <include refid="automaticRetryCandidateCondition"/>
+                        THEN 1 ELSE 0 END) AS dueRetryEventCount,
                SUM(CASE WHEN event_type = 'PAYMENT_SUCCESS' THEN 1 ELSE 0 END) AS paymentSuccessEventCount,
                DATE_FORMAT(MAX(last_published_at), '%Y-%m-%d %H:%i:%s') AS latestPublishedAt
         FROM t_payment_event
@@ -146,10 +154,7 @@
     <select id="findDueFailedEventNos" resultType="string">
         SELECT event_no
         FROM t_payment_event
-        WHERE (publish_status = 'FAILED'
-               OR (publish_status = 'PENDING'
-                   AND event_type IN ('PAYMENT_SUCCESS', 'REFUND_SUBMIT')))
-          AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
+        WHERE <include refid="automaticRetryCandidateCondition"/>
         ORDER BY created_at ASC, id ASC
         LIMIT #{batchSize}
     </select>

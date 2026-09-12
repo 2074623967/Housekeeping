@@ -24,7 +24,7 @@ public class PaymentEventOverviewDTO {
     private Long failedOrDeadLetterCount;
     /** 涉及下游系统数。 */
     private Integer distinctDownstreamCount;
-    /** 需要重试的事件数。 */
+    /** 已进入自动重试候选口径的事件数。 */
     private Integer dueRetryEventCount;
     /** 成功支付事件数。 */
     private Integer paymentSuccessEventCount;

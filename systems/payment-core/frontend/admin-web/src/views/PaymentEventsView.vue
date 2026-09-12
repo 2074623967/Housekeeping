@@ -244,7 +244,7 @@ onMounted(loadEvents);
         <article class="overview-card warn">
           <p class="overview-title">到期待重试</p>
           <strong>{{ metrics.dueRetryCount }}</strong>
-          <span>表示已达到下次重试时间但仍未收口的失败事件，适合作为任务中心补跑输入。</span>
+          <span>与自动任务候选口径一致：失败事件或可派发的待发布事件，且未设置未来重试时间。</span>
         </article>
         <article class="overview-card info">
           <p class="overview-title">支付成功事件</p>
