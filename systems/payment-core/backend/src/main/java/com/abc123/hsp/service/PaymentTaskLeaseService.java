@@ -164,13 +164,27 @@ public class PaymentTaskLeaseService implements DisposableBean {
 
         @Override
         public void close() {
-            if (!closed.compareAndSet(false, true)) {
+            if (!stopRenewal()) {
                 return;
+            }
+            release(taskCode, lockOwner);
+        }
+
+        /**
+         * 停止续期但保留数据库租约至自然过期，用于需要共享冷却窗口的场景。
+         */
+        public void retainUntilExpiry() {
+            stopRenewal();
+        }
+
+        private boolean stopRenewal() {
+            if (!closed.compareAndSet(false, true)) {
+                return false;
             }
             if (renewalFuture != null) {
                 renewalFuture.cancel(false);
             }
-            release(taskCode, lockOwner);
+            return true;
         }
     }
 

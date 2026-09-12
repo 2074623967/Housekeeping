@@ -94,6 +94,27 @@ class PaymentTaskLeaseServiceTest {
     }
 
     @Test
+    void shouldStopRenewalAndRetainLeaseUntilExpiry() {
+        executeTransactionCallbacks();
+        when(paymentTaskCenterMapper.acquireTaskLease("ALERT_PROVIDER_PROBE", "owner-a", 630))
+                .thenReturn(1);
+        doReturn(renewalFuture).when(renewalExecutor).scheduleWithFixedDelay(
+                any(Runnable.class), eq(210000L), eq(210000L), eq(TimeUnit.MILLISECONDS));
+        PaymentTaskLeaseService service = new PaymentTaskLeaseService(
+                paymentTaskCenterMapper, transactionTemplate, renewalExecutor);
+
+        PaymentTaskLeaseService.Lease lease = service.tryAcquire(
+                "ALERT_PROVIDER_PROBE", "owner-a", 630);
+        lease.retainUntilExpiry();
+        lease.retainUntilExpiry();
+        lease.close();
+
+        verify(renewalFuture, times(1)).cancel(false);
+        verify(paymentTaskCenterMapper, never()).releaseTaskLease(any(String.class), any(String.class));
+        verify(transactionTemplate, times(1)).execute(any());
+    }
+
+    @Test
     void shouldStopRenewingAfterOwnerLosesLease() {
         executeTransactionCallbacks();
         when(paymentTaskCenterMapper.acquireTaskLease("PAYMENT_EVENT_RETRY", "owner-a", 120)).thenReturn(1);

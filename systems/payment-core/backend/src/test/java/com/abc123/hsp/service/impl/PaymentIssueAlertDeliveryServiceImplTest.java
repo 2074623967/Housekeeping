@@ -1299,9 +1299,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
                 .thenReturn(buildDeliveryResult(
                         "IM-PROBE-001", "ACCEPTED", "半开探针已受理", "[IM-PRIMARY] ISSUE-001"));
-        when(paymentTaskCenterMapper.acquireTaskLease(any(String.class), any(String.class), eq(30)))
-                .thenReturn(1);
-        when(paymentTaskCenterMapper.releaseTaskLease(any(String.class), any(String.class)))
+        when(paymentTaskCenterMapper.acquireTaskLease(any(String.class), any(String.class), eq(630)))
                 .thenReturn(1);
         PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
@@ -1326,8 +1324,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
 
         ArgumentCaptor<String> taskCodeCaptor = ArgumentCaptor.forClass(String.class);
         verify(paymentTaskCenterMapper).acquireTaskLease(
-                taskCodeCaptor.capture(), any(String.class), eq(30));
-        verify(paymentTaskCenterMapper).releaseTaskLease(eq(taskCodeCaptor.getValue()), any(String.class));
+                taskCodeCaptor.capture(), any(String.class), eq(630));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .releaseTaskLease(any(String.class), any(String.class));
         verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertTrue(taskCodeCaptor.getValue().startsWith("AP:"));
         Assertions.assertEquals(64, taskCodeCaptor.getValue().length());
@@ -1360,7 +1359,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
                 .thenReturn(buildDeliveryResult(
                         "IM-BACKUP-001", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
-        when(paymentTaskCenterMapper.acquireTaskLease(any(String.class), any(String.class), eq(30)))
+        when(paymentTaskCenterMapper.acquireTaskLease(any(String.class), any(String.class), eq(630)))
                 .thenReturn(0);
         PaymentTaskLeaseService leaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(

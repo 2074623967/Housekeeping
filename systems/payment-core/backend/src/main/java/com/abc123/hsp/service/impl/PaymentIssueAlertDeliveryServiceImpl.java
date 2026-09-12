@@ -78,7 +78,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private static final Pattern TEMPLATE_PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_]+)\\s*}}");
     private static final int PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES = 10;
     private static final int PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 3;
-    private static final int PROVIDER_CIRCUIT_PROBE_LEASE_SECONDS = 30;
+    private static final int PROVIDER_CIRCUIT_PROBE_LEASE_SECONDS =
+            PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES * 60 + 30;
     private static final String PROVIDER_CIRCUIT_PROBE_TASK_PREFIX = "AP:";
     private static final int PROVIDER_RECEIPT_SNAPSHOT_MAX_LENGTH = 2048;
     private static final int PROVIDER_RECEIPT_NO_MAX_LENGTH = 128;
@@ -693,7 +694,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCompletion(int status) {
-                    closeProbeLeaseSafely(probeLease, providerConfig.getProviderCode(), channelCode);
+                    retainProbeLeaseUntilExpirySafely(
+                            probeLease, providerConfig.getProviderCode(), channelCode);
                 }
             });
             return DispatchGuard.allowed();
@@ -723,13 +725,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         }
     }
 
-    private void closeProbeLeaseSafely(PaymentTaskLeaseService.Lease probeLease,
-                                       String providerCode,
-                                       String channelCode) {
+    private void retainProbeLeaseUntilExpirySafely(PaymentTaskLeaseService.Lease probeLease,
+                                                   String providerCode,
+                                                   String channelCode) {
         try {
-            probeLease.close();
+            probeLease.retainUntilExpiry();
         } catch (RuntimeException exception) {
-            LOGGER.warn("告警供应商半开探针租约释放失败, providerCode={}, channelCode={}, exceptionType={}",
+            LOGGER.warn("告警供应商半开探针租约停止续期失败, providerCode={}, channelCode={}, exceptionType={}",
                     providerCode, channelCode, exception.getClass().getName());
         }
     }
@@ -1794,7 +1796,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
 
         private void closeLocalProbeLease() {
             if (localProbeLease != null) {
-                localProbeLease.close();
+                localProbeLease.retainUntilExpiry();
             }
         }
     }
