@@ -36,6 +36,10 @@ public class PaymentDayEndBatchListItemDTO {
     private Integer paymentSuccessGapCount;
     /** 支付成功差异金额。 */
     private String paymentSuccessGapAmount;
+    /** 待收口支付数；历史未采集批次为 null。 */
+    private Integer pendingPaymentCount;
+    /** 待收口支付金额；历史未采集批次为 null。 */
+    private String pendingPaymentAmount;
     /** 退款成功单量。 */
     private Integer refundSuccessCount;
     /** 退款成功金额。 */

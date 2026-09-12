@@ -88,6 +88,16 @@ public interface PaymentDayEndMapper {
     BigDecimal sumPaymentSuccessGapAmountByDate(@Param("bizDate") String bizDate);
 
     /**
+     * 查询指定业务日仍处于明确非终态的支付单量。
+     */
+    Integer countPendingPaymentsByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日仍处于明确非终态的支付金额。
+     */
+    BigDecimal sumPendingPaymentAmountByDate(@Param("bizDate") String bizDate);
+
+    /**
      * 查询指定业务日的退款成功金额。
      */
     BigDecimal sumSuccessRefundAmountByDate(@Param("bizDate") String bizDate);

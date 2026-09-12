@@ -27,6 +27,12 @@
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
                ), 0) AS openInternalAbnormalCount,
+               (
+                   SELECT pending_payment_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS openPendingPaymentCount,
                COALESCE((
                    SELECT pending_refund_count
                    FROM t_payment_day_end_batch
@@ -69,6 +75,12 @@
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
                ), '¥0.00') AS latestPaymentSuccessGapAmount,
+               (
+                   SELECT CONCAT('¥', FORMAT(pending_payment_amount, 2))
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS latestPendingPaymentAmount,
                COALESCE((
                    SELECT CONCAT('¥', FORMAT(pending_refund_amount, 2))
                    FROM t_payment_day_end_batch
@@ -93,6 +105,8 @@
                CONCAT('¥', FORMAT(internal_success_amount, 2)) AS internalSuccessAmount,
                payment_success_gap_count AS paymentSuccessGapCount,
                CONCAT('¥', FORMAT(payment_success_gap_amount, 2)) AS paymentSuccessGapAmount,
+               pending_payment_count AS pendingPaymentCount,
+               CONCAT('¥', FORMAT(pending_payment_amount, 2)) AS pendingPaymentAmount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                channel_abnormal_count AS channelAbnormalCount,
@@ -123,6 +137,8 @@
                CONCAT('¥', FORMAT(internal_success_amount, 2)) AS internalSuccessAmount,
                payment_success_gap_count AS paymentSuccessGapCount,
                CONCAT('¥', FORMAT(payment_success_gap_amount, 2)) AS paymentSuccessGapAmount,
+               pending_payment_count AS pendingPaymentCount,
+               CONCAT('¥', FORMAT(pending_payment_amount, 2)) AS pendingPaymentAmount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                channel_abnormal_count AS channelAbnormalCount,
@@ -304,6 +320,20 @@
           )
     </select>
 
+    <select id="countPendingPaymentsByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order
+        WHERE DATE(created_at) = #{bizDate}
+          AND status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
+    </select>
+
+    <select id="sumPendingPaymentAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(amount), 0)
+        FROM t_payment_order
+        WHERE DATE(created_at) = #{bizDate}
+          AND status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
+    </select>
+
     <select id="sumSuccessRefundAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
@@ -369,6 +399,8 @@
             internal_success_amount,
             payment_success_gap_count,
             payment_success_gap_amount,
+            pending_payment_count,
+            pending_payment_amount,
             refund_success_count,
             refund_success_amount,
             channel_abnormal_count,
@@ -394,6 +426,8 @@
             #{internalSuccessAmount},
             #{paymentSuccessGapCount},
             #{paymentSuccessGapAmount},
+            #{pendingPaymentCount},
+            #{pendingPaymentAmount},
             #{refundSuccessCount},
             #{refundSuccessAmount},
             #{channelAbnormalCount},

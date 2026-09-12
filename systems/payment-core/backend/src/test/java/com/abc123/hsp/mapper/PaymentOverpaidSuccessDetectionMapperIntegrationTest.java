@@ -95,6 +95,26 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
     }
 
     @Test
+    void shouldCountOnlyExplicitPendingPaymentStatesForDayEnd() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, customer_name, amount, status, status_type, created_at) VALUES "
+                    + "('PAY-PENDING-PREPAY', 'ORD-PENDING', '客户一', 10.00, 'PREPAY_CREATED', 'info', NOW()), "
+                    + "('PAY-PENDING-CALLBACK', 'ORD-PENDING', '客户二', 20.00, 'WAIT_CALLBACK', 'warn', NOW()), "
+                    + "('PAY-PENDING-REVIEW', 'ORD-PENDING', '客户三', 30.00, 'RISK_REVIEW', 'warn', NOW()), "
+                    + "('PAY-FINAL-BLOCKED', 'ORD-PENDING', '客户四', 40.00, 'RISK_BLOCKED', 'danger', NOW()), "
+                    + "('PAY-FINAL-REJECTED', 'ORD-PENDING', '客户五', 50.00, 'RISK_REJECTED', 'danger', NOW())");
+            PaymentDayEndMapper mapper = session.getMapper(PaymentDayEndMapper.class);
+            String today = LocalDate.now().toString();
+
+            assertEquals(3, mapper.countPendingPaymentsByDate(today));
+            assertEquals(0, mapper.sumPendingPaymentAmountByDate(today)
+                    .compareTo(new BigDecimal("60.00")));
+        }
+    }
+
+    @Test
     void shouldExposeUnknownRefundSubmitAsP1ClearingIssue() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentIssueMapper mapper = session.getMapper(PaymentIssueMapper.class);

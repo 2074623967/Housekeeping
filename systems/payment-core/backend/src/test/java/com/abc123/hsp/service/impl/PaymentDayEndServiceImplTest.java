@@ -39,10 +39,12 @@ class PaymentDayEndServiceImplTest {
         overview.setLatestBizDate("2026-07-20");
         overview.setLatestBatchStatus("COMPLETED");
         overview.setLatestPaymentSuccessGapCount(0);
+        overview.setOpenPendingPaymentCount(0);
         overview.setOpenPendingRefundCount(1);
         overview.setLatestChannelSuccessAmount("¥268.00");
         PaymentDayEndBatchListItemDTO batch = new PaymentDayEndBatchListItemDTO();
         batch.setBatchNo("DEB001");
+        batch.setPendingPaymentCount(0);
         batch.setPendingRefundCount(1);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
         when(paymentDayEndMapper.findRecentBatches()).thenReturn(Arrays.asList(batch));
@@ -55,11 +57,14 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("有条件进入对账", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertEquals("CONDITIONAL", result.getRecentBatches().get(0).getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertNotNull(result.getAlerts());
-        org.junit.jupiter.api.Assertions.assertEquals(4, result.getAlerts().size());
-        org.junit.jupiter.api.Assertions.assertEquals("PAYMENT_SUCCESS_GAP", result.getAlerts().get(0).getAlertType());
-        org.junit.jupiter.api.Assertions.assertEquals("/payment-issues", result.getAlerts().get(0).getActionRoute());
-        org.junit.jupiter.api.Assertions.assertEquals("/payment-events?publishStatus=FAILED_OR_DEAD_LETTER", result.getAlerts().get(2).getActionRoute());
-        org.junit.jupiter.api.Assertions.assertEquals("/refunds?refundStatus=PENDING", result.getAlerts().get(3).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals(5, result.getAlerts().size());
+        org.junit.jupiter.api.Assertions.assertEquals("PENDING_PAYMENT", result.getAlerts().get(0).getAlertType());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "/payments?status=DAY_END_PENDING", result.getAlerts().get(0).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals("PAYMENT_SUCCESS_GAP", result.getAlerts().get(1).getAlertType());
+        org.junit.jupiter.api.Assertions.assertEquals("/payment-issues", result.getAlerts().get(1).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals("/payment-events?publishStatus=FAILED_OR_DEAD_LETTER", result.getAlerts().get(3).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals("/refunds?refundStatus=PENDING", result.getAlerts().get(4).getActionRoute());
     }
 
     @Test
@@ -78,6 +83,8 @@ class PaymentDayEndServiceImplTest {
         batch.setInternalSuccessAmount("¥268.00");
         batch.setPaymentSuccessGapCount(0);
         batch.setPaymentSuccessGapAmount("¥0.00");
+        batch.setPendingPaymentCount(2);
+        batch.setPendingPaymentAmount("¥98.00");
         batch.setRefundSuccessCount(0);
         batch.setRefundSuccessAmount("¥0.00");
         batch.setChannelAbnormalCount(0);
@@ -95,7 +102,8 @@ class PaymentDayEndServiceImplTest {
         verify(paymentDayEndMapper).findAllBatchesForExport();
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("批次号,业务日期"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"DEB001\""));
-        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("CONDITIONAL"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("待收口支付,待收口支付金额"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("BLOCKED"));
     }
 
     @Test
@@ -111,6 +119,8 @@ class PaymentDayEndServiceImplTest {
         when(paymentDayEndMapper.sumInternalSuccessAmountByDate(bizDate)).thenReturn(BigDecimal.ZERO);
         when(paymentDayEndMapper.countPaymentSuccessGapByDate(bizDate)).thenReturn(1);
         when(paymentDayEndMapper.sumPaymentSuccessGapAmountByDate(bizDate)).thenReturn(new BigDecimal("268.00"));
+        when(paymentDayEndMapper.countPendingPaymentsByDate(bizDate)).thenReturn(1);
+        when(paymentDayEndMapper.sumPendingPaymentAmountByDate(bizDate)).thenReturn(new BigDecimal("88.00"));
         when(paymentDayEndMapper.countSuccessRefundsByDate(bizDate)).thenReturn(0);
         when(paymentDayEndMapper.sumSuccessRefundAmountByDate(bizDate)).thenReturn(BigDecimal.ZERO);
         when(paymentDayEndMapper.countChannelAbnormalByDate(bizDate)).thenReturn(0);
@@ -133,6 +143,8 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("WARNING", captor.getValue().getBatchStatus());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), captor.getValue().getPaymentTotalCount());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getPaymentSuccessGapCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getPendingPaymentCount());
+        org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("88.00"), captor.getValue().getPendingPaymentAmount());
         org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("68.00"), captor.getValue().getPendingRefundAmount());
         org.junit.jupiter.api.Assertions.assertEquals("RERUN", captor.getValue().getRunMode());
         org.junit.jupiter.api.Assertions.assertEquals("finance-ops", captor.getValue().getTriggeredBy());
@@ -432,6 +444,49 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldWarnAndBlockReconciliationWhenPendingPaymentsRemain() {
+        String bizDate = "2026-07-19";
+        when(paymentDayEndMapper.countPendingPaymentsByDate(bizDate)).thenReturn(2);
+        when(paymentDayEndMapper.sumPendingPaymentAmountByDate(bizDate)).thenReturn(new BigDecimal("188.00"));
+        PaymentDayEndOverviewDTO overview = new PaymentDayEndOverviewDTO();
+        overview.setLatestBizDate(bizDate);
+        overview.setOpenPendingPaymentCount(2);
+        when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
+        when(paymentDayEndMapper.findRecentBatches())
+                .thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate(bizDate);
+        request.setTriggeredBy("finance-ops");
+
+        PaymentDayEndOverviewDTO result = new PaymentDayEndServiceImpl(paymentDayEndMapper).run(request);
+
+        ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
+                ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
+        verify(paymentDayEndMapper).insertBatch(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("WARNING", captor.getValue().getBatchStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), captor.getValue().getPendingPaymentCount());
+        org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getSummaryComment().contains("待收口支付2笔（¥188.00）"));
+        org.junit.jupiter.api.Assertions.assertEquals("禁止进入对账", result.getReconciliationReadinessStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), result.getAlerts().get(0).getAffectedCount());
+    }
+
+    @Test
+    void shouldTreatLegacyBatchWithoutPendingPaymentFactAsIncomplete() {
+        PaymentDayEndOverviewDTO overview = new PaymentDayEndOverviewDTO();
+        overview.setLatestBizDate("2026-07-18");
+        PaymentDayEndBatchListItemDTO legacyBatch = new PaymentDayEndBatchListItemDTO();
+        legacyBatch.setBatchNo("DEB-LEGACY");
+        when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
+        when(paymentDayEndMapper.findRecentBatches()).thenReturn(Collections.singletonList(legacyBatch));
+
+        PaymentDayEndOverviewDTO result = new PaymentDayEndServiceImpl(paymentDayEndMapper).overview();
+
+        org.junit.jupiter.api.Assertions.assertEquals("日终事实不完整", result.getReconciliationReadinessStatus());
+        org.junit.jupiter.api.Assertions.assertTrue(result.getReconciliationReadinessSummary().contains("未采集待收口支付事实"));
+        org.junit.jupiter.api.Assertions.assertEquals("UNKNOWN", result.getRecentBatches().get(0).getReconciliationReadinessStatus());
+    }
+
+    @Test
     void shouldResolveDefaultBizDateInBusinessTimezone() {
         ZoneId businessZone = ZoneId.of("Asia/Shanghai");
         LocalDate businessToday = LocalDate.now(businessZone);
@@ -524,6 +579,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenChannelAbnormalCount(2);
         overview.setOpenInternalAbnormalCount(1);
         overview.setLatestPaymentSuccessGapCount(3);
+        overview.setOpenPendingPaymentCount(0);
         overview.setOpenPendingRefundCount(0);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
         when(paymentDayEndMapper.findRecentBatches()).thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
@@ -533,7 +589,7 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("禁止进入对账", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertEquals("danger", result.getReconciliationReadinessType());
         org.junit.jupiter.api.Assertions.assertTrue(result.getReconciliationReadinessSummary().contains("支付成功差异 3 笔"));
-        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(3), result.getAlerts().get(0).getAffectedCount());
-        org.junit.jupiter.api.Assertions.assertEquals("P1", result.getAlerts().get(0).getSeverityLevel());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(3), result.getAlerts().get(1).getAffectedCount());
+        org.junit.jupiter.api.Assertions.assertEquals("P1", result.getAlerts().get(1).getSeverityLevel());
     }
 }

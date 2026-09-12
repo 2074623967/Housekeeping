@@ -308,6 +308,10 @@ onMounted(refreshList);
             <option>FAIL</option>
             <option>CLOSED</option>
             <option>PREPAY_CREATED</option>
+            <option value="DAY_END_PENDING">日终待收口</option>
+            <option>RISK_REVIEW</option>
+            <option>RISK_BLOCKED</option>
+            <option>RISK_REJECTED</option>
           </select>
         </div>
         <div class="field">

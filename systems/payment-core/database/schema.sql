@@ -1067,6 +1067,8 @@ CREATE TABLE t_payment_day_end_batch (
     internal_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '内部事件成功发布金额',
     payment_success_gap_count INT NOT NULL DEFAULT 0 COMMENT '支付成功差异单量',
     payment_success_gap_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '支付成功差异金额',
+    pending_payment_count INT NOT NULL DEFAULT 0 COMMENT '待收口支付数',
+    pending_payment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '待收口支付金额',
     refund_success_count INT NOT NULL DEFAULT 0 COMMENT '退款成功单量',
     refund_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款成功金额',
     channel_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '渠道异常数',

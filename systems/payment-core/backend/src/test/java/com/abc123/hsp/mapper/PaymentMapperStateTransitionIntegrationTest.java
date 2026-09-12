@@ -316,6 +316,33 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldApplyDayEndPendingStatusGroupToListCountAndExport() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, customer_name, amount, status, status_type, created_at) VALUES "
+                    + "('PAY-DAY-END-PREPAY', 'ORD-DAY-END', '客户一', 10.00, 'PREPAY_CREATED', 'info', NOW()), "
+                    + "('PAY-DAY-END-WAIT', 'ORD-DAY-END', '客户二', 20.00, 'WAIT_CALLBACK', 'warn', NOW()), "
+                    + "('PAY-DAY-END-REVIEW', 'ORD-DAY-END', '客户三', 30.00, 'RISK_REVIEW', 'warn', NOW()), "
+                    + "('PAY-DAY-END-BLOCKED', 'ORD-DAY-END', '客户四', 40.00, 'RISK_BLOCKED', 'danger', NOW()), "
+                    + "('PAY-DAY-END-SUCCESS', 'ORD-DAY-END', '客户五', 50.00, 'SUCCESS', 'success', NOW())");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setOrderNo("ORD-DAY-END");
+            query.setStatus("DAY_END_PENDING");
+
+            List<PaymentListItemDTO> items = mapper.findAll(query);
+
+            assertEquals(3, items.size());
+            assertEquals(3L, mapper.count(query));
+            assertEquals(3, mapper.findAllForExport(query).size());
+            org.junit.jupiter.api.Assertions.assertTrue(items.stream().allMatch(item ->
+                    java.util.Arrays.asList("PREPAY_CREATED", "WAIT_CALLBACK", "RISK_REVIEW")
+                            .contains(item.getStatus())));
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);

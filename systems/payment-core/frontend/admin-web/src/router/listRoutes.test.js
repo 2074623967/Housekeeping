@@ -35,3 +35,12 @@ test("keeps admin list filters in structured query fields", () => {
     status: "WAIT_CALLBACK"
   });
 });
+
+test("keeps the day-end pending payment status group in the payment list route", () => {
+  const router = createTestRouter();
+
+  const resolved = router.resolve(paymentsRoute({ status: "DAY_END_PENDING" }));
+
+  assert.deepEqual(resolved.query, { status: "DAY_END_PENDING" });
+  assert.equal(resolved.href, "/payments?status=DAY_END_PENDING");
+});
