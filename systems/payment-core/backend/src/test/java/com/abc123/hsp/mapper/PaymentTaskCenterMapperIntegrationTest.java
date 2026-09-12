@@ -238,6 +238,33 @@ public class PaymentTaskCenterMapperIntegrationTest {
             }
             session.clearCache();
 
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_task_run_log "
+                        + "SET task_status = 'WARNING', success_count = 0, warning_count = 1 "
+                        + "WHERE task_log_no = 'PTL-DAY-END-001'");
+            }
+            session.clearCache();
+            assertEquals(0, mapper.countUnlinkedAutoDayEndBatchesByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate("2026-09-11"));
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_task_run_log "
+                        + "SET triggered_by = 'operator', processed_count = 2 "
+                        + "WHERE task_log_no = 'PTL-DAY-END-001'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate("2026-09-11"));
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_task_run_log "
+                        + "SET task_status = 'SUCCESS', success_count = 1, warning_count = 0, "
+                        + "triggered_by = 'payment-day-end-scheduler', processed_count = 1 "
+                        + "WHERE task_log_no = 'PTL-DAY-END-001'");
+            }
+            session.clearCache();
+
             PaymentTaskRunLogEntity duplicate = new PaymentTaskRunLogEntity();
             duplicate.setTaskLogNo("PTL-DAY-END-002");
             duplicate.setTaskCode(entity.getTaskCode());

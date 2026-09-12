@@ -452,10 +452,19 @@
               FROM t_payment_task_run_log task_log
               WHERE task_log.task_code = 'PAYMENT_DAY_END'
                 AND task_log.run_mode = 'AUTO'
+                AND task_log.triggered_by = 'payment-day-end-scheduler'
                 AND task_log.biz_date = batch.biz_date
                 AND task_log.business_ref_no = batch.batch_no
-                AND task_log.processed_count &gt; 0
+                AND task_log.processed_count = 1
                 AND task_log.fail_count = 0
+                AND (
+                    (task_log.task_status = 'SUCCESS'
+                        AND task_log.success_count = 1
+                        AND task_log.warning_count = 0)
+                    OR (task_log.task_status = 'WARNING'
+                        AND task_log.success_count = 0
+                        AND task_log.warning_count = 1)
+                )
           )
     </select>
 
@@ -464,9 +473,18 @@
         FROM t_payment_task_run_log task_log
         WHERE task_log.task_code = 'PAYMENT_DAY_END'
           AND task_log.run_mode = 'AUTO'
+          AND task_log.triggered_by = 'payment-day-end-scheduler'
           AND task_log.biz_date = #{bizDate}
-          AND task_log.processed_count &gt; 0
+          AND task_log.processed_count = 1
           AND task_log.fail_count = 0
+          AND (
+              (task_log.task_status = 'SUCCESS'
+                  AND task_log.success_count = 1
+                  AND task_log.warning_count = 0)
+              OR (task_log.task_status = 'WARNING'
+                  AND task_log.success_count = 0
+                  AND task_log.warning_count = 1)
+          )
           AND NOT EXISTS (
               SELECT 1
               FROM t_payment_day_end_batch batch
@@ -481,9 +499,18 @@
         FROM t_payment_task_run_log task_log
         WHERE task_log.task_code = 'PAYMENT_DAY_END'
           AND task_log.run_mode = 'AUTO'
+          AND task_log.triggered_by = 'payment-day-end-scheduler'
           AND task_log.biz_date = #{bizDate}
-          AND task_log.processed_count &gt; 0
+          AND task_log.processed_count = 1
           AND task_log.fail_count = 0
+          AND (
+              (task_log.task_status = 'SUCCESS'
+                  AND task_log.success_count = 1
+                  AND task_log.warning_count = 0)
+              OR (task_log.task_status = 'WARNING'
+                  AND task_log.success_count = 0
+                  AND task_log.warning_count = 1)
+          )
           AND EXISTS (
               SELECT 1
               FROM t_payment_day_end_batch batch
@@ -496,10 +523,19 @@
               FROM t_payment_task_run_log earlier_log
               WHERE earlier_log.task_code = task_log.task_code
                 AND earlier_log.run_mode = 'AUTO'
+                AND earlier_log.triggered_by = 'payment-day-end-scheduler'
                 AND earlier_log.biz_date = task_log.biz_date
                 AND earlier_log.business_ref_no = task_log.business_ref_no
-                AND earlier_log.processed_count &gt; 0
+                AND earlier_log.processed_count = 1
                 AND earlier_log.fail_count = 0
+                AND (
+                    (earlier_log.task_status = 'SUCCESS'
+                        AND earlier_log.success_count = 1
+                        AND earlier_log.warning_count = 0)
+                    OR (earlier_log.task_status = 'WARNING'
+                        AND earlier_log.success_count = 0
+                        AND earlier_log.warning_count = 1)
+                )
                 AND earlier_log.id &lt; task_log.id
           )
     </select>
