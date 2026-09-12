@@ -4025,6 +4025,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 本契约不改变查询字段、筛选语义、计数、分页边界、导出上限、响应字段、金额格式或服务者姓名脱敏规则。
 4. 稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离，也不表示真实出款、到账、结算或对账已经完成。
 
+### 14.266 支付记录列表与最近尝试确定性读取契约
+
+1. `GET /api/payment-records` 继续支持 `sortField=createdAt / paymentAmount / paidAt` 和 `sortOrder=asc / desc`；每个业务排序字段后必须追加同方向 `p.id`，即升序使用 `field ASC, p.id ASC`，降序使用 `field DESC, p.id DESC`。
+2. 该接口保持既有 `LIMIT/OFFSET` 分页、筛选、计数和响应字段，不新增 CSV 导出接口；稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离。
+3. `GET /api/payment-records/{paymentOrderId}` 的最近支付尝试必须按 `created_at DESC, id DESC` 唯一选择；不能只以 `MAX(created_at)` 关联后依赖无排序 `LIMIT 1` 裁决同秒记录。
+4. 最近尝试表示 payment-core 中已记录的最新提交尝试，不等于渠道已受理、支付已成功、退款已到账或资金已完成对账。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

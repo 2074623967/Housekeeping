@@ -11819,3 +11819,34 @@
 1. 在数据集合不变的前提下，服务者结算分页与 CSV 对相同账期结束日和创建时间记录具有确定次序。
 2. `id` 次排序不提供多个请求之间的数据库快照；翻页期间若新增或修改结算单，偏移分页仍可能随数据集变化。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据导出、真实出款、到账、结算或对账一致性；release 四项真实治理阻断不变。
+
+## 439. 2026-09-12 支付记录列表与最近尝试确定性读取 V1.0 验证
+
+### 439.1 本轮补强
+
+1. `PaymentRecordMapper.findAll` 的 `createdAt / paymentAmount / paidAt` 三类排序集中到 `paymentRecordOrder`，每类业务字段后追加同方向自增 `p.id`。
+2. `PaymentRecordMapper.findDetail` 不再用 `MAX(created_at)` 关联可能重复的尝试行，改为按 `created_at DESC, id DESC LIMIT 1` 唯一选择最近支付尝试。
+3. 该变更不新增 CSV 能力，也不改变筛选、计数、分页、响应字段、用户引用脱敏、API、schema、索引或迁移。
+
+### 439.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 支付记录相关定向测试 | `PaymentRecordListMapperIntegrationTest,PaymentRecordRefundAggregationMapperIntegrationTest,PaymentRecordServiceListTest,PaymentRecordServiceImplTest` `11` 项通过，`0` failures、`0` errors、`0` skipped |
+| 创建时间跨页 | 三条同秒记录跨三页依次返回 `PAY-RECORD-STABLE-003 / 002 / 001` |
+| 支付金额排序 | 三条同金额记录升序返回 `001 / 002 / 003` |
+| 支付完成时间排序 | 三条同秒成功记录降序返回 `003 / 002 / 001` |
+| 最近尝试选择 | 两条尝试创建时间相同时返回后插入的 `NEW_TERMINAL / NEW_KEY / SUCCESS / new-response` |
+| 聚合与服务回归 | 成功退款聚合、列表查询规范化、用户引用脱敏和详情不存在/字段脱敏用例继续通过 |
+| 计数回归 | 正式 `count` 查询返回筛选后的 `3` 条 |
+| payment-core 后端全量测试 | `956` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentRecordMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `a6c6617f fix(payment-core): stabilize payment record reads` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 439.3 当前判断
+
+1. 在数据集合不变的前提下，支付记录三类排序的同值行具有确定次序；详情在同秒尝试下也具有明确的最新事实选择规则。
+2. `p.id` 次排序不提供多个请求之间的数据库快照；翻页期间若新增或修改支付记录，偏移分页仍可能随数据集变化。
+3. 本地 H2 不证明生产 MySQL 执行计划、真实渠道受理、支付成功、退款到账或资金对账一致性；release 四项真实治理阻断不变。
