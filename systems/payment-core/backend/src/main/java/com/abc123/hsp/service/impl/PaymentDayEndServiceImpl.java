@@ -213,6 +213,15 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     private java.util.List<PaymentDayEndAlertItemDTO> buildAlerts(PaymentDayEndOverviewDTO overview) {
         java.util.List<PaymentDayEndAlertItemDTO> alerts = new ArrayList<>();
         alerts.add(buildAlert(
+                "PAYMENT_SUCCESS_GAP",
+                "支付成功差异",
+                defaultZero(overview.getLatestPaymentSuccessGapCount()),
+                "存在支付成功但渠道回调、内部事件或订单应收仍不一致的交易，当前不能进入正式对账。",
+                "进入支付交易异常中心联查回调、事件和超额成功收款",
+                "/payment-issues",
+                1
+        ));
+        alerts.add(buildAlert(
                 "CHANNEL_ABNORMAL",
                 "渠道回调未收口",
                 defaultZero(overview.getOpenChannelAbnormalCount()),

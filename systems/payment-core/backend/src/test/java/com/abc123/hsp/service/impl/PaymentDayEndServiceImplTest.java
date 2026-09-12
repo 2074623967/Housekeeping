@@ -53,8 +53,11 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("有条件进入对账", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertEquals("CONDITIONAL", result.getRecentBatches().get(0).getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertNotNull(result.getAlerts());
-        org.junit.jupiter.api.Assertions.assertEquals("/payment-events?publishStatus=FAILED_OR_DEAD_LETTER", result.getAlerts().get(1).getActionRoute());
-        org.junit.jupiter.api.Assertions.assertEquals("/refunds?refundStatus=PENDING", result.getAlerts().get(2).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals(4, result.getAlerts().size());
+        org.junit.jupiter.api.Assertions.assertEquals("PAYMENT_SUCCESS_GAP", result.getAlerts().get(0).getAlertType());
+        org.junit.jupiter.api.Assertions.assertEquals("/payment-issues", result.getAlerts().get(0).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals("/payment-events?publishStatus=FAILED_OR_DEAD_LETTER", result.getAlerts().get(2).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals("/refunds?refundStatus=PENDING", result.getAlerts().get(3).getActionRoute());
     }
 
     @Test
@@ -233,5 +236,7 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("禁止进入对账", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertEquals("danger", result.getReconciliationReadinessType());
         org.junit.jupiter.api.Assertions.assertTrue(result.getReconciliationReadinessSummary().contains("支付成功差异 3 笔"));
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(3), result.getAlerts().get(0).getAffectedCount());
+        org.junit.jupiter.api.Assertions.assertEquals("P1", result.getAlerts().get(0).getSeverityLevel());
     }
 }

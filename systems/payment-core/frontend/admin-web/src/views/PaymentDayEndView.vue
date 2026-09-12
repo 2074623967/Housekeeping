@@ -120,7 +120,7 @@ onMounted(loadOverview);
         </div>
 
         <div class="risk-banner">
-          当前未收口：渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，待收口退款 {{ overview.openPendingRefundCount }} 笔。
+          当前未收口：支付成功差异 {{ overview.latestPaymentSuccessGapCount ?? 0 }} 笔，渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，待收口退款 {{ overview.openPendingRefundCount }} 笔。
         </div>
 
         <div class="detail-panel">
@@ -229,7 +229,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>最近日终批次</h3>
-              <p class="meta">重点关注渠道异常、内部事件异常和待收口退款，作为第二天对账和差错处理入口</p>
+              <p class="meta">重点关注支付成功差异、渠道异常、内部事件异常和待收口退款，作为第二天对账和差错处理入口</p>
             </div>
           </div>
 
