@@ -4437,6 +4437,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. `GET /api/refunds` 与导出接口接受虚拟筛选 `TERMINAL_FACT_MISMATCH`，列表、计数和 CSV 使用同一集合；日终和支付监控告警类型为 `REFUND_TERMINAL_FACT_MISMATCH / P1`，动作路由固定为 `/refunds?refundStatus=TERMINAL_FACT_MISMATCH`。
 6. 本契约报告 payment-core 内部结构化事实一致性，不证明渠道到账、渠道账单、账务冲销、资金一致或告警处置完成。
 
+### 14.317 支付成功终态事实一致性契约
+
+1. `t_payment_attempt` 新增可空 `completed_at`，表示 payment-core 将该尝试写入终态的本地时间。历史值不自动回填；新增迁移必须先于包含新查询列和成功终结 SQL 的应用版本执行。
+2. `POST /api/payments/callback/{channel}` 与 `POST /api/payments/query` 确认成功时，支付单状态、`success_at` 与最新支付尝试“成功”及 `completed_at` 必须在同一事务内收口；最新尝试按 `created_at DESC, id DESC` 唯一裁决。
+3. 最新尝试终结未精确更新一行时接口抛出内部一致性错误，事务整体回滚，不允许继续更新订单、账单、预付单、成功事件或提交令牌。
+4. 支付详情新增 `successAt` 和 `latestAttemptCompletedAt`。对于已经为 `SUCCESS` 的支付，只有 `successAt` 非空、`latestAttemptStatus=成功` 且 `latestAttemptCompletedAt` 非空时，重复成功回调或主动查单才幂等返回。
+5. 任一成功事实不完整时返回内部一致性错误，不调用渠道、不自动补写历史数据。该异常当前尚无独立列表筛选、日终快照或监控告警，需由后续主动巡检契约补齐。
+6. `CLOSED` 不纳入本契约：未提交人工关闭和过期关闭可以没有支付尝试，其一致性规则需要按关闭来源单独设计。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
