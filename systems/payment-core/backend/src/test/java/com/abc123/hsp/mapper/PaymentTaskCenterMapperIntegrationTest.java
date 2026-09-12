@@ -417,6 +417,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
             PaymentIssueAlertLogEntity accepted = buildIssueAlertLog("PIA-RECEIPT-UPDATE");
             accepted.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-UPDATE");
+            accepted.setSourceAlertNo("PIA-OUTBOX-RECEIPT-UPDATE");
             accepted.setAlertChannel("IM");
             accepted.setAlertStatus("已派发");
             accepted.setProviderReceiptSnapshot("HTTP_RESPONSE:{\"status\":\"ACCEPTED\"}");
@@ -463,17 +464,27 @@ public class PaymentTaskCenterMapperIntegrationTest {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
             PaymentIssueAlertLogEntity accepted = buildIssueAlertLog("PIA-RECEIPT-RETRY");
             accepted.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-RETRY");
+            accepted.setSourceAlertNo("PIA-OUTBOX-RECEIPT-RETRY");
             accepted.setAlertChannel("SMS");
             accepted.setAlertStatus("已派发");
             accepted.setProviderDeliveryStatus("ACCEPTED");
             assertEquals(1, mapper.insertIssueAlertLog(accepted));
+            PaymentIssueAlertLogEntity orphan = buildIssueAlertLog("PIA-RECEIPT-ORPHAN");
+            orphan.setGenerationKey("ISSUE_DELIVERY:PIA-RECEIPT-ORPHAN");
+            orphan.setAlertChannel("EMAIL");
+            orphan.setAlertStatus("已派发");
+            orphan.setProviderDeliveryStatus("ACCEPTED");
+            assertEquals(1, mapper.insertIssueAlertLog(orphan));
             try (Statement statement = session.getConnection().createStatement()) {
                 statement.executeUpdate("UPDATE t_payment_issue_alert_log "
                         + "SET created_at = TIMESTAMPADD(MINUTE, -2, NOW()) "
-                        + "WHERE alert_no = 'PIA-RECEIPT-RETRY'");
+                        + "WHERE alert_no IN ('PIA-RECEIPT-RETRY', 'PIA-RECEIPT-ORPHAN')");
             }
 
             assertEquals(1, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
+            org.junit.jupiter.api.Assertions.assertNull(
+                    mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(orphan.getAlertNo()));
+            assertEquals(0, mapper.claimIssueAlertReceiptQuery(orphan.getAlertNo(), 0, true, 2, 30));
             assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, false, 2, 30));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, false, 2, 30));
             assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(

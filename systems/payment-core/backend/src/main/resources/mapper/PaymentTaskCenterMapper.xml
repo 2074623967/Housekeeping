@@ -1249,7 +1249,8 @@
                ack_operator AS ackOperator,
                triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log
-        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+        WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -1288,6 +1289,7 @@
                triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log
         WHERE alert_no = #{alertNo}
+          AND source_alert_no IS NOT NULL
           AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
@@ -1325,7 +1327,8 @@
                ack_operator AS ackOperator,
                triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log
-        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+        WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -1348,6 +1351,8 @@
             next_receipt_query_at = TIMESTAMPADD(SECOND, #{claimTimeoutSeconds}, NOW()),
             receipt_query_result = 'QUERYING'
         WHERE alert_no = #{alertNo}
+          AND source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -1371,6 +1376,9 @@
                 ELSE TIMESTAMPADD(SECOND, #{nextDelaySeconds}, NOW())
             END
         WHERE alert_no = #{alertNo}
+          AND source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
           AND receipt_query_count = #{attemptCount}
@@ -1391,6 +1399,9 @@
             ack_at = NOW(),
             triggered_by = #{triggeredBy}
         WHERE alert_no = #{alertNo}
+          AND source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
           AND receipt_query_count = #{receiptQueryCount}
