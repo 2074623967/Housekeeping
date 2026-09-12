@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { paymentDayEndApi } from "../api/client";
+import { previousShanghaiBusinessDate } from "../utils/businessDate";
 
 const overview = ref({
   totalBatchCount: 0,
@@ -20,16 +21,8 @@ const errorMessage = ref("");
 const actionMessage = ref("");
 const activeAction = ref("");
 
-function previousLocalDate() {
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
 const runForm = ref({
-  bizDate: previousLocalDate(),
+  bizDate: previousShanghaiBusinessDate(),
   triggeredBy: "",
   runMode: "MANUAL"
 });
