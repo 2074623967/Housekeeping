@@ -11474,3 +11474,30 @@
 1. HTTP 派发的权威裁决现与运营页面一致：无法识别阶段时不猜测、不调用外部系统，先保留失败事实供数据修复和人工核查。
 2. 数据库默认值保证正常新事件仍从 `PENDING` 开始；AMQP 的发布语义继续只由 `publishStatus` 与 publisher confirm 表达，不因无关 HTTP 阶段异常被阻断。
 3. 本地 Mockito 不证明生产存量数据质量、真实下游幂等、清分或账务结果、MySQL 多实例行为和稳定性；release 四项真实治理阻断不变。
+
+## 427. 2026-09-12 支付成功 HTTP 完成阶段直接恢复 V1.0 验证
+
+### 427.1 本轮补强
+
+1. 派发入口先校验投递模式；HTTP 模式随后先解析并校验阶段，`COMPLETED` 跳过载荷重建和 HTTP 配置校验，直接补齐事件 `SUCCESS`。
+2. `COMPLETED` 不再读取支付详情、服务者，不依赖清分 URL、账务 URL 或账务账号；合法 `PENDING / CLEARING_ACCEPTED` 及 AMQP 的载荷校验与外部调用路径保持不变。
+3. 非法模式和非法 HTTP 阶段同步提前到支付详情读取前失败，避免无意义的业务查询，也维持外部副作用零调用。
+
+### 427.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 首次定向测试 | 未通过：`53` 项中 `1` error，原因是非法派发模式提前失败后旧用例的支付详情、服务者 stub 变为多余；业务断言无 failure，未记录为能力通过 |
+| 修正后定向测试 | `PaymentEventDispatchServiceImplTest` `53` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 后端全量测试 | `943` 项通过，`0` failures、`0` errors、`0` skipped |
+| 完成阶段恢复 | 支付详情与服务者零读取、HTTP 配置为空、两个 HTTP 下游零调用、阶段零推进，仅 `markPublishSuccess` 一次 |
+| 失败闭合 | 非法模式与空白/未知 HTTP 阶段在支付详情读取前失败，保持下游零调用和既有失败状态收口 |
+| 结构与补丁 | 无 API、前端、schema、Mapper 或迁移变化；`git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+| 代码提交 | `54724db3 fix(payment-core): recover completed success events directly` |
+
+### 427.3 当前判断
+
+1. `COMPLETED` 现在真正表示两个 HTTP 下游均已接受、只剩本地发布终态待修复；恢复不再被已经无关的载荷来源或下游配置阻断。
+2. 事件行锁、可重发状态和 `markPublishSuccess` 受影响行数仍承担本地并发与终态裁决；写入失败不会被包装成成功，而会沿原失败/死信路径保留。
+3. 本地 Mockito 不证明生产事件更新一定成功、真实下游接受、清分完成、账务入账、MySQL 多实例时序或稳定性；release 四项真实治理阻断不变。

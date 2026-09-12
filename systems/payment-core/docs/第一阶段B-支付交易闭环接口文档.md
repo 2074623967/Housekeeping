@@ -3938,6 +3938,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. AMQP 模式不解释 `paymentSuccessHttpStage`，继续忽略该字段并按 publisher confirm 收口发布状态；HTTP 非法阶段规则不得被调用方扩展成 AMQP 发布限制。
 5. 失败闭合只阻止当前代码路径根据异常阶段产生 HTTP 副作用，不证明存量数据已清洗、真实下游未曾受理、资金一致或生产稳定性。
 
+### 14.254 支付成功 HTTP 完成阶段终态恢复契约
+
+1. 对 `eventType=PAYMENT_SUCCESS`、`publishStatus=PENDING / FAILED / DEAD_LETTER` 且 `paymentSuccessHttpStage=COMPLETED` 的 HTTP 事件，重试只执行事件发布终态更新，不再重建或校验下游载荷。
+2. 该恢复不得查询支付详情或服务者，不得要求清分 URL、账务 URL、账务账号有效，也不得调用清分、账务或阶段推进 Mapper；唯一业务写入为既有条件化 `markPublishSuccess`。
+3. `markPublishSuccess` 影响行数不是 `1` 时不得返回成功，事件继续沿既有失败次数和死信规则收口；调用方必须依据重试响应和刷新后的事件状态判断结果。
+4. `PENDING / CLEARING_ACCEPTED` 仍必须校验支付成功事实、金额、订单、用户、服务者及 HTTP 配置后按阶段投递；AMQP 仍需重建消息载荷并等待 publisher confirm，不使用 `COMPLETED` 快捷恢复。
+5. 该契约只消除本地终态补写对无关数据和配置的依赖，不把 `COMPLETED` 扩张为真实清分完成、账务入账或资金一致性证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
