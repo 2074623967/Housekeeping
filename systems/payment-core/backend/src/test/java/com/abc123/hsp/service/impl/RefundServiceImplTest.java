@@ -560,7 +560,7 @@ class RefundServiceImplTest {
         RefundActionRequestDTO request = new RefundActionRequestDTO();
         request.setRefundOrderId("REF-002");
         request.setOperator(" refund-retry-operator ");
-        when(refundMapper.updateRefundStatus("REF-002", "FAIL", "PROCESSING", "warn", false)).thenReturn(1);
+        when(refundMapper.restartFailedRefund("REF-002")).thenReturn(1);
         RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
         submitRequest.setRefundOrderId("REF-002");
         submitRequest.setPaymentOrderId("PAY-002");
@@ -575,6 +575,9 @@ class RefundServiceImplTest {
         when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-002")).thenReturn(submitRequest);
         createService().retry(request);
 
+        verify(refundMapper).restartFailedRefund("REF-002");
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                "REF-002", "FAIL", "PROCESSING", "warn", false);
         verify(refundMapper).upsertRefundSubmitEvent(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
                 org.mockito.ArgumentMatchers.eq("REF-002"),
@@ -591,7 +594,7 @@ class RefundServiceImplTest {
 
     @Test
     void shouldResubmitChannelForTaskRetryAndKeepTriggerIdentity() {
-        when(refundMapper.updateRefundStatus("REF-TASK", "FAIL", "PROCESSING", "warn", false)).thenReturn(1);
+        when(refundMapper.restartFailedRefund("REF-TASK")).thenReturn(1);
         RefundChannelSubmitRequestDTO submitRequest = new RefundChannelSubmitRequestDTO();
         submitRequest.setRefundOrderId("REF-TASK");
         submitRequest.setPaymentOrderId("PAY-TASK");
@@ -603,6 +606,7 @@ class RefundServiceImplTest {
         createService()
                 .retryForTask("REF-TASK", "refund-retry-scheduler");
 
+        verify(refundMapper).restartFailedRefund("REF-TASK");
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
                 org.mockito.ArgumentMatchers.eq("REF-TASK"),
@@ -634,6 +638,8 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund(org.mockito.ArgumentMatchers.anyString());
         org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
     }
 
@@ -659,6 +665,8 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .restartFailedRefund(org.mockito.ArgumentMatchers.anyString());
         org.mockito.Mockito.verifyNoInteractions(paymentEventDispatchService);
     }
 

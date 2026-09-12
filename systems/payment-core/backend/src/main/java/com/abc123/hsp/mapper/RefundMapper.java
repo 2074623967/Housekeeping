@@ -134,6 +134,11 @@ public interface RefundMapper {
                            @Param("success") boolean success);
 
     /**
+     * 将失败退款重新置为待渠道处理，并清除上一轮当前受理轨迹。
+     */
+    int restartFailedRefund(@Param("refundOrderId") String refundOrderId);
+
+    /**
      * 新增退款操作日志。
      */
     int insertOperationLog(RefundOperationLogEntity entity);

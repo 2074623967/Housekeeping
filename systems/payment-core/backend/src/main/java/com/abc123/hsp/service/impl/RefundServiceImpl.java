@@ -631,7 +631,9 @@ public class RefundServiceImpl implements RefundService {
         if (remark == null) {
             remark = resolveDefaultRemark(fromStatus, status);
         }
-        int affectedRows = refundMapper.updateRefundStatus(refundOrderId, fromStatus, status, statusType, success);
+        int affectedRows = STATUS_FAIL.equals(fromStatus) && STATUS_PROCESSING.equals(status)
+                ? refundMapper.restartFailedRefund(refundOrderId)
+                : refundMapper.updateRefundStatus(refundOrderId, fromStatus, status, statusType, success);
         if (affectedRows == 0) {
             throw new IllegalArgumentException("退款单状态不允许执行当前操作");
         }

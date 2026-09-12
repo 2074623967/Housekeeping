@@ -356,6 +356,18 @@
           AND status = #{fromStatus}
     </update>
 
+    <update id="restartFailedRefund">
+        UPDATE t_refund_order
+        SET status = 'PROCESSING',
+            status_type = 'warn',
+            success_at = NULL,
+            channel_code = NULL,
+            channel_refund_no = NULL,
+            channel_submitted_at = NULL
+        WHERE refund_order_id = #{refundOrderId}
+          AND status = 'FAIL'
+    </update>
+
     <insert id="insertOperationLog" parameterType="com.abc123.hsp.entity.RefundOperationLogEntity">
         INSERT INTO t_refund_operation_log (
             log_no,

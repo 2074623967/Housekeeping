@@ -202,6 +202,37 @@ class RefundSubmitOutboxMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldRestartFailedRefundWithoutReusingPreviousAcceptedTrace() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_refund_order "
+                    + "SET status='FAIL', status_type='danger', channel_code='wx_h5', "
+                    + "channel_refund_no='RCH-FAILED', channel_submitted_at=NOW(), success_at=NOW() "
+                    + "WHERE refund_order_id='REF-TRACE'");
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+
+            int restarted = refundMapper.restartFailedRefund("REF-TRACE");
+            int repeated = refundMapper.restartFailedRefund("REF-TRACE");
+
+            assertEquals(1, restarted);
+            assertEquals(0, repeated);
+            try (ResultSet resultSet = statement.executeQuery(
+                    "SELECT status, status_type, channel_code, channel_refund_no, "
+                            + "channel_submitted_at, success_at FROM t_refund_order "
+                            + "WHERE refund_order_id='REF-TRACE'")) {
+                resultSet.next();
+                assertEquals("PROCESSING", resultSet.getString("status"));
+                assertEquals("warn", resultSet.getString("status_type"));
+                assertNull(resultSet.getString("channel_code"));
+                assertNull(resultSet.getString("channel_refund_no"));
+                assertNull(resultSet.getTimestamp("channel_submitted_at"));
+                assertNull(resultSet.getTimestamp("success_at"));
+            }
+            session.rollback();
+        }
+    }
+
     private void parseMapper(Configuration configuration, String resource) throws Exception {
         try (InputStream mapperXml = Resources.getResourceAsStream(resource)) {
             new XMLMapperBuilder(
