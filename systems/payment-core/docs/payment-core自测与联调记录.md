@@ -11993,3 +11993,31 @@
 1. 独立支付监控页现已同时展示待收口与已关闭数量，页面矩阵、Mapper、DTO 和前端摘要完成对齐。
 2. `closedPaymentCount` 是查询时点 payment-core 中 `CLOSED` 支付单数量，不区分超时关闭和人工关闭，也不表达渠道侧终态。
 3. 本地测试不证明生产数据完整、真实渠道关单、支付失败、资金退回、账务入账或对账一致性；release 四项真实治理阻断不变。
+
+## 445. 2026-09-12 支付监控空集合零值契约 V1.0 验证
+
+### 445.1 本轮补强
+
+1. `PaymentMonitorMapper.findSummary` 的成功、待处理和已关闭数量聚合统一增加 `COALESCE(..., 0)`，消除支付表为空时 `SUM` 返回 `NULL` 的数据库语义泄漏。
+2. 空支付集合下，摘要的 `totalCount / successCount / pendingPaymentCount / closedPaymentCount` 均固定为整数 `0`，成功率和成功金额继续分别返回 `0.00%`、`¥0.00`。
+3. 告警继续从支付、退款和渠道配置三类事实独立计算；清空支付表不会隐式清除失败退款或停用渠道告警。
+
+### 445.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 监控后端定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest,PaymentMonitorControllerTest` `6` 项通过，`0` failures、`0` errors、`0` skipped |
+| 空支付集合数量 | `totalCount=0`、`successCount=0`、`pendingPaymentCount=0`、`closedPaymentCount=0`，均为非空数值 |
+| 空支付集合展示值 | `successRate=0.00%`、`successAmount=¥0.00` |
+| 跨表告警独立性 | 保留一笔失败退款与一个停用渠道时，清空支付表后 `alertCount=2` |
+| payment-core 后端全量测试 | `962` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API 路径、DTO、前端、状态机、schema、索引或迁移变化 |
+| 代码提交 | `916bdd66 fix(payment-core): normalize empty monitor summary` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 445.3 当前判断
+
+1. 支付监控摘要的整数数量字段现在具备完整的空集合零值契约，调用方不再接收到由 SQL 空集合聚合产生的 `null`。
+2. 本轮只归一化空集合表示，不改变有数据时的状态分类、成功率、成功金额或告警口径；前端既有缺省防御继续作为兼容保护。
+3. 本地 H2 空表测试不证明生产数据完整、真实渠道状态、支付成功、退款到账、账务入账、资金一致或生产稳定性；release 四项真实治理阻断不变。

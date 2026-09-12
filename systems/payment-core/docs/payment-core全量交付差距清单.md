@@ -2273,6 +2273,14 @@
 4. 正式 Mapper 集成测试验证 `total=6 / success=3 / pending=1 / closed=1`；后端定向 `5` 项、后端全量 `961` 项、管理端单测 `15` 项和生产构建通过，Mapper XML 与补丁检查通过。构建仍有既存 `542.37 kB` 单包告警。
 5. 本轮不改变支付状态机、关单动作、告警数量、渠道指标、schema、索引或迁移；本地 `CLOSED` 计数不证明真实渠道已关单、支付失败、资金已退回或对账一致，release 四项真实治理阻断不变。
 
+### 8.277 2026-09-12 支付监控空集合零值契约进展
+
+1. `PaymentMonitorMapper.findSummary` 原先以 `SUM(CASE...)` 聚合成功、待处理和已关闭数量；支付表为空时 MySQL 聚合返回 `NULL`，导致三个整数型摘要字段可能为 `null`，与监控数值契约不一致。
+2. 三个数量聚合统一使用 `COALESCE(SUM(CASE...), 0)`，空支付集合下 `totalCount / successCount / pendingPaymentCount / closedPaymentCount` 均返回数值 `0`；既有成功率 `0.00%` 和成功金额 `¥0.00` 语义保持一致。
+3. 正式 Mapper 集成测试在同一事务清空支付表后验证全部零值，并保留失败退款和停用渠道夹具，确认跨表告警仍独立返回 `alertCount=2`。定向 `6` 项、payment-core 后端全量 `962` 项通过，均为 `0` failures、`0` errors、`0` skipped，Mapper XML 与补丁检查通过。
+4. 本轮不改变非空统计口径、支付状态机、告警生成、渠道指标、API 路径、DTO、前端、schema、索引或迁移；前端 `?? 0` 防御仍保留，但不再承担修补后端空集合语义的职责。
+5. 本地空表测试不证明生产数据完整、真实渠道状态、支付成功、退款到账、账务入账、资金一致或生产稳定性；统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

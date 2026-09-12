@@ -4067,6 +4067,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 字段缺省展示按 `0` 处理；管理端以独立“已关闭支付”卡片展示，不改变摘要其他字段、渠道指标或告警数组契约。
 4. `CLOSED` 是 payment-core 内部支付状态，可能来自超时关闭或人工关闭；该计数不得解释为渠道侧关单确认、支付失败、资金退回或对账完成。
 
+### 14.272 支付监控摘要空集合零值契约
+
+1. `GET /api/payment-monitor/overview` 的 `summary.totalCount / successCount / pendingPaymentCount / closedPaymentCount` 均为整数型数值字段；当 `t_payment_order` 没有记录时，四个字段必须返回 `0`，不得返回 `null`。
+2. 同一场景下 `successRate` 返回 `0.00%`，`successAmount` 返回 `¥0.00`；该零值契约只统一空集合表示，不改变非空集合的状态分类、比率或金额算法。
+3. `alertCount` 仍由待处理支付、失败退款和停用渠道三类事实独立计算；支付表为空只消除支付待处理告警，不代表失败退款或停用渠道告警必然为零。
+4. 本契约不改变 API 路径、响应结构、前端缺省防御、渠道指标或告警数组；零值也不得解释为生产数据已完整核验、渠道正常、支付或资金处理已经完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

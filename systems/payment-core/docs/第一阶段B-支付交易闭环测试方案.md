@@ -2250,6 +2250,14 @@
 4. 执行监控 Mapper、服务和控制器定向测试、payment-core 后端全量测试、管理端单测与生产构建、Mapper XML 和补丁检查；核对桌面五列、平板两列和手机单列样式规则。
 5. 另行验证生产 MySQL 聚合计划和生产状态数据；本地 `CLOSED` 不能证明真实渠道关单、支付失败、资金退回、账务入账或资金一致性。
 
+### 4.289 支付监控摘要空集合零值保护
+
+1. 使用正式 `PaymentMonitorMapper.xml`，在同一测试事务中清空 `t_payment_order` 后调用 `findSummary`，避免使用手工构造 DTO 掩盖数据库空集合聚合行为。
+2. 验证 `totalCount / successCount / pendingPaymentCount / closedPaymentCount` 均为非空整数 `0`，并核对 `successRate=0.00%`、`successAmount=¥0.00`。
+3. 保留失败退款和停用渠道夹具，验证支付表为空时 `alertCount` 仍为 `2`，证明退款与渠道配置事实没有被支付空集合错误归零。
+4. 回归非空支付摘要、告警排序、监控服务和控制器，并执行监控定向测试、payment-core 后端全量测试、Mapper XML 与补丁检查；本轮无前端代码变化，不重复声明前端构建为本批验证。
+5. 另行验证生产 MySQL 空集合聚合与真实数据质量；本地 H2 空表不得证明生产数据完整、渠道正常、支付成功、退款到账、账务入账、资金一致或生产稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
