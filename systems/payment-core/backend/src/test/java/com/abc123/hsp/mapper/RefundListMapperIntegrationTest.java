@@ -69,6 +69,34 @@ class RefundListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldApplyPendingStatusToListCountAndExport() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order "
+                    + "(refund_order_id, payment_order_id, order_no, customer_name, refund_amount, "
+                    + "refund_method, status, status_type, applied_at) VALUES "
+                    + "('REF-PENDING-REVIEW', 'PAY-PENDING-1', 'ORD-PENDING-1', '客户甲', 1.00, "
+                    + "'待收口测试', 'REVIEWING', 'warning', '2026-09-12 12:00:00'), "
+                    + "('REF-PENDING-PROCESS', 'PAY-PENDING-2', 'ORD-PENDING-2', '客户乙', 2.00, "
+                    + "'待收口测试', 'PROCESSING', 'warning', '2026-09-12 12:00:01'), "
+                    + "('REF-PENDING-SUCCESS', 'PAY-PENDING-3', 'ORD-PENDING-3', '客户丙', 3.00, "
+                    + "'待收口测试', 'SUCCESS', 'success', '2026-09-12 12:00:02'), "
+                    + "('REF-PENDING-FAIL', 'PAY-PENDING-4', 'ORD-PENDING-4', '客户丁', 4.00, "
+                    + "'待收口测试', 'FAIL', 'danger', '2026-09-12 12:00:03')");
+            RefundMapper mapper = session.getMapper(RefundMapper.class);
+            RefundQueryDTO query = new RefundQueryDTO();
+            query.setRefundStatus("PENDING");
+            query.setRefundMethod("待收口测试");
+
+            assertEquals(Arrays.asList("REF-PENDING-PROCESS", "REF-PENDING-REVIEW"),
+                    refundOrderIds(mapper.findAll(query)));
+            assertEquals(2L, mapper.count(query));
+            assertEquals(Arrays.asList("REF-PENDING-PROCESS", "REF-PENDING-REVIEW"),
+                    refundOrderIds(mapper.findAllForExport(query)));
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

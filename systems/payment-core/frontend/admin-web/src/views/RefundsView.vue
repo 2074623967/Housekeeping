@@ -1,10 +1,13 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
 import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
 import { resolveRefundApplicationAttempt } from "../utils/refundApplication";
+import { refundListFiltersFromQuery } from "../utils/refundListFilters";
 
+const route = useRoute();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
@@ -28,12 +31,7 @@ const applyForm = ref({
   refundMethod: "原路退款",
   refundReason: ""
 });
-const filters = ref({
-  refundOrderId: "",
-  paymentOrderId: "",
-  refundStatus: "全部",
-  refundMethod: "全部"
-});
+const filters = ref(refundListFiltersFromQuery(route.query));
 
 const metrics = computed(() => ({
   total: total.value,
@@ -242,6 +240,20 @@ function goToPage(nextPage) {
 }
 
 onMounted(loadRefunds);
+
+watch(
+  () => [
+    route.query.refundOrderId,
+    route.query.paymentOrderId,
+    route.query.refundStatus,
+    route.query.refundMethod
+  ],
+  () => {
+    filters.value = refundListFiltersFromQuery(route.query);
+    pageNo.value = 1;
+    loadRefunds();
+  }
+);
 </script>
 
 <template>
@@ -342,6 +354,7 @@ onMounted(loadRefunds);
           <label>退款状态</label>
           <select v-model="filters.refundStatus" :disabled="isActionRunningOnPage">
             <option>全部</option>
+            <option value="PENDING">待收口（待审核 / 处理中）</option>
             <option>REVIEWING</option>
             <option>PROCESSING</option>
             <option>SUCCESS</option>

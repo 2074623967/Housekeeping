@@ -30,9 +30,14 @@
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
             </if>
-            <if test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
-                AND status = #{query.refundStatus}
-            </if>
+            <choose>
+                <when test="query.refundStatus == 'PENDING'">
+                    AND status IN ('REVIEWING', 'PROCESSING')
+                </when>
+                <when test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
+                    AND status = #{query.refundStatus}
+                </when>
+            </choose>
             <if test="query.refundMethod != null and query.refundMethod != '' and query.refundMethod != '全部'">
                 AND refund_method = #{query.refundMethod}
             </if>
@@ -51,9 +56,14 @@
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
             </if>
-            <if test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
-                AND status = #{query.refundStatus}
-            </if>
+            <choose>
+                <when test="query.refundStatus == 'PENDING'">
+                    AND status IN ('REVIEWING', 'PROCESSING')
+                </when>
+                <when test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
+                    AND status = #{query.refundStatus}
+                </when>
+            </choose>
             <if test="query.refundMethod != null and query.refundMethod != '' and query.refundMethod != '全部'">
                 AND refund_method = #{query.refundMethod}
             </if>
@@ -82,9 +92,14 @@
             <if test="query.paymentOrderId != null and query.paymentOrderId != ''">
                 AND payment_order_id LIKE CONCAT('%', #{query.paymentOrderId}, '%')
             </if>
-            <if test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
-                AND status = #{query.refundStatus}
-            </if>
+            <choose>
+                <when test="query.refundStatus == 'PENDING'">
+                    AND status IN ('REVIEWING', 'PROCESSING')
+                </when>
+                <when test="query.refundStatus != null and query.refundStatus != '' and query.refundStatus != '全部'">
+                    AND status = #{query.refundStatus}
+                </when>
+            </choose>
             <if test="query.refundMethod != null and query.refundMethod != '' and query.refundMethod != '全部'">
                 AND refund_method = #{query.refundMethod}
             </if>

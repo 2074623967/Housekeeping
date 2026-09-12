@@ -233,8 +233,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 "退款待收口",
                 defaultZero(overview.getOpenPendingRefundCount()),
                 "存在退款处理中或待审核记录，需要继续推进逆向资金收口。",
-                "进入退款单管理页核对失败与处理中退款单",
-                "/refunds?refundStatus=PROCESSING",
+                "进入退款单管理页核对待审核与处理中退款单",
+                "/refunds?refundStatus=PENDING",
                 2
         ));
         return alerts;
