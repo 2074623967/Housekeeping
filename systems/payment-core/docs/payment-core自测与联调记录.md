@@ -11174,3 +11174,28 @@
 1. `SUCCESS / CLOSED` 的终态保护已由数据库条件更新承担，不再依赖 Service 初次读取结果，消除了已确认终态被晚到非成功回调倒退的窗口。
 2. 本轮没有收窄 `tradeStatus` 文本集合；真实渠道状态映射仍需结合正式协议适配单独治理，不能由本修复推断已完成。
 3. 本地自动测试不替代生产 MySQL 隔离级别、多实例时序、真实渠道乱序通知、账务和对账核验，release 四项真实阻断不变。
+
+## 415. 2026-09-12 支付渠道提交事实与前端查单资格 V1.0 验证
+
+### 415.1 本轮补强
+
+1. 回调与主动查单在外部调用和资金副作用前统一校验：终态 `SUCCESS / CLOSED` 可刷新，其他状态仅 `WAIT_CALLBACK` 且最近支付尝试非空时允许；不满足时返回 `PAYMENT-1054`。
+2. 正式 Mapper 的普通成功、待确认状态更新均要求支付尝试存在；支付列表与收银台响应暴露最小只读提交事实，预付单创建/复用路径保持原查询依赖。
+3. 管理端支付列表、支付详情、支付记录详情，以及用户端收银台、结果页同时加入按钮资格和动作函数兜底；页面不再以“支付单号存在”或“主动查单始终可用”替代渠道提交事实。
+
+### 415.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `mvn -Dtest=PaymentServiceImplTest,PaymentMapperSqlBindingSafetyTest,PaymentMapperStateTransitionIntegrationTest,PaymentPrepayCreationConcurrencyIntegrationTest test` | 通过 | `90` 项；覆盖零副作用资格拒绝、正式 SQL 最新尝试投影及预付并发路径回归 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `927` 项，`0` failures、`0` errors、`0` skipped |
+| 管理端测试与构建 | `npm test`、`npm run build`（admin-web） | 通过 | `12` 项测试通过并成功产出；仍报告既存的 `539.75 kB` 单包告警 |
+| 用户端测试与构建 | `npm test`、`npm run build`（app-web） | 通过 | `13` 项测试通过，APP/H5/PC 共用构建成功产出 |
+| Mapper 与补丁检查 | `xmllint --noout PaymentMapper.xml`、`git diff --check` | 通过 | Mapper XML 合法，无空白错误 |
+| 真实环境验证 | MySQL 多连接、多实例回调/查单、真实渠道适配与资金核验 | 未执行 | 不记录渠道受理、查询成功、资金一致或生产稳定性通过 |
+
+### 415.3 当前判断
+
+1. 客户端五个入口与服务端权威门禁已使用同一资格口径，无渠道提交事实时既不开放操作，也不能通过事件函数绕过。
+2. `PaymentListItemDTO.latestAttemptStatus` 与 `CashierPageDTO.paymentStatus / latestAttemptStatus` 只用于展示和动作资格，不是新的渠道受理凭证；权威事实仍由服务端数据库与状态迁移判断。
+3. 本地自动化不替代真实渠道协议、MySQL 多实例竞态、账务、对账和生产核验，release 四项真实阻断不变。

@@ -1495,6 +1495,13 @@ t_order
 2. Mapper 返回受影响行数供 Service 判断是否取得状态写入权；返回 `0` 时不得继续修改 `t_payment_attempt`、`t_prepay_order` 或新增 `PAYMENT_PENDING` 事件。
 3. 本轮复用 `t_payment_order` 既有主业务单号定位和状态字段，不新增表、列、索引或迁移；H2 验证不能替代生产 MySQL 锁等待、隔离级别和多实例竞态验证。
 
+### 4.173 支付渠道提交事实查询与迁移边界
+
+1. 渠道提交事实继续来源于 `t_payment_attempt`，不在 `t_payment_order` 或 `t_prepay_order` 冗余新增布尔标记；最近尝试按同一支付单的 `created_at DESC, id DESC` 确定。
+2. 支付列表以左关联最近尝试投影 `latestAttemptStatus`；收银台通过独立 `findSubmissionFact` 只读查询取得支付状态和最近尝试，避免让预付单创建、幂等复用和并发协调路径依赖支付尝试表查询。
+3. 普通渠道成功和非成功待确认更新均使用 `EXISTS t_payment_attempt` 作为数据库末端资格条件，与 Service 的 `WAIT_CALLBACK + latestAttemptStatus` 前置校验共同失败闭合。
+4. 本轮不新增表、列、索引、数据回填或迁移；当前分页和单支付单查询使用既有 `payment_order_id / created_at / id` 访问形态，生产数据量下的执行计划与索引效果仍需 MySQL 环境验证。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

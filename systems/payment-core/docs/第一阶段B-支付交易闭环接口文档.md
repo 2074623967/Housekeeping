@@ -2617,6 +2617,9 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 | `PAYMENT-1049` | gateway-access 退款提交未配置、调用失败或未返回可确认的渠道受理事实；保持处理中并先查单核验 |
 | `PAYMENT-1050` | 退款提交受理结果未知，必须先向渠道查单或人工核查，禁止直接重发 |
 | `PAYMENT-1051` | 告警供应商回执查询的目标通道共享固定窗口额度已耗尽，本条不调用通知集成网关 |
+| `PAYMENT-1052` | 退款申请幂等键为空、超长或包含 ISO 控制字符，服务端在 Mapper 访问前拒绝 |
+| `PAYMENT-1053` | 同一支付单复用退款申请幂等键但规范化业务内容不一致 |
+| `PAYMENT-1054` | 支付单没有可供回调或主动查单使用的渠道提交事实 |
 
 ### 14.75 退款提交未知结果按平台退款单号核查契约
 
@@ -3844,6 +3847,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 非 `SUCCESS` 回调仅在数据库中支付单尚未进入 `SUCCESS / CLOSED` 时原子维持 `WAIT_CALLBACK` 并绑定渠道流水；条件不满足时返回支付单最新详情。
 3. 条件更新未命中表示终态已由并发回调、主动查单或关闭路径取得，服务不得再更新支付尝试、预付单，不得写新的待确认通知处理记录或 `PAYMENT_PENDING` 事件。
 4. 该契约保证平台终态不被晚到非成功回调倒退，不代表任意渠道状态文本已经完成正式协议映射；生产仍需按真实渠道文档验证乱序和重复通知。
+
+### 14.242 支付渠道提交事实与主动查单资格契约
+
+1. `POST /api/payments/query`、`POST /api/payments/admin/query` 和 `POST /api/payments/callback/{channel}` 在渠道、限流、资金或状态副作用前校验支付提交事实；除兼容读取 `SUCCESS / CLOSED` 外，仅 `WAIT_CALLBACK` 且存在最近支付尝试的支付单具备资格，否则返回 `PAYMENT-1054`。
+2. 成功回调和主动查单成功的数据库收口只允许普通 `WAIT_CALLBACK` 且 `t_payment_attempt` 至少存在一行的支付单；`CLOSED` 仅保留既有历史过期误关恢复条件。非成功回调维持待确认也要求相同提交事实。
+3. `GET /api/payments` 的 `PaymentListItemDTO` 新增可空 `latestAttemptStatus`；`GET /api/payments/cashier/{prepayOrderNo}` 的 `CashierPageDTO` 新增可空 `paymentStatus / latestAttemptStatus`，供客户端在发起主动查单前准确判断。既有字段、端点路径和请求体不变。
+4. 客户端不得以按钮可点击、收银台文案或支付单号已生成推断渠道已受理；服务端校验仍是权威边界。`SUCCESS / CLOSED` 可继续查单仅用于刷新与历史兼容，不表示允许重开终态或产生新的资金事实。
 
 ## 15. 结论
 
