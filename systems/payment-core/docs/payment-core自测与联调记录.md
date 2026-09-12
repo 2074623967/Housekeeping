@@ -12048,3 +12048,31 @@
 1. 摘要告警数现在与告警数组使用同一组生成条件，调用方可依赖 `summary.alertCount = alerts.length`，当前三类告警下取值为 `0..3`。
 2. `affectedCount` 继续表达单类告警影响的记录数；不能把多个 `affectedCount` 求和后与 `alertCount` 比较。
 3. 本地 H2 不证明生产告警事实完整、处置完成、渠道恢复、支付成功、退款到账、账务入账、资金一致或生产稳定性；release 四项真实治理阻断不变。
+
+## 447. 2026-09-12 支付监控最近七日时间窗 V1.0 验证
+
+### 447.1 本轮补强
+
+1. `PaymentMonitorMapper.findRecentTrends` 从“全历史最近七个有数据日期”收敛为数据库会话当天及此前六个自然日。
+2. 时间条件采用左闭右开区间 `[CURDATE()-6天, CURDATE()+1天)`，排除窗口前历史记录与明日及更晚的异常时间戳。
+3. 保留按日聚合、日期降序和最多七行的现有响应形态；无支付事实的日期不生成零值趋势点。
+
+### 447.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 监控后端定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest,PaymentMonitorControllerTest` `8` 项通过，`0` failures、`0` errors、`0` skipped |
+| 窗口下界 | 前第六天一笔支付进入趋势，前第七天一笔支付被排除 |
+| 窗口上界 | 明日时间戳支付被排除，当天六笔既有支付保持聚合为一行 |
+| 顺序与行数 | 返回当天、前第六天两行，继续按 `statDate DESC` 排列且不补空白日期 |
+| payment-core 后端全量测试 | `964` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、状态机、schema、索引或迁移变化 |
+| 代码提交 | `92a373fb fix(payment-core): bound recent monitor trends` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 447.3 当前判断
+
+1. “最近 7 天”现在表达连续七个自然日，而不是七个离散有数据日期；页面不会再把窗口外历史数据当作近期趋势。
+2. 窗口以数据库会话 `CURDATE()` 为准，生产环境仍需确保数据库会话时区与业务时区一致；空白日期当前不补零。
+3. 本地 H2 不证明生产 MySQL 时区、索引和执行计划、数据完整、真实支付成功、账务入账、资金一致或生产稳定性；release 四项真实治理阻断不变。

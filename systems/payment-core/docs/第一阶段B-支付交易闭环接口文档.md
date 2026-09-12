@@ -4082,6 +4082,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `pendingPaymentCount` 仍统计 `PREPAY_CREATED / WAIT_CALLBACK`，但只有 `WAIT_CALLBACK` 触发 `WAIT_CALLBACK_TIMEOUT`；仅存在 `PREPAY_CREATED` 时待处理数可以大于零，告警数仍为零。
 4. 本契约不改变告警顺序、等级、影响数量、建议动作或跳转路由；计数一致也不表示告警事实已核验、异常已处置或渠道与资金状态正常。
 
+### 14.274 支付监控最近七日趋势窗口契约
+
+1. `GET /api/payment-monitor/overview` 的 `trends` 只聚合数据库会话当天及此前六个自然日，时间范围为 `[CURDATE()-6天, CURDATE()+1天)`；窗口外历史记录和未来时间戳不进入结果。
+2. 结果继续按 `statDate DESC` 返回且最多七行；每一行只表示窗口内实际存在支付事实的日期，无交易日期不生成零值点，因此数组长度可以小于七。
+3. 每日 `totalCount / successCount / successAmount` 的状态和金额口径保持不变，接口路径、趋势字段和前端消费方式不变。
+4. 窗口以数据库会话时区为准；调用方不得用本地浏览器日期重新裁剪结果，生产投放前应核对数据库会话时区与业务时区一致。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
