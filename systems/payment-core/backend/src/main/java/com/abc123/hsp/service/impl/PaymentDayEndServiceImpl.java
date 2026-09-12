@@ -81,6 +81,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             overview.setOpenMissingPaymentSuccessTimeCount(0);
             overview.setOpenPaymentSuccessFactMismatchCount(0);
             overview.setOpenPendingRefundCount(0);
+            overview.setOpenRefundFailCount(0);
             overview.setOpenMissingRefundSuccessTimeCount(0);
             overview.setOpenRefundTerminalFactMismatchCount(0);
             overview.setLatestBatchStatus("未跑批");
@@ -88,6 +89,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             overview.setLatestPaymentSuccessGapAmount("¥0.00");
             overview.setLatestPendingPaymentAmount("¥0.00");
             overview.setLatestPendingRefundAmount("¥0.00");
+            overview.setLatestRefundFailAmount("¥0.00");
         }
         overview.setAlerts(buildAlerts(overview));
         overview.setRecentBatches(enrichRecentBatches(paymentDayEndMapper.findRecentBatches()));
@@ -204,6 +206,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 paymentDayEndMapper.countPaymentSuccessFactMismatchByDate(bizDate)));
         entity.setRefundSuccessCount(defaultZero(paymentDayEndMapper.countSuccessRefundsByDate(bizDate)));
         entity.setRefundSuccessAmount(defaultAmount(paymentDayEndMapper.sumSuccessRefundAmountByDate(bizDate)));
+        entity.setRefundFailCount(defaultZero(paymentDayEndMapper.countFailedRefundsByDate(bizDate)));
+        entity.setRefundFailAmount(defaultAmount(paymentDayEndMapper.sumFailedRefundAmountByDate(bizDate)));
         entity.setMissingRefundSuccessTimeCount(defaultZero(
                 paymentDayEndMapper.countMissingRefundSuccessTimeByDate(bizDate)));
         entity.setRefundTerminalFactMismatchCount(defaultZero(
@@ -240,7 +244,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 enrichRecentBatches(CsvExportRowLimiter.requireWithinLimit(
                         paymentDayEndMapper.findAllBatchesForExport()));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("批次号,业务日期,运行方式,批次状态,支付总单量,支付成功单量,支付成功金额,渠道成功单量,渠道成功金额,内部成功单量,内部成功金额,成功差异单量,成功差异金额,待收口支付,待收口支付金额,支付成功时间缺失,支付成功事实不一致,退款成功单量,退款成功金额,退款成功时间缺失,退款终态事实不一致,渠道异常,内部异常,待收口退款,待收口退款金额,对账准入,准入说明,备注,触发人,创建时间,完成时间\n");
+        builder.append("批次号,业务日期,运行方式,批次状态,支付总单量,支付成功单量,支付成功金额,渠道成功单量,渠道成功金额,内部成功单量,内部成功金额,成功差异单量,成功差异金额,待收口支付,待收口支付金额,支付成功时间缺失,支付成功事实不一致,退款成功单量,退款成功金额,退款失败单量,退款失败金额,退款成功时间缺失,退款终态事实不一致,渠道异常,内部异常,待收口退款,待收口退款金额,对账准入,准入说明,备注,触发人,创建时间,完成时间\n");
         for (PaymentDayEndBatchListItemDTO batch : batches) {
             builder.append(csvCell(batch.getBatchNo())).append(',')
                     .append(csvCell(batch.getBizDate())).append(',')
@@ -261,6 +265,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                     .append(csvCell(valueOf(batch.getPaymentSuccessFactMismatchCount()))).append(',')
                     .append(csvCell(valueOf(batch.getRefundSuccessCount()))).append(',')
                     .append(csvCell(batch.getRefundSuccessAmount())).append(',')
+                    .append(csvCell(valueOf(batch.getRefundFailCount()))).append(',')
+                    .append(csvCell(batch.getRefundFailAmount())).append(',')
                     .append(csvCell(valueOf(batch.getMissingRefundSuccessTimeCount()))).append(',')
                     .append(csvCell(valueOf(batch.getRefundTerminalFactMismatchCount()))).append(',')
                     .append(csvCell(valueOf(batch.getChannelAbnormalCount()))).append(',')
@@ -325,6 +331,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 && entity.getPendingPaymentCount() == 0
                 && entity.getMissingPaymentSuccessTimeCount() == 0
                 && entity.getPaymentSuccessFactMismatchCount() == 0
+                && entity.getRefundFailCount() == 0
                 && entity.getMissingRefundSuccessTimeCount() == 0
                 && entity.getRefundTerminalFactMismatchCount() == 0
                 && entity.getChannelAbnormalCount() == 0
@@ -333,13 +340,15 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             return "支付状态、支付成功、渠道回调、内部事件和退款状态均已完成日终收口，可进入次日对账。";
         }
         return String.format(
-                "成功差异%d笔（%s），待收口支付%d笔（%s），支付成功时间缺失%d笔，支付成功事实不一致%d笔，退款成功时间缺失%d笔，退款终态事实不一致%d笔，渠道异常%d笔，内部事件异常%d笔，待收口退款%d笔（%s），需在对账与差错环节继续跟进。",
+                "成功差异%d笔（%s），待收口支付%d笔（%s），支付成功时间缺失%d笔，支付成功事实不一致%d笔，退款失败%d笔（%s），退款成功时间缺失%d笔，退款终态事实不一致%d笔，渠道异常%d笔，内部事件异常%d笔，待收口退款%d笔（%s），需在对账与差错环节继续跟进。",
                 entity.getPaymentSuccessGapCount(),
                 formatAmount(entity.getPaymentSuccessGapAmount()),
                 entity.getPendingPaymentCount(),
                 formatAmount(entity.getPendingPaymentAmount()),
                 entity.getMissingPaymentSuccessTimeCount(),
                 entity.getPaymentSuccessFactMismatchCount(),
+                entity.getRefundFailCount(),
+                formatAmount(entity.getRefundFailAmount()),
                 entity.getMissingRefundSuccessTimeCount(),
                 entity.getRefundTerminalFactMismatchCount(),
                 entity.getChannelAbnormalCount(),
@@ -354,6 +363,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 || entity.getPendingPaymentCount() > 0
                 || entity.getMissingPaymentSuccessTimeCount() > 0
                 || entity.getPaymentSuccessFactMismatchCount() > 0
+                || entity.getRefundFailCount() > 0
                 || entity.getMissingRefundSuccessTimeCount() > 0
                 || entity.getRefundTerminalFactMismatchCount() > 0
                 || entity.getChannelAbnormalCount() > 0
@@ -450,6 +460,15 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
                 1
         ));
         alerts.add(buildAlert(
+                "REFUND_FAIL",
+                "退款失败",
+                defaultZero(overview.getOpenRefundFailCount()),
+                "存在已进入失败终态的退款，需要确认重试、改道或人工处置，当前不能进入正式对账。",
+                "进入退款单管理页处理失败退款",
+                "/refunds?refundStatus=FAIL",
+                1
+        ));
+        alerts.add(buildAlert(
                 "PENDING_REFUND",
                 "退款待收口",
                 defaultZero(overview.getOpenPendingRefundCount()),
@@ -493,6 +512,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         Integer pendingPaymentFact = overview.getOpenPendingPaymentCount();
         Integer missingSuccessTimeFact = overview.getOpenMissingPaymentSuccessTimeCount();
         Integer paymentSuccessFactMismatchFact = overview.getOpenPaymentSuccessFactMismatchCount();
+        Integer refundFailFact = overview.getOpenRefundFailCount();
         Integer missingRefundSuccessTimeFact = overview.getOpenMissingRefundSuccessTimeCount();
         Integer refundTerminalFactMismatchFact = overview.getOpenRefundTerminalFactMismatchCount();
         int channelAbnormalCount = defaultZero(overview.getOpenChannelAbnormalCount());
@@ -509,39 +529,43 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         }
         if (pendingPaymentFact == null || missingSuccessTimeFact == null
                 || paymentSuccessFactMismatchFact == null
+                || refundFailFact == null
                 || missingRefundSuccessTimeFact == null
                 || refundTerminalFactMismatchFact == null) {
             overview.setReconciliationReadinessStatus("日终事实不完整");
             overview.setReconciliationReadinessType("danger");
-            overview.setReconciliationReadinessSummary("最近批次未完整采集待收口支付、成功时间或支付退款终态一致性事实，不能据此判断可以进入正式对账。");
-            overview.setReconciliationSuggestedAction("使用 RERUN 重检该业务日，生成包含待收口支付、成功时间和支付退款终态一致性的新事实快照。");
+            overview.setReconciliationReadinessSummary("最近批次未完整采集待收口支付、成功时间、退款失败或支付退款终态一致性事实，不能据此判断可以进入正式对账。");
+            overview.setReconciliationSuggestedAction("使用 RERUN 重检该业务日，生成包含待收口支付、成功时间、退款失败和支付退款终态一致性的新事实快照。");
             overview.setReconciliationBlockingOwner("支付研发 / 财务值班");
             return;
         }
         int pendingPaymentCount = defaultZero(pendingPaymentFact);
         int missingSuccessTimeCount = defaultZero(missingSuccessTimeFact);
         int paymentSuccessFactMismatchCount = defaultZero(paymentSuccessFactMismatchFact);
+        int refundFailCount = defaultZero(refundFailFact);
         int missingRefundSuccessTimeCount = defaultZero(missingRefundSuccessTimeFact);
         int refundTerminalFactMismatchCount = defaultZero(refundTerminalFactMismatchFact);
         if (pendingPaymentCount > 0 || missingSuccessTimeCount > 0
                 || paymentSuccessFactMismatchCount > 0
+                || refundFailCount > 0
                 || missingRefundSuccessTimeCount > 0
                 || refundTerminalFactMismatchCount > 0
                 || channelAbnormalCount > 0 || internalAbnormalCount > 0 || successGapCount > 0) {
             overview.setReconciliationReadinessStatus("禁止进入对账");
             overview.setReconciliationReadinessType("danger");
             overview.setReconciliationReadinessSummary(String.format(
-                    "最近业务日仍有待收口支付 %d 笔、支付成功时间缺失 %d 笔、支付成功事实不一致 %d 笔、退款成功时间缺失 %d 笔、退款终态事实不一致 %d 笔、渠道异常 %d 笔、内部事件异常 %d 笔、支付成功差异 %d 笔，继续进入正式对账会放大差错范围。",
+                    "最近业务日仍有待收口支付 %d 笔、支付成功时间缺失 %d 笔、支付成功事实不一致 %d 笔、退款失败 %d 笔、退款成功时间缺失 %d 笔、退款终态事实不一致 %d 笔、渠道异常 %d 笔、内部事件异常 %d 笔、支付成功差异 %d 笔，继续进入正式对账会放大差错范围。",
                     pendingPaymentCount,
                     missingSuccessTimeCount,
                     paymentSuccessFactMismatchCount,
+                    refundFailCount,
                     missingRefundSuccessTimeCount,
                     refundTerminalFactMismatchCount,
                     channelAbnormalCount,
                     internalAbnormalCount,
                     successGapCount
             ));
-            overview.setReconciliationSuggestedAction("优先处理待支付、待风控复核、成功时间缺失、支付退款终态不一致、渠道回调、事件出站和支付成功差异，确认事实收口后再推进对账。");
+            overview.setReconciliationSuggestedAction("优先处理待支付、待风控复核、退款失败、成功时间缺失、支付退款终态不一致、渠道回调、事件出站和支付成功差异，确认事实收口后再推进对账。");
             overview.setReconciliationBlockingOwner("支付研发 / 风控运营 / 渠道运营 / 财务值班");
             return;
         }
@@ -571,16 +595,18 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             if (batch.getPendingPaymentCount() == null
                     || batch.getMissingPaymentSuccessTimeCount() == null
                     || batch.getPaymentSuccessFactMismatchCount() == null
+                    || batch.getRefundFailCount() == null
                     || batch.getMissingRefundSuccessTimeCount() == null
                     || batch.getRefundTerminalFactMismatchCount() == null) {
                 batch.setReconciliationReadinessStatus("UNKNOWN");
                 batch.setReconciliationReadinessType("danger");
-                batch.setReconciliationReadinessSummary("历史批次未完整采集待收口支付、成功时间或支付退款终态一致性事实，需重检后判断。");
+                batch.setReconciliationReadinessSummary("历史批次未完整采集待收口支付、成功时间、退款失败或支付退款终态一致性事实，需重检后判断。");
                 continue;
             }
             int pendingPaymentCount = defaultZero(batch.getPendingPaymentCount());
             int missingSuccessTimeCount = defaultZero(batch.getMissingPaymentSuccessTimeCount());
             int paymentSuccessFactMismatchCount = defaultZero(batch.getPaymentSuccessFactMismatchCount());
+            int refundFailCount = defaultZero(batch.getRefundFailCount());
             int missingRefundSuccessTimeCount = defaultZero(batch.getMissingRefundSuccessTimeCount());
             int refundTerminalFactMismatchCount = defaultZero(batch.getRefundTerminalFactMismatchCount());
             int channelAbnormalCount = defaultZero(batch.getChannelAbnormalCount());
@@ -589,6 +615,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
             int pendingRefundCount = defaultZero(batch.getPendingRefundCount());
             if (pendingPaymentCount > 0 || missingSuccessTimeCount > 0
                     || paymentSuccessFactMismatchCount > 0
+                    || refundFailCount > 0
                     || missingRefundSuccessTimeCount > 0
                     || refundTerminalFactMismatchCount > 0
                     || channelAbnormalCount > 0 || internalAbnormalCount > 0 || successGapCount > 0) {

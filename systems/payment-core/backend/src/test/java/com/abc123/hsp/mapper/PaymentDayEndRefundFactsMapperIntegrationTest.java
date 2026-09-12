@@ -55,6 +55,10 @@ class PaymentDayEndRefundFactsMapperIntegrationTest {
             assertEquals(Integer.valueOf(2), mapper.countSuccessRefundsByDate("2026-09-12"));
             assertEquals(new BigDecimal("30.00"), mapper.sumSuccessRefundAmountByDate("2026-09-12"));
             assertEquals(Integer.valueOf(0), mapper.countSuccessRefundsByDate("2026-09-11"));
+            assertEquals(Integer.valueOf(1), mapper.countFailedRefundsByDate("2026-09-11"));
+            assertEquals(new BigDecimal("50.00"), mapper.sumFailedRefundAmountByDate("2026-09-11"));
+            assertEquals(Integer.valueOf(1), mapper.countFailedRefundsByDate("2026-09-12"));
+            assertEquals(new BigDecimal("60.00"), mapper.sumFailedRefundAmountByDate("2026-09-12"));
             assertEquals(Integer.valueOf(1), mapper.countMissingRefundSuccessTimeByDate("2026-09-11"));
             assertEquals(Integer.valueOf(0), mapper.countMissingRefundSuccessTimeByDate("2026-09-12"));
             assertEquals(Integer.valueOf(1), mapper.countRefundTerminalFactMismatchByDate("2026-09-11"));

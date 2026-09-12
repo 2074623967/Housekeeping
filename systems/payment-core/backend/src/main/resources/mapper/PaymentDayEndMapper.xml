@@ -52,6 +52,12 @@
                    LIMIT 1
                ), 0) AS openPendingRefundCount,
                (
+                   SELECT refund_fail_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS openRefundFailCount,
+               (
                    SELECT missing_refund_success_time_count
                    FROM t_payment_day_end_batch
                    ORDER BY biz_date DESC, id DESC
@@ -110,7 +116,13 @@
                    FROM t_payment_day_end_batch
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
-               ), '¥0.00') AS latestPendingRefundAmount
+               ), '¥0.00') AS latestPendingRefundAmount,
+               (
+                   SELECT CONCAT('¥', FORMAT(refund_fail_amount, 2))
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS latestRefundFailAmount
         FROM t_payment_day_end_batch
     </select>
 
@@ -135,6 +147,8 @@
                payment_success_fact_mismatch_count AS paymentSuccessFactMismatchCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
+               refund_fail_count AS refundFailCount,
+               CONCAT('¥', FORMAT(refund_fail_amount, 2)) AS refundFailAmount,
                missing_refund_success_time_count AS missingRefundSuccessTimeCount,
                refund_terminal_fact_mismatch_count AS refundTerminalFactMismatchCount,
                channel_abnormal_count AS channelAbnormalCount,
@@ -171,6 +185,8 @@
                payment_success_fact_mismatch_count AS paymentSuccessFactMismatchCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
+               refund_fail_count AS refundFailCount,
+               CONCAT('¥', FORMAT(refund_fail_amount, 2)) AS refundFailAmount,
                missing_refund_success_time_count AS missingRefundSuccessTimeCount,
                refund_terminal_fact_mismatch_count AS refundTerminalFactMismatchCount,
                channel_abnormal_count AS channelAbnormalCount,
@@ -416,6 +432,22 @@
           AND status = 'SUCCESS'
     </select>
 
+    <select id="countFailedRefundsByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_refund_order
+        WHERE terminal_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND terminal_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
+          AND status = 'FAIL'
+    </select>
+
+    <select id="sumFailedRefundAmountByDate" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(refund_amount), 0)
+        FROM t_refund_order
+        WHERE terminal_at &gt;= CAST(#{bizDate} AS DATETIME)
+          AND terminal_at &lt; TIMESTAMPADD(DAY, 1, CAST(#{bizDate} AS DATETIME))
+          AND status = 'FAIL'
+    </select>
+
     <select id="countMissingRefundSuccessTimeByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_refund_order
@@ -527,6 +559,8 @@
             payment_success_fact_mismatch_count,
             refund_success_count,
             refund_success_amount,
+            refund_fail_count,
+            refund_fail_amount,
             missing_refund_success_time_count,
             refund_terminal_fact_mismatch_count,
             channel_abnormal_count,
@@ -558,6 +592,8 @@
             #{paymentSuccessFactMismatchCount},
             #{refundSuccessCount},
             #{refundSuccessAmount},
+            #{refundFailCount},
+            #{refundFailAmount},
             #{missingRefundSuccessTimeCount},
             #{refundTerminalFactMismatchCount},
             #{channelAbnormalCount},

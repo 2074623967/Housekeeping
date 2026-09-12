@@ -31,6 +31,8 @@ public class PaymentDayEndOverviewDTO {
     private Integer openPaymentSuccessFactMismatchCount;
     /** 当前待收口退款数。 */
     private Integer openPendingRefundCount;
+    /** 当前退款失败数；历史未采集批次为 null。 */
+    private Integer openRefundFailCount;
     /** 当前退款成功时间缺失数；历史未采集批次为 null。 */
     private Integer openMissingRefundSuccessTimeCount;
     /** 当前退款终态事实不一致数；历史未采集批次为 null。 */
@@ -51,6 +53,8 @@ public class PaymentDayEndOverviewDTO {
     private String latestPendingPaymentAmount;
     /** 最近批次待收口退款金额。 */
     private String latestPendingRefundAmount;
+    /** 最近批次退款失败金额；历史未采集批次为 null。 */
+    private String latestRefundFailAmount;
     /** 当前对账准入状态。 */
     private String reconciliationReadinessStatus;
     /** 当前对账准入状态样式。 */

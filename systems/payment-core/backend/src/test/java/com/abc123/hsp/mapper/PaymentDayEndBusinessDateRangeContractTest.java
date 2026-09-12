@@ -30,8 +30,8 @@ class PaymentDayEndBusinessDateRangeContractTest {
         }
 
         assertFalse(FUNCTION_WRAPPED_BIZ_DATE_COLUMN.matcher(mapperXml).find());
-        assertEquals(22, countOccurrences(mapperXml, INCLUSIVE_START));
-        assertEquals(22, countOccurrences(mapperXml, EXCLUSIVE_END));
+        assertEquals(24, countOccurrences(mapperXml, INCLUSIVE_START));
+        assertEquals(24, countOccurrences(mapperXml, EXCLUSIVE_END));
         assertTrue(mapperXml.contains(
                 "<select id=\"countPaymentSuccessFactMismatchByDate\" resultType=\"java.lang.Integer\">\n"
                         + "        SELECT COUNT(1)\n"

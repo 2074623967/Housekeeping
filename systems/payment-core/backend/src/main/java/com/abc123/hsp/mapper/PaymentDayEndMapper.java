@@ -113,6 +113,16 @@ public interface PaymentDayEndMapper {
     BigDecimal sumSuccessRefundAmountByDate(@Param("bizDate") String bizDate);
 
     /**
+     * 查询指定业务日进入失败终态的退款单量。
+     */
+    Integer countFailedRefundsByDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 查询指定业务日进入失败终态的退款金额。
+     */
+    BigDecimal sumFailedRefundAmountByDate(@Param("bizDate") String bizDate);
+
+    /**
      * 查询申请于指定业务日但缺少成功时间的成功退款单量。
      */
     Integer countMissingRefundSuccessTimeByDate(@Param("bizDate") String bizDate);

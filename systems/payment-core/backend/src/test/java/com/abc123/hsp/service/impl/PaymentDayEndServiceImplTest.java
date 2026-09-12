@@ -43,6 +43,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenMissingPaymentSuccessTimeCount(0);
         overview.setOpenPaymentSuccessFactMismatchCount(0);
         overview.setOpenPendingRefundCount(1);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(0);
         overview.setOpenRefundTerminalFactMismatchCount(0);
         overview.setLatestChannelSuccessAmount("¥268.00");
@@ -52,6 +53,7 @@ class PaymentDayEndServiceImplTest {
         batch.setMissingPaymentSuccessTimeCount(0);
         batch.setPaymentSuccessFactMismatchCount(0);
         batch.setPendingRefundCount(1);
+        batch.setRefundFailCount(0);
         batch.setMissingRefundSuccessTimeCount(0);
         batch.setRefundTerminalFactMismatchCount(0);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
@@ -65,7 +67,7 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("有条件进入对账", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertEquals("CONDITIONAL", result.getRecentBatches().get(0).getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertNotNull(result.getAlerts());
-        org.junit.jupiter.api.Assertions.assertEquals(9, result.getAlerts().size());
+        org.junit.jupiter.api.Assertions.assertEquals(10, result.getAlerts().size());
         org.junit.jupiter.api.Assertions.assertEquals("PENDING_PAYMENT", result.getAlerts().get(0).getAlertType());
         org.junit.jupiter.api.Assertions.assertEquals(
                 "/payments?status=DAY_END_PENDING", result.getAlerts().get(0).getActionRoute());
@@ -84,7 +86,9 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "/refunds?refundStatus=TERMINAL_FACT_MISMATCH", result.getAlerts().get(7).getActionRoute());
         org.junit.jupiter.api.Assertions.assertEquals(
-                "/refunds?refundStatus=PENDING", result.getAlerts().get(8).getActionRoute());
+                "/refunds?refundStatus=FAIL", result.getAlerts().get(8).getActionRoute());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "/refunds?refundStatus=PENDING", result.getAlerts().get(9).getActionRoute());
     }
 
     @Test
@@ -109,6 +113,8 @@ class PaymentDayEndServiceImplTest {
         batch.setPaymentSuccessFactMismatchCount(0);
         batch.setRefundSuccessCount(0);
         batch.setRefundSuccessAmount("¥0.00");
+        batch.setRefundFailCount(0);
+        batch.setRefundFailAmount("¥0.00");
         batch.setMissingRefundSuccessTimeCount(0);
         batch.setRefundTerminalFactMismatchCount(0);
         batch.setChannelAbnormalCount(0);
@@ -128,6 +134,7 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"DEB001\""));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("待收口支付,待收口支付金额"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("退款终态事实不一致"));
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("退款失败单量,退款失败金额"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("支付成功事实不一致"));
         org.junit.jupiter.api.Assertions.assertTrue(csv.contains("BLOCKED"));
     }
@@ -480,6 +487,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenPendingPaymentCount(2);
         overview.setOpenMissingPaymentSuccessTimeCount(0);
         overview.setOpenPaymentSuccessFactMismatchCount(0);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(0);
         overview.setOpenRefundTerminalFactMismatchCount(0);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
@@ -514,7 +522,7 @@ class PaymentDayEndServiceImplTest {
 
         org.junit.jupiter.api.Assertions.assertEquals("日终事实不完整", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertTrue(result.getReconciliationReadinessSummary()
-                .contains("未完整采集待收口支付、成功时间或支付退款终态一致性事实"));
+                .contains("未完整采集待收口支付、成功时间、退款失败或支付退款终态一致性事实"));
         org.junit.jupiter.api.Assertions.assertEquals("UNKNOWN", result.getRecentBatches().get(0).getReconciliationReadinessStatus());
     }
 
@@ -527,6 +535,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenPendingPaymentCount(0);
         overview.setOpenMissingPaymentSuccessTimeCount(1);
         overview.setOpenPaymentSuccessFactMismatchCount(0);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(0);
         overview.setOpenRefundTerminalFactMismatchCount(0);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
@@ -558,6 +567,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenPendingPaymentCount(0);
         overview.setOpenMissingPaymentSuccessTimeCount(0);
         overview.setOpenPaymentSuccessFactMismatchCount(1);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(0);
         overview.setOpenRefundTerminalFactMismatchCount(0);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
@@ -590,6 +600,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenPendingPaymentCount(0);
         overview.setOpenMissingPaymentSuccessTimeCount(0);
         overview.setOpenPaymentSuccessFactMismatchCount(0);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(1);
         overview.setOpenRefundTerminalFactMismatchCount(0);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
@@ -622,6 +633,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenPendingPaymentCount(0);
         overview.setOpenMissingPaymentSuccessTimeCount(0);
         overview.setOpenPaymentSuccessFactMismatchCount(0);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(0);
         overview.setOpenRefundTerminalFactMismatchCount(1);
         when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
@@ -643,6 +655,42 @@ class PaymentDayEndServiceImplTest {
                 .contains("退款终态事实不一致1笔"));
         org.junit.jupiter.api.Assertions.assertEquals("禁止进入对账", result.getReconciliationReadinessStatus());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), result.getAlerts().get(7).getAffectedCount());
+    }
+
+    @Test
+    void shouldWarnAndBlockReconciliationWhenRefundsFail() {
+        String bizDate = "2026-07-19";
+        when(paymentDayEndMapper.countFailedRefundsByDate(bizDate)).thenReturn(2);
+        when(paymentDayEndMapper.sumFailedRefundAmountByDate(bizDate)).thenReturn(new BigDecimal("88.00"));
+        PaymentDayEndOverviewDTO overview = new PaymentDayEndOverviewDTO();
+        overview.setLatestBizDate(bizDate);
+        overview.setOpenPendingPaymentCount(0);
+        overview.setOpenMissingPaymentSuccessTimeCount(0);
+        overview.setOpenPaymentSuccessFactMismatchCount(0);
+        overview.setOpenRefundFailCount(2);
+        overview.setOpenMissingRefundSuccessTimeCount(0);
+        overview.setOpenRefundTerminalFactMismatchCount(0);
+        when(paymentDayEndMapper.findOverviewSummary()).thenReturn(overview);
+        when(paymentDayEndMapper.findRecentBatches())
+                .thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate(bizDate);
+        request.setTriggeredBy("finance-ops");
+
+        PaymentDayEndOverviewDTO result = new PaymentDayEndServiceImpl(paymentDayEndMapper).run(request);
+
+        ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
+                ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
+        verify(paymentDayEndMapper).insertBatch(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("WARNING", captor.getValue().getBatchStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), captor.getValue().getRefundFailCount());
+        org.junit.jupiter.api.Assertions.assertEquals(new BigDecimal("88.00"), captor.getValue().getRefundFailAmount());
+        org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getSummaryComment()
+                .contains("退款失败2笔（¥88.00）"));
+        org.junit.jupiter.api.Assertions.assertEquals("禁止进入对账", result.getReconciliationReadinessStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(2), result.getAlerts().get(8).getAffectedCount());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "/refunds?refundStatus=FAIL", result.getAlerts().get(8).getActionRoute());
     }
 
     @Test
@@ -741,6 +789,7 @@ class PaymentDayEndServiceImplTest {
         overview.setOpenPendingPaymentCount(0);
         overview.setOpenMissingPaymentSuccessTimeCount(0);
         overview.setOpenPaymentSuccessFactMismatchCount(0);
+        overview.setOpenRefundFailCount(0);
         overview.setOpenMissingRefundSuccessTimeCount(0);
         overview.setOpenRefundTerminalFactMismatchCount(0);
         overview.setOpenPendingRefundCount(0);
