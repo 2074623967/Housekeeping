@@ -109,6 +109,24 @@ class PaymentMonitorMapperIntegrationTest {
     }
 
     @Test
+    void shouldExposeMissingRefundSuccessTimeAsGlobalP1Alert() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order(status, success_at) VALUES ('SUCCESS', NULL)");
+            PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
+
+            List<PaymentAlertItemDTO> alerts = mapper.findAlerts();
+
+            assertEquals(4, alerts.size());
+            assertEquals("REFUND_SUCCESS_TIME_MISSING", alerts.get(1).getAlertType());
+            assertEquals("P1", alerts.get(1).getAlertLevel());
+            assertEquals(Integer.valueOf(1), alerts.get(1).getAffectedCount());
+            assertEquals("/refunds?refundStatus=SUCCESS_TIME_MISSING", alerts.get(1).getActionRoute());
+            assertEquals(Integer.valueOf(alerts.size()), mapper.findSummary().getAlertCount());
+        }
+    }
+
+    @Test
     void shouldExposeClosedPaymentsSeparatelyInMonitorSummary() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMonitorSummaryDTO summary = session.getMapper(PaymentMonitorMapper.class).findSummary();
@@ -210,7 +228,7 @@ class PaymentMonitorMapperIntegrationTest {
                     + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2), success_at TIMESTAMP, "
                     + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_refund_order ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32), success_at TIMESTAMP)");
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_attempt ("

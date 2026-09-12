@@ -29,6 +29,8 @@ public class PaymentDayEndOverviewDTO {
     private Integer openMissingPaymentSuccessTimeCount;
     /** 当前待收口退款数。 */
     private Integer openPendingRefundCount;
+    /** 当前退款成功时间缺失数；历史未采集批次为 null。 */
+    private Integer openMissingRefundSuccessTimeCount;
     /** 最近批次渠道成功单量。 */
     private Integer latestChannelSuccessCount;
     /** 最近批次渠道成功金额。 */

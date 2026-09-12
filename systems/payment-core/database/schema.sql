@@ -814,7 +814,9 @@ CREATE TABLE t_refund_order (
     UNIQUE KEY uk_refund_order_id (refund_order_id),
     UNIQUE KEY uk_refund_apply_idempotency (payment_order_id, idempotency_key),
     UNIQUE KEY uk_refund_channel_no (channel_code, channel_refund_no),
-    KEY idx_refund_payment_status (payment_order_id, status)
+    KEY idx_refund_payment_status (payment_order_id, status),
+    KEY idx_refund_status_applied (status, applied_at),
+    KEY idx_refund_status_success (status, success_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
 
 CREATE TABLE t_refund_attempt (
@@ -1075,6 +1077,7 @@ CREATE TABLE t_payment_day_end_batch (
     missing_payment_success_time_count INT NOT NULL DEFAULT 0 COMMENT '支付成功时间缺失数',
     refund_success_count INT NOT NULL DEFAULT 0 COMMENT '退款成功单量',
     refund_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款成功金额',
+    missing_refund_success_time_count INT NOT NULL DEFAULT 0 COMMENT '退款成功时间缺失数',
     channel_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '渠道异常数',
     internal_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '内部异常数',
     pending_refund_count INT NOT NULL DEFAULT 0 COMMENT '待收口退款数',

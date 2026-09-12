@@ -358,6 +358,7 @@ watch(
             <option>REVIEWING</option>
             <option>PROCESSING</option>
             <option>SUCCESS</option>
+            <option value="SUCCESS_TIME_MISSING">成功时间缺失</option>
             <option>FAIL</option>
           </select>
         </div>

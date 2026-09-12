@@ -47,6 +47,8 @@ public class PaymentDayEndBatchEntity {
     private Integer refundSuccessCount;
     /** 退款成功金额。 */
     private BigDecimal refundSuccessAmount;
+    /** 退款成功时间缺失数。 */
+    private Integer missingRefundSuccessTimeCount;
     /** 渠道异常数。 */
     private Integer channelAbnormalCount;
     /** 内部异常数。 */

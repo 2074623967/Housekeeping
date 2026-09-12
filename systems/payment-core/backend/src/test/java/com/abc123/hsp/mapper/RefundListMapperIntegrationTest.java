@@ -97,6 +97,29 @@ class RefundListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldFilterSuccessfulRefundsWithoutSuccessTime() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order "
+                    + "(refund_order_id, payment_order_id, order_no, customer_name, refund_amount, "
+                    + "refund_method, status, status_type, applied_at, success_at) VALUES "
+                    + "('REF-SUCCESS-MISSING', 'PAY-MISSING', 'ORD-MISSING', '客户甲', 1.00, "
+                    + "'完整性测试', 'SUCCESS', 'success', '2026-09-11 12:00:00', NULL), "
+                    + "('REF-SUCCESS-PRESENT', 'PAY-PRESENT', 'ORD-PRESENT', '客户乙', 2.00, "
+                    + "'完整性测试', 'SUCCESS', 'success', '2026-09-11 12:00:01', '2026-09-12 12:00:00')");
+            RefundMapper mapper = session.getMapper(RefundMapper.class);
+            RefundQueryDTO query = new RefundQueryDTO();
+            query.setRefundStatus("SUCCESS_TIME_MISSING");
+            query.setRefundMethod("完整性测试");
+
+            assertEquals(Arrays.asList("REF-SUCCESS-MISSING"), refundOrderIds(mapper.findAll(query)));
+            assertEquals(1L, mapper.count(query));
+            assertEquals(Arrays.asList("REF-SUCCESS-MISSING"),
+                    refundOrderIds(mapper.findAllForExport(query)));
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

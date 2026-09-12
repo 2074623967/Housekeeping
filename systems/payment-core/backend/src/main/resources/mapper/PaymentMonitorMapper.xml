@@ -16,6 +16,7 @@
                (
                    CASE WHEN payment_summary.wait_callback_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN payment_summary.missing_success_time_count &gt; 0 THEN 1 ELSE 0 END +
+                   CASE WHEN COALESCE(refund_summary.missing_success_time_count, 0) &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN COALESCE(refund_summary.failed_refund_count, 0) &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN COALESCE(channel_summary.disabled_channel_count, 0) &gt; 0 THEN 1 ELSE 0 END
                ) AS alertCount
@@ -36,9 +37,10 @@
             FROM t_payment_order
         ) payment_summary
                  CROSS JOIN (
-            SELECT COUNT(1) AS failed_refund_count
+            SELECT COALESCE(SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END), 0) AS failed_refund_count,
+                   COALESCE(SUM(CASE WHEN status = 'SUCCESS' AND success_at IS NULL THEN 1 ELSE 0 END), 0)
+                       AS missing_success_time_count
             FROM t_refund_order
-            WHERE status = 'FAIL'
         ) refund_summary
                  CROSS JOIN (
             SELECT COUNT(1) AS disabled_channel_count
@@ -165,6 +167,22 @@
         UNION ALL
 
         SELECT 3 AS alertSortNo,
+               'REFUND_SUCCESS_TIME_MISSING' AS alertType,
+               '退款成功时间缺失' AS alertTitle,
+               '存在已成功但缺少成功时间的退款单，无法可信归属逆向资金账期。' AS alertMessage,
+               'P1' AS alertLevel,
+               'danger' AS alertLevelType,
+               COUNT(1) AS affectedCount,
+               '进入退款单管理页核对成功时间缺失记录。' AS suggestedAction,
+               '/refunds?refundStatus=SUCCESS_TIME_MISSING' AS actionRoute
+        FROM t_refund_order
+        WHERE status = 'SUCCESS'
+          AND success_at IS NULL
+        HAVING COUNT(1) &gt; 0
+
+        UNION ALL
+
+        SELECT 4 AS alertSortNo,
                'REFUND_FAIL' AS alertType,
                '退款失败待重试' AS alertTitle,
                '退款单存在失败记录，需要运营复核后重试或切线下处理。' AS alertMessage,
@@ -179,7 +197,7 @@
 
         UNION ALL
 
-        SELECT 4 AS alertSortNo,
+        SELECT 5 AS alertSortNo,
                'CHANNEL_DISABLED' AS alertType,
                '渠道已停用' AS alertTitle,
                '存在已停用渠道，请确认是否需要同步调整路由规则。' AS alertMessage,

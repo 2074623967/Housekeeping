@@ -101,7 +101,9 @@ const alertSuggestions = computed(() => {
   if (alert.alertTitle?.includes("待回调") || alert.alertMessage?.includes("待回调")) {
     suggestions.push("优先联查支付单管理页，确认是否存在 WAIT_CALLBACK 积压和渠道回调延迟。");
   }
-  if (alert.alertTitle?.includes("成功时间缺失") || alert.alertMessage?.includes("成功时间")) {
+  if (alert.alertTitle?.includes("退款成功时间缺失")) {
+    suggestions.push("优先核对可信退款回调、主动查单结果和退款操作日志，确认成功时间后再归属逆向资金账期。");
+  } else if (alert.alertTitle?.includes("成功时间缺失") || alert.alertMessage?.includes("成功时间")) {
     suggestions.push("优先核对支付成功通知与内部事件，确认可信成功时间后再归属账期。");
   }
   if (alert.alertTitle?.includes("退款失败") || alert.alertMessage?.includes("退款失败")) {
@@ -216,7 +218,7 @@ onMounted(loadOverview);
             <article class="overview-card danger">
               <p class="overview-title">P1 告警优先处理</p>
               <strong>{{ riskSummary.alertP1Count }}</strong>
-              <span>优先联查待回调、成功时间缺失和退款失败告警，避免主链路事实持续失真。</span>
+              <span>优先联查待回调、支付或退款成功时间缺失和退款失败告警，避免资金事实持续失真。</span>
             </article>
             <article class="overview-card warn">
               <p class="overview-title">存在待处理渠道</p>

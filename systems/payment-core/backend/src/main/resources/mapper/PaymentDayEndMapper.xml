@@ -45,6 +45,12 @@
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
                ), 0) AS openPendingRefundCount,
+               (
+                   SELECT missing_refund_success_time_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS openMissingRefundSuccessTimeCount,
                COALESCE((
                    SELECT channel_success_count
                    FROM t_payment_day_end_batch
@@ -116,6 +122,7 @@
                missing_payment_success_time_count AS missingPaymentSuccessTimeCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
+               missing_refund_success_time_count AS missingRefundSuccessTimeCount,
                channel_abnormal_count AS channelAbnormalCount,
                internal_abnormal_count AS internalAbnormalCount,
                pending_refund_count AS pendingRefundCount,
@@ -149,6 +156,7 @@
                missing_payment_success_time_count AS missingPaymentSuccessTimeCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
+               missing_refund_success_time_count AS missingRefundSuccessTimeCount,
                channel_abnormal_count AS channelAbnormalCount,
                internal_abnormal_count AS internalAbnormalCount,
                pending_refund_count AS pendingRefundCount,
@@ -357,6 +365,14 @@
           AND status = 'SUCCESS'
     </select>
 
+    <select id="countMissingRefundSuccessTimeByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_refund_order
+        WHERE DATE(applied_at) = #{bizDate}
+          AND status = 'SUCCESS'
+          AND success_at IS NULL
+    </select>
+
     <select id="countChannelAbnormalByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
@@ -420,6 +436,7 @@
             missing_payment_success_time_count,
             refund_success_count,
             refund_success_amount,
+            missing_refund_success_time_count,
             channel_abnormal_count,
             internal_abnormal_count,
             pending_refund_count,
@@ -448,6 +465,7 @@
             #{missingPaymentSuccessTimeCount},
             #{refundSuccessCount},
             #{refundSuccessAmount},
+            #{missingRefundSuccessTimeCount},
             #{channelAbnormalCount},
             #{internalAbnormalCount},
             #{pendingRefundCount},
