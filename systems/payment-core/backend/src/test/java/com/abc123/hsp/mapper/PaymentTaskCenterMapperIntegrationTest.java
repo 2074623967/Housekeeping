@@ -485,6 +485,19 @@ public class PaymentTaskCenterMapperIntegrationTest {
             org.junit.jupiter.api.Assertions.assertNull(
                     mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(orphan.getAlertNo()));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(orphan.getAlertNo(), 0, true, 2, 30));
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET receipt_query_count = 1, receipt_query_result = 'QUERYING' "
+                        + "WHERE alert_no = 'PIA-RECEIPT-ORPHAN'");
+            }
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    orphan.getAlertNo(), 1, "FAILED", 60, 2));
+            PaymentIssueAlertLogEntity orphanUpdate = new PaymentIssueAlertLogEntity();
+            orphanUpdate.setAlertNo(orphan.getAlertNo());
+            orphanUpdate.setProviderDeliveryStatus("DELIVERED");
+            orphanUpdate.setAckStatus("已确认");
+            orphanUpdate.setReceiptQueryCount(1);
+            assertEquals(0, mapper.updateIssueAlertProviderReceipt(orphanUpdate));
             assertEquals(1, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, false, 2, 30));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(accepted.getAlertNo(), 0, false, 2, 30));
             assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
