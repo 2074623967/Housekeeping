@@ -3855,6 +3855,12 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `GET /api/payments` 的 `PaymentListItemDTO` 新增可空 `latestAttemptStatus`；`GET /api/payments/cashier/{prepayOrderNo}` 的 `CashierPageDTO` 新增可空 `paymentStatus / latestAttemptStatus`，供客户端在发起主动查单前准确判断。既有字段、端点路径和请求体不变。
 4. 客户端不得以按钮可点击、收银台文案或支付单号已生成推断渠道已受理；服务端校验仍是权威边界。`SUCCESS / CLOSED` 可继续查单仅用于刷新与历史兼容，不表示允许重开终态或产生新的资金事实。
 
+### 14.243 收银台提交事实消费约束
+
+1. `GET /api/payments/cashier/{prepayOrderNo}` 的既有 `paymentStatus / latestAttemptStatus` 除用于主动查单资格外，也用于客户端重复提交锁定和本地关闭资格；本轮不新增或修改响应字段。
+2. 客户端没有最新查单详情时使用收银台快照，查单成功后优先使用 `PaymentDetailDTO`；非空尝试事实不得因收银台展示状态仍为待支付而被忽略。
+3. 本轮无端点、请求、响应、错误码或服务端状态机变化；客户端判断不能替代支付提交幂等、`PAYMENT-1054` 和数据库关单条件。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

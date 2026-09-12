@@ -1502,6 +1502,12 @@ t_order
 3. 普通渠道成功和非成功待确认更新均使用 `EXISTS t_payment_attempt` 作为数据库末端资格条件，与 Service 的 `WAIT_CALLBACK + latestAttemptStatus` 前置校验共同失败闭合。
 4. 本轮不新增表、列、索引、数据回填或迁移；当前分页和单支付单查询使用既有 `payment_order_id / created_at / id` 访问形态，生产数据量下的执行计划与索引效果仍需 MySQL 环境验证。
 
+### 4.174 收银台客户端提交事实复用数据边界
+
+1. 收银台页面对 `latestAttemptStatus` 的重复提交锁定与关单资格复用只发生在浏览器派生状态，不新增客户端持久化或数据库事实。
+2. 服务端仍从 `t_payment_attempt` 查询最近尝试，客户端不缓存为新的受理标记，也不写回 `t_payment_order / t_prepay_order`。
+3. 本轮无 Mapper SQL、表、列、索引、数据回填或迁移变化；数据库权威资格仍按既有支付状态、尝试存在性和条件更新判断。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
