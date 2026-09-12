@@ -12670,3 +12670,32 @@
 1. 正常数据库并发下，供应商与通道维度的限流判断和容量占用已共享同一个原子更新点，不再依赖最终成功日志倒推容量。
 2. 占额在外部调用前独立提交，因此真实失败同样消耗供应商请求容量；代价是占额后、调用前进程崩溃会暂时损失一个额度，固定窗口到期后恢复。
 3. 本地 H2/mock 不证明生产 MySQL 锁竞争、多实例吞吐、供应商真实限额、幂等或送达稳定性；必须在目标环境独立压测与校准，release 四项真实治理阻断不变。
+
+## 468. 2026-09-12 告警供应商连续失败熔断恢复 V1.0 验证
+
+### 468.1 本轮补强
+
+1. 熔断判断由窗口失败总数改为窗口内最近三条合法真实供应商结果，落实“连续失败三次”语义。
+2. 最近结果查询增加同异常顶层来源归属校验，并要求本地已派发匹配 `ACCEPTED / DELIVERED`、本地派发失败匹配 `FAILED / SEND_EXCEPTION`。
+3. 告警日志新增供应商、通道、创建时间组合索引与独立迁移，支撑最近结果读取。
+
+### 468.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 连续失败 | 最近三条为 `FAILED / SEND_EXCEPTION / FAILED` 时主供应商熔断并切换后备 |
+| 成功恢复 | 较早有三次失败，但最近三条包含 `ACCEPTED` 时继续调用主供应商 |
+| 本地护栏 | `RATE_LIMITED / RETRY_COOLDOWN_ACTIVE / PROVIDER_CIRCUIT_OPEN` 不进入最近真实结果 |
+| 来源完整性 | 孤立来源和错异常来源不进入供应商序列 |
+| 状态一致性 | “本地已派发 + FAILED”等矛盾组合不构成真实成功或失败证据 |
+| 联合定向测试 | `PaymentIssueAlertDeliveryServiceImplTest,PaymentTaskCenterMapperIntegrationTest` 共 `77` 项通过 |
+| payment-core 后端全量测试 | `985` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | 全部 Mapper XML 的 `xmllint` 与 `git diff --check` 通过 |
+| 数据结构 | 新增 `idx_issue_alert_provider_delivery` 及 `2026-09-12-add-issue-alert-provider-delivery-index.sql` |
+| 代码提交 | `0f5c6296 fix(payment-core): reset alert circuit on recovery` |
+
+### 468.3 当前判断
+
+1. 成功供应商事实现在能够立即打断历史失败序列，避免供应商恢复后仍因窗口累计失败被错误摘流。
+2. 熔断只消费来源可追溯、状态自洽的真实通知结果，不再受本地拒绝或畸形历史污染。
+3. H2/mock 不证明生产 MySQL 执行计划、索引选择、多实例同时失败时的阈值精度、真实恢复或送达稳定性；release 四项真实治理阻断不变。

@@ -4248,6 +4248,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 占额使用独立 `REQUIRES_NEW` 事务并在外部调用前提交。供应商返回失败或通知器抛异常时不得返还额度，因为网络请求已经消耗供应商容量；额度耗尽仍记录 `RATE_LIMITED`，并按 14.293 排除出真实调用失败统计。
 5. 本契约新增内部服务、Mapper、共享桶 schema 和迁移，不改变 HTTP API、前端 DTO 或告警状态字段。占额后调用前崩溃可能暂时损失一个额度，窗口到期后恢复；生产仍需验证 MySQL 锁等待、多实例容量、供应商幂等与真实限额。
 
+### 14.295 告警供应商连续失败熔断契约
+
+1. 供应商熔断必须基于目标 `providerCode + alertChannel` 在 10 分钟窗口内最近 3 条合法真实调用结果，不得用窗口失败总数替代连续失败序列。
+2. 真实成功要求 `alert_status=已派发` 且供应商状态为 `ACCEPTED / DELIVERED`；真实失败要求 `alert_status=派发失败` 且供应商状态为 `FAILED / SEND_EXCEPTION`。本地护栏和状态矛盾组合不得进入序列。
+3. 每条结果必须通过来源归属校验：`source_alert_no` 指向同一 `issue_no` 的顶层 `IN_APP_OUTBOX`。孤立、错异常和嵌套来源日志不得影响供应商熔断。
+4. 最近三条不足 3 条，或其中存在 `ACCEPTED / DELIVERED` 时不得熔断；仅三条全部失败时记录 `PROVIDER_CIRCUIT_OPEN` 并继续尝试后备供应商。
+5. 本契约只改变内部 Mapper 与服务判定并增加查询索引，不改变 HTTP API、DTO 或持久化状态。目标 MySQL 的排序执行计划、多实例并发失败、供应商真实恢复与送达仍需独立验证。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
