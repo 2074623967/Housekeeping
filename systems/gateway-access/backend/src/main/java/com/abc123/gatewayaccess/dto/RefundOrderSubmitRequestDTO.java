@@ -10,6 +10,7 @@ import lombok.Data;
 public class RefundOrderSubmitRequestDTO {
 
     private String refundOrderId;
+    private String refundAttemptNo;
     private String paymentOrderId;
     private String orderNo;
     private String customerName;

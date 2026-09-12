@@ -109,10 +109,15 @@ INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, dow
 ('EVT202607190002', 'PAYMENT_PENDING', 'PAY202607190002', 'ORD202607190002', 'payment-core-ops', 'payment.trade.pending.v1', 'PENDING', 'warn', 0, NULL, '2026-07-20 10:08:19', '{"amount":6800.00}', '2026-07-19 10:03:19'),
 ('EVT202607180074', 'PAYMENT_SUCCESS', 'PAY202607180074', 'ORD202607180118', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'FAILED', 'danger', 2, '2026-07-18 18:41:30', '2026-07-20 09:00:00', '{"amount":3600.00}', '2026-07-18 18:41:21');
 
-INSERT INTO t_refund_order (refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES
-('REF202607190001', 'PAY202607190001', 'LEGACY:REF202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
-('REF202607180019', 'PAY202607180074', 'LEGACY:REF202607180019', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
-('REF202607170088', 'PAY202607160031', 'LEGACY:REF202607170088', 'ORD202607160071', '赵女士', 200.00, '退转付', '用户重复支付', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
+INSERT INTO t_refund_order (refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, refund_method, refund_reason, channel_code, channel_refund_no, channel_submitted_at, status, status_type, applied_at, success_at) VALUES
+('REF202607190001', 'PAY202607190001', 'LEGACY:REF202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'wx_jsapi', NULL, NULL, 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
+('REF202607180019', 'PAY202607180074', 'LEGACY:REF202607180019', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'offline_bank', 'BANK-REF-202607180019', '2026-07-18 19:01:15', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
+('REF202607170088', 'PAY202607160031', 'LEGACY:REF202607170088', 'ORD202607160071', '赵女士', 200.00, '退转付', '用户重复支付', 'legacy_unknown', 'LEGACY-REF-202607170088', '2026-07-17 15:12:10', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
+
+INSERT INTO t_refund_attempt (refund_attempt_no, refund_order_id, channel_code, channel_refund_no, attempt_status, attempt_status_type, submitted_at, completed_at, created_at) VALUES
+('RFA202607190001', 'REF202607190001', 'wx_jsapi', NULL, 'PENDING', 'warn', NULL, NULL, '2026-07-19 11:08:20'),
+('RFA202607180019', 'REF202607180019', 'offline_bank', 'BANK-REF-202607180019', 'SUCCESS', 'success', '2026-07-18 19:01:15', '2026-07-18 19:03:26', '2026-07-18 19:01:10'),
+('RFA202607170088', 'REF202607170088', 'legacy_unknown', 'LEGACY-REF-202607170088', 'FAIL', 'danger', '2026-07-17 15:12:10', '2026-07-17 15:18:21', '2026-07-17 15:12:00');
 
 INSERT INTO t_refund_operation_log (log_no, refund_order_id, action_code, action_name, from_status, to_status, operator_name, operation_remark, created_at) VALUES
 ('ROL202607190001', 'REF202607190001', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '客户取消服务', '2026-07-19 11:05:10'),

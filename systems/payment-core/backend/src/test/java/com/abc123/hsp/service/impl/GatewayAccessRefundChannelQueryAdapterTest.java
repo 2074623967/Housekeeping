@@ -101,6 +101,7 @@ class GatewayAccessRefundChannelQueryAdapterTest {
                 (GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryRequest)
                         entityCaptor.getValue().getBody();
         assertEquals("REF-001", forwarded.getRefundOrderId());
+        assertEquals("RFA-001", forwarded.getRefundAttemptNo());
         assertEquals(null, forwarded.getChannelRefundNo());
         assertEquals("CHANNEL-REF-RECOVERED", result.getChannelRefundNo());
     }
@@ -149,6 +150,7 @@ class GatewayAccessRefundChannelQueryAdapterTest {
                 .thenReturn(ResponseEntity.ok(response));
         RefundCallbackSourceDTO refund = refund();
         refund.setRefundOrderId(" REF-001 ");
+        refund.setRefundAttemptNo(" RFA-001 ");
         refund.setChannelCode(" wx_h5 ");
         refund.setChannelRefundNo(" CHANNEL-REF-001 ");
 
@@ -158,9 +160,11 @@ class GatewayAccessRefundChannelQueryAdapterTest {
                 (GatewayAccessRefundChannelQueryAdapter.GatewayRefundQueryRequest)
                         entityCaptor.getValue().getBody();
         assertEquals("REF-001", sent.getRefundOrderId());
+        assertEquals("RFA-001", sent.getRefundAttemptNo());
         assertEquals("wx_h5", sent.getChannelCode());
         assertEquals("CHANNEL-REF-001", sent.getChannelRefundNo());
         assertEquals(" REF-001 ", refund.getRefundOrderId());
+        assertEquals(" RFA-001 ", refund.getRefundAttemptNo());
         assertEquals(" wx_h5 ", refund.getChannelCode());
     }
 
@@ -220,6 +224,7 @@ class GatewayAccessRefundChannelQueryAdapterTest {
     private RefundCallbackSourceDTO refund() {
         RefundCallbackSourceDTO refund = new RefundCallbackSourceDTO();
         refund.setRefundOrderId("REF-001");
+        refund.setRefundAttemptNo("RFA-001");
         refund.setChannelCode("wx_h5");
         refund.setChannelRefundNo("CHANNEL-REF-001");
         refund.setStatus("PROCESSING");

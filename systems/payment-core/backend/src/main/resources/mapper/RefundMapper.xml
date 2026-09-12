@@ -160,6 +160,26 @@
         ORDER BY created_at DESC, id DESC
     </select>
 
+    <select id="findAttempts" resultType="com.abc123.hsp.dto.RefundAttemptItemDTO">
+        SELECT refund_attempt_no AS refundAttemptNo,
+               channel_code AS channelCode,
+               channel_refund_no AS channelRefundNo,
+               attempt_status AS attemptStatus,
+               attempt_status_type AS attemptStatusType,
+               CASE
+                   WHEN submitted_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(submitted_at, '%Y-%m-%d %H:%i:%s')
+               END AS submittedAt,
+               CASE
+                   WHEN completed_at IS NULL THEN '-'
+                   ELSE DATE_FORMAT(completed_at, '%Y-%m-%d %H:%i:%s')
+               END AS completedAt,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+        FROM t_refund_attempt
+        WHERE refund_order_id = #{refundOrderId}
+        ORDER BY created_at DESC, id DESC
+    </select>
+
     <select id="findPaymentSourceForUpdate" resultType="com.abc123.hsp.dto.RefundPaymentSourceDTO">
         SELECT payment_order_id AS paymentOrderId,
                order_no AS orderNo,
@@ -221,35 +241,98 @@
         LIMIT 1
     </select>
 
+    <select id="findChannelSubmitRequestByAttemptNo" resultType="com.abc123.hsp.dto.RefundChannelSubmitRequestDTO">
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               attempt.refund_attempt_no AS refundAttemptNo,
+               refund_order.payment_order_id AS paymentOrderId,
+               refund_order.order_no AS orderNo,
+               refund_order.customer_name AS customerName,
+               refund_order.refund_amount AS refundAmount,
+               refund_order.refund_method AS refundMethod,
+               refund_order.refund_reason AS refundReason,
+               attempt.channel_code AS channelCode,
+               refund_order.status AS refundStatus,
+               attempt.attempt_status AS attemptStatus,
+               attempt.channel_code AS submittedChannelCode,
+               attempt.channel_refund_no AS channelRefundNo
+        FROM t_refund_attempt attempt
+        INNER JOIN t_refund_order refund_order
+            ON refund_order.refund_order_id = attempt.refund_order_id
+        WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+        LIMIT 1
+    </select>
+
+    <insert id="insertRefundAttempt">
+        INSERT INTO t_refund_attempt(
+            refund_attempt_no,
+            refund_order_id,
+            channel_code,
+            channel_refund_no,
+            attempt_status,
+            attempt_status_type,
+            submitted_at,
+            completed_at,
+            created_at
+        ) VALUES (
+            #{refundAttemptNo},
+            #{refundOrderId},
+            #{channelCode},
+            NULL,
+            'PENDING',
+            'warn',
+            NULL,
+            NULL,
+            NOW()
+        )
+    </insert>
+
     <select id="findCallbackSourceForUpdate" resultType="com.abc123.hsp.dto.RefundCallbackSourceDTO">
-        SELECT refund_order_id AS refundOrderId,
-               status,
-               channel_code AS channelCode,
-               channel_refund_no AS channelRefundNo,
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.status,
+               attempt.refund_attempt_no AS refundAttemptNo,
+               attempt.channel_code AS channelCode,
+               attempt.channel_refund_no AS channelRefundNo,
+               attempt.attempt_status AS attemptStatus,
                (SELECT event.publish_status
                 FROM t_payment_event event
                 WHERE event.event_type = 'REFUND_SUBMIT'
-                  AND event.biz_no = refund_order.refund_order_id
+                  AND event.biz_no = attempt.refund_attempt_no
                 ORDER BY event.id DESC
                 LIMIT 1) AS submitEventStatus
         FROM t_refund_order refund_order
-        WHERE refund_order_id = #{refundOrderId}
+        LEFT JOIN t_refund_attempt attempt ON attempt.id = (
+            SELECT latest_attempt.id
+            FROM t_refund_attempt latest_attempt
+            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+            LIMIT 1
+        )
+        WHERE refund_order.refund_order_id = #{refundOrderId}
         FOR UPDATE
     </select>
 
     <select id="findCallbackSourceByRefundOrderId" resultType="com.abc123.hsp.dto.RefundCallbackSourceDTO">
-        SELECT refund_order_id AS refundOrderId,
-               status,
-               channel_code AS channelCode,
-               channel_refund_no AS channelRefundNo,
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.status,
+               attempt.refund_attempt_no AS refundAttemptNo,
+               attempt.channel_code AS channelCode,
+               attempt.channel_refund_no AS channelRefundNo,
+               attempt.attempt_status AS attemptStatus,
                (SELECT event.publish_status
                 FROM t_payment_event event
                 WHERE event.event_type = 'REFUND_SUBMIT'
-                  AND event.biz_no = refund_order.refund_order_id
+                  AND event.biz_no = attempt.refund_attempt_no
                 ORDER BY event.id DESC
                 LIMIT 1) AS submitEventStatus
         FROM t_refund_order refund_order
-        WHERE refund_order_id = #{refundOrderId}
+        LEFT JOIN t_refund_attempt attempt ON attempt.id = (
+            SELECT latest_attempt.id
+            FROM t_refund_attempt latest_attempt
+            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+            LIMIT 1
+        )
+        WHERE refund_order.refund_order_id = #{refundOrderId}
         LIMIT 1
     </select>
 
@@ -272,7 +355,7 @@
             #{eventNo},
             'REFUND_SUBMIT',
             #{paymentOrderId},
-            #{refundOrderId},
+            #{refundAttemptNo},
             'gateway-access',
             'payment.refund.submitted.v1',
             'PENDING',
@@ -292,6 +375,53 @@
             event_payload = '退款渠道待下发'
     </insert>
 
+    <update id="bindRefundAttemptAccepted">
+        UPDATE t_refund_attempt
+        SET channel_refund_no = #{channelRefundNo},
+            attempt_status = 'ACCEPTED',
+            attempt_status_type = 'warn',
+            submitted_at = COALESCE(submitted_at, NOW())
+        WHERE refund_attempt_no = #{refundAttemptNo}
+          AND attempt_status IN ('PENDING', 'FAILED', 'UNKNOWN')
+          AND channel_refund_no IS NULL
+    </update>
+
+    <update id="markRefundAttemptFailed">
+        UPDATE t_refund_attempt
+        SET attempt_status = 'FAILED',
+            attempt_status_type = 'danger'
+        WHERE refund_attempt_no = #{refundAttemptNo}
+          AND attempt_status IN ('PENDING', 'FAILED')
+          AND channel_refund_no IS NULL
+    </update>
+
+    <update id="markRefundAttemptUnknown">
+        UPDATE t_refund_attempt
+        SET attempt_status = 'UNKNOWN',
+            attempt_status_type = 'warn',
+            submitted_at = COALESCE(submitted_at, NOW())
+        WHERE refund_attempt_no = #{refundAttemptNo}
+          AND attempt_status IN ('PENDING', 'FAILED')
+          AND channel_refund_no IS NULL
+    </update>
+
+    <update id="finalizeRefundAttempt">
+        UPDATE t_refund_attempt
+        SET attempt_status = #{attemptStatus},
+            attempt_status_type = #{attemptStatusType},
+            completed_at = NOW()
+        WHERE refund_attempt_no = #{refundAttemptNo}
+          AND attempt_status = 'ACCEPTED'
+    </update>
+
+    <select id="findAttemptNoByChannelRefundNo" resultType="string">
+        SELECT refund_attempt_no
+        FROM t_refund_attempt
+        WHERE channel_code = #{channelCode}
+          AND channel_refund_no = #{channelRefundNo}
+        LIMIT 1
+    </select>
+
     <update id="bindRefundChannelAccepted">
         UPDATE t_refund_order
         SET channel_code = #{channelCode},
@@ -300,6 +430,22 @@
         WHERE refund_order_id = #{refundOrderId}
           AND status = 'PROCESSING'
           AND channel_refund_no IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM t_refund_attempt attempt
+              WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND attempt.refund_order_id = #{refundOrderId}
+                AND attempt.channel_code = #{channelCode}
+                AND attempt.channel_refund_no = #{channelRefundNo}
+                AND attempt.attempt_status = 'ACCEPTED'
+                AND attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_refund_attempt latest_attempt
+                    WHERE latest_attempt.refund_order_id = #{refundOrderId}
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                )
+          )
     </update>
 
     <update id="bindUnknownRefundChannelAccepted">
@@ -314,8 +460,24 @@
               SELECT 1
               FROM t_payment_event event
               WHERE event.event_type = 'REFUND_SUBMIT'
-                AND event.biz_no = #{refundOrderId}
+                AND event.biz_no = #{refundAttemptNo}
                 AND event.publish_status = 'UNKNOWN'
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM t_refund_attempt attempt
+              WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND attempt.refund_order_id = #{refundOrderId}
+                AND attempt.channel_code = #{channelCode}
+                AND attempt.channel_refund_no = #{channelRefundNo}
+                AND attempt.attempt_status = 'ACCEPTED'
+                AND attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_refund_attempt latest_attempt
+                    WHERE latest_attempt.refund_order_id = #{refundOrderId}
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                )
           )
     </update>
 
@@ -325,6 +487,22 @@
         WHERE refund_order_id = #{refundOrderId}
           AND status = 'PROCESSING'
           AND channel_refund_no IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM t_refund_attempt attempt
+              WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+                AND attempt.refund_order_id = #{refundOrderId}
+                AND attempt.channel_code = #{channelCode}
+                AND attempt.channel_refund_no IS NULL
+                AND attempt.attempt_status = 'UNKNOWN'
+                AND attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_refund_attempt latest_attempt
+                    WHERE latest_attempt.refund_order_id = #{refundOrderId}
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                )
+          )
     </update>
 
     <update id="markUnknownRefundSubmitEventConfirmed">
@@ -335,7 +513,7 @@
             next_retry_at = NULL,
             event_payload = '退款渠道受理事实已由可信核查确认'
         WHERE event_type = 'REFUND_SUBMIT'
-          AND biz_no = #{refundOrderId}
+          AND biz_no = #{refundAttemptNo}
           AND publish_status = 'UNKNOWN'
     </update>
 

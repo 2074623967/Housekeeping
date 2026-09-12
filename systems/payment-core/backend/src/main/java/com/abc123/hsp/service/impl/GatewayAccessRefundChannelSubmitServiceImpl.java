@@ -114,6 +114,7 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
         }
         GatewayRefundSubmitRequest normalized = new GatewayRefundSubmitRequest();
         normalized.setRefundOrderId(requiredRequest(request.getRefundOrderId(), 64));
+        normalized.setRefundAttemptNo(requiredRequest(request.getRefundAttemptNo(), 64));
         normalized.setPaymentOrderId(requiredRequest(request.getPaymentOrderId(), 64));
         normalized.setOrderNo(requiredRequest(request.getOrderNo(), 64));
         normalized.setCustomerName(optionalRequest(request.getCustomerName(), 128));
@@ -231,6 +232,7 @@ public class GatewayAccessRefundChannelSubmitServiceImpl implements RefundChanne
     public static class GatewayRefundSubmitRequest {
 
         private String refundOrderId;
+        private String refundAttemptNo;
         private String paymentOrderId;
         private String orderNo;
         private String customerName;

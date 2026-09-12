@@ -7,6 +7,7 @@ import {
   paymentRecordDetailRoute as buildPaymentRecordDetailRoute
 } from "../router/detailRoutes";
 import { paymentLogsRoute as buildPaymentLogsRoute } from "../router/listRoutes";
+import { refundAttemptStatusType } from "../utils/refundAttempt";
 
 const route = useRoute();
 const router = useRouter();
@@ -292,6 +293,46 @@ onMounted(loadDetail);
               <button class="button primary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
               <button class="button secondary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
+          </div>
+        </div>
+
+        <div class="detail-panel">
+          <div class="section-title">
+            <div>
+              <h3>渠道退款尝试</h3>
+              <p class="meta">每轮渠道请求使用独立尝试号，保留未知态、受理事实和最终结果</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>退款尝试号</th>
+                  <th>渠道</th>
+                  <th>渠道退款号</th>
+                  <th>尝试状态</th>
+                  <th>创建时间</th>
+                  <th>提交时间</th>
+                  <th>完成时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in (detail.attempts || [])" :key="item.refundAttemptNo">
+                  <td>{{ item.refundAttemptNo }}</td>
+                  <td>{{ item.channelCode || "-" }}</td>
+                  <td>{{ item.channelRefundNo || "-" }}</td>
+                  <td>
+                    <span :class="['badge', refundAttemptStatusType(item.attemptStatusType)]">
+                      {{ item.attemptStatus || "-" }}
+                    </span>
+                  </td>
+                  <td>{{ item.createdAt || "-" }}</td>
+                  <td>{{ item.submittedAt || "-" }}</td>
+                  <td>{{ item.completedAt || "-" }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="!(detail.attempts || []).length" class="state-box">当前暂无渠道退款尝试</div>
           </div>
         </div>
 

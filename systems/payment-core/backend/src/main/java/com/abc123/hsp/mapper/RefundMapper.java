@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
 import com.abc123.hsp.dto.RefundApplicationIdempotencyDTO;
+import com.abc123.hsp.dto.RefundAttemptItemDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
@@ -53,6 +54,11 @@ public interface RefundMapper {
     List<RefundOperationLogItemDTO> findOperationLogs(@Param("refundOrderId") String refundOrderId);
 
     /**
+     * 查询退款渠道尝试历史。
+     */
+    List<RefundAttemptItemDTO> findAttempts(@Param("refundOrderId") String refundOrderId);
+
+    /**
      * 查询并锁定可退款的原支付单快照。
      */
     RefundPaymentSourceDTO findPaymentSourceForUpdate(String paymentOrderId);
@@ -75,6 +81,19 @@ public interface RefundMapper {
     RefundChannelSubmitRequestDTO findChannelSubmitRequestByRefundOrderId(@Param("refundOrderId") String refundOrderId);
 
     /**
+     * 按尝试号查询退款渠道下发请求快照。
+     */
+    RefundChannelSubmitRequestDTO findChannelSubmitRequestByAttemptNo(
+            @Param("refundAttemptNo") String refundAttemptNo);
+
+    /**
+     * 新建一轮退款渠道尝试。
+     */
+    int insertRefundAttempt(@Param("refundAttemptNo") String refundAttemptNo,
+                            @Param("refundOrderId") String refundOrderId,
+                            @Param("channelCode") String channelCode);
+
+    /**
      * 查询并锁定退款回调收口快照。
      */
     RefundCallbackSourceDTO findCallbackSourceForUpdate(@Param("refundOrderId") String refundOrderId);
@@ -88,13 +107,43 @@ public interface RefundMapper {
      * 以稳定事件号写入或重新激活退款渠道下发 outbox。
      */
     int upsertRefundSubmitEvent(@Param("eventNo") String eventNo,
-                                @Param("refundOrderId") String refundOrderId,
+                                @Param("refundAttemptNo") String refundAttemptNo,
                                 @Param("paymentOrderId") String paymentOrderId);
+
+    /**
+     * 将当前尝试绑定为渠道已受理。
+     */
+    int bindRefundAttemptAccepted(@Param("refundAttemptNo") String refundAttemptNo,
+                                  @Param("channelRefundNo") String channelRefundNo);
+
+    /**
+     * 将调用前失败的当前尝试标记为可重试失败。
+     */
+    int markRefundAttemptFailed(@Param("refundAttemptNo") String refundAttemptNo);
+
+    /**
+     * 将渠道调用结果未知的当前尝试标记为未知。
+     */
+    int markRefundAttemptUnknown(@Param("refundAttemptNo") String refundAttemptNo);
+
+    /**
+     * 将当前尝试收口为退款终态。
+     */
+    int finalizeRefundAttempt(@Param("refundAttemptNo") String refundAttemptNo,
+                              @Param("attemptStatus") String attemptStatus,
+                              @Param("attemptStatusType") String attemptStatusType);
+
+    /**
+     * 按渠道退款号查找所属尝试，用于拒绝旧尝试乱序回调。
+     */
+    String findAttemptNoByChannelRefundNo(@Param("channelCode") String channelCode,
+                                          @Param("channelRefundNo") String channelRefundNo);
 
     /**
      * 首次绑定渠道退款受理事实，禁止后续补偿覆盖为其他渠道单号。
      */
     int bindRefundChannelAccepted(@Param("refundOrderId") String refundOrderId,
+                                  @Param("refundAttemptNo") String refundAttemptNo,
                                   @Param("channelCode") String channelCode,
                                   @Param("channelRefundNo") String channelRefundNo);
 
@@ -102,6 +151,7 @@ public interface RefundMapper {
      * 仅为仍处于 UNKNOWN 的退款提交首次补录可信渠道受理事实。
      */
     int bindUnknownRefundChannelAccepted(@Param("refundOrderId") String refundOrderId,
+                                         @Param("refundAttemptNo") String refundAttemptNo,
                                          @Param("channelCode") String channelCode,
                                          @Param("channelRefundNo") String channelRefundNo);
 
@@ -109,12 +159,13 @@ public interface RefundMapper {
      * 记录结果未知的退款提交实际调用渠道，不伪造渠道受理号。
      */
     int recordUnknownRefundSubmitChannel(@Param("refundOrderId") String refundOrderId,
+                                         @Param("refundAttemptNo") String refundAttemptNo,
                                          @Param("channelCode") String channelCode);
 
     /**
      * 将已由可信查单或验签回调确认的退款提交未知事件收敛为成功。
      */
-    int markUnknownRefundSubmitEventConfirmed(@Param("refundOrderId") String refundOrderId);
+    int markUnknownRefundSubmitEventConfirmed(@Param("refundAttemptNo") String refundAttemptNo);
 
     /**
      * 汇总原支付单已申请且未终止的退款金额。

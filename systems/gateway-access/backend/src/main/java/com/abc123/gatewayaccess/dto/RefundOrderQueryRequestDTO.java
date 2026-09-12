@@ -9,6 +9,7 @@ import lombok.Data;
 public class RefundOrderQueryRequestDTO {
 
     private String refundOrderId;
+    private String refundAttemptNo;
     private String channelCode;
     private String channelRefundNo;
 }

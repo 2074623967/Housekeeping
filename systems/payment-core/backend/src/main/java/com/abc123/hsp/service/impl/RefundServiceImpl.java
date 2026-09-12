@@ -161,6 +161,7 @@ public class RefundServiceImpl implements RefundService {
         BeanUtils.copyProperties(detail, outwardDetail);
         outwardDetail.setCustomerName(sensitiveDataMasker.maskName(detail.getCustomerName()));
         outwardDetail.setOperationLogs(refundMapper.findOperationLogs(requiredRefundOrderId));
+        outwardDetail.setAttempts(refundMapper.findAttempts(requiredRefundOrderId));
         return outwardDetail;
     }
 
@@ -313,6 +314,17 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_CHANNEL_MISMATCH,
                     "callback channel does not match refund channel");
         }
+        if (!StringUtils.hasText(source.getRefundAttemptNo())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
+                    "refund has no current channel attempt");
+        }
+        String matchedAttemptNo = refundMapper.findAttemptNoByChannelRefundNo(
+                channel, channelRefundNo);
+        if (StringUtils.hasText(matchedAttemptNo)
+                && !matchedAttemptNo.equals(source.getRefundAttemptNo())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
+                    "callback belongs to an earlier refund attempt");
+        }
         boolean acceptanceRecovered = false;
         if (!StringUtils.hasText(source.getChannelRefundNo())) {
             acceptanceRecovered = recoverUnknownRefundAcceptance(source, channel, channelRefundNo, operator);
@@ -357,6 +369,10 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_STATUS_INVALID,
                     "refund status does not allow callback finalization");
         }
+        if (refundMapper.finalizeRefundAttempt(
+                source.getRefundAttemptNo(), targetStatus, statusType) != 1) {
+            throw new IllegalStateException("refund attempt finalization was not applied atomically");
+        }
         refundMapper.insertOperationLog(buildOperationLog(
                 refundOrderId,
                 recordSameStatus ? "CHANNEL_QUERY_" + targetStatus : targetStatus,
@@ -387,9 +403,11 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
                     "callback transaction does not match refund transaction");
         }
-        if (refundMapper.bindUnknownRefundChannelAccepted(
-                source.getRefundOrderId(), channel, channelRefundNo) != 1
-                || refundMapper.markUnknownRefundSubmitEventConfirmed(source.getRefundOrderId()) != 1) {
+        if (refundMapper.bindRefundAttemptAccepted(
+                source.getRefundAttemptNo(), channelRefundNo) != 1
+                || refundMapper.bindUnknownRefundChannelAccepted(
+                source.getRefundOrderId(), source.getRefundAttemptNo(), channel, channelRefundNo) != 1
+                || refundMapper.markUnknownRefundSubmitEventConfirmed(source.getRefundAttemptNo()) != 1) {
             throw new IllegalStateException("unknown refund acceptance recovery was not applied atomically");
         }
         refundMapper.insertOperationLog(buildOperationLog(
@@ -657,38 +675,46 @@ public class RefundServiceImpl implements RefundService {
         if (channelSubmitRequest == null) {
             throw new IllegalArgumentException("退款单不存在或缺少渠道下发信息");
         }
-        String eventNo = buildRefundSubmitEventNo(refundOrderId);
-        refundMapper.upsertRefundSubmitEvent(eventNo, refundOrderId, channelSubmitRequest.getPaymentOrderId());
-        dispatchAfterCommit(eventNo, refundOrderId, operator);
+        String refundAttemptNo = buildRefundAttemptNo();
+        refundMapper.insertRefundAttempt(
+                refundAttemptNo, refundOrderId, channelSubmitRequest.getChannelCode().trim());
+        String eventNo = buildRefundSubmitEventNo(refundAttemptNo);
+        refundMapper.upsertRefundSubmitEvent(
+                eventNo, refundAttemptNo, channelSubmitRequest.getPaymentOrderId());
+        dispatchAfterCommit(eventNo, refundAttemptNo, operator);
     }
 
-    private void dispatchAfterCommit(String eventNo, String refundOrderId, String operator) {
+    private void dispatchAfterCommit(String eventNo, String refundAttemptNo, String operator) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            tryDispatch(eventNo, refundOrderId, operator);
+            tryDispatch(eventNo, refundAttemptNo, operator);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                tryDispatch(eventNo, refundOrderId, operator);
+                tryDispatch(eventNo, refundAttemptNo, operator);
             }
         });
     }
 
-    private void tryDispatch(String eventNo, String refundOrderId, String operator) {
+    private void tryDispatch(String eventNo, String refundAttemptNo, String operator) {
         try {
-            paymentEventDispatchService.publishRefundSubmit(eventNo, refundOrderId, operator);
+            paymentEventDispatchService.publishRefundSubmit(eventNo, refundAttemptNo, operator);
         } catch (RuntimeException exception) {
             LOGGER.warn("退款渠道事件即时派发失败 eventNo={}, exceptionType={}",
                     eventNo, exception.getClass().getName());
         }
     }
 
-    private String buildRefundSubmitEventNo(String refundOrderId) {
+    private String buildRefundSubmitEventNo(String refundAttemptNo) {
         return "EVTR" + UUID.nameUUIDFromBytes(
-                ("REFUND_SUBMIT:" + refundOrderId).getBytes(StandardCharsets.UTF_8))
+                ("REFUND_SUBMIT:" + refundAttemptNo).getBytes(StandardCharsets.UTF_8))
                 .toString()
                 .replace("-", "");
+    }
+
+    private String buildRefundAttemptNo() {
+        return "RFA" + UUID.randomUUID().toString().replace("-", "");
     }
 
     private String requireRefundOrderId(RefundActionRequestDTO request) {

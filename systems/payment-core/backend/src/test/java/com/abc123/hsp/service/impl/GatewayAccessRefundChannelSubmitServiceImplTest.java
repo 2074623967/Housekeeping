@@ -112,6 +112,7 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
         stubSuccess(restTemplate, sentRequest);
         RefundChannelSubmitRequestDTO request = request();
         request.setRefundOrderId(" REF-1001 ");
+        request.setRefundAttemptNo(" RFA-1001 ");
         request.setCustomerName("   ");
         request.setRefundReason(" customer request ");
         request.setChannelCode(" wx_h5 ");
@@ -124,11 +125,13 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
         GatewayAccessRefundChannelSubmitServiceImpl.GatewayRefundSubmitRequest sent = sentRequest.get();
         assertNotNull(sent);
         assertEquals("REF-1001", sent.getRefundOrderId());
+        assertEquals("RFA-1001", sent.getRefundAttemptNo());
         assertNull(sent.getCustomerName());
         assertEquals("customer request", sent.getRefundReason());
         assertEquals("wx_h5", sent.getChannelCode());
         assertTrue(result.getResponsePayload().contains("\"channelCode\":\"wx_h5\""));
         assertEquals(" REF-1001 ", request.getRefundOrderId());
+        assertEquals(" RFA-1001 ", request.getRefundAttemptNo());
         assertEquals("   ", request.getCustomerName());
         assertEquals(" wx_h5 ", request.getChannelCode());
         assertEquals("internal-refund-no", request.getChannelRefundNo());
@@ -211,6 +214,7 @@ class GatewayAccessRefundChannelSubmitServiceImplTest {
     private RefundChannelSubmitRequestDTO request() {
         RefundChannelSubmitRequestDTO request = new RefundChannelSubmitRequestDTO();
         request.setRefundOrderId("REF-1001");
+        request.setRefundAttemptNo("RFA-1001");
         request.setPaymentOrderId("PAY-1001");
         request.setOrderNo("ORD-1001");
         request.setCustomerName("Customer");

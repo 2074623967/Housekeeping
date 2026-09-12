@@ -150,6 +150,28 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldNotCarryPreviousAttemptQueryBackoffIntoNewRefundAttempt() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             PreparedStatement statement = session.getConnection().prepareStatement(
+                     "INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, channel_code, "
+                             + "channel_refund_no, attempt_status, attempt_status_type, submitted_at, "
+                             + "completed_at, created_at) "
+                             + "VALUES ('RFA-REF-BASE-WAIT-NEW', 'REF-BASE-WAIT', 'wx_h5', "
+                             + "'CHANNEL-REF-BASE-WAIT-NEW', 'ACCEPTED', 'warn', ?, NULL, ?)")) {
+            Timestamp attemptTime = Timestamp.valueOf(LocalDateTime.now().minusSeconds(10));
+            statement.setTimestamp(1, attemptTime);
+            statement.setTimestamp(2, attemptTime);
+            statement.executeUpdate();
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            List<String> candidates = mapper.findDuePendingRefundOrderIdsForQuery(
+                    0, 60, 2, 900, 20, 100);
+
+            org.junit.jupiter.api.Assertions.assertTrue(candidates.contains("REF-BASE-WAIT"));
+        }
+    }
+
+    @Test
     void shouldSeparateDueAndBackingOffExpiryCloseBacklogs() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
@@ -527,6 +549,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_event");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("DROP TABLE IF EXISTS t_refund_operation_log");
+            statement.execute("DROP TABLE IF EXISTS t_refund_attempt");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("DROP TABLE IF EXISTS t_payment_expiry_close_retry");
@@ -558,6 +581,12 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
                     + "channel_code VARCHAR(64), channel_refund_no VARCHAR(128), "
                     + "channel_submitted_at DATETIME, status VARCHAR(32), applied_at DATETIME)");
+            statement.execute("CREATE TABLE t_refund_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_attempt_no VARCHAR(64), "
+                    + "refund_order_id VARCHAR(64), channel_code VARCHAR(64), "
+                    + "channel_refund_no VARCHAR(128), attempt_status VARCHAR(32), "
+                    + "attempt_status_type VARCHAR(32), submitted_at DATETIME, "
+                    + "completed_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_refund_operation_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
                     + "action_code VARCHAR(64), created_at DATETIME)");
@@ -934,7 +963,11 @@ public class PaymentTaskCenterMapperIntegrationTest {
             boolean withTrace) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO t_refund_order(refund_order_id, channel_code, channel_refund_no, "
-                        + "channel_submitted_at, status, applied_at) VALUES (?, ?, ?, ?, ?, ?)")) {
+                        + "channel_submitted_at, status, applied_at) VALUES (?, ?, ?, ?, ?, ?)");
+             PreparedStatement attemptStatement = connection.prepareStatement(
+                     "INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, channel_code, "
+                             + "channel_refund_no, attempt_status, attempt_status_type, submitted_at, "
+                             + "completed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setString(1, refundOrderId);
             statement.setString(2, withTrace ? channelCode : null);
             statement.setString(3, withTrace ? "CHANNEL-" + refundOrderId : null);
@@ -942,6 +975,19 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.setString(5, status);
             statement.setTimestamp(6, Timestamp.valueOf(submittedAt));
             statement.executeUpdate();
+            if (withTrace) {
+                attemptStatement.setString(1, "RFA-" + refundOrderId);
+                attemptStatement.setString(2, refundOrderId);
+                attemptStatement.setString(3, channelCode);
+                attemptStatement.setString(4, "CHANNEL-" + refundOrderId);
+                attemptStatement.setString(5, "SUCCESS".equals(status) ? "SUCCESS" : "ACCEPTED");
+                attemptStatement.setString(6, "SUCCESS".equals(status) ? "success" : "warn");
+                attemptStatement.setTimestamp(7, Timestamp.valueOf(submittedAt));
+                attemptStatement.setTimestamp(8,
+                        "SUCCESS".equals(status) ? Timestamp.valueOf(submittedAt) : null);
+                attemptStatement.setTimestamp(9, Timestamp.valueOf(submittedAt.minusHours(1)));
+                attemptStatement.executeUpdate();
+            }
         }
     }
 
@@ -971,6 +1017,10 @@ public class PaymentTaskCenterMapperIntegrationTest {
         try (PreparedStatement refundStatement = connection.prepareStatement(
                 "INSERT INTO t_refund_order(refund_order_id, channel_code, channel_refund_no, "
                         + "channel_submitted_at, status, applied_at) VALUES (?, ?, NULL, NULL, 'PROCESSING', ?)");
+             PreparedStatement attemptStatement = connection.prepareStatement(
+                     "INSERT INTO t_refund_attempt(refund_attempt_no, refund_order_id, channel_code, "
+                             + "channel_refund_no, attempt_status, attempt_status_type, submitted_at, "
+                             + "completed_at, created_at) VALUES (?, ?, ?, NULL, 'UNKNOWN', 'warn', ?, NULL, ?)");
              PreparedStatement eventStatement = connection.prepareStatement(
                      "INSERT INTO t_payment_event(event_no, payment_order_id, biz_no, event_type, "
                              + "publish_status, last_published_at, created_at) "
@@ -979,9 +1029,16 @@ public class PaymentTaskCenterMapperIntegrationTest {
             refundStatement.setString(2, channelCode);
             refundStatement.setTimestamp(3, Timestamp.valueOf(eventAt));
             refundStatement.executeUpdate();
+            String refundAttemptNo = "RFA-" + refundOrderId;
+            attemptStatement.setString(1, refundAttemptNo);
+            attemptStatement.setString(2, refundOrderId);
+            attemptStatement.setString(3, channelCode);
+            attemptStatement.setTimestamp(4, Timestamp.valueOf(eventAt));
+            attemptStatement.setTimestamp(5, Timestamp.valueOf(eventAt));
+            attemptStatement.executeUpdate();
             eventStatement.setString(1, "EVTR-" + refundOrderId);
             eventStatement.setString(2, "PAY-" + refundOrderId);
-            eventStatement.setString(3, refundOrderId);
+            eventStatement.setString(3, refundAttemptNo);
             eventStatement.setString(4, publishStatus);
             eventStatement.setTimestamp(5, Timestamp.valueOf(eventAt));
             eventStatement.setTimestamp(6, Timestamp.valueOf(eventAt));

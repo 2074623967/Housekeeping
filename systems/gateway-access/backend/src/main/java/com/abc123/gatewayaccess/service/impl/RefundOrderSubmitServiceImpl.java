@@ -94,6 +94,7 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
             throw invalid("refund submit request is required");
         }
         request.setRefundOrderId(required(request.getRefundOrderId(), "refundOrderId", 64));
+        request.setRefundAttemptNo(required(request.getRefundAttemptNo(), "refundAttemptNo", 64));
         request.setPaymentOrderId(required(request.getPaymentOrderId(), "paymentOrderId", 64));
         request.setOrderNo(required(request.getOrderNo(), "orderNo", 64));
         request.setCustomerName(optional(request.getCustomerName(), "customerName", 128));

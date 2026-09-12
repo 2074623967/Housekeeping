@@ -45,4 +45,6 @@ public class RefundDetailDTO {
     private String channelSubmittedAt;
     /** 操作日志。 */
     private List<RefundOperationLogItemDTO> operationLogs;
+    /** 退款渠道尝试历史，按最新尝试优先返回。 */
+    private List<RefundAttemptItemDTO> attempts;
 }

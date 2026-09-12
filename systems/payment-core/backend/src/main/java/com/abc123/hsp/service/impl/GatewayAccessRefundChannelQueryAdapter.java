@@ -106,6 +106,7 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
         }
         GatewayRefundQueryRequest request = new GatewayRefundQueryRequest();
         request.setRefundOrderId(requiredRequest(refund.getRefundOrderId(), 64));
+        request.setRefundAttemptNo(requiredRequest(refund.getRefundAttemptNo(), 64));
         request.setChannelCode(requiredRequest(refund.getChannelCode(), 64));
         request.setChannelRefundNo(optionalRequest(refund.getChannelRefundNo(), 128));
         return request;
@@ -163,6 +164,7 @@ public class GatewayAccessRefundChannelQueryAdapter implements RefundChannelQuer
     public static class GatewayRefundQueryRequest {
 
         private String refundOrderId;
+        private String refundAttemptNo;
         private String channelCode;
         private String channelRefundNo;
     }

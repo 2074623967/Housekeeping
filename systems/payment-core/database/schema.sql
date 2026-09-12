@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS t_payment_prepay_creation_lock;
 DROP TABLE IF EXISTS t_prepay_order;
 DROP TABLE IF EXISTS t_bill;
 DROP TABLE IF EXISTS t_worker_settlement_order;
+DROP TABLE IF EXISTS t_refund_attempt;
 DROP TABLE IF EXISTS t_refund_order;
 DROP TABLE IF EXISTS t_refund_operation_log;
 DROP TABLE IF EXISTS t_payment_day_end_batch;
@@ -810,6 +811,23 @@ CREATE TABLE t_refund_order (
     UNIQUE KEY uk_refund_channel_no (channel_code, channel_refund_no),
     KEY idx_refund_payment_status (payment_order_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';
+
+CREATE TABLE t_refund_attempt (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    refund_attempt_no VARCHAR(64) NOT NULL COMMENT '退款尝试号及渠道侧商户退款请求号',
+    refund_order_id VARCHAR(64) NOT NULL COMMENT '关联退款单号',
+    channel_code VARCHAR(64) NOT NULL COMMENT '本次尝试渠道编码',
+    channel_refund_no VARCHAR(128) DEFAULT NULL COMMENT '本次尝试渠道侧退款单号',
+    attempt_status VARCHAR(32) NOT NULL COMMENT '尝试状态：PENDING/FAILED/ACCEPTED/UNKNOWN/SUCCESS/FAIL',
+    attempt_status_type VARCHAR(32) NOT NULL COMMENT '尝试状态样式类型',
+    submitted_at DATETIME DEFAULT NULL COMMENT '首次进入渠道调用时间',
+    completed_at DATETIME DEFAULT NULL COMMENT '尝试终态时间',
+    created_at DATETIME NOT NULL COMMENT '尝试创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_refund_attempt_no (refund_attempt_no),
+    UNIQUE KEY uk_refund_attempt_channel_no (channel_code, channel_refund_no),
+    KEY idx_refund_attempt_order_created (refund_order_id, created_at, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款渠道尝试事实表';
 
 CREATE TABLE t_refund_operation_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

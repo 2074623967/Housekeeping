@@ -11,6 +11,8 @@ public class RefundChannelSubmitRequestDTO {
 
     /** 退款单号。 */
     private String refundOrderId;
+    /** 本次退款渠道尝试号，同时作为渠道侧商户退款请求号。 */
+    private String refundAttemptNo;
     /** 原支付单号。 */
     private String paymentOrderId;
     /** 原订单号。 */
@@ -27,6 +29,8 @@ public class RefundChannelSubmitRequestDTO {
     private String channelCode;
     /** 当前退款状态，仅供内部派发边界校验。 */
     private String refundStatus;
+    /** 当前退款尝试状态，仅供内部派发边界校验。 */
+    private String attemptStatus;
     /** 已绑定的渠道编码，用于受理事实幂等校验。 */
     private String submittedChannelCode;
     /** 已持久化的渠道退款号。 */

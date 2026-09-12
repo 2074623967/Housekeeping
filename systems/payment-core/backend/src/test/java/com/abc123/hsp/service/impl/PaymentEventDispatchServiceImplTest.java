@@ -77,18 +77,22 @@ class PaymentEventDispatchServiceImplTest {
         RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
         result.setChannelRefundNo("RCH-REF-001");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request)).thenReturn(result);
-        when(refundMapper.bindRefundChannelAccepted("REF-001", "wx_h5", "RCH-REF-001")).thenReturn(1);
+        when(refundMapper.bindRefundAttemptAccepted("RFA-001", "RCH-REF-001")).thenReturn(1);
+        when(refundMapper.bindRefundChannelAccepted(
+                "REF-001", "RFA-001", "wx_h5", "RCH-REF-001")).thenReturn(1);
         when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService).submit(request);
-        verify(refundMapper).bindRefundChannelAccepted("REF-001", "wx_h5", "RCH-REF-001");
+        verify(refundMapper).bindRefundAttemptAccepted("RFA-001", "RCH-REF-001");
+        verify(refundMapper).bindRefundChannelAccepted(
+                "REF-001", "RFA-001", "wx_h5", "RCH-REF-001");
         verify(paymentEventMapper).markPublishSuccess("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_SUBMIT".equals(log.getActionCode())
@@ -103,10 +107,11 @@ class PaymentEventDispatchServiceImplTest {
         RefundChannelSubmitResultDTO result = new RefundChannelSubmitResultDTO();
         result.setChannelRefundNo("RCH-REF-RETRY-001");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request)).thenReturn(result);
+        when(refundMapper.bindRefundAttemptAccepted("RFA-001", "RCH-REF-RETRY-001")).thenReturn(1);
         when(refundMapper.bindRefundChannelAccepted(
-                "REF-001", "wx_h5", "RCH-REF-RETRY-001")).thenReturn(1);
+                "REF-001", "RFA-001", "wx_h5", "RCH-REF-RETRY-001")).thenReturn(1);
         when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
 
         boolean success = new PaymentEventDispatchServiceImpl(
@@ -115,8 +120,9 @@ class PaymentEventDispatchServiceImplTest {
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService).submit(request);
+        verify(refundMapper).bindRefundAttemptAccepted("RFA-001", "RCH-REF-RETRY-001");
         verify(refundMapper).bindRefundChannelAccepted(
-                "REF-001", "wx_h5", "RCH-REF-RETRY-001");
+                "REF-001", "RFA-001", "wx_h5", "RCH-REF-RETRY-001");
         verify(paymentEventMapper).markPublishSuccess("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_SUBMIT".equals(log.getActionCode())
@@ -129,16 +135,17 @@ class PaymentEventDispatchServiceImplTest {
         PaymentEventListItemDTO event = refundEvent("PENDING", 0);
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request))
                 .thenThrow(new RefundChannelSubmitException("timeout", true));
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertFalse(success);
-        verify(refundMapper).recordUnknownRefundSubmitChannel("REF-001", "wx_h5");
+        verify(refundMapper).markRefundAttemptUnknown("RFA-001");
+        verify(refundMapper).recordUnknownRefundSubmitChannel("REF-001", "RFA-001", "wx_h5");
         verify(paymentEventMapper).markPublishUnknown("EVTR-001");
         verify(paymentEventMapper, never()).markPublishFailed("EVTR-001");
         verify(paymentEventMapper, never()).markPublishSuccess("EVTR-001");
@@ -153,16 +160,17 @@ class PaymentEventDispatchServiceImplTest {
         PaymentEventListItemDTO event = refundEvent("PENDING", 0);
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request))
                 .thenThrow(new RefundChannelSubmitException("not configured", false));
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertFalse(success);
-        verify(refundMapper, never()).recordUnknownRefundSubmitChannel(any(), any());
+        verify(refundMapper).markRefundAttemptFailed("RFA-001");
+        verify(refundMapper, never()).recordUnknownRefundSubmitChannel(any(), any(), any());
         verify(paymentEventMapper).markPublishFailed("EVTR-001");
         verify(paymentEventMapper, never()).markPublishUnknown("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
@@ -177,7 +185,7 @@ class PaymentEventDispatchServiceImplTest {
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3);
 
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> service.publishRefundSubmit("EVTR-001", "REF-001", " "));
+                () -> service.publishRefundSubmit("EVTR-001", "RFA-001", " "));
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> service.republish("EVTR-001", String.join("", java.util.Collections.nCopies(65, "A"))));
         Assertions.assertThrows(IllegalArgumentException.class,
@@ -215,7 +223,7 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("事件号长度不能超过64字符", oversizedEventNo.getMessage());
         Assertions.assertEquals("事件号不能包含控制字符", controlEventNo.getMessage());
         Assertions.assertEquals("支付单号长度不能超过64字符", oversizedPaymentOrderId.getMessage());
-        Assertions.assertEquals("退款单号不能包含控制字符", controlRefundOrderId.getMessage());
+        Assertions.assertEquals("退款尝试号不能包含控制字符", controlRefundOrderId.getMessage());
         org.mockito.Mockito.verifyNoInteractions(
                 paymentMapper, paymentEventMapper, refundMapper, refundChannelSubmitService);
     }
@@ -226,11 +234,11 @@ class PaymentEventDispatchServiceImplTest {
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         request.setPaymentOrderId("PAY-OTHER");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertFalse(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -246,7 +254,7 @@ class PaymentEventDispatchServiceImplTest {
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -257,7 +265,7 @@ class PaymentEventDispatchServiceImplTest {
     void shouldRejectDirectRepublishWhenRefundResultIsUnknown() {
         PaymentEventListItemDTO event = refundEvent("UNKNOWN", 1);
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001"))
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001"))
                 .thenReturn(refundSubmitRequest());
 
         BusinessException exception = Assertions.assertThrows(BusinessException.class,
@@ -276,13 +284,14 @@ class PaymentEventDispatchServiceImplTest {
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         request.setChannelRefundNo("CR-RECONCILED-001");
         request.setSubmittedChannelCode(request.getChannelCode());
+        request.setAttemptStatus("ACCEPTED");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
@@ -296,18 +305,19 @@ class PaymentEventDispatchServiceImplTest {
         RefundChannelSubmitRequestDTO request = refundSubmitRequest();
         request.setSubmittedChannelCode("WX_H5");
         request.setChannelRefundNo("RCH-REF-001");
+        request.setAttemptStatus("ACCEPTED");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
                 .thenReturn(refundEvent("FAILED", 1));
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(paymentEventMapper.markPublishSuccess("EVTR-001")).thenReturn(1);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertTrue(success);
         verify(refundChannelSubmitService, never()).submit(any());
-        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
+        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any(), any());
         verify(paymentEventMapper).markPublishSuccess("EVTR-001");
     }
 
@@ -318,15 +328,15 @@ class PaymentEventDispatchServiceImplTest {
         result.setChannelRefundNo(new String(new char[129]).replace('\0', 'R'));
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
                 .thenReturn(refundEvent("PENDING", 0));
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request)).thenReturn(result);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertFalse(success);
-        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
+        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any(), any());
         verify(paymentEventMapper).markPublishUnknown("EVTR-001");
         verify(paymentEventMapper, never()).markPublishFailed("EVTR-001");
     }
@@ -338,15 +348,15 @@ class PaymentEventDispatchServiceImplTest {
         result.setChannelRefundNo("RCH-REF-001\n");
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001"))
                 .thenReturn(refundEvent("PENDING", 0));
-        when(refundMapper.findChannelSubmitRequestByRefundOrderId("REF-001")).thenReturn(request);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(request);
         when(refundChannelSubmitService.submit(request)).thenReturn(result);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
-                .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
+                .publishRefundSubmit("EVTR-001", "RFA-001", " refund-operator ");
 
         Assertions.assertFalse(success);
-        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any());
+        verify(refundMapper, never()).bindRefundChannelAccepted(any(), any(), any(), any());
         verify(paymentEventMapper).markPublishUnknown("EVTR-001");
         verify(paymentEventMapper, never()).markPublishFailed("EVTR-001");
     }
@@ -743,7 +753,7 @@ class PaymentEventDispatchServiceImplTest {
                 .republish("EVTR-001", " finance-ops ");
 
         Assertions.assertFalse(success);
-        verify(refundMapper, never()).findChannelSubmitRequestByRefundOrderId(any());
+        verify(refundMapper, never()).findChannelSubmitRequestByAttemptNo(any());
         verify(refundChannelSubmitService, never()).submit(any());
         verify(paymentEventMapper, never()).markPublishSuccess(any());
         verify(paymentEventMapper, never()).markPublishFailed(any());
@@ -1275,7 +1285,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventNo("EVTR-001");
         event.setEventType("REFUND_SUBMIT");
         event.setPaymentOrderId("PAY-001");
-        event.setBizNo("REF-001");
+        event.setBizNo("RFA-001");
         event.setPublishStatus(publishStatus);
         event.setRetryCount(retryCount);
         return event;
@@ -1284,10 +1294,12 @@ class PaymentEventDispatchServiceImplTest {
     private RefundChannelSubmitRequestDTO refundSubmitRequest() {
         RefundChannelSubmitRequestDTO request = new RefundChannelSubmitRequestDTO();
         request.setRefundOrderId("REF-001");
+        request.setRefundAttemptNo("RFA-001");
         request.setPaymentOrderId("PAY-001");
         request.setChannelCode("wx_h5");
         request.setRefundAmount(new java.math.BigDecimal("20.00"));
         request.setRefundStatus("PROCESSING");
+        request.setAttemptStatus("PENDING");
         return request;
     }
 

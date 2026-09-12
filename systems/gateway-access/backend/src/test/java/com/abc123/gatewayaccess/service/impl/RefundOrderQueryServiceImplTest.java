@@ -105,6 +105,7 @@ class RefundOrderQueryServiceImplTest {
                 "APP_PAY_CORE", "secret", "127.0.0.1", request);
 
         assertEquals("REF-001", requestCaptor.getValue().getRefundOrderId());
+        assertEquals("RFA-001", requestCaptor.getValue().getRefundAttemptNo());
         assertEquals(null, requestCaptor.getValue().getChannelRefundNo());
         assertEquals("CHANNEL-REF-RECOVERED", result.getChannelRefundNo());
     }
@@ -158,6 +159,7 @@ class RefundOrderQueryServiceImplTest {
     private RefundOrderQueryRequestDTO request() {
         RefundOrderQueryRequestDTO request = new RefundOrderQueryRequestDTO();
         request.setRefundOrderId("REF-001");
+        request.setRefundAttemptNo("RFA-001");
         request.setChannelCode("WX_H5");
         request.setChannelRefundNo("CHANNEL-REF-001");
         return request;

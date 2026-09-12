@@ -52,14 +52,14 @@ class RefundSubmitOutboxMapperIntegrationTest {
     void shouldReuseStableRefundEventAndExposePendingEventForAutomaticDispatch() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
-            refundMapper.upsertRefundSubmitEvent("EVTR-STABLE", "REF-001", "PAY-001");
+            refundMapper.upsertRefundSubmitEvent("EVTR-STABLE", "RFA-STABLE", "PAY-001");
             session.commit();
         }
         markEventFailed();
         insertUnsupportedPendingEvent();
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
-            refundMapper.upsertRefundSubmitEvent("EVTR-STABLE", "REF-001", "PAY-001");
+            refundMapper.upsertRefundSubmitEvent("EVTR-STABLE", "RFA-STABLE", "PAY-001");
 
             PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
             List<String> dueEventNos = eventMapper.findDueFailedEventNos(100);
@@ -69,7 +69,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
             assertEquals(1, dueEventNos.size());
             assertEquals("EVTR-STABLE", dueEventNos.get(0));
             assertEquals("REFUND_SUBMIT", event.getEventType());
-            assertEquals("REF-001", event.getBizNo());
+            assertEquals("RFA-STABLE", event.getBizNo());
             assertEquals("PENDING", event.getPublishStatus());
             assertEquals(0, event.getRetryCount());
             session.rollback();
@@ -81,10 +81,11 @@ class RefundSubmitOutboxMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
 
+            assertEquals(1, refundMapper.bindRefundAttemptAccepted("RFA-TRACE", "RCH-TRACE"));
             int firstBinding = refundMapper.bindRefundChannelAccepted(
-                    "REF-TRACE", "wx_h5", "RCH-TRACE");
+                    "REF-TRACE", "RFA-TRACE", "wx_h5", "RCH-TRACE");
             int conflictingBinding = refundMapper.bindRefundChannelAccepted(
-                    "REF-TRACE", "wx_h5", "RCH-OTHER");
+                    "REF-TRACE", "RFA-TRACE", "wx_h5", "RCH-OTHER");
 
             assertEquals(1, firstBinding);
             assertEquals(0, conflictingBinding);
@@ -107,7 +108,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
             PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
-            refundMapper.upsertRefundSubmitEvent("EVTR-UNKNOWN", "REF-001", "PAY-001");
+            refundMapper.upsertRefundSubmitEvent("EVTR-UNKNOWN", "RFA-UNKNOWN-EVENT", "PAY-001");
 
             assertEquals(1, eventMapper.markPublishUnknown("EVTR-UNKNOWN"));
             PaymentEventListItemDTO event = eventMapper.findByEventNoForUpdate("EVTR-UNKNOWN");
@@ -139,10 +140,13 @@ class RefundSubmitOutboxMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
             PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
-            refundMapper.upsertRefundSubmitEvent("EVTR-RECOVER", "REF-UNKNOWN", "PAY-UNKNOWN");
+            refundMapper.upsertRefundSubmitEvent("EVTR-RECOVER", "RFA-UNKNOWN", "PAY-UNKNOWN");
             assertEquals(1, eventMapper.markPublishUnknown("EVTR-RECOVER"));
+            assertEquals(1, refundMapper.markRefundAttemptUnknown("RFA-UNKNOWN"));
+            assertEquals(0, refundMapper.finalizeRefundAttempt(
+                    "RFA-UNKNOWN", "SUCCESS", "success"));
             assertEquals(1, refundMapper.recordUnknownRefundSubmitChannel(
-                    "REF-UNKNOWN", "wx_h5"));
+                    "REF-UNKNOWN", "RFA-UNKNOWN", "wx_h5"));
 
             RefundCallbackSourceDTO before =
                     refundMapper.findCallbackSourceByRefundOrderId("REF-UNKNOWN");
@@ -150,10 +154,11 @@ class RefundSubmitOutboxMapperIntegrationTest {
             assertNull(before.getChannelRefundNo());
             assertEquals("UNKNOWN", before.getSubmitEventStatus());
             assertEquals(0, refundMapper.bindUnknownRefundChannelAccepted(
-                    "REF-TRACE", "wx_h5", "RCH-NOT-ALLOWED"));
+                    "REF-TRACE", "RFA-UNKNOWN", "wx_h5", "RCH-NOT-ALLOWED"));
+            assertEquals(1, refundMapper.bindRefundAttemptAccepted("RFA-UNKNOWN", "RCH-RECOVERED"));
             assertEquals(1, refundMapper.bindUnknownRefundChannelAccepted(
-                    "REF-UNKNOWN", "wx_h5", "RCH-RECOVERED"));
-            assertEquals(1, refundMapper.markUnknownRefundSubmitEventConfirmed("REF-UNKNOWN"));
+                    "REF-UNKNOWN", "RFA-UNKNOWN", "wx_h5", "RCH-RECOVERED"));
+            assertEquals(1, refundMapper.markUnknownRefundSubmitEventConfirmed("RFA-UNKNOWN"));
 
             RefundCallbackSourceDTO after = refundMapper.findCallbackSourceForUpdate("REF-UNKNOWN");
             assertEquals("RCH-RECOVERED", after.getChannelRefundNo());
@@ -183,7 +188,9 @@ class RefundSubmitOutboxMapperIntegrationTest {
     void shouldLockCallbackSourceAndFinalizeOnlyFromProcessing() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             RefundMapper refundMapper = session.getMapper(RefundMapper.class);
-            refundMapper.bindRefundChannelAccepted("REF-TRACE", "wx_h5", "RCH-TRACE");
+            refundMapper.bindRefundAttemptAccepted("RFA-TRACE", "RCH-TRACE");
+            refundMapper.bindRefundChannelAccepted(
+                    "REF-TRACE", "RFA-TRACE", "wx_h5", "RCH-TRACE");
 
             RefundCallbackSourceDTO snapshot =
                     refundMapper.findCallbackSourceByRefundOrderId("REF-TRACE");
@@ -201,6 +208,27 @@ class RefundSubmitOutboxMapperIntegrationTest {
             assertEquals("RCH-TRACE", source.getChannelRefundNo());
             assertEquals(1, finalized);
             assertEquals(0, repeated);
+            session.rollback();
+        }
+    }
+
+    @Test
+    void shouldResolvePreviousChannelTraceWithoutTreatingItAsCurrentAttempt() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+            assertEquals(1, refundMapper.bindRefundAttemptAccepted("RFA-TRACE", "RCH-PREVIOUS"));
+            assertEquals(1, refundMapper.bindRefundChannelAccepted(
+                    "REF-TRACE", "RFA-TRACE", "wx_h5", "RCH-PREVIOUS"));
+            assertEquals(1, refundMapper.insertRefundAttempt(
+                    "RFA-TRACE-NEW", "REF-TRACE", "wx_h5"));
+
+            RefundCallbackSourceDTO current =
+                    refundMapper.findCallbackSourceByRefundOrderId("REF-TRACE");
+
+            assertEquals("RFA-TRACE-NEW", current.getRefundAttemptNo());
+            assertNull(current.getChannelRefundNo());
+            assertEquals("RFA-TRACE",
+                    refundMapper.findAttemptNoByChannelRefundNo("wx_h5", "RCH-PREVIOUS"));
             session.rollback();
         }
     }
@@ -287,6 +315,24 @@ class RefundSubmitOutboxMapperIntegrationTest {
             statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, channel_code, status) "
                     + "VALUES ('REF-TRACE', NULL, 'PROCESSING'), "
                     + "('REF-UNKNOWN', NULL, 'PROCESSING')");
+            statement.execute("DROP TABLE IF EXISTS t_refund_attempt");
+            statement.execute("CREATE TABLE t_refund_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
+                    + "refund_attempt_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "refund_order_id VARCHAR(64) NOT NULL, "
+                    + "channel_code VARCHAR(64) NOT NULL, "
+                    + "channel_refund_no VARCHAR(128) NULL, "
+                    + "attempt_status VARCHAR(32) NOT NULL, "
+                    + "attempt_status_type VARCHAR(32) NOT NULL, "
+                    + "submitted_at TIMESTAMP NULL, "
+                    + "completed_at TIMESTAMP NULL, "
+                    + "created_at TIMESTAMP NOT NULL, "
+                    + "UNIQUE(channel_code, channel_refund_no))");
+            statement.executeUpdate("INSERT INTO t_refund_attempt("
+                    + "refund_attempt_no, refund_order_id, channel_code, channel_refund_no, "
+                    + "attempt_status, attempt_status_type, created_at) VALUES "
+                    + "('RFA-TRACE', 'REF-TRACE', 'wx_h5', NULL, 'PENDING', 'warn', NOW()), "
+                    + "('RFA-UNKNOWN', 'REF-UNKNOWN', 'wx_h5', NULL, 'PENDING', 'warn', NOW())");
             session.commit();
         }
     }

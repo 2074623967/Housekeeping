@@ -312,10 +312,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean publishRefundSubmit(String eventNo, String refundOrderId, String operator) {
+    public boolean publishRefundSubmit(String eventNo, String refundAttemptNo, String operator) {
         return dispatchRefundSubmit(
                 normalizeRequiredIdentifier(eventNo, "事件号", EVENT_NO_MAX_LENGTH),
-                normalizeRequiredIdentifier(refundOrderId, "退款单号", REFUND_ORDER_ID_MAX_LENGTH),
+                normalizeRequiredIdentifier(refundAttemptNo, "退款尝试号", REFUND_ORDER_ID_MAX_LENGTH),
                 normalizeOperator(operator));
     }
 
@@ -348,14 +348,14 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 || "DEAD_LETTER".equals(publishStatus);
     }
 
-    private boolean dispatchRefundSubmit(String eventNo, String refundOrderId, String operator) {
+    private boolean dispatchRefundSubmit(String eventNo, String refundAttemptNo, String operator) {
         if (refundMapper == null || refundChannelSubmitService == null) {
             return false;
         }
         PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
         if (event == null
                 || !REFUND_SUBMIT_EVENT_TYPE.equals(event.getEventType())
-                || !Objects.equals(event.getBizNo(), refundOrderId)) {
+                || !Objects.equals(event.getBizNo(), refundAttemptNo)) {
             return false;
         }
         if ("SUCCESS".equals(event.getPublishStatus())) {
@@ -363,7 +363,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         boolean resultUnknown = "UNKNOWN".equals(event.getPublishStatus());
         RefundChannelSubmitRequestDTO request =
-                refundMapper.findChannelSubmitRequestByRefundOrderId(refundOrderId);
+                refundMapper.findChannelSubmitRequestByAttemptNo(refundAttemptNo);
         if (request == null) {
             if (resultUnknown) {
                 throw refundSubmitReviewRequired();
@@ -371,6 +371,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             markFailedOrDeadLetter(eventNo);
             return false;
         }
+        String refundOrderId = request.getRefundOrderId();
         if (!"PROCESSING".equals(request.getRefundStatus())) {
             return paymentEventMapper.markPublishSuccess(eventNo) == 1;
         }
@@ -382,6 +383,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             }
             recordRefundSubmitFailure(refundOrderId, operator,
                     "退款渠道下发快照校验失败，修复数据后再重试");
+            refundMapper.markRefundAttemptFailed(refundAttemptNo);
             markFailedOrDeadLetter(eventNo);
             return false;
         }
@@ -393,48 +395,55 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 if (resultUnknown) {
                     throw refundSubmitReviewRequired();
                 }
-                markRefundSubmitUnknown(eventNo, refundOrderId, request.getChannelCode(), operator);
+                markRefundSubmitUnknown(
+                        eventNo, refundOrderId, refundAttemptNo, request.getChannelCode(), operator);
                 return false;
             }
         }
         if (resultUnknown) {
             throw refundSubmitReviewRequired();
         }
+        RefundChannelSubmitResultDTO result;
+        String channelRefundNo;
         try {
-            RefundChannelSubmitResultDTO result = refundChannelSubmitService.submit(request);
+            result = refundChannelSubmitService.submit(request);
             if (result == null || !StringUtils.hasText(result.getChannelRefundNo())) {
                 throw new IllegalStateException("退款渠道未返回受理单号");
             }
-            String channelRefundNo = normalizeChannelRefundNo(result.getChannelRefundNo());
-            if (refundMapper.bindRefundChannelAccepted(
-                    refundOrderId, request.getChannelCode().trim(), channelRefundNo) != 1) {
-                throw new IllegalStateException("退款渠道受理事实绑定失败");
-            }
-            refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
-                    refundOrderId,
-                    "CHANNEL_SUBMIT",
-                    "提交退款渠道",
-                    "PROCESSING",
-                    "PROCESSING",
-                    operator,
-                    refundSubmitRemark(request, result)));
-            if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
-                throw new IllegalStateException("退款渠道事件成功状态更新失败");
-            }
-            return true;
+            channelRefundNo = normalizeChannelRefundNo(result.getChannelRefundNo());
         } catch (RefundChannelSubmitException exception) {
             if (!exception.isResultUnknown()) {
                 recordRefundSubmitFailure(refundOrderId, operator,
                         "退款提交在调用渠道前被配置或治理门禁拒绝，等待修复后重试");
+                refundMapper.markRefundAttemptFailed(refundAttemptNo);
                 markFailedOrDeadLetter(eventNo);
                 return false;
             }
-            markRefundSubmitUnknown(eventNo, refundOrderId, request.getChannelCode(), operator);
+            markRefundSubmitUnknown(
+                    eventNo, refundOrderId, refundAttemptNo, request.getChannelCode(), operator);
             return false;
         } catch (RuntimeException exception) {
-            markRefundSubmitUnknown(eventNo, refundOrderId, request.getChannelCode(), operator);
+            markRefundSubmitUnknown(
+                    eventNo, refundOrderId, refundAttemptNo, request.getChannelCode(), operator);
             return false;
         }
+        if (refundMapper.bindRefundAttemptAccepted(refundAttemptNo, channelRefundNo) != 1
+                || refundMapper.bindRefundChannelAccepted(
+                refundOrderId, refundAttemptNo, request.getChannelCode().trim(), channelRefundNo) != 1) {
+            throw new IllegalStateException("退款渠道受理事实绑定失败");
+        }
+        refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
+                refundOrderId,
+                "CHANNEL_SUBMIT",
+                "提交退款渠道",
+                "PROCESSING",
+                "PROCESSING",
+                operator,
+                refundSubmitRemark(request, result)));
+        if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
+            throw new IllegalStateException("退款渠道事件成功状态更新失败");
+        }
+        return true;
     }
 
     private BusinessException refundSubmitReviewRequired() {
@@ -456,9 +465,12 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private void markRefundSubmitUnknown(String eventNo,
                                          String refundOrderId,
+                                         String refundAttemptNo,
                                          String channelCode,
                                          String operator) {
-        refundMapper.recordUnknownRefundSubmitChannel(refundOrderId, channelCode.trim());
+        refundMapper.markRefundAttemptUnknown(refundAttemptNo);
+        refundMapper.recordUnknownRefundSubmitChannel(
+                refundOrderId, refundAttemptNo, channelCode.trim());
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 "CHANNEL_SUBMIT_UNKNOWN",
@@ -504,11 +516,17 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private void validateRefundSubmitRequest(PaymentEventListItemDTO event,
                                              RefundChannelSubmitRequestDTO request) {
-        if (!Objects.equals(event.getBizNo(), request.getRefundOrderId())
+        boolean acceptedTraceExists = StringUtils.hasText(request.getChannelRefundNo());
+        boolean attemptStatusMatchesTrace = acceptedTraceExists
+                ? "ACCEPTED".equals(request.getAttemptStatus())
+                : "PENDING".equals(request.getAttemptStatus())
+                || "FAILED".equals(request.getAttemptStatus());
+        if (!Objects.equals(event.getBizNo(), request.getRefundAttemptNo())
                 || !Objects.equals(event.getPaymentOrderId(), request.getPaymentOrderId())
                 || request.getRefundAmount() == null
                 || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0
-                || !StringUtils.hasText(request.getChannelCode())) {
+                || !StringUtils.hasText(request.getChannelCode())
+                || !attemptStatusMatchesTrace) {
             throw new IllegalArgumentException("退款渠道下发快照不完整或不一致");
         }
     }

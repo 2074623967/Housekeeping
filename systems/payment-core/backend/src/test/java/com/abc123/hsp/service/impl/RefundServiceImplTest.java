@@ -12,6 +12,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
+import com.abc123.hsp.dto.RefundAttemptItemDTO;
 import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
 import com.abc123.hsp.dto.RefundChannelQueryResultDTO;
@@ -40,6 +41,7 @@ import java.util.Collections;
 import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -442,13 +444,20 @@ class RefundServiceImplTest {
             org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
         }
 
+        ArgumentCaptor<String> refundAttemptNoCaptor = ArgumentCaptor.forClass(String.class);
+        verify(refundMapper).insertRefundAttempt(
+                refundAttemptNoCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq("REF-001"),
+                org.mockito.ArgumentMatchers.eq("wx_h5"));
+        String refundAttemptNo = refundAttemptNoCaptor.getValue();
+        assertTrue(refundAttemptNo.startsWith("RFA"));
         verify(refundMapper).upsertRefundSubmitEvent(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-001"),
+                org.mockito.ArgumentMatchers.eq(refundAttemptNo),
                 org.mockito.ArgumentMatchers.eq("PAY-001"));
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-001"),
+                org.mockito.ArgumentMatchers.eq(refundAttemptNo),
                 org.mockito.ArgumentMatchers.eq("refund-approver"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "APPROVE".equals(log.getActionCode())
@@ -524,7 +533,7 @@ class RefundServiceImplTest {
         org.mockito.Mockito.doThrow(new IllegalStateException(sensitiveMessage))
                 .when(paymentEventDispatchService).publishRefundSubmit(
                         org.mockito.ArgumentMatchers.anyString(),
-                        org.mockito.ArgumentMatchers.eq("REF-DISPATCH-FAIL"),
+                        org.mockito.ArgumentMatchers.startsWith("RFA"),
                         org.mockito.ArgumentMatchers.eq("refund-approver"));
         Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(RefundServiceImpl.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -546,7 +555,7 @@ class RefundServiceImplTest {
             org.junit.jupiter.api.Assertions.assertNull(event.getThrowableProxy());
             verify(refundMapper).upsertRefundSubmitEvent(
                     org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                    org.mockito.ArgumentMatchers.eq("REF-DISPATCH-FAIL"),
+                    org.mockito.ArgumentMatchers.startsWith("RFA"),
                     org.mockito.ArgumentMatchers.eq("PAY-DISPATCH-FAIL"));
         } finally {
             org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
@@ -580,11 +589,15 @@ class RefundServiceImplTest {
                 "REF-002", "FAIL", "PROCESSING", "warn", false);
         verify(refundMapper).upsertRefundSubmitEvent(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-002"),
+                org.mockito.ArgumentMatchers.startsWith("RFA"),
                 org.mockito.ArgumentMatchers.eq("PAY-002"));
+        verify(refundMapper).insertRefundAttempt(
+                org.mockito.ArgumentMatchers.startsWith("RFA"),
+                org.mockito.ArgumentMatchers.eq("REF-002"),
+                org.mockito.ArgumentMatchers.eq("alipay_h5"));
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-002"),
+                org.mockito.ArgumentMatchers.startsWith("RFA"),
                 org.mockito.ArgumentMatchers.eq("refund-retry-operator"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "RETRY".equals(log.getActionCode())
@@ -609,8 +622,12 @@ class RefundServiceImplTest {
         verify(refundMapper).restartFailedRefund("REF-TASK");
         verify(paymentEventDispatchService).publishRefundSubmit(
                 org.mockito.ArgumentMatchers.startsWith("EVTR"),
-                org.mockito.ArgumentMatchers.eq("REF-TASK"),
+                org.mockito.ArgumentMatchers.startsWith("RFA"),
                 org.mockito.ArgumentMatchers.eq("refund-retry-scheduler"));
+        verify(refundMapper).insertRefundAttempt(
+                org.mockito.ArgumentMatchers.startsWith("RFA"),
+                org.mockito.ArgumentMatchers.eq("REF-TASK"),
+                org.mockito.ArgumentMatchers.eq("wx_h5"));
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "TASK_RETRY".equals(log.getActionCode())
                         && "refund-retry-scheduler".equals(log.getOperatorName())
@@ -677,18 +694,24 @@ class RefundServiceImplTest {
         detail.setCustomerName("张女士");
         RefundOperationLogItemDTO logItem = new RefundOperationLogItemDTO();
         logItem.setLogNo("ROL-001");
+        RefundAttemptItemDTO attemptItem = new RefundAttemptItemDTO();
+        attemptItem.setRefundAttemptNo("RFA-001");
         when(refundMapper.findDetailByRefundOrderId("REF-001")).thenReturn(detail);
         when(refundMapper.findOperationLogs("REF-001")).thenReturn(Arrays.asList(logItem));
+        when(refundMapper.findAttempts("REF-001")).thenReturn(Arrays.asList(attemptItem));
 
         RefundDetailDTO result = createService().detail("REF-001");
 
         org.junit.jupiter.api.Assertions.assertEquals("REF-001", result.getRefundOrderId());
         org.junit.jupiter.api.Assertions.assertEquals("张*", result.getCustomerName());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getOperationLogs().size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, result.getAttempts().size());
+        org.junit.jupiter.api.Assertions.assertEquals("RFA-001", result.getAttempts().get(0).getRefundAttemptNo());
         org.junit.jupiter.api.Assertions.assertEquals("张女士", detail.getCustomerName());
         org.junit.jupiter.api.Assertions.assertEquals(null, detail.getOperationLogs());
         verify(refundMapper).findDetailByRefundOrderId("REF-001");
         verify(refundMapper).findOperationLogs("REF-001");
+        verify(refundMapper).findAttempts("REF-001");
     }
 
     @Test
@@ -701,6 +724,7 @@ class RefundServiceImplTest {
         when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
         when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "SUCCESS", "success", true))
                 .thenReturn(1);
+        when(refundMapper.finalizeRefundAttempt("RFA-001", "SUCCESS", "success")).thenReturn(1);
         when(refundMapper.findByRefundOrderId("REF-001")).thenReturn(mapperItem);
 
         RefundListItemDTO result = new RefundServiceImpl(
@@ -784,16 +808,41 @@ class RefundServiceImplTest {
     }
 
     @Test
+    void shouldRejectCallbackBelongingToPreviousRefundAttempt() {
+        RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
+        RefundCallbackSourceDTO source = buildCallbackSource(
+                "PROCESSING", "wx_h5", "CHANNEL-REF-CURRENT");
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
+        when(refundMapper.findAttemptNoByChannelRefundNo("wx_h5", "CHANNEL-REF-001"))
+                .thenReturn("RFA-PREVIOUS");
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class,
+                () -> createService().callback("wx_h5", request));
+
+        assertEquals(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).finalizeRefundAttempt(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
     void shouldRecoverUnknownRefundAcceptanceFromVerifiedCallback() {
         RefundCallbackRequestDTO request = buildCallbackRequest("SUCCESS");
         RefundCallbackSourceDTO source = buildCallbackSource("PROCESSING", "wx_h5", null);
         source.setSubmitEventStatus("UNKNOWN");
         when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
         when(refundMapper.bindUnknownRefundChannelAccepted(
-                "REF-001", "wx_h5", "CHANNEL-REF-001")).thenReturn(1);
-        when(refundMapper.markUnknownRefundSubmitEventConfirmed("REF-001")).thenReturn(1);
+                "REF-001", "RFA-001", "wx_h5", "CHANNEL-REF-001")).thenReturn(1);
+        when(refundMapper.bindRefundAttemptAccepted("RFA-001", "CHANNEL-REF-001")).thenReturn(1);
+        when(refundMapper.markUnknownRefundSubmitEventConfirmed("RFA-001")).thenReturn(1);
         when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "SUCCESS", "success", true))
                 .thenReturn(1);
+        when(refundMapper.finalizeRefundAttempt("RFA-001", "SUCCESS", "success")).thenReturn(1);
 
         new RefundServiceImpl(refundMapper, paymentEventDispatchService, paymentCallbackSignatureService,
                 refundChannelQueryService).callback("wx_h5", request);
@@ -802,7 +851,7 @@ class RefundServiceImplTest {
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_ACCEPTANCE_RECOVERED".equals(log.getActionCode())
                         && "channel-callback".equals(log.getOperatorName())));
-        verify(refundMapper).markUnknownRefundSubmitEventConfirmed("REF-001");
+        verify(refundMapper).markUnknownRefundSubmitEventConfirmed("RFA-001");
     }
 
     @Test
@@ -858,6 +907,7 @@ class RefundServiceImplTest {
         when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
         when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "SUCCESS", "success", true))
                 .thenReturn(1);
+        when(refundMapper.finalizeRefundAttempt("RFA-001", "SUCCESS", "success")).thenReturn(1);
         when(refundMapper.findByRefundOrderId("REF-001")).thenReturn(mapperItem);
 
         createService().query(queryRequest());
@@ -880,8 +930,9 @@ class RefundServiceImplTest {
                 .thenReturn(buildQueryResult("PROCESSING", "CHANNEL-REF-RECOVERED"));
         when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
         when(refundMapper.bindUnknownRefundChannelAccepted(
-                "REF-001", "wx_h5", "CHANNEL-REF-RECOVERED")).thenReturn(1);
-        when(refundMapper.markUnknownRefundSubmitEventConfirmed("REF-001")).thenReturn(1);
+                "REF-001", "RFA-001", "wx_h5", "CHANNEL-REF-RECOVERED")).thenReturn(1);
+        when(refundMapper.bindRefundAttemptAccepted("RFA-001", "CHANNEL-REF-RECOVERED")).thenReturn(1);
+        when(refundMapper.markUnknownRefundSubmitEventConfirmed("RFA-001")).thenReturn(1);
         when(refundMapper.findByRefundOrderId("REF-001")).thenReturn(mapperItem);
 
         RefundListItemDTO result = createService().query(queryRequest());
@@ -891,7 +942,7 @@ class RefundServiceImplTest {
                 "CHANNEL_ACCEPTANCE_RECOVERED".equals(log.getActionCode())
                         && "refund-query-operator".equals(log.getOperatorName())
                         && !log.getOperationRemark().contains("CHANNEL-REF-RECOVERED")));
-        verify(refundMapper).markUnknownRefundSubmitEventConfirmed("REF-001");
+        verify(refundMapper).markUnknownRefundSubmitEventConfirmed("RFA-001");
     }
 
     @Test
@@ -903,8 +954,9 @@ class RefundServiceImplTest {
                 .thenReturn(buildQueryResult("SUCCESS", "CHANNEL-REF-RECOVERED"));
         when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
         when(refundMapper.bindUnknownRefundChannelAccepted(
-                "REF-001", "wx_h5", "CHANNEL-REF-RECOVERED")).thenReturn(1);
-        when(refundMapper.markUnknownRefundSubmitEventConfirmed("REF-001")).thenReturn(1);
+                "REF-001", "RFA-001", "wx_h5", "CHANNEL-REF-RECOVERED")).thenReturn(1);
+        when(refundMapper.bindRefundAttemptAccepted("RFA-001", "CHANNEL-REF-RECOVERED")).thenReturn(1);
+        when(refundMapper.markUnknownRefundSubmitEventConfirmed("RFA-001")).thenReturn(1);
 
         IllegalStateException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalStateException.class, () -> createService().query(queryRequest()));
@@ -934,6 +986,7 @@ class RefundServiceImplTest {
         when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(source);
         when(refundMapper.updateRefundStatus("REF-001", "PROCESSING", "FAIL", "danger", false))
                 .thenReturn(1);
+        when(refundMapper.finalizeRefundAttempt("RFA-001", "FAIL", "danger")).thenReturn(1);
 
         createService().query(queryRequest());
 
@@ -1107,9 +1160,11 @@ class RefundServiceImplTest {
     private RefundCallbackSourceDTO buildCallbackSource(String status, String channel, String channelRefundNo) {
         RefundCallbackSourceDTO source = new RefundCallbackSourceDTO();
         source.setRefundOrderId("REF-001");
+        source.setRefundAttemptNo("RFA-001");
         source.setStatus(status);
         source.setChannelCode(channel);
         source.setChannelRefundNo(channelRefundNo);
+        source.setAttemptStatus(channelRefundNo == null ? "UNKNOWN" : "ACCEPTED");
         return source;
     }
 

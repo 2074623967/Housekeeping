@@ -71,9 +71,11 @@ class RefundOrderSubmitServiceImplTest {
         UpstreamRefundSubmitResponseDTO response = new UpstreamRefundSubmitResponseDTO();
         response.setCode("0");
         response.setData(data);
+        ArgumentCaptor<RefundOrderSubmitRequestDTO> requestCaptor =
+                ArgumentCaptor.forClass(RefundOrderSubmitRequestDTO.class);
         when(restTemplate.postForObject(
                 eq("https://channel.example/refunds/submit"),
-                any(RefundOrderSubmitRequestDTO.class),
+                requestCaptor.capture(),
                 eq(UpstreamRefundSubmitResponseDTO.class))).thenReturn(response);
 
         RefundOrderSubmitResultDTO result = service().submit(
@@ -82,6 +84,7 @@ class RefundOrderSubmitServiceImplTest {
         assertEquals("WX-R-1001", result.getChannelRefundNo());
         assertEquals("PROCESSING", result.getStatus());
         assertEquals("warn", result.getStatusType());
+        assertEquals("RFA-1001", requestCaptor.getValue().getRefundAttemptNo());
         ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
         verify(mapper).insertAuditLog(captor.capture());
         assertEquals("REFUND_SUBMIT", captor.getValue().getOperationType());
@@ -144,6 +147,7 @@ class RefundOrderSubmitServiceImplTest {
     private RefundOrderSubmitRequestDTO request() {
         RefundOrderSubmitRequestDTO request = new RefundOrderSubmitRequestDTO();
         request.setRefundOrderId("REF-1001");
+        request.setRefundAttemptNo("RFA-1001");
         request.setPaymentOrderId("PAY-1001");
         request.setOrderNo("ORD-1001");
         request.setCustomerName("Customer");

@@ -85,6 +85,7 @@ public class RefundOrderQueryServiceImpl implements RefundOrderQueryService {
             throw invalid("refund query request is required");
         }
         request.setRefundOrderId(required(request.getRefundOrderId(), "refundOrderId", 64));
+        request.setRefundAttemptNo(required(request.getRefundAttemptNo(), "refundAttemptNo", 64));
         request.setChannelCode(required(request.getChannelCode(), "channelCode", 64)
                 .toLowerCase(Locale.ROOT));
         request.setChannelRefundNo(optional(request.getChannelRefundNo(), "channelRefundNo", 128));
