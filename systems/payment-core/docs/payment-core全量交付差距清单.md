@@ -2654,7 +2654,7 @@
 
 1. 上一版只在成功结果再次回调或主动查单时校验支付单与最新支付尝试，未再次触达的历史断裂仍会静默留存，日终和支付监控无法主动发现。
 2. 新增统一不一致集合：支付单状态为 `SUCCESS`，但按 `created_at DESC, id DESC` 选出的最新支付尝试缺失、状态不是“成功”或 `completed_at` 缺失。`CLOSED` 不纳入；单纯 `SUCCESS + success_at IS NULL` 继续由成功时间缺失集合负责，两类条件同时成立时允许分别告警。
-3. 日终按支付创建日快照 `paymentSuccessFactMismatchCount`，任一非零使批次 `WARNING` 并禁止进入对账；总览、最近批次、CSV 和 `PAYMENT_SUCCESS_FACT_MISMATCH / P1` 告警使用同一快照。历史批次新字段保持 `NULL`，要求 `RERUN`，不倒推旧事实。
+3. 日终按支付成功日快照 `paymentSuccessFactMismatchCount`，任一非零使批次 `WARNING` 并禁止进入对账；总览、最近批次、CSV 和 `PAYMENT_SUCCESS_FACT_MISMATCH / P1` 告警使用同一快照。历史批次新字段保持 `NULL`，要求 `RERUN`，不倒推旧事实。
 4. 支付列表、计数和 CSV 新增虚拟筛选 `SUCCESS_FACT_MISMATCH`，日终和支付监控统一下钻 `/payments?status=SUCCESS_FACT_MISMATCH`；管理端同步展示事实卡、批次列、筛选项与差异化处置建议。
 5. 两份 schema 与迁移 `2026-09-12-add-payment-success-fact-guard.sql` 同步完成。定向后端 `52` 项、后端全量 `1058` 项、管理端 `30` 项、Vite 生产构建、三份 Mapper XML 与补丁检查通过；代码提交为 `340de51b feat(payment-core): patrol payment success facts`。
 6. 本轮不自动修复历史不一致，也不证明渠道实际扣款、渠道账单、清分、账务入账或资金一致；目标 MySQL 迁移、执行计划、历史分布和运营处置仍需真实环境验证，release 四项治理阻断不变。
@@ -2667,6 +2667,14 @@
 4. 复用 `idx_payment_created_at`、`idx_payment_status_created`、`idx_payment_status_success`、`idx_refund_status_applied` 和 `idx_refund_status_success`，本轮无 schema、迁移、DTO、HTTP 或前端变化。
 5. 日终联合定向 `44` 项、后端全量 `1059` 项、`PaymentDayEndMapper.xml` 与补丁检查通过；代码提交为 `114eaaf5 perf(payment-core): make day-end date ranges sargable`。首次两轮定向分别暴露 H2 不支持 `DATE_ADD` 和无法推断裸 `TIMESTAMPADD` 参数类型，改为两端兼容的显式常量转换后完整重跑，失败结果未作为通过证据。
 6. 当前环境没有目标 MySQL 实例，尚未执行 `EXPLAIN ANALYZE`、统计信息核验或生产量级压测；SQL 具备范围扫描形状不等于优化器一定选择索引，也不证明资金、账务或正式关账一致，release 四项治理阻断不变。
+
+### 8.325 2026-09-12 支付成功事实巡检账期归属进展
+
+1. 继续审计发现 `paymentSuccessFactMismatchCount` 描述支付成功终态与最新尝试的一致性，却按支付创建日采集；跨日成功发生后，异常既不会进入已执行过的创建日日终，也不会进入成功日日终，只能依赖全局监控暴露。
+2. 该巡检改按 `success_at` 所在业务日的左闭右开区间归属，与支付成功单量、金额、渠道事实和内部事件事实使用同一成功时间轴；成功时间缺失仍按创建日进入独立 `PAYMENT_SUCCESS_TIME_MISSING` 集合。
+3. 集成样例新增“前日创建、当日零点成功且最新尝试缺失”，验证异常计入成功日、不回落到创建日；次日零点正常成功继续排除在前一业务日之外。
+4. 本轮不修改批次字段、HTTP、前端、schema、索引或迁移，查询复用 `idx_payment_status_success(status, success_at)` 与既有最新尝试索引。
+5. 日终相关 `39` 项、后端全量 `1059` 项、Mapper XML 与补丁检查通过。本地 H2 只验证集合和边界，不证明目标 MySQL 执行计划、历史异常分布、渠道扣款、账务入账、资金一致或正式关账；release 四项真实治理阻断不变。
 
 ## 9. 最终结论
 

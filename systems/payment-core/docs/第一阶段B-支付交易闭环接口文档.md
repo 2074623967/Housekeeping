@@ -4450,7 +4450,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 1. 支付成功事实不一致集合固定为：支付单状态为 `SUCCESS`，且不存在“按 `created_at DESC, id DESC` 选出的最新支付尝试状态为‘成功’且 `completed_at` 非空”的完整事实。
 2. `SUCCESS + success_at IS NULL` 由 `PAYMENT_SUCCESS_TIME_MISSING` 独立负责；最新尝试完整时不进入新集合，若成功时间与尝试事实均缺失则允许同时命中两个风险集合。`CLOSED` 不纳入本契约。
-3. 日终批次新增 `paymentSuccessFactMismatchCount`，按支付单 `created_at` 所在业务日采集；总览新增 `openPaymentSuccessFactMismatchCount`，最近批次和 CSV 同步返回。任一非零使批次 `WARNING` 并禁止进入对账。
+3. 日终批次新增 `paymentSuccessFactMismatchCount`，按支付单 `success_at` 所在业务日采集；总览新增 `openPaymentSuccessFactMismatchCount`，最近批次和 CSV 同步返回。任一非零使批次 `WARNING` 并禁止进入对账。
 4. 历史批次未采集该字段时返回 `NULL`，总览和批次必须显示事实不完整并要求 `RERUN`；不得使用当前扫描值回填旧批次。
 5. `GET /api/payments` 与导出接口接受虚拟筛选 `SUCCESS_FACT_MISMATCH`，列表、计数和 CSV 使用同一集合；日终和支付监控告警类型为 `PAYMENT_SUCCESS_FACT_MISMATCH / P1`，动作路由固定为 `/payments?status=SUCCESS_FACT_MISMATCH`。
 6. 本契约报告 payment-core 内部结构化事实一致性，不证明渠道扣款、渠道账单、清分、账务入账、资金一致或告警处置完成。
@@ -4459,10 +4459,18 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 1. 支付日终内部统计接口继续接收严格 `yyyy-MM-dd` 业务日期；所有创建时间、成功时间和申请时间条件统一解释为数据库会话时区下 `[bizDate 00:00:00, bizDate+1 00:00:00)`。
 2. 下界包含业务日零点，上界排除次日零点；不得使用 `23:59:59`、毫秒截断或浏览器时区补偿，避免高精度时间遗漏和相邻账期重复。
-3. 支付总量、待收口支付、支付成功时间缺失和支付成功事实不一致按支付创建时间范围；支付成功、渠道成功、内部成功、成功差异及渠道/内部异常按支付成功时间范围。
+3. 支付总量、待收口支付和支付成功时间缺失按支付创建时间范围；支付成功、支付成功事实不一致、渠道成功、内部成功、成功差异及渠道/内部异常按支付成功时间范围。
 4. 退款成功单量和金额按退款成功时间范围；退款成功时间缺失、退款终态不一致和待收口退款按退款申请时间范围。该优化不改变既有字段、响应或告警集合。
 5. SQL 不得在索引时间列外包 `DATE()` 后再比较业务日；日期转换和次日计算只能作用于绑定常量，以保留范围扫描可能性。
 6. 本契约不保证目标数据库一定选择某个索引；上线前仍需以真实 MySQL 版本、统计信息、数据分布和 `EXPLAIN ANALYZE` 验证执行计划。
+
+### 14.320 支付成功事实巡检账期归属契约
+
+1. `paymentSuccessFactMismatchCount` 是支付成功发生后的结构化一致性事实，必须按 `t_payment_order.success_at` 所在业务日采集，不得按支付创建日归属。
+2. 跨日成功支付在成功日检查最新支付尝试；成功日下界包含 `00:00:00`，次日 `00:00:00` 排除。支付创建日不再重复统计该成功事实。
+3. `SUCCESS + success_at IS NULL` 无法归入成功日，继续由 `missingPaymentSuccessTimeCount` 按创建日采集；不得用创建时间替代缺失成功时间。
+4. 本轮不改变接口字段、告警类型、下钻路由、历史批次 `NULL/RERUN` 规则或批次准入逻辑，只修正新执行批次的内部统计集合。
+5. 该契约只约束 payment-core 本地账期归属，不证明渠道扣款、渠道账单、账务入账、资金一致或正式关账。
 
 ## 15. 结论
 

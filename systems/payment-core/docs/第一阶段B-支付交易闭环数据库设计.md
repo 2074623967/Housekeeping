@@ -1629,8 +1629,8 @@ t_order
 ### 4.188 支付成功事实主动巡检数据边界
 
 1. `t_payment_day_end_batch` 新增 `payment_success_fact_mismatch_count`。全新 schema 为 `INT NOT NULL DEFAULT 0`；增量迁移使用可空字段，历史 `NULL` 表示未采集，不伪造零值。
-2. 扫描以支付创建日为完整性归属；支付单为 `SUCCESS`，但最新支付尝试缺失、状态不是“成功”或 `completed_at` 为空时计数。最新尝试通过 `ORDER BY created_at DESC, id DESC` 稳定选取。
-3. 查询复用既有 `idx_attempt_payment_created(payment_order_id, created_at)` 与 `idx_payment_status_created(status, created_at)`，本轮不新增重复索引；同时间尝试由主键倒序稳定裁决。
+2. 扫描以支付成功日为完整性归属；支付单为 `SUCCESS`，但最新支付尝试缺失、状态不是“成功”或 `completed_at` 为空时计数。最新尝试通过 `ORDER BY created_at DESC, id DESC` 稳定选取。
+3. 查询复用既有 `idx_attempt_payment_created(payment_order_id, created_at)` 与 `idx_payment_status_success(status, success_at)`，本轮不新增重复索引；同时间尝试由主键倒序稳定裁决。
 4. 迁移 `2026-09-12-add-payment-success-fact-guard.sql` 只新增批次快照字段，不回填历史批次，也不修改支付单或支付尝试。
 5. 目标 MySQL 执行前需预查字段冲突、评估在线 DDL 与相关子查询执行计划，并抽样核对历史异常集合；本地 H2 不证明生产性能、渠道扣款或资金一致。
 
@@ -1641,6 +1641,14 @@ t_order
 3. 本轮只修改查询形状，不新增或删除索引，不执行数据迁移，不改变字段类型、时区或历史数据。时间边界仍以数据库会话时区解释。
 4. 资源契约锁定当前 `21` 个日期范围谓词均不在索引列外包函数；集成样例覆盖业务日零点包含和次日零点排除。
 5. 上线前必须在目标 MySQL 核验会话时区、表统计信息、基数、数据倾斜、复合索引前导列和 `EXPLAIN ANALYZE`；本地 H2 兼容测试不构成真实执行计划或性能证明。
+
+### 4.190 支付成功事实巡检账期归属边界
+
+1. `payment_success_fact_mismatch_count` 的扫描时间轴修正为 `t_payment_order.success_at`；它描述成功状态与最新尝试的结构化一致性，应与其他支付成功事实归入同一业务日。
+2. 查询继续要求 `status='SUCCESS'`，并使用 `success_at >= start AND success_at < nextDay`；复用 `idx_payment_status_success(status, success_at)`，最新尝试子查询继续复用 `idx_attempt_payment_created(payment_order_id, created_at)`。
+3. `success_at IS NULL` 的成功支付不会进入该按日集合，仍由按创建日扫描的 `missing_payment_success_time_count` 独立拦截，不从其他时间字段推断成功日。
+4. 本轮不修改表、列、索引、迁移或历史批次；已经生成的批次是不可变快照，需要通过既有重跑机制生成新批次，不原地改写。
+5. 目标 MySQL 的索引选择和扫描成本仍需真实环境验证；本地集合正确性不构成渠道、账务或资金事实证明。
 
 ## 5. 状态建议
 
