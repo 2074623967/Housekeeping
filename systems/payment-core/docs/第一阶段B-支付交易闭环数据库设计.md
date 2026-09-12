@@ -362,7 +362,7 @@ t_order
 | `refund_amount / refund_method / refund_reason` | 退款金额、方式与原因 |
 | `channel_code` | 实际受理退款的渠道编码，受理前为空 |
 | `channel_refund_no` | 渠道侧退款单号，受理后首次绑定且不可覆盖 |
-| `channel_submitted_at` | 首次获得有效渠道退款号的数据库时间 |
+| `channel_submitted_at` | 当前一次渠道提交首次获得有效渠道退款号的数据库时间；失败重试前随当前轨迹重置 |
 | `status / status_type` | `REVIEWING/PROCESSING/SUCCESS/FAIL` 及页面样式 |
 | `applied_at / success_at` | 申请时间与可信退款成功时间 |
 
@@ -1507,6 +1507,13 @@ t_order
 1. 收银台页面对 `latestAttemptStatus` 的重复提交锁定与关单资格复用只发生在浏览器派生状态，不新增客户端持久化或数据库事实。
 2. 服务端仍从 `t_payment_attempt` 查询最近尝试，客户端不缓存为新的受理标记，也不写回 `t_payment_order / t_prepay_order`。
 3. 本轮无 Mapper SQL、表、列、索引、数据回填或迁移变化；数据库权威资格仍按既有支付状态、尝试存在性和条件更新判断。
+
+### 4.175 失败退款重试当前轨迹重置边界
+
+1. `restartFailedRefund(refundOrderId)` 以 `status = 'FAIL'` 为条件，原子写入 `PROCESSING / warn`，并将 `success_at / channel_code / channel_refund_no / channel_submitted_at` 置空；重复执行或并发失去资格时影响行数为零。
+2. 轨迹重置与重试操作日志、稳定 `REFUND_SUBMIT` 事件重新激活处于同一服务事务；回滚时不得留下已清轨迹但无待派发事件的部分状态。
+3. `t_refund_order` 的渠道字段由“首次且永久受理事实”收敛为“当前一次渠道受理事实”；既有操作日志不被修改或删除，但当前版本尚未建立独立 `t_refund_attempt` 多次尝试表。
+4. 本轮复用既有可空列和索引，无 schema、数据回填或迁移变化；生产仍需评估真实渠道退款幂等键、旧回调与新尝试区分，以及多尝试审计模型。
 
 ## 5. 状态建议
 

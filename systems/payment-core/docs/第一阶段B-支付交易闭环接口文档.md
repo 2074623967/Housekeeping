@@ -2442,7 +2442,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 ### 14.60 退款渠道受理事实字段契约
 
-1. `GET /api/refunds/{refundOrderId}` 新增 `channelCode/channelRefundNo/channelSubmittedAt`：分别表示实际受理渠道、渠道侧退款单号和首次获得受理号时间；尚未受理时返回空值或 `-`，不得推断为失败。
+1. `GET /api/refunds/{refundOrderId}` 新增 `channelCode/channelRefundNo/channelSubmittedAt`：分别表示当前一次实际受理渠道、渠道侧退款单号和该次首次获得受理号时间；尚未受理或失败重试已重置当前轨迹时返回空值或 `-`，不得推断为失败。
 2. 渠道返回的退款号必须非空、最长 `128` 字符且不含 ISO 控制字符；只允许在退款仍为 `PROCESSING` 且尚未绑定渠道退款号时首次写入，之后不得由补偿覆盖。
 3. `(channelCode, channelRefundNo)` 在退款单表内唯一。事件补偿读取到既有受理号时，只有已绑定渠道与原支付渠道一致才可直接收口事件；不一致时不得再次调用渠道。
 4. `channelSubmittedAt` 和 `channelRefundNo` 只表达渠道受理事实，退款是否成功仍由后续可信退款回调或主动查单确认；接口不得将受理时间作为 `successAt` 返回。
@@ -3860,6 +3860,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 1. `GET /api/payments/cashier/{prepayOrderNo}` 的既有 `paymentStatus / latestAttemptStatus` 除用于主动查单资格外，也用于客户端重复提交锁定和本地关闭资格；本轮不新增或修改响应字段。
 2. 客户端没有最新查单详情时使用收银台快照，查单成功后优先使用 `PaymentDetailDTO`；非空尝试事实不得因收银台展示状态仍为待支付而被忽略。
 3. 本轮无端点、请求、响应、错误码或服务端状态机变化；客户端判断不能替代支付提交幂等、`PAYMENT-1054` 和数据库关单条件。
+
+### 14.244 失败退款重试当前受理轨迹契约
+
+1. 人工退款重试和任务中心失败退款重试的端点与请求字段不变；只有当前状态为 `FAIL` 且退款额度复验通过时允许进入 `PROCESSING`。
+2. 状态迁移通过专用数据库条件更新完成，并同时将上一轮当前 `channelCode / channelRefundNo / channelSubmittedAt / successAt` 置空；随后在同一事务重新激活稳定 `REFUND_SUBMIT` 事件，事务提交后才触发渠道派发。
+3. 重新派发不得因上一轮渠道退款号存在而直接把 outbox 标为成功；新受理结果仍须经过既有字段校验和首次绑定条件，结果未知时继续进入 `UNKNOWN` 并停止直接重试。
+4. 响应中的渠道字段表示当前一次受理轨迹，不是完整尝试历史；操作成功不代表真实渠道接受同退款单重试、退款到账或对账完成。
 
 ## 15. 结论
 
