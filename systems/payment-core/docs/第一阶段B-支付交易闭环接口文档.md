@@ -4332,6 +4332,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 批次写入失败必须回滚并向调度框架抛出异常，租约随后释放或按既有到期语义恢复；不得把技术失败包装成“已有批次”或“租约忙”的幂等跳过。
 6. 默认关闭不表示能力缺失，也不表示生产已经启用。启用前必须验证主机时钟、MySQL 多实例租约竞争、数据水位、关账窗口和告警观测；本地测试结果不能替代生产调度或财务确认。
 
+### 14.305 自动日终内部结果与任务日志契约
+
+1. `PaymentDayEndService.runAutomatically()` 的内部返回值包含 `executed / skipReason / bizDate / batchStatus`，不暴露为 HTTP 响应。`executed=true` 时 `batchStatus` 只能是 `COMPLETED / WARNING` 且不得有跳过原因。
+2. `executed=false` 时 `batchStatus` 必须为空，`skipReason` 只能是 `EXISTING_BATCH / LEASE_BUSY`；空结果、空业务日、未知原因或矛盾字段组合均按技术失败处理，不得回退成正常幂等跳过。
+3. 调度器通过 `PaymentTaskCenterService.runAutoPaymentDayEnd()` 执行，任务日志编码固定为 `PAYMENT_DAY_END`、方式为 `AUTO`、触发人为 `payment-day-end-scheduler`，推荐路由为 `/payment-day-end`。
+4. 新批次 `COMPLETED` 记 `SUCCESS/P3`；新批次 `WARNING` 或业务日租约忙记 `WARNING/P2`；已有批次幂等跳过记 `SUCCESS/P3`；技术异常或非法结果记 `WARNING/P1`。
+5. 技术失败摘要固定为 `PAYMENT_DAY_END_AUTO_RUN_FAILED`，不得记录数据库、凭证或异常原文；记录失败不能覆盖原始业务异常，原异常必须继续向 Spring 调度框架传播。
+6. 日终事务和租约生命周期先于任务日志结束。任务日志不是批次存在性的唯一依据；若两者不一致，应先查询 `t_payment_day_end_batch`，再由值班人员决定是否 `RERUN`，不得自动重复生成首次快照。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
