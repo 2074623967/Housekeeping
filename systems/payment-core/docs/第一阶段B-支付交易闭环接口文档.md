@@ -3913,6 +3913,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `SUCCESS` 事件的首次派发和后续重复触发均幂等停止；`PENDING / FAILED / DEAD_LETTER` 继续复用既有 HTTP/AMQP 投递、失败计数和死信规则。即时派发异常不回滚已经提交的支付与 outbox 事实。
 4. 该契约只保证本地提交顺序和单事件派发互斥，不保证 HTTP 清分、账务两个下游原子成功，也不把 AMQP publisher confirm 解释为消费、入账或业务完成；下游仍须按稳定业务身份幂等。
 
+### 14.251 支付成功 HTTP 分阶段投递契约
+
+1. 支付事件查询项新增 `paymentSuccessHttpStage`，数据库字段为 `payment_success_http_stage`，取值为 `PENDING / CLEARING_ACCEPTED / COMPLETED`；该字段是 HTTP 双下游投递进度，不替代 `publishStatus`。
+2. `PENDING` 表示尚无已提交的清分接受阶段；`CLEARING_ACCEPTED` 表示 payment-core 已收到清分成功响应且正常提交该阶段；`COMPLETED` 表示清分与账务均返回成功，事件发布状态可能仍待补齐为 `SUCCESS`。
+3. HTTP 重试从持久化阶段继续：`PENDING` 依次调用清分、账务，`CLEARING_ACCEPTED` 只调用账务，`COMPLETED` 不调用下游。阶段推进失败不得把事件标为成功。
+4. AMQP 模式不读取或更新 `paymentSuccessHttpStage`，继续由 `publishStatus` 与 publisher confirm 表达本地发布结果；调用方不得把 HTTP 阶段解释为 AMQP 消费进度。
+5. 增量迁移将存量行默认置为 `PENDING`，不依据历史 `eventPayload`、`publishStatus` 或下游范围反推受理事实；已为 `SUCCESS` 的存量事件仍由发布终态阻止重发。
+6. HTTP 成功响应只表示接口契约上的接受。若进程在清分返回成功后、事件事务提交前退出，阶段可能仍为 `PENDING`；清分和账务必须以稳定 `eventNo / paymentOrderId` 实现幂等，接口契约不承诺 exactly-once。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

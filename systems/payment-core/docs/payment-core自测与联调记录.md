@@ -11393,3 +11393,30 @@
 1. 支付成功 outbox 现在先于外部副作用形成可补偿事实，即时派发、自动补偿与人工重发也共享单事件数据库互斥。
 2. HTTP 模式仍是清分后账务的顺序调用；清分成功、账务失败时可能再次调用清分，必须依赖下游幂等并在后续引入分阶段投递事实。AMQP publisher confirm 也不证明消费完成。
 3. 本地 Mockito/反射测试不证明 Spring 生产代理、MySQL 多实例锁等待、进程崩溃窗口、真实下游幂等或账务入账；release 四项真实阻断不变。
+
+## 424. 2026-09-12 支付成功 HTTP 分阶段投递 V1.0 验证
+
+### 424.1 本轮补强
+
+1. `t_payment_event.payment_success_http_stage` 建模 `PENDING / CLEARING_ACCEPTED / COMPLETED`，正式查询与事件行锁快照均返回该字段；双份初始化 schema/data 和增量迁移保持一致。
+2. HTTP 模式在 `PENDING` 调用清分并条件推进阶段，再调用账务；账务失败沿既有失败或死信状态机收口，下一次从 `CLEARING_ACCEPTED` 继续，不重复调用清分。
+3. `COMPLETED` 事件重试只补写发布成功；非法阶段失败闭合。AMQP 模式完全忽略 HTTP 阶段，保持既有 publisher confirm 与发布状态语义。
+
+### 424.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 定向测试 | `PaymentEventDispatchServiceImplTest,PaymentEventRepublishAuditMapperIntegrationTest` 共 `57` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 后端全量测试 | `942` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentEventMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 数据结构 | 双份 schema/data 已同步；新增 `2026-09-12-add-payment-success-http-stage.sql`，存量行默认 `PENDING` |
+| 统一门禁复判 | 脚本退出码 `2` 仅来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`releaseBlockerCount=4` |
+| 代码提交 | `e7f69d34 fix(payment-core): resume staged success delivery` |
+
+全量测试首次执行发现 `RefundSubmitOutboxMapperIntegrationTest` 的 H2 夹具缺少新列，补齐与正式表一致的默认列后再次执行全量通过；未把首次失败记录成业务能力通过。
+
+### 424.3 当前判断
+
+1. 常规账务 HTTP 失败返回后，清分已接受阶段会与事件失败状态共同提交，自动补偿和人工重发只继续账务；阶段条件更新和事件行锁阻止同一事件并发越级推进。
+2. 阶段事实只描述 payment-core 已收到下游成功响应，不证明清分完成或账务入账；AMQP publisher confirm 也仍不证明消费者完成处理。
+3. 清分接受响应之后、当前事件事务提交之前若进程硬退出或数据库回滚，阶段写入可能丢失并导致清分重放，因此真实下游仍必须按稳定 `eventNo / paymentOrderId` 幂等。本地 H2/Mockito 不替代生产 MySQL、多实例、真实 HTTP、资金或稳定性验证，release 四项真实阻断不变。

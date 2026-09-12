@@ -2116,6 +2116,14 @@
 3. 定向 `126` 项、payment-core 后端全量 `939` 项通过，均为 `0` failures、`0` errors、`0` skipped；补丁检查通过。本轮无 API、Mapper SQL、schema、迁移或前端变化。
 4. 单事件锁和提交顺序不解决 HTTP 清分成功、账务失败后的分阶段重试，也不证明 AMQP 消费、真实入账、下游幂等、生产 MySQL 多实例时序或稳定性；release 四项真实治理阻断不变。
 
+### 8.256 2026-09-12 支付成功 HTTP 分阶段投递进展
+
+1. `t_payment_event` 新增 `payment_success_http_stage`，以 `PENDING / CLEARING_ACCEPTED / COMPLETED` 独立记录 HTTP 双下游进度，不再用展示用 `event_payload` 推断权威状态。
+2. 清分明确接受后先推进为 `CLEARING_ACCEPTED`；账务调用失败时事件仍进入 `FAILED / DEAD_LETTER`，正常事务提交后保留清分受理阶段，后续重试只调用账务。两个下游均接受但事件成功状态尚未收口时，`COMPLETED` 重试不再调用任一下游，只补齐 `SUCCESS`。
+3. AMQP 分支继续使用 publisher confirm 和事件发布状态，不读取或推进 HTTP 阶段；新增列对存量默认 `PENDING`，迁移不根据历史报文或发布状态猜测外部受理事实。
+4. Service 与正式 Mapper H2 定向 `57` 项、payment-core 后端全量 `942` 项通过，均为 `0` failures、`0` errors、`0` skipped；双份 schema/data、增量迁移、Mapper XML 与补丁检查通过。
+5. 本地事务仍不能与两个 HTTP 下游构成原子提交：清分已接受但事件事务提交前进程退出或数据库回滚时，阶段可能仍为 `PENDING`，重试仍须依赖下游按稳定事件号或支付身份幂等。本轮不证明真实清分、账务入账、生产 MySQL 或稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

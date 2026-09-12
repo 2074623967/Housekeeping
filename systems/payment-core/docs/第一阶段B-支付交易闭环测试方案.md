@@ -2075,6 +2075,15 @@
 4. 回归支付详情缺失、字段非法、HTTP 部分失败、AMQP publisher confirm 失败、重试和死信规则；执行相关 Service 定向测试与 payment-core 后端全量测试。
 5. 另行安排生产 MySQL 多实例锁等待、进程在提交后回调前退出、HTTP 双下游部分成功、消息消费幂等和真实账务入账验证；本地测试不得替代这些证据。
 
+### 4.268 支付成功 HTTP 分阶段投递保护
+
+1. 使用正式 `PaymentEventMapper.xml` 和 H2 MySQL 模式验证阶段只能按 `PENDING -> CLEARING_ACCEPTED -> COMPLETED` 推进，重复和越级更新均影响 `0` 行，行锁查询返回当前阶段。
+2. 构造清分成功、账务非 2xx，验证事件进入 `FAILED`、已调用清分阶段写入且未写完成阶段；再以 `CLEARING_ACCEPTED` 重试，验证清分零调用、只调用账务并最终标记成功。
+3. 构造 `COMPLETED + FAILED` 恢复，验证任一 HTTP 下游零调用，只补齐事件 `SUCCESS`；阶段条件更新失败或非法阶段必须失败闭合，不得伪造成功。
+4. 在 AMQP 成功测试中显式断言两个 HTTP 阶段 Mapper 方法均未调用，确保切换投递模式不会把 publisher confirm 误记为清分或账务接受。
+5. 验证双份 schema/data 均包含相同字段和示例阶段，增量迁移只增加非空默认 `PENDING` 列，不从历史展示载荷反推事实；执行 Mapper XML、补丁和后端全量回归。
+6. 另行做进程在清分响应后、事务提交前退出的故障注入，并验证下游以稳定事件/支付身份防重；本地单元与 H2 测试不得声称 exactly-once、真实清分完成、账务入账或生产稳定性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
