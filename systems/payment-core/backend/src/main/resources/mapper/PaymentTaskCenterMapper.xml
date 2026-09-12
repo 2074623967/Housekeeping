@@ -451,6 +451,7 @@
               SELECT 1
               FROM t_payment_task_run_log task_log
               WHERE task_log.task_code = 'PAYMENT_DAY_END'
+                AND task_log.run_mode = 'AUTO'
                 AND task_log.biz_date = batch.biz_date
                 AND task_log.business_ref_no = batch.batch_no
                 AND task_log.processed_count &gt; 0
@@ -462,6 +463,7 @@
         SELECT COUNT(1)
         FROM t_payment_task_run_log task_log
         WHERE task_log.task_code = 'PAYMENT_DAY_END'
+          AND task_log.run_mode = 'AUTO'
           AND task_log.biz_date = #{bizDate}
           AND task_log.processed_count &gt; 0
           AND task_log.fail_count = 0
@@ -478,6 +480,7 @@
         SELECT COUNT(1)
         FROM t_payment_task_run_log task_log
         WHERE task_log.task_code = 'PAYMENT_DAY_END'
+          AND task_log.run_mode = 'AUTO'
           AND task_log.biz_date = #{bizDate}
           AND task_log.processed_count &gt; 0
           AND task_log.fail_count = 0
@@ -492,6 +495,7 @@
               SELECT 1
               FROM t_payment_task_run_log earlier_log
               WHERE earlier_log.task_code = task_log.task_code
+                AND earlier_log.run_mode = 'AUTO'
                 AND earlier_log.biz_date = task_log.biz_date
                 AND earlier_log.business_ref_no = task_log.business_ref_no
                 AND earlier_log.processed_count &gt; 0

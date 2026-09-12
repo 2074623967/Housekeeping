@@ -224,6 +224,20 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate("2026-09-11"));
             assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate("2026-09-11"));
 
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_task_run_log SET run_mode = 'MANUAL' "
+                        + "WHERE task_log_no = 'PTL-DAY-END-001'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate("2026-09-11"));
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_task_run_log SET run_mode = 'AUTO' "
+                        + "WHERE task_log_no = 'PTL-DAY-END-001'");
+            }
+            session.clearCache();
+
             PaymentTaskRunLogEntity duplicate = new PaymentTaskRunLogEntity();
             duplicate.setTaskLogNo("PTL-DAY-END-002");
             duplicate.setTaskCode(entity.getTaskCode());
