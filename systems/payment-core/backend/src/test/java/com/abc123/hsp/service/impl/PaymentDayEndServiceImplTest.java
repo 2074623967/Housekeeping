@@ -152,6 +152,8 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals("WARNING", captor.getValue().getBatchStatus());
         org.junit.jupiter.api.Assertions.assertEquals("warn", captor.getValue().getBatchStatusType());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getPaymentSuccessGapCount());
+        org.junit.jupiter.api.Assertions.assertTrue(captor.getValue().getSummaryComment().contains("成功差异1笔"));
+        org.junit.jupiter.api.Assertions.assertFalse(captor.getValue().getSummaryComment().contains("可进入次日对账"));
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), captor.getValue().getChannelAbnormalCount());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), captor.getValue().getInternalAbnormalCount());
         org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), captor.getValue().getPendingRefundCount());

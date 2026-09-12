@@ -172,7 +172,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     }
 
     private String buildSummaryComment(PaymentDayEndBatchEntity entity) {
-        if (entity.getChannelAbnormalCount() == 0
+        if (entity.getPaymentSuccessGapCount() == 0
+                && entity.getChannelAbnormalCount() == 0
                 && entity.getInternalAbnormalCount() == 0
                 && entity.getPendingRefundCount() == 0) {
             return "支付成功、渠道回调、内部事件和退款状态均已完成日终收口，可进入次日对账。";
