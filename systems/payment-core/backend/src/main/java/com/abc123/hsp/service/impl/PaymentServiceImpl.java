@@ -48,17 +48,23 @@ import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 @Service
 public class PaymentServiceImpl implements PaymentService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PaymentServiceImpl.class);
 
     private static final int BUSINESS_ORDER_NO_MAX_LENGTH = 64;
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
@@ -948,7 +954,7 @@ public class PaymentServiceImpl implements PaymentService {
                 eventPayload);
         recordEventProcessLog(eventNo, eventType, request.getPaymentOrderId(), detail.getOrderNo());
         if (paySuccess) {
-            paymentEventDispatchService.publishPaymentSuccess(eventNo, request.getPaymentOrderId());
+            dispatchPaymentSuccessAfterCommit(eventNo, request.getPaymentOrderId());
         }
         if (paySuccess) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_SUCCESS");
@@ -1064,7 +1070,7 @@ public class PaymentServiceImpl implements PaymentService {
                 eventPayload);
         recordEventProcessLog(
                 eventNo, "PAYMENT_SUCCESS", detail.getPaymentOrderId(), detail.getOrderNo());
-        paymentEventDispatchService.publishPaymentSuccess(eventNo, detail.getPaymentOrderId());
+        dispatchPaymentSuccessAfterCommit(eventNo, detail.getPaymentOrderId());
         paymentMapper.releaseSubmitConcurrencyToken(detail.getPaymentOrderId(), "ACTIVE_QUERY_SUCCESS");
         PaymentDetailDTO latestDetail = paymentMapper.findDetail(detail.getPaymentOrderId());
         if (latestDetail == null) {
@@ -1073,6 +1079,28 @@ public class PaymentServiceImpl implements PaymentService {
         latestDetail.setQuerySource(queryResult.getQuerySource());
         applyReturnCodeStandardization(latestDetail, queryResult);
         return outwardDetail(latestDetail);
+    }
+
+    private void dispatchPaymentSuccessAfterCommit(String eventNo, String paymentOrderId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            tryDispatchPaymentSuccess(eventNo, paymentOrderId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                tryDispatchPaymentSuccess(eventNo, paymentOrderId);
+            }
+        });
+    }
+
+    private void tryDispatchPaymentSuccess(String eventNo, String paymentOrderId) {
+        try {
+            paymentEventDispatchService.publishPaymentSuccess(eventNo, paymentOrderId);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("支付成功事件即时派发失败 eventNo={}, exceptionType={}",
+                    eventNo, exception.getClass().getName());
+        }
     }
 
     private void requireChannelSubmissionFact(PaymentDetailDTO detail) {

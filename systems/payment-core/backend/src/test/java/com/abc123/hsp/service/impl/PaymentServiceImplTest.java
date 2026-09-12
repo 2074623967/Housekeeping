@@ -56,6 +56,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 支付状态收口规则单元测试。
@@ -1167,14 +1169,28 @@ class PaymentServiceImplTest {
         callback.setTradeStatus("SUCCESS");
         callback.setChannelTransactionNo("WX-CALLBACK-001");
 
-        new PaymentServiceImpl(
-                paymentMapper,
-                paymentCallbackSignatureService,
-                paymentChannelRoutingService,
-                paymentChannelQueryService,
-                paymentChannelSubmitService,
-                paymentEventDispatchService)
-                .callback("wx_h5", callback);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            new PaymentServiceImpl(
+                    paymentMapper,
+                    paymentCallbackSignatureService,
+                    paymentChannelRoutingService,
+                    paymentChannelQueryService,
+                    paymentChannelSubmitService,
+                    paymentEventDispatchService)
+                    .callback("wx_h5", callback);
+
+            verify(paymentEventDispatchService, never()).publishPaymentSuccess(
+                    org.mockito.ArgumentMatchers.anyString(),
+                    org.mockito.ArgumentMatchers.eq("PAY-CALLBACK-001")
+            );
+            for (TransactionSynchronization synchronization
+                    : TransactionSynchronizationManager.getSynchronizations()) {
+                synchronization.afterCommit();
+            }
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
 
         verify(paymentMapper).insertEvent(
                 org.mockito.ArgumentMatchers.anyString(),

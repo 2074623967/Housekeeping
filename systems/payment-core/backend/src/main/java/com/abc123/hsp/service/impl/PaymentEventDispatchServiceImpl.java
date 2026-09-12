@@ -304,6 +304,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishPaymentSuccess(String eventNo, String paymentOrderId) {
         dispatchPaymentSuccess(
                 normalizeRequiredIdentifier(eventNo, "事件号", EVENT_NO_MAX_LENGTH),
@@ -576,6 +577,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     private boolean dispatchPaymentSuccess(String eventNo, String paymentOrderId) {
+        PaymentEventListItemDTO event = paymentEventMapper.findByEventNoForUpdate(eventNo);
+        if (event == null
+                || !PAYMENT_SUCCESS_EVENT_TYPE.equals(event.getEventType())
+                || !Objects.equals(event.getPaymentOrderId(), paymentOrderId)) {
+            return false;
+        }
+        if ("SUCCESS".equals(event.getPublishStatus())) {
+            return true;
+        }
+        if (!isRepublishableStatus(event.getPublishStatus())) {
+            return false;
+        }
         PaymentDetailDTO detail = paymentMapper.findDetail(paymentOrderId);
         if (detail == null) {
             markFailedOrDeadLetter(eventNo);

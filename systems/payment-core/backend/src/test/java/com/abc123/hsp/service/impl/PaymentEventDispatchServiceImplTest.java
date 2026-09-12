@@ -25,6 +25,7 @@ import java.time.ZoneId;
 import java.util.Collections;
 import java.util.TimeZone;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -59,6 +60,24 @@ class PaymentEventDispatchServiceImplTest {
     @Mock
     private RefundChannelSubmitService refundChannelSubmitService;
 
+    @BeforeEach
+    void defaultPaymentSuccessEvent() {
+        org.mockito.Mockito.lenient()
+                .when(paymentEventMapper.findByEventNoForUpdate(any()))
+                .thenAnswer(invocation -> paymentEvent(invocation.getArgument(0), 0));
+    }
+
+    @Test
+    void shouldDispatchPaymentSuccessInNewTransactionAfterBusinessCommit() throws Exception {
+        Method method = PaymentEventDispatchServiceImpl.class.getMethod(
+                "publishPaymentSuccess", String.class, String.class);
+
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        Assertions.assertNotNull(transactional);
+        Assertions.assertEquals(Propagation.REQUIRES_NEW, transactional.propagation());
+    }
+
     @Test
     void shouldDispatchRefundInNewTransactionAfterApprovalCommit() throws Exception {
         Method method = PaymentEventDispatchServiceImpl.class.getMethod(
@@ -68,6 +87,50 @@ class PaymentEventDispatchServiceImplTest {
 
         Assertions.assertNotNull(transactional);
         Assertions.assertEquals(Propagation.REQUIRES_NEW, transactional.propagation());
+    }
+
+    @Test
+    void shouldNotDispatchPaymentSuccessEventAgainWhenAlreadySucceeded() {
+        PaymentEventListItemDTO event = paymentEvent("EVT-SUCCESS-INITIAL", 1);
+        event.setPublishStatus("SUCCESS");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-SUCCESS-INITIAL")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-SUCCESS-INITIAL", "PAY-001");
+
+        verify(paymentMapper, never()).findDetail(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+        verify(paymentEventMapper, never()).markPublishFailed(any());
+    }
+
+    @Test
+    void shouldRejectMismatchedPaymentSuccessEventBeforeCallingDownstream() {
+        PaymentEventListItemDTO event = paymentEvent("EVT-MISMATCHED-INITIAL", 0);
+        event.setPaymentOrderId("PAY-OTHER");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-MISMATCHED-INITIAL")).thenReturn(event);
+
+        new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).publishPaymentSuccess("EVT-MISMATCHED-INITIAL", "PAY-001");
+
+        verify(paymentMapper, never()).findDetail(any());
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(rabbitTemplate, never()).invoke(any());
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+        verify(paymentEventMapper, never()).markPublishFailed(any());
     }
 
     @Test
@@ -779,6 +842,9 @@ class PaymentEventDispatchServiceImplTest {
 
     @Test
     void shouldMarkFailedWhenPaymentDetailMissing() {
+        PaymentEventListItemDTO event = paymentEvent("EVT-404", 0);
+        event.setPaymentOrderId("PAY-404");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-404")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-404")).thenReturn(null);
 
         new PaymentEventDispatchServiceImpl(
