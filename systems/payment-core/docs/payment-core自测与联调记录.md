@@ -11698,3 +11698,33 @@
 1. 在数据集合不变的前提下，支付请求分页和 CSV 对三类受支持排序字段的同值记录均具有确定次序。
 2. `pa.id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生支付尝试插入或更新，偏移分页仍可能随数据集变化。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、真实渠道受理或资金结果；release 四项真实治理阻断不变。
+
+## 435. 2026-09-12 支付流水列表与导出稳定排序 V1.0 验证
+
+### 435.1 本轮补强
+
+1. 支付尝试、渠道回调、路由记录和业务事件联合分支分别投影固定 `flow_source_rank=1..4` 与各自表的 `flow_source_id`，避免不同来源相同自增 ID 发生次排序碰撞。
+2. `createdAt / retryCount / flowType` 均以原业务字段为首排序键，再以来源序号和来源主键作为同方向复合次排序键；`findAll` 与 `findAllForExport` 统一引用 `paymentFlowOrder`。
+3. 内部排序列不进入响应 DTO、CSV 或 `count` 联合列；筛选、页码、导出 `1001` 行保护、敏感数据脱敏和流水事实含义不变。
+
+### 435.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与服务定向测试 | `PaymentFlowListMapperIntegrationTest,PaymentFlowServiceImplTest` `6` 项通过，`0` failures、`0` errors、`0` skipped |
+| 跨来源同秒排序 | 支付尝试、渠道回调、路由记录和业务事件各自 `id=1` 时，创建时间降序按来源序号返回 `EVENT / ROUTE / NOTIFY / ATTEMPT` |
+| 创建时间跨页 | 三条同秒支付尝试跨三页依次返回 `FLOW-ATTEMPT-STABLE-003 / 002 / 001` |
+| 流水类型导出 | 三条同类型支付尝试按升序返回 `001 / 002 / 003` |
+| 重试次数导出 | 三条同重试次数业务事件按降序返回 `003 / 002 / 001` |
+| 计数回归 | 正式 `count` 联合查询返回筛选后的 `3` 条，未携带内部排序列 |
+| payment-core 后端全量测试 | `951` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentFlowMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `af431170 fix(payment-core): stabilize payment flow ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 435.3 当前判断
+
+1. 在数据集合不变的前提下，支付流水分页和 CSV 对三类受支持排序字段的同值记录均具有跨来源确定次序。
+2. 来源序号是内部固定排序语义，不代表四类流水的业务优先级；复合次排序也不提供多个请求之间的数据库快照，偏移分页仍会随并发写入变化。
+3. 本地 H2 不证明生产 MySQL `UNION ALL` 排序执行计划、大数据量导出、并发分页快照、真实渠道处理或资金结果；release 四项真实治理阻断不变。
