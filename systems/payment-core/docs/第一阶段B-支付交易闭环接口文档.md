@@ -4089,6 +4089,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 每日 `totalCount / successCount / successAmount` 的状态和金额口径保持不变，接口路径、趋势字段和前端消费方式不变。
 4. 窗口以数据库会话时区为准；调用方不得用本地浏览器日期重新裁剪结果，生产投放前应核对数据库会话时区与业务时区一致。
 
+### 14.275 支付监控渠道提交事实契约
+
+1. `GET /api/payment-monitor/overview` 的 `channelMetrics` 只聚合至少存在一条 `t_payment_attempt` 的支付单；无支付尝试的 `PREPAY_CREATED / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED` 以及未提交即关闭记录不进入渠道表现。
+2. 同一支付单存在多条尝试时仍只计为一笔支付单；`totalCount / successCount / successRate / successAmount` 均以满足提交事实的支付单集合为基础。
+3. `channelMetrics[].pendingCount` 只统计 `WAIT_CALLBACK`，P1 风险与待收口提示使用同一条件；因此管理端以 `status=WAIT_CALLBACK` 下钻不得因未提交预付单产生空结果。
+4. `summary.pendingPaymentCount` 继续统计 `PREPAY_CREATED / WAIT_CALLBACK`，与渠道指标承担不同观察范围；支付尝试只证明本地提交事实，不等于渠道已受理、支付成功或资金已收口。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

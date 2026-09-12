@@ -2297,6 +2297,14 @@
 4. 趋势仍按 `statDate DESC` 返回且最多七行，只返回窗口内实际存在支付事实的日期，不为无交易日人工补零；本轮无 API、DTO、前端、schema、索引或迁移变化。
 5. 本地 H2 只验证 SQL 语义与边界，不证明生产 MySQL 时区配置、索引和执行计划、数据完整、真实支付成功、账务入账、资金一致或稳定性；release 四项真实治理阻断不变。
 
+### 8.280 2026-09-12 支付监控渠道提交事实进展
+
+1. 渠道指标原先直接聚合全部支付单，导致尚无支付尝试的 `PREPAY_CREATED` 也进入渠道总量、成功率分母和 P1 待处理风险；页面点击后固定筛选 `WAIT_CALLBACK`，可能得到空列表。
+2. `PaymentMonitorMapper.findChannelMetrics` 现在只聚合存在 `t_payment_attempt` 的支付单，使用 `EXISTS` 避免同一支付单多次尝试造成重复计数，并复用已有 `idx_attempt_payment_created(payment_order_id, created_at)` 索引。
+3. 渠道 `pendingCount`、P1 风险与风险提示统一只按 `WAIT_CALLBACK` 判断；摘要 `pendingPaymentCount` 仍统计 `PREPAY_CREATED / WAIT_CALLBACK`，保留全局待处理口径。
+4. 正式 Mapper 集成测试为原三组指标补齐尝试事实，保持每组 `total=2 / success=1` 与稳定排序；仅有无尝试 `PREPAY_CREATED` 时摘要待处理为 `1`，但渠道指标为空。定向 `8` 项、payment-core 后端全量 `964` 项通过。
+5. 本轮无 API 字段、DTO、前端、schema、索引或迁移变化；本地尝试事实不证明渠道实际受理、成功率真实、支付成功、账务入账、资金一致或生产稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

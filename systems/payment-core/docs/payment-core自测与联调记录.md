@@ -12076,3 +12076,31 @@
 1. “最近 7 天”现在表达连续七个自然日，而不是七个离散有数据日期；页面不会再把窗口外历史数据当作近期趋势。
 2. 窗口以数据库会话 `CURDATE()` 为准，生产环境仍需确保数据库会话时区与业务时区一致；空白日期当前不补零。
 3. 本地 H2 不证明生产 MySQL 时区、索引和执行计划、数据完整、真实支付成功、账务入账、资金一致或生产稳定性；release 四项真实治理阻断不变。
+
+## 448. 2026-09-12 支付监控渠道提交事实 V1.0 验证
+
+### 448.1 本轮补强
+
+1. `PaymentMonitorMapper.findChannelMetrics` 使用关联支付单号的 `t_payment_attempt` 存在性作为渠道提交事实，没有任何支付尝试的支付单不进入渠道表现指标。
+2. 使用 `EXISTS` 而非直接联表，确保同一支付单的多次尝试只在渠道总量和成功率分母中计一次。
+3. 渠道 `pendingCount`、P1 风险和对应提示统一收敛到 `WAIT_CALLBACK`；全局摘要仍保留 `PREPAY_CREATED / WAIT_CALLBACK` 的宽口径待处理数。
+
+### 448.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 监控后端定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest,PaymentMonitorControllerTest` `8` 项通过，`0` failures、`0` errors、`0` skipped |
+| 已提交渠道指标 | 三组支付单均有支付尝试，继续返回每组 `totalCount=2`、`successCount=1` 及稳定分组键顺序 |
+| 未提交预付边界 | 仅有无尝试 `PREPAY_CREATED` 时，`summary.pendingPaymentCount=1`，`channelMetrics=[]` |
+| 页面下钻对齐 | 渠道 `pendingCount>0` 只可能来自 `WAIT_CALLBACK`，与管理端下钻 `status=WAIT_CALLBACK` 一致 |
+| payment-core 后端全量测试 | `964` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API 字段、DTO、前端、状态机、schema、索引或迁移变化 |
+| 代码提交 | `12e74564 fix(payment-core): require submitted channel metrics` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 448.3 当前判断
+
+1. 渠道总量、成功率、成功金额和风险不再被尚未形成支付尝试的本地订单污染；多次尝试也不会放大支付单数量。
+2. 支付尝试只证明 payment-core 已记录提交动作，不证明渠道已受理；生产渠道表现仍需结合渠道流水、查询、回调和对账事实核验。
+3. 本轮没有前端代码变化，因此未重复执行管理端测试与构建；本地 H2 不证明生产 MySQL 执行计划、真实渠道成功率、账务入账、资金一致或生产稳定性，release 四项真实治理阻断不变。
