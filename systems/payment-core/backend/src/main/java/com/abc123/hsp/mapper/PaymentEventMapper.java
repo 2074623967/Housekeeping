@@ -57,6 +57,16 @@ public interface PaymentEventMapper {
     int markPublishSuccess(@Param("eventNo") String eventNo);
 
     /**
+     * 记录支付成功事件已被清分系统接受。
+     */
+    int markPaymentSuccessClearingAccepted(@Param("eventNo") String eventNo);
+
+    /**
+     * 记录支付成功事件的 HTTP 下游均已接受。
+     */
+    int markPaymentSuccessHttpCompleted(@Param("eventNo") String eventNo);
+
+    /**
      * 标记事件发布失败。
      */
     int markPublishFailed(@Param("eventNo") String eventNo);

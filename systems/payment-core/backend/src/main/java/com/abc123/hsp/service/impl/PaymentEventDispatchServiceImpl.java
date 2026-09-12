@@ -40,6 +40,9 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
 
     private static final String PAYMENT_SUCCESS_EVENT_TYPE = "PAYMENT_SUCCESS";
     private static final String REFUND_SUBMIT_EVENT_TYPE = "REFUND_SUBMIT";
+    private static final String HTTP_STAGE_PENDING = "PENDING";
+    private static final String HTTP_STAGE_CLEARING_ACCEPTED = "CLEARING_ACCEPTED";
+    private static final String HTTP_STAGE_COMPLETED = "COMPLETED";
     private static final int CHANNEL_REFUND_NO_MAX_LENGTH = 128;
     private static final int CHANNEL_CODE_MAX_LENGTH = 64;
     private static final int CHANNEL_TRANSACTION_NO_MAX_LENGTH = 128;
@@ -605,10 +608,8 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName, workerName, amount);
             } else {
                 validateHttpDispatchConfiguration();
-                postForSuccess(clearingUrl, buildClearingPayload(
-                        detail.getPaymentOrderId(), orderNo, customerName, workerName, amount));
-                postForSuccess(accountingUrl, buildAccountingPayload(
-                        detail.getPaymentOrderId(), orderNo, customerName, amount));
+                dispatchPaymentSuccessViaHttp(
+                        event, detail, orderNo, customerName, workerName, amount);
             }
             if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
                 throw new IllegalStateException("支付成功事件成功状态更新失败");
@@ -617,6 +618,34 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         } catch (RuntimeException exception) {
             markFailedOrDeadLetter(eventNo);
             return false;
+        }
+    }
+
+    private void dispatchPaymentSuccessViaHttp(PaymentEventListItemDTO event,
+                                               PaymentDetailDTO detail,
+                                               String orderNo,
+                                               String customerName,
+                                               String workerName,
+                                               BigDecimal amount) {
+        String stage = StringUtils.hasText(event.getPaymentSuccessHttpStage())
+                ? event.getPaymentSuccessHttpStage().trim()
+                : HTTP_STAGE_PENDING;
+        if (HTTP_STAGE_COMPLETED.equals(stage)) {
+            return;
+        }
+        if (HTTP_STAGE_PENDING.equals(stage)) {
+            postForSuccess(clearingUrl, buildClearingPayload(
+                    detail.getPaymentOrderId(), orderNo, customerName, workerName, amount));
+            if (paymentEventMapper.markPaymentSuccessClearingAccepted(event.getEventNo()) != 1) {
+                throw new IllegalStateException("支付成功事件清分受理阶段更新失败");
+            }
+        } else if (!HTTP_STAGE_CLEARING_ACCEPTED.equals(stage)) {
+            throw new IllegalArgumentException("支付成功事件 HTTP 投递阶段非法");
+        }
+        postForSuccess(accountingUrl, buildAccountingPayload(
+                detail.getPaymentOrderId(), orderNo, customerName, amount));
+        if (paymentEventMapper.markPaymentSuccessHttpCompleted(event.getEventNo()) != 1) {
+            throw new IllegalStateException("支付成功事件 HTTP 完成阶段更新失败");
         }
     }
 

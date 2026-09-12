@@ -24,6 +24,8 @@ public class PaymentEventListItemDTO {
     private String publishStatus;
     /** 发布状态样式。 */
     private String publishStatusType;
+    /** 支付成功事件的 HTTP 下游投递阶段。 */
+    private String paymentSuccessHttpStage;
     /** 重试次数。 */
     private Integer retryCount;
     /** 最近发布时间。 */

@@ -40,6 +40,7 @@
                downstream_system AS downstreamSystem,
                publish_status AS publishStatus,
                publish_status_type AS publishStatusType,
+               payment_success_http_stage AS paymentSuccessHttpStage,
                retry_count AS retryCount,
                DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
                DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
@@ -102,6 +103,7 @@
                downstream_system AS downstreamSystem,
                publish_status AS publishStatus,
                publish_status_type AS publishStatusType,
+               payment_success_http_stage AS paymentSuccessHttpStage,
                retry_count AS retryCount,
                DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
                DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
@@ -161,6 +163,7 @@
                downstream_system AS downstreamSystem,
                publish_status AS publishStatus,
                publish_status_type AS publishStatusType,
+               payment_success_http_stage AS paymentSuccessHttpStage,
                retry_count AS retryCount,
                DATE_FORMAT(last_published_at, '%Y-%m-%d %H:%i:%s') AS lastPublishedAt,
                DATE_FORMAT(next_retry_at, '%Y-%m-%d %H:%i:%s') AS nextRetryAt,
@@ -179,6 +182,7 @@
                payment_order_id AS paymentOrderId,
                biz_no AS bizNo,
                publish_status AS publishStatus,
+               payment_success_http_stage AS paymentSuccessHttpStage,
                retry_count AS retryCount
         FROM t_payment_event
         WHERE event_no = #{eventNo}
@@ -194,6 +198,24 @@
             next_retry_at = NULL
         WHERE event_no = #{eventNo}
           AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER', 'UNKNOWN')
+    </update>
+
+    <update id="markPaymentSuccessClearingAccepted">
+        UPDATE t_payment_event
+        SET payment_success_http_stage = 'CLEARING_ACCEPTED'
+        WHERE event_no = #{eventNo}
+          AND event_type = 'PAYMENT_SUCCESS'
+          AND payment_success_http_stage = 'PENDING'
+          AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
+    </update>
+
+    <update id="markPaymentSuccessHttpCompleted">
+        UPDATE t_payment_event
+        SET payment_success_http_stage = 'COMPLETED'
+        WHERE event_no = #{eventNo}
+          AND event_type = 'PAYMENT_SUCCESS'
+          AND payment_success_http_stage = 'CLEARING_ACCEPTED'
+          AND publish_status IN ('PENDING', 'FAILED', 'DEAD_LETTER')
     </update>
 
     <update id="markPublishFailed">

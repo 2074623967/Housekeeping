@@ -121,6 +121,22 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldPersistPaymentSuccessHttpStagesInOrder() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+
+            assertEquals("PENDING", mapper.findByEventNoForUpdate("EVT-AUDIT-001")
+                    .getPaymentSuccessHttpStage());
+            assertEquals(1, mapper.markPaymentSuccessClearingAccepted("EVT-AUDIT-001"));
+            assertEquals(0, mapper.markPaymentSuccessClearingAccepted("EVT-AUDIT-001"));
+            assertEquals(1, mapper.markPaymentSuccessHttpCompleted("EVT-AUDIT-001"));
+            assertEquals(0, mapper.markPaymentSuccessHttpCompleted("EVT-AUDIT-001"));
+            assertEquals("COMPLETED", mapper.findByEventNo("EVT-AUDIT-001")
+                    .getPaymentSuccessHttpStage());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -133,7 +149,9 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
                     + "event_type VARCHAR(64) NOT NULL, payment_order_id VARCHAR(64) NOT NULL, "
                     + "biz_no VARCHAR(64) NOT NULL, downstream_system VARCHAR(256) NOT NULL, "
                     + "event_topic VARCHAR(128) NOT NULL, publish_status VARCHAR(32) NOT NULL, "
-                    + "publish_status_type VARCHAR(32) NOT NULL, retry_count INT NOT NULL, "
+                    + "publish_status_type VARCHAR(32) NOT NULL, "
+                    + "payment_success_http_stage VARCHAR(32) NOT NULL DEFAULT 'PENDING', "
+                    + "retry_count INT NOT NULL, "
                     + "last_published_at DATETIME, next_retry_at DATETIME, "
                     + "last_republish_operator VARCHAR(64), last_republished_at DATETIME, "
                     + "event_payload VARCHAR(2048) NOT NULL, created_at DATETIME NOT NULL)");

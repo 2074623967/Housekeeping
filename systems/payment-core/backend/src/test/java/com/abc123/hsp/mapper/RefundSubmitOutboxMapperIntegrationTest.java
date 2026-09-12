@@ -311,6 +311,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "event_topic VARCHAR(128) NOT NULL, "
                     + "publish_status VARCHAR(32) NOT NULL, "
                     + "publish_status_type VARCHAR(32) NOT NULL, "
+                    + "payment_success_http_stage VARCHAR(32) NOT NULL DEFAULT 'PENDING', "
                     + "retry_count INT NOT NULL, "
                     + "last_published_at TIMESTAMP NULL, "
                     + "next_retry_at TIMESTAMP NULL, "

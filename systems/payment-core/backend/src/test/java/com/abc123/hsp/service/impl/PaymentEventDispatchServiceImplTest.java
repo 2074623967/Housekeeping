@@ -65,6 +65,12 @@ class PaymentEventDispatchServiceImplTest {
         org.mockito.Mockito.lenient()
                 .when(paymentEventMapper.findByEventNoForUpdate(any()))
                 .thenAnswer(invocation -> paymentEvent(invocation.getArgument(0), 0));
+        org.mockito.Mockito.lenient()
+                .when(paymentEventMapper.markPaymentSuccessClearingAccepted(any()))
+                .thenReturn(1);
+        org.mockito.Mockito.lenient()
+                .when(paymentEventMapper.markPaymentSuccessHttpCompleted(any()))
+                .thenReturn(1);
     }
 
     @Test
@@ -481,6 +487,8 @@ class PaymentEventDispatchServiceImplTest {
         Assertions.assertEquals("PAYMENT_SUCCESS", message.getMessageProperties().getHeaders().get("eventType"));
         Assertions.assertEquals("PAY-001", message.getMessageProperties().getHeaders().get("paymentOrderId"));
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
+        verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
         verify(restTemplate, never()).postForEntity(
                 any(), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
     }
@@ -619,6 +627,8 @@ class PaymentEventDispatchServiceImplTest {
 
         verify(restTemplate).postForEntity(eq("http://127.0.0.1:18120/api/clearing/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
         verify(restTemplate).postForEntity(eq("http://127.0.0.1:18110/api/accounting/events/payments/success"), any(), eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(paymentEventMapper).markPaymentSuccessClearingAccepted("EVT-001");
+        verify(paymentEventMapper).markPaymentSuccessHttpCompleted("EVT-001");
         verify(paymentEventMapper).markPublishSuccess("EVT-001");
         verify(paymentEventMapper, never()).markPublishFailed("EVT-001");
     }
@@ -724,7 +734,73 @@ class PaymentEventDispatchServiceImplTest {
         ).republish("EVT-001", " payment-event-scheduler ");
 
         Assertions.assertFalse(success);
+        verify(paymentEventMapper).markPaymentSuccessClearingAccepted("EVT-001");
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted("EVT-001");
         verify(paymentEventMapper).markPublishFailed("EVT-001");
+    }
+
+    @Test
+    void shouldResumeAtAccountingWhenClearingWasAlreadyAccepted() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-ACCOUNTING-RETRY", 1);
+        event.setPaymentSuccessHttpStage("CLEARING_ACCEPTED");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-ACCOUNTING-RETRY")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(restTemplate.postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class)))
+                .thenReturn(successResponse());
+        when(paymentEventMapper.markPublishSuccess("EVT-ACCOUNTING-RETRY")).thenReturn(1);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-ACCOUNTING-RETRY", " payment-event-scheduler ");
+
+        Assertions.assertTrue(success);
+        verify(restTemplate, never()).postForEntity(
+                eq("http://127.0.0.1:18120/api/clearing/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(restTemplate).postForEntity(
+                eq("http://127.0.0.1:18110/api/accounting/events/payments/success"),
+                any(),
+                eq(PaymentEventDispatchServiceImpl.DownstreamApiResponse.class));
+        verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
+        verify(paymentEventMapper).markPaymentSuccessHttpCompleted("EVT-ACCOUNTING-RETRY");
+        verify(paymentEventMapper).markPublishSuccess("EVT-ACCOUNTING-RETRY");
+    }
+
+    @Test
+    void shouldOnlyCloseEventWhenHttpDeliveryWasAlreadyCompleted() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO event = paymentEvent("EVT-HTTP-COMPLETED", 1);
+        event.setPaymentSuccessHttpStage("COMPLETED");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-HTTP-COMPLETED")).thenReturn(event);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+        when(paymentEventMapper.markPublishSuccess("EVT-HTTP-COMPLETED")).thenReturn(1);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        ).republish("EVT-HTTP-COMPLETED", " payment-event-scheduler ");
+
+        Assertions.assertTrue(success);
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
+        verify(paymentEventMapper).markPublishSuccess("EVT-HTTP-COMPLETED");
     }
 
     @Test
@@ -1345,6 +1421,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setPublishStatus("FAILED");
+        event.setPaymentSuccessHttpStage("PENDING");
         event.setRetryCount(retryCount);
         return event;
     }

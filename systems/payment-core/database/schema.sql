@@ -753,6 +753,7 @@ CREATE TABLE t_payment_event (
     event_topic VARCHAR(128) NOT NULL COMMENT '事件主题',
     publish_status VARCHAR(32) NOT NULL COMMENT '事件发布状态',
     publish_status_type VARCHAR(32) NOT NULL COMMENT '事件发布状态样式类型',
+    payment_success_http_stage VARCHAR(32) NOT NULL DEFAULT 'PENDING' COMMENT '支付成功事件HTTP投递阶段',
     retry_count INT NOT NULL DEFAULT 0 COMMENT '事件重试次数',
     last_published_at DATETIME DEFAULT NULL COMMENT '最近发布时间',
     next_retry_at DATETIME DEFAULT NULL COMMENT '下次重试时间',
