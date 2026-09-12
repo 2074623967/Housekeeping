@@ -11669,3 +11669,32 @@
 1. 在数据集合不变的前提下，收银台会话分页和 CSV 对三类受支持排序字段的同值记录均具有确定次序。
 2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生会话插入或更新，偏移分页仍可能随数据集变化。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、真实支付提交或渠道受理；release 四项真实治理阻断不变。
+
+## 434. 2026-09-12 支付请求列表与导出稳定排序 V1.0 验证
+
+### 434.1 本轮补强
+
+1. `PaymentRequestMapper.findAll` 与 `findAllForExport` 统一引用 `paymentRequestOrder`，避免页面和 CSV 重复维护动态排序。
+2. `createdAt / channelCode / terminal` 均以对应数据库字段为首排序键，以自增 `pa.id` 为同方向次排序键。
+3. 该变更不改变支付单关联、最近路由记录选择、筛选、排序参数、分页、导出 `1001` 行保护、响应字段或支付处理状态。
+
+### 434.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与服务定向测试 | `PaymentRequestListMapperIntegrationTest,PaymentRequestServiceImplTest` `7` 项通过，`0` failures、`0` errors、`0` skipped |
+| 创建时间跨页 | 三条同秒支付尝试按 `createdAt desc, pa.id desc` 跨三页依次返回 `ATTEMPT-STABLE-003 / 002 / 001` |
+| 渠道导出 | 三条同渠道支付尝试按升序返回 `001 / 002 / 003` |
+| 终端导出 | 三条同终端支付尝试按降序返回 `003 / 002 / 001` |
+| 查询结构回归 | 正式 SQL 继续执行支付单关联和按 `created_at DESC, id DESC` 选择最近路由记录的子查询 |
+| payment-core 后端全量测试 | `950` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentRequestMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `c0ae5e8b fix(payment-core): stabilize payment request ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 434.3 当前判断
+
+1. 在数据集合不变的前提下，支付请求分页和 CSV 对三类受支持排序字段的同值记录均具有确定次序。
+2. `pa.id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生支付尝试插入或更新，偏移分页仍可能随数据集变化。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、真实渠道受理或资金结果；release 四项真实治理阻断不变。
