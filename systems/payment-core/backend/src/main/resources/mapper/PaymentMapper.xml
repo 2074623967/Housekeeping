@@ -239,11 +239,13 @@
                pa.idempotency_key AS latestIdempotencyKey,
                pa.attempt_status AS latestAttemptStatus,
                pa.attempt_status_type AS latestAttemptStatusType,
+               DATE_FORMAT(pa.completed_at, '%Y-%m-%d %H:%i:%s') AS latestAttemptCompletedAt,
                pa.ops_config_snapshot_version AS opsConfigSnapshotVersion,
                pa.request_payload AS latestRequestPayload,
                pa.response_payload AS latestResponsePayload,
                p.status,
                p.status_type AS statusType,
+               DATE_FORMAT(p.success_at, '%Y-%m-%d %H:%i:%s') AS successAt,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_order p
                  LEFT JOIN t_prepay_order pr ON pr.id = (
@@ -455,6 +457,23 @@
               )
             )
           )
+    </update>
+
+    <update id="finalizeLatestPaymentAttemptSuccess">
+        UPDATE t_payment_attempt
+        SET attempt_status = '成功',
+            attempt_status_type = 'success',
+            completed_at = COALESCE(completed_at, NOW())
+        WHERE id = (
+            SELECT latest_attempt.id
+            FROM (
+                SELECT id
+                FROM t_payment_attempt
+                WHERE payment_order_id = #{paymentOrderId}
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) latest_attempt
+        )
     </update>
 
     <update id="markPaymentPendingFromCallback">

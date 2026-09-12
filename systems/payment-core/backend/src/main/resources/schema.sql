@@ -756,6 +756,7 @@ CREATE TABLE t_payment_attempt (
     response_payload VARCHAR(2048) DEFAULT NULL COMMENT '响应报文',
     attempt_status VARCHAR(32) NOT NULL COMMENT '尝试状态',
     attempt_status_type VARCHAR(32) NOT NULL COMMENT '尝试状态样式类型',
+    completed_at DATETIME DEFAULT NULL COMMENT '尝试终态时间',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_attempt_no (attempt_no),

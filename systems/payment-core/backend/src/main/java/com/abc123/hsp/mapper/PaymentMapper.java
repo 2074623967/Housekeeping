@@ -185,6 +185,11 @@ public interface PaymentMapper {
                                             @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
+     * 将支付单最新一次支付尝试原子终结为成功，并保留首次终态完成时间。
+     */
+    int finalizeLatestPaymentAttemptSuccess(@Param("paymentOrderId") String paymentOrderId);
+
+    /**
      * 非成功渠道回调原子维持待确认状态，禁止并发覆盖已经成功或关闭的终态。
      */
     int markPaymentPendingFromCallback(@Param("paymentOrderId") String paymentOrderId,

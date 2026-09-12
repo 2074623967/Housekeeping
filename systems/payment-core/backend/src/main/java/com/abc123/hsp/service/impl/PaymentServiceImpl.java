@@ -882,6 +882,9 @@ public class PaymentServiceImpl implements PaymentService {
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || ("CLOSED".equalsIgnoreCase(detail.getStatus()) && !paySuccess)) {
+            if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                validatePaymentSuccessFacts(detail);
+            }
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return outwardDetail(detail);
         }
@@ -889,6 +892,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess) {
             detail = lockAndReloadPaymentForSettlement(detail);
             if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                validatePaymentSuccessFacts(detail);
                 paymentMapper.releaseSubmitConcurrencyToken(
                         request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
                 return outwardDetail(detail);
@@ -897,7 +901,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess && paymentMapper.markPaymentSuccessFromChannelResult(
                 request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
-            return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
+            if (latestDetail != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                validatePaymentSuccessFacts(latestDetail);
+            }
+            return outwardDetail(latestDetail);
         }
         if (!paySuccess && paymentMapper.markPaymentPendingFromCallback(
                 request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
@@ -924,11 +932,12 @@ public class PaymentServiceImpl implements PaymentService {
                 request.getTradeStatus(),
                 "已收口",
                 "success");
-        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
-                request.getPaymentOrderId(),
-                paySuccess ? "成功" : "待回调",
-                paySuccess ? "success" : "warn"
-        );
+        if (paySuccess) {
+            finalizeLatestPaymentAttemptSuccess(request.getPaymentOrderId());
+        } else {
+            paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
+                    request.getPaymentOrderId(), "待回调", "warn");
+        }
         paymentMapper.updatePrepayStatusByPaymentOrderId(
                 request.getPaymentOrderId(),
                 paySuccess ? "支付成功" : "待回调",
@@ -1000,6 +1009,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+            validatePaymentSuccessFacts(detail);
+            return outwardDetail(detail);
+        }
         requireChannelSubmissionFact(detail);
         try {
             paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
@@ -1041,6 +1054,9 @@ public class PaymentServiceImpl implements PaymentService {
         recordChannelQuery(detail, queryResult, operator);
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || !"SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())) {
+            if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
+                validatePaymentSuccessFacts(detail);
+            }
             return outwardDetail(detail);
         }
         int settledRows = paymentMapper.markPaymentSuccessFromChannelResult(
@@ -1050,12 +1066,14 @@ public class PaymentServiceImpl implements PaymentService {
             if (latestDetail == null) {
                 throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
             }
+            if ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                validatePaymentSuccessFacts(latestDetail);
+            }
             latestDetail.setQuerySource(queryResult.getQuerySource());
             applyReturnCodeStandardization(latestDetail, queryResult);
             return outwardDetail(latestDetail);
         }
-        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
-                detail.getPaymentOrderId(), "成功", "success");
+        finalizeLatestPaymentAttemptSuccess(detail.getPaymentOrderId());
         paymentMapper.updatePrepayStatusByPaymentOrderId(
                 detail.getPaymentOrderId(), "支付成功", "success");
         settleOrderAndBill(detail);
@@ -1080,6 +1098,21 @@ public class PaymentServiceImpl implements PaymentService {
         latestDetail.setQuerySource(queryResult.getQuerySource());
         applyReturnCodeStandardization(latestDetail, queryResult);
         return outwardDetail(latestDetail);
+    }
+
+    private void finalizeLatestPaymentAttemptSuccess(String paymentOrderId) {
+        if (paymentMapper.finalizeLatestPaymentAttemptSuccess(paymentOrderId) != 1) {
+            throw new IllegalStateException("payment attempt finalization was not applied atomically");
+        }
+    }
+
+    private void validatePaymentSuccessFacts(PaymentDetailDTO detail) {
+        if (!"SUCCESS".equalsIgnoreCase(detail.getStatus())
+                || !"成功".equals(detail.getLatestAttemptStatus())
+                || !StringUtils.hasText(detail.getLatestAttemptCompletedAt())
+                || !StringUtils.hasText(detail.getSuccessAt())) {
+            throw new IllegalStateException("payment success facts are inconsistent");
+        }
     }
 
     private void dispatchPaymentSuccessAfterCommit(String eventNo, String paymentOrderId) {

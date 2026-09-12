@@ -234,7 +234,10 @@ class PaymentMapperStateTransitionIntegrationTest {
                     "PAY-ABNORMAL-WAIT", "WX-NOT-SUBMITTED"));
             assertEquals(1, mapper.markPaymentSuccessFromChannelResult(
                     "PAY-SUBMITTED", "WX-SUBMITTED"));
+            assertEquals(1, mapper.finalizeLatestPaymentAttemptSuccess("PAY-SUBMITTED"));
             assertPaymentSuccessTimePresent(session, "PAY-SUBMITTED");
+            assertLatestPaymentAttemptCompleted(session, "PAY-SUBMITTED");
+            assertEarlierPaymentAttemptUnchanged(session, "PAY-SUBMITTED");
         }
     }
 
@@ -389,6 +392,32 @@ class PaymentMapperStateTransitionIntegrationTest {
         }
     }
 
+    private void assertLatestPaymentAttemptCompleted(SqlSession session, String paymentOrderId) throws Exception {
+        try (java.sql.PreparedStatement statement = session.getConnection().prepareStatement(
+                "SELECT attempt_status, completed_at FROM t_payment_attempt "
+                        + "WHERE payment_order_id = ? ORDER BY created_at DESC, id DESC LIMIT 1")) {
+            statement.setString(1, paymentOrderId);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(resultSet.next());
+                assertEquals("成功", resultSet.getString("attempt_status"));
+                org.junit.jupiter.api.Assertions.assertNotNull(resultSet.getTimestamp("completed_at"));
+            }
+        }
+    }
+
+    private void assertEarlierPaymentAttemptUnchanged(SqlSession session, String paymentOrderId) throws Exception {
+        try (java.sql.PreparedStatement statement = session.getConnection().prepareStatement(
+                "SELECT attempt_status, completed_at FROM t_payment_attempt "
+                        + "WHERE payment_order_id = ? ORDER BY created_at ASC, id ASC LIMIT 1")) {
+            statement.setString(1, paymentOrderId);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(resultSet.next());
+                assertEquals("待回调", resultSet.getString("attempt_status"));
+                org.junit.jupiter.api.Assertions.assertNull(resultSet.getTimestamp("completed_at"));
+            }
+        }
+    }
+
     private void createTablesAndFixtures() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -424,7 +453,8 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "payment_order_id VARCHAR(64), created_at DATETIME, expires_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
-                    + "attempt_status VARCHAR(64), created_at DATETIME)");
+                    + "attempt_status VARCHAR(64), attempt_status_type VARCHAR(32), "
+                    + "completed_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_event (payment_order_id VARCHAR(64), event_type VARCHAR(64))");
             statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, order_no, status, status_type) "
                     + "VALUES ('PAY-UNSUBMITTED', 'ORD-1', 'PREPAY_CREATED', 'info'), "
@@ -452,6 +482,7 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "order_no = 'ORD-2', cashier_status = '支付中', cashier_status_type = 'warn', "
                     + "created_at = NOW() WHERE payment_order_id = 'PAY-SUBMITTED'");
             statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) VALUES "
+                    + "('PAY-SUBMITTED', '待回调', TIMESTAMPADD(MINUTE, -1, NOW())), "
                     + "('PAY-SUBMITTED', '处理中', NOW()), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', '处理中', NOW())");
             statement.executeUpdate("INSERT INTO t_payment_event(payment_order_id, event_type) "

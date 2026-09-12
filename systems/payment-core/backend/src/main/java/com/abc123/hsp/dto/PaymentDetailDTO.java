@@ -35,6 +35,8 @@ public class PaymentDetailDTO {
     private String latestIdempotencyKey;
     /** 最近一次支付尝试的状态。 */
     private String latestAttemptStatus;
+    /** 最近一次支付尝试的终态完成时间。 */
+    private String latestAttemptCompletedAt;
     /** 最近一次支付尝试状态对应的前端展示样式。 */
     private String latestAttemptStatusType;
     /** 最近一次支付尝试消费的运营配置快照版本。 */
@@ -65,6 +67,8 @@ public class PaymentDetailDTO {
     private String status;
     /** 当前支付单状态对应的前端展示样式。 */
     private String statusType;
+    /** 支付成功时间。 */
+    private String successAt;
     /** 支付单创建时间。 */
     private String createdAt;
     /** 支付路由执行轨迹。 */

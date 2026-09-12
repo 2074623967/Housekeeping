@@ -419,6 +419,9 @@ class PaymentServiceImplTest {
         detail.setPaymentOrderId("PAY-001");
         detail.setChannel("wx_h5");
         detail.setStatus("SUCCESS");
+        detail.setSuccessAt("2026-09-12 10:00:00");
+        detail.setLatestAttemptStatus("成功");
+        detail.setLatestAttemptCompletedAt("2026-09-12 10:00:00");
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findRouteLogs("PAY-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-001")).thenReturn(Collections.emptyList());
@@ -451,6 +454,120 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectRepeatedSuccessCallbackWhenPaymentFactsAreIncomplete() {
+        PaymentDetailDTO detail = queryDetail("PAY-INCONSISTENT-CALLBACK", "SUCCESS");
+        detail.setLatestAttemptStatus("处理中");
+        when(paymentMapper.findDetail("PAY-INCONSISTENT-CALLBACK")).thenReturn(detail);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-INCONSISTENT-CALLBACK");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-INCONSISTENT-CALLBACK");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment success facts are inconsistent", exception.getMessage());
+        verify(paymentMapper, never()).releaseSubmitConcurrencyToken(anyString(), anyString());
+    }
+
+    @Test
+    void shouldRejectSuccessfulPaymentQueryWhenAttemptCompletionTimeIsMissing() {
+        PaymentDetailDTO detail = queryDetail("PAY-INCONSISTENT-QUERY", "SUCCESS");
+        detail.setLatestAttemptCompletedAt(null);
+        when(paymentMapper.findDetail("PAY-INCONSISTENT-QUERY")).thenReturn(detail);
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-INCONSISTENT-QUERY");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment success facts are inconsistent", exception.getMessage());
+        verifyNoInteractions(paymentChannelQueryService);
+    }
+
+    @Test
+    void shouldReturnSuccessfulPaymentQueryWithoutCallingChannel() {
+        PaymentDetailDTO detail = queryDetail("PAY-COMPLETE-QUERY", "SUCCESS");
+        when(paymentMapper.findDetail("PAY-COMPLETE-QUERY")).thenReturn(detail);
+        when(paymentMapper.findRouteLogs("PAY-COMPLETE-QUERY")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findNotifyLogs("PAY-COMPLETE-QUERY")).thenReturn(Collections.emptyList());
+        when(paymentMapper.findEventItems("PAY-COMPLETE-QUERY")).thenReturn(Collections.emptyList());
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-COMPLETE-QUERY");
+
+        PaymentDetailDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .query(request);
+
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", result.getStatus());
+        verifyNoInteractions(paymentChannelQueryService, paymentChannelQueryRateLimitService);
+    }
+
+    @Test
+    void shouldRejectSuccessfulPaymentQueryWhenSuccessTimeIsMissing() {
+        PaymentDetailDTO detail = queryDetail("PAY-MISSING-SUCCESS-TIME", "SUCCESS");
+        detail.setSuccessAt(null);
+        when(paymentMapper.findDetail("PAY-MISSING-SUCCESS-TIME")).thenReturn(detail);
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-MISSING-SUCCESS-TIME");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment success facts are inconsistent", exception.getMessage());
+        verifyNoInteractions(paymentChannelQueryService);
+    }
+
+    @Test
+    void shouldRejectSuccessfulPaymentQueryWithoutLatestAttempt() {
+        PaymentDetailDTO detail = queryDetail("PAY-MISSING-LATEST-ATTEMPT", "SUCCESS");
+        detail.setLatestAttemptStatus(null);
+        detail.setLatestAttemptCompletedAt(null);
+        when(paymentMapper.findDetail("PAY-MISSING-LATEST-ATTEMPT")).thenReturn(detail);
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-MISSING-LATEST-ATTEMPT");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment success facts are inconsistent", exception.getMessage());
+        verifyNoInteractions(paymentChannelQueryService);
+    }
+
+    @Test
     void shouldSettleLateSuccessCallbackAfterLegacyExpiryClose() {
         PaymentDetailDTO closedDetail = queryDetail("PAY-EXPIRED-CALLBACK", "CLOSED");
         PaymentDetailDTO settledDetail = queryDetail("PAY-EXPIRED-CALLBACK", "SUCCESS");
@@ -459,6 +576,7 @@ class PaymentServiceImplTest {
         when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult(
                 "PAY-EXPIRED-CALLBACK", "WX-EXPIRED-CALLBACK")).thenReturn(1);
+        when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-EXPIRED-CALLBACK")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
                 .thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findRouteLogs("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
@@ -1115,6 +1233,7 @@ class PaymentServiceImplTest {
                 .thenReturn("WALLET-RECHARGE-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult(
                 "PAY-VIRTUAL-CALLBACK", "ALI-VIRTUAL-001")).thenReturn(1);
+        when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-VIRTUAL-CALLBACK")).thenReturn(1);
         when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
         when(paymentMapper.findRouteLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
@@ -1159,6 +1278,7 @@ class PaymentServiceImplTest {
                 .thenReturn("ORD-CALLBACK-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult(
                 "PAY-CALLBACK-001", "WX-CALLBACK-001")).thenReturn(1);
+        when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-CALLBACK-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-CALLBACK-001")).thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findRouteLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
@@ -1219,6 +1339,40 @@ class PaymentServiceImplTest {
                 "PAY-CALLBACK-001", "WX-CALLBACK-001");
         settlementOrder.verify(paymentMapper).updateOrderAfterPayment(
                 "ORD-CALLBACK-001", new BigDecimal("168.00"), "待履约", "info");
+    }
+
+    @Test
+    void shouldFailSuccessSettlementWhenLatestAttemptCannotBeFinalized() {
+        PaymentDetailDTO detail = queryDetail("PAY-CALLBACK-NO-ATTEMPT", "WAIT_CALLBACK");
+        detail.setOrderNo("ORD-CALLBACK-NO-ATTEMPT");
+        when(paymentMapper.findDetail("PAY-CALLBACK-NO-ATTEMPT")).thenReturn(detail, detail);
+        when(paymentMapper.lockPrepayCreation("ORD-CALLBACK-NO-ATTEMPT"))
+                .thenReturn("ORD-CALLBACK-NO-ATTEMPT");
+        when(paymentMapper.markPaymentSuccessFromChannelResult(
+                "PAY-CALLBACK-NO-ATTEMPT", "WX-CALLBACK-NO-ATTEMPT")).thenReturn(1);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-NO-ATTEMPT");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-NO-ATTEMPT");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment attempt finalization was not applied atomically", exception.getMessage());
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -2453,6 +2607,7 @@ class PaymentServiceImplTest {
         when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
         when(paymentMapper.markPaymentSuccessFromChannelResult("PAY-QUERY-001", "WX-QUERY-001"))
                 .thenReturn(1);
+        when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-QUERY-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
                 .thenReturn(new BigDecimal("168.00"));
         when(paymentMapper.findRouteLogs("PAY-QUERY-001")).thenReturn(Collections.emptyList());
@@ -2473,8 +2628,7 @@ class PaymentServiceImplTest {
                 paymentEventDispatchService)
                 .query(request, " 支付运营 ");
 
-        verify(paymentMapper).updatePaymentAttemptStatusByPaymentOrderId(
-                "PAY-QUERY-001", "成功", "success");
+        verify(paymentMapper).finalizeLatestPaymentAttemptSuccess("PAY-QUERY-001");
         verify(paymentMapper).updatePrepayStatusByPaymentOrderId(
                 "PAY-QUERY-001", "支付成功", "success");
         verify(paymentMapper).updateOrderAfterPayment(
@@ -2842,6 +2996,10 @@ class PaymentServiceImplTest {
         detail.setStatus(status);
         if ("WAIT_CALLBACK".equals(status)) {
             detail.setLatestAttemptStatus("待回调");
+        } else if ("SUCCESS".equals(status)) {
+            detail.setSuccessAt("2026-09-12 10:00:00");
+            detail.setLatestAttemptStatus("成功");
+            detail.setLatestAttemptCompletedAt("2026-09-12 10:00:00");
         }
         return detail;
     }

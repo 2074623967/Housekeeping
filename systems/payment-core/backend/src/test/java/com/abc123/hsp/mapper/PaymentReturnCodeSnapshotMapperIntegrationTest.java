@@ -101,7 +101,7 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                     + "last_standardized_message VARCHAR(256), last_handling_suggestion VARCHAR(256), "
                     + "last_retryable VARCHAR(16), last_manual_intervention_required VARCHAR(16), "
                     + "last_mapping_version VARCHAR(32), last_mapping_matched TINYINT, "
-                    + "status VARCHAR(32), status_type VARCHAR(32), created_at DATETIME)");
+                    + "status VARCHAR(32), status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
                     + "payment_order_id VARCHAR(64), created_at DATETIME)");
@@ -111,7 +111,7 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), terminal VARCHAR(64), "
                     + "client_ip VARCHAR(64), idempotency_key VARCHAR(128), attempt_status VARCHAR(32), "
                     + "attempt_status_type VARCHAR(32), ops_config_snapshot_version BIGINT, "
-                    + "request_payload CLOB, response_payload CLOB, created_at DATETIME)");
+                    + "request_payload CLOB, response_payload CLOB, completed_at DATETIME, created_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_payment_order (payment_order_id, order_no, customer_name, amount, "
                     + "payment_method, channel_code, channel_transaction_no, status, status_type, created_at) VALUES "
                     + "('PAY-SNAPSHOT-001', 'ORD-SNAPSHOT-001', '测试客户', 88.00, "
