@@ -1515,6 +1515,13 @@ t_order
 3. `t_refund_order` 的渠道字段由“首次且永久受理事实”收敛为“当前一次渠道受理事实”；既有操作日志不被修改或删除，但当前版本尚未建立独立 `t_refund_attempt` 多次尝试表。
 4. 本轮复用既有可空列和索引，无 schema、数据回填或迁移变化；生产仍需评估真实渠道退款幂等键、旧回调与新尝试区分，以及多尝试审计模型。
 
+### 4.176 退款提交未知渠道事实写入边界
+
+1. `recordUnknownRefundSubmitChannel(refundOrderId, channelCode)` 只更新 `status = 'PROCESSING' AND channel_refund_no IS NULL` 的退款单，将实际调用渠道写入 `channel_code`；不满足条件时影响行数为零。
+2. 该 SQL 不写渠道退款号、受理时间、成功时间或状态，不把调用事实提升为渠道受理或资金事实；`UNKNOWN` 事件状态继续由事件 Mapper 独立维护。
+3. 渠道字段、未知操作日志和事件未知状态处于退款事件派发的同一新事务，异常回滚时不留下部分未知事实；后续恢复查询以 `PROCESSING + channel_code + (channel_refund_no 或 UNKNOWN 事件)` 为候选边界。
+4. 本轮复用既有可空列，无 schema、索引、数据回填或迁移变化；当前单字段模型仍不能区分多次退款尝试、旧回调归属或每轮渠道请求身份。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

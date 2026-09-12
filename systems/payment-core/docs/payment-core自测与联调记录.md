@@ -11244,3 +11244,26 @@
 1. 失败退款重试不再被上一轮渠道退款号短路，代码语义与“重新下发退款渠道”的产品动作一致。
 2. `t_refund_order` 仍只保存当前一次受理轨迹，既有操作日志不删除但尚无独立多尝试结构；完整退款尝试历史属于后续数据模型增强。
 3. 本地自动化不替代真实渠道幂等规则、生产 MySQL 事务竞态、资金到账和财务对账核验，release 四项真实阻断不变。
+
+## 418. 2026-09-12 退款提交未知渠道事实保留 V1.0 验证
+
+### 418.1 本轮补强
+
+1. 退款渠道已经发起调用但返回结果未知时，将实际请求的 `channelCode` 写入仍为 `PROCESSING` 且无渠道退款号的退款单，补齐主动查单和自动补偿所需的渠道定位事实。
+2. 该路径不写 `channelRefundNo / channelSubmittedAt / successAt`，不迁移退款终态；`REFUND_SUBMIT` 事件仍进入 `UNKNOWN` 并停止直接重发，等待可信查单或验签回调收口。
+3. 明确在调用上游前被配置或治理门禁拒绝时继续进入可重试失败路径，不记录未知渠道；既有非法受理轨迹分支受 SQL 条件保护，不覆盖当前渠道事实。
+
+### 418.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 后端定向测试 | `mvn -Dtest=PaymentEventDispatchServiceImplTest,RefundSubmitOutboxMapperIntegrationTest,RefundServiceImplTest,PaymentTaskCenterMapperIntegrationTest test` | 通过 | `110` 项；覆盖未知结果写实际渠道、调用前拒绝不写渠道、正式 SQL 从空渠道进入未知受理恢复 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `928` 项，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `xmllint --noout RefundMapper.xml`、`git diff --check` | 通过 | Mapper XML 合法，无空白错误 |
+| 真实环境验证 | MySQL 多连接、真实渠道未知结果查单、回调、到账与对账 | 未执行 | 不记录渠道受理、资金退回或生产稳定性通过 |
+
+### 418.3 当前判断
+
+1. 生产代码产生的退款提交未知态已具备渠道定位事实，可进入按平台退款单号主动查单及任务候选，不再因 `channelCode` 为空永久滞留。
+2. `channelCode` 只证明平台实际调用了哪个渠道，不证明渠道收到、受理或完成退款；渠道退款号、受理时间和终态仍须可信外部结果形成。
+3. 本地自动化不替代真实网关超时语义、渠道按商户退款单号查单能力、生产 MySQL 竞态、退款到账和财务对账核验，release 四项真实阻断不变。
