@@ -4349,6 +4349,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 管理端任务日志日期筛选同时传给列表和导出；业务日为空时只展示 `-`，不得用开始时间推断账期。
 5. `bizDate` 只建立任务日志与业务事实的关联键，不改变任务状态、严重等级、计数、事务顺序或批次权威性，也不代表批次与日志已经自动勾稽。
 
+### 14.307 自动日终一致性巡检内部契约
+
+1. 本能力不新增 HTTP API。`PaymentDayEndScheduler` 在 `payment.day-end.patrol.enabled=true` 时调用 `PaymentTaskCenterService.runAutoPaymentDayEndPatrol()`；默认 cron 为 `0 30 2-6 * * *`，时区固定 `Asia/Shanghai`，目标为前一业务日。
+2. `PaymentDayEndService.inspectPreviousBusinessDay()` 返回 `inspected / skipReason / bizDate / batchCount / autoBatchCount`。完成检查时计数必须非负、自动批次不得多于全部批次且跳过原因必须为空；未完成时只允许 `LEASE_BUSY` 且两个计数为空，其他组合失败闭合。
+3. 巡检使用 `PAYMENT_DAY_END:{bizDate}` 租约。租约忙返回处理数 `0` 且不写最终巡检日志；已检查时再统计同业务日 `PAYMENT_DAY_END` 且 `processed_count > 0 AND fail_count = 0` 的日志，表示实际创建批次的自动运行记录。
+4. `batchCount=0` 记 `WARNING/P1`；`autoBatchCount` 与成功创建日志数不一致记 `WARNING/P2`；人工批次覆盖，或自动批次与成功创建日志数相等记 `SUCCESS/P3`。推荐路由统一为 `/payment-day-end`。
+5. 最终日志编码为 `PAYMENT_DAY_END_PATROL`，日志号按业务日固定为 `PTL-DAY-END-PATROL-{yyyyMMdd}`；唯一键冲突表示其他实例已记录同日最终结论，不重复插入。技术失败另写随机日志号和稳定摘要 `PAYMENT_DAY_END_PATROL_FAILED`，不得复制异常原文，且原异常必须继续抛出。
+6. 巡检只比较批次与任务日志数量，不自动生成或修改日终批次，不证明账期数据完整、资金一致、渠道账单一致、正式关账或发布放行。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

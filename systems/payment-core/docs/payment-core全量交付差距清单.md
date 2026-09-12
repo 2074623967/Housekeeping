@@ -2554,6 +2554,15 @@
 5. 控制器、Mapper 集成和任务中心定向 `72` 项、后端全量 `1009` 项、管理端单测 `27` 项、生产构建、Mapper XML 与补丁检查通过；代码提交为 `2f6c176f feat(payment-core): link task runs to business dates`。
 6. 历史任务日志不做摘要解析回填，避免把自由文本误当事实；本轮只建立可勾稽的数据基础，尚未实现自动漏跑判定、批次与日志差异巡检或生产迁移验证。
 
+### 8.312 2026-09-12 自动日终一致性巡检进展
+
+1. 新增内部任务 `PAYMENT_DAY_END_PATROL`，默认在 `Asia/Shanghai` 的 `02:30-06:30` 每小时检查前一已结束业务日；由 `HSP_PAYMENT_DAY_END_PATROL_ENABLED` 显式启用，默认关闭，cron 可通过 `HSP_PAYMENT_DAY_END_PATROL_CRON` 调整。
+2. 巡检复用 `PAYMENT_DAY_END:{bizDate}` 业务日租约，只读取该日全部批次数、`AUTO` 批次数及成功创建批次的自动任务日志数；租约忙不写最终日志，等待后续小时重试，不自动补跑或修改批次。
+3. 无任何批次记 `WARNING/P1`；自动批次数与 `processed_count > 0 AND fail_count = 0` 的 `PAYMENT_DAY_END` 日志数不一致记 `WARNING/P2`；人工批次覆盖，或自动批次与日志数一致记 `SUCCESS/P3`。结论只表示本地两类记录数量勾稽，不表示资金、渠道账单或正式关账一致。
+4. 最终巡检日志号固定为 `PTL-DAY-END-PATROL-{yyyyMMdd}`，依赖既有唯一键实现同业务日跨实例去重；技术失败使用独立随机日志号和稳定码 `PAYMENT_DAY_END_PATROL_FAILED`，原异常继续抛出，使后续小时恢复后仍可写入最终结论。
+5. 新增服务、调度、配置与 MyBatis 集成回归；定向累计 `103` 项、后端全量 `1024` 项、XML 与补丁检查通过。代码提交为 `bac0c42f feat(payment-core): patrol day-end consistency`。
+6. 本轮无 HTTP、前端、schema、索引或迁移变化。统一门禁复判仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4`；默认关闭、固定模拟数据和 H2 测试不证明目标 MySQL 多实例时序、生产任务已启用、告警已送达、账期数据水位完整或 release 可放行。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
