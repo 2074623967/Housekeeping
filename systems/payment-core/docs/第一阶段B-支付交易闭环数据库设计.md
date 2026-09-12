@@ -1567,6 +1567,17 @@ t_order
 
 迁移：`database/migrations/2026-09-12-add-task-run-business-reference.sql` 只增加列和索引，不回填历史记录。自动日终巡检以 `task_code=PAYMENT_DAY_END`、同一 `biz_date`、成功创建条件和 `business_ref_no=batch_no` 勾稽 `AUTO` 批次，并检测双向悬空及重复关联。目标 MySQL 执行前仍需预查字段冲突、评估在线 DDL 和锁等待、准备备份与回滚；本地 schema 与 H2 结果不代表生产迁移完成。
 
+### 4.182 支付日终待收口支付快照边界
+
+表：`t_payment_day_end_batch`
+
+| 字段 | 设计 |
+| --- | --- |
+| `pending_payment_count` | 新建 schema 为 `INT NOT NULL DEFAULT 0`；保存该批次采集到的待收口支付单量 |
+| `pending_payment_amount` | 新建 schema 为 `DECIMAL(18,2) NOT NULL DEFAULT 0.00`；保存同一集合的支付金额 |
+
+待收口集合固定为 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW`。迁移 `database/migrations/2026-09-12-add-day-end-pending-payment.sql` 对存量表以可空列新增，不回填历史零值；历史 `NULL` 表示缺少当时快照，必须通过 `RERUN` 形成新批次。该设计避免用支付单当前状态倒推旧账期事实，也不把本地状态快照解释为渠道、事件或资金数据水位。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

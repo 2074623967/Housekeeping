@@ -2594,6 +2594,15 @@
 5. 执行 Mapper、巡检与任务中心联合定向 `82` 项、payment-core 后端全量 `1029` 项、Mapper XML 和补丁检查；本轮无前端、HTTP、schema、索引或迁移变化。
 6. 目标环境另需验证 MySQL 执行计划、最小写库权限和存量畸形日志分布；本地通过不证明调度身份可信、生产巡检启用或资金一致。
 
+### 4.328 支付日终待收口支付事实保护
+
+1. 使用正式 `PaymentDayEndMapper.xml` 构造 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW / RISK_BLOCKED / RISK_REJECTED`，验证只统计前三种状态及其金额，明确风控终止状态不得混入。
+2. 构造仅有待收口支付的业务日，验证新批次为 `WARNING/warn`，摘要包含数量和金额，总览为“禁止进入对账”，`PENDING_PAYMENT` 告警下钻 `/payments?status=DAY_END_PENDING`。
+3. 构造历史批次字段为 `NULL`，验证总览显示“日终事实不完整”、批次显示 `UNKNOWN`，不允许按零值生成 `READY`。
+4. 对支付列表、计数和 CSV 导出统一使用 `DAY_END_PENDING`，验证三条查询均只返回 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW`，普通单状态筛选语义不变。
+5. 核对两份 schema 与独立迁移；执行日终/支付 Mapper 与服务定向测试、后端全量测试、管理端单测和生产构建，并校验 MyBatis XML 与补丁格式。
+6. 本地测试只验证 SQL 集合、快照、页面和准入规则，不得据此声明渠道回调全部到齐、生产迁移完成、资金一致或真实关账完成。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

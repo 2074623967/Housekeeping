@@ -13132,3 +13132,33 @@
 1. 新谓词与任务中心当前自动日终写入形态一致，避免宽松计数把畸形日志当作批次创建证据。
 2. 固定 `triggered_by` 是本地系统身份声明而非可信认证；生产仍需最小写库权限、日志审计和数据抽样，不能仅凭字符串证明真实调度来源。
 3. 本轮仍未补齐上游数据水位、渠道账单、账务或资金核验，也不构成生产巡检启用、告警处置或 release 放行证明。
+
+## 484. 2026-09-12 支付日终待收口支付事实 V1.0 验证
+
+### 484.1 本轮补强
+
+1. 日终批次新增 `pendingPaymentCount / pendingPaymentAmount`，明确统计 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW` 三种本地非终态。
+2. 批次状态、系统摘要、总览告警和对账准入统一纳入待收口支付；新增 `PENDING_PAYMENT` 告警与支付单精确下钻。
+3. 支付列表、计数和导出支持查询态 `DAY_END_PENDING`；管理端增加对应筛选选项与批次事实展示。
+4. 两份 schema 增加非空零默认字段；独立迁移为存量批次保留可空字段，历史空值按事实不完整处理，要求 `RERUN`。
+
+### 484.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 状态集合 | H2 MySQL 兼容测试验证只统计 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW`，排除 `RISK_BLOCKED / RISK_REJECTED` |
+| 列表下钻 | `DAY_END_PENDING` 在列表、计数和 CSV 导出返回同一三状态集合 |
+| 批次与准入 | 仅有待收口支付时批次为 `WARNING/warn`，总览禁止进入对账并返回 P1 告警 |
+| 历史边界 | 新字段为 `NULL` 的历史批次显示 `UNKNOWN`，总览为“日终事实不完整” |
+| 定向后端测试 | `PaymentDayEndServiceImplTest` 与两组 Mapper 集成共 `39` 项通过 |
+| payment-core 后端全量测试 | `1033` 项通过，`0` failures、`0` errors、`0` skipped |
+| 管理端验证 | `28` 项单测通过；Vite 生产构建通过，保留既有单包大于 `500 kB` 提示 |
+| XML 与补丁检查 | `PaymentDayEndMapper.xml`、`PaymentMapper.xml` 与 `git diff --check` 通过 |
+| 统一门禁复判 | `canPromoteTestToMaster=true`、`canCreateRelease=false`、统一 `blockerCount=1`、内部 `releaseBlockerCount=4` |
+| 实现提交 | `5676b4ef feat(payment-core): snapshot pending day-end payments` |
+
+### 484.3 当前判断
+
+1. 本轮弥补的是 payment-core 可直接证明的本地状态缺口，不是完整跨系统数据水位协议。
+2. `RISK_REVIEW` 等待外部人工复核，属于未完成；`RISK_BLOCKED / RISK_REJECTED` 已有终止结论，不应误报为资金待确认。
+3. 本地测试不证明目标 MySQL 迁移已完成、渠道回调全部到齐、资金或渠道账单一致；统一门禁仍需按现有治理证据重新复判。

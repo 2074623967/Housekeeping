@@ -4383,6 +4383,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 状态与计数矛盾、处理数不是一、失败数非零或触发人不匹配的日志不构成关联，并按既有规则表现为自动批次缺少合法成功日志；巡检形成 `WARNING/P2`。
 5. 本契约不改变 HTTP、DTO、schema、索引或前端。系统身份字符串不是认证凭证，生产仍需数据库权限与审计控制；该证据只覆盖本地批次创建留痕。
 
+### 14.311 支付日终待收口支付事实契约
+
+1. 日终批次新增 `pendingPaymentCount / pendingPaymentAmount`，只统计目标业务日创建且当前状态为 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW` 的支付单；这是明确非终态集合，不使用“非成功”兜底推断。
+2. `RISK_BLOCKED / RISK_REJECTED` 已取得明确风控终止结论，不计入待收口支付；`SUCCESS / CLOSED / FAIL` 同样不计入。该口径不改变支付状态机，也不把风控终止自动改写为 `CLOSED`。
+3. 任一待收口支付会使新批次持久化为 `WARNING/warn`，并使总览与批次对账准入为禁止。总览新增 `PENDING_PAYMENT` 告警，动作路由为 `/payments?status=DAY_END_PENDING`。
+4. `GET /api/payments` 与导出接口接受虚拟筛选值 `DAY_END_PENDING`，服务端将其精确展开为上述三个状态；该值只用于列表查询，不是支付单可持久化状态。
+5. 数据库迁移对历史批次保留 `pending_payment_count / pending_payment_amount=NULL`，表示当时未采集。总览和批次不得把空值展示为零或“可进入对账”，必须提示使用 `RERUN` 生成完整新快照。
+6. 这些字段只证明 payment-core 在跑批事务读取时的本地支付状态，不证明渠道回调已全部到齐、跨系统数据水位完整、资金到账、渠道账单一致或正式关账完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
