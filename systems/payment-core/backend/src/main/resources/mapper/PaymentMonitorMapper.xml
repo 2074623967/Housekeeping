@@ -20,13 +20,14 @@
                ) AS alertCount
         FROM (
             SELECT COUNT(1) AS total_count,
-                   SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS success_count,
+                   COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END), 0) AS success_count,
                    CASE WHEN COUNT(1) = 0 THEN 0
                         ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
                    END AS success_rate,
                    COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0) AS success_amount,
-                   SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) AS pending_payment_count,
-                   SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) AS closed_payment_count
+                   COALESCE(SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END), 0)
+                       AS pending_payment_count,
+                   COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END), 0) AS closed_payment_count
             FROM t_payment_order
         ) payment_summary
                  CROSS JOIN (

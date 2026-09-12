@@ -97,6 +97,24 @@ class PaymentMonitorMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldReturnZeroValuesWhenPaymentSummaryIsEmpty() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("DELETE FROM t_payment_order");
+
+            PaymentMonitorSummaryDTO summary = session.getMapper(PaymentMonitorMapper.class).findSummary();
+
+            assertEquals(Integer.valueOf(0), summary.getTotalCount());
+            assertEquals(Integer.valueOf(0), summary.getSuccessCount());
+            assertEquals(Integer.valueOf(0), summary.getPendingPaymentCount());
+            assertEquals(Integer.valueOf(0), summary.getClosedPaymentCount());
+            assertEquals("0.00%", summary.getSuccessRate());
+            assertEquals("¥0.00", summary.getSuccessAmount());
+            assertEquals(Integer.valueOf(2), summary.getAlertCount());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
