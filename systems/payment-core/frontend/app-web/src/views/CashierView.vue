@@ -210,7 +210,7 @@ const selectedChannelCode = computed(() => resolvePaymentChannelCode(selectedPay
 const submissionPending = computed(() => {
   return isPaymentSubmissionPending(
     cashier.value?.status,
-    latestQueriedDetail.value?.latestAttemptStatus
+    latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
   );
 });
 const canQueryPayment = computed(() => canQueryPaymentChannel(
@@ -278,7 +278,7 @@ const canClose = computed(() => Boolean(cashier.value?.paymentOrderId)
   && canClosePaymentLocally(
     cashier.value?.status,
     latestQueriedDetail.value?.channelTransactionNo,
-    latestQueriedDetail.value?.latestAttemptStatus
+    latestQueriedDetail.value?.latestAttemptStatus || cashier.value?.latestAttemptStatus
   ));
 const businessEntryPath = computed(() => `/${resolveBizType()}`);
 const countdownRiskLevel = computed(() => {
