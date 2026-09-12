@@ -4513,6 +4513,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 管理端在对应人工候选数为零时禁用按钮，非零时展示候选数。该前端保护不替代服务端再次查询资格，也不承诺点击时处理数必然等于此前总览快照。
 5. 本轮不新增或修改 HTTP 字段、请求、响应、候选 SQL 与任务状态机；页面和固定 mock 不证明真实渠道查询、回调收口、退款到账或资金一致。
 
+### 14.326 失败事件重发资格分层契约
+
+1. `GET /api/payment-task-center/overview` 保留 `failedEventCount`，新增 `retryableFailedEventCount / deadLetterEventCount`；分别表示 `FAILED + DEAD_LETTER` 总风险、`FAILED` 批量候选和 `DEAD_LETTER` 人工处置集合。
+2. 三项必须满足 `failedEventCount = retryableFailedEventCount + deadLetterEventCount`。`POST /api/payment-task-center/republish-failed-events` 和自动重发继续只查询 `publish_status = 'FAILED'`，不得处理 `DEAD_LETTER`，也不得信任页面回传数量。
+3. `focusAlerts` 的 `PAYMENT_EVENT` 告警同时返回三项数量。死信数大于零时严重等级为 `P1`、动作路由为 `/payment-events?publishStatus=DEAD_LETTER`；否则路由为 `/payment-events?publishStatus=FAILED`。
+4. 管理端按钮状态与文案使用 `retryableFailedEventCount`，总风险和死信数即使不可批量执行也必须持续展示。总览与实际执行之间的状态变化由执行端重新查询候选裁决。
+5. 本轮不新增数据库字段、索引或迁移。接口字段只描述 payment-core 本地事件状态和任务资格，不证明真实 MQ 已重投、下游已消费、账务已处理或资金一致。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
