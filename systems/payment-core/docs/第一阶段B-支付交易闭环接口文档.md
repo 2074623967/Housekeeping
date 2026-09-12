@@ -4053,6 +4053,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 服务层与前端应消费 Mapper 已确定的数组顺序，不得在缺少完整裁决字段时自行重排；本契约不改变成功率、成功金额、待处理数或风险等级计算。
 4. 稳定排序只描述同一查询快照中的展示顺序，不承诺跨请求快照一致性，也不构成真实渠道成功率、渠道稳定性、支付成功、账务入账或资金对账证明。
 
+### 14.270 支付监控告警显式优先级契约
+
+1. `GET /api/payment-monitor/overview` 的 `alerts` 在同时命中多类告警时，固定按 `WAIT_CALLBACK_TIMEOUT`、`REFUND_FAIL`、`CHANNEL_DISABLED` 返回，对应待回调 P1、退款失败 P1、停用渠道 P2。
+2. Mapper 使用内部 `alertSortNo` 表达该顺序，字段只参与 SQL 排序，不进入 `PaymentAlertItemDTO` 或 JSON 响应；现有告警类型、标题、内容、等级、影响数、建议动作和跳转路由不变。
+3. 前端应按响应数组原序展示并选择首项，不得依赖 `UNION ALL` 分支书写顺序，也不得用缺少业务规则的文本排序覆盖后端优先级。
+4. 固定顺序不表示告警已核验或处置完成，也不构成渠道恢复、退款到账、支付成功、账务入账或资金对账证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

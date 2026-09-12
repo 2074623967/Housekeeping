@@ -2234,6 +2234,14 @@
 4. 执行正式 Mapper 与监控服务定向测试、payment-core 后端全量测试、Mapper XML 与补丁检查；本轮无前端变化，不重复声明前端构建为本批验证。
 5. 另行验证生产 MySQL 聚合排序执行计划和动态数据下的刷新行为；本地 H2 不得证明渠道数据完整、真实成功率、渠道稳定性、支付成功、账务入账或资金一致性。
 
+### 4.287 支付监控告警显式优先级保护
+
+1. 使用正式 `PaymentMonitorMapper.xml` 同时构造至少一笔 `WAIT_CALLBACK` 支付、一笔 `FAIL` 退款和一个 `DISABLED` 渠道，确保三段 `UNION ALL` 均返回告警。
+2. 验证 `findAlerts` 固定返回 `WAIT_CALLBACK_TIMEOUT / REFUND_FAIL / CHANNEL_DISABLED`，并核对前两项为 `P1`、第三项为 `P2`。
+3. 回归 `PaymentAlertItemDTO` 不暴露内部 `alertSortNo`，监控服务继续原样装配告警数组；核对管理端按数组顺序渲染并以首项初始化告警快照。
+4. 执行正式 Mapper 与监控服务定向测试、payment-core 后端全量测试、Mapper XML 与补丁检查；本轮没有前端代码变化，不重复声明前端构建为本批验证。
+5. 另行验证生产 MySQL 联合查询计划和生产告警事实；本地 H2 不得证明告警处置完成、渠道恢复、退款到账、支付成功、账务入账或资金一致性。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

@@ -11935,3 +11935,32 @@
 1. 对同一统计快照，总量和成功量相同的渠道分组具有按完整分组键裁决的确定阅读顺序。
 2. 该排序不提供多个请求之间的数据库快照；支付单新增或状态变化会合理改变聚合值和榜单顺序。
 3. 本地 H2 不证明生产 MySQL 聚合排序计划、渠道数据完整、真实成功率、渠道稳定性、支付成功、账务入账或资金对账一致性；release 四项真实治理阻断不变。
+
+## 443. 2026-09-12 支付监控告警显式优先级 V1.0 验证
+
+### 443.1 本轮补强
+
+1. `PaymentMonitorMapper.findAlerts` 的三段 `UNION ALL` 分别增加内部 `alertSortNo=1/2/3`，并在联合结果末尾显式 `ORDER BY alertSortNo ASC`。
+2. 排序保持待回调 P1、退款失败 P1、停用渠道 P2 的既有业务编排，避免依赖数据库未承诺的联合分支返回顺序。
+3. `alertSortNo` 只服务 Mapper 内部排序，`PaymentAlertItemDTO` 与 `GET /api/payment-monitor/overview` 响应字段保持不变。
+
+### 443.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与监控服务定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest` `3` 项通过，`0` failures、`0` errors、`0` skipped |
+| 三类告警顺序 | 同时命中时固定返回 `WAIT_CALLBACK_TIMEOUT / REFUND_FAIL / CHANNEL_DISABLED` |
+| 等级映射 | 前两项均为 `P1`，第三项为 `P2` |
+| 前端消费核对 | 管理端按 `overview.alerts` 原序渲染，并以首项初始化告警快照，未在前端二次排序 |
+| DTO 与服务回归 | 内部排序号未进入 DTO；监控服务继续装配摘要、趋势、渠道指标和告警 |
+| payment-core 后端全量测试 | `960` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `b8afdb62 fix(payment-core): stabilize monitor alert ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 443.3 当前判断
+
+1. 三类告警同时存在时，运营页面首项和列表顺序具有明确、可回归的处理优先级，不再依赖 `UNION ALL` 的偶然返回顺序。
+2. 固定类型顺序不按影响笔数动态重排；影响笔数仍作为独立字段展示，若未来需要动态优先级，应另行定义等级、数量和时间的组合规则。
+3. 本地 H2 不证明生产告警数据完整、处置完成、渠道恢复、退款到账、支付成功或资金对账一致性；release 四项真实治理阻断不变。
