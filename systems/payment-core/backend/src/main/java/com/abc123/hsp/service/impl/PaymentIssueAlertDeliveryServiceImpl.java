@@ -636,17 +636,22 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         String sinceTime = currentBusinessTime()
                 .minusMinutes(PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES)
                 .format(ALERT_LOG_TIME_FORMATTER);
-        int failedDeliveryCount = paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(
-                providerConfig.getProviderCode(),
-                channelCode,
-                sinceTime
-        );
-        if (failedDeliveryCount < PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD) {
+        List<String> recentDeliveryStatuses = paymentTaskCenterMapper
+                .findRecentIssueAlertProviderDeliveryStatusesSince(
+                        providerConfig.getProviderCode(),
+                        channelCode,
+                        sinceTime,
+                        PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD
+                );
+        if (recentDeliveryStatuses == null
+                || recentDeliveryStatuses.size() < PROVIDER_CIRCUIT_BREAKER_FAILURE_THRESHOLD
+                || recentDeliveryStatuses.stream().anyMatch(this::isSuccessfulProviderDeliveryStatus)) {
             return null;
         }
         return buildFailureResult(
                 "PROVIDER_CIRCUIT_OPEN",
-                String.format("供应商近 %d 分钟内失败 %d 次，已临时熔断并切换候选供应商", PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES, failedDeliveryCount),
+                String.format("供应商近 %d 分钟内连续失败 %d 次，已临时熔断并切换候选供应商",
+                        PROVIDER_CIRCUIT_BREAKER_WINDOW_MINUTES, recentDeliveryStatuses.size()),
                 item
         );
     }

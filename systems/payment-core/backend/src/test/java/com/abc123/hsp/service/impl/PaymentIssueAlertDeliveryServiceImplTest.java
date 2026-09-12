@@ -1215,8 +1215,16 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10),
                 buildProvider("ALERT_IM_BACKUP", "企业微信告警机器人-备", "wecom-bot-backup", "TPL_PAYMENT_ISSUE_IM_V2", "DEFAULT", 20)
         ));
-        when(paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_PRIMARY"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(3);
-        when(paymentTaskCenterMapper.countIssueAlertProviderFailedDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_BACKUP"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(0);
+        when(paymentTaskCenterMapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                org.mockito.ArgumentMatchers.eq("ALERT_IM_PRIMARY"),
+                org.mockito.ArgumentMatchers.eq("IM"), any(String.class),
+                org.mockito.ArgumentMatchers.eq(3)))
+                .thenReturn(Arrays.asList("SEND_EXCEPTION", "FAILED", "FAILED"));
+        when(paymentTaskCenterMapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                org.mockito.ArgumentMatchers.eq("ALERT_IM_BACKUP"),
+                org.mockito.ArgumentMatchers.eq("IM"), any(String.class),
+                org.mockito.ArgumentMatchers.eq(3)))
+                .thenReturn(Collections.<String>emptyList());
         when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(buildDeliveryResult("IM-RECEIPT-BACKUP", "ACCEPTED", "备用供应商已接单", "[IM-BACKUP] ISSUE-001"));
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
@@ -1232,6 +1240,39 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                         && "PROVIDER_CIRCUIT_OPEN".equals(log.getProviderDeliveryStatus())));
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-备".equals(log.getProviderName()) && "已派发".equals(log.getAlertStatus())));
+    }
+
+    @Test
+    void shouldCallRecoveredProviderWhenSuccessBreaksFailureSequence() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_PRIMARY", "企业微信告警机器人-主", "wecom-bot-primary",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 10)
+        ));
+        when(paymentTaskCenterMapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                org.mockito.ArgumentMatchers.eq("ALERT_IM_PRIMARY"),
+                org.mockito.ArgumentMatchers.eq("IM"), any(String.class),
+                org.mockito.ArgumentMatchers.eq(3)))
+                .thenReturn(Arrays.asList("FAILED", "SEND_EXCEPTION", "ACCEPTED"));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenReturn(buildDeliveryResult(
+                        "IM-RECOVERED-001", "ACCEPTED", "主供应商恢复受理", "[IM-PRIMARY] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts("payment-core-admin");
+
+        verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
     }
 
     @Test

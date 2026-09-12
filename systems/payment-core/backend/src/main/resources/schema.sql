@@ -1093,6 +1093,7 @@ CREATE TABLE t_payment_issue_alert_log (
     KEY idx_issue_alert_source_channel (source_alert_no, alert_channel, alert_status),
     KEY idx_issue_alert_issue (issue_no, created_at),
     KEY idx_issue_alert_ack (ack_status, created_at),
+    KEY idx_issue_alert_provider_delivery (provider_code, alert_channel, created_at),
     KEY idx_issue_alert_receipt_query (
         provider_delivery_status, alert_status, next_receipt_query_at, receipt_query_count, created_at
     )

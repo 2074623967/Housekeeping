@@ -346,11 +346,71 @@ public class PaymentTaskCenterMapperIntegrationTest {
             }
 
             assertEquals(2, mapper.countFailedIssueAlertChannelDeliveries("PIA-ATTEMPT-SOURCE", "IM"));
-            assertEquals(2, mapper.countIssueAlertProviderFailedDeliveriesSince(
-                    "ALERT_IM_PRIMARY", "IM", "2000-01-01 00:00:00"));
+            assertEquals(Arrays.asList("SEND_EXCEPTION", "FAILED"),
+                    mapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                            "ALERT_IM_PRIMARY", "IM", "2000-01-01 00:00:00", 3));
             PaymentIssueAlertLogEntity latest =
                     mapper.findLatestIssueAlertChannelDeliveryLog("PIA-ATTEMPT-SOURCE", "IM");
             assertEquals("PIA-ATTEMPT-EXCEPTION", latest.getAlertNo());
+        }
+    }
+
+    @Test
+    void shouldReturnOnlyRecentConsecutiveProviderAttemptEvidence() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("INSERT INTO t_payment_issue_alert_log("
+                        + "alert_no, source_alert_no, issue_no, alert_channel, alert_status, ack_status, "
+                        + "provider_code, provider_delivery_status, created_at) VALUES "
+                        + "('PIA-CIRCUIT-RECOVERED-SOURCE', NULL, 'ISSUE-CIRCUIT-RECOVERED', "
+                        + "'IN_APP_OUTBOX', '派发失败', '已确认', NULL, NULL, "
+                        + "TIMESTAMPADD(MINUTE, -20, NOW())),"
+                        + "('PIA-CIRCUIT-RECOVERED-F1', 'PIA-CIRCUIT-RECOVERED-SOURCE', "
+                        + "'ISSUE-CIRCUIT-RECOVERED', 'IM', '派发失败', '无需回执', "
+                        + "'ALERT_IM_RECOVERED', 'FAILED', TIMESTAMPADD(MINUTE, -7, NOW())),"
+                        + "('PIA-CIRCUIT-RECOVERED-F2', 'PIA-CIRCUIT-RECOVERED-SOURCE', "
+                        + "'ISSUE-CIRCUIT-RECOVERED', 'IM', '派发失败', '无需回执', "
+                        + "'ALERT_IM_RECOVERED', 'SEND_EXCEPTION', TIMESTAMPADD(MINUTE, -6, NOW())),"
+                        + "('PIA-CIRCUIT-RECOVERED-F3', 'PIA-CIRCUIT-RECOVERED-SOURCE', "
+                        + "'ISSUE-CIRCUIT-RECOVERED', 'IM', '派发失败', '无需回执', "
+                        + "'ALERT_IM_RECOVERED', 'FAILED', TIMESTAMPADD(MINUTE, -5, NOW())),"
+                        + "('PIA-CIRCUIT-RECOVERED-SUCCESS', 'PIA-CIRCUIT-RECOVERED-SOURCE', "
+                        + "'ISSUE-CIRCUIT-RECOVERED', 'IM', '已派发', '待确认', "
+                        + "'ALERT_IM_RECOVERED', 'ACCEPTED', TIMESTAMPADD(MINUTE, -4, NOW())),"
+                        + "('PIA-CIRCUIT-RECOVERED-F4', 'PIA-CIRCUIT-RECOVERED-SOURCE', "
+                        + "'ISSUE-CIRCUIT-RECOVERED', 'IM', '派发失败', '无需回执', "
+                        + "'ALERT_IM_RECOVERED', 'FAILED', TIMESTAMPADD(MINUTE, -3, NOW())),"
+                        + "('PIA-CIRCUIT-RECOVERED-F5', 'PIA-CIRCUIT-RECOVERED-SOURCE', "
+                        + "'ISSUE-CIRCUIT-RECOVERED', 'IM', '派发失败', '无需回执', "
+                        + "'ALERT_IM_RECOVERED', 'SEND_EXCEPTION', TIMESTAMPADD(MINUTE, -2, NOW())),"
+                        + "('PIA-CIRCUIT-OPEN-SOURCE', NULL, 'ISSUE-CIRCUIT-OPEN', "
+                        + "'IN_APP_OUTBOX', '派发失败', '已确认', NULL, NULL, "
+                        + "TIMESTAMPADD(MINUTE, -20, NOW())),"
+                        + "('PIA-CIRCUIT-OPEN-F1', 'PIA-CIRCUIT-OPEN-SOURCE', 'ISSUE-CIRCUIT-OPEN', "
+                        + "'IM', '派发失败', '无需回执', 'ALERT_IM_OPEN', 'FAILED', "
+                        + "TIMESTAMPADD(MINUTE, -3, NOW())),"
+                        + "('PIA-CIRCUIT-OPEN-F2', 'PIA-CIRCUIT-OPEN-SOURCE', 'ISSUE-CIRCUIT-OPEN', "
+                        + "'IM', '派发失败', '无需回执', 'ALERT_IM_OPEN', 'SEND_EXCEPTION', "
+                        + "TIMESTAMPADD(MINUTE, -2, NOW())),"
+                        + "('PIA-CIRCUIT-OPEN-F3', 'PIA-CIRCUIT-OPEN-SOURCE', 'ISSUE-CIRCUIT-OPEN', "
+                        + "'IM', '派发失败', '无需回执', 'ALERT_IM_OPEN', 'FAILED', "
+                        + "TIMESTAMPADD(MINUTE, -1, NOW())),"
+                        + "('PIA-CIRCUIT-OPEN-ORPHAN', 'PIA-CIRCUIT-MISSING', 'ISSUE-CIRCUIT-OPEN', "
+                        + "'IM', '派发失败', '无需回执', 'ALERT_IM_OPEN', 'SEND_EXCEPTION', NOW()),"
+                        + "('PIA-CIRCUIT-OPEN-WRONG-ISSUE', 'PIA-CIRCUIT-OPEN-SOURCE', 'ISSUE-OTHER', "
+                        + "'IM', '派发失败', '无需回执', 'ALERT_IM_OPEN', 'SEND_EXCEPTION', NOW()),"
+                        + "('PIA-CIRCUIT-OPEN-INCONSISTENT', 'PIA-CIRCUIT-OPEN-SOURCE', "
+                        + "'ISSUE-CIRCUIT-OPEN', 'IM', '已派发', '待确认', 'ALERT_IM_OPEN', "
+                        + "'FAILED', NOW())");
+            }
+
+            assertEquals(Arrays.asList("SEND_EXCEPTION", "FAILED", "ACCEPTED"),
+                    mapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                            "ALERT_IM_RECOVERED", "IM", "2000-01-01 00:00:00", 3));
+            assertEquals(Arrays.asList("FAILED", "SEND_EXCEPTION", "FAILED"),
+                    mapper.findRecentIssueAlertProviderDeliveryStatusesSince(
+                            "ALERT_IM_OPEN", "IM", "2000-01-01 00:00:00", 3));
         }
     }
 

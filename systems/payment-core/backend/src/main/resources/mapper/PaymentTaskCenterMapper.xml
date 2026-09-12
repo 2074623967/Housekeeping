@@ -1212,14 +1212,32 @@
         LIMIT 1
     </select>
 
-    <select id="countIssueAlertProviderFailedDeliveriesSince" resultType="int">
-        SELECT COUNT(1)
-        FROM t_payment_issue_alert_log
-        WHERE provider_code = #{providerCode}
-          AND alert_channel = #{alertChannel}
-          AND created_at &gt;= STR_TO_DATE(#{sinceTime}, '%Y-%m-%d %H:%i:%s')
-          AND alert_status = '派发失败'
-          AND provider_delivery_status IN ('FAILED', 'SEND_EXCEPTION')
+    <select id="findRecentIssueAlertProviderDeliveryStatusesSince" resultType="string">
+        SELECT delivery.provider_delivery_status
+        FROM t_payment_issue_alert_log delivery
+        WHERE delivery.provider_code = #{providerCode}
+          AND delivery.alert_channel = #{alertChannel}
+          AND delivery.created_at &gt;= STR_TO_DATE(#{sinceTime}, '%Y-%m-%d %H:%i:%s')
+          AND (
+            (
+              delivery.alert_status = '已派发'
+              AND delivery.provider_delivery_status IN ('ACCEPTED', 'DELIVERED')
+            )
+            OR (
+              delivery.alert_status = '派发失败'
+              AND delivery.provider_delivery_status IN ('FAILED', 'SEND_EXCEPTION')
+            )
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM t_payment_issue_alert_log source_alert
+            WHERE source_alert.alert_no = delivery.source_alert_no
+              AND source_alert.issue_no = delivery.issue_no
+              AND source_alert.alert_channel = 'IN_APP_OUTBOX'
+              AND source_alert.source_alert_no IS NULL
+          )
+        ORDER BY delivery.created_at DESC, delivery.id DESC
+        LIMIT #{limit}
     </select>
 
     <select id="findEnabledAlertProvidersByChannel" resultType="com.abc123.hsp.dto.PaymentAlertProviderConfigDTO">
