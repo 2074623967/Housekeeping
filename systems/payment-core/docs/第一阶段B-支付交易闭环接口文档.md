@@ -949,6 +949,7 @@ POST /api/refunds/retry
 ```json
 {
   "refundOrderId": "REF20260720223600123",
+  "refundAttemptNo": "RFA20260720223600123",
   "channelRefundNo": "WXREF202607200001",
   "refundStatus": "SUCCESS",
   "timestamp": "1753022160",
@@ -968,8 +969,8 @@ POST /api/refunds/retry
 
 实现说明：
 
-1. 回调签名原文为 `channel|refundOrderId|refundStatus|channelRefundNo|timestamp|nonce`，渠道规范化为小写；签名算法、时间窗和 nonce 防重规则与支付回调共享。
-2. 后端锁定退款单并核对实际受理渠道与渠道退款号，只有 `SUCCESS/FAIL` 可从 `PROCESSING` 收口；相同终态幂等返回，相反终态返回冲突。
+1. 回调签名原文为 `channel|refundOrderId|refundAttemptNo|refundStatus|channelRefundNo|timestamp|nonce`，渠道规范化为小写；签名算法、时间窗和 nonce 防重规则与支付回调共享。
+2. 后端锁定退款单并核对当前退款尝试、实际受理渠道与渠道退款号，只有 `SUCCESS/FAIL` 可从 `PROCESSING` 收口；相同终态幂等返回，相反终态返回冲突。
 3. `SUCCESS` 会写入 `success_at`，`retry` 会清空成功时间；可信回调操作人固定为 `channel-callback`。
 4. 后台不再提供模拟成功/失败接口。当前通用回调契约仍需由真实渠道适配器映射，主动查单、渠道流水和到账核验尚未完成。
 
@@ -3881,7 +3882,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. payment-core 调用 `POST /api/gateway/refunds/submit` 与 `POST /api/gateway/refunds/query` 时新增必填 `refundAttemptNo`，长度上限 `64` 且拒绝 ISO 控制字符；gateway-access 原样转发给上游，作为该轮渠道侧商户退款请求身份。
 3. `GET /api/refunds/{refundOrderId}` 的响应新增 `attempts` 数组；元素包含 `refundAttemptNo / channelCode / channelRefundNo / attemptStatus / attemptStatusType / submittedAt / completedAt / createdAt`。既有退款单字段保持当前尝试投影语义。
 4. `UNKNOWN` 尝试没有渠道退款号时允许按 `refundAttemptNo + refundOrderId + channelCode` 主动查单；可信结果返回渠道退款号后先恢复当前尝试受理事实，再确认未知 outbox 和退款终态。
-5. 回调继续兼容 `refundOrderId + channelRefundNo`，但服务端会查找渠道退款号所属历史尝试；若不属于当前最新尝试，返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`，不得更新退款终态。
+5. 回调请求必须携带当前 `refundAttemptNo`；服务端同时查找已有渠道退款号的历史尝试归属。任一身份不属于当前最新尝试时返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`，不得更新退款终态。
 
 ### 14.247 退款主动查单尝试快照一致性契约
 
@@ -3889,6 +3890,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 外部调用期间退款终态失败并已创建新尝试时，旧查单结果固定返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`；即使渠道退款号尚未被任何历史尝试绑定，也不得将旧结果补录到新尝试。
 3. 拒绝发生在尝试受理绑定、退款单投影更新、UNKNOWN outbox 确认、退款终态更新和操作日志写入之前；共享渠道限流已在外部调用前占用的配额不回退。
 4. 渠道查询成功、失败和处理中日志均关联发起查询时的 `refundAttemptNo`；自动补偿退避仅统计当前尝试的 `CHANNEL_QUERY / CHANNEL_QUERY_FAILED`，不再按时间边界推断轮次。
+
+### 14.248 退款回调尝试身份契约
+
+1. `POST /api/refunds/callback/{channel}` 请求新增必填 `refundAttemptNo`，规范化后长度为 `1..64` 且原值不得包含 ISO 控制字符；非法输入返回 `REFUND_CALLBACK_REQUEST_INVALID`，并在验签和数据库访问前失败。
+2. 退款回调签名原文调整为 `channel|refundOrderId|refundAttemptNo|refundStatus|channelRefundNo|timestamp|nonce`；支付回调签名原文不变。渠道适配器必须按新原文生成签名，不得在验签后另行补写尝试号。
+3. 验签通过后，服务在退款单行锁内要求请求尝试号等于当前最新尝试号；不一致固定返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`。该校验先于历史渠道退款号查询、UNKNOWN 受理恢复、退款投影和终态更新。
+4. 因此旧 `UNKNOWN` 尝试即使从未绑定过 `channelRefundNo`，其首次晚到回调也不能把渠道受理号写入新尝试。已有渠道退款号的历史归属查询继续作为第二道一致性校验。
+5. 本契约不证明真实渠道已经携带或签署 `refundAttemptNo`；上线前必须完成渠道适配、签名向量、乱序回调及生产密钥联调，旧版回调调用方需同步升级。
 
 ## 15. 结论
 

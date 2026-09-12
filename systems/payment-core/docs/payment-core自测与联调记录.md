@@ -11323,3 +11323,26 @@
 1. 退款查询事实和自动退避已使用确定的尝试身份，不再依赖秒级时间近似关联。
 2. 单机 H2/Mockito 证明当前 Mapper 与服务分支，不证明生产 MySQL 在线 DDL、历史回填行数、多实例锁时序或真实渠道超时返回；上线前仍需备份、抽样和回滚演练。
 3. 本轮不证明真实渠道受理、退款到账、渠道账单或财务对账一致性，release 四项真实阻断不变。
+
+## 421. 2026-09-12 退款首次回调轮次隔离 V1.0 验证
+
+### 421.1 本轮补强
+
+1. 退款回调请求新增必填 `refundAttemptNo`，最大长度 `64`，并在裁剪前拒绝控制字符；非法尝试号在验签和 Mapper 访问前失败。
+2. 退款回调签名原文加入尝试号，锁内渠道结果处理要求回调尝试号等于当前最新尝试号；支付回调签名原文保持不变。
+3. 旧 UNKNOWN 尝试即使没有历史渠道退款号，其首次晚到回调也会在历史归属查询、受理绑定、outbox 确认、退款终态和日志写入前被拒绝。
+
+### 421.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 定向测试 | `RefundControllerTest,RefundServiceImplTest,PaymentCallbackSignatureServiceImplTest` 共 `69` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 后端全量测试 | `934` 项通过，`0` failures、`0` errors、`0` skipped |
+| 补丁检查 | `git diff --check` 通过；本轮无 Mapper、schema、迁移或前端变化 |
+| 代码提交 | `c853baac fix(payment-core): bind refund callbacks to attempts` |
+
+### 421.3 当前判断
+
+1. 退款查单与回调现在都在锁内使用明确尝试身份，UNKNOWN 首次回调不再依赖尚未形成的渠道退款号判断轮次。
+2. 这是退款回调协议的非兼容升级，实际接入前必须同步渠道适配器和签名向量；本地 Mockito/HMAC 测试不证明真实渠道已支持。
+3. 本轮不证明生产多实例时序、真实退款回调送达、退款到账、渠道账单或财务对账一致性，release 四项真实阻断不变。

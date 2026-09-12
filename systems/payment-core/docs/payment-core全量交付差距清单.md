@@ -781,7 +781,7 @@
 
 ### 8.65 2026-09-10 退款可信回调收口进展
 
-1. 新增 `POST /api/refunds/callback/{channel}`，退款回调按 `channel|refundOrderId|refundStatus|channelRefundNo|timestamp|nonce` 验证渠道独立 HMAC-SHA256/RSA2 签名、时间窗和 nonce；支付回调原签名原文保持兼容。
+1. 初版新增 `POST /api/refunds/callback/{channel}`，当时退款回调按 `channel|refundOrderId|refundStatus|channelRefundNo|timestamp|nonce` 验证渠道独立 HMAC-SHA256/RSA2 签名、时间窗和 nonce；当前原文已由 8.253 增加 `refundAttemptNo`，支付回调原签名原文保持兼容。
 2. nonce 表由支付单专用字段泛化为 `biz_type + biz_no`，支付与退款仍共享 `(channel_code, nonce)` 唯一边界，存量数据迁移默认标记为 `PAYMENT`；双全量 schema、增量迁移和 Mapper 集成测试已同步。
 3. 回调事务锁定退款单，核对已绑定渠道和渠道退款号，仅允许明确 `SUCCESS/FAIL` 从 `PROCESSING` 收口；相同终态幂等返回、相反终态失败闭合，并以 `channel-callback` 写操作日志。
 4. 后端删除公开模拟成功/失败接口，管理端列表和详情移除人工“成功回调/失败回调”按钮；全量 `599` 个测试及 68 模块生产构建通过。当前仍缺真实渠道报文联调、退款主动查单、渠道流水对账、生产迁移和财务现场核验。
@@ -2094,6 +2094,13 @@
 2. `t_refund_operation_log` 新增可空 `refund_attempt_no` 和 `(refund_attempt_no, action_code, created_at)` 索引；渠道提交、查单、受理恢复及终态日志在已有上下文时写入明确尝试号，自动退避只聚合当前尝试号的 `CHANNEL_QUERY / CHANNEL_QUERY_FAILED`。
 3. 主动查单将调用前快照中的预期尝试号带入锁内复核；当前最新尝试已变化时返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`，不得绑定受理号、更新退款终态或写入新尝试日志。
 4. 增量迁移仅为“退款单恰好只有一轮尝试”的历史渠道日志回填尝试号；多尝试旧日志保持空值，避免按秒级时间伪造归属。payment-core 后端全量 `932` 项通过，Mapper XML 与补丁检查通过；未执行生产 MySQL 迁移或真实渠道并发联调，release 四项真实阻断不变。
+
+### 8.253 2026-09-12 退款首次回调轮次隔离进展
+
+1. 继续审计发现旧 `UNKNOWN` 尝试从未落过渠道退款号时，其首次晚到回调无法被既有历史归属查询识别，存在把旧尝试受理号绑定到当前新尝试的风险。
+2. 退款回调新增必填 `refundAttemptNo` 并纳入签名原文；锁定退款单后先校验该请求身份等于当前最新尝试，再执行渠道退款号历史归属、UNKNOWN 受理恢复和终态收口。
+3. 新增缺失、超长、控制字符及旧 UNKNOWN 尝试首次晚到回调用例；定向 `69` 项、payment-core 后端全量 `934` 项通过，均为 `0` failures、`0` errors、`0` skipped。
+4. 该变更是退款回调协议升级，不代表真实渠道已完成字段透传、签名切换、乱序通知或生产密钥验证；上线前仍须联调，release 四项真实治理阻断不变。
 
 ## 9. 最终结论
 
