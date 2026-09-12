@@ -12104,3 +12104,32 @@
 1. 渠道总量、成功率、成功金额和风险不再被尚未形成支付尝试的本地订单污染；多次尝试也不会放大支付单数量。
 2. 支付尝试只证明 payment-core 已记录提交动作，不证明渠道已受理；生产渠道表现仍需结合渠道流水、查询、回调和对账事实核验。
 3. 本轮没有前端代码变化，因此未重复执行管理端测试与构建；本地 H2 不证明生产 MySQL 执行计划、真实渠道成功率、账务入账、资金一致或生产稳定性，release 四项真实治理阻断不变。
+
+## 449. 2026-09-12 支付监控渠道下钻闭环 V1.0 验证
+
+### 449.1 本轮补强
+
+1. 支付单列表与 CSV 导出新增可选 `channelCode`，服务层统一规范化并拒绝超过 64 字符或包含控制字符的值。
+2. `PaymentMapper.findAll / count / findAllForExport` 共享渠道编码精确筛选，避免页面条目、总数和导出文件出现不同口径。
+3. 管理端支付单页从结构化路由查询初始化筛选；监控待回调渠道下钻同时携带渠道编码、支付方式和 `WAIT_CALLBACK`，P1 文案不再错误包含 P2 停用渠道。
+
+### 449.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端定向测试 | `PaymentControllerTest,PaymentServiceImplTest,PaymentMapperStateTransitionIntegrationTest` `99` 项通过，`0` failures、`0` errors、`0` skipped |
+| 渠道筛选一致性 | 正式 Mapper 验证列表、总数和导出只返回 `channelCode=wx_h5` 的一笔支付单 |
+| 参数边界 | 控制器透传渠道编码；服务层验证空白裁剪、64 字符上限和控制字符拒绝 |
+| 管理端单测 | `15` 项通过，含支付列表结构化路由查询断言 |
+| 管理端生产构建 | 通过；最大 JS 包约 `542.88 kB`，保留既有超过 `500 kB` 告警 |
+| payment-core 后端全量测试 | `965` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 新增列表/导出查询参数与管理端筛选；无状态机、schema、索引或迁移变化 |
+| 代码提交 | `7bba23d8 feat(payment-core): support channel payment drilldown` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 449.3 当前判断
+
+1. 待回调渠道指标现在可以下钻到同一渠道、同一支付方式和同一状态的支付单集合，页面列表与 CSV 使用同一筛选口径。
+2. P1 仅表示待回调与退款失败，停用渠道继续为 P2；本轮没有改变告警生成条件、等级或状态机。
+3. 本机测试不证明真实渠道、资金、生产数据或稳定性；发布说明正式化、正式签字审批、发布后现场核验和 `master` 稳定观察结束结论仍未形成。

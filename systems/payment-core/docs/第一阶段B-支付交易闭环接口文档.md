@@ -4096,6 +4096,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `channelMetrics[].pendingCount` 只统计 `WAIT_CALLBACK`，P1 风险与待收口提示使用同一条件；因此管理端以 `status=WAIT_CALLBACK` 下钻不得因未提交预付单产生空结果。
 4. `summary.pendingPaymentCount` 继续统计 `PREPAY_CREATED / WAIT_CALLBACK`，与渠道指标承担不同观察范围；支付尝试只证明本地提交事实，不等于渠道已受理、支付成功或资金已收口。
 
+### 14.276 支付监控渠道下钻契约
+
+1. `GET /api/payments` 与 `GET /api/payments/export` 新增可选查询参数 `channelCode`；非空值按渠道编码精确匹配，空值或 `全部` 不限制渠道。
+2. `channelCode` 在服务层去除首尾空白，最大 64 字符且不得包含控制字符；非法值按既有支付请求参数错误契约拒绝。
+3. 支付单分页列表、对应总数和 CSV 导出必须使用同一组 `paymentOrderId / orderNo / channelCode / paymentMethod / status` 筛选条件，调用方不得把总数或导出解释为未筛选全量。
+4. 管理端从结构化路由查询初始化上述筛选；支付监控 `channelMetrics[].pendingCount>0` 时，下钻必须携带该项的 `channelCode`、`paymentMethod` 与 `status=WAIT_CALLBACK`。
+5. 本契约只定义 payment-core 本地查询和页面导航，不证明渠道受理、支付成功、退款到账、账务入账、资金一致或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
