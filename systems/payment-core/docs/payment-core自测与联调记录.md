@@ -11346,3 +11346,27 @@
 1. 退款查单与回调现在都在锁内使用明确尝试身份，UNKNOWN 首次回调不再依赖尚未形成的渠道退款号判断轮次。
 2. 这是退款回调协议的非兼容升级，实际接入前必须同步渠道适配器和签名向量；本地 Mockito/HMAC 测试不证明真实渠道已支持。
 3. 本轮不证明生产多实例时序、真实退款回调送达、退款到账、渠道账单或财务对账一致性，release 四项真实阻断不变。
+
+## 422. 2026-09-12 退款旧下发事件隔离 V1.0 验证
+
+### 422.1 本轮补强
+
+1. `findChannelSubmitRequestByAttemptNo` 增加当前最新尝试条件，历史退款尝试即使存在可重发事件，也不能生成渠道下发快照。
+2. 当前尝试选择统一使用 `created_at DESC, id DESC`，避免同秒多尝试排序不确定；最新尝试的正常下发字段保持不变。
+3. 旧事件读取空快照后沿既有失败/死信路径处理，在退款渠道提交、受理绑定和渠道操作日志之前失败闭合。
+
+### 422.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 定向测试 | `RefundSubmitOutboxMapperIntegrationTest,PaymentEventDispatchServiceImplTest` 共 `56` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 后端全量测试 | `936` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `RefundMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 数据结构 | 无 schema、data 或迁移变化；正式 SQL 使用既有退款尝试索引 |
+| 代码提交 | `94be9578 fix(payment-core): block stale refund submit events` |
+
+### 422.3 当前判断
+
+1. 旧退款事件、旧查单结果和旧回调均已具备明确的当前尝试隔离，异常历史 outbox 不会从静态快照路径调用渠道。
+2. 本地 H2/Mockito 只证明当前 SQL 与服务分支，不证明生产 MySQL 事务隔离、事件锁竞争或真实渠道调用时序。
+3. 本轮不证明真实渠道受理、退款到账、渠道账单或财务对账一致性，release 四项真实阻断不变。
