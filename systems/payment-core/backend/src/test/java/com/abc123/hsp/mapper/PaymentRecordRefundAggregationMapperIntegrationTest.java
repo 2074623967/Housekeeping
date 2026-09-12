@@ -113,7 +113,7 @@ public class PaymentRecordRefundAggregationMapperIntegrationTest {
                     + "order_no VARCHAR(64), customer_name VARCHAR(128), amount DECIMAL(18,2), "
                     + "payment_method VARCHAR(32), channel_code VARCHAR(64), "
                     + "channel_transaction_no VARCHAR(128), status VARCHAR(32), "
-                    + "status_type VARCHAR(32), created_at DATETIME)");
+                    + "status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "payment_method VARCHAR(32), terminal VARCHAR(32), client_ip VARCHAR(64), "
@@ -131,6 +131,8 @@ public class PaymentRecordRefundAggregationMapperIntegrationTest {
                     + "'WX-REFUNDED', 'SUCCESS', 'success', TIMESTAMP '2026-09-10 08:00:00'), "
                     + "('PAY-NO-REFUND', 'ORD-NO-REFUND', '李女士', 80.00, '支付宝', 'alipay_h5', "
                     + "'ALI-NO-REFUND', 'SUCCESS', 'success', TIMESTAMP '2026-09-10 07:00:00')");
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = created_at "
+                    + "WHERE status = 'SUCCESS'");
             statement.executeUpdate("INSERT INTO t_refund_order("
                     + "refund_order_id, payment_order_id, refund_amount, status) VALUES "
                     + "('REF-SUCCESS-1', 'PAY-REFUNDED', 20.00, 'SUCCESS'), "

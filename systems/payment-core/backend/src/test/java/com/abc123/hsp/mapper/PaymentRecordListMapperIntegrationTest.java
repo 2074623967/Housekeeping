@@ -117,7 +117,7 @@ class PaymentRecordListMapperIntegrationTest {
                     + "order_no VARCHAR(64), customer_name VARCHAR(128), amount DECIMAL(18,2), "
                     + "payment_method VARCHAR(32), channel_code VARCHAR(64), "
                     + "channel_transaction_no VARCHAR(128), status VARCHAR(32), "
-                    + "status_type VARCHAR(32), created_at DATETIME)");
+                    + "status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "payment_method VARCHAR(32), terminal VARCHAR(32), client_ip VARCHAR(64), "
@@ -136,6 +136,8 @@ class PaymentRecordListMapperIntegrationTest {
                     + "'微信', 'wx_h5', 'CHANNEL-002', 'SUCCESS', 'success', '2026-09-12 16:00:00'), "
                     + "('PAY-RECORD-STABLE-003', 'ORDER-RECORD-STABLE-003', '稳定用户丙', 100.00, "
                     + "'微信', 'wx_h5', 'CHANNEL-003', 'SUCCESS', 'success', '2026-09-12 16:00:00')");
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = "
+                    + "TIMESTAMPADD(SECOND, id, created_at)");
             statement.executeUpdate("INSERT INTO t_payment_attempt "
                     + "(payment_order_id, payment_method, terminal, client_ip, idempotency_key, "
                     + "attempt_status, attempt_status_type, request_payload, response_payload, created_at) VALUES "

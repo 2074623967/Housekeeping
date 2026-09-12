@@ -115,6 +115,28 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
     }
 
     @Test
+    void shouldAssignSuccessfulPaymentsBySuccessTimeAndExposeMissingTime() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            String successDate = LocalDate.now().minusDays(30).toString();
+            String creationDate = LocalDate.now().minusDays(31).toString();
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, customer_name, amount, status, status_type, "
+                    + "success_at, created_at) VALUES "
+                    + "('PAY-CROSS-DAY', 'ORD-CROSS-DAY', '跨日客户', 66.00, 'SUCCESS', 'success', '"
+                    + successDate + " 00:05:00', '" + creationDate + " 23:55:00'), "
+                    + "('PAY-MISSING-SUCCESS-TIME', 'ORD-MISSING-TIME', '缺时客户', 77.00, "
+                    + "'SUCCESS', 'success', NULL, '" + creationDate + " 12:00:00')");
+            PaymentDayEndMapper mapper = session.getMapper(PaymentDayEndMapper.class);
+
+            assertEquals(1, mapper.countSuccessPaymentsByDate(successDate));
+            assertEquals(0, mapper.sumSuccessPaymentAmountByDate(successDate)
+                    .compareTo(new BigDecimal("66.00")));
+            assertEquals(1, mapper.countMissingPaymentSuccessTimeByDate(creationDate));
+        }
+    }
+
+    @Test
     void shouldExposeUnknownRefundSubmitAsP1ClearingIssue() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentIssueMapper mapper = session.getMapper(PaymentIssueMapper.class);
@@ -169,7 +191,7 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "order_no VARCHAR(64), customer_name VARCHAR(128), amount DECIMAL(18,2), "
                     + "payment_method VARCHAR(32), channel_code VARCHAR(64), status VARCHAR(32), "
-                    + "status_type VARCHAR(32), created_at DATETIME)");
+                    + "status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
                     + "attempt_status VARCHAR(32), created_at DATETIME)");
@@ -201,6 +223,8 @@ public class PaymentOverpaidSuccessDetectionMapperIntegrationTest {
                     + "'SUCCESS', 'success', NOW()), "
                     + "('PAY-REFUND-UNKNOWN', 'ORD-REFUND', '王女士', 50.00, '微信', 'wx_h5', "
                     + "'SUCCESS', 'success', NOW())");
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = created_at "
+                    + "WHERE status = 'SUCCESS'");
             statement.executeUpdate("INSERT INTO t_payment_notify_log("
                     + "notify_no, payment_order_id, channel_code, notify_type, notify_status, created_at) "
                     + "SELECT CONCAT('NTF-', payment_order_id), payment_order_id, channel_code, "

@@ -41,6 +41,8 @@ public class PaymentDayEndBatchEntity {
     private Integer pendingPaymentCount;
     /** 待收口支付金额。 */
     private BigDecimal pendingPaymentAmount;
+    /** 支付成功时间缺失数。 */
+    private Integer missingPaymentSuccessTimeCount;
     /** 退款成功单量。 */
     private Integer refundSuccessCount;
     /** 退款成功金额。 */

@@ -220,7 +220,7 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
-    void shouldRequireSubmissionAttemptForChannelStateTransitions() {
+    void shouldRequireSubmissionAttemptForChannelStateTransitions() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
 
@@ -234,6 +234,7 @@ class PaymentMapperStateTransitionIntegrationTest {
                     "PAY-ABNORMAL-WAIT", "WX-NOT-SUBMITTED"));
             assertEquals(1, mapper.markPaymentSuccessFromChannelResult(
                     "PAY-SUBMITTED", "WX-SUBMITTED"));
+            assertPaymentSuccessTimePresent(session, "PAY-SUBMITTED");
         }
     }
 
@@ -343,6 +344,22 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldFilterSuccessfulPaymentsWithoutSuccessTime() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setStatus("SUCCESS_TIME_MISSING");
+
+            List<PaymentListItemDTO> items = mapper.findAll(query);
+
+            assertEquals(1, items.size());
+            assertEquals("PAY-FINAL-SUCCESS", items.get(0).getPaymentOrderId());
+            assertEquals(1L, mapper.count(query));
+            assertEquals(1, mapper.findAllForExport(query).size());
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -358,6 +375,17 @@ class PaymentMapperStateTransitionIntegrationTest {
                      "SELECT COUNT(1) FROM t_payment_expiry_close_retry")) {
             resultSet.next();
             return resultSet.getInt(1);
+        }
+    }
+
+    private void assertPaymentSuccessTimePresent(SqlSession session, String paymentOrderId) throws Exception {
+        try (java.sql.PreparedStatement statement = session.getConnection().prepareStatement(
+                "SELECT success_at FROM t_payment_order WHERE payment_order_id = ?")) {
+            statement.setString(1, paymentOrderId);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(resultSet.next());
+                org.junit.jupiter.api.Assertions.assertNotNull(resultSet.getTimestamp(1));
+            }
         }
     }
 
@@ -381,7 +409,7 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "order_no VARCHAR(64), customer_name VARCHAR(128), amount DECIMAL(18, 2), "
                     + "payment_method VARCHAR(32), channel_code VARCHAR(64), "
                     + "channel_transaction_no VARCHAR(128), status VARCHAR(32), "
-                    + "status_type VARCHAR(32), created_at DATETIME)");
+                    + "status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_expiry_close_retry ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64) NOT NULL, "
                     + "retry_count INT NOT NULL, retry_interval_seconds INT NOT NULL, "

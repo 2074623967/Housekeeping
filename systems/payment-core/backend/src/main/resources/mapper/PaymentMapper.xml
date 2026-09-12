@@ -42,6 +42,9 @@
                 AND p.payment_method = #{query.paymentMethod}
             </if>
             <choose>
+                <when test="query.status == 'SUCCESS_TIME_MISSING'">
+                    AND p.status = 'SUCCESS' AND p.success_at IS NULL
+                </when>
                 <when test="query.status == 'DAY_END_PENDING'">
                     AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
                 </when>
@@ -71,6 +74,9 @@
                 AND p.payment_method = #{query.paymentMethod}
             </if>
             <choose>
+                <when test="query.status == 'SUCCESS_TIME_MISSING'">
+                    AND p.status = 'SUCCESS' AND p.success_at IS NULL
+                </when>
                 <when test="query.status == 'DAY_END_PENDING'">
                     AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
                 </when>
@@ -107,6 +113,9 @@
                 AND p.payment_method = #{query.paymentMethod}
             </if>
             <choose>
+                <when test="query.status == 'SUCCESS_TIME_MISSING'">
+                    AND p.status = 'SUCCESS' AND p.success_at IS NULL
+                </when>
                 <when test="query.status == 'DAY_END_PENDING'">
                     AND p.status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
                 </when>
@@ -414,7 +423,8 @@
         UPDATE t_payment_order
         SET status = 'SUCCESS',
             status_type = 'success',
-            channel_transaction_no = #{channelTransactionNo}
+            channel_transaction_no = #{channelTransactionNo},
+            success_at = COALESCE(success_at, NOW())
         WHERE payment_order_id = #{paymentOrderId}
           AND (
             (

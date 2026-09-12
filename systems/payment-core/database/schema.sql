@@ -617,11 +617,13 @@ CREATE TABLE t_payment_order (
     last_mapping_matched TINYINT(1) NULL COMMENT '最近结果是否命中启用未归档映射',
     status VARCHAR(32) NOT NULL COMMENT '支付状态',
     status_type VARCHAR(32) NOT NULL COMMENT '支付状态样式类型',
+    success_at DATETIME DEFAULT NULL COMMENT '支付成功时间',
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_payment_order_id (payment_order_id),
     KEY idx_payment_order_no (order_no),
     KEY idx_payment_status_created (status, created_at),
+    KEY idx_payment_status_success (status, success_at),
     KEY idx_payment_channel_created (channel_code, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
 
@@ -1069,6 +1071,7 @@ CREATE TABLE t_payment_day_end_batch (
     payment_success_gap_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '支付成功差异金额',
     pending_payment_count INT NOT NULL DEFAULT 0 COMMENT '待收口支付数',
     pending_payment_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '待收口支付金额',
+    missing_payment_success_time_count INT NOT NULL DEFAULT 0 COMMENT '支付成功时间缺失数',
     refund_success_count INT NOT NULL DEFAULT 0 COMMENT '退款成功单量',
     refund_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款成功金额',
     channel_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '渠道异常数',

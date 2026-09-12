@@ -27,4 +27,6 @@ public class PaymentOrderEntity {
     private String status;
     /** 支付状态样式类型。 */
     private String statusType;
+    /** 支付成功时间。 */
+    private String successAt;
 }

@@ -21,8 +21,7 @@
                 ORDER BY p.amount
             </when>
             <when test="query.sortField == 'paidAt'">
-                ORDER BY
-                CASE WHEN p.status = 'SUCCESS' THEN p.created_at ELSE NULL END
+                ORDER BY p.success_at
             </when>
             <otherwise>
                 ORDER BY p.created_at
@@ -94,10 +93,7 @@
                DATE_FORMAT(TIMESTAMPADD(HOUR, 1, p.created_at), '%Y-%m-%d %H:%i:%s') AS expireTime,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS updatedAt,
-               CASE WHEN p.status = 'SUCCESS'
-                    THEN DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s')
-                    ELSE NULL
-               END AS paidAt,
+               DATE_FORMAT(p.success_at, '%Y-%m-%d %H:%i:%s') AS paidAt,
                CONCAT('user-', p.customer_name) AS userId,
                p.status_type AS statusType
         FROM t_payment_order p
@@ -230,10 +226,7 @@
                DATE_FORMAT(TIMESTAMPADD(HOUR, 1, p.created_at), '%Y-%m-%d %H:%i:%s') AS expireTime,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s') AS updatedAt,
-               CASE WHEN p.status = 'SUCCESS'
-                    THEN DATE_FORMAT(p.created_at, '%Y-%m-%d %H:%i:%s')
-                    ELSE NULL
-               END AS paidAt,
+               DATE_FORMAT(p.success_at, '%Y-%m-%d %H:%i:%s') AS paidAt,
                CONCAT('user-', p.customer_name) AS userId,
                p.status_type AS statusType,
                pa.terminal AS latestTerminal,

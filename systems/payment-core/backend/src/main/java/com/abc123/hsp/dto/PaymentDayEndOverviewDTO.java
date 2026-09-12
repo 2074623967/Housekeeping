@@ -25,6 +25,8 @@ public class PaymentDayEndOverviewDTO {
     private Integer openInternalAbnormalCount;
     /** 当前待收口支付数；历史未采集批次为 null。 */
     private Integer openPendingPaymentCount;
+    /** 当前支付成功时间缺失数；历史未采集批次为 null。 */
+    private Integer openMissingPaymentSuccessTimeCount;
     /** 当前待收口退款数。 */
     private Integer openPendingRefundCount;
     /** 最近批次渠道成功单量。 */

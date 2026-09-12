@@ -12,6 +12,7 @@ const overview = ref({
   openChannelAbnormalCount: 0,
   openInternalAbnormalCount: 0,
   openPendingPaymentCount: 0,
+  openMissingPaymentSuccessTimeCount: 0,
   openPendingRefundCount: 0,
   alerts: [],
   recentBatches: []
@@ -119,7 +120,7 @@ onMounted(loadOverview);
         </div>
 
         <div class="risk-banner">
-          当前未收口：支付 {{ overview.openPendingPaymentCount ?? "未采集" }} 笔，支付成功差异 {{ overview.latestPaymentSuccessGapCount ?? 0 }} 笔，渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，退款 {{ overview.openPendingRefundCount }} 笔。
+          当前未收口：支付 {{ overview.openPendingPaymentCount ?? "未采集" }} 笔，成功时间缺失 {{ overview.openMissingPaymentSuccessTimeCount ?? "未采集" }} 笔，支付成功差异 {{ overview.latestPaymentSuccessGapCount ?? 0 }} 笔，渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，退款 {{ overview.openPendingRefundCount }} 笔。
         </div>
 
         <div class="detail-panel">
@@ -179,6 +180,12 @@ onMounted(loadOverview);
               <div class="detail-value">{{ overview.openPendingPaymentCount ?? "未采集" }}</div>
               <div class="detail-hint">金额 {{ overview.latestPendingPaymentAmount || "未采集" }}</div>
               <RouterLink class="link-button" to="/payments?status=DAY_END_PENDING">查看支付单</RouterLink>
+            </div>
+            <div class="detail-card">
+              <div class="detail-label">支付成功时间缺失</div>
+              <div class="detail-value">{{ overview.openMissingPaymentSuccessTimeCount ?? "未采集" }}</div>
+              <div class="detail-hint">缺少可信账期归属，必须先核查</div>
+              <RouterLink class="link-button" to="/payments?status=SUCCESS_TIME_MISSING">查看支付单</RouterLink>
             </div>
             <div class="detail-card">
               <div class="detail-label">待收口退款金额</div>
@@ -257,6 +264,7 @@ onMounted(loadOverview);
                   <th>成功差异金额</th>
                   <th>待收口支付</th>
                   <th>待收口支付金额</th>
+                  <th>成功时间缺失</th>
                   <th>退款成功单量</th>
                   <th>退款成功金额</th>
                   <th>渠道异常</th>
@@ -286,6 +294,7 @@ onMounted(loadOverview);
                   <td>{{ item.paymentSuccessGapAmount }}</td>
                   <td>{{ item.pendingPaymentCount ?? "未采集" }}</td>
                   <td>{{ item.pendingPaymentAmount || "未采集" }}</td>
+                  <td>{{ item.missingPaymentSuccessTimeCount ?? "未采集" }}</td>
                   <td>{{ item.refundSuccessCount }}</td>
                   <td>{{ item.refundSuccessAmount }}</td>
                   <td>{{ item.channelAbnormalCount }}</td>

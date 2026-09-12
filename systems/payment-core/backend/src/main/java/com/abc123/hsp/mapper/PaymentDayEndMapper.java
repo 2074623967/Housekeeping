@@ -98,6 +98,11 @@ public interface PaymentDayEndMapper {
     BigDecimal sumPendingPaymentAmountByDate(@Param("bizDate") String bizDate);
 
     /**
+     * 查询创建于指定业务日但缺少成功时间的成功支付单量。
+     */
+    Integer countMissingPaymentSuccessTimeByDate(@Param("bizDate") String bizDate);
+
+    /**
      * 查询指定业务日的退款成功金额。
      */
     BigDecimal sumSuccessRefundAmountByDate(@Param("bizDate") String bizDate);

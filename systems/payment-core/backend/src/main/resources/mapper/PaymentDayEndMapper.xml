@@ -33,6 +33,12 @@
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
                ) AS openPendingPaymentCount,
+               (
+                   SELECT missing_payment_success_time_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS openMissingPaymentSuccessTimeCount,
                COALESCE((
                    SELECT pending_refund_count
                    FROM t_payment_day_end_batch
@@ -107,6 +113,7 @@
                CONCAT('¥', FORMAT(payment_success_gap_amount, 2)) AS paymentSuccessGapAmount,
                pending_payment_count AS pendingPaymentCount,
                CONCAT('¥', FORMAT(pending_payment_amount, 2)) AS pendingPaymentAmount,
+               missing_payment_success_time_count AS missingPaymentSuccessTimeCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                channel_abnormal_count AS channelAbnormalCount,
@@ -139,6 +146,7 @@
                CONCAT('¥', FORMAT(payment_success_gap_amount, 2)) AS paymentSuccessGapAmount,
                pending_payment_count AS pendingPaymentCount,
                CONCAT('¥', FORMAT(pending_payment_amount, 2)) AS pendingPaymentAmount,
+               missing_payment_success_time_count AS missingPaymentSuccessTimeCount,
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                channel_abnormal_count AS channelAbnormalCount,
@@ -176,14 +184,14 @@
     <select id="countSuccessPaymentsByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order
-        WHERE DATE(created_at) = #{bizDate}
+        WHERE DATE(success_at) = #{bizDate}
           AND status = 'SUCCESS'
     </select>
 
     <select id="sumSuccessPaymentAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(amount), 0)
         FROM t_payment_order
-        WHERE DATE(created_at) = #{bizDate}
+        WHERE DATE(success_at) = #{bizDate}
           AND status = 'SUCCESS'
     </select>
 
@@ -197,7 +205,7 @@
     <select id="countChannelSuccessByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -211,7 +219,7 @@
     <select id="sumChannelSuccessAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(payment_order.amount), 0)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -225,7 +233,7 @@
     <select id="countInternalSuccessByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -239,7 +247,7 @@
     <select id="sumInternalSuccessAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(payment_order.amount), 0)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND EXISTS (
               SELECT 1
@@ -253,7 +261,7 @@
     <select id="countPaymentSuccessGapByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND (
               NOT EXISTS (
@@ -288,7 +296,7 @@
     <select id="sumPaymentSuccessGapAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(payment_order.amount), 0)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND (
               NOT EXISTS (
@@ -334,6 +342,14 @@
           AND status IN ('PREPAY_CREATED', 'WAIT_CALLBACK', 'RISK_REVIEW')
     </select>
 
+    <select id="countMissingPaymentSuccessTimeByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_payment_order
+        WHERE DATE(created_at) = #{bizDate}
+          AND status = 'SUCCESS'
+          AND success_at IS NULL
+    </select>
+
     <select id="sumSuccessRefundAmountByDate" resultType="java.math.BigDecimal">
         SELECT COALESCE(SUM(refund_amount), 0)
         FROM t_refund_order
@@ -344,7 +360,7 @@
     <select id="countChannelAbnormalByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND NOT EXISTS (
               SELECT 1
@@ -358,7 +374,7 @@
     <select id="countInternalAbnormalByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
-        WHERE DATE(payment_order.created_at) = #{bizDate}
+        WHERE DATE(payment_order.success_at) = #{bizDate}
           AND payment_order.status = 'SUCCESS'
           AND NOT EXISTS (
               SELECT 1
@@ -401,6 +417,7 @@
             payment_success_gap_amount,
             pending_payment_count,
             pending_payment_amount,
+            missing_payment_success_time_count,
             refund_success_count,
             refund_success_amount,
             channel_abnormal_count,
@@ -428,6 +445,7 @@
             #{paymentSuccessGapAmount},
             #{pendingPaymentCount},
             #{pendingPaymentAmount},
+            #{missingPaymentSuccessTimeCount},
             #{refundSuccessCount},
             #{refundSuccessAmount},
             #{channelAbnormalCount},
