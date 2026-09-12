@@ -2401,6 +2401,14 @@
 4. 正式 Mapper 测试验证错来源元组和已确认来源 claim 均返回 `0`，合法来源继续完成自动、退避、耗尽和人工强制回查；服务既有 claim 失败用例补充断言不调用适配器和共享限流器。代码提交为 `5efd2028 fix(payment-core): atomically claim alert receipts`。
 5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 H2 不证明生产 MySQL 执行计划、锁竞争、真实供应商回执或生产稳定性，release 四项真实治理阻断不变。
 
+### 8.293 2026-09-12 告警最终回执来源围栏进展
+
+1. claim 已经原子复验来源身份，但供应商查询返回 `DELIVERED` 后的最终回执更新原先只按外发告警号、次数和 claim 时间裁决；查询期间若外发行来源元组被错误改写，仍可能把送达终态写入不再对应原候选的记录。
+2. 最终回执实体与 Mapper 更新现在显式携带并匹配 `alertNo + sourceAlertNo + issueNo`，同时要求来源真实存在、属于同一异常且是顶层 `IN_APP_OUTBOX`；缺失、错异常、错误来源号或嵌套来源均不能写入最终 `DELIVERED` 回执。
+3. 来源在合法 claim 后被另一合法动作确认时，最终回执仍允许保存真实供应商 `DELIVERED` 证据；后续来源确认沿用既有“条件更新或已确认复验”幂等裁决，不覆盖先前确认人和确认时间。
+4. 正式 Mapper 测试验证错误来源号和嵌套来源最终更新均返回 `0`，已确认的同异常顶层来源仍可保存终态；服务测试断言最终更新对象携带来源号和异常号。代码提交为 `67b300a7 fix(payment-core): fence final alert receipts`。
+5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 H2 不证明生产 MySQL 派生表物化、执行计划、锁竞争、真实供应商回执或生产稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
