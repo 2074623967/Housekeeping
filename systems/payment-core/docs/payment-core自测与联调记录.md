@@ -11613,3 +11613,31 @@
 1. 在数据集合不变的前提下，支付列表翻页与 CSV 对同秒记录具有确定次序，消除了仅因秒级创建时间导致的随机分页边界。
 2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生支付单插入或更新，偏移分页仍可能随数据集变化，不能解释为一致性读。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、渠道受理、资金入账或生产稳定性；release 四项真实治理阻断不变。
+
+## 432. 2026-09-12 账单列表与导出稳定排序 V1.0 验证
+
+### 432.1 本轮补强
+
+1. `BillMapper.findAll` 与 `findAllForExport` 统一引用 `billOrder`，避免页面和 CSV 重复维护动态排序。
+2. `createdAt / dueAt / billAmount / unpaidAmount` 均以对应数据库表达式为首排序键，以自增 `id` 为同方向次排序键。
+3. 该变更不改变筛选、排序请求参数、分页、导出 `1001` 行保护、总览金额、响应字段或账单状态。
+
+### 432.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与服务定向测试 | `BillListMapperIntegrationTest,BillServiceImplTest` `7` 项通过，`0` failures、`0` errors、`0` skipped |
+| 创建时间跨页 | 三条同秒账单按 `createdAt desc, id desc` 跨三页依次返回 `BILL-STABLE-003 / 002 / 001` |
+| 到期时间与未付金额导出 | 三条同值账单按升序均返回 `001 / 002 / 003` |
+| 应收金额导出 | 三条同值账单按降序返回 `003 / 002 / 001` |
+| payment-core 后端全量测试 | `948` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `BillMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `91691d59 fix(payment-core): stabilize bill list ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 432.3 当前判断
+
+1. 在数据集合不变的前提下，账单分页和 CSV 对所有受支持排序字段的同值记录均具有确定次序。
+2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生账单插入或更新，偏移分页仍可能随数据集变化。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、账务入账或资金一致性；release 四项真实治理阻断不变。
