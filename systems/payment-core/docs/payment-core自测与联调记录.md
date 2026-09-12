@@ -11728,3 +11728,33 @@
 1. 在数据集合不变的前提下，支付流水分页和 CSV 对三类受支持排序字段的同值记录均具有跨来源确定次序。
 2. 来源序号是内部固定排序语义，不代表四类流水的业务优先级；复合次排序也不提供多个请求之间的数据库快照，偏移分页仍会随并发写入变化。
 3. 本地 H2 不证明生产 MySQL `UNION ALL` 排序执行计划、大数据量导出、并发分页快照、真实渠道处理或资金结果；release 四项真实治理阻断不变。
+
+## 436. 2026-09-12 订单列表与导出稳定排序 V1.0 验证
+
+### 436.1 本轮补强
+
+1. `OrderMapper.findAll` 与 `findForExport` 统一引用 `orderListOrder`，避免页面和 CSV 独立维护排序规则。
+2. 订单创建时间仍为唯一业务排序字段，并追加唯一、不可变的 `o.id DESC`；最新订单优先的既有阅读方向不变。
+3. 该变更不改变筛选、分页、导出 `1001` 行保护、响应 DTO、名称脱敏，以及最近账单、支付单和预付单的选择规则。
+
+### 436.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与服务定向测试 | `OrderListMapperIntegrationTest,OrderServiceImplTest` `6` 项通过，`0` failures、`0` errors、`0` skipped |
+| 同秒跨页与导出 | 三条同秒订单在三页和 CSV 中均依次返回 `ORDER-STABLE-003 / 002 / 001` |
+| 最近账单关联 | 两条同秒账单按 `created_at DESC, id DESC` 返回 `BILL-STABLE-NEW` |
+| 最近支付单关联 | 两条同秒支付单返回 `PAY-STABLE-NEW` 及其“支付成功”状态 |
+| 最近预付单关联 | 两条同秒预付单返回 `PRE-STABLE-NEW` 及其“支付完成”状态 |
+| 计数回归 | 正式 `count` 查询返回筛选后的 `3` 条 |
+| payment-core 后端全量测试 | `952` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `OrderMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `9ee2d426 fix(payment-core): stabilize order list ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 436.3 当前判断
+
+1. 在数据集合不变的前提下，订单列表翻页与 CSV 对同秒记录具有确定次序，最近关联事实也有明确的同秒裁决规则。
+2. `o.id` 次排序不提供多个请求之间的数据库快照；翻页期间若发生订单插入或更新，偏移分页仍可能随数据集变化。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据导出、并发分页快照、真实履约、渠道受理或资金结果；release 四项真实治理阻断不变。

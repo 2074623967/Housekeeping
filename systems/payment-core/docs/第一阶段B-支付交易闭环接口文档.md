@@ -4004,6 +4004,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 列表的 `LIMIT/OFFSET` 和 CSV 的 `LIMIT 1001` 必须引用同一 `paymentFlowOrder` SQL 片段；内部排序列不得暴露到 DTO 或 CSV，计数查询无需携带这些列。
 4. 来源序号只用于同值记录的确定性裁决，不表达支付尝试、回调、路由和事件之间的业务优先级；稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离或资金处理结果。
 
+### 14.263 订单列表与导出稳定排序契约
+
+1. `GET /api/orders` 与 `GET /api/orders/export` 使用相同排序规则，统一按创建时间降序、数据库自增 `id` 降序返回，即 `o.created_at DESC, o.id DESC`。
+2. 当多条订单具有相同秒级创建时间时，由 `o.id` 确定唯一顺序；列表的 `LIMIT/OFFSET` 与 CSV 的 `LIMIT 1001` 必须引用同一 `orderListOrder` SQL 片段。
+3. 最近账单、支付单和预付单继续分别按本表 `created_at DESC, id DESC` 选择；本契约不改变筛选、分页边界、导出上限、响应字段、名称脱敏、订单状态或履约状态。
+4. 稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离，也不表示履约完成、渠道受理或资金已收口。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
