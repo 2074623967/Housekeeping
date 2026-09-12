@@ -11558,3 +11558,31 @@
 1. 在数据集合不变的前提下，列表翻页与 CSV 对同值记录具有确定次序，消除了仅因秒级时间或相同重试字段导致的随机分页边界。
 2. `id` 次排序不能提供跨多个独立查询的数据库快照；翻页期间若有新事件写入或旧事件状态改变，偏移分页仍可能随数据集变化，强快照需求应另行采用游标或一致性读设计。
 3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照或稳定性；release 四项真实治理阻断不变。
+
+## 430. 2026-09-12 退款列表与导出稳定排序 V1.0 验证
+
+### 430.1 本轮补强
+
+1. `RefundMapper.findAll` 与 `findAllForExport` 统一引用 `refundOrderListOrder`，避免页面和 CSV 重复维护排序规则。
+2. 退款申请时间仍为唯一业务排序字段，并追加自增 `id DESC` 作为唯一且不可变的次排序键；新申请优先的既有阅读方向不变。
+3. 该变更只确定同秒退款次序，不改变筛选、页码、导出 `1001` 行保护、响应字段、退款状态机或资金处理。
+
+### 430.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 定向测试 | `RefundListMapperIntegrationTest` `1` 项通过，`0` failures、`0` errors、`0` skipped |
+| 退款服务定向回归 | `RefundListMapperIntegrationTest,RefundServiceImplTest` `47` 项通过，`0` failures、`0` errors、`0` skipped |
+| 同秒跨页与导出 | 三条同秒退款按 `applied_at desc, id desc` 在三页和导出中均依次返回 `REF-003 / REF-002 / REF-001` |
+| payment-core 后端全量测试 | `946` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `RefundMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 首次无效结果 | 新 H2 夹具漏注册既有 `FORMAT` 兼容函数，查询在断言前报错；补齐别名后定向与全量重跑通过，首次结果未计入通过数 |
+| 结构变化 | 无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `cf86433f fix(payment-core): stabilize refund list ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 430.3 当前判断
+
+1. 在数据集合不变的前提下，退款列表翻页与 CSV 对同秒记录具有确定次序，消除了仅因秒级申请时间导致的随机分页边界。
+2. `id` 次排序不提供跨多个请求的数据库快照；翻页期间若发生退款申请或数据更新，偏移分页仍可能随数据集变化，不能解释为一致性读。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照、退款到账或资金一致性；release 四项真实治理阻断不变。
