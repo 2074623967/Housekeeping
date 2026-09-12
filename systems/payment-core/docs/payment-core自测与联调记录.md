@@ -12162,3 +12162,33 @@
 1. 监控退款失败告警和日终退款待收口告警现在都能落到与告警口径一致的退款集合，且页面导出不会丢失当前筛选。
 2. `PENDING` 仅是管理查询的组合条件，不是新的退款生命周期状态，也不得出现在回调、提交、事件或数据库状态字段中。
 3. 本机 H2 与管理端测试不证明真实退款提交、渠道受理、到账、资金一致或生产稳定性；release 四项真实治理阻断不变。
+
+## 451. 2026-09-12 停用渠道告警下钻闭环 V1.0 验证
+
+### 451.1 本轮补强
+
+1. 支付监控 `CHANNEL_DISABLED` 告警动作路由改为 `/payment-config?channelStatus=DISABLED`，使统计口径与目标视图一致。
+2. 配置中心新增渠道状态路由解析和客户端筛选，只影响支付渠道配置表；路由值变化时同步筛选并定位渠道区域。
+3. 渠道表增加筛选空状态，渠道导出按钮明确为“导出全部渠道”，避免将未筛选治理快照误解为当前视图导出。
+
+### 451.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 监控后端定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest,PaymentMonitorControllerTest` `8` 项通过，`0` failures、`0` errors、`0` skipped |
+| 告警动作路由 | 正式 Mapper 断言 `CHANNEL_DISABLED` 返回 `/payment-config?channelStatus=DISABLED` |
+| 管理端筛选 | `DISABLED` 只返回停用渠道；未知状态和非标量路由值回退全量，非数组数据回退空集合 |
+| 管理端单测 | `19` 项通过，`0` failures |
+| 管理端生产构建 | 通过；最大 JS 包约 `544.47 kB`，保留既有超过 `500 kB` 告警 |
+| payment-core 后端全量测试 | `966` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 浏览器烟测 | `http://127.0.0.1:4204/payment-config?channelStatus=DISABLED` 可加载且无运行时崩溃；配置接口返回现有模拟 `503`，未形成渠道表数据展示证据 |
+| 结构变化 | 仅调整告警动作路由与渠道表前端筛选；无 API 响应、状态机、schema、索引或迁移变化 |
+| 代码提交 | `b9699096 fix(payment-core): target disabled channel alerts` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 451.3 当前判断
+
+1. 停用渠道告警现在能定位到配置中心的停用渠道集合，不再让运营人员在完整治理页面中人工扫描。
+2. 筛选不改变治理总览或配置数据本身，渠道导出仍为全量治理快照；本轮没有自动启停渠道或修改路由规则。
+3. 模拟 `503` 下的浏览器烟测不能证明渠道表现场展示、真实渠道停用或生产可用性；release 四项真实治理阻断不变。

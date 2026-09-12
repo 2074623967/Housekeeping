@@ -4112,6 +4112,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 支付监控退款失败告警继续跳转 `/refunds?refundStatus=FAIL`；支付日终退款待收口告警跳转 `/refunds?refundStatus=PENDING`，覆盖其统计口径中的待审核与处理中退款。
 5. 组合筛选只反映 payment-core 本地退款状态，不构成渠道已受理、退款到账、资金一致、对账完成或生产稳定性证明。
 
+### 14.278 停用渠道告警下钻契约
+
+1. `GET /api/payment-monitor/overview` 的 `CHANNEL_DISABLED` 告警 `actionRoute` 固定为 `/payment-config?channelStatus=DISABLED`，与告警按渠道配置 `status='DISABLED'` 的统计条件一致。
+2. `channelStatus` 是管理端配置中心路由查询字段，当前只接受 `ENABLED / DISABLED`；缺失、未知或非标量值回退“全部”。该字段不是支付配置后端接口参数。
+3. 状态筛选只作用于页面的支付渠道配置表，不改变治理总览、渠道复核申请、路由规则、协议、返回码、网关、控制策略或其他配置集合。
+4. 渠道治理快照导出保持全量口径，管理端必须明确标注“导出全部渠道”，不得暗示其等于当前状态筛选结果。
+5. 告警下钻只提供本地配置定位，不执行渠道启停或路由调整，也不构成真实渠道状态、生产数据完整或稳定性证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
