@@ -11103,3 +11103,27 @@
 1. 页面已清晰区分服务端全量记录数与客户端当前页状态计数，避免运营人员横向比较不同范围的指标。
 2. 本轮不改变计数逻辑、分页、接口、数据库或支付退款状态机。
 3. 本页状态指标不作为全量运营统计、SLA、资金结果或生产稳定性证明，也不改变 release 四项真实阻断。
+
+## 412. 2026-09-12 退款申请客户端幂等保护 V1.0 验证
+
+### 412.1 本轮补强
+
+1. 退款申请 DTO 新增必填 `idempotencyKey`；服务在锁定原支付单后查询 `paymentOrderId + idempotencyKey`，同键同规范化金额、方式、原因和操作人时返回原退款单，不重复汇总额度、插入退款单或申请日志。
+2. 同键异参返回 `PAYMENT-1053`；空白、超过 `128` 字符或含 ISO 控制字符返回 `PAYMENT-1052`，并在任何退款 Mapper 访问前失败。
+3. 管理端按规范化请求内容保留失败重试键，字段或操作人变化后生成新键，成功后清空；数据库新增复合唯一索引，双份初始化基线及历史占位回填迁移保持一致。
+
+### 412.2 验证结果
+
+| 验证项 | 命令或方式 | 结果 | 说明 |
+| --- | --- | --- | --- |
+| 退款幂等定向测试 | `mvn -Dtest=RefundServiceImplTest,RefundApplicationConcurrencyIntegrationTest,RefundApplyRequestDTOJsonTest test` | 通过 | `46` 个用例；覆盖同键重放、四类异参冲突、非法键零 Mapper 访问、JSON 绑定、异键额度竞争及同键并发单行落库 |
+| 后端全量测试 | `mvn test` | 通过 | Surefire 汇总 `921` 个用例，`0` failures、`0` errors、`0` skipped |
+| 管理端测试与构建 | `npm test`、`npm run build`（admin-web） | 通过 | `8` 个测试通过并成功产出；仍报告既存的 `538.56 kB` 单包告警 |
+| 结构与补丁检查 | 双 schema/data 片段比对、`xmllint --noout RefundMapper.xml`、`git diff --check` | 通过 | 两套初始化基线一致，Mapper XML 合法，无空白错误 |
+| 真实环境验证 | MySQL 在线 DDL、多实例锁等待、调用方重试、真实渠道退款与资金核验 | 未执行 | 不记录生产迁移、渠道幂等、到账、对账或稳定性通过 |
+
+### 412.3 当前判断
+
+1. 客户端网络重试不再仅依赖渠道下发层的稳定 `refundOrderId`；申请层与渠道层分别使用 `idempotencyKey` 和 `refundOrderId`，职责清晰。
+2. 历史 `LEGACY:<refundOrderId>` 仅用于满足非空和唯一约束，不表示历史调用方曾提供幂等键，也不改变历史退款事实。
+3. 本地自动测试不能替代 MySQL 在线迁移、多实例事务、真实渠道受理、退款到账与财务核验，release 四项真实阻断不变。

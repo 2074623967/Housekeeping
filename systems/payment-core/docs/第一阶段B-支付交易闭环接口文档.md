@@ -889,9 +889,11 @@
 ```json
 {
   "paymentOrderId": "PAY202607190001",
-  "refundAmount": 68.00,
+  "idempotencyKey": "7b1db871-17c6-4ec0-a98d-d6a8ae5d9a47",
+  "refundAmount": "68.00",
   "refundMethod": "原路退款",
-  "refundReason": "客户取消服务"
+  "refundReason": "客户取消服务",
+  "operator": "finance-operator"
 }
 ```
 
@@ -900,7 +902,8 @@
 1. 原支付单必须存在且状态为 `SUCCESS`。
 2. `refundAmount` 必须大于 `0`。
 3. 同一支付单下 `REVIEWING`、`PROCESSING`、`SUCCESS` 状态退款金额累计不能超过原支付金额。
-4. 创建后状态为 `REVIEWING`，等待运营或财务审核。
+4. `idempotencyKey` 与 `operator` 必填；同支付单、同键、同规范化申请内容重放时返回原退款单，同键异参返回 `PAYMENT-1053`。
+5. 创建后状态为 `REVIEWING`，等待运营或财务审核。
 
 ### 12.3 查询退款详情
 
@@ -3821,6 +3824,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 1. 列表接口响应 `total` 表示符合筛选条件的全量记录数，`items` 只包含当前分页；两者不得混用为同一统计范围。
 2. 管理端从 `items` 派生的状态计数必须在用户可见标题中标识“本页”，而记录总数继续展示 `total`。
 3. 本轮无请求、响应、端点或错误码变化；若需要全量状态分布，应新增服务端聚合契约，不得在客户端根据单页样本外推。
+
+### 14.239 退款申请客户端幂等契约
+
+1. `POST /api/refunds/apply` 请求新增必填字符串 `idempotencyKey`，裁剪首尾空白后长度为 `1..128`，原值不得包含 ISO 控制字符；非法键返回 `PAYMENT-1052`。
+2. 幂等范围为同一 `paymentOrderId`：首次成功申请持久化该键；后续同键且规范化后的 `refundAmount / refundMethod / refundReason / operator` 全部一致时返回原退款单，不新增退款单或申请日志。
+3. 同一支付单使用相同键但上述任一业务字段不同，返回 `PAYMENT-1053`，调用方必须检查请求身份，不得用新键盲目绕过冲突。
+4. 申请层幂等键只标识创建请求；审核后渠道提交仍以稳定 `refundOrderId` 作为渠道幂等标识。两层键不得互相替代，响应成功也不代表渠道受理或资金到账。
 
 ## 15. 结论
 
