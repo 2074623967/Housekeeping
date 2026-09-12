@@ -12331,15 +12331,17 @@
 | 自动候选防护 | 孤立 `EMAIL / 已派发 / ACCEPTED / 待确认` 记录不进入到期回查候选 |
 | 人工读取防护 | 按孤立告警号读取返回 `null` |
 | claim 防护 | 对孤立告警执行 claim 返回 `0`，不得形成查询中状态 |
+| 完成尝试防护 | 测试直接将孤立记录置为 `receipt_query_count=1 / QUERYING` 后，完成尝试仍返回 `0` |
+| 最终回执防护 | 对同一孤立 `QUERYING` 记录写最终 `DELIVERED / 已确认` 回执仍返回 `0` |
 | 合法路径回归 | 有来源关联的记录继续覆盖自动 claim、退避、次数耗尽、人工回查与最终回执写入 |
 | payment-core 后端全量测试 | `967` 项通过，`0` failures、`0` errors、`0` skipped |
 | Mapper 与补丁检查 | `PaymentTaskCenterMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
 | 结构变化 | 只收紧 Mapper 执行谓词和测试夹具；无 API、前端、状态机、schema、索引或迁移变化 |
-| 代码提交 | `b6e96d21 fix(payment-core): reject orphan alert receipts` |
+| 代码与测试提交 | `b6e96d21 fix(payment-core): reject orphan alert receipts`；`ff7f5968 test(payment-core): cover orphan receipt write guards` |
 | 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
 
 ### 456.3 当前判断
 
-1. 待回查监控、明细、自动调度、人工读取和条件更新现在共享同一来源关联不变量，孤立外发日志不能被当作真实回查对象执行。
+1. 待回查监控、明细、自动调度、人工读取和条件更新现在共享同一来源关联不变量；即使绕过正常 claim 前置流程构造查询中状态，孤立外发日志也不能完成尝试或写入最终回执。
 2. 来源号只证明本地外发日志与来源告警建立关联，不证明供应商已真实受理或最终送达；生产数据仍需独立清洗与核验。
 3. 本地 H2 不证明真实供应商回执、人员响应、告警处置或生产稳定性；release 四项真实治理阻断不变。

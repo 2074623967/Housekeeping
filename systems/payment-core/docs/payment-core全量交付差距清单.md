@@ -2365,8 +2365,8 @@
 
 1. 待回查指标与明细已经统一要求来源关联，但自动候选、按号人工读取、claim、完成尝试和最终回执更新原先未全部守住 `source_alert_no IS NOT NULL`，历史孤立外发日志仍可能进入真实执行链。
 2. 六条回查执行 SQL 现在统一要求来源关联、外部通道、已派发、供应商 `ACCEPTED` 且待确认；孤立记录既不能被自动调度或人工读取，也不能通过并发 claim、完成尝试或最终回执更新绕过候选资格。
-3. 两条既有合法回执夹具补齐来源告警号，并新增外部 `EMAIL`、已派发、`ACCEPTED`、待确认但无来源号的孤立夹具，验证其不进入自动候选、按号读取返回空且 claim 更新为 `0`。
-4. 正式 Mapper 集成测试 `16` 项、payment-core 后端全量 `967` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。代码提交为 `b6e96d21 fix(payment-core): reject orphan alert receipts`。
+3. 两条既有合法回执夹具补齐来源告警号，并新增外部 `EMAIL`、已派发、`ACCEPTED`、待确认但无来源号的孤立夹具，验证其不进入自动候选、按号读取返回空且 claim 更新为 `0`；即使测试直接把孤立记录置为 `QUERYING`，完成尝试和最终回执更新仍各返回 `0`。
+4. 正式 Mapper 集成测试 `16` 项、payment-core 后端全量 `967` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。实现提交为 `b6e96d21 fix(payment-core): reject orphan alert receipts`，直接写入防护测试提交为 `ff7f5968 test(payment-core): cover orphan receipt write guards`。
 5. 本轮无 API、前端、持久化状态机、schema、索引或迁移变化；本地 H2 不证明真实供应商回执、最终送达、人员响应或生产稳定性。统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
 
 ## 9. 最终结论
