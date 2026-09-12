@@ -433,13 +433,13 @@ onMounted(loadOverview);
 
             <div class="sub-panel">
               <h3>待回调主动查单</h3>
-              <p>立即批量补查达到等待阈值且尚未过期的支付单，不受自动退避窗口限制；渠道确认成功时自动收口，处理中或失败结果进入任务日志继续跟进。</p>
+              <p>立即批量补查达到等待阈值的待回调支付单，收银台已过期但渠道已提交的交易仍可查；人工执行不受自动退避窗口限制。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.pendingQueryBacklogCount === 0"
                 @click="runTask('PAYMENT_PENDING_QUERY', '待回调主动查单', paymentTaskCenterApi.runPendingPaymentQueries)"
               >
-                {{ activeTaskCode === "PAYMENT_PENDING_QUERY" ? "执行中..." : "执行主动查单" }}
+                {{ activeTaskCode === "PAYMENT_PENDING_QUERY" ? "执行中..." : overview.pendingQueryBacklogCount === 0 ? "暂无待查支付" : `执行主动查单（${overview.pendingQueryBacklogCount}）` }}
               </button>
             </div>
 
@@ -457,13 +457,13 @@ onMounted(loadOverview);
 
             <div class="sub-panel">
               <h3>处理中退款主动查单</h3>
-              <p>立即补查已获得渠道退款号且达到等待阈值的退款；明确终态由服务端收口，处理中或失败结果进入任务日志继续跟进。</p>
+              <p>立即补查达到等待阈值且已有渠道退款号，或提交结果未知但具备渠道定位事实的处理中退款；明确终态由服务端收口。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.pendingRefundQueryBacklogCount === 0"
                 @click="runTask('REFUND_PENDING_QUERY', '处理中退款主动查单', paymentTaskCenterApi.runPendingRefundQueries)"
               >
-                {{ activeTaskCode === "REFUND_PENDING_QUERY" ? "执行中..." : "执行退款查单" }}
+                {{ activeTaskCode === "REFUND_PENDING_QUERY" ? "执行中..." : overview.pendingRefundQueryBacklogCount === 0 ? "暂无待查退款" : `执行退款查单（${overview.pendingRefundQueryBacklogCount}）` }}
               </button>
             </div>
 
