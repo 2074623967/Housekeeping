@@ -2281,6 +2281,14 @@
 4. 本轮不改变非空统计口径、支付状态机、告警生成、渠道指标、API 路径、DTO、前端、schema、索引或迁移；前端 `?? 0` 防御仍保留，但不再承担修补后端空集合语义的职责。
 5. 本地空表测试不证明生产数据完整、真实渠道状态、支付成功、退款到账、账务入账、资金一致或生产稳定性；统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
 
+### 8.278 2026-09-12 支付监控告警计数对齐进展
+
+1. 摘要 `alertCount` 原先以包含 `PREPAY_CREATED / WAIT_CALLBACK` 的 `pendingPaymentCount` 判断支付告警，而 `alerts` 只为 `WAIT_CALLBACK` 生成待回调告警；仅有正常预付已创建订单时可能出现摘要告警数为 `1`、告警列表为空的不一致。
+2. `PaymentMonitorMapper.findSummary` 新增仅供内部判断的 `wait_callback_count`，摘要支付告警与 `findAlerts` 统一使用 `status='WAIT_CALLBACK'`；`pendingPaymentCount` 仍完整统计 `PREPAY_CREATED / WAIT_CALLBACK`，不改变待处理指标。
+3. 正式 Mapper 集成测试验证三类告警同时命中时 `alertCount=3`，并验证仅有一笔 `PREPAY_CREATED` 时 `pendingPaymentCount=1`、`alertCount=0`、`alerts=[]`。定向 `7` 项、payment-core 后端全量 `963` 项通过，均为 `0` failures、`0` errors、`0` skipped。
+4. 本轮不新增 DTO 或响应字段，不改变告警类型、等级、顺序、影响数量、前端、schema、索引或迁移；`alertCount` 表示当前命中的告警类型数，必须等于 `alerts.length`，当前取值范围为 `0..3`。
+5. 本地 H2 不证明生产告警事实完整、处置完成、渠道恢复、支付成功、退款到账、账务入账、资金一致或生产稳定性；统一门禁仍允许评估 `test -> master`，不允许创建 `release/*`，四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

@@ -12021,3 +12021,30 @@
 1. 支付监控摘要的整数数量字段现在具备完整的空集合零值契约，调用方不再接收到由 SQL 空集合聚合产生的 `null`。
 2. 本轮只归一化空集合表示，不改变有数据时的状态分类、成功率、成功金额或告警口径；前端既有缺省防御继续作为兼容保护。
 3. 本地 H2 空表测试不证明生产数据完整、真实渠道状态、支付成功、退款到账、账务入账、资金一致或生产稳定性；release 四项真实治理阻断不变。
+
+## 446. 2026-09-12 支付监控告警计数对齐 V1.0 验证
+
+### 446.1 本轮补强
+
+1. `PaymentMonitorMapper.findSummary` 增加内部 `wait_callback_count`，只在存在 `WAIT_CALLBACK` 支付单时为摘要贡献一类支付告警。
+2. `pendingPaymentCount` 继续统计 `PREPAY_CREATED / WAIT_CALLBACK`，从而保留待处理运营指标；正常等待中的 `PREPAY_CREATED` 不再被误报为回调待收口告警。
+3. `alertCount` 与 `findAlerts` 使用相同三类生成条件，表示命中的告警类型数而非受影响记录总数。
+
+### 446.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 监控后端定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest,PaymentMonitorControllerTest` `7` 项通过，`0` failures、`0` errors、`0` skipped |
+| 三类告警对齐 | 同时存在待回调支付、失败退款和停用渠道时，`alertCount=3` 且 `alerts.length=3` |
+| 预付等待边界 | 仅有一笔 `PREPAY_CREATED` 时，`pendingPaymentCount=1`、`alertCount=0`、`alerts=[]` |
+| payment-core 后端全量测试 | `963` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 只新增 Mapper 内部聚合；无 API、DTO、前端、状态机、schema、索引或迁移变化 |
+| 代码提交 | `1b3e4859 fix(payment-core): align monitor alert count` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 446.3 当前判断
+
+1. 摘要告警数现在与告警数组使用同一组生成条件，调用方可依赖 `summary.alertCount = alerts.length`，当前三类告警下取值为 `0..3`。
+2. `affectedCount` 继续表达单类告警影响的记录数；不能把多个 `affectedCount` 求和后与 `alertCount` 比较。
+3. 本地 H2 不证明生产告警事实完整、处置完成、渠道恢复、支付成功、退款到账、账务入账、资金一致或生产稳定性；release 四项真实治理阻断不变。

@@ -1563,9 +1563,10 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
     "successRate": "92.16%",
     "successAmount": "¥18,932.00",
     "pendingPaymentCount": 12,
+    "closedPaymentCount": 5,
     "failedRefundCount": 3,
     "disabledChannelCount": 1,
-    "alertCount": 4
+    "alertCount": 3
   },
   "trends": [
     {
@@ -4073,6 +4074,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 2. 同一场景下 `successRate` 返回 `0.00%`，`successAmount` 返回 `¥0.00`；该零值契约只统一空集合表示，不改变非空集合的状态分类、比率或金额算法。
 3. `alertCount` 仍由待处理支付、失败退款和停用渠道三类事实独立计算；支付表为空只消除支付待处理告警，不代表失败退款或停用渠道告警必然为零。
 4. 本契约不改变 API 路径、响应结构、前端缺省防御、渠道指标或告警数组；零值也不得解释为生产数据已完整核验、渠道正常、支付或资金处理已经完成。
+
+### 14.273 支付监控告警计数一致性契约
+
+1. `GET /api/payment-monitor/overview` 必须满足 `summary.alertCount = alerts.length`；`alertCount` 表示当前命中的告警类型数，不表示各类型 `affectedCount` 的总和。
+2. 当前三类告警分别由至少一笔 `WAIT_CALLBACK` 支付、至少一笔 `FAIL` 退款和至少一个 `DISABLED` 渠道触发，因此 `alertCount` 的取值范围为 `0..3`。
+3. `pendingPaymentCount` 仍统计 `PREPAY_CREATED / WAIT_CALLBACK`，但只有 `WAIT_CALLBACK` 触发 `WAIT_CALLBACK_TIMEOUT`；仅存在 `PREPAY_CREATED` 时待处理数可以大于零，告警数仍为零。
+4. 本契约不改变告警顺序、等级、影响数量、建议动作或跳转路由；计数一致也不表示告警事实已核验、异常已处置或渠道与资金状态正常。
 
 ## 15. 结论
 
