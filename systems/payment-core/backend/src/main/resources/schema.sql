@@ -900,6 +900,7 @@ CREATE TABLE t_refund_operation_log (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     log_no VARCHAR(64) NOT NULL COMMENT '退款操作日志号',
     refund_order_id VARCHAR(64) NOT NULL COMMENT '关联退款单号',
+    refund_attempt_no VARCHAR(64) DEFAULT NULL COMMENT '关联退款渠道尝试号，非渠道动作为空',
     action_code VARCHAR(64) NOT NULL COMMENT '动作编码',
     action_name VARCHAR(128) NOT NULL COMMENT '动作名称',
     from_status VARCHAR(32) NOT NULL COMMENT '原状态',
@@ -909,7 +910,8 @@ CREATE TABLE t_refund_operation_log (
     created_at DATETIME NOT NULL COMMENT '操作时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_refund_operation_log_no (log_no),
-    KEY idx_refund_operation_refund_created (refund_order_id, created_at)
+    KEY idx_refund_operation_refund_created (refund_order_id, created_at),
+    KEY idx_refund_operation_attempt_action_created (refund_attempt_no, action_code, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款操作日志表';
 
 CREATE TABLE t_payment_issue_action_log (

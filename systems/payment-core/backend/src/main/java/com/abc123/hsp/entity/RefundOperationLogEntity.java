@@ -12,6 +12,8 @@ public class RefundOperationLogEntity {
     private String logNo;
     /** 退款单号。 */
     private String refundOrderId;
+    /** 退款渠道尝试号；申请、审核等非渠道动作可为空。 */
+    private String refundAttemptNo;
     /** 动作编码。 */
     private String actionCode;
     /** 动作名称。 */

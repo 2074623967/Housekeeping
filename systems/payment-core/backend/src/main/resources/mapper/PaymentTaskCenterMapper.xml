@@ -590,9 +590,8 @@
                                MAX(log.created_at) AS latest_query_at
                         FROM t_refund_attempt attempt
                         LEFT JOIN t_refund_operation_log log
-                          ON log.refund_order_id = attempt.refund_order_id
+                          ON log.refund_attempt_no = attempt.refund_attempt_no
                          AND log.action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
-                         AND log.created_at &gt;= attempt.created_at
                         GROUP BY attempt.refund_attempt_no
                      ) query_history
                        ON query_history.refund_attempt_no = refund_attempt.refund_attempt_no
@@ -738,9 +737,8 @@
                            MAX(log.created_at) AS latest_query_at
                     FROM t_refund_attempt attempt
                     LEFT JOIN t_refund_operation_log log
-                      ON log.refund_order_id = attempt.refund_order_id
+                      ON log.refund_attempt_no = attempt.refund_attempt_no
                      AND log.action_code IN ('CHANNEL_QUERY', 'CHANNEL_QUERY_FAILED')
-                     AND log.created_at &gt;= attempt.created_at
                     GROUP BY attempt.refund_attempt_no
                  ) query_history
                    ON query_history.refund_attempt_no = refund_attempt.refund_attempt_no

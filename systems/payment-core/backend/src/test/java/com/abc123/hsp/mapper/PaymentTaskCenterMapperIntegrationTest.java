@@ -157,10 +157,10 @@ public class PaymentTaskCenterMapperIntegrationTest {
                              + "channel_refund_no, attempt_status, attempt_status_type, submitted_at, "
                              + "completed_at, created_at) "
                              + "VALUES ('RFA-REF-BASE-WAIT-NEW', 'REF-BASE-WAIT', 'wx_h5', "
-                             + "'CHANNEL-REF-BASE-WAIT-NEW', 'ACCEPTED', 'warn', ?, NULL, ?)")) {
-            Timestamp attemptTime = Timestamp.valueOf(LocalDateTime.now().minusSeconds(10));
-            statement.setTimestamp(1, attemptTime);
-            statement.setTimestamp(2, attemptTime);
+                             + "'CHANNEL-REF-BASE-WAIT-NEW', 'ACCEPTED', 'warn', ?, NULL, "
+                             + "(SELECT MAX(created_at) FROM t_refund_operation_log "
+                             + "WHERE refund_order_id = 'REF-BASE-WAIT'))")) {
+            statement.setTimestamp(1, Timestamp.valueOf(LocalDateTime.now().minusSeconds(10)));
             statement.executeUpdate();
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
 
@@ -589,7 +589,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "completed_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_refund_operation_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
-                    + "action_code VARCHAR(64), created_at DATETIME)");
+                    + "refund_attempt_no VARCHAR(64), action_code VARCHAR(64), created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_query_rate_limit_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rejection_no VARCHAR(64), "
                     + "channel_code VARCHAR(64), payment_order_id VARCHAR(64), "
@@ -997,11 +997,13 @@ public class PaymentTaskCenterMapperIntegrationTest {
             LocalDateTime now,
             int... secondsAgo) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO t_refund_operation_log(refund_order_id, action_code, created_at) VALUES (?, ?, ?)")) {
+                "INSERT INTO t_refund_operation_log(refund_order_id, refund_attempt_no, action_code, created_at) "
+                        + "VALUES (?, ?, ?, ?)")) {
             for (int seconds : secondsAgo) {
                 statement.setString(1, refundOrderId);
-                statement.setString(2, "CHANNEL_QUERY");
-                statement.setTimestamp(3, Timestamp.valueOf(now.minusSeconds(seconds)));
+                statement.setString(2, "RFA-" + refundOrderId);
+                statement.setString(3, "CHANNEL_QUERY");
+                statement.setTimestamp(4, Timestamp.valueOf(now.minusSeconds(seconds)));
                 statement.addBatch();
             }
             statement.executeBatch();
@@ -1052,10 +1054,11 @@ public class PaymentTaskCenterMapperIntegrationTest {
             LocalDateTime now,
             int secondsAgo) throws Exception {
         try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO t_refund_operation_log(refund_order_id, action_code, created_at) "
-                        + "VALUES (?, 'CHANNEL_QUERY_FAILED', ?)")) {
+                "INSERT INTO t_refund_operation_log(refund_order_id, refund_attempt_no, action_code, created_at) "
+                        + "VALUES (?, ?, 'CHANNEL_QUERY_FAILED', ?)")) {
             statement.setString(1, refundOrderId);
-            statement.setTimestamp(2, Timestamp.valueOf(now.minusSeconds(secondsAgo)));
+            statement.setString(2, "RFA-" + refundOrderId);
+            statement.setTimestamp(3, Timestamp.valueOf(now.minusSeconds(secondsAgo)));
             statement.executeUpdate();
         }
     }

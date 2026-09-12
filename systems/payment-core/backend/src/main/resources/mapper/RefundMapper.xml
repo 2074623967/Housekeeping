@@ -558,6 +558,7 @@
         INSERT INTO t_refund_operation_log (
             log_no,
             refund_order_id,
+            refund_attempt_no,
             action_code,
             action_name,
             from_status,
@@ -568,6 +569,7 @@
         ) VALUES (
             #{logNo},
             #{refundOrderId},
+            #{refundAttemptNo},
             #{actionCode},
             #{actionName},
             #{fromStatus},

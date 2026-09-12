@@ -381,7 +381,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             if (resultUnknown) {
                 throw refundSubmitReviewRequired();
             }
-            recordRefundSubmitFailure(refundOrderId, operator,
+            recordRefundSubmitFailure(refundOrderId, refundAttemptNo, operator,
                     "退款渠道下发快照校验失败，修复数据后再重试");
             refundMapper.markRefundAttemptFailed(refundAttemptNo);
             markFailedOrDeadLetter(eventNo);
@@ -413,7 +413,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
             channelRefundNo = normalizeChannelRefundNo(result.getChannelRefundNo());
         } catch (RefundChannelSubmitException exception) {
             if (!exception.isResultUnknown()) {
-                recordRefundSubmitFailure(refundOrderId, operator,
+                recordRefundSubmitFailure(refundOrderId, refundAttemptNo, operator,
                         "退款提交在调用渠道前被配置或治理门禁拒绝，等待修复后重试");
                 refundMapper.markRefundAttemptFailed(refundAttemptNo);
                 markFailedOrDeadLetter(eventNo);
@@ -434,6 +434,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         }
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
+                refundAttemptNo,
                 "CHANNEL_SUBMIT",
                 "提交退款渠道",
                 "PROCESSING",
@@ -452,9 +453,13 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 "refund submit result is unknown; verify the provider result before any retry");
     }
 
-    private void recordRefundSubmitFailure(String refundOrderId, String operator, String remark) {
+    private void recordRefundSubmitFailure(String refundOrderId,
+                                           String refundAttemptNo,
+                                           String operator,
+                                           String remark) {
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
+                refundAttemptNo,
                 "CHANNEL_SUBMIT_FAILED",
                 "退款渠道下发失败",
                 "PROCESSING",
@@ -473,6 +478,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 refundOrderId, refundAttemptNo, channelCode.trim());
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
+                refundAttemptNo,
                 "CHANNEL_SUBMIT_UNKNOWN",
                 "退款渠道下发结果未知",
                 "PROCESSING",

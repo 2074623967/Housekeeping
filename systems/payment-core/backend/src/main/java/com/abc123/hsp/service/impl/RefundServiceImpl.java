@@ -240,6 +240,7 @@ public class RefundServiceImpl implements RefundService {
                 normalizedChannel,
                 request.getChannelRefundNo(),
                 request.getRefundStatus(),
+                null,
                 CALLBACK_OPERATOR,
                 false);
     }
@@ -264,6 +265,7 @@ public class RefundServiceImpl implements RefundService {
                 snapshot.getChannelCode().trim().toLowerCase(Locale.ROOT),
                 result.getChannelRefundNo(),
                 result.getRefundStatus(),
+                snapshot.getRefundAttemptNo(),
                 operator,
                 true);
     }
@@ -291,6 +293,7 @@ public class RefundServiceImpl implements RefundService {
     private void recordChannelQueryFailure(RefundCallbackSourceDTO snapshot, String operator) {
         refundMapper.insertOperationLog(buildOperationLog(
                 snapshot.getRefundOrderId(),
+                snapshot.getRefundAttemptNo(),
                 "CHANNEL_QUERY_FAILED",
                 "退款渠道查单失败",
                 snapshot.getStatus(),
@@ -303,6 +306,7 @@ public class RefundServiceImpl implements RefundService {
                                                  String channel,
                                                  String channelRefundNo,
                                                  String targetStatus,
+                                                 String expectedRefundAttemptNo,
                                                  String operator,
                                                  boolean recordSameStatus) {
         RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate(refundOrderId);
@@ -317,6 +321,11 @@ public class RefundServiceImpl implements RefundService {
         if (!StringUtils.hasText(source.getRefundAttemptNo())) {
             throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
                     "refund has no current channel attempt");
+        }
+        if (StringUtils.hasText(expectedRefundAttemptNo)
+                && !Objects.equals(expectedRefundAttemptNo, source.getRefundAttemptNo())) {
+            throw new BusinessException(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH,
+                    "refund query belongs to an earlier refund attempt");
         }
         String matchedAttemptNo = refundMapper.findAttemptNoByChannelRefundNo(
                 channel, channelRefundNo);
@@ -336,6 +345,7 @@ public class RefundServiceImpl implements RefundService {
             if (recordSameStatus) {
                 refundMapper.insertOperationLog(buildOperationLog(
                         refundOrderId,
+                        source.getRefundAttemptNo(),
                         "CHANNEL_QUERY",
                         "退款渠道主动查单",
                         source.getStatus(),
@@ -375,6 +385,7 @@ public class RefundServiceImpl implements RefundService {
         }
         refundMapper.insertOperationLog(buildOperationLog(
                 refundOrderId,
+                source.getRefundAttemptNo(),
                 recordSameStatus ? "CHANNEL_QUERY_" + targetStatus : targetStatus,
                 recordSameStatus ? "退款渠道查单收口" : success ? "退款成功回调" : "退款失败回调",
                 STATUS_PROCESSING,
@@ -412,6 +423,7 @@ public class RefundServiceImpl implements RefundService {
         }
         refundMapper.insertOperationLog(buildOperationLog(
                 source.getRefundOrderId(),
+                source.getRefundAttemptNo(),
                 "CHANNEL_ACCEPTANCE_RECOVERED",
                 "退款渠道受理事实恢复",
                 source.getStatus(),
@@ -733,9 +745,22 @@ public class RefundServiceImpl implements RefundService {
                                                              String toStatus,
                                                              String operatorName,
                                                              String operationRemark) {
+        return buildOperationLog(refundOrderId, null, actionCode, actionName,
+                fromStatus, toStatus, operatorName, operationRemark);
+    }
+
+    public static RefundOperationLogEntity buildOperationLog(String refundOrderId,
+                                                             String refundAttemptNo,
+                                                             String actionCode,
+                                                             String actionName,
+                                                             String fromStatus,
+                                                             String toStatus,
+                                                             String operatorName,
+                                                             String operationRemark) {
         RefundOperationLogEntity entity = new RefundOperationLogEntity();
         entity.setLogNo(buildBusinessNo("ROL"));
         entity.setRefundOrderId(refundOrderId);
+        entity.setRefundAttemptNo(refundAttemptNo);
         entity.setActionCode(actionCode);
         entity.setActionName(actionName);
         entity.setFromStatus(fromStatus);

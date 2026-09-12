@@ -269,7 +269,8 @@ public class RefundApplicationConcurrencyIntegrationTest {
                     + "UNIQUE(payment_order_id, idempotency_key))");
             statement.execute("CREATE TABLE t_refund_operation_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, log_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "refund_order_id VARCHAR(64) NOT NULL, action_code VARCHAR(64) NOT NULL, "
+                    + "refund_order_id VARCHAR(64) NOT NULL, refund_attempt_no VARCHAR(64), "
+                    + "action_code VARCHAR(64) NOT NULL, "
                     + "action_name VARCHAR(128) NOT NULL, from_status VARCHAR(32) NOT NULL, "
                     + "to_status VARCHAR(32) NOT NULL, operator_name VARCHAR(64) NOT NULL, "
                     + "operation_remark VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL)");

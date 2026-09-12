@@ -889,6 +889,7 @@ class RefundServiceImplTest {
         verify(refundChannelQueryRateLimitService).acquire("wx_h5", "REF-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY".equals(log.getActionCode())
+                        && "RFA-001".equals(log.getRefundAttemptNo())
                         && "refund-query-operator".equals(log.getOperatorName())
                         && "PROCESSING".equals(log.getToStatus())));
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
@@ -1008,6 +1009,7 @@ class RefundServiceImplTest {
         assertEquals(ErrorCode.REFUND_CHANNEL_QUERY_FAILED, exception.getCode());
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "CHANNEL_QUERY_FAILED".equals(log.getActionCode())
+                        && "RFA-001".equals(log.getRefundAttemptNo())
                         && "refund-query-operator".equals(log.getOperatorName())
                         && "退款渠道查单未获得可信结果".equals(log.getOperationRemark())));
         org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
@@ -1102,6 +1104,32 @@ class RefundServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void shouldRejectChannelQueryResultWhenCurrentRefundAttemptChanged() {
+        RefundCallbackSourceDTO snapshot = buildCallbackSource("PROCESSING", "wx_h5", null);
+        snapshot.setSubmitEventStatus("UNKNOWN");
+        RefundCallbackSourceDTO current = buildCallbackSource("PROCESSING", "wx_h5", null);
+        current.setRefundAttemptNo("RFA-002");
+        current.setSubmitEventStatus("UNKNOWN");
+        when(refundMapper.findCallbackSourceByRefundOrderId("REF-001")).thenReturn(snapshot);
+        when(refundChannelQueryService.query(snapshot))
+                .thenReturn(buildQueryResult("PROCESSING", "CHANNEL-REF-OLD-ATTEMPT"));
+        when(refundMapper.findCallbackSourceForUpdate("REF-001")).thenReturn(current);
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().query(queryRequest()));
+
+        assertEquals(ErrorCode.REFUND_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).bindRefundAttemptAccepted(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).updateRefundStatus(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .insertOperationLog(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
