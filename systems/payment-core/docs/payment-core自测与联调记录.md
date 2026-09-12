@@ -13075,3 +13075,31 @@
 1. `business_ref_no` 使新产生的自动日终批次与任务日志可以结构化勾稽，但历史日志保持空值，不从自由摘要或同日批次猜测关联。
 2. 巡检仍默认关闭，且结论只覆盖本地批次表与任务日志表；不能解释为渠道账单、账务分录、资金或正式财务关账一致。
 3. 目标 MySQL 的在线 DDL、存量空值分布、多实例写入时序、P2 告警送达与处置仍需真实环境验证；本地结果不改变 release 治理阻断。
+
+## 482. 2026-09-12 自动日终关联运行方式隔离 V1.0 验证
+
+### 482.1 本轮补强
+
+1. 批次缺日志、日志缺批次和重复关联三类 Mapper 查询均把候选任务日志限定为 `PAYMENT_DAY_END / AUTO`。
+2. 重复关联的较早日志同样限定 `AUTO`，人工记录不能作为已存在的自动成功日志参与计数。
+3. 不改变成功创建条件、批次类型、业务日和批次号匹配规则，也不新增表结构、接口或页面字段。
+
+### 482.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 人工日志隔离 | 匹配同一自动批次号的 `MANUAL` 成功日志不能消除自动批次缺日志计数 |
+| 自动日志集合 | `MANUAL` 日志不进入无批次关联的自动成功日志计数，也不进入重复关联计数 |
+| 原有关联语义 | 日志恢复 `AUTO` 后，完全匹配、双向悬空和重复关联测试继续通过 |
+| 定向测试 | `PaymentTaskCenterMapperIntegrationTest`、巡检 Mapper 与任务中心服务共 `82` 项通过 |
+| payment-core 后端全量测试 | `1029` 项通过，`0` failures、`0` errors、`0` skipped |
+| XML 与补丁检查 | `PaymentTaskCenterMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2` 仅来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、统一 `blockerCount=1`、内部 `releaseBlockerCount=4` |
+| 代码提交 | `4e3b9514 fix(payment-core): scope day-end links to automatic runs` |
+| 前端与数据结构 | 无前端、HTTP、schema、索引或迁移变化，未重复运行管理端测试与构建 |
+
+### 482.3 当前判断
+
+1. 当前 SQL 与接口契约的 `PAYMENT_DAY_END / AUTO` 集合已经一致，人工日志不能替代自动运行证据。
+2. 数据库没有对历史 `business_ref_no` 的来源真实性作强制约束，目标环境仍需审计存量关联和写入权限；本地测试不证明生产数据未受污染。
+3. 本轮不改变数据水位、渠道账单、账务或资金边界，也不构成自动巡检已启用、告警闭环或 release 放行证明。
