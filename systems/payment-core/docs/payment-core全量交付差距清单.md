@@ -2345,6 +2345,14 @@
 4. 管理端 `23` 项单测和生产构建通过，最大 JS 包约 `545.05 kB`，保留既有超过 `500 kB` 告警；同一浏览器页验证 `EXHAUSTED`、`ACCEPTED + 待确认` 与无查询三种路由可依次重水合。代码提交为 `bec50adc fix(payment-core): refresh issue alert filters`。
 5. 本轮无后端、API、状态机、schema、索引或迁移变化；浏览器使用现有模拟数据，只证明路由筛选控件与页面刷新行为，不证明真实告警集合、供应商送达、人工确认或生产稳定性。release 四项真实治理阻断不变。
 
+### 8.286 2026-09-12 异常告警待派发精准下钻进展
+
+1. 任务中心“异常告警待派发”统计只覆盖来源 `IN_APP_OUTBOX`、待确认且状态为已生成、部分失败或派发失败的记录，原动作却进入无筛选的异常告警明细台，会混入外发、已确认和已派发记录。
+2. 告警列表查询新增只读虚拟状态 `PENDING_DISPATCH`，Mapper 将其展开为 `alert_status IN ('已生成', '部分失败', '派发失败')`；列表、计数与 CSV 共用该片段，不改变任何持久化状态。
+3. 任务中心动作路由改为 `/payment-issue-alerts?alertChannel=IN_APP_OUTBOX&alertStatus=PENDING_DISPATCH&ackStatus=待确认`，完整组合与积压统计条件一致；管理端状态下拉显示“待派发（已生成 / 部分失败 / 派发失败）”。
+4. 后端定向 `89` 项、payment-core 后端全量 `967` 项、管理端 `23` 项单测和生产构建通过，Mapper XML、补丁检查及目标 URL 浏览器水合通过；构建保留既有约 `545.15 kB` 单包告警。代码提交为 `6bf27d75 fix(payment-core): target pending alert dispatches`。
+5. 本轮无告警状态机、schema、索引或迁移变化；本地 H2 与模拟页面不证明真实积压、外部派发、供应商送达、人员确认或生产稳定性。统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

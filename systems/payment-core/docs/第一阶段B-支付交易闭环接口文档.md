@@ -4136,6 +4136,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 路由变化时必须清除旧选中告警和操作提示，避免新筛选集合显示上一集合的详情或结果信息；CSV 导出继续复用当前筛选。
 5. 本契约不新增 API 参数或响应字段，也不改变告警派发、供应商回执、人工确认和状态计算；筛选展示不能解释为真实送达或处置证明。
 
+### 14.281 异常告警待派发组合筛选契约
+
+1. `GET /api/payment-issues/alerts` 与 `GET /api/payment-issues/alerts/export` 的既有 `alertStatus` 参数新增只读查询虚拟值 `PENDING_DISPATCH`，其含义固定为 `alert_status` 属于已生成、部分失败或派发失败。
+2. `PENDING_DISPATCH` 不是告警发送状态，不得写入 `t_payment_issue_alert_log`，也不得用于派发结果、回执或确认状态迁移；既有单状态筛选保持精确匹配。
+3. 任务中心 `PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG.actionRoute` 固定为 `/payment-issue-alerts?alertChannel=IN_APP_OUTBOX&alertStatus=PENDING_DISPATCH&ackStatus=待确认`，与来源 outbox 待派发统计条件一致。
+4. 分页列表、对应总数和 CSV 必须使用相同状态展开规则；管理端把虚拟值显示为“待派发（已生成 / 部分失败 / 派发失败）”，不得展示为新的业务状态。
+5. 组合查询只反映 payment-core 本地告警日志，不证明实际派发已执行、供应商已接收、人员已响应或告警已处置。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

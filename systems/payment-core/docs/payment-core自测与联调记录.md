@@ -12250,3 +12250,34 @@
 1. 任务中心的“自动次数耗尽”和“已受理待确认”入口现在可在同一个告警页面内可靠切换，菜单清除查询也不会遗留旧筛选。
 2. 页面只消费既有查询参数和 API，不改变告警派发、回执回查、人工确认或导出规则。
 3. 本机模拟数据不证明真实供应商送达、回执状态、人工确认、告警处置或生产稳定性；release 四项真实治理阻断不变。
+
+## 454. 2026-09-12 异常告警待派发精准下钻 V1.0 验证
+
+### 454.1 本轮补强
+
+1. 告警列表查询新增只读 `PENDING_DISPATCH`，展开为已生成、部分失败和派发失败三种真实状态。
+2. 列表与计数共享 `alertStatusFilter`，CSV 继续复用列表 Mapper；该虚拟值不写入告警日志或派发流程。
+3. 任务中心待派发告警携带 `IN_APP_OUTBOX + PENDING_DISPATCH + 待确认` 三项条件进入明细台，管理端新增可识别的组合状态选项。
+
+### 454.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端定向测试 | `PaymentTaskCenterMapperIntegrationTest,PaymentTaskCenterServiceImplTest,PaymentIssueServiceImplTest,PaymentIssueControllerTest` `89` 项通过，`0` failures、`0` errors、`0` skipped |
+| 待派发组合筛选 | 正式 `PaymentIssueMapper.xml` 对现有夹具返回 `2` 条，状态依次为部分失败、已生成；列表与计数一致，并排除已确认、外发和非待派发状态 |
+| 任务中心动作路由 | `PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG` 固定携带 `alertChannel=IN_APP_OUTBOX&alertStatus=PENDING_DISPATCH&ackStatus=待确认` |
+| 管理端单测 | `23` 项通过，`0` failures；路由水合覆盖 `PENDING_DISPATCH` |
+| 管理端生产构建 | 通过；最大 JS 包约 `545.15 kB`，保留既有超过 `500 kB` 告警 |
+| 浏览器烟测 | 目标 URL 正确选中站内来源、待派发组合状态和待确认三个筛选控件，页面无运行时崩溃 |
+| 模拟数据边界 | 页面接口仍返回固定模拟快照，不证明筛选后的真实数据集合 |
+| payment-core 后端全量测试 | `967` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentIssueMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 扩展查询语义和管理端选项；无持久化状态机、schema、索引或迁移变化 |
+| 代码提交 | `6bf27d75 fix(payment-core): target pending alert dispatches` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 454.3 当前判断
+
+1. 待派发指标现在可定位到与统计条件等价的来源 outbox 集合，不再用无筛选全量日志替代处置对象。
+2. `PENDING_DISPATCH` 只是读取边界的组合条件，三种真实告警状态及派发状态迁移保持不变。
+3. 本地测试不证明真实告警积压、外部派发、供应商送达、人员确认或生产稳定性；release 四项真实治理阻断不变。
