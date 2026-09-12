@@ -270,12 +270,12 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(2, mapper.countPendingIssueAlertDispatches());
             assertEquals(1, mapper.countFailedIssueAlertDispatches());
             assertEquals(45, mapper.findOldestPendingIssueAlertDispatchMinutes());
-            assertEquals(8, mapper.countPendingIssueAlertReceipts());
+            assertEquals(7, mapper.countPendingIssueAlertReceipts());
             assertEquals(2, mapper.countDueIssueAlertReceipts(60, 10, 30));
             assertEquals(1, mapper.countBackingOffIssueAlertReceipts(60, 10, 30));
             assertEquals(1, mapper.countQueryingIssueAlertReceipts(30));
             assertEquals(1, mapper.countExhaustedIssueAlertReceipts(10, 30));
-            assertEquals(65, mapper.findOldestPendingIssueAlertReceiptMinutes());
+            assertEquals(10, mapper.findOldestPendingIssueAlertReceiptMinutes());
 
             PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);
             PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
@@ -294,6 +294,9 @@ public class PaymentTaskCenterMapperIntegrationTest {
             query.setReceiptQueryMinAgeSeconds(60);
             query.setReceiptQueryMaxAttempts(10);
             query.setReceiptQueryClaimTimeoutSeconds(30);
+            query.setReceiptQueryState("PENDING_RECEIPT");
+            assertEquals(7, issueMapper.countAlertLogs(query));
+            assertEquals(7, issueMapper.findAlertLogs(query).size());
             query.setReceiptQueryState("EXHAUSTED");
             assertEquals(1, issueMapper.countAlertLogs(query));
             PaymentIssueAlertLogRowDTO exhausted = issueMapper.findAlertLogs(query).get(0);

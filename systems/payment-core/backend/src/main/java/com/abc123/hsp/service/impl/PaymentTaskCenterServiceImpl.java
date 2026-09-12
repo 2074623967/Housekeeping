@@ -1338,7 +1338,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                         : "暂无待回查告警回执",
                 exhaustedIssueAlertReceiptCount > 0
                         ? "/payment-issue-alerts?receiptQueryState=EXHAUSTED"
-                        : "/payment-issue-alerts?providerDeliveryStatus=ACCEPTED&ackStatus=待确认",
+                        : "/payment-issue-alerts?receiptQueryState=PENDING_RECEIPT",
                 issueAlertReceiptThresholdExceeded ? "P1" : pendingIssueAlertReceiptCount > 0 ? "P2" : "P3",
                 issueAlertReceiptThresholdExceeded ? "danger" : pendingIssueAlertReceiptCount > 0 ? "warn" : "success"
         ));

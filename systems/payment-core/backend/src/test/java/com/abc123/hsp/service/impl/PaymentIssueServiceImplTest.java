@@ -167,7 +167,7 @@ class PaymentIssueServiceImplTest {
         query.setAlertStatus("  已派发  ");
         query.setAckStatus("  待确认  ");
         query.setProviderDeliveryStatus("  ACCEPTED  ");
-        query.setReceiptQueryState("  exhausted  ");
+        query.setReceiptQueryState("  pending_receipt  ");
         query.setPageNo(0);
         query.setPageSize(200);
 
@@ -183,7 +183,7 @@ class PaymentIssueServiceImplTest {
         assertEquals("已派发", normalized.getAlertStatus());
         assertEquals("待确认", normalized.getAckStatus());
         assertEquals("ACCEPTED", normalized.getProviderDeliveryStatus());
-        assertEquals("EXHAUSTED", normalized.getReceiptQueryState());
+        assertEquals("PENDING_RECEIPT", normalized.getReceiptQueryState());
         assertEquals(60, normalized.getReceiptQueryMinAgeSeconds());
         assertEquals(10, normalized.getReceiptQueryMaxAttempts());
         assertEquals(30, normalized.getReceiptQueryClaimTimeoutSeconds());

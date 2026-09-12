@@ -310,7 +310,7 @@ public class PaymentIssueServiceImpl implements PaymentIssueService {
             return "全部";
         }
         String normalized = normalizedValue.toUpperCase(Locale.ROOT);
-        if (!Arrays.asList("INITIAL_WAIT", "DUE", "BACKING_OFF", "QUERYING", "EXHAUSTED")
+        if (!Arrays.asList("PENDING_RECEIPT", "INITIAL_WAIT", "DUE", "BACKING_OFF", "QUERYING", "EXHAUSTED")
                 .contains(normalized)) {
             throw new IllegalArgumentException("不支持的回执回查状态：" + normalizedValue);
         }

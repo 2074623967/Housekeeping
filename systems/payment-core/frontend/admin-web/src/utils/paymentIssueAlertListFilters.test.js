@@ -9,7 +9,7 @@ test("hydrates payment issue alert log filters from route query", () => {
     alertStatus: "PENDING_DISPATCH",
     providerDeliveryStatus: "ACCEPTED",
     ackStatus: "待确认",
-    receiptQueryState: "EXHAUSTED"
+    receiptQueryState: "PENDING_RECEIPT"
   }), {
     alertNo: "ALERT-001",
     issueNo: "",
@@ -18,7 +18,7 @@ test("hydrates payment issue alert log filters from route query", () => {
     alertStatus: "PENDING_DISPATCH",
     ackStatus: "待确认",
     providerDeliveryStatus: "ACCEPTED",
-    receiptQueryState: "EXHAUSTED"
+    receiptQueryState: "PENDING_RECEIPT"
   });
 });
 

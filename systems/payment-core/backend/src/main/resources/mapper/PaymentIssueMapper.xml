@@ -458,7 +458,8 @@
 
     <sql id="receiptQueryStateExpression">
         CASE
-            WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+            WHEN source_alert_no IS NOT NULL
+                 AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                  AND alert_status = '已派发'
                  AND provider_delivery_status = 'ACCEPTED'
                  AND ack_status = '待确认'
@@ -466,26 +467,30 @@
                  AND last_receipt_query_at &gt; TIMESTAMPADD(
                     SECOND, -#{query.receiptQueryClaimTimeoutSeconds}, NOW())
                 THEN 'QUERYING'
-            WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+            WHEN source_alert_no IS NOT NULL
+                 AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                  AND alert_status = '已派发'
                  AND provider_delivery_status = 'ACCEPTED'
                  AND ack_status = '待确认'
                  AND receipt_query_count &gt;= #{query.receiptQueryMaxAttempts}
                 THEN 'EXHAUSTED'
-            WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+            WHEN source_alert_no IS NOT NULL
+                 AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                  AND alert_status = '已派发'
                  AND provider_delivery_status = 'ACCEPTED'
                  AND ack_status = '待确认'
                  AND created_at &gt; TIMESTAMPADD(SECOND, -#{query.receiptQueryMinAgeSeconds}, NOW())
                 THEN 'INITIAL_WAIT'
-            WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+            WHEN source_alert_no IS NOT NULL
+                 AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                  AND alert_status = '已派发'
                  AND provider_delivery_status = 'ACCEPTED'
                  AND ack_status = '待确认'
                  AND receipt_query_count &lt; #{query.receiptQueryMaxAttempts}
                  AND next_receipt_query_at &gt; NOW()
                 THEN 'BACKING_OFF'
-            WHEN alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+            WHEN source_alert_no IS NOT NULL
+                 AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
                  AND alert_status = '已派发'
                  AND provider_delivery_status = 'ACCEPTED'
                  AND ack_status = '待确认'
@@ -499,6 +504,7 @@
 
     <sql id="receiptQueryStateFilter">
         <if test="query.receiptQueryState != null and query.receiptQueryState != '' and query.receiptQueryState != '全部'">
+            AND source_alert_no IS NOT NULL
             AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
             AND alert_status = '已派发'
             AND provider_delivery_status = 'ACCEPTED'

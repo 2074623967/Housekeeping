@@ -236,7 +236,9 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
                         && "P2".equals(alert.getAlertLevel())
-                        && alert.getAlertMessage().contains("2 条供应商已受理告警")));
+                        && alert.getAlertMessage().contains("2 条供应商已受理告警")
+                        && "/payment-issue-alerts?receiptQueryState=PENDING_RECEIPT"
+                        .equals(alert.getActionRoute())));
     }
 
     @Test

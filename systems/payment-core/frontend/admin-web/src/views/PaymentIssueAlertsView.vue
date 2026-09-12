@@ -319,6 +319,7 @@ watch(
           <label>回查队列状态</label>
           <select v-model="filters.receiptQueryState">
             <option value="全部">全部</option>
+            <option value="PENDING_RECEIPT">待回查（全部）</option>
             <option value="INITIAL_WAIT">首次等待</option>
             <option value="DUE">当前可执行</option>
             <option value="BACKING_OFF">退避中</option>

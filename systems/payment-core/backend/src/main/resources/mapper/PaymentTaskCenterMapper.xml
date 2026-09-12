@@ -860,6 +860,8 @@
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
         WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
     </select>
@@ -867,7 +869,8 @@
     <select id="countDueIssueAlertReceipts" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
-        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+        WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -884,7 +887,8 @@
     <select id="countBackingOffIssueAlertReceipts" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
-        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+        WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -901,7 +905,8 @@
     <select id="countQueryingIssueAlertReceipts" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
-        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+        WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -912,7 +917,8 @@
     <select id="countExhaustedIssueAlertReceipts" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
-        WHERE alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+        WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
@@ -928,6 +934,8 @@
         SELECT COALESCE(MAX(TIMESTAMPDIFF(MINUTE, created_at, NOW())), 0)
         FROM t_payment_issue_alert_log
         WHERE source_alert_no IS NOT NULL
+          AND alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
     </select>
