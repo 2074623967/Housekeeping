@@ -54,11 +54,13 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
                                               PaymentOrderSubmitRequestDTO request) {
         String requestId = accessService.newRequestId();
         GatewayTransactionAccessService.AccessContext context = null;
+        boolean upstreamInvoked = false;
         try {
             validateRequest(request);
             context = accessService.authorize(appCode, accessKey, request.getResolvedChannelCode(),
                     GatewayTransactionAccessService.PAYMENT_SUBMIT);
             request.setResolvedChannelCode(context.getChannelCode());
+            upstreamInvoked = true;
             UpstreamPaymentSubmitResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamPaymentSubmitResponseDTO.class);
             PaymentOrderSubmitResultDTO result = validateUpstreamResponse(response);
@@ -69,12 +71,16 @@ public class PaymentOrderSubmitServiceImpl implements PaymentOrderSubmitService 
         } catch (GatewayAccessException exception) {
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.PAYMENT_SUBMIT,
-                    "FAILED", "danger", exception.getCode());
+                    upstreamInvoked ? "UNKNOWN" : "FAILED",
+                    upstreamInvoked ? "warn" : "danger",
+                    exception.getCode());
             throw exception;
         } catch (RuntimeException exception) {
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.PAYMENT_SUBMIT,
-                    "FAILED", "danger", "GATEWAY_UPSTREAM_UNAVAILABLE");
+                    upstreamInvoked ? "UNKNOWN" : "FAILED",
+                    upstreamInvoked ? "warn" : "danger",
+                    "GATEWAY_UPSTREAM_UNAVAILABLE");
             LOGGER.error("Payment submit upstream failed, requestId={}, exceptionType={}",
                     requestId, exception.getClass().getName());
             throw new GatewayAccessException("GATEWAY_UPSTREAM_UNAVAILABLE",

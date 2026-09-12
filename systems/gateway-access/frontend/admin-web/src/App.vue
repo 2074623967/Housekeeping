@@ -454,6 +454,7 @@ onMounted(loadAll);
           <select v-model="auditFilters.resultStatus">
             <option>全部</option>
             <option>SUCCESS</option>
+            <option>UNKNOWN</option>
             <option>FAILED</option>
           </select>
           <button class="button secondary" @click="applyAuditFilters">查询</button>

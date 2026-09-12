@@ -55,7 +55,10 @@ class RefundOrderSubmitServiceImplTest {
                 () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
 
         assertEquals("GATEWAY_UPSTREAM_NOT_CONFIGURED", exception.getCode());
-        verify(mapper).insertAuditLog(any(GatewayAuditLogEntity.class));
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("FAILED", captor.getValue().getResultStatus());
+        assertEquals("danger", captor.getValue().getResultStatusType());
     }
 
     @Test
@@ -101,6 +104,26 @@ class RefundOrderSubmitServiceImplTest {
                 () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
 
         assertEquals("GATEWAY_UPSTREAM_INVALID_RESPONSE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("UNKNOWN", captor.getValue().getResultStatus());
+        assertEquals("warn", captor.getValue().getResultStatusType());
+    }
+
+    @Test
+    void shouldAuditUnknownWhenRefundSubmitTimesOutAfterCallingUpstream() {
+        configureEnabledGovernance();
+        when(restTemplate.postForObject(any(String.class), any(), eq(UpstreamRefundSubmitResponseDTO.class)))
+                .thenThrow(new IllegalStateException("timeout"));
+
+        GatewayAccessException exception = assertThrows(GatewayAccessException.class,
+                () -> service().submit("APP_PAY_CORE", "secret", "127.0.0.1", request()));
+
+        assertEquals("GATEWAY_UPSTREAM_UNAVAILABLE", exception.getCode());
+        ArgumentCaptor<GatewayAuditLogEntity> captor = ArgumentCaptor.forClass(GatewayAuditLogEntity.class);
+        verify(mapper).insertAuditLog(captor.capture());
+        assertEquals("UNKNOWN", captor.getValue().getResultStatus());
+        assertEquals("warn", captor.getValue().getResultStatusType());
     }
 
     @Test

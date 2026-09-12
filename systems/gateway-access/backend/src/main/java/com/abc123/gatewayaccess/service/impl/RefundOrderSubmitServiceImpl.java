@@ -55,11 +55,13 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
                                              RefundOrderSubmitRequestDTO request) {
         String requestId = accessService.newRequestId();
         GatewayTransactionAccessService.AccessContext context = null;
+        boolean upstreamInvoked = false;
         try {
             validateRequest(request);
             context = accessService.authorize(appCode, accessKey, request.getChannelCode(),
                     GatewayTransactionAccessService.REFUND_SUBMIT);
             request.setChannelCode(context.getChannelCode());
+            upstreamInvoked = true;
             UpstreamRefundSubmitResponseDTO response = restTemplate.postForObject(
                     context.getUpstreamUrl(), request, UpstreamRefundSubmitResponseDTO.class);
             RefundOrderSubmitResultDTO result = validateUpstreamResponse(response);
@@ -70,12 +72,16 @@ public class RefundOrderSubmitServiceImpl implements RefundOrderSubmitService {
         } catch (GatewayAccessException exception) {
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.REFUND_SUBMIT,
-                    "FAILED", "danger", exception.getCode());
+                    upstreamInvoked ? "UNKNOWN" : "FAILED",
+                    upstreamInvoked ? "warn" : "danger",
+                    exception.getCode());
             throw exception;
         } catch (RuntimeException exception) {
             accessService.audit(requestId, context, appCode, clientIp,
                     GatewayTransactionAccessService.REFUND_SUBMIT,
-                    "FAILED", "danger", "GATEWAY_UPSTREAM_UNAVAILABLE");
+                    upstreamInvoked ? "UNKNOWN" : "FAILED",
+                    upstreamInvoked ? "warn" : "danger",
+                    "GATEWAY_UPSTREAM_UNAVAILABLE");
             LOGGER.error("Refund submit upstream failed, requestId={}, exceptionType={}",
                     requestId, exception.getClass().getName());
             throw new GatewayAccessException("GATEWAY_UPSTREAM_UNAVAILABLE",
