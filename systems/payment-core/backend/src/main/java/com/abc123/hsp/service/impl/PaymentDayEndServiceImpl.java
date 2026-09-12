@@ -189,7 +189,8 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
     }
 
     private String resolveBatchStatus(PaymentDayEndBatchEntity entity) {
-        if (entity.getChannelAbnormalCount() > 0
+        if (entity.getPaymentSuccessGapCount() > 0
+                || entity.getChannelAbnormalCount() > 0
                 || entity.getInternalAbnormalCount() > 0
                 || entity.getPendingRefundCount() > 0) {
             return "WARNING";

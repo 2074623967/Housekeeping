@@ -133,6 +133,31 @@ class PaymentDayEndServiceImplTest {
     }
 
     @Test
+    void shouldWarnWhenOnlyPaymentSuccessGapRemains() {
+        String bizDate = "2026-07-19";
+        when(paymentDayEndMapper.countPaymentSuccessGapByDate(bizDate)).thenReturn(1);
+        when(paymentDayEndMapper.sumPaymentSuccessGapAmountByDate(bizDate)).thenReturn(new BigDecimal("268.00"));
+        when(paymentDayEndMapper.findRecentBatches())
+                .thenReturn(Collections.<PaymentDayEndBatchListItemDTO>emptyList());
+
+        PaymentDayEndRunRequestDTO request = new PaymentDayEndRunRequestDTO();
+        request.setBizDate(bizDate);
+        request.setTriggeredBy("finance-ops");
+
+        new PaymentDayEndServiceImpl(paymentDayEndMapper).run(request);
+
+        ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
+                ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
+        verify(paymentDayEndMapper).insertBatch(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("WARNING", captor.getValue().getBatchStatus());
+        org.junit.jupiter.api.Assertions.assertEquals("warn", captor.getValue().getBatchStatusType());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(1), captor.getValue().getPaymentSuccessGapCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), captor.getValue().getChannelAbnormalCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), captor.getValue().getInternalAbnormalCount());
+        org.junit.jupiter.api.Assertions.assertEquals(Integer.valueOf(0), captor.getValue().getPendingRefundCount());
+    }
+
+    @Test
     void shouldResolveDefaultBizDateInBusinessTimezone() {
         ZoneId businessZone = ZoneId.of("Asia/Shanghai");
         LocalDate businessToday = LocalDate.now(businessZone);
