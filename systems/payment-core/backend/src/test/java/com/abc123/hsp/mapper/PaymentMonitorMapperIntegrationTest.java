@@ -2,6 +2,7 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentChannelMetricDTO;
 import java.io.InputStream;
 import java.sql.Statement;
@@ -68,6 +69,21 @@ class PaymentMonitorMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldReturnMonitorAlertsInExplicitOperationsPriority() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            List<PaymentAlertItemDTO> alerts = session.getMapper(PaymentMonitorMapper.class).findAlerts();
+
+            assertEquals(3, alerts.size());
+            assertEquals("WAIT_CALLBACK_TIMEOUT", alerts.get(0).getAlertType());
+            assertEquals("P1", alerts.get(0).getAlertLevel());
+            assertEquals("REFUND_FAIL", alerts.get(1).getAlertType());
+            assertEquals("P1", alerts.get(1).getAlertLevel());
+            assertEquals("CHANNEL_DISABLED", alerts.get(2).getAlertType());
+            assertEquals("P2", alerts.get(2).getAlertLevel());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -75,17 +91,25 @@ class PaymentMonitorMapperIntegrationTest {
                     + PaymentReturnCodeSnapshotMapperIntegrationTest.class.getName()
                     + ".format\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
+            statement.execute("DROP TABLE IF EXISTS t_refund_order");
+            statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64), "
                     + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2))");
+            statement.execute("CREATE TABLE t_refund_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
+            statement.execute("CREATE TABLE t_payment_channel_config ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
             statement.executeUpdate("INSERT INTO t_payment_order("
                     + "channel_code, payment_method, status, amount) VALUES "
                     + "('channel-b', 'method-a', 'SUCCESS', 10.00), "
-                    + "('channel-b', 'method-a', 'FAIL', 10.00), "
+                    + "('channel-b', 'method-a', 'WAIT_CALLBACK', 10.00), "
                     + "('channel-a', 'method-b', 'SUCCESS', 10.00), "
                     + "('channel-a', 'method-b', 'FAIL', 10.00), "
                     + "('channel-a', 'method-a', 'SUCCESS', 10.00), "
                     + "('channel-a', 'method-a', 'FAIL', 10.00)");
+            statement.executeUpdate("INSERT INTO t_refund_order(status) VALUES ('FAIL')");
+            statement.executeUpdate("INSERT INTO t_payment_channel_config(status) VALUES ('DISABLED')");
             session.commit();
         }
     }
