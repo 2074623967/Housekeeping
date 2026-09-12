@@ -1140,7 +1140,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 "PIA-IM-LIMITED", "PIA-OUTBOX-LIMITED", "ISSUE-001", 0, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-LIMITED", 1, "RATE_LIMITED", 60, 10)).thenReturn(1);
+                "PIA-IM-LIMITED", "PIA-OUTBOX-LIMITED", "ISSUE-001",
+                1, "RATE_LIMITED", 60, 10)).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         doThrow(new BusinessException(
                 ErrorCode.PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED,
@@ -1295,7 +1296,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 0, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "ADAPTER_MISSING", 60, 10)).thenReturn(1);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001",
+                1, "ADAPTER_MISSING", 60, 10)).thenReturn(1);
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
@@ -1352,7 +1354,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 "PIA-IM-SELECT-ERROR", "PIA-OUTBOX-001", "ISSUE-001", 2, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-SELECT-ERROR", 3, "QUERY_ERROR", 240, 10)).thenReturn(1);
+                "PIA-IM-SELECT-ERROR", "PIA-OUTBOX-001", "ISSUE-001",
+                3, "QUERY_ERROR", 240, 10)).thenReturn(1);
         when(receiptQueryAdapter.supports("IM"))
                 .thenThrow(new IllegalStateException("adapter selection failed"));
 
@@ -1364,7 +1367,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         ).reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-SELECT-ERROR", 3, "QUERY_ERROR", 240, 10);
+                "PIA-IM-SELECT-ERROR", "PIA-OUTBOX-001", "ISSUE-001",
+                3, "QUERY_ERROR", 240, 10);
         verify(receiptQueryAdapter, org.mockito.Mockito.never())
                 .query(any(PaymentIssueAlertLogEntity.class));
         verify(receiptQueryRateLimitService, org.mockito.Mockito.never())
@@ -1383,7 +1387,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 0, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "RECEIPT_CONFLICT", 60, 10)).thenReturn(1);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001",
+                1, "RECEIPT_CONFLICT", 60, 10)).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
                 buildDeliveryResult("IM-RECEIPT-OTHER", "DELIVERED", "供应商查询确认送达", ""));
@@ -1409,7 +1414,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 0, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "RECEIPT_CONFLICT", 60, 10)).thenReturn(1);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001",
+                1, "RECEIPT_CONFLICT", 60, 10)).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
                 buildDeliveryResult(null, "DELIVERED", "供应商查询确认送达", ""));
@@ -1423,7 +1429,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "RECEIPT_CONFLICT", 60, 10);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001",
+                1, "RECEIPT_CONFLICT", 60, 10);
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(1, result.getFailCount());
     }
@@ -1437,7 +1444,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 0, true, 10, 30))
                 .thenReturn(1, 1, 1, 1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                eq("PIA-IM-001"), eq(1), org.mockito.ArgumentMatchers.anyString(), eq(60), eq(10)))
+                eq("PIA-IM-001"), eq("PIA-OUTBOX-001"), eq("ISSUE-001"),
+                eq(1), org.mockito.ArgumentMatchers.anyString(), eq(60), eq(10)))
                 .thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
@@ -1457,9 +1465,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO normalizedResult = service.reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper, times(3)).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "QUERY_ERROR", 60, 10);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 1, "QUERY_ERROR", 60, 10);
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "ACCEPTED", 60, 10);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 1, "ACCEPTED", 60, 10);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
         Assertions.assertEquals(1, unknownResult.getFailCount());
@@ -1477,7 +1485,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
                 "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 0, true, 10, 30))
                 .thenReturn(1, 1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                eq("PIA-IM-001"), eq(1), org.mockito.ArgumentMatchers.anyString(), eq(60), eq(10))).thenReturn(1);
+                eq("PIA-IM-001"), eq("PIA-OUTBOX-001"), eq("ISSUE-001"),
+                eq(1), org.mockito.ArgumentMatchers.anyString(), eq(60), eq(10))).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenReturn(
                 buildDeliveryResult("IM-RECEIPT-001", "ACCEPTED", "供应商仍在处理", ""),
@@ -1492,9 +1501,9 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO failedResult = service.reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "ACCEPTED", 60, 10);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 1, "ACCEPTED", 60, 10);
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-001", 1, "FAILED", 60, 10);
+                "PIA-IM-001", "PIA-OUTBOX-001", "ISSUE-001", 1, "FAILED", 60, 10);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .updateIssueAlertProviderReceipt(any(PaymentIssueAlertLogEntity.class));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
@@ -1514,7 +1523,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.claimIssueAlertReceiptQuery(
                 "PIA-IM-BACKOFF", "PIA-OUTBOX-BACKOFF", "ISSUE-001", 4, true, 10, 30)).thenReturn(1);
         when(paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-BACKOFF", 5, "QUERY_ERROR", 900, 10)).thenReturn(1);
+                "PIA-IM-BACKOFF", "PIA-OUTBOX-BACKOFF", "ISSUE-001",
+                5, "QUERY_ERROR", 900, 10)).thenReturn(1);
         when(receiptQueryAdapter.supports("IM")).thenReturn(true);
         when(receiptQueryAdapter.query(acceptedLog)).thenThrow(new IllegalStateException("provider unavailable"));
         PaymentIssueAlertDeliveryServiceImpl service = new PaymentIssueAlertDeliveryServiceImpl(
@@ -1527,7 +1537,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentTaskActionResultDTO result = service.reconcileDeliveryReceipts("payment-core-admin");
 
         verify(paymentTaskCenterMapper).completeIssueAlertReceiptQueryAttempt(
-                "PIA-IM-BACKOFF", 5, "QUERY_ERROR", 900, 10);
+                "PIA-IM-BACKOFF", "PIA-OUTBOX-BACKOFF", "ISSUE-001",
+                5, "QUERY_ERROR", 900, 10);
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(1, result.getFailCount());
     }
@@ -1552,7 +1563,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         verify(receiptQueryRateLimitService, org.mockito.Mockito.never())
                 .acquire(any(String.class), any(String.class));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never()).completeIssueAlertReceiptQueryAttempt(
-                any(String.class), org.mockito.ArgumentMatchers.anyInt(), any(String.class),
+                any(String.class), any(String.class), any(String.class),
+                org.mockito.ArgumentMatchers.anyInt(), any(String.class),
                 org.mockito.ArgumentMatchers.anyInt(),
                 org.mockito.ArgumentMatchers.anyInt());
         Assertions.assertEquals(0, result.getSuccessCount());

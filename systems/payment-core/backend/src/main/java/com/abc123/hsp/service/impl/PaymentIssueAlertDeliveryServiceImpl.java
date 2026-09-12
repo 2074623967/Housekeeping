@@ -1300,6 +1300,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                                              String queryResult) {
         int affectedRows = paymentTaskCenterMapper.completeIssueAlertReceiptQueryAttempt(
                 acceptedLog.getAlertNo(),
+                acceptedLog.getSourceAlertNo().trim(),
+                acceptedLog.getIssueNo().trim(),
                 previousAttemptCount + 1,
                 queryResult,
                 calculateReceiptQueryRetryDelaySeconds(previousAttemptCount),

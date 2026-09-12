@@ -269,6 +269,8 @@ public interface PaymentTaskCenterMapper {
      * 保存未送达或失败回查的有限结果及下一次自动重试时间。
      */
     int completeIssueAlertReceiptQueryAttempt(@Param("alertNo") String alertNo,
+                                              @Param("sourceAlertNo") String sourceAlertNo,
+                                              @Param("issueNo") String issueNo,
                                               @Param("attemptCount") int attemptCount,
                                               @Param("queryResult") String queryResult,
                                               @Param("nextDelaySeconds") int nextDelaySeconds,

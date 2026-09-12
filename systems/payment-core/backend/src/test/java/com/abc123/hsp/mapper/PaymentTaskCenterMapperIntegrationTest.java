@@ -605,10 +605,26 @@ public class PaymentTaskCenterMapperIntegrationTest {
                 statement.executeUpdate("UPDATE t_payment_issue_alert_log "
                         + "SET receipt_query_count = 1, receipt_query_result = 'QUERYING' "
                         + "WHERE alert_no IN ('PIA-RECEIPT-ORPHAN', "
+                        + "'PIA-RECEIPT-WRONG-ISSUE', "
                         + "'PIA-RECEIPT-NESTED-SOURCE', 'PIA-RECEIPT-ACKNOWLEDGED-SOURCE')");
             }
             assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
-                    orphan.getAlertNo(), 1, "FAILED", 60, 2));
+                    orphan.getAlertNo(), "PIA-OUTBOX-MISSING", orphan.getIssueNo(),
+                    1, "FAILED", 60, 2));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    wrongIssueDelivery.getAlertNo(), wrongIssueDelivery.getSourceAlertNo(),
+                    wrongIssueDelivery.getIssueNo(), 1, "FAILED", 60, 2));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    nestedSourceDelivery.getAlertNo(), nestedSourceDelivery.getSourceAlertNo(),
+                    nestedSourceDelivery.getIssueNo(), 1, "FAILED", 60, 2));
+            assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
+                    acknowledgedSourceDelivery.getAlertNo(), acknowledgedSourceDelivery.getSourceAlertNo(),
+                    acknowledgedSourceDelivery.getIssueNo(), 1, "FAILED", 60, 2));
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET receipt_query_result = 'QUERYING' "
+                        + "WHERE alert_no = 'PIA-RECEIPT-ACKNOWLEDGED-SOURCE'");
+            }
             PaymentIssueAlertLogEntity orphanUpdate = new PaymentIssueAlertLogEntity();
             orphanUpdate.setAlertNo(orphan.getAlertNo());
             orphanUpdate.setProviderDeliveryStatus("DELIVERED");
@@ -637,8 +653,15 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(), 0, false, 2, 30));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(), 0, false, 2, 30));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    accepted.getAlertNo(), wrongIssueSource.getAlertNo(), accepted.getIssueNo(),
+                    1, "ACCEPTED", 60, 2));
+            assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
+                    accepted.getAlertNo(), accepted.getSourceAlertNo(), wrongIssueSource.getIssueNo(),
+                    1, "ACCEPTED", 60, 2));
             assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
-                    accepted.getAlertNo(), 1, "ACCEPTED", 60, 2));
+                    accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(),
+                    1, "ACCEPTED", 60, 2));
             assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
 
             try (Statement statement = session.getConnection().createStatement()) {
@@ -653,9 +676,11 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(1, mapper.claimIssueAlertReceiptQuery(
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(), 1, false, 2, 30));
             assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
-                    accepted.getAlertNo(), 1, "FAILED", 120, 2));
+                    accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(),
+                    1, "FAILED", 120, 2));
             assertEquals(1, mapper.completeIssueAlertReceiptQueryAttempt(
-                    accepted.getAlertNo(), 2, "FAILED", 120, 2));
+                    accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(),
+                    2, "FAILED", 120, 2));
             assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
             List<PaymentIssueAlertLogEntity> manualCandidates = mapper.findAcceptedIssueAlertDeliveryLogs(10);
             assertEquals(1, manualCandidates.size());
@@ -678,7 +703,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(), 3, true, 2, 30));
             assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
-                    accepted.getAlertNo(), 3, "FAILED", 120, 2));
+                    accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(),
+                    3, "FAILED", 120, 2));
             PaymentIssueAlertLogEntity lateUpdate = new PaymentIssueAlertLogEntity();
             lateUpdate.setAlertNo(accepted.getAlertNo());
             lateUpdate.setProviderDeliveryStatus("DELIVERED");
