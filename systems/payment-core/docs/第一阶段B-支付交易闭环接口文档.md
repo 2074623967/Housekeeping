@@ -3946,6 +3946,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `PENDING / CLEARING_ACCEPTED` 仍必须校验支付成功事实、金额、订单、用户、服务者及 HTTP 配置后按阶段投递；AMQP 仍需重建消息载荷并等待 publisher confirm，不使用 `COMPLETED` 快捷恢复。
 5. 该契约只消除本地终态补写对无关数据和配置的依赖，不把 `COMPLETED` 扩张为真实清分完成、账务入账或资金一致性证明。
 
+### 14.255 支付事件到期重试总览口径契约
+
+1. `GET /api/payment-events/overview` 的 `dueRetryEventCount` 表示在当前筛选范围内满足自动事件重试候选条件的记录数，不再只表示 `FAILED` 且已到显式重试时间的事件。
+2. 候选条件为：`publishStatus=FAILED`，或 `publishStatus=PENDING` 且 `eventType` 为 `PAYMENT_SUCCESS / REFUND_SUBMIT`；同时 `nextRetryAt` 必须为空或不晚于服务端当前时间。
+3. `PENDING` 的其他事件类型、`SUCCESS / DEAD_LETTER / UNKNOWN` 以及设置了未来 `nextRetryAt` 的事件不计入该字段；自动任务和总览必须复用同一服务端 SQL 条件。
+4. 总览继续应用支付单号、事件类型、发布状态、下游系统和事件主题筛选；自动任务候选查询不应用页面筛选且受批次上限约束，因此页面值不承诺等于某次任务实际处理数。
+5. 字段只描述查询时刻的候选快照，不证明任务已取得锁、执行重试、下游接受或业务完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

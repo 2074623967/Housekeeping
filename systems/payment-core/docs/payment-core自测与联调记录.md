@@ -11501,3 +11501,32 @@
 1. `COMPLETED` 现在真正表示两个 HTTP 下游均已接受、只剩本地发布终态待修复；恢复不再被已经无关的载荷来源或下游配置阻断。
 2. 事件行锁、可重发状态和 `markPublishSuccess` 受影响行数仍承担本地并发与终态裁决；写入失败不会被包装成成功，而会沿原失败/死信路径保留。
 3. 本地 Mockito 不证明生产事件更新一定成功、真实下游接受、清分完成、账务入账、MySQL 多实例时序或稳定性；release 四项真实治理阻断不变。
+
+## 428. 2026-09-12 支付事件到期重试指标口径对齐 V1.0 验证
+
+### 428.1 本轮补强
+
+1. `findOverview.dueRetryEventCount` 与 `findDueFailedEventNos` 复用 `automaticRetryCandidateCondition` SQL 片段，避免总览和自动任务因重复条件再次漂移。
+2. 统一口径为：`FAILED` 或 `PAYMENT_SUCCESS / REFUND_SUBMIT` 的 `PENDING`，且 `next_retry_at` 为空或不晚于当前时间；查询筛选仍通过既有 `paymentEventWhere` 约束总览范围。
+3. 管理端说明改为“与自动任务候选口径一致”，DTO 注释同步，不改变字段名、响应结构、状态机或重试任务实现。
+
+### 428.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 定向测试 | `PaymentEventRepublishAuditMapperIntegrationTest` `6` 项通过，`0` failures、`0` errors、`0` skipped |
+| 候选一致性 | 同一夹具下总览计数为 `3`，候选列表恰为无未来时间的既有 `FAILED`、`PENDING PAYMENT_SUCCESS`、`PENDING REFUND_SUBMIT` |
+| 排除规则 | `PENDING PAYMENT_PENDING` 和未来到期 `FAILED` 不进入总览计数及自动候选列表 |
+| payment-core 后端全量测试 | `944` 项通过，`0` failures、`0` errors、`0` skipped |
+| payment-core 管理端测试 | `15` 项通过，`0` fail |
+| 管理端生产构建 | 通过；保留既有 `542.22 kB` 单包大于 `500 kB` 告警 |
+| Mapper 与补丁检查 | `PaymentEventMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API 字段名、schema、索引或迁移变化 |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+| 代码提交 | `76fdb49a fix(payment-core): align due event metrics with retries` |
+
+### 428.3 当前判断
+
+1. 运营总览的“到期待重试”现在可作为自动任务当前候选规模的同口径观察值，不再系统性漏掉 `nextRetryAt` 为空的失败事件或首次待派发事件。
+2. 总览仍受页面筛选条件影响，而自动任务读取全局有界批次；筛选后的页面数值不能解释为任务本次一定处理的数量，执行时还会受并发状态变化和行锁裁决影响。
+3. 本地 H2、测试和构建不证明生产候选规模、任务已执行、真实下游完成或稳定性；release 四项真实治理阻断不变。

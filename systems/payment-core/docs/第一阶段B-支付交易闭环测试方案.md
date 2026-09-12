@@ -2111,6 +2111,15 @@
 5. 回归非法模式和非法 HTTP 阶段，验证均在支付详情读取前失败且外部零调用；执行定向与全量测试并记录首次夹具错误，不以清理多余 stub 掩盖第一次结果。
 6. 另行验证生产 MySQL 条件更新、多实例事件锁、真实下游受理记录和账务入账；本地测试不得把阶段记录解释为外部资金事实。
 
+### 4.272 支付事件到期重试总览口径保护
+
+1. 使用正式 `PaymentEventMapper.xml` 构造 `FAILED + nextRetryAt=null`、`PENDING PAYMENT_SUCCESS + null`、`PENDING REFUND_SUBMIT + null`，验证总览计数和自动候选列表同时包含三者。
+2. 构造不支持自动派发的 `PENDING PAYMENT_PENDING` 与未来到期的 `FAILED`，验证两者均不进入总览计数或自动候选列表。
+3. 验证 `findOverview` 和 `findDueFailedEventNos` 引用同一 `automaticRetryCandidateCondition` SQL 片段，避免仅靠两个结果碰巧相等而遗漏结构性防漂移。
+4. 回归页面筛选后的总览、自动任务全局批次上限及创建时间/主键排序，明确总览值与单次实际处理数的差异边界。
+5. 执行正式 Mapper 定向测试、payment-core 后端全量测试、管理端测试与生产构建、Mapper XML 和补丁检查；保留构建体积告警。
+6. 另行验证生产 MySQL 当前时间、时区、多实例候选竞争和真实任务处理量；本地 H2 结果不得包装为生产补偿执行或下游收口证明。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。
