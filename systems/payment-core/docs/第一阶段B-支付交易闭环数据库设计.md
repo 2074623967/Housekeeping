@@ -1545,6 +1545,17 @@ t_order
 3. 自增 `id` 只承担同秒确定排序，不替代外部 `refundAttemptNo` 业务身份；查询为空由事件派发层按失败/死信规则处理，不能解释为渠道拒绝或退款失败。
 4. H2 MySQL 模式验证正式 SQL 语义，不替代生产 MySQL 执行计划、锁范围与多实例竞态检查。
 
+### 4.180 任务运行日志业务日关联边界
+
+表：`t_payment_task_run_log`
+
+| 字段或索引 | 设计 |
+| --- | --- |
+| `biz_date` | `DATE NULL`；日期型任务的关联业务日，非日期型任务和未回填历史日志为空 |
+| `idx_task_code_biz_date` | `(task_code, biz_date)`；支撑按任务类型与账期精确查询 |
+
+迁移：`database/migrations/2026-09-12-add-task-run-business-date.sql` 增加列和索引。自动日终的完成、跳过与失败日志写入目标业务日；不从 `summary_comment` 推断历史日期，不改变 `task_log_no` 唯一键、任务计数或批次事务。目标 MySQL 执行前仍需评估在线 DDL、锁等待、备份与回滚，本地 schema 与 H2 测试不等于生产迁移完成。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

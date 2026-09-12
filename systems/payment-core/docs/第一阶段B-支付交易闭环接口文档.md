@@ -4341,6 +4341,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 技术失败摘要固定为 `PAYMENT_DAY_END_AUTO_RUN_FAILED`，不得记录数据库、凭证或异常原文；记录失败不能覆盖原始业务异常，原异常必须继续向 Spring 调度框架传播。
 6. 日终事务和租约生命周期先于任务日志结束。任务日志不是批次存在性的唯一依据；若两者不一致，应先查询 `t_payment_day_end_batch`，再由值班人员决定是否 `RERUN`，不得自动重复生成首次快照。
 
+### 14.306 任务日志业务日查询契约
+
+1. `GET /api/payment-task-center/task-runs` 与 `GET /api/payment-task-center/task-runs/export` 新增可选 `bizDate`，按 `yyyy-MM-dd` 精确匹配 `t_payment_task_run_log.biz_date`；空值表示不按业务日过滤。
+2. `PaymentTaskRunLogItemDTO` 和 CSV 新增 `bizDate`。日期型任务返回关联业务日，当前自动日终的成功、跳过和失败均填写；其他任务和未回填历史日志返回空值。
+3. 服务端先去除首尾空格，再执行长度与真实日历日期校验；`2026-02-30`、控制字符或超过 `10` 个字符的输入必须在 Mapper 访问前拒绝。
+4. 管理端任务日志日期筛选同时传给列表和导出；业务日为空时只展示 `-`，不得用开始时间推断账期。
+5. `bizDate` 只建立任务日志与业务事实的关联键，不改变任务状态、严重等级、计数、事务顺序或批次权威性，也不代表批次与日志已经自动勾稽。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
