@@ -1602,6 +1602,14 @@ t_order
 3. 全局成功时间缺失告警直接查询 `status=SUCCESS AND success_at IS NULL`，与支付列表虚拟筛选保持同一集合。摘要 SQL 计算告警类型数，服务层以实际告警数组长度统一响应内计数。
 4. 两份 schema 和迁移 `2026-09-12-add-payment-created-time-index.sql` 新增创建时间索引，不执行数据回填。目标 MySQL 仍需预查同名索引、评估在线 DDL，并检查派生表执行计划、索引选择、会话时区和历史空值规模；H2 兼容测试不等于生产性能或资金事实验证。
 
+### 4.185 退款成功时间完整性数据边界
+
+1. `t_payment_day_end_batch` 新增 `missing_refund_success_time_count`。全新 schema 为 `NOT NULL DEFAULT 0`；增量迁移使用可空字段，使历史批次明确保持“未采集”，不伪造零值。
+2. 新批次按目标申请日统计 `t_refund_order.status=SUCCESS AND success_at IS NULL`；退款成功单量和金额仍按 `success_at` 所在日统计，两类事实不得合并为同一时间轴。
+3. `t_refund_order` 新增 `idx_refund_status_applied(status, applied_at)` 和 `idx_refund_status_success(status, success_at)`，分别支撑状态加申请时间完整性扫描以及成功状态加成功时间查询。
+4. 迁移 `2026-09-12-add-refund-success-time-guard.sql` 只新增索引和批次完整性字段，不更新 `t_refund_order.success_at`；缺失成功时间必须保留待核查，不能从申请时间推断。
+5. 目标 MySQL 执行前需预查同名索引和字段、评估在线 DDL 与锁等待，并核验历史缺失规模及执行计划；本地 H2 测试不证明生产迁移、渠道到账或资金一致。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

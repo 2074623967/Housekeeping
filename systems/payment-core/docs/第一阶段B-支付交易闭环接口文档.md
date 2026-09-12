@@ -4410,6 +4410,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. `summary` 和 `channelMetrics` 仍是当前支付单状态集合的全量/渠道队列观察口径，不因趋势时间轴变化改写；调用方不得混用趋势成功发生量与创建量计算日转化率。
 6. 窗口仍以数据库会话时区为准。本接口只报告 payment-core 本地成功状态，不证明渠道扣款、清分、账务入账、资金一致或告警已经人工处置。
 
+### 14.314 退款成功时间完整性契约
+
+1. 日终退款成功单量和金额继续按 `DATE(success_at)=bizDate` 归属；退款申请日内 `status=SUCCESS AND success_at IS NULL` 计入 `missingRefundSuccessTimeCount`，不允许回退到 `applied_at` 充当成功账期。
+2. 日终总览新增 `openMissingRefundSuccessTimeCount`，最近批次和 CSV 同步返回 `missingRefundSuccessTimeCount`。任一缺失使新批次为 `WARNING`，总览和批次均禁止进入对账。
+3. 历史批次未采集该字段时返回 `NULL` 并判定“日终事实不完整”，调用方必须通过 `RERUN` 形成新快照，不得将空值转换为零。
+4. `GET /api/refunds` 与导出接口接受虚拟筛选 `SUCCESS_TIME_MISSING`，列表、计数与 CSV 精确展开为 `SUCCESS + success_at IS NULL`；该值不是退款状态机状态。
+5. 日终与支付监控新增 `REFUND_SUCCESS_TIME_MISSING / P1` 告警，动作路由固定为 `/refunds?refundStatus=SUCCESS_TIME_MISSING`；监控 `summary.alertCount` 纳入该类型并由服务层保持与实际告警数组一致。
+6. `success_at` 仅表示 payment-core 可信退款结果的本地落库时间，不证明客户到账、渠道账单、账务冲销、资金一致或告警处置完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

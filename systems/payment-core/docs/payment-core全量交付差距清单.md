@@ -2614,6 +2614,15 @@
 4. 管理端趋势列明确为“创建单量 / 成功发生量”，P1 风险摘要和处理建议同步覆盖成功时间缺失。定向后端 `8` 项、后端全量 `1037` 项、管理端 `29` 项、Vite 生产构建、Mapper XML 与补丁检查通过；实现提交为 `16866db3 fix(payment-core): align monitor success facts`。
 5. 两份 schema 和迁移 `2026-09-12-add-payment-created-time-index.sql` 新增 `idx_payment_created_at(created_at)`，支撑不带状态前导列的创建时间窗口扫描。七日趋势仍依赖数据库会话时区，且本地成功发生不等于渠道扣款、清分或账务入账；目标 MySQL 索引创建、执行计划、生产时区、历史缺失分布和真实监控处置仍需目标环境验证，release 四项治理阻断不变。
 
+### 8.319 2026-09-12 退款成功时间完整性进展
+
+1. 继续审计确认退款成功单量和金额虽已按 `success_at` 归属，但 `SUCCESS + success_at IS NULL` 会从日终成功事实中静默消失，也未进入日终准入和全局监控告警。
+2. 新批次新增 `missingRefundSuccessTimeCount`，按退款申请日识别无法归属成功账期的记录；任一缺失使批次为 `WARNING`、总览与批次禁止进入对账，并生成 `REFUND_SUCCESS_TIME_MISSING / P1` 告警。
+3. 退款列表、计数和 CSV 新增虚拟筛选 `SUCCESS_TIME_MISSING`，精确下钻 `/refunds?refundStatus=SUCCESS_TIME_MISSING`；支付监控摘要和实际告警数组同步纳入该类型，管理端按退款回调、主动查单和操作日志给出处置建议。
+4. 两份 schema 新增 `idx_refund_status_applied(status, applied_at)`、`idx_refund_status_success(status, success_at)`；迁移 `2026-09-12-add-refund-success-time-guard.sql` 对历史日终批次保留完整性字段为 `NULL`，要求 `RERUN`，不以申请时间伪造成功时间。
+5. 定向后端 `36` 项、后端全量 `1041` 项、管理端 `29` 项、Vite 生产构建、三份 Mapper XML 与补丁检查通过；实现提交为 `a65f0464 fix(payment-core): guard refund success time`。
+6. 该完整性保护只覆盖 payment-core 本地退款状态和本地成功时间，不证明渠道已实际退款到账、账务冲销、资金一致或正式关账；目标 MySQL 迁移、执行计划和历史缺失记录仍需真实环境核验，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
