@@ -13162,3 +13162,34 @@
 1. 本轮弥补的是 payment-core 可直接证明的本地状态缺口，不是完整跨系统数据水位协议。
 2. `RISK_REVIEW` 等待外部人工复核，属于未完成；`RISK_BLOCKED / RISK_REJECTED` 已有终止结论，不应误报为资金待确认。
 3. 本地测试不证明目标 MySQL 迁移已完成、渠道回调全部到齐、资金或渠道账单一致；统一门禁仍需按现有治理证据重新复判。
+
+## 485. 2026-09-12 支付成功时间与日终账期归属 V1.0 验证
+
+### 485.1 本轮补强
+
+1. 支付单新增 `successAt`，渠道回调与主动查单成功收口通过同一原子 SQL 首次写入，支付流水 `paidAt` 和排序改用真实字段。
+2. 日终所有成功类事实改按 `DATE(success_at)` 归属；支付总量、待收口支付和成功时间缺失识别仍按支付单创建日，避免缺失记录被静默丢弃。
+3. 日终批次新增成功时间缺失数，纳入批次状态、摘要、告警、CSV、总览及对账准入；支付列表新增 `SUCCESS_TIME_MISSING` 精确下钻。
+4. 两份 schema、固定样例和独立迁移同步更新；迁移仅使用明确成功通知或支付成功事件证据，无法回填的历史成功单保持空值，历史批次完整性字段保持 `NULL`。
+
+### 485.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 原子成功迁移 | H2 MySQL 兼容测试验证合格渠道结果写入非空 `success_at`，无提交事实的支付单仍不能成功收口 |
+| 跨日账期 | 构造前一日创建、后一日成功的支付单，成功单量与金额只计入成功日 |
+| 缺失识别 | 创建日存在 `SUCCESS + success_at IS NULL` 时，日终完整性计数为 `1`，列表、计数和 CSV 使用同一虚拟筛选集合 |
+| 流水语义 | 支付流水列表与退款聚合查询返回 `success_at` 作为 `paidAt`，并按该字段排序 |
+| 批次与准入 | 成功时间缺失使批次为 `WARNING/warn`，生成 `PAYMENT_SUCCESS_TIME_MISSING` 告警并禁止进入对账；历史空字段显示 `UNKNOWN` |
+| 定向后端测试 | 五组服务与 Mapper 测试共 `46` 项通过 |
+| payment-core 后端全量测试 | `1036` 项通过，`0` failures、`0` errors、`0` skipped |
+| 管理端验证 | `29` 项单测通过；Vite 生产构建通过，保留既有单包大于 `500 kB` 提示 |
+| XML 与补丁检查 | `PaymentDayEndMapper.xml`、`PaymentMapper.xml`、`PaymentRecordMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2` 仅来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、统一 `blockerCount=1`、内部 `releaseBlockerCount=4` |
+| 实现提交 | `db4c7123 feat(payment-core): record payment success time` |
+
+### 485.3 当前判断
+
+1. `success_at` 是 payment-core 首次可信落成功状态的本地时间，不等于渠道实际扣款、清算或入账时间；外部账单仍需后续对账确认。
+2. 历史回填遵循“有明确证据才填”，无法证明的记录通过告警阻断而非用 `created_at` 伪造；生产迁移前仍需预查证据冲突、评估锁等待并准备备份与回滚。
+3. 本轮验证基于本地 H2、固定样例和管理端构建，不证明目标 MySQL 已迁移、生产多实例时序、渠道资金或正式关账一致，也不解除 release 治理阻断。

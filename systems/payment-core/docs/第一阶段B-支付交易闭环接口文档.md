@@ -4392,6 +4392,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 数据库迁移对历史批次保留 `pending_payment_count / pending_payment_amount=NULL`，表示当时未采集。总览和批次不得把空值展示为零或“可进入对账”，必须提示使用 `RERUN` 生成完整新快照。
 6. 这些字段只证明 payment-core 在跑批事务读取时的本地支付状态，不证明渠道回调已全部到齐、跨系统数据水位完整、资金到账、渠道账单一致或正式关账完成。
 
+### 14.312 支付成功时间与日终完整性契约
+
+1. 支付单进入 `SUCCESS` 时由渠道回调和主动查单共用的原子状态迁移写入 `success_at=COALESCE(success_at, NOW())`；该字段表示 payment-core 首次可信落成功状态的本地时间，后续重复结果不得覆盖。
+2. 支付流水响应中的 `paidAt` 及 `sortField=paidAt` 均使用 `success_at`。非成功或历史缺失记录返回空值，不允许用 `createdAt` 回退伪装。
+3. 日终支付成功单量/金额、渠道成功、内部事件成功、支付成功差异、渠道异常和内部事件异常均按 `DATE(success_at)=bizDate` 归属；支付总单量与待收口支付继续按创建日统计。
+4. 日终批次与总览新增 `missingPaymentSuccessTimeCount / openMissingPaymentSuccessTimeCount`。统计集合为目标创建日内 `status=SUCCESS AND success_at IS NULL`；任一非零使批次为 `WARNING`、总览禁止进入对账，并生成 `PAYMENT_SUCCESS_TIME_MISSING` 告警。
+5. `GET /api/payments` 与导出接口接受虚拟筛选 `SUCCESS_TIME_MISSING`，列表、计数与 CSV 均精确展开为上述缺失集合；告警动作路由固定为 `/payments?status=SUCCESS_TIME_MISSING`。
+6. 历史批次未采集完整性字段时返回 `NULL` 并判定“日终事实不完整”，需要 `RERUN` 形成新快照。接口事实不证明渠道实际扣款、账单、资金、清分或账务最终一致。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

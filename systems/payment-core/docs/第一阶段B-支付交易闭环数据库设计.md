@@ -1578,6 +1578,23 @@ t_order
 
 待收口集合固定为 `PREPAY_CREATED / WAIT_CALLBACK / RISK_REVIEW`。迁移 `database/migrations/2026-09-12-add-day-end-pending-payment.sql` 对存量表以可空列新增，不回填历史零值；历史 `NULL` 表示缺少当时快照，必须通过 `RERUN` 形成新批次。该设计避免用支付单当前状态倒推旧账期事实，也不把本地状态快照解释为渠道、事件或资金数据水位。
 
+### 4.183 支付成功时间与日终完整性数据边界
+
+表：`t_payment_order`
+
+| 字段或索引 | 设计 |
+| --- | --- |
+| `success_at` | `DATETIME NULL`；payment-core 首次可信落成功状态的本地时间，历史无法证明时为空 |
+| `idx_payment_status_success` | `(status, success_at)`；支撑成功账期、缺失识别和支付流水排序查询 |
+
+表：`t_payment_day_end_batch`
+
+| 字段 | 设计 |
+| --- | --- |
+| `missing_payment_success_time_count` | 新建 schema 为 `INT NOT NULL DEFAULT 0`；存量迁移为可空列，`NULL` 表示历史批次未采集完整性事实 |
+
+迁移 `database/migrations/2026-09-12-add-payment-success-time.sql` 只从状态已成功且存在明确成功通知或 `PAYMENT_SUCCESS` 事件的支付单中取最早本地事实时间回填，不使用支付单 `created_at`，无法证明的记录保持空值。所有成功类日终查询按 `success_at` 归属；缺失记录按创建日进入完整性阻断。目标 MySQL 执行前仍需预查字段/索引冲突、成功证据分布、回填行数与锁等待，准备备份、回滚和抽样核验；本地 schema 与 H2 测试不代表生产迁移完成或渠道资金时间可信。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
