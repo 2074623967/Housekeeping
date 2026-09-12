@@ -1595,6 +1595,13 @@ t_order
 
 迁移 `database/migrations/2026-09-12-add-payment-success-time.sql` 只从状态已成功且存在明确成功通知或 `PAYMENT_SUCCESS` 事件的支付单中取最早本地事实时间回填，不使用支付单 `created_at`，无法证明的记录保持空值。所有成功类日终查询按 `success_at` 归属；缺失记录按创建日进入完整性阻断。目标 MySQL 执行前仍需预查字段/索引冲突、成功证据分布、回填行数与锁等待，准备备份、回滚和抽样核验；本地 schema 与 H2 测试不代表生产迁移完成或渠道资金时间可信。
 
+### 4.184 支付监控双时间轴查询边界
+
+1. 最近七日趋势从 `t_payment_order` 生成两组日事实：`created_at` 聚合创建量，`success_at` 聚合成功量和成功金额，再以 `UNION ALL` 和外层日期分组形成日期并集。
+2. 创建分支使用新增 `idx_payment_created_at(created_at)` 支撑纯创建时间窗口扫描；成功分支使用既有 `idx_payment_status_success(status, success_at)` 支撑成功状态和成功时间窗口。最终结果最多七行，不生成无创建且无成功事实的空日期。
+3. 全局成功时间缺失告警直接查询 `status=SUCCESS AND success_at IS NULL`，与支付列表虚拟筛选保持同一集合。摘要 SQL 计算告警类型数，服务层以实际告警数组长度统一响应内计数。
+4. 两份 schema 和迁移 `2026-09-12-add-payment-created-time-index.sql` 新增创建时间索引，不执行数据回填。目标 MySQL 仍需预查同名索引、评估在线 DDL，并检查派生表执行计划、索引选择、会话时区和历史空值规模；H2 兼容测试不等于生产性能或资金事实验证。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

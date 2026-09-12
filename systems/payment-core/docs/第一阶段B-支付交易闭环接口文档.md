@@ -4401,6 +4401,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. `GET /api/payments` 与导出接口接受虚拟筛选 `SUCCESS_TIME_MISSING`，列表、计数与 CSV 均精确展开为上述缺失集合；告警动作路由固定为 `/payments?status=SUCCESS_TIME_MISSING`。
 6. 历史批次未采集完整性字段时返回 `NULL` 并判定“日终事实不完整”，需要 `RERUN` 形成新快照。接口事实不证明渠道实际扣款、账单、资金、清分或账务最终一致。
 
+### 14.313 支付监控成功事实一致性契约
+
+1. `GET /api/payment-monitor/overview` 的 `trends[].totalCount` 按 `created_at` 所在日统计支付创建量；`successCount / successAmount` 只统计 `status=SUCCESS` 且按 `success_at` 所在日归属。
+2. 最近七日窗口同时应用于创建时间和成功时间，按两类日期的并集返回；某日期只有成功事实时 `totalCount=0`，只有创建事实时 `successCount=0 / successAmount=¥0.00`。未来日期和窗口外事实不得进入。
+3. `alerts` 新增 `PAYMENT_SUCCESS_TIME_MISSING`，集合为全局 `status=SUCCESS AND success_at IS NULL`，等级为 `P1/danger`，动作路由为 `/payments?status=SUCCESS_TIME_MISSING`。
+4. `summary.alertCount` 纳入该告警类型，取值范围由 `0..3` 扩展为 `0..4`；服务层最终以本次响应实际 `alerts.length` 设置该值，保证单个响应内一致，不表示各项 `affectedCount` 之和。
+5. `summary` 和 `channelMetrics` 仍是当前支付单状态集合的全量/渠道队列观察口径，不因趋势时间轴变化改写；调用方不得混用趋势成功发生量与创建量计算日转化率。
+6. 窗口仍以数据库会话时区为准。本接口只报告 payment-core 本地成功状态，不证明渠道扣款、清分、账务入账、资金一致或告警已经人工处置。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

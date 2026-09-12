@@ -2606,6 +2606,14 @@
 5. 迁移只从明确成功通知或 `PAYMENT_SUCCESS` 事件的最早本地时间回填；无法证明的成功单继续为空。定向后端 `46` 项、后端全量 `1036` 项、管理端 `29` 项、Vite 生产构建、三份 Mapper XML 和补丁检查通过；实现提交为 `db4c7123 feat(payment-core): record payment success time`。
 6. 本地成功时间、通知和事件仍不能证明渠道账单、清分、账务分录或资金最终一致；目标 MySQL 在线 DDL、历史回填行数与抽样核验尚待真实环境执行，release 四项治理阻断不变。
 
+### 8.318 2026-09-12 支付监控成功事实一致性进展
+
+1. 继续审计发现监控页最近七日趋势仍将成功单量和金额按支付单 `created_at` 聚合，跨日成功会留在创建日；同时监控告警未覆盖全局 `SUCCESS + success_at IS NULL`，历史缺失只能依赖特定日终批次暴露。
+2. 趋势改为双事实时间轴：支付创建量按 `created_at`，成功发生量与金额按 `success_at`，以最近七个自然日内两类日期的并集汇总。某日允许创建量为零但成功量非零，真实表达此前创建支付在当日收口。
+3. 监控新增 `PAYMENT_SUCCESS_TIME_MISSING / P1` 全局告警，精确下钻 `/payments?status=SUCCESS_TIME_MISSING`；摘要告警类型数同步纳入该集合，服务端最终以实际告警数组长度覆盖摘要值，保持 `summary.alertCount = alerts.length`。
+4. 管理端趋势列明确为“创建单量 / 成功发生量”，P1 风险摘要和处理建议同步覆盖成功时间缺失。定向后端 `8` 项、后端全量 `1037` 项、管理端 `29` 项、Vite 生产构建、Mapper XML 与补丁检查通过；实现提交为 `16866db3 fix(payment-core): align monitor success facts`。
+5. 两份 schema 和迁移 `2026-09-12-add-payment-created-time-index.sql` 新增 `idx_payment_created_at(created_at)`，支撑不带状态前导列的创建时间窗口扫描。七日趋势仍依赖数据库会话时区，且本地成功发生不等于渠道扣款、清分或账务入账；目标 MySQL 索引创建、执行计划、生产时区、历史缺失分布和真实监控处置仍需目标环境验证，release 四项治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
