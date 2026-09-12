@@ -353,21 +353,21 @@
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', notify_type, ' | ', notify_status) AS item
         FROM t_payment_notify_log
         WHERE payment_order_id = #{paymentOrderId}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
     </select>
 
     <select id="findRouteLogs" resultType="string">
         SELECT CONCAT(DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s'), ' | ', route_rule, ' | ', route_result) AS item
         FROM t_payment_route_record
         WHERE payment_order_id = #{paymentOrderId}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
     </select>
 
     <select id="findEventItems" resultType="string">
         SELECT CONCAT(event_type, ' | ', event_topic, ' | ', publish_status, ' | ', DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s')) AS item
         FROM t_payment_event
         WHERE payment_order_id = #{paymentOrderId}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
     </select>
 
     <select id="findPaymentOrderIdByPrepayOrderNo" resultType="string">
