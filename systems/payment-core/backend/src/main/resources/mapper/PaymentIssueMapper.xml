@@ -128,7 +128,7 @@
                CONCAT('支付单命中的渠道 ', po.channel_code, ' 当前已停用') AS issue_summary,
                '渠道配置已停用但支付单仍引用该渠道，建议核对路由规则、渠道启停和历史存量单据处理策略。' AS root_cause_hint,
                '进入支付渠道与路由页，复核渠道状态和路由规则' AS recommended_action,
-               '/payment-config' AS recommended_route,
+               '/payment-config?channelStatus=DISABLED' AS recommended_route,
                DATE_FORMAT(po.created_at, '%Y-%m-%d %H:%i:%s') AS created_at
         FROM t_payment_order po
                  INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code

@@ -1,9 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentIssueApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentIssueAlertsRoute } from "../router/listRoutes";
+import { paymentIssueListFiltersFromQuery } from "../utils/paymentIssueListFilters";
 
 const route = useRoute();
 const router = useRouter();
@@ -28,14 +29,7 @@ const actionForm = ref({
   operator: "",
   remark: "请按建议动作完成排查并回写处理结果"
 });
-const filters = ref({
-  paymentOrderId: route.query.paymentOrderId || "",
-  orderNo: route.query.orderNo || "",
-  issueType: route.query.issueType || "全部",
-  severity: route.query.severity || "全部",
-  channelCode: route.query.channelCode || "",
-  paymentMethod: route.query.paymentMethod || "全部"
-});
+const filters = ref(paymentIssueListFiltersFromQuery(route.query));
 
 const issueOverview = computed(() => ({
   groupCount: responsibilitySummaries.value.length,
@@ -194,6 +188,23 @@ async function submitBatchAction() {
 }
 
 onMounted(loadIssues);
+
+watch(
+  () => [
+    route.query.paymentOrderId,
+    route.query.orderNo,
+    route.query.issueType,
+    route.query.severity,
+    route.query.channelCode,
+    route.query.paymentMethod
+  ],
+  () => {
+    filters.value = paymentIssueListFiltersFromQuery(route.query);
+    pageNo.value = 1;
+    selectedIssueNos.value = [];
+    loadIssues();
+  }
+);
 </script>
 
 <template>
