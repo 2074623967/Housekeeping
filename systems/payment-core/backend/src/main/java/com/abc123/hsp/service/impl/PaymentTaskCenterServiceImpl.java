@@ -1516,6 +1516,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 overview.getRecentQueryRateLimitRejectionCount());
         double recentQueryFailureRate = percentage(recentQueryFailureCount, recentQueryCount);
         int failedEventCount = valueOrZero(overview.getFailedEventCount());
+        int failedRefundCount = valueOrZero(overview.getFailedRefundCount());
+        int retryableFailedRefundCount = valueOrZero(overview.getRetryableFailedRefundCount());
+        int blockedFailedRefundCount = valueOrZero(overview.getBlockedFailedRefundCount());
         int unknownRefundSubmitEventCount = valueOrZero(overview.getUnknownRefundSubmitEventCount());
         int pendingIssueAlertDispatchCount = valueOrZero(overview.getPendingIssueAlertDispatchCount());
         int failedIssueAlertDispatchCount = valueOrZero(overview.getFailedIssueAlertDispatchCount());
@@ -1623,6 +1626,20 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "/payment-issues?issueType=退款提交结果待核查",
                 unknownRefundSubmitEventCount > 0 ? "P1" : "P3",
                 unknownRefundSubmitEventCount > 0 ? "danger" : "success"
+        ));
+        alerts.add(buildAlert(
+                "REFUND_RETRY",
+                "失败退款待处置",
+                failedRefundCount,
+                failedRefundCount > 0
+                        ? String.format("存在 %d 笔失败退款：可批量重试 %d 笔、终态事实异常 %d 笔",
+                        failedRefundCount, retryableFailedRefundCount, blockedFailedRefundCount)
+                        : "暂无失败退款",
+                blockedFailedRefundCount > 0
+                        ? "/refunds?refundStatus=TERMINAL_FACT_MISMATCH"
+                        : "/refunds?refundStatus=FAIL",
+                failedRefundCount > 0 ? "P1" : "P3",
+                failedRefundCount > 0 ? "danger" : "success"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG",

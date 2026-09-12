@@ -175,14 +175,35 @@ class RefundSubmitOutboxMapperIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.executeUpdate("INSERT INTO t_refund_order("
-                    + "refund_order_id, status, applied_at, terminal_at) VALUES "
-                    + "('REF-FAILED-LATER-APPLIED-EARLY', 'FAIL', NOW(), DATEADD('SECOND', 3, NOW())), "
-                    + "('REF-FAILED-EARLIER-APPLIED-LATE', 'FAIL', DATEADD('SECOND', 2, NOW()), NOW()), "
-                    + "('REF-FAILED-SAME-001', 'FAIL', DATEADD('SECOND', 3, NOW()), "
+                    + "refund_order_id, status, applied_at, success_at, terminal_at) VALUES "
+                    + "('REF-FAILED-LATER-APPLIED-EARLY', 'FAIL', NOW(), NULL, DATEADD('SECOND', 3, NOW())), "
+                    + "('REF-FAILED-EARLIER-APPLIED-LATE', 'FAIL', DATEADD('SECOND', 2, NOW()), NULL, NOW()), "
+                    + "('REF-FAILED-SAME-001', 'FAIL', DATEADD('SECOND', 3, NOW()), NULL, "
                     + "DATEADD('SECOND', 1, NOW())), "
-                    + "('REF-FAILED-SAME-002', 'FAIL', DATEADD('SECOND', 4, NOW()), "
+                    + "('REF-FAILED-SAME-002', 'FAIL', DATEADD('SECOND', 4, NOW()), NULL, "
                     + "DATEADD('SECOND', 1, NOW())), "
-                    + "('REF-MISSING-TERMINAL', 'FAIL', DATEADD('SECOND', -1, NOW()), NULL)");
+                    + "('REF-MISSING-TERMINAL', 'FAIL', DATEADD('SECOND', -1, NOW()), NULL, NULL), "
+                    + "('REF-MISSING-ATTEMPT', 'FAIL', NOW(), NULL, DATEADD('SECOND', 2, NOW())), "
+                    + "('REF-MISMATCHED-ATTEMPT', 'FAIL', NOW(), NULL, DATEADD('SECOND', 2, NOW())), "
+                    + "('REF-INCOMPLETE-ATTEMPT', 'FAIL', NOW(), NULL, DATEADD('SECOND', 2, NOW())), "
+                    + "('REF-RESIDUAL-SUCCESS', 'FAIL', NOW(), NOW(), DATEADD('SECOND', 2, NOW()))");
+            statement.executeUpdate("INSERT INTO t_refund_attempt("
+                    + "refund_attempt_no, refund_order_id, channel_code, attempt_status, "
+                    + "attempt_status_type, completed_at, created_at) VALUES "
+                    + "('RFA-FAILED-LATER', 'REF-FAILED-LATER-APPLIED-EARLY', 'wx_h5', "
+                    + "'FAIL', 'danger', NOW(), NOW()), "
+                    + "('RFA-FAILED-EARLIER', 'REF-FAILED-EARLIER-APPLIED-LATE', 'wx_h5', "
+                    + "'FAIL', 'danger', NOW(), NOW()), "
+                    + "('RFA-FAILED-SAME-001', 'REF-FAILED-SAME-001', 'wx_h5', "
+                    + "'FAIL', 'danger', NOW(), NOW()), "
+                    + "('RFA-FAILED-SAME-002', 'REF-FAILED-SAME-002', 'wx_h5', "
+                    + "'FAIL', 'danger', NOW(), NOW()), "
+                    + "('RFA-MISMATCHED', 'REF-MISMATCHED-ATTEMPT', 'wx_h5', "
+                    + "'ACCEPTED', 'warn', NOW(), NOW()), "
+                    + "('RFA-INCOMPLETE', 'REF-INCOMPLETE-ATTEMPT', 'wx_h5', "
+                    + "'FAIL', 'danger', NULL, NOW()), "
+                    + "('RFA-RESIDUAL-SUCCESS', 'REF-RESIDUAL-SUCCESS', 'wx_h5', "
+                    + "'FAIL', 'danger', NOW(), NOW())");
             RefundMapper mapper = session.getMapper(RefundMapper.class);
 
             assertEquals(java.util.Collections.singletonList("REF-FAILED-EARLIER-APPLIED-LATE"),

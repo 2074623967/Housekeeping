@@ -7,6 +7,7 @@ import com.abc123.hsp.dto.PaymentIssueAlertDispatchItemDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogQueryDTO;
 import com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO;
 import com.abc123.hsp.dto.PaymentQueryTrendPointDTO;
+import com.abc123.hsp.dto.PaymentTaskCenterOverviewDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogItemDTO;
 import com.abc123.hsp.dto.PaymentTaskRunLogQueryDTO;
 import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
@@ -71,6 +72,39 @@ public class PaymentTaskCenterMapperIntegrationTest {
         }
         sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
         createTablesAndFixtures();
+    }
+
+    @Test
+    void shouldPartitionFailedRefundsByBatchRetryEligibility() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_refund_order("
+                    + "refund_order_id, status, applied_at, success_at, terminal_at) VALUES "
+                    + "('REF-RETRYABLE', 'FAIL', NOW(), NULL, NOW()), "
+                    + "('REF-NO-TERMINAL', 'FAIL', NOW(), NULL, NULL), "
+                    + "('REF-NO-ATTEMPT', 'FAIL', NOW(), NULL, NOW()), "
+                    + "('REF-MISMATCHED-ATTEMPT', 'FAIL', NOW(), NULL, NOW()), "
+                    + "('REF-INCOMPLETE-ATTEMPT', 'FAIL', NOW(), NULL, NOW()), "
+                    + "('REF-RESIDUAL-SUCCESS', 'FAIL', NOW(), NOW(), NOW())");
+            statement.executeUpdate("INSERT INTO t_refund_attempt("
+                    + "refund_attempt_no, refund_order_id, channel_code, attempt_status, "
+                    + "attempt_status_type, completed_at, created_at) VALUES "
+                    + "('RFA-RETRYABLE', 'REF-RETRYABLE', 'wx_h5', 'FAIL', 'danger', NOW(), NOW()), "
+                    + "('RFA-MISMATCHED', 'REF-MISMATCHED-ATTEMPT', 'wx_h5', "
+                    + "'ACCEPTED', 'warn', NOW(), NOW()), "
+                    + "('RFA-INCOMPLETE', 'REF-INCOMPLETE-ATTEMPT', 'wx_h5', "
+                    + "'FAIL', 'danger', NULL, NOW()), "
+                    + "('RFA-RESIDUAL-SUCCESS', 'REF-RESIDUAL-SUCCESS', 'wx_h5', "
+                    + "'FAIL', 'danger', NOW(), NOW())");
+
+            PaymentTaskCenterOverviewDTO overview = session
+                    .getMapper(PaymentTaskCenterMapper.class)
+                    .findOverviewSummary();
+
+            assertEquals(6, overview.getFailedRefundCount());
+            assertEquals(1, overview.getRetryableFailedRefundCount());
+            assertEquals(5, overview.getBlockedFailedRefundCount());
+        }
     }
 
     @Test
@@ -1058,6 +1092,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_event");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
+            statement.execute("DROP TABLE IF EXISTS t_payment_control_policy");
             statement.execute("DROP TABLE IF EXISTS t_refund_operation_log");
             statement.execute("DROP TABLE IF EXISTS t_refund_attempt");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
@@ -1087,10 +1122,13 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "last_published_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "channel_code VARCHAR(64), status VARCHAR(32))");
+            statement.execute("CREATE TABLE t_payment_control_policy ("
+                    + "status VARCHAR(32), self_check_status VARCHAR(32))");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64), "
                     + "channel_code VARCHAR(64), channel_refund_no VARCHAR(128), "
-                    + "channel_submitted_at DATETIME, status VARCHAR(32), applied_at DATETIME)");
+                    + "channel_submitted_at DATETIME, status VARCHAR(32), success_at DATETIME, "
+                    + "terminal_at DATETIME, applied_at DATETIME)");
             statement.execute("CREATE TABLE t_refund_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_attempt_no VARCHAR(64), "
                     + "refund_order_id VARCHAR(64), channel_code VARCHAR(64), "
@@ -1125,9 +1163,10 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "started_at DATETIME NOT NULL, completed_at DATETIME NOT NULL)");
             statement.execute("CREATE TABLE t_payment_day_end_batch ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, batch_no VARCHAR(64) NOT NULL UNIQUE, "
-                    + "biz_date DATE NOT NULL, run_mode VARCHAR(32) NOT NULL)");
-            statement.execute("INSERT INTO t_payment_day_end_batch (batch_no, biz_date, run_mode) VALUES "
-                    + "('DEB-20260911-AUTO-001', '2026-09-11', 'AUTO')");
+                    + "biz_date DATE NOT NULL, run_mode VARCHAR(32) NOT NULL, batch_status VARCHAR(32))");
+            statement.execute("INSERT INTO t_payment_day_end_batch ("
+                    + "batch_no, biz_date, run_mode, batch_status) VALUES "
+                    + "('DEB-20260911-AUTO-001', '2026-09-11', 'AUTO', 'SUCCESS')");
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), source_alert_no VARCHAR(64), "
                     + "generation_key VARCHAR(191), issue_no VARCHAR(128), payment_order_id VARCHAR(64), "

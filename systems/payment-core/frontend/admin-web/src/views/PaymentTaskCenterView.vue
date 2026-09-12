@@ -35,6 +35,8 @@ const overview = ref({
   failedEventCount: 0,
   unknownRefundSubmitEventCount: 0,
   failedRefundCount: 0,
+  retryableFailedRefundCount: 0,
+  blockedFailedRefundCount: 0,
   warningDayEndBatchCount: 0,
   controlPolicyWarningCount: 0,
   overdueIssueCount: 0,
@@ -251,6 +253,7 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">失败退款</div>
             <div class="detail-value">{{ overview.failedRefundCount }}</div>
+            <div class="meta">可批量重试 {{ overview.retryableFailedRefundCount }} · 事实异常 {{ overview.blockedFailedRefundCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">控制策略告警</div>
@@ -478,13 +481,13 @@ onMounted(loadOverview);
 
             <div class="sub-panel">
               <h3>失败退款重试</h3>
-              <p>将退款失败单重新推进到处理中状态，作为人工复核和后续渠道补退的统一入口。</p>
+              <p>仅将终态事实完整的失败退款重新推进到处理中；事实异常记录须先核查退款单与最新尝试。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.retryableFailedRefundCount === 0"
                 @click="runTask('REFUND_FAIL_RETRY', '失败退款重试', paymentTaskCenterApi.runRetryFailedRefunds)"
               >
-                {{ activeTaskCode === "REFUND_FAIL_RETRY" ? "执行中..." : "执行退款重试" }}
+                {{ activeTaskCode === "REFUND_FAIL_RETRY" ? "执行中..." : overview.retryableFailedRefundCount === 0 ? "暂无可重试退款" : `执行退款重试（${overview.retryableFailedRefundCount}）` }}
               </button>
             </div>
 
@@ -590,9 +593,19 @@ onMounted(loadOverview);
                   <td>渠道可能已受理，须按退款单号查单或人工核查，禁止直接重发</td>
                 </tr>
                 <tr>
-                  <td>失败退款</td>
+                  <td>失败退款总数</td>
                   <td>{{ overview.failedRefundCount }}</td>
                   <td>影响用户退款闭环与逆向资金核对</td>
+                </tr>
+                <tr>
+                  <td>失败退款可批量重试</td>
+                  <td>{{ overview.retryableFailedRefundCount }}</td>
+                  <td>退款单与最新尝试终态事实完整，可按最早失败时间进入有界批次</td>
+                </tr>
+                <tr>
+                  <td>失败退款事实异常</td>
+                  <td>{{ overview.blockedFailedRefundCount }}</td>
+                  <td>禁止无人值守重试，须下钻终态事实不一致集合核查</td>
                 </tr>
                 <tr>
                   <td>日终告警批次</td>

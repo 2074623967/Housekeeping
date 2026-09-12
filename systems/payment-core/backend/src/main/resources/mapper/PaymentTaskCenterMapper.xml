@@ -36,6 +36,48 @@
             ), 0) AS failedRefundCount,
             COALESCE((
                 SELECT COUNT(1)
+                FROM t_refund_order refund_order
+                WHERE refund_order.status = 'FAIL'
+                  AND refund_order.terminal_at IS NOT NULL
+                  AND refund_order.success_at IS NULL
+                  AND EXISTS (
+                    SELECT 1
+                    FROM t_refund_attempt terminal_attempt
+                    WHERE terminal_attempt.id = (
+                        SELECT latest_attempt.id
+                        FROM t_refund_attempt latest_attempt
+                        WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+                        ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                        LIMIT 1
+                    )
+                      AND terminal_attempt.attempt_status = 'FAIL'
+                      AND terminal_attempt.completed_at IS NOT NULL
+                  )
+            ), 0) AS retryableFailedRefundCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_refund_order refund_order
+                WHERE refund_order.status = 'FAIL'
+                  AND (
+                    refund_order.terminal_at IS NULL
+                    OR refund_order.success_at IS NOT NULL
+                    OR NOT EXISTS (
+                        SELECT 1
+                        FROM t_refund_attempt terminal_attempt
+                        WHERE terminal_attempt.id = (
+                            SELECT latest_attempt.id
+                            FROM t_refund_attempt latest_attempt
+                            WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+                            ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                            LIMIT 1
+                        )
+                          AND terminal_attempt.attempt_status = 'FAIL'
+                          AND terminal_attempt.completed_at IS NOT NULL
+                    )
+                  )
+            ), 0) AS blockedFailedRefundCount,
+            COALESCE((
+                SELECT COUNT(1)
                 FROM t_payment_day_end_batch
                 WHERE batch_status = 'WARNING'
             ), 0) AS warningDayEndBatchCount,

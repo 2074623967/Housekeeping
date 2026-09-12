@@ -77,6 +77,10 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer unknownRefundSubmitEventCount;
     /** 失败退款数。 */
     private Integer failedRefundCount;
+    /** 终态事实完整、可批量重试的失败退款数。 */
+    private Integer retryableFailedRefundCount;
+    /** 终态事实异常、禁止批量重试的失败退款数。 */
+    private Integer blockedFailedRefundCount;
     /** 日终告警批次数。 */
     private Integer warningDayEndBatchCount;
     /** 支付控制策略异常数。 */

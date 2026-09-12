@@ -152,6 +152,20 @@
         FROM t_refund_order
         WHERE status = 'FAIL'
           AND terminal_at IS NOT NULL
+          AND success_at IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM t_refund_attempt terminal_attempt
+            WHERE terminal_attempt.id = (
+                SELECT latest_attempt.id
+                FROM t_refund_attempt latest_attempt
+                WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                LIMIT 1
+            )
+              AND terminal_attempt.attempt_status = 'FAIL'
+              AND terminal_attempt.completed_at IS NOT NULL
+          )
         ORDER BY terminal_at ASC, id ASC
         LIMIT #{batchSize}
     </select>

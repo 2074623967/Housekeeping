@@ -78,6 +78,28 @@ class PaymentTaskCenterServiceImplTest {
     private TransactionStatus transactionStatus;
 
     @Test
+    void shouldExposeRetryableAndBlockedFailedRefundsAsImmediateP1Alert() {
+        PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
+        summary.setFailedRefundCount(5);
+        summary.setRetryableFailedRefundCount(2);
+        summary.setBlockedFailedRefundCount(3);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(summary);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(2, overview.getRetryableFailedRefundCount());
+        Assertions.assertEquals(3, overview.getBlockedFailedRefundCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "REFUND_RETRY".equals(alert.getAlertType())
+                        && "P1".equals(alert.getAlertLevel())
+                        && alert.getAlertMessage().contains("可批量重试 2 笔")
+                        && alert.getAlertMessage().contains("终态事实异常 3 笔")
+                        && "/refunds?refundStatus=TERMINAL_FACT_MISMATCH"
+                        .equals(alert.getActionRoute())));
+    }
+
+    @Test
     void shouldExposePendingQueryBacklogMetricsInOverview() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
         when(paymentTaskCenterMapper.countPendingPaymentQueryBacklog(30)).thenReturn(120);
