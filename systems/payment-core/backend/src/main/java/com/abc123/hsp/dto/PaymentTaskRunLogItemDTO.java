@@ -16,6 +16,8 @@ public class PaymentTaskRunLogItemDTO {
     private String taskName;
     /** 关联业务日。 */
     private String bizDate;
+    /** 关联业务单据号。 */
+    private String businessRefNo;
     /** 运行方式。 */
     private String runMode;
     /** 任务状态。 */

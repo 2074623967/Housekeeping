@@ -226,9 +226,19 @@ public interface PaymentTaskCenterMapper {
     int insertTaskRunLog(PaymentTaskRunLogEntity entity);
 
     /**
-     * 查询指定业务日实际创建批次的自动日终任务日志数。
+     * 统计指定业务日缺少成功任务日志关联的自动日终批次。
      */
-    int countCompletedDayEndTaskRunsByBizDate(@Param("bizDate") String bizDate);
+    int countUnlinkedAutoDayEndBatchesByBizDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 统计指定业务日缺少自动日终批次关联的成功任务日志。
+     */
+    int countUnlinkedCompletedDayEndTaskRunsByBizDate(@Param("bizDate") String bizDate);
+
+    /**
+     * 统计指定业务日重复关联同一自动日终批次的成功任务日志。
+     */
+    int countDuplicateCompletedDayEndTaskRunLinksByBizDate(@Param("bizDate") String bizDate);
 
     /**
      * 新增支付交易异常告警通知日志。

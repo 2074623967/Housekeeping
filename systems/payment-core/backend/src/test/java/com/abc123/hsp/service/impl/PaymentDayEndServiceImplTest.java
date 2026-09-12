@@ -266,6 +266,7 @@ class PaymentDayEndServiceImplTest {
         ArgumentCaptor<com.abc123.hsp.entity.PaymentDayEndBatchEntity> captor =
                 ArgumentCaptor.forClass(com.abc123.hsp.entity.PaymentDayEndBatchEntity.class);
         verify(paymentDayEndMapper).insertBatch(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(captor.getValue().getBatchNo(), result.getBatchNo());
         org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), captor.getValue().getBizDate());
         org.junit.jupiter.api.Assertions.assertEquals("AUTO", captor.getValue().getRunMode());
         org.junit.jupiter.api.Assertions.assertEquals(
@@ -283,6 +284,7 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertFalse(result.getExecuted());
         org.junit.jupiter.api.Assertions.assertEquals("EXISTING_BATCH", result.getSkipReason());
         org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertNull(result.getBatchNo());
         org.junit.jupiter.api.Assertions.assertNull(result.getBatchStatus());
         verify(paymentDayEndMapper, org.mockito.Mockito.never()).insertBatch(org.mockito.ArgumentMatchers.any());
         verify(paymentDayEndMapper, org.mockito.Mockito.never()).countPaymentsByDate(org.mockito.ArgumentMatchers.anyString());
@@ -304,6 +306,7 @@ class PaymentDayEndServiceImplTest {
         org.junit.jupiter.api.Assertions.assertFalse(result.getExecuted());
         org.junit.jupiter.api.Assertions.assertEquals("LEASE_BUSY", result.getSkipReason());
         org.junit.jupiter.api.Assertions.assertEquals(expectedBizDate.toString(), result.getBizDate());
+        org.junit.jupiter.api.Assertions.assertNull(result.getBatchNo());
         org.junit.jupiter.api.Assertions.assertNull(result.getBatchStatus());
         org.mockito.Mockito.verifyNoInteractions(paymentDayEndMapper);
     }

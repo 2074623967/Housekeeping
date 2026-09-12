@@ -690,6 +690,7 @@ onMounted(loadOverview);
                   <th>任务编码</th>
                   <th>任务名称</th>
                   <th>业务日期</th>
+                  <th>业务关联号</th>
                   <th>运行方式</th>
                   <th>任务状态</th>
                   <th>严重等级</th>
@@ -712,6 +713,7 @@ onMounted(loadOverview);
                   <td>{{ item.taskCode }}</td>
                   <td>{{ item.taskName }}</td>
                   <td>{{ item.bizDate || "-" }}</td>
+                  <td>{{ item.businessRefNo || "-" }}</td>
                   <td>{{ item.runMode }}</td>
                   <td><span :class="['badge', item.taskStatusType]">{{ item.taskStatus }}</span></td>
                   <td><span :class="['badge', item.severityLevelType]">{{ item.severityLevel }}</span></td>

@@ -17,6 +17,8 @@ public class PaymentDayEndAutoRunResultDTO {
     private String skipReason;
     /** 本轮目标业务日。 */
     private String bizDate;
+    /** 本轮新生成的日终批次号，未执行时为空。 */
+    private String batchNo;
     /** 新批次状态。 */
     private String batchStatus;
 }

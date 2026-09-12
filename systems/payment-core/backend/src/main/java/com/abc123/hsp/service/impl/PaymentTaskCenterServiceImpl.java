@@ -386,12 +386,13 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 enrichTaskRuns(CsvExportRowLimiter.requireWithinLimit(
                         paymentTaskCenterMapper.findTaskRunLogsForExport(normalizedQuery)));
         StringBuilder builder = new StringBuilder("\uFEFF");
-        builder.append("日志号,任务编码,任务名称,业务日期,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
+        builder.append("日志号,任务编码,任务名称,业务日期,业务关联号,运行方式,任务状态,严重等级,升级状态,处理总数,成功数,告警数,失败数,执行摘要,建议动作,推荐路由,触发人,开始时间,完成时间\n");
         for (PaymentTaskRunLogItemDTO item : items) {
             builder.append(csvCell(item.getTaskLogNo())).append(',')
                     .append(csvCell(item.getTaskCode())).append(',')
                     .append(csvCell(item.getTaskName())).append(',')
                     .append(csvCell(item.getBizDate())).append(',')
+                    .append(csvCell(item.getBusinessRefNo())).append(',')
                     .append(csvCell(item.getRunMode())).append(',')
                     .append(csvCell(item.getTaskStatus())).append(',')
                     .append(csvCell(item.getSeverityLevel())).append(',')
@@ -484,7 +485,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 batchWarning || leaseBusy ? 1 : 0,
                 0,
                 summaryComment,
-                dayEndResult.getBizDate());
+                dayEndResult.getBizDate(),
+                dayEndResult.getBatchNo());
     }
 
     @Override
@@ -531,8 +533,12 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
 
         int batchCount = patrolResult.getBatchCount();
         int autoBatchCount = patrolResult.getAutoBatchCount();
-        int completedRunLogCount = paymentTaskCenterMapper
-                .countCompletedDayEndTaskRunsByBizDate(patrolResult.getBizDate());
+        int unlinkedAutoBatchCount = batchCount == 0 ? 0 : paymentTaskCenterMapper
+                .countUnlinkedAutoDayEndBatchesByBizDate(patrolResult.getBizDate());
+        int unlinkedCompletedRunCount = batchCount == 0 ? 0 : paymentTaskCenterMapper
+                .countUnlinkedCompletedDayEndTaskRunsByBizDate(patrolResult.getBizDate());
+        int duplicateCompletedRunLinkCount = batchCount == 0 ? 0 : paymentTaskCenterMapper
+                .countDuplicateCompletedDayEndTaskRunLinksByBizDate(patrolResult.getBizDate());
         int successCount = 0;
         int warningCount = 0;
         int failCount = 0;
@@ -542,17 +548,20 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
             summaryComment = String.format(
                     "%s 尚无支付日终批次；巡检仅记录缺失事实，不自动补跑。",
                     patrolResult.getBizDate());
-        } else if (autoBatchCount != completedRunLogCount) {
+        } else if (unlinkedAutoBatchCount > 0
+                || unlinkedCompletedRunCount > 0
+                || duplicateCompletedRunLinkCount > 0) {
             warningCount = 1;
             summaryComment = String.format(
-                    "%s 共 %d 个日终批次，其中自动批次 %d 个、成功创建批次的自动任务日志 %d 条，数量不一致。",
-                    patrolResult.getBizDate(), batchCount, autoBatchCount, completedRunLogCount);
+                    "%s 共 %d 个日终批次，其中自动批次 %d 个；缺少成功日志关联的自动批次 %d 个，缺少自动批次关联的成功日志 %d 条，重复关联同一批次的成功日志 %d 条。",
+                    patrolResult.getBizDate(), batchCount, autoBatchCount,
+                    unlinkedAutoBatchCount, unlinkedCompletedRunCount, duplicateCompletedRunLinkCount);
         } else {
             successCount = 1;
             summaryComment = autoBatchCount == 0
-                    ? String.format("%s 已有 %d 个人工日终批次，自动批次与成功创建日志均为 0。",
+                    ? String.format("%s 已有 %d 个人工日终批次，无自动批次关联缺口。",
                     patrolResult.getBizDate(), batchCount)
-                    : String.format("%s 共 %d 个日终批次，自动批次与成功创建日志均为 %d。",
+                    : String.format("%s 共 %d 个日终批次，%d 个自动批次均与成功任务日志一一关联。",
                     patrolResult.getBizDate(), batchCount, autoBatchCount);
         }
         try {
@@ -567,7 +576,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                     warningCount,
                     failCount,
                     summaryComment,
-                    patrolResult.getBizDate());
+                    patrolResult.getBizDate(),
+                    null);
         } catch (DuplicateKeyException ignored) {
             return buildActionResult(
                     TASK_CODE_DAY_END_PATROL,
@@ -607,13 +617,17 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         }
         if (Boolean.TRUE.equals(result.getExecuted())) {
             if (result.getSkipReason() != null
+                    || result.getBatchNo() == null
+                    || result.getBatchNo().trim().isEmpty()
+                    || result.getBatchNo().length() > 64
                     || (!"COMPLETED".equals(result.getBatchStatus())
                     && !"WARNING".equals(result.getBatchStatus()))) {
                 throw new IllegalStateException("automatic day-end returned an invalid executed result");
             }
             return;
         }
-        if (result.getBatchStatus() != null
+        if (result.getBatchNo() != null
+                || result.getBatchStatus() != null
                 || (!PaymentDayEndAutoRunResultDTO.SKIP_REASON_EXISTING_BATCH.equals(result.getSkipReason())
                 && !PaymentDayEndAutoRunResultDTO.SKIP_REASON_LEASE_BUSY.equals(result.getSkipReason()))) {
             throw new IllegalStateException("automatic day-end returned an invalid skipped result");
@@ -1306,8 +1320,23 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                             int failCount,
                                                             String summaryComment,
                                                             String bizDate) {
+        return buildAndRecordResult(taskCode, taskName, runMode, triggeredBy, processedCount,
+                successCount, warningCount, failCount, summaryComment, bizDate, null);
+    }
+
+    private PaymentTaskActionResultDTO buildAndRecordResult(String taskCode,
+                                                            String taskName,
+                                                            String runMode,
+                                                            String triggeredBy,
+                                                            int processedCount,
+                                                            int successCount,
+                                                            int warningCount,
+                                                            int failCount,
+                                                            String summaryComment,
+                                                            String bizDate,
+                                                            String businessRefNo) {
         return buildAndRecordResult(buildTaskLogNo(), taskCode, taskName, runMode, triggeredBy,
-                processedCount, successCount, warningCount, failCount, summaryComment, bizDate);
+                processedCount, successCount, warningCount, failCount, summaryComment, bizDate, businessRefNo);
     }
 
     private PaymentTaskActionResultDTO buildAndRecordResult(String taskLogNo,
@@ -1320,12 +1349,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                                                             int warningCount,
                                                             int failCount,
                                                             String summaryComment,
-                                                            String bizDate) {
+                                                            String bizDate,
+                                                            String businessRefNo) {
         PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
         entity.setTaskLogNo(taskLogNo);
         entity.setTaskCode(taskCode);
         entity.setTaskName(taskName);
         entity.setBizDate(bizDate);
+        entity.setBusinessRefNo(businessRefNo);
         entity.setRunMode(runMode);
         entity.setTaskStatus(failCount > 0 || warningCount > 0 ? TASK_STATUS_WARN : TASK_STATUS_SUCCESS);
         entity.setTaskStatusType(failCount > 0 || warningCount > 0 ? "warn" : "success");

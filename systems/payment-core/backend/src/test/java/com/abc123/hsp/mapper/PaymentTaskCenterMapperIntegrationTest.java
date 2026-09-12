@@ -185,7 +185,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
-    void shouldPersistAndFilterTaskRunsByBusinessDate() {
+    void shouldPersistAndFilterTaskRunsByBusinessDate() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
             PaymentTaskRunLogEntity entity = new PaymentTaskRunLogEntity();
@@ -193,6 +193,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             entity.setTaskCode("PAYMENT_DAY_END");
             entity.setTaskName("支付日终处理");
             entity.setBizDate("2026-09-11");
+            entity.setBusinessRefNo("DEB-20260911-AUTO-001");
             entity.setRunMode("AUTO");
             entity.setTaskStatus("SUCCESS");
             entity.setTaskStatusType("success");
@@ -216,10 +217,49 @@ public class PaymentTaskCenterMapperIntegrationTest {
             List<PaymentTaskRunLogItemDTO> items = mapper.findTaskRunLogs(query);
 
             assertEquals(1, mapper.countTaskRunLogs(query));
-            assertEquals(1, mapper.countCompletedDayEndTaskRunsByBizDate("2026-09-11"));
-            assertEquals(0, mapper.countCompletedDayEndTaskRunsByBizDate("2026-09-10"));
             assertEquals(1, items.size());
             assertEquals("2026-09-11", items.get(0).getBizDate());
+            assertEquals("DEB-20260911-AUTO-001", items.get(0).getBusinessRefNo());
+            assertEquals(0, mapper.countUnlinkedAutoDayEndBatchesByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate("2026-09-11"));
+
+            PaymentTaskRunLogEntity duplicate = new PaymentTaskRunLogEntity();
+            duplicate.setTaskLogNo("PTL-DAY-END-002");
+            duplicate.setTaskCode(entity.getTaskCode());
+            duplicate.setTaskName(entity.getTaskName());
+            duplicate.setBizDate(entity.getBizDate());
+            duplicate.setBusinessRefNo(entity.getBusinessRefNo());
+            duplicate.setRunMode(entity.getRunMode());
+            duplicate.setTaskStatus(entity.getTaskStatus());
+            duplicate.setTaskStatusType(entity.getTaskStatusType());
+            duplicate.setSeverityLevel(entity.getSeverityLevel());
+            duplicate.setSeverityLevelType(entity.getSeverityLevelType());
+            duplicate.setEscalationStatus(entity.getEscalationStatus());
+            duplicate.setEscalationStatusType(entity.getEscalationStatusType());
+            duplicate.setProcessedCount(entity.getProcessedCount());
+            duplicate.setSuccessCount(entity.getSuccessCount());
+            duplicate.setWarningCount(entity.getWarningCount());
+            duplicate.setFailCount(entity.getFailCount());
+            duplicate.setSummaryComment(entity.getSummaryComment());
+            duplicate.setSuggestedAction(entity.getSuggestedAction());
+            duplicate.setRecommendedRoute(entity.getRecommendedRoute());
+            duplicate.setTriggeredBy(entity.getTriggeredBy());
+            assertEquals(1, mapper.insertTaskRunLog(duplicate));
+            session.clearCache();
+            assertEquals(1, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate("2026-09-11"));
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("DELETE FROM t_payment_task_run_log "
+                        + "WHERE task_log_no = 'PTL-DAY-END-002'");
+                statement.executeUpdate("UPDATE t_payment_task_run_log "
+                        + "SET business_ref_no = 'DEB-ORPHAN-001' "
+                        + "WHERE task_log_no = 'PTL-DAY-END-001'");
+            }
+            session.clearCache();
+            assertEquals(1, mapper.countUnlinkedAutoDayEndBatchesByBizDate("2026-09-11"));
+            assertEquals(1, mapper.countUnlinkedCompletedDayEndTaskRunsByBizDate("2026-09-11"));
+            assertEquals(0, mapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate("2026-09-11"));
         }
     }
 
@@ -971,6 +1011,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_refund_channel_query_rate_limit_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_lease");
             statement.execute("DROP TABLE IF EXISTS t_payment_task_run_log");
+            statement.execute("DROP TABLE IF EXISTS t_payment_day_end_batch");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_alert_log");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_duty_roster");
             statement.execute("DROP TABLE IF EXISTS t_payment_notify_log");
@@ -1032,6 +1073,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
             statement.execute("CREATE TABLE t_payment_task_run_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, task_log_no VARCHAR(64) NOT NULL UNIQUE, "
                     + "task_code VARCHAR(64) NOT NULL, task_name VARCHAR(128) NOT NULL, biz_date DATE, "
+                    + "business_ref_no VARCHAR(64), "
                     + "run_mode VARCHAR(32) NOT NULL, task_status VARCHAR(32) NOT NULL, "
                     + "task_status_type VARCHAR(32) NOT NULL, severity_level VARCHAR(32) NOT NULL, "
                     + "severity_level_type VARCHAR(32) NOT NULL, escalation_status VARCHAR(32) NOT NULL, "
@@ -1040,6 +1082,11 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     + "summary_comment VARCHAR(512) NOT NULL, suggested_action VARCHAR(255) NOT NULL, "
                     + "recommended_route VARCHAR(255) NOT NULL, triggered_by VARCHAR(64) NOT NULL, "
                     + "started_at DATETIME NOT NULL, completed_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_payment_day_end_batch ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, batch_no VARCHAR(64) NOT NULL UNIQUE, "
+                    + "biz_date DATE NOT NULL, run_mode VARCHAR(32) NOT NULL)");
+            statement.execute("INSERT INTO t_payment_day_end_batch (batch_no, biz_date, run_mode) VALUES "
+                    + "('DEB-20260911-AUTO-001', '2026-09-11', 'AUTO')");
             statement.execute("CREATE TABLE t_payment_issue_alert_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, alert_no VARCHAR(64), source_alert_no VARCHAR(64), "
                     + "generation_key VARCHAR(191), issue_no VARCHAR(128), payment_order_id VARCHAR(64), "

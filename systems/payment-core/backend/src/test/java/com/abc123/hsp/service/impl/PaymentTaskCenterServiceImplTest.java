@@ -527,6 +527,7 @@ class PaymentTaskCenterServiceImplTest {
         item.setTaskCode("PAYMENT_EVENT_RETRY");
         item.setTaskName("失败事件重发");
         item.setBizDate("2026-09-11");
+        item.setBusinessRefNo("DEB-20260911-AUTO-001");
         item.setRunMode("MANUAL");
         item.setTaskStatus("SUCCESS");
         item.setSeverityLevel("P2");
@@ -557,6 +558,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertTrue(csv.contains("日志号,任务编码"));
         Assertions.assertTrue(csv.contains("\"LOG-001\""));
         Assertions.assertTrue(csv.contains("\"2026-09-11\""));
+        Assertions.assertTrue(csv.contains("\"DEB-20260911-AUTO-001\""));
     }
 
     @Test
@@ -733,6 +735,7 @@ class PaymentTaskCenterServiceImplTest {
                 entity -> "PAYMENT_DAY_END".equals(entity.getTaskCode())
                         && "AUTO".equals(entity.getRunMode())
                         && "2026-09-11".equals(entity.getBizDate())
+                        && "DEB-20260911-AUTO-001".equals(entity.getBusinessRefNo())
                         && "payment-day-end-scheduler".equals(entity.getTriggeredBy())
                         && "WARNING".equals(entity.getTaskStatus())
                         && "P2".equals(entity.getSeverityLevel())
@@ -791,6 +794,7 @@ class PaymentTaskCenterServiceImplTest {
                 entity -> "PAYMENT_DAY_END".equals(entity.getTaskCode())
                         && "WARNING".equals(entity.getTaskStatus())
                         && expectedBizDate.equals(entity.getBizDate())
+                        && entity.getBusinessRefNo() == null
                         && "P1".equals(entity.getSeverityLevel())
                         && entity.getFailCount() == 1
                         && "PAYMENT_DAY_END_AUTO_RUN_FAILED".equals(entity.getSummaryComment())
@@ -814,11 +818,65 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldFailClosedWhenExecutedAutomaticDayEndHasNoBatchReference() {
+        PaymentDayEndAutoRunResultDTO result = dayEndResult(true, null, "COMPLETED");
+        result.setBatchNo(null);
+        when(paymentDayEndService.runAutomatically()).thenReturn(result);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertEquals("automatic day-end returned an invalid executed result", error.getMessage());
+        verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
+                entity -> entity.getBusinessRefNo() == null
+                        && "PAYMENT_DAY_END_AUTO_RUN_FAILED".equals(entity.getSummaryComment())));
+    }
+
+    @Test
+    void shouldFailClosedWhenExecutedAutomaticDayEndHasBlankBatchReference() {
+        PaymentDayEndAutoRunResultDTO result = dayEndResult(true, null, "COMPLETED");
+        result.setBatchNo("   ");
+        when(paymentDayEndService.runAutomatically()).thenReturn(result);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertEquals("automatic day-end returned an invalid executed result", error.getMessage());
+    }
+
+    @Test
+    void shouldFailClosedWhenExecutedAutomaticDayEndBatchReferenceIsTooLong() {
+        PaymentDayEndAutoRunResultDTO result = dayEndResult(true, null, "COMPLETED");
+        result.setBatchNo("B".repeat(65));
+        when(paymentDayEndService.runAutomatically()).thenReturn(result);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertEquals("automatic day-end returned an invalid executed result", error.getMessage());
+    }
+
+    @Test
+    void shouldFailClosedWhenSkippedAutomaticDayEndCarriesBatchReference() {
+        PaymentDayEndAutoRunResultDTO result = dayEndResult(false, "EXISTING_BATCH", null);
+        result.setBatchNo("DEB-20260911-AUTO-001");
+        when(paymentDayEndService.runAutomatically()).thenReturn(result);
+
+        IllegalStateException error = Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> buildQueryTaskCenterService().runAutoPaymentDayEnd());
+
+        Assertions.assertEquals("automatic day-end returned an invalid skipped result", error.getMessage());
+    }
+
+    @Test
     void shouldRaiseP1WhenPreviousBusinessDayHasNoDayEndBatch() {
         String bizDate = previousShanghaiBusinessDay();
         when(paymentDayEndService.inspectPreviousBusinessDay())
                 .thenReturn(dayEndPatrolResult(true, null, bizDate, 0, 0));
-        when(paymentTaskCenterMapper.countCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
         stubTaskCenterOverview();
 
         PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEndPatrol();
@@ -840,7 +898,9 @@ class PaymentTaskCenterServiceImplTest {
         String bizDate = previousShanghaiBusinessDay();
         when(paymentDayEndService.inspectPreviousBusinessDay())
                 .thenReturn(dayEndPatrolResult(true, null, bizDate, 2, 2));
-        when(paymentTaskCenterMapper.countCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(1);
+        when(paymentTaskCenterMapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate)).thenReturn(1);
+        when(paymentTaskCenterMapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate)).thenReturn(0);
         stubTaskCenterOverview();
 
         PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEndPatrol();
@@ -849,7 +909,7 @@ class PaymentTaskCenterServiceImplTest {
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 entity -> "P2".equals(entity.getSeverityLevel())
                         && entity.getSummaryComment().contains("自动批次 2 个")
-                        && entity.getSummaryComment().contains("自动任务日志 1 条")));
+                        && entity.getSummaryComment().contains("缺少成功日志关联的自动批次 1 个")));
     }
 
     @Test
@@ -857,7 +917,9 @@ class PaymentTaskCenterServiceImplTest {
         String bizDate = previousShanghaiBusinessDay();
         when(paymentDayEndService.inspectPreviousBusinessDay())
                 .thenReturn(dayEndPatrolResult(true, null, bizDate, 1, 0));
-        when(paymentTaskCenterMapper.countCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate)).thenReturn(0);
         stubTaskCenterOverview();
 
         PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEndPatrol();
@@ -874,13 +936,31 @@ class PaymentTaskCenterServiceImplTest {
         String bizDate = previousShanghaiBusinessDay();
         when(paymentDayEndService.inspectPreviousBusinessDay())
                 .thenReturn(dayEndPatrolResult(true, null, bizDate, 2, 1));
-        when(paymentTaskCenterMapper.countCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(1);
+        when(paymentTaskCenterMapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate)).thenReturn(0);
         stubTaskCenterOverview();
 
         PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEndPatrol();
 
         Assertions.assertEquals(1, result.getSuccessCount());
-        Assertions.assertTrue(result.getSummaryComment().contains("均为 1"));
+        Assertions.assertTrue(result.getSummaryComment().contains("一一关联"));
+    }
+
+    @Test
+    void shouldRaiseP2WhenCompletedRunLogsRepeatTheSameBatchReference() {
+        String bizDate = previousShanghaiBusinessDay();
+        when(paymentDayEndService.inspectPreviousBusinessDay())
+                .thenReturn(dayEndPatrolResult(true, null, bizDate, 1, 1));
+        when(paymentTaskCenterMapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate)).thenReturn(1);
+        stubTaskCenterOverview();
+
+        PaymentTaskActionResultDTO result = buildQueryTaskCenterService().runAutoPaymentDayEndPatrol();
+
+        Assertions.assertEquals(1, result.getWarningCount());
+        Assertions.assertTrue(result.getSummaryComment().contains("重复关联同一批次的成功日志 1 条"));
     }
 
     @Test
@@ -895,7 +975,11 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(0, result.getProcessedCount());
         Assertions.assertTrue(result.getSummaryComment().contains("等待后续重试"));
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
-                .countCompletedDayEndTaskRunsByBizDate(org.mockito.ArgumentMatchers.anyString());
+                .countUnlinkedAutoDayEndBatchesByBizDate(org.mockito.ArgumentMatchers.anyString());
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .countUnlinkedCompletedDayEndTaskRunsByBizDate(org.mockito.ArgumentMatchers.anyString());
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .countDuplicateCompletedDayEndTaskRunLinksByBizDate(org.mockito.ArgumentMatchers.anyString());
         verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
                 .insertTaskRunLog(org.mockito.ArgumentMatchers.any());
     }
@@ -905,7 +989,9 @@ class PaymentTaskCenterServiceImplTest {
         String bizDate = previousShanghaiBusinessDay();
         when(paymentDayEndService.inspectPreviousBusinessDay())
                 .thenReturn(dayEndPatrolResult(true, null, bizDate, 1, 1));
-        when(paymentTaskCenterMapper.countCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(1);
+        when(paymentTaskCenterMapper.countUnlinkedAutoDayEndBatchesByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countUnlinkedCompletedDayEndTaskRunsByBizDate(bizDate)).thenReturn(0);
+        when(paymentTaskCenterMapper.countDuplicateCompletedDayEndTaskRunLinksByBizDate(bizDate)).thenReturn(0);
         org.mockito.Mockito.doThrow(new DuplicateKeyException("duplicate patrol"))
                 .when(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.any());
         stubTaskCenterOverview();
@@ -1562,6 +1648,7 @@ class PaymentTaskCenterServiceImplTest {
         result.setExecuted(executed);
         result.setSkipReason(skipReason);
         result.setBizDate("2026-09-11");
+        result.setBatchNo(executed ? "DEB-20260911-AUTO-001" : null);
         result.setBatchStatus(batchStatus);
         return result;
     }

@@ -311,6 +311,7 @@
                task_code AS taskCode,
                task_name AS taskName,
                DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
+               business_ref_no AS businessRefNo,
                run_mode AS runMode,
                task_status AS taskStatus,
                task_status_type AS taskStatusType,
@@ -333,6 +334,7 @@
                task_code AS taskCode,
                task_name AS taskName,
                DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
+               business_ref_no AS businessRefNo,
                run_mode AS runMode,
                task_status AS taskStatus,
                task_status_type AS taskStatusType,
@@ -378,6 +380,7 @@
                task_code AS taskCode,
                task_name AS taskName,
                DATE_FORMAT(biz_date, '%Y-%m-%d') AS bizDate,
+               business_ref_no AS businessRefNo,
                run_mode AS runMode,
                task_status AS taskStatus,
                task_status_type AS taskStatusType,
@@ -439,13 +442,62 @@
         </where>
     </select>
 
-    <select id="countCompletedDayEndTaskRunsByBizDate" resultType="int">
+    <select id="countUnlinkedAutoDayEndBatchesByBizDate" resultType="int">
         SELECT COUNT(1)
-        FROM t_payment_task_run_log
-        WHERE task_code = 'PAYMENT_DAY_END'
-          AND biz_date = #{bizDate}
-          AND processed_count &gt; 0
-          AND fail_count = 0
+        FROM t_payment_day_end_batch batch
+        WHERE batch.biz_date = #{bizDate}
+          AND batch.run_mode = 'AUTO'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_task_run_log task_log
+              WHERE task_log.task_code = 'PAYMENT_DAY_END'
+                AND task_log.biz_date = batch.biz_date
+                AND task_log.business_ref_no = batch.batch_no
+                AND task_log.processed_count &gt; 0
+                AND task_log.fail_count = 0
+          )
+    </select>
+
+    <select id="countUnlinkedCompletedDayEndTaskRunsByBizDate" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_task_run_log task_log
+        WHERE task_log.task_code = 'PAYMENT_DAY_END'
+          AND task_log.biz_date = #{bizDate}
+          AND task_log.processed_count &gt; 0
+          AND task_log.fail_count = 0
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_day_end_batch batch
+              WHERE batch.biz_date = task_log.biz_date
+                AND batch.batch_no = task_log.business_ref_no
+                AND batch.run_mode = 'AUTO'
+          )
+    </select>
+
+    <select id="countDuplicateCompletedDayEndTaskRunLinksByBizDate" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_task_run_log task_log
+        WHERE task_log.task_code = 'PAYMENT_DAY_END'
+          AND task_log.biz_date = #{bizDate}
+          AND task_log.processed_count &gt; 0
+          AND task_log.fail_count = 0
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_day_end_batch batch
+              WHERE batch.biz_date = task_log.biz_date
+                AND batch.batch_no = task_log.business_ref_no
+                AND batch.run_mode = 'AUTO'
+          )
+          AND EXISTS (
+              SELECT 1
+              FROM t_payment_task_run_log earlier_log
+              WHERE earlier_log.task_code = task_log.task_code
+                AND earlier_log.biz_date = task_log.biz_date
+                AND earlier_log.business_ref_no = task_log.business_ref_no
+                AND earlier_log.processed_count &gt; 0
+                AND earlier_log.fail_count = 0
+                AND earlier_log.id &lt; task_log.id
+          )
     </select>
 
     <select id="findPendingPaymentOrderIdsForManualQuery" resultType="string">
@@ -1004,6 +1056,7 @@
             task_code,
             task_name,
             biz_date,
+            business_ref_no,
             run_mode,
             task_status,
             task_status_type,
@@ -1026,6 +1079,7 @@
             #{taskCode},
             #{taskName},
             #{bizDate},
+            #{businessRefNo},
             #{runMode},
             #{taskStatus},
             #{taskStatusType},

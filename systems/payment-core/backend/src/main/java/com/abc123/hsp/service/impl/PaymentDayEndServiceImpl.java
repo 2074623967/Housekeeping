@@ -110,6 +110,7 @@ public class PaymentDayEndServiceImpl implements PaymentDayEndService {
         result.setExecuted(outcome.batch != null);
         result.setSkipReason(outcome.skipReason);
         result.setBizDate(bizDate);
+        result.setBatchNo(outcome.batch == null ? null : outcome.batch.getBatchNo());
         result.setBatchStatus(outcome.batch == null ? null : outcome.batch.getBatchStatus());
         return result;
     }
