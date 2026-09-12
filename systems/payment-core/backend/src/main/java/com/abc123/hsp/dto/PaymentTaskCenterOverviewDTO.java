@@ -55,6 +55,8 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer issueAlertDispatchTimeoutMinutes;
     /** 供应商已受理、等待回执回查的外发告警数。 */
     private Integer pendingIssueAlertReceiptCount;
+    /** 当前可由人工批量执行回执回查的外发告警数。 */
+    private Integer manualIssueAlertReceiptCount;
     /** 当前已达到自动回查时间的外发告警数。 */
     private Integer dueIssueAlertReceiptCount;
     /** 当前处于自动回查退避窗口的外发告警数。 */

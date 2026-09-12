@@ -1031,6 +1031,30 @@
           AND ack_status = '待确认'
     </select>
 
+    <select id="countManualIssueAlertReceipts" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log delivery
+        WHERE delivery.source_alert_no IS NOT NULL
+          AND delivery.alert_channel &lt;&gt; 'IN_APP_OUTBOX'
+          AND delivery.alert_status = '已派发'
+          AND delivery.provider_delivery_status = 'ACCEPTED'
+          AND delivery.ack_status = '待确认'
+          AND (
+            delivery.receipt_query_result IS NULL
+            OR delivery.receipt_query_result &lt;&gt; 'QUERYING'
+            OR delivery.last_receipt_query_at &lt;= TIMESTAMPADD(SECOND, -#{claimTimeoutSeconds}, NOW())
+          )
+          AND EXISTS (
+            SELECT 1
+            FROM t_payment_issue_alert_log source_alert
+            WHERE source_alert.alert_no = delivery.source_alert_no
+              AND source_alert.issue_no = delivery.issue_no
+              AND source_alert.alert_channel = 'IN_APP_OUTBOX'
+              AND source_alert.source_alert_no IS NULL
+              AND source_alert.ack_status = '待确认'
+          )
+    </select>
+
     <select id="countDueIssueAlertReceipts" resultType="int">
         SELECT COUNT(1)
         FROM t_payment_issue_alert_log
@@ -1478,6 +1502,11 @@
           AND alert_status = '已派发'
           AND provider_delivery_status = 'ACCEPTED'
           AND ack_status = '待确认'
+          AND (
+            receipt_query_result IS NULL
+            OR receipt_query_result &lt;&gt; 'QUERYING'
+            OR last_receipt_query_at &lt;= TIMESTAMPADD(SECOND, -#{claimTimeoutSeconds}, NOW())
+          )
           AND EXISTS (
             SELECT 1
             FROM t_payment_issue_alert_log source_alert

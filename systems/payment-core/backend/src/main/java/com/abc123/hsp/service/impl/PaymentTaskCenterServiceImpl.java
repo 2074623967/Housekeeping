@@ -348,6 +348,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setIssueAlertDispatchCountThreshold(issueAlertDispatchCountThreshold);
         overview.setIssueAlertDispatchTimeoutMinutes(issueAlertDispatchTimeoutMinutes);
         overview.setPendingIssueAlertReceiptCount(paymentTaskCenterMapper.countPendingIssueAlertReceipts());
+        overview.setManualIssueAlertReceiptCount(paymentTaskCenterMapper.countManualIssueAlertReceipts(
+                issueAlertReceiptQueryClaimTimeoutSeconds));
         overview.setDueIssueAlertReceiptCount(paymentTaskCenterMapper.countDueIssueAlertReceipts(
                 issueAlertReceiptQueryMinAgeSeconds,
                 issueAlertReceiptQueryMaxAttempts,
@@ -1527,6 +1529,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int oldestPendingIssueAlertDispatchMinutes =
                 valueOrZero(overview.getOldestPendingIssueAlertDispatchMinutes());
         int pendingIssueAlertReceiptCount = valueOrZero(overview.getPendingIssueAlertReceiptCount());
+        int manualIssueAlertReceiptCount = valueOrZero(overview.getManualIssueAlertReceiptCount());
         int dueIssueAlertReceiptCount = valueOrZero(overview.getDueIssueAlertReceiptCount());
         int backingOffIssueAlertReceiptCount = valueOrZero(overview.getBackingOffIssueAlertReceiptCount());
         int queryingIssueAlertReceiptCount = valueOrZero(overview.getQueryingIssueAlertReceiptCount());
@@ -1671,8 +1674,9 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 "异常告警待回查",
                 pendingIssueAlertReceiptCount,
                 pendingIssueAlertReceiptCount > 0
-                        ? String.format("当前有 %d 条供应商已受理告警等待送达回执：可执行 %d 条、退避中 %d 条、查询中 %d 条、自动次数耗尽 %d 条，最老已等待 %d 分钟",
+                        ? String.format("当前有 %d 条供应商已受理告警等待送达回执：人工可执行 %d 条、自动到期 %d 条、退避中 %d 条、查询中 %d 条、自动次数耗尽 %d 条，最老已等待 %d 分钟",
                         pendingIssueAlertReceiptCount,
+                        manualIssueAlertReceiptCount,
                         dueIssueAlertReceiptCount,
                         backingOffIssueAlertReceiptCount,
                         queryingIssueAlertReceiptCount,

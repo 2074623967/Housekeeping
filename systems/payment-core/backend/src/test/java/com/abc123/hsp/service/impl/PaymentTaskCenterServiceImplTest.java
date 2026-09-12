@@ -164,6 +164,8 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldExposeIssueAlertReceiptQueryQueueMetricsInOverview() {
         when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countPendingIssueAlertReceipts()).thenReturn(13);
+        when(paymentTaskCenterMapper.countManualIssueAlertReceipts(30)).thenReturn(11);
         when(paymentTaskCenterMapper.countDueIssueAlertReceipts(60, 10, 30)).thenReturn(7);
         when(paymentTaskCenterMapper.countBackingOffIssueAlertReceipts(60, 10, 30)).thenReturn(5);
         when(paymentTaskCenterMapper.countQueryingIssueAlertReceipts(30)).thenReturn(2);
@@ -172,10 +174,16 @@ class PaymentTaskCenterServiceImplTest {
 
         PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
 
+        Assertions.assertEquals(13, overview.getPendingIssueAlertReceiptCount());
+        Assertions.assertEquals(11, overview.getManualIssueAlertReceiptCount());
         Assertions.assertEquals(7, overview.getDueIssueAlertReceiptCount());
         Assertions.assertEquals(5, overview.getBackingOffIssueAlertReceiptCount());
         Assertions.assertEquals(2, overview.getQueryingIssueAlertReceiptCount());
         Assertions.assertEquals(3, overview.getExhaustedIssueAlertReceiptCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
+                        && alert.getAlertMessage().contains("人工可执行 11 条")
+                        && alert.getAlertMessage().contains("自动到期 7 条")));
     }
 
     @Test

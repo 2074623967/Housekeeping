@@ -1266,7 +1266,8 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         receiptQueryMaxAttempts,
                         receiptQueryClaimTimeoutSeconds,
                         receiptQueryBatchSize)
-                : paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(receiptQueryBatchSize);
+                : paymentTaskCenterMapper.findAcceptedIssueAlertDeliveryLogs(
+                        receiptQueryClaimTimeoutSeconds, receiptQueryBatchSize);
         return reconcileDeliveryReceipts(acceptedLogs, runMode, triggeredBy);
     }
 

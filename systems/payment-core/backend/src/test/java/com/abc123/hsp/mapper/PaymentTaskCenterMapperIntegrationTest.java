@@ -1013,6 +1013,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     accepted.getAlertNo(), wrongIssueSource.getAlertNo(), accepted.getIssueNo(), 0, false, 2, 30));
             assertEquals(1, mapper.claimIssueAlertReceiptQuery(
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(), 0, false, 2, 30));
+            assertEquals(0, mapper.countManualIssueAlertReceipts(30));
+            assertEquals(0, mapper.findAcceptedIssueAlertDeliveryLogs(30, 10).size());
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(), 0, false, 2, 30));
             assertEquals(0, mapper.completeIssueAlertReceiptQueryAttempt(
@@ -1044,7 +1046,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     accepted.getAlertNo(), accepted.getSourceAlertNo(), accepted.getIssueNo(),
                     2, "FAILED", 120, 2));
             assertEquals(0, mapper.findDueAcceptedIssueAlertDeliveryLogs(60, 2, 30, 10).size());
-            List<PaymentIssueAlertLogEntity> manualCandidates = mapper.findAcceptedIssueAlertDeliveryLogs(10);
+            assertEquals(1, mapper.countManualIssueAlertReceipts(30));
+            List<PaymentIssueAlertLogEntity> manualCandidates = mapper.findAcceptedIssueAlertDeliveryLogs(30, 10);
             assertEquals(1, manualCandidates.size());
             assertEquals(Integer.valueOf(2), manualCandidates.get(0).getReceiptQueryCount());
             PaymentIssueAlertLogEntity specified =
@@ -1059,7 +1062,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
                         + "WHERE alert_no = 'PIA-RECEIPT-RETRY'");
             }
             session.clearCache();
-            assertEquals(0, mapper.findAcceptedIssueAlertDeliveryLogs(10).size());
+            assertEquals(0, mapper.findAcceptedIssueAlertDeliveryLogs(30, 10).size());
             org.junit.jupiter.api.Assertions.assertNull(
                     mapper.findAcceptedIssueAlertDeliveryLogByAlertNo(accepted.getAlertNo()));
             assertEquals(0, mapper.claimIssueAlertReceiptQuery(

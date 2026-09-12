@@ -157,6 +157,11 @@ public interface PaymentTaskCenterMapper {
     int countPendingIssueAlertReceipts();
 
     /**
+     * 统计当前可由人工批量执行回执回查的外发告警。
+     */
+    int countManualIssueAlertReceipts(@Param("claimTimeoutSeconds") int claimTimeoutSeconds);
+
+    /**
      * 统计当前已达到自动回查时间的外发告警。
      */
     int countDueIssueAlertReceipts(@Param("minAgeSeconds") int minAgeSeconds,
@@ -253,7 +258,9 @@ public interface PaymentTaskCenterMapper {
     /**
      * 查询供应商已受理但尚未确认送达的异常告警派发日志。
      */
-    List<PaymentIssueAlertLogEntity> findAcceptedIssueAlertDeliveryLogs(@Param("batchSize") int batchSize);
+    List<PaymentIssueAlertLogEntity> findAcceptedIssueAlertDeliveryLogs(
+            @Param("claimTimeoutSeconds") int claimTimeoutSeconds,
+            @Param("batchSize") int batchSize);
 
     /**
      * 查询指定的待确认供应商受理告警。

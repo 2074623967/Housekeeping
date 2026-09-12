@@ -24,6 +24,7 @@ const overview = ref({
   issueAlertDispatchCountThreshold: 10,
   issueAlertDispatchTimeoutMinutes: 15,
   pendingIssueAlertReceiptCount: 0,
+  manualIssueAlertReceiptCount: 0,
   dueIssueAlertReceiptCount: 0,
   backingOffIssueAlertReceiptCount: 0,
   queryingIssueAlertReceiptCount: 0,
@@ -276,7 +277,8 @@ onMounted(loadOverview);
             <div class="detail-label">异常告警待回查</div>
             <div class="detail-value">{{ overview.pendingIssueAlertReceiptCount }}</div>
             <div class="meta">最老等待 {{ overview.oldestPendingIssueAlertReceiptMinutes }} 分钟</div>
-            <div class="meta">可执行 {{ overview.dueIssueAlertReceiptCount }} · 退避中 {{ overview.backingOffIssueAlertReceiptCount }}</div>
+            <div class="meta">人工可执行 {{ overview.manualIssueAlertReceiptCount }}</div>
+            <div class="meta">自动到期 {{ overview.dueIssueAlertReceiptCount }} · 退避中 {{ overview.backingOffIssueAlertReceiptCount }}</div>
             <div class="meta">查询中 {{ overview.queryingIssueAlertReceiptCount }} · 自动次数耗尽 {{ overview.exhaustedIssueAlertReceiptCount }}</div>
             <div class="meta">P1：数量 ≥ {{ overview.issueAlertReceiptCountThreshold }} 或等待 ≥ {{ overview.issueAlertReceiptTimeoutMinutes }} 分钟</div>
           </div>
@@ -535,10 +537,10 @@ onMounted(loadOverview);
               <p>对已派发且仍停留在供应商受理中的异常告警执行回执回查，统一回写送达结果，减少人工逐条核对。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.manualIssueAlertReceiptCount === 0"
                 @click="runTask('PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE', '异常告警回执回查', paymentTaskCenterApi.runReconcileIssueAlertReceipts)"
               >
-                {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE" ? "执行中..." : "执行回执回查" }}
+                {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_RECEIPT_RECONCILE" ? "执行中..." : overview.manualIssueAlertReceiptCount === 0 ? "暂无可回查告警" : `执行回执回查（${overview.manualIssueAlertReceiptCount}）` }}
               </button>
             </div>
           </section>
@@ -644,6 +646,11 @@ onMounted(loadOverview);
                   <td>SLA 超时异常</td>
                   <td>{{ overview.overdueIssueCount }}</td>
                   <td>需要分派值班负责人并进入异常中心跟进</td>
+                </tr>
+                <tr>
+                  <td>告警回执人工可执行</td>
+                  <td>{{ overview.manualIssueAlertReceiptCount }}</td>
+                  <td>允许越过自动等待、退避和次数上限，但排除仍在有效占用中的回查</td>
                 </tr>
                 <tr>
                   <td>异常告警派发链路</td>
