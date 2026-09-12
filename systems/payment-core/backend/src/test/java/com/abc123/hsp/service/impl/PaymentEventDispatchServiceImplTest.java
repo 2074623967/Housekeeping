@@ -262,6 +262,23 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldFailRefundEventBeforeChannelWhenAttemptIsNoLongerCurrent() {
+        PaymentEventListItemDTO event = refundEvent("FAILED", 1);
+        when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);
+        when(paymentEventMapper.findByEventNo("EVTR-001")).thenReturn(event);
+        when(refundMapper.findChannelSubmitRequestByAttemptNo("RFA-001")).thenReturn(null);
+
+        boolean success = new PaymentEventDispatchServiceImpl(
+                paymentEventMapper, refundMapper, refundChannelSubmitService, 3)
+                .republish("EVTR-001", " payment-event-scheduler ");
+
+        Assertions.assertFalse(success);
+        verify(refundChannelSubmitService, never()).submit(any());
+        verify(paymentEventMapper).markPublishFailed("EVTR-001");
+        verify(refundMapper, never()).insertOperationLog(any());
+    }
+
+    @Test
     void shouldRejectDirectRepublishWhenRefundResultIsUnknown() {
         PaymentEventListItemDTO event = refundEvent("UNKNOWN", 1);
         when(paymentEventMapper.findByEventNoForUpdate("EVTR-001")).thenReturn(event);

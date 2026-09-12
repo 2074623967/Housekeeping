@@ -259,6 +259,13 @@
         INNER JOIN t_refund_order refund_order
             ON refund_order.refund_order_id = attempt.refund_order_id
         WHERE attempt.refund_attempt_no = #{refundAttemptNo}
+          AND attempt.id = (
+              SELECT latest_attempt.id
+              FROM t_refund_attempt latest_attempt
+              WHERE latest_attempt.refund_order_id = attempt.refund_order_id
+              ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+              LIMIT 1
+          )
         LIMIT 1
     </select>
 

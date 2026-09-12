@@ -2,10 +2,12 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.abc123.hsp.dto.PaymentEventListItemDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
+import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import java.io.InputStream;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -234,6 +236,27 @@ class RefundSubmitOutboxMapperIntegrationTest {
     }
 
     @Test
+    void shouldExposeChannelSubmitSnapshotOnlyForLatestAttemptWhenCreatedAtTies() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            RefundMapper refundMapper = session.getMapper(RefundMapper.class);
+            assertEquals(1, refundMapper.insertRefundAttempt(
+                    "RFA-TRACE-NEW", "REF-TRACE", "wx_h5"));
+
+            RefundChannelSubmitRequestDTO previous =
+                    refundMapper.findChannelSubmitRequestByAttemptNo("RFA-TRACE");
+            RefundChannelSubmitRequestDTO latest =
+                    refundMapper.findChannelSubmitRequestByAttemptNo("RFA-TRACE-NEW");
+
+            assertNull(previous);
+            assertNotNull(latest);
+            assertEquals("RFA-TRACE-NEW", latest.getRefundAttemptNo());
+            assertEquals("REF-TRACE", latest.getRefundOrderId());
+            assertEquals("PAY-TRACE", latest.getPaymentOrderId());
+            session.rollback();
+        }
+    }
+
+    @Test
     void shouldRestartFailedRefundWithoutReusingPreviousAcceptedTrace() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -300,10 +323,23 @@ class RefundSubmitOutboxMapperIntegrationTest {
     private void createRefundTable() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS t_payment_order");
+            statement.execute("CREATE TABLE t_payment_order ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
+                    + "payment_order_id VARCHAR(64) NOT NULL UNIQUE, "
+                    + "channel_code VARCHAR(64) NULL)");
+            statement.executeUpdate("INSERT INTO t_payment_order(payment_order_id, channel_code) "
+                    + "VALUES ('PAY-TRACE', 'wx_h5'), ('PAY-UNKNOWN', 'wx_h5')");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
                     + "refund_order_id VARCHAR(64) NOT NULL UNIQUE, "
+                    + "payment_order_id VARCHAR(64) NULL, "
+                    + "order_no VARCHAR(64) NULL, "
+                    + "customer_name VARCHAR(64) NULL, "
+                    + "refund_amount DECIMAL(18, 2) NULL, "
+                    + "refund_method VARCHAR(32) NULL, "
+                    + "refund_reason VARCHAR(255) NULL, "
                     + "channel_code VARCHAR(64) NULL, "
                     + "channel_refund_no VARCHAR(128) NULL, "
                     + "channel_submitted_at TIMESTAMP NULL, "
@@ -312,9 +348,13 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "success_at TIMESTAMP NULL, "
                     + "applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                     + "UNIQUE(channel_code, channel_refund_no))");
-            statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, channel_code, status) "
-                    + "VALUES ('REF-TRACE', NULL, 'PROCESSING'), "
-                    + "('REF-UNKNOWN', NULL, 'PROCESSING')");
+            statement.executeUpdate("INSERT INTO t_refund_order("
+                    + "refund_order_id, payment_order_id, order_no, customer_name, refund_amount, "
+                    + "refund_method, refund_reason, channel_code, status) VALUES "
+                    + "('REF-TRACE', 'PAY-TRACE', 'ORD-TRACE', '张女士', 10.00, "
+                    + "'原路退款', '测试退款', NULL, 'PROCESSING'), "
+                    + "('REF-UNKNOWN', 'PAY-UNKNOWN', 'ORD-UNKNOWN', '李女士', 20.00, "
+                    + "'原路退款', '未知退款', NULL, 'PROCESSING')");
             statement.execute("DROP TABLE IF EXISTS t_refund_attempt");
             statement.execute("CREATE TABLE t_refund_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, "
