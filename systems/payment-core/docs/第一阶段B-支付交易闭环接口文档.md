@@ -4240,6 +4240,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. `RATE_LIMITED / RETRY_COOLDOWN_ACTIVE / RETRY_LIMIT_REACHED / REPLAY_WINDOW_ACTIVE / FRESHNESS_WINDOW_EXPIRED / PROVIDER_CIRCUIT_OPEN` 等本地结果继续作为审计日志保留，但不得冒充供应商调用失败。
 5. 该内部契约不改 HTTP API、DTO、状态字段、schema、索引或迁移；供应商限流仍需后续以原子配额预留解决并发超额窗口。
 
+### 14.294 告警供应商派发共享配额契约
+
+1. 启用供应商限流策略时，任何通知器调用前必须先按规范化后的 `providerCode + channelCode` 原子占用一个固定窗口额度；不得再以告警成功历史的查询结果作为调用许可。
+2. 窗口分钟数与最大条数继续来自供应商 `rateLimitPolicy`。分钟数转换为秒数必须检查整数溢出；无效或超出支持范围的配置闭合为 `RATE_LIMITED`，不得调用供应商。
+3. 共享桶初始化采用唯一键幂等插入，占额采用单条条件更新：窗口已过期时将计数重置为 `1`，窗口有效时仅在 `used_count < maxDeliveries` 时加一；更新影响 `0` 行表示额度耗尽。
+4. 占额使用独立 `REQUIRES_NEW` 事务并在外部调用前提交。供应商返回失败或通知器抛异常时不得返还额度，因为网络请求已经消耗供应商容量；额度耗尽仍记录 `RATE_LIMITED`，并按 14.293 排除出真实调用失败统计。
+5. 本契约新增内部服务、Mapper、共享桶 schema 和迁移，不改变 HTTP API、前端 DTO 或告警状态字段。占额后调用前崩溃可能暂时损失一个额度，窗口到期后恢复；生产仍需验证 MySQL 锁等待、多实例容量、供应商幂等与真实限额。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
