@@ -459,6 +459,46 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldAcknowledgeOnlyMatchingTopLevelSourceAlert() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            PaymentIssueAlertLogEntity matchingSource = buildIssueAlertLog("PIA-SOURCE-MATCH");
+            matchingSource.setGenerationKey("ISSUE_ACTIVE:PIA-SOURCE-MATCH");
+            PaymentIssueAlertLogEntity otherIssueSource = buildIssueAlertLog("PIA-SOURCE-OTHER");
+            otherIssueSource.setGenerationKey("ISSUE_ACTIVE:PIA-SOURCE-OTHER");
+            otherIssueSource.setIssueNo("ISSUE-OTHER");
+            PaymentIssueAlertLogEntity nestedOutbox = buildIssueAlertLog("PIA-SOURCE-NESTED");
+            nestedOutbox.setGenerationKey("ISSUE_ACTIVE:PIA-SOURCE-NESTED");
+            nestedOutbox.setSourceAlertNo("PIA-SOURCE-PARENT");
+            assertEquals(1, mapper.insertIssueAlertLog(matchingSource));
+            assertEquals(1, mapper.insertIssueAlertLog(otherIssueSource));
+            assertEquals(1, mapper.insertIssueAlertLog(nestedOutbox));
+
+            PaymentIssueAlertLogEntity update = new PaymentIssueAlertLogEntity();
+            update.setAlertNo(matchingSource.getAlertNo());
+            update.setIssueNo(matchingSource.getIssueNo());
+            update.setAckStatus("已确认");
+            update.setAckStatusType("success");
+            update.setAckOperator("payment-core-admin");
+            update.setTriggeredBy("integration-test");
+            assertEquals(1, mapper.updateSourceIssueAlertAcknowledgement(update));
+
+            update.setAlertNo(otherIssueSource.getAlertNo());
+            update.setIssueNo(matchingSource.getIssueNo());
+            assertEquals(0, mapper.updateSourceIssueAlertAcknowledgement(update));
+            update.setAlertNo(nestedOutbox.getAlertNo());
+            assertEquals(0, mapper.updateSourceIssueAlertAcknowledgement(update));
+
+            assertEquals("已确认", findIssueAlertReceipt(
+                    session.getConnection(), matchingSource.getAlertNo()).getAckStatus());
+            assertEquals("待确认", findIssueAlertReceipt(
+                    session.getConnection(), otherIssueSource.getAlertNo()).getAckStatus());
+            assertEquals("待确认", findIssueAlertReceipt(
+                    session.getConnection(), nestedOutbox.getAlertNo()).getAckStatus());
+        }
+    }
+
+    @Test
     void shouldSelectClaimBackoffAndExhaustAutomaticReceiptQueries() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);

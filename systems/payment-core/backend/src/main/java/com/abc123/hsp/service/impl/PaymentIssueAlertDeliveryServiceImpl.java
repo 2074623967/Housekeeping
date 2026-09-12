@@ -330,6 +330,15 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                     DispatchOutcome currentOutcome = dispatchToAllChannels(item, notifierMap, triggeredBy);
                     paymentTaskCenterMapper.updateIssueAlertDeliveryStatus(
                             buildSourceAlertStatus(item, triggeredBy, currentOutcome));
+                    if (currentOutcome.hasConfirmedDelivery()) {
+                        acknowledgeSourceAlert(
+                                item.getAlertNo(),
+                                item.getIssueNo(),
+                                "已确认",
+                                "success",
+                                triggeredBy,
+                                triggeredBy);
+                    }
                     return currentOutcome;
                 });
                 if (outcome.isAllSucceeded()) {
@@ -372,6 +381,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         }
         int successCount = 0;
         int failCount = 0;
+        boolean confirmedDelivery = false;
         for (String channelCode : configuredChannels) {
             if (paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery(item.getAlertNo(), channelCode)) {
                 successCount++;
@@ -406,23 +416,27 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 failCount++;
                 continue;
             }
-            if (dispatchByProviderFallback(item, triggeredBy, channelCode, notifier, candidateProviders)) {
+            String deliveryStatus = dispatchByProviderFallback(
+                    item, triggeredBy, channelCode, notifier, candidateProviders);
+            if (StringUtils.hasText(deliveryStatus)) {
                 successCount++;
+                confirmedDelivery = confirmedDelivery || "DELIVERED".equals(deliveryStatus);
             } else {
                 failCount++;
             }
         }
-        return new DispatchOutcome(successCount, failCount, configuredChannels.size(), false);
+        return new DispatchOutcome(
+                successCount, failCount, configuredChannels.size(), false, confirmedDelivery);
     }
 
     /**
      * 针对同一通知通道依次尝试多个候选供应商，前一个失败时自动切换到下一个候选。
      */
-    private boolean dispatchByProviderFallback(PaymentIssueAlertDispatchItemDTO item,
-                                               String triggeredBy,
-                                               String channelCode,
-                                               PaymentIssueAlertNotifier notifier,
-                                               List<PaymentAlertProviderConfigDTO> candidateProviders) {
+    private String dispatchByProviderFallback(PaymentIssueAlertDispatchItemDTO item,
+                                              String triggeredBy,
+                                              String channelCode,
+                                              PaymentIssueAlertNotifier notifier,
+                                              List<PaymentAlertProviderConfigDTO> candidateProviders) {
         for (PaymentAlertProviderConfigDTO providerConfig : candidateProviders) {
             PaymentIssueAlertDispatchItemDTO deliveryItem = buildDeliveryItem(item, providerConfig);
             PaymentIssueAlertDeliveryResultDTO guardFailure = resolveDispatchGuardFailure(providerConfig, deliveryItem, channelCode);
@@ -463,7 +477,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                         "success",
                         normalizedResult
                 ));
-                return true;
+                return normalizedResult.getProviderDeliveryStatus();
             } catch (RuntimeException ex) {
                 PaymentIssueAlertDeliveryResultDTO failureResult = buildFailureResult("SEND_EXCEPTION", ex.getMessage(), deliveryItem);
                 paymentTaskCenterMapper.insertIssueAlertLog(buildDeliveryLog(
@@ -476,7 +490,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
                 ));
             }
         }
-        return false;
+        return null;
     }
 
     /**
@@ -1397,12 +1411,31 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (acceptedLog == null || !StringUtils.hasText(acceptedLog.getSourceAlertNo())) {
             return;
         }
+        acknowledgeSourceAlert(
+                acceptedLog.getSourceAlertNo(),
+                acceptedLog.getIssueNo(),
+                receiptUpdate.getAckStatus(),
+                receiptUpdate.getAckStatusType(),
+                receiptUpdate.getAckOperator(),
+                receiptUpdate.getTriggeredBy());
+    }
+
+    private void acknowledgeSourceAlert(String sourceAlertNo,
+                                        String issueNo,
+                                        String ackStatus,
+                                        String ackStatusType,
+                                        String ackOperator,
+                                        String triggeredBy) {
+        if (!StringUtils.hasText(sourceAlertNo) || !StringUtils.hasText(issueNo)) {
+            return;
+        }
         PaymentIssueAlertLogEntity sourceAckUpdate = new PaymentIssueAlertLogEntity();
-        sourceAckUpdate.setAlertNo(acceptedLog.getSourceAlertNo().trim());
-        sourceAckUpdate.setAckStatus(receiptUpdate.getAckStatus());
-        sourceAckUpdate.setAckStatusType(receiptUpdate.getAckStatusType());
-        sourceAckUpdate.setAckOperator(receiptUpdate.getAckOperator());
-        sourceAckUpdate.setTriggeredBy(receiptUpdate.getTriggeredBy());
+        sourceAckUpdate.setAlertNo(sourceAlertNo.trim());
+        sourceAckUpdate.setIssueNo(issueNo.trim());
+        sourceAckUpdate.setAckStatus(ackStatus);
+        sourceAckUpdate.setAckStatusType(ackStatusType);
+        sourceAckUpdate.setAckOperator(ackOperator);
+        sourceAckUpdate.setTriggeredBy(triggeredBy);
         paymentTaskCenterMapper.updateSourceIssueAlertAcknowledgement(sourceAckUpdate);
     }
 
@@ -1596,12 +1629,18 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         private final int failCount;
         private final int totalChannels;
         private final boolean noExternalDispatchRequired;
+        private final boolean confirmedDelivery;
 
-        DispatchOutcome(int successCount, int failCount, int totalChannels, boolean noExternalDispatchRequired) {
+        DispatchOutcome(int successCount,
+                        int failCount,
+                        int totalChannels,
+                        boolean noExternalDispatchRequired,
+                        boolean confirmedDelivery) {
             this.successCount = successCount;
             this.failCount = failCount;
             this.totalChannels = totalChannels;
             this.noExternalDispatchRequired = noExternalDispatchRequired;
+            this.confirmedDelivery = confirmedDelivery;
         }
 
         boolean isAllSucceeded() {
@@ -1612,8 +1651,12 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
             return noExternalDispatchRequired || successCount > 0;
         }
 
+        boolean hasConfirmedDelivery() {
+            return confirmedDelivery;
+        }
+
         static DispatchOutcome noExternalDispatch() {
-            return new DispatchOutcome(0, 0, 0, true);
+            return new DispatchOutcome(0, 0, 0, true, false);
         }
     }
 

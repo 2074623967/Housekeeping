@@ -92,6 +92,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         ArgumentCaptor<PaymentIssueAlertLogEntity> deliveryLogCaptor = ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
         verify(paymentTaskCenterMapper, org.mockito.Mockito.times(3)).insertIssueAlertLog(deliveryLogCaptor.capture());
         verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
+        verify(paymentTaskCenterMapper, org.mockito.Mockito.never())
+                .updateSourceIssueAlertAcknowledgement(any(PaymentIssueAlertLogEntity.class));
         verify(paymentTaskCenterMapper).insertTaskRunLog(org.mockito.ArgumentMatchers.argThat(
                 log -> "支付运营".equals(log.getTriggeredBy())));
         Assertions.assertEquals(1, result.getSuccessCount());
@@ -109,6 +111,49 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getProviderReceiptSnapshot().contains("ACCEPTED")));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(
                 log -> "支付运营".equals(log.getTriggeredBy())));
+    }
+
+    @Test
+    void shouldConfirmMatchingSourceWhenProviderImmediatelyReportsDelivered() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100))
+                .thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM"))
+                .thenReturn(Collections.singletonList(buildProvider(
+                        "ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100)));
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class))).thenReturn(
+                buildDeliveryResult(
+                        "IM-RECEIPT-DELIVERED", "DELIVERED", "企业微信已送达", "[IM] ISSUE-001"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+        ).dispatchPendingAlerts(" 支付运营 ");
+
+        ArgumentCaptor<PaymentIssueAlertLogEntity> deliveryLogCaptor =
+                ArgumentCaptor.forClass(PaymentIssueAlertLogEntity.class);
+        verify(paymentTaskCenterMapper).insertIssueAlertLog(deliveryLogCaptor.capture());
+        Assertions.assertEquals("DELIVERED", deliveryLogCaptor.getValue().getProviderDeliveryStatus());
+        Assertions.assertEquals("无需回执", deliveryLogCaptor.getValue().getAckStatus());
+        org.mockito.InOrder sourceUpdates = org.mockito.Mockito.inOrder(paymentTaskCenterMapper);
+        sourceUpdates.verify(paymentTaskCenterMapper).updateIssueAlertDeliveryStatus(any(PaymentIssueAlertLogEntity.class));
+        sourceUpdates.verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(
+                org.mockito.ArgumentMatchers.argThat(source ->
+                        "PIA-OUTBOX-001".equals(source.getAlertNo())
+                                && "ISSUE-001".equals(source.getIssueNo())
+                                && "已确认".equals(source.getAckStatus())
+                                && "success".equals(source.getAckStatusType())
+                                && "支付运营".equals(source.getAckOperator())
+                                && "支付运营".equals(source.getTriggeredBy())));
+        Assertions.assertEquals(1, result.getSuccessCount());
+        Assertions.assertEquals(0, result.getFailCount());
     }
 
     @Test
@@ -216,6 +261,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         PaymentIssueAlertLogEntity acceptedLog = new PaymentIssueAlertLogEntity();
         acceptedLog.setAlertNo("PIA-IM-001");
         acceptedLog.setSourceAlertNo("PIA-OUTBOX-001");
+        acceptedLog.setIssueNo("ISSUE-001");
         acceptedLog.setAlertChannel("IM");
         acceptedLog.setProviderReceiptNo("IM-RECEIPT-001");
         when(paymentTaskCenterMapper.acquireTaskLease(
@@ -984,6 +1030,7 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         verify(paymentTaskCenterMapper).updateIssueAlertProviderReceipt(captor.capture());
         verify(paymentTaskCenterMapper).updateSourceIssueAlertAcknowledgement(org.mockito.ArgumentMatchers.argThat(
                 entity -> "PIA-OUTBOX-001".equals(entity.getAlertNo())
+                        && "ISSUE-001".equals(entity.getIssueNo())
                         && "已确认".equals(entity.getAckStatus())
                         && "支付运营".equals(entity.getAckOperator())
         ));
