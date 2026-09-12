@@ -226,6 +226,38 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldUseStableIdTieBreakerForPaymentListAndExport() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, order_no, customer_name, amount, payment_method, channel_code, "
+                    + "status, status_type, created_at) VALUES "
+                    + "('PAY-STABLE-001', 'ORD-STABLE', '客户一', 1.00, '微信支付', 'wx_h5', "
+                    + "'WAIT_CALLBACK', 'warn', '2026-09-12 12:00:00'), "
+                    + "('PAY-STABLE-002', 'ORD-STABLE', '客户二', 2.00, '微信支付', 'wx_h5', "
+                    + "'WAIT_CALLBACK', 'warn', '2026-09-12 12:00:00'), "
+                    + "('PAY-STABLE-003', 'ORD-STABLE', '客户三', 3.00, '微信支付', 'wx_h5', "
+                    + "'WAIT_CALLBACK', 'warn', '2026-09-12 12:00:00')");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+            PaymentListQueryDTO query = new PaymentListQueryDTO();
+            query.setOrderNo("ORD-STABLE");
+            query.setPageSize(1);
+
+            assertEquals("PAY-STABLE-003", mapper.findAll(query).get(0).getPaymentOrderId());
+            query.setPageNo(2);
+            assertEquals("PAY-STABLE-002", mapper.findAll(query).get(0).getPaymentOrderId());
+            query.setPageNo(3);
+            assertEquals("PAY-STABLE-001", mapper.findAll(query).get(0).getPaymentOrderId());
+
+            List<PaymentListItemDTO> exportItems = mapper.findAllForExport(query);
+            assertEquals(3, exportItems.size());
+            assertEquals("PAY-STABLE-003", exportItems.get(0).getPaymentOrderId());
+            assertEquals("PAY-STABLE-002", exportItems.get(1).getPaymentOrderId());
+            assertEquals("PAY-STABLE-001", exportItems.get(2).getPaymentOrderId());
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);

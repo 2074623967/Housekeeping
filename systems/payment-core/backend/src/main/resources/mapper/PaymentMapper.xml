@@ -4,6 +4,10 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.abc123.hsp.mapper.PaymentMapper">
 
+    <sql id="paymentOrderListOrder">
+        ORDER BY p.created_at DESC, p.id DESC
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentListItemDTO">
         SELECT p.payment_order_id AS paymentOrderId,
                p.order_no AS orderNo,
@@ -38,7 +42,7 @@
                 AND p.status = #{query.status}
             </if>
         </where>
-        ORDER BY p.created_at DESC
+        <include refid="paymentOrderListOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
@@ -87,7 +91,7 @@
                 AND p.status = #{query.status}
             </if>
         </where>
-        ORDER BY p.created_at DESC
+        <include refid="paymentOrderListOrder"/>
         LIMIT 1001
     </select>
 
