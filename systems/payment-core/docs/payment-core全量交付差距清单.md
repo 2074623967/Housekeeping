@@ -2385,6 +2385,14 @@
 4. Mapper 新增内部布尔查询并由正式 H2 测试覆盖更新前 false、正确确认后 true、错异常 false 和嵌套 outbox false；服务测试覆盖更新 `0` 行时“已确认=true”成功与“已确认=false”失败。代码提交为 `70c6cfb5 fix(payment-core): verify alert source acknowledgement`。
 5. 服务与 Mapper 联合定向 `67` 项、payment-core 后端全量 `971` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 mock/H2 不证明真实供应商送达、人员确认或生产并发稳定性，release 四项真实治理阻断不变。
 
+### 8.291 2026-09-12 告警回查候选来源完整性进展
+
+1. 回查执行链已经拒绝无来源号的孤立日志，但候选读取原先只要求 `source_alert_no IS NOT NULL`；指向不存在来源、另一异常来源、嵌套 outbox 或已经确认来源的畸形记录仍可能先被 claim，并在最终来源确认阶段才失败。
+2. 自动候选、人工批量候选和按号候选现在都要求来源号实际关联同一 `issue_no` 的顶层 `IN_APP_OUTBOX`，且来源仍为待确认；已确认来源及三类错误关联不再进入供应商回查工作集。
+3. 服务在 claim 前再次调用内部来源资格查询，防止过期或绕过候选读取的对象占用尝试次数和共享限流额度；资格失败直接计本条回查失败，不调用回执适配器，也不写入供应商回执状态。
+4. 正式 Mapper 测试同时构造合法来源、孤立记录、错异常来源和嵌套来源，验证只有合法记录进入自动与人工候选；服务测试验证错来源不 claim、不调用适配器且不调用限流器。代码提交为 `b7b4609c fix(payment-core): validate alert receipt sources`。
+5. 服务与 Mapper 联合定向 `68` 项、payment-core 后端全量 `972` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 mock/H2 不证明生产 MySQL 执行计划、真实供应商送达、人员响应或生产稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
