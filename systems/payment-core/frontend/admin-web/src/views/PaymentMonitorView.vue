@@ -101,6 +101,9 @@ const alertSuggestions = computed(() => {
   if (alert.alertTitle?.includes("待回调") || alert.alertMessage?.includes("待回调")) {
     suggestions.push("优先联查支付单管理页，确认是否存在 WAIT_CALLBACK 积压和渠道回调延迟。");
   }
+  if (alert.alertTitle?.includes("成功时间缺失") || alert.alertMessage?.includes("成功时间")) {
+    suggestions.push("优先核对支付成功通知与内部事件，确认可信成功时间后再归属账期。");
+  }
   if (alert.alertTitle?.includes("退款失败") || alert.alertMessage?.includes("退款失败")) {
     suggestions.push("优先联查退款单管理页，核对失败原因并确认是否需要执行失败重试。");
   }
@@ -213,7 +216,7 @@ onMounted(loadOverview);
             <article class="overview-card danger">
               <p class="overview-title">P1 告警优先处理</p>
               <strong>{{ riskSummary.alertP1Count }}</strong>
-              <span>优先联查待回调和退款失败告警，避免主链路持续积压。</span>
+              <span>优先联查待回调、成功时间缺失和退款失败告警，避免主链路事实持续失真。</span>
             </article>
             <article class="overview-card warn">
               <p class="overview-title">存在待处理渠道</p>
@@ -231,15 +234,15 @@ onMounted(loadOverview);
         <div class="split-panels">
           <section class="panel mini">
             <div class="section-title">
-              <h3>最近支付趋势</h3>
-              <span class="meta">按日汇总</span>
+              <h3>最近支付事实趋势</h3>
+              <span class="meta">创建按创建日，成功按成功日</span>
             </div>
             <table>
               <thead>
                 <tr>
                   <th>日期</th>
-                  <th>总单量</th>
-                  <th>成功单量</th>
+                  <th>创建单量</th>
+                  <th>成功发生量</th>
                   <th>成功金额</th>
                 </tr>
               </thead>

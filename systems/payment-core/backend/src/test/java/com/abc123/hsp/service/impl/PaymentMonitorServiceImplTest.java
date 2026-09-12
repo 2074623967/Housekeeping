@@ -1,14 +1,17 @@
 package com.abc123.hsp.service.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.abc123.hsp.dto.PaymentAlertItemDTO;
 import com.abc123.hsp.dto.PaymentChannelMetricDTO;
+import com.abc123.hsp.dto.PaymentMonitorOverviewDTO;
 import com.abc123.hsp.dto.PaymentMonitorSummaryDTO;
 import com.abc123.hsp.dto.PaymentTrendPointDTO;
 import com.abc123.hsp.mapper.PaymentMonitorMapper;
 import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -25,13 +28,18 @@ class PaymentMonitorServiceImplTest {
 
     @Test
     void shouldLoadMonitorOverview() {
-        when(paymentMonitorMapper.findSummary()).thenReturn(new PaymentMonitorSummaryDTO());
+        PaymentMonitorSummaryDTO summary = new PaymentMonitorSummaryDTO();
+        summary.setAlertCount(99);
+        when(paymentMonitorMapper.findSummary()).thenReturn(summary);
         when(paymentMonitorMapper.findRecentTrends()).thenReturn(Collections.<PaymentTrendPointDTO>emptyList());
         when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
-        when(paymentMonitorMapper.findAlerts()).thenReturn(Collections.<PaymentAlertItemDTO>emptyList());
+        when(paymentMonitorMapper.findAlerts()).thenReturn(List.of(
+                new PaymentAlertItemDTO(),
+                new PaymentAlertItemDTO()));
 
-        new PaymentMonitorServiceImpl(paymentMonitorMapper).overview();
+        PaymentMonitorOverviewDTO overview = new PaymentMonitorServiceImpl(paymentMonitorMapper).overview();
 
+        assertEquals(Integer.valueOf(2), overview.getSummary().getAlertCount());
         verify(paymentMonitorMapper).findSummary();
         verify(paymentMonitorMapper).findRecentTrends();
         verify(paymentMonitorMapper).findChannelMetrics();

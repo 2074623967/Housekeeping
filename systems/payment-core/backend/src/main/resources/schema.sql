@@ -678,6 +678,7 @@ CREATE TABLE t_payment_order (
     KEY idx_payment_order_no (order_no),
     KEY idx_payment_status_created (status, created_at),
     KEY idx_payment_status_success (status, success_at),
+    KEY idx_payment_created_at (created_at),
     KEY idx_payment_channel_created (channel_code, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付单表';
 

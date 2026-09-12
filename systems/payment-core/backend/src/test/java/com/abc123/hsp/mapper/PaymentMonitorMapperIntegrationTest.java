@@ -89,6 +89,26 @@ class PaymentMonitorMapperIntegrationTest {
     }
 
     @Test
+    void shouldExposeMissingSuccessTimeAsGlobalP1Alert() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_order("
+                    + "payment_order_id, channel_code, payment_method, status, amount) VALUES "
+                    + "('PAY-SUCCESS-TIME-MISSING', 'channel-c', 'method-c', 'SUCCESS', 12.00)");
+            PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
+
+            List<PaymentAlertItemDTO> alerts = mapper.findAlerts();
+
+            assertEquals(4, alerts.size());
+            assertEquals("PAYMENT_SUCCESS_TIME_MISSING", alerts.get(1).getAlertType());
+            assertEquals("P1", alerts.get(1).getAlertLevel());
+            assertEquals(Integer.valueOf(1), alerts.get(1).getAffectedCount());
+            assertEquals("/payments?status=SUCCESS_TIME_MISSING", alerts.get(1).getActionRoute());
+            assertEquals(Integer.valueOf(alerts.size()), mapper.findSummary().getAlertCount());
+        }
+    }
+
+    @Test
     void shouldExposeClosedPaymentsSeparatelyInMonitorSummary() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMonitorSummaryDTO summary = session.getMapper(PaymentMonitorMapper.class).findSummary();
@@ -141,23 +161,34 @@ class PaymentMonitorMapperIntegrationTest {
     }
 
     @Test
-    void shouldLimitRecentTrendsToSevenCalendarDays() throws Exception {
+    void shouldAssignRecentTrendFactsToCreationAndSuccessDates() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.executeUpdate("INSERT INTO t_payment_order("
-                    + "channel_code, payment_method, status, amount, created_at) VALUES "
-                    + "('channel-a', 'method-a', 'SUCCESS', 20.00, DATEADD('DAY', -6, CURRENT_TIMESTAMP)), "
-                    + "('channel-a', 'method-a', 'SUCCESS', 30.00, DATEADD('DAY', -7, CURRENT_TIMESTAMP)), "
-                    + "('channel-a', 'method-a', 'SUCCESS', 40.00, DATEADD('DAY', 1, CURRENT_TIMESTAMP))");
+                    + "payment_order_id, channel_code, payment_method, status, amount, success_at, created_at) VALUES "
+                    + "('PAY-CROSS-WINDOW', 'channel-a', 'method-a', 'SUCCESS', 20.00, "
+                    + "CURRENT_TIMESTAMP, DATEADD('DAY', -7, CURRENT_TIMESTAMP)), "
+                    + "('PAY-CROSS-DAY', 'channel-a', 'method-a', 'SUCCESS', 30.00, "
+                    + "DATEADD('DAY', -5, CURRENT_TIMESTAMP), DATEADD('DAY', -6, CURRENT_TIMESTAMP)), "
+                    + "('PAY-FUTURE', 'channel-a', 'method-a', 'SUCCESS', 40.00, "
+                    + "DATEADD('DAY', 1, CURRENT_TIMESTAMP), DATEADD('DAY', 1, CURRENT_TIMESTAMP))");
 
             List<PaymentTrendPointDTO> trends = session.getMapper(PaymentMonitorMapper.class)
                     .findRecentTrends();
 
-            assertEquals(2, trends.size());
+            assertEquals(3, trends.size());
             assertEquals(LocalDate.now().toString(), trends.get(0).getStatDate());
             assertEquals(Integer.valueOf(6), trends.get(0).getTotalCount());
-            assertEquals(LocalDate.now().minusDays(6).toString(), trends.get(1).getStatDate());
-            assertEquals(Integer.valueOf(1), trends.get(1).getTotalCount());
+            assertEquals(Integer.valueOf(4), trends.get(0).getSuccessCount());
+            assertEquals("¥50.00", trends.get(0).getSuccessAmount());
+            assertEquals(LocalDate.now().minusDays(5).toString(), trends.get(1).getStatDate());
+            assertEquals(Integer.valueOf(0), trends.get(1).getTotalCount());
+            assertEquals(Integer.valueOf(1), trends.get(1).getSuccessCount());
+            assertEquals("¥30.00", trends.get(1).getSuccessAmount());
+            assertEquals(LocalDate.now().minusDays(6).toString(), trends.get(2).getStatDate());
+            assertEquals(Integer.valueOf(1), trends.get(2).getTotalCount());
+            assertEquals(Integer.valueOf(0), trends.get(2).getSuccessCount());
+            assertEquals("¥0.00", trends.get(2).getSuccessAmount());
         }
     }
 
@@ -176,7 +207,7 @@ class PaymentMonitorMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("CREATE TABLE t_payment_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), channel_code VARCHAR(64), "
-                    + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2), "
+                    + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2), success_at TIMESTAMP, "
                     + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
@@ -192,6 +223,7 @@ class PaymentMonitorMapperIntegrationTest {
                     + "('PAY-004', 'channel-a', 'method-b', 'FAIL', 10.00), "
                     + "('PAY-005', 'channel-a', 'method-a', 'SUCCESS', 10.00), "
                     + "('PAY-006', 'channel-a', 'method-a', 'CLOSED', 10.00)");
+            statement.executeUpdate("UPDATE t_payment_order SET success_at = created_at WHERE status = 'SUCCESS'");
             statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES "
                     + "('PAY-001'), ('PAY-001'), ('PAY-002'), ('PAY-003'), ('PAY-004'), ('PAY-005'), ('PAY-006')");
             statement.executeUpdate("INSERT INTO t_refund_order(status) VALUES ('FAIL')");

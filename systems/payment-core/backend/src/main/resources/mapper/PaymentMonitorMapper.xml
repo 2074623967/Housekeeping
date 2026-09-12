@@ -15,6 +15,7 @@
                COALESCE(channel_summary.disabled_channel_count, 0) AS disabledChannelCount,
                (
                    CASE WHEN payment_summary.wait_callback_count &gt; 0 THEN 1 ELSE 0 END +
+                   CASE WHEN payment_summary.missing_success_time_count &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN COALESCE(refund_summary.failed_refund_count, 0) &gt; 0 THEN 1 ELSE 0 END +
                    CASE WHEN COALESCE(channel_summary.disabled_channel_count, 0) &gt; 0 THEN 1 ELSE 0 END
                ) AS alertCount
@@ -29,6 +30,8 @@
                        AS pending_payment_count,
                    COALESCE(SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END), 0)
                        AS wait_callback_count,
+                   COALESCE(SUM(CASE WHEN status = 'SUCCESS' AND success_at IS NULL THEN 1 ELSE 0 END), 0)
+                       AS missing_success_time_count,
                    COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END), 0) AS closed_payment_count
             FROM t_payment_order
         ) payment_summary
@@ -45,14 +48,33 @@
     </select>
 
     <select id="findRecentTrends" resultType="com.abc123.hsp.dto.PaymentTrendPointDTO">
-        SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS statDate,
-               COUNT(1) AS totalCount,
-               SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS successCount,
-               CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0), 2)) AS successAmount
-        FROM t_payment_order
-        WHERE created_at &gt;= CURDATE() - INTERVAL '6' DAY
-          AND created_at &lt; CURDATE() + INTERVAL '1' DAY
-        GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+        SELECT daily_fact.stat_date AS statDate,
+               SUM(daily_fact.total_count) AS totalCount,
+               SUM(daily_fact.success_count) AS successCount,
+               CONCAT('¥', FORMAT(COALESCE(SUM(daily_fact.success_amount), 0), 2)) AS successAmount
+        FROM (
+            SELECT DATE_FORMAT(created_at, '%Y-%m-%d') AS stat_date,
+                   COUNT(1) AS total_count,
+                   0 AS success_count,
+                   0 AS success_amount
+            FROM t_payment_order
+            WHERE created_at &gt;= CURDATE() - INTERVAL '6' DAY
+              AND created_at &lt; CURDATE() + INTERVAL '1' DAY
+            GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+
+            UNION ALL
+
+            SELECT DATE_FORMAT(success_at, '%Y-%m-%d') AS stat_date,
+                   0 AS total_count,
+                   COUNT(1) AS success_count,
+                   COALESCE(SUM(amount), 0) AS success_amount
+            FROM t_payment_order
+            WHERE status = 'SUCCESS'
+              AND success_at &gt;= CURDATE() - INTERVAL '6' DAY
+              AND success_at &lt; CURDATE() + INTERVAL '1' DAY
+            GROUP BY DATE_FORMAT(success_at, '%Y-%m-%d')
+        ) daily_fact
+        GROUP BY daily_fact.stat_date
         ORDER BY statDate DESC
         LIMIT 7
     </select>
@@ -127,6 +149,22 @@
         UNION ALL
 
         SELECT 2 AS alertSortNo,
+               'PAYMENT_SUCCESS_TIME_MISSING' AS alertType,
+               '支付成功时间缺失' AS alertTitle,
+               '存在已成功但缺少成功时间的支付单，无法可信归属支付账期。' AS alertMessage,
+               'P1' AS alertLevel,
+               'danger' AS alertLevelType,
+               COUNT(1) AS affectedCount,
+               '进入支付单管理页核对成功时间缺失记录。' AS suggestedAction,
+               '/payments?status=SUCCESS_TIME_MISSING' AS actionRoute
+        FROM t_payment_order
+        WHERE status = 'SUCCESS'
+          AND success_at IS NULL
+        HAVING COUNT(1) &gt; 0
+
+        UNION ALL
+
+        SELECT 3 AS alertSortNo,
                'REFUND_FAIL' AS alertType,
                '退款失败待重试' AS alertTitle,
                '退款单存在失败记录，需要运营复核后重试或切线下处理。' AS alertMessage,
@@ -141,7 +179,7 @@
 
         UNION ALL
 
-        SELECT 3 AS alertSortNo,
+        SELECT 4 AS alertSortNo,
                'CHANNEL_DISABLED' AS alertType,
                '渠道已停用' AS alertTitle,
                '存在已停用渠道，请确认是否需要同步调整路由规则。' AS alertMessage,
