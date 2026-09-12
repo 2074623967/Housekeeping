@@ -314,13 +314,6 @@ public interface PaymentTaskCenterMapper {
     PaymentIssueAlertLogEntity findLatestIssueAlertChannelDeliveryLog(String sourceAlertNo, String alertChannel);
 
     /**
-     * 统计某个供应商在指定时间窗口内的派发次数。
-     */
-    int countIssueAlertProviderDeliveriesSince(@Param("providerCode") String providerCode,
-                                               @Param("alertChannel") String alertChannel,
-                                               @Param("sinceTime") String sinceTime);
-
-    /**
      * 统计某个供应商在指定时间窗口内的失败派发次数。
      */
     int countIssueAlertProviderFailedDeliveriesSince(@Param("providerCode") String providerCode,

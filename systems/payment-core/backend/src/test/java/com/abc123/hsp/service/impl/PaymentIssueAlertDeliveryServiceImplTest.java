@@ -20,6 +20,7 @@ import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
+import com.abc123.hsp.service.PaymentIssueAlertDeliveryRateLimitService;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
 import java.time.LocalDateTime;
@@ -59,6 +60,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
     private PaymentIssueAlertReceiptQueryAdapter receiptQueryAdapter;
     @Mock
     private PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService;
+    @Mock
+    private PaymentIssueAlertDeliveryRateLimitService deliveryRateLimitService;
     @Mock
     private PlatformTransactionManager transactionManager;
     @Mock
@@ -917,16 +920,78 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
                 buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts", "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, null, "每分钟 1 条")
         ));
-        when(paymentTaskCenterMapper.countIssueAlertProviderDeliveriesSince(org.mockito.ArgumentMatchers.eq("ALERT_IM_WECOM"), org.mockito.ArgumentMatchers.eq("IM"), any(String.class))).thenReturn(1);
+        when(deliveryRateLimitService.tryAcquire("ALERT_IM_WECOM", "IM", 60, 1)).thenReturn(false);
 
         PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
                 paymentTaskCenterMapper,
-                Arrays.asList(imNotifier, smsNotifier, emailNotifier)
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                deliveryRateLimitService
         ).dispatchPendingAlerts("payment-core-admin");
 
         verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        verify(deliveryRateLimitService).tryAcquire("ALERT_IM_WECOM", "IM", 60, 1);
         Assertions.assertEquals(0, result.getSuccessCount());
         Assertions.assertEquals(0, result.getWarningCount());
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldReserveQuotaBeforeCallingProviderThatFails() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, null, "每分钟 10 条")
+        ));
+        when(deliveryRateLimitService.tryAcquire("ALERT_IM_WECOM", "IM", 60, 10)).thenReturn(true);
+        when(imNotifier.send(any(PaymentIssueAlertDispatchItemDTO.class)))
+                .thenThrow(new RuntimeException("provider unavailable"));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                deliveryRateLimitService
+        ).dispatchPendingAlerts("payment-core-admin");
+
+        org.mockito.InOrder callOrder = org.mockito.Mockito.inOrder(deliveryRateLimitService, imNotifier);
+        callOrder.verify(deliveryRateLimitService).tryAcquire("ALERT_IM_WECOM", "IM", 60, 10);
+        callOrder.verify(imNotifier).send(any(PaymentIssueAlertDispatchItemDTO.class));
+        Assertions.assertEquals(1, result.getFailCount());
+    }
+
+    @Test
+    void shouldFailClosedWhenProviderRateLimitWindowOverflowsSeconds() {
+        PaymentIssueAlertDispatchItemDTO item = buildDispatchItem();
+        item.setNotifyChannels("IN_APP,IM");
+        when(paymentTaskCenterMapper.findPendingOutboxAlerts(100)).thenReturn(Collections.singletonList(item));
+        when(imNotifier.channelCode()).thenReturn("IM");
+        when(smsNotifier.channelCode()).thenReturn("SMS");
+        when(emailNotifier.channelCode()).thenReturn("EMAIL");
+        when(paymentTaskCenterMapper.hasSuccessfulIssueAlertChannelDelivery("PIA-OUTBOX-001", "IM"))
+                .thenReturn(false);
+        when(paymentTaskCenterMapper.findEnabledAlertProvidersByChannel("IM")).thenReturn(Collections.singletonList(
+                buildProvider("ALERT_IM_WECOM", "企业微信告警机器人", "wecom-bot-alerts",
+                        "TPL_PAYMENT_ISSUE_IM_V1", "DEFAULT", 100, null, "每40000000分钟 1 条")
+        ));
+
+        PaymentTaskActionResultDTO result = new PaymentIssueAlertDeliveryServiceImpl(
+                paymentTaskCenterMapper,
+                Arrays.asList(imNotifier, smsNotifier, emailNotifier),
+                deliveryRateLimitService
+        ).dispatchPendingAlerts("payment-core-admin");
+
+        verify(deliveryRateLimitService, org.mockito.Mockito.never()).tryAcquire(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt());
+        verify(imNotifier, org.mockito.Mockito.never()).send(any(PaymentIssueAlertDispatchItemDTO.class));
         Assertions.assertEquals(1, result.getFailCount());
     }
 

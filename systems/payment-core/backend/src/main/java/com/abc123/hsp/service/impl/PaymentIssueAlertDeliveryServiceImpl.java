@@ -10,6 +10,7 @@ import com.abc123.hsp.entity.PaymentIssueAlertLogEntity;
 import com.abc123.hsp.entity.PaymentTaskRunLogEntity;
 import com.abc123.hsp.mapper.PaymentTaskCenterMapper;
 import com.abc123.hsp.service.PaymentIssueAlertDeliveryService;
+import com.abc123.hsp.service.PaymentIssueAlertDeliveryRateLimitService;
 import com.abc123.hsp.service.PaymentIssueAlertNotifier;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryAdapter;
 import com.abc123.hsp.service.PaymentIssueAlertReceiptQueryRateLimitService;
@@ -89,6 +90,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     private PaymentTaskLeaseService paymentTaskLeaseService;
     private final List<PaymentIssueAlertNotifier> notifiers;
     private final List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters;
+    private final PaymentIssueAlertDeliveryRateLimitService deliveryRateLimitService;
     private final PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService;
     private final TransactionTemplate itemTransactionTemplate;
     private int dispatchBatchSize = 100;
@@ -105,6 +107,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     public PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
                                                 List<PaymentIssueAlertNotifier> notifiers,
                                                 List<PaymentIssueAlertReceiptQueryAdapter> receiptQueryAdapters,
+                                                PaymentIssueAlertDeliveryRateLimitService deliveryRateLimitService,
                                                 PaymentIssueAlertReceiptQueryRateLimitService receiptQueryRateLimitService,
                                                 PlatformTransactionManager transactionManager,
                                                 @Value(
@@ -134,6 +137,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.receiptQueryAdapters = receiptQueryAdapters;
+        this.deliveryRateLimitService = deliveryRateLimitService;
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
         this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -185,6 +189,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.receiptQueryAdapters = receiptQueryAdapters;
+        this.deliveryRateLimitService = (providerCode, channelCode, windowSeconds, maxDeliveries) -> true;
         this.receiptQueryRateLimitService = (channelCode, alertNo) -> { };
         this.itemTransactionTemplate = null;
     }
@@ -198,7 +203,20 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.receiptQueryAdapters = receiptQueryAdapters;
+        this.deliveryRateLimitService = (providerCode, channelCode, windowSeconds, maxDeliveries) -> true;
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
+        this.itemTransactionTemplate = null;
+    }
+
+    PaymentIssueAlertDeliveryServiceImpl(PaymentTaskCenterMapper paymentTaskCenterMapper,
+                                         List<PaymentIssueAlertNotifier> notifiers,
+                                         PaymentIssueAlertDeliveryRateLimitService deliveryRateLimitService) {
+        this.paymentTaskCenterMapper = paymentTaskCenterMapper;
+        this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
+        this.notifiers = notifiers;
+        this.receiptQueryAdapters = new ArrayList<PaymentIssueAlertReceiptQueryAdapter>();
+        this.deliveryRateLimitService = deliveryRateLimitService;
+        this.receiptQueryRateLimitService = (channelCode, alertNo) -> { };
         this.itemTransactionTemplate = null;
     }
 
@@ -229,6 +247,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         this.paymentTaskLeaseService = new PaymentTaskLeaseService(paymentTaskCenterMapper);
         this.notifiers = notifiers;
         this.receiptQueryAdapters = receiptQueryAdapters;
+        this.deliveryRateLimitService = (providerCode, channelCode, windowSeconds, maxDeliveries) -> true;
         this.receiptQueryRateLimitService = receiptQueryRateLimitService;
         this.itemTransactionTemplate = new TransactionTemplate(transactionManager);
         this.itemTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -633,7 +652,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     /**
-     * 按供应商配置中的限流策略控制单位时间内的派发次数。
+     * 按供应商与通道共享桶控制单位时间内的派发次数。
      */
     private PaymentIssueAlertDeliveryResultDTO resolveRateLimitGuardFailure(PaymentAlertProviderConfigDTO providerConfig,
                                                                             PaymentIssueAlertDispatchItemDTO item,
@@ -646,18 +665,29 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         if (!StringUtils.hasText(providerCode)) {
             return null;
         }
-        String sinceTime = currentBusinessTime()
-                .minusMinutes(rateLimitGuard.getWindowMinutes())
-                .format(ALERT_LOG_TIME_FORMATTER);
-        int currentDeliveryCount = paymentTaskCenterMapper.countIssueAlertProviderDeliveriesSince(providerCode, channelCode, sinceTime);
-        if (currentDeliveryCount >= rateLimitGuard.getThreshold()) {
+        int windowSeconds;
+        try {
+            windowSeconds = Math.multiplyExact(rateLimitGuard.getWindowMinutes().intValue(), 60);
+        } catch (ArithmeticException exception) {
             return buildFailureResult(
                     "RATE_LIMITED",
-                    String.format("命中供应商限流策略：%d 分钟内最多 %d 条", rateLimitGuard.getWindowMinutes(), rateLimitGuard.getThreshold()),
+                    "供应商限流窗口超出系统支持范围，已停止外发",
                     item
             );
         }
-        return null;
+        if (deliveryRateLimitService.tryAcquire(
+                providerCode,
+                channelCode,
+                windowSeconds,
+                rateLimitGuard.getThreshold().intValue())) {
+            return null;
+        }
+        return buildFailureResult(
+                "RATE_LIMITED",
+                String.format("命中供应商限流策略：%d 分钟内最多 %d 条",
+                        rateLimitGuard.getWindowMinutes(), rateLimitGuard.getThreshold()),
+                item
+        );
     }
 
     private PaymentIssueAlertLogEntity buildSourceAlertStatus(PaymentIssueAlertDispatchItemDTO item,
@@ -1802,7 +1832,7 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
     }
 
     /**
-     * 告警通道级限流护栏配置，来源于供应商配置中的限流策略。
+     * 告警供应商派发限流护栏配置，来源于供应商配置中的限流策略。
      */
     static class RateLimitGuard {
         private Integer windowMinutes;
