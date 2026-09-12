@@ -359,6 +359,7 @@ watch(
             <option>PROCESSING</option>
             <option>SUCCESS</option>
             <option value="SUCCESS_TIME_MISSING">成功时间缺失</option>
+            <option value="TERMINAL_FACT_MISMATCH">终态事实不一致</option>
             <option>FAIL</option>
           </select>
         </div>

@@ -113,6 +113,11 @@ public interface PaymentDayEndMapper {
     Integer countMissingRefundSuccessTimeByDate(@Param("bizDate") String bizDate);
 
     /**
+     * 查询申请于指定业务日且终态与最新尝试事实不一致的退款单量。
+     */
+    Integer countRefundTerminalFactMismatchByDate(@Param("bizDate") String bizDate);
+
+    /**
      * 查询指定业务日的渠道侧异常数。
      */
     Integer countChannelAbnormalByDate(@Param("bizDate") String bizDate);

@@ -51,6 +51,12 @@
                    ORDER BY biz_date DESC, id DESC
                    LIMIT 1
                ) AS openMissingRefundSuccessTimeCount,
+               (
+                   SELECT refund_terminal_fact_mismatch_count
+                   FROM t_payment_day_end_batch
+                   ORDER BY biz_date DESC, id DESC
+                   LIMIT 1
+               ) AS openRefundTerminalFactMismatchCount,
                COALESCE((
                    SELECT channel_success_count
                    FROM t_payment_day_end_batch
@@ -123,6 +129,7 @@
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                missing_refund_success_time_count AS missingRefundSuccessTimeCount,
+               refund_terminal_fact_mismatch_count AS refundTerminalFactMismatchCount,
                channel_abnormal_count AS channelAbnormalCount,
                internal_abnormal_count AS internalAbnormalCount,
                pending_refund_count AS pendingRefundCount,
@@ -157,6 +164,7 @@
                refund_success_count AS refundSuccessCount,
                CONCAT('¥', FORMAT(refund_success_amount, 2)) AS refundSuccessAmount,
                missing_refund_success_time_count AS missingRefundSuccessTimeCount,
+               refund_terminal_fact_mismatch_count AS refundTerminalFactMismatchCount,
                channel_abnormal_count AS channelAbnormalCount,
                internal_abnormal_count AS internalAbnormalCount,
                pending_refund_count AS pendingRefundCount,
@@ -373,6 +381,29 @@
           AND success_at IS NULL
     </select>
 
+    <select id="countRefundTerminalFactMismatchByDate" resultType="java.lang.Integer">
+        SELECT COUNT(1)
+        FROM t_refund_order refund_order
+        WHERE DATE(refund_order.applied_at) = #{bizDate}
+          AND refund_order.status IN ('SUCCESS', 'FAIL')
+          AND (
+              (refund_order.status = 'FAIL' AND refund_order.success_at IS NOT NULL)
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM t_refund_attempt attempt
+                  WHERE attempt.id = (
+                      SELECT latest_attempt.id
+                      FROM t_refund_attempt latest_attempt
+                      WHERE latest_attempt.refund_order_id = refund_order.refund_order_id
+                      ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                      LIMIT 1
+                  )
+                    AND attempt.attempt_status = refund_order.status
+                    AND attempt.completed_at IS NOT NULL
+              )
+          )
+    </select>
+
     <select id="countChannelAbnormalByDate" resultType="java.lang.Integer">
         SELECT COUNT(1)
         FROM t_payment_order payment_order
@@ -437,6 +468,7 @@
             refund_success_count,
             refund_success_amount,
             missing_refund_success_time_count,
+            refund_terminal_fact_mismatch_count,
             channel_abnormal_count,
             internal_abnormal_count,
             pending_refund_count,
@@ -466,6 +498,7 @@
             #{refundSuccessCount},
             #{refundSuccessAmount},
             #{missingRefundSuccessTimeCount},
+            #{refundTerminalFactMismatchCount},
             #{channelAbnormalCount},
             #{internalAbnormalCount},
             #{pendingRefundCount},

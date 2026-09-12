@@ -48,6 +48,8 @@ public class PaymentDayEndBatchListItemDTO {
     private String refundSuccessAmount;
     /** 退款成功时间缺失数；历史未采集批次为 null。 */
     private Integer missingRefundSuccessTimeCount;
+    /** 退款终态与最新尝试事实不一致数；历史未采集批次为 null。 */
+    private Integer refundTerminalFactMismatchCount;
     /** 渠道异常数。 */
     private Integer channelAbnormalCount;
     /** 内部异常数。 */

@@ -103,6 +103,8 @@ const alertSuggestions = computed(() => {
   }
   if (alert.alertTitle?.includes("退款成功时间缺失")) {
     suggestions.push("优先核对可信退款回调、主动查单结果和退款操作日志，确认成功时间后再归属逆向资金账期。");
+  } else if (alert.alertTitle?.includes("退款终态事实不一致")) {
+    suggestions.push("优先核对退款单终态、最新退款尝试状态、完成时间和操作日志，确认结构化事实一致后再推进对账。");
   } else if (alert.alertTitle?.includes("成功时间缺失") || alert.alertMessage?.includes("成功时间")) {
     suggestions.push("优先核对支付成功通知与内部事件，确认可信成功时间后再归属账期。");
   }
@@ -218,7 +220,7 @@ onMounted(loadOverview);
             <article class="overview-card danger">
               <p class="overview-title">P1 告警优先处理</p>
               <strong>{{ riskSummary.alertP1Count }}</strong>
-              <span>优先联查待回调、支付或退款成功时间缺失和退款失败告警，避免资金事实持续失真。</span>
+              <span>优先联查待回调、成功时间缺失、退款终态事实不一致和退款失败告警，避免资金事实持续失真。</span>
             </article>
             <article class="overview-card warn">
               <p class="overview-title">存在待处理渠道</p>

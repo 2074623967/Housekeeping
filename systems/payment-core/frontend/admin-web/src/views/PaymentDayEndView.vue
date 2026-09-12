@@ -15,6 +15,7 @@ const overview = ref({
   openMissingPaymentSuccessTimeCount: 0,
   openPendingRefundCount: 0,
   openMissingRefundSuccessTimeCount: 0,
+  openRefundTerminalFactMismatchCount: 0,
   alerts: [],
   recentBatches: []
 });
@@ -121,7 +122,7 @@ onMounted(loadOverview);
         </div>
 
         <div class="risk-banner">
-          当前未收口：支付 {{ overview.openPendingPaymentCount ?? "未采集" }} 笔，支付成功时间缺失 {{ overview.openMissingPaymentSuccessTimeCount ?? "未采集" }} 笔，退款成功时间缺失 {{ overview.openMissingRefundSuccessTimeCount ?? "未采集" }} 笔，支付成功差异 {{ overview.latestPaymentSuccessGapCount ?? 0 }} 笔，渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，退款 {{ overview.openPendingRefundCount }} 笔。
+          当前未收口：支付 {{ overview.openPendingPaymentCount ?? "未采集" }} 笔，支付成功时间缺失 {{ overview.openMissingPaymentSuccessTimeCount ?? "未采集" }} 笔，退款成功时间缺失 {{ overview.openMissingRefundSuccessTimeCount ?? "未采集" }} 笔，退款终态事实不一致 {{ overview.openRefundTerminalFactMismatchCount ?? "未采集" }} 笔，支付成功差异 {{ overview.latestPaymentSuccessGapCount ?? 0 }} 笔，渠道异常 {{ overview.openChannelAbnormalCount }} 笔，内部事件异常 {{ overview.openInternalAbnormalCount }} 笔，退款 {{ overview.openPendingRefundCount }} 笔。
         </div>
 
         <div class="detail-panel">
@@ -195,6 +196,12 @@ onMounted(loadOverview);
               <RouterLink class="link-button" to="/refunds?refundStatus=SUCCESS_TIME_MISSING">查看退款单</RouterLink>
             </div>
             <div class="detail-card">
+              <div class="detail-label">退款终态事实不一致</div>
+              <div class="detail-value">{{ overview.openRefundTerminalFactMismatchCount ?? "未采集" }}</div>
+              <div class="detail-hint">退款单与最新渠道尝试未形成一致终态</div>
+              <RouterLink class="link-button" to="/refunds?refundStatus=TERMINAL_FACT_MISMATCH">查看退款单</RouterLink>
+            </div>
+            <div class="detail-card">
               <div class="detail-label">待收口退款金额</div>
               <div class="detail-value">{{ overview.latestPendingRefundAmount || "¥0.00" }}</div>
               <div class="detail-hint">对应 {{ overview.openPendingRefundCount ?? 0 }} 笔退款</div>
@@ -248,7 +255,7 @@ onMounted(loadOverview);
           <div class="section-title">
             <div>
               <h3>最近日终批次</h3>
-              <p class="meta">重点关注待收口支付、支付与退款成功时间缺失、支付成功差异、渠道异常、内部事件异常和待收口退款，作为第二天对账和差错处理入口</p>
+              <p class="meta">重点关注待收口支付、成功时间缺失、退款终态事实不一致、支付成功差异、渠道异常、内部事件异常和待收口退款，作为第二天对账和差错处理入口</p>
             </div>
           </div>
 
@@ -275,6 +282,7 @@ onMounted(loadOverview);
                   <th>退款成功单量</th>
                   <th>退款成功金额</th>
                   <th>退款成功时间缺失</th>
+                  <th>退款终态事实不一致</th>
                   <th>渠道异常</th>
                   <th>内部异常</th>
                   <th>待收口退款</th>
@@ -306,6 +314,7 @@ onMounted(loadOverview);
                   <td>{{ item.refundSuccessCount }}</td>
                   <td>{{ item.refundSuccessAmount }}</td>
                   <td>{{ item.missingRefundSuccessTimeCount ?? "未采集" }}</td>
+                  <td>{{ item.refundTerminalFactMismatchCount ?? "未采集" }}</td>
                   <td>{{ item.channelAbnormalCount }}</td>
                   <td>{{ item.internalAbnormalCount }}</td>
                   <td>{{ item.pendingRefundCount }}</td>

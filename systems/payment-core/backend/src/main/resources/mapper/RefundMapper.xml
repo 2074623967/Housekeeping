@@ -8,6 +8,26 @@
         ORDER BY applied_at DESC, id DESC
     </sql>
 
+    <sql id="refundTerminalFactMismatchCondition">
+        status IN ('SUCCESS', 'FAIL')
+        AND (
+            (status = 'FAIL' AND success_at IS NOT NULL)
+            OR NOT EXISTS (
+                SELECT 1
+                FROM t_refund_attempt terminal_attempt
+                WHERE terminal_attempt.id = (
+                    SELECT latest_attempt.id
+                    FROM t_refund_attempt latest_attempt
+                    WHERE latest_attempt.refund_order_id = t_refund_order.refund_order_id
+                    ORDER BY latest_attempt.created_at DESC, latest_attempt.id DESC
+                    LIMIT 1
+                )
+                  AND terminal_attempt.attempt_status = t_refund_order.status
+                  AND terminal_attempt.completed_at IS NOT NULL
+            )
+        )
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.RefundListItemDTO">
         SELECT refund_order_id AS refundOrderId,
                payment_order_id AS paymentOrderId,
@@ -33,6 +53,9 @@
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
                     AND status = 'SUCCESS' AND success_at IS NULL
+                </when>
+                <when test="query.refundStatus == 'TERMINAL_FACT_MISMATCH'">
+                    AND <include refid="refundTerminalFactMismatchCondition"/>
                 </when>
                 <when test="query.refundStatus == 'PENDING'">
                     AND status IN ('REVIEWING', 'PROCESSING')
@@ -62,6 +85,9 @@
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
                     AND status = 'SUCCESS' AND success_at IS NULL
+                </when>
+                <when test="query.refundStatus == 'TERMINAL_FACT_MISMATCH'">
+                    AND <include refid="refundTerminalFactMismatchCondition"/>
                 </when>
                 <when test="query.refundStatus == 'PENDING'">
                     AND status IN ('REVIEWING', 'PROCESSING')
@@ -101,6 +127,9 @@
             <choose>
                 <when test="query.refundStatus == 'SUCCESS_TIME_MISSING'">
                     AND status = 'SUCCESS' AND success_at IS NULL
+                </when>
+                <when test="query.refundStatus == 'TERMINAL_FACT_MISMATCH'">
+                    AND <include refid="refundTerminalFactMismatchCondition"/>
                 </when>
                 <when test="query.refundStatus == 'PENDING'">
                     AND status IN ('REVIEWING', 'PROCESSING')

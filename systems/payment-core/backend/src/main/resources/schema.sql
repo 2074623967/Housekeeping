@@ -1145,6 +1145,7 @@ CREATE TABLE t_payment_day_end_batch (
     refund_success_count INT NOT NULL DEFAULT 0 COMMENT '退款成功单量',
     refund_success_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款成功金额',
     missing_refund_success_time_count INT NOT NULL DEFAULT 0 COMMENT '退款成功时间缺失数',
+    refund_terminal_fact_mismatch_count INT NOT NULL DEFAULT 0 COMMENT '退款终态事实不一致数',
     channel_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '渠道异常数',
     internal_abnormal_count INT NOT NULL DEFAULT 0 COMMENT '内部异常数',
     pending_refund_count INT NOT NULL DEFAULT 0 COMMENT '待收口退款数',
