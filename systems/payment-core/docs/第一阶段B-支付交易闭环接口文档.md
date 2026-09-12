@@ -4274,6 +4274,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 租约获取和续期仍为独立短事务，网络调用期间不得持有租约表行锁。若实例在完成前崩溃，既有租约按数据库到期时间恢复；若调用异常变长，后台续期继续保护执行权。
 6. 本契约不改变 HTTP API、DTO、schema 或迁移。630 秒余量、数据库时钟、实例暂停、续期竞争与真实供应商恢复必须在目标环境校准。
 
+### 14.298 支付日终批次状态一致性契约
+
+1. 日终批次状态必须由四类未收口事实共同决定：支付成功差异、渠道异常、内部事件异常和待收口退款。任一计数大于零时必须持久化 `batchStatus=WARNING`、`batchStatusType=warn`。
+2. 仅当四类计数全部为零时，批次才可持久化为 `batchStatus=COMPLETED`、`batchStatusType=success`；该口径必须与总览的正式对账准入判断保持一致。
+3. `findOverviewSummary()` 仍以持久化 `batch_status` 汇总完成与异常批次数，因此状态写入与历史纠偏是汇总准确性的前置条件，不在查询时临时覆盖事实。
+4. 历史上满足 `payment_success_gap_count > 0 AND batch_status = 'COMPLETED'` 的记录通过幂等迁移纠正状态和样式；迁移不得改变金额、数量、业务日期、备注或原始交易事实。
+5. 本契约不改变 `POST /api/v1/payment-day-end/run` 和总览响应字段，也不新增前端适配。目标库迁移必须先预查命中集合，并在执行后复核完成/异常批次数与最近批次状态。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

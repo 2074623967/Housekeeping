@@ -2481,6 +2481,14 @@
 4. 新增租约服务测试覆盖取消续期、不释放、重复保留和随后关闭的幂等语义；联合定向 `85` 项、后端全量 `988` 项、补丁检查通过。
 5. 本轮仍无 schema、迁移、HTTP API 或前端变化；630 秒含固定 30 秒余量，不替代目标 MySQL、多实例、异常长网络耗时、进程崩溃、真实供应商恢复和送达验证，release 四项真实治理阻断不变。
 
+### 8.303 2026-09-12 日终成功差异状态一致性进展
+
+1. 日终对账准入已经把 `paymentSuccessGapCount > 0` 视为禁止进入正式对账，但批次状态原先只检查渠道异常、内部事件异常和待收口退款；仅有支付成功差异时会错误持久化为 `COMPLETED/success`，并污染总览完成批次数。
+2. `resolveBatchStatus()` 现在把支付成功差异纳入统一警告条件；四类未收口事实任一大于零均写 `WARNING/warn`，全部为零时才允许写 `COMPLETED/success`。
+3. 新增幂等迁移 `2026-09-12-fix-day-end-success-gap-status.sql`，仅将历史 `payment_success_gap_count > 0 AND batch_status = 'COMPLETED'` 的派生状态纠正为 `WARNING/warn`，不修改金额、单量、业务日期或原始交易事实。
+4. 新增“仅支付成功差异，其余三类异常均为零”服务回归；日终定向 `7` 项、payment-core 后端全量 `989` 项、补丁检查通过。代码、测试与迁移提交为 `873561bf fix(payment-core): classify day-end success gaps`。
+5. 本轮无 HTTP API、前端、表结构或索引变化。迁移尚未在目标 MySQL 执行，历史命中规模、执行影响和迁移后汇总仍需上线前备份、预查与复核；本地测试不构成真实对账、财务审批或 release 放行证明。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
