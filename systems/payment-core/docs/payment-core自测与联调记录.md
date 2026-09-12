@@ -12192,3 +12192,32 @@
 1. 停用渠道告警现在能定位到配置中心的停用渠道集合，不再让运营人员在完整治理页面中人工扫描。
 2. 筛选不改变治理总览或配置数据本身，渠道导出仍为全量治理快照；本轮没有自动启停渠道或修改路由规则。
 3. 模拟 `503` 下的浏览器烟测不能证明渠道表现场展示、真实渠道停用或生产可用性；release 四项真实治理阻断不变。
+
+## 452. 2026-09-12 异常中心告警下钻一致性 V1.0 验证
+
+### 452.1 本轮补强
+
+1. 异常中心停用渠道异常的 `recommendedRoute` 改为 `/payment-config?channelStatus=DISABLED`，与支付监控的同类告警入口保持一致。
+2. 异常列表首次进入时从路由查询水合六个筛选字段；同页查询参数变化后重新水合、回到第一页、清空勾选项并加载目标集合。
+3. 路由转换集中为纯函数，数组、空值和空字符串等非标量或无效值回退各字段默认值，避免畸形 URL 污染接口请求。
+
+### 452.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 异常中心后端定向测试 | `33` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 路由契约 | 使用正式 `PaymentIssueMapper.xml` 展开 `findAll / findByIssueNo`，两条 SQL 均包含 `/payment-config?channelStatus=DISABLED` 且不再包含泛化路由 |
+| 管理端路由水合 | 覆盖六个标量筛选字段及数组、空值、空字符串回退；同页路由变化触发重新加载 |
+| 管理端单测 | `21` 项通过，`0` failures |
+| 管理端生产构建 | 通过；最大 JS 包约 `544.72 kB`，保留既有超过 `500 kB` 告警 |
+| payment-core 后端全量测试 | `967` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentIssueMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 仅调整异常推荐路由和管理端筛选水合；无 API 响应、状态机、schema、索引或迁移变化 |
+| 代码提交 | `6f0cca2a fix(payment-core): align issue alert drilldown` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 452.3 当前判断
+
+1. 异常中心的停用渠道处置入口与监控告警现已统一，列表和详情共享同一异常联合定义，避免两种读取路径产生路由漂移。
+2. 待回调异常继续直接由 `t_payment_order.status='WAIT_CALLBACK'` 聚合，不依赖独立异常记录；本轮没有新增异常持久化或改变处置状态机。
+3. 本机测试不证明真实渠道状态、异常已处置、支付或退款资金结果和生产稳定性；发布说明正式化、正式签字审批、发布后现场核验、`master` 稳定观察结束结论仍未形成。

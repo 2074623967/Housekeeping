@@ -4120,6 +4120,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 渠道治理快照导出保持全量口径，管理端必须明确标注“导出全部渠道”，不得暗示其等于当前状态筛选结果。
 5. 告警下钻只提供本地配置定位，不执行渠道启停或路由调整，也不构成真实渠道状态、生产数据完整或稳定性证明。
 
+### 14.279 异常中心告警下钻一致性契约
+
+1. 支付异常列表与详情中的停用渠道异常 `recommendedRoute` 固定为 `/payment-config?channelStatus=DISABLED`，与 `CHANNEL_DISABLED` 监控告警入口及 `status='DISABLED'` 的事实条件一致。
+2. 异常列表与详情必须共享 `PaymentIssueMapper.issueUnion` 的异常定义；`findAll` 与 `findByIssueNo` 两条展开 SQL 不得分别维护不同的建议路由。
+3. 管理端异常列表从路由查询接收 `paymentOrderId / orderNo / issueType / severity / channelCode / paymentMethod` 六个筛选字段；首次进入和同页查询变化均应按当前路由重新加载第一页。
+4. 路由查询只有非空字符串可进入筛选；数组、空值和空字符串回退默认值。路由转换只影响现有列表请求，不新增或改变后端 API 参数、响应字段和异常状态。
+5. 待回调异常继续由 `t_payment_order.status='WAIT_CALLBACK'` 直接聚合，不要求预先创建独立异常记录；推荐路由只辅助定位，不证明异常已处置、渠道已恢复或资金已收口。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

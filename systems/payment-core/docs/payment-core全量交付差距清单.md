@@ -2329,6 +2329,14 @@
 4. 正式监控 Mapper 测试断言停用渠道告警路由；管理端筛选测试覆盖停用渠道、非法值和非数组输入。后端定向 `8` 项、后端全量 `966` 项、管理端 `19` 项单测和生产构建通过，构建保留既有约 `544.47 kB` 单包告警。
 5. 浏览器烟测确认路由可加载且无前端运行时崩溃，但现有配置接口返回模拟 `503`，未形成渠道表现场展示证据；本地测试不证明真实渠道停用、路由调整、生产数据或稳定性，release 四项真实治理阻断不变。
 
+### 8.284 2026-09-12 异常中心告警下钻一致性进展
+
+1. 支付异常中心直接从支付、退款和渠道配置事实联合生成异常；其中停用渠道异常的建议路由仍为泛化 `/payment-config`，与监控告警已经收口的停用渠道视图不一致。
+2. `PaymentIssueMapper` 的停用渠道异常推荐路由改为 `/payment-config?channelStatus=DISABLED`；异常列表与详情共同复用 `issueUnion`，两条展开 SQL 均由正式 Mapper 契约测试保护。
+3. 异常列表从路由查询水合 `paymentOrderId / orderNo / issueType / severity / channelCode / paymentMethod` 六个筛选字段，并监听同页路由条件变化；变化后回到第一页、清空勾选项并重新加载，数组、空值等非标量查询回退默认值。
+4. 后端定向 `33` 项、payment-core 后端全量 `967` 项、管理端 `21` 项单测和生产构建通过，Mapper XML 与补丁检查通过；构建保留既有约 `544.72 kB` 单包告警。代码提交为 `6f0cca2a fix(payment-core): align issue alert drilldown`。
+5. 本轮无 API 响应、状态机、schema、索引或迁移变化；本机测试不证明真实渠道状态、异常处置、支付或退款资金结果和生产稳定性。统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
