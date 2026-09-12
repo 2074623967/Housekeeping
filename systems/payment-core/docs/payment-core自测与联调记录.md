@@ -11850,3 +11850,32 @@
 1. 在数据集合不变的前提下，支付记录三类排序的同值行具有确定次序；详情在同秒尝试下也具有明确的最新事实选择规则。
 2. `p.id` 次排序不提供多个请求之间的数据库快照；翻页期间若新增或修改支付记录，偏移分页仍可能随数据集变化。
 3. 本地 H2 不证明生产 MySQL 执行计划、真实渠道受理、支付成功、退款到账或资金对账一致性；release 四项真实治理阻断不变。
+
+## 440. 2026-09-12 支付详情三类轨迹稳定排序 V1.0 验证
+
+### 440.1 本轮补强
+
+1. `PaymentMapper.findNotifyLogs`、`findRouteLogs` 和 `findEventItems` 从单独按 `created_at DESC` 调整为按 `created_at DESC, id DESC` 返回。
+2. 支付详情与收款记录详情继续复用这三条 Mapper 查询，服务层不复制排序或重排结果。
+3. 该变更不改变轨迹展示文本、查询范围、详情响应字段、API、前端、schema、索引或迁移。
+
+### 440.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与详情服务定向测试 | `PaymentDetailTraceOrderingMapperIntegrationTest,PaymentRecordServiceImplTest,PaymentServiceImplTest` `80` 项通过，`0` failures、`0` errors、`0` skipped |
+| 通知轨迹 | 三条同秒通知按本表 `id DESC` 返回 `通知-003 / 002 / 001` |
+| 路由轨迹 | 三条同秒路由按本表 `id DESC` 返回 `规则-003 / 002 / 001` |
+| 事件轨迹 | 三条同秒事件按本表 `id DESC` 返回 `EVENT-003 / 002 / 001` |
+| 详情装配回归 | 支付主详情与收款记录详情继续获取路由、通知和事件轨迹 |
+| payment-core 后端全量测试 | `957` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `7098ded9 fix(payment-core): stabilize payment detail trace ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 440.3 当前判断
+
+1. 对同一支付单和静态数据集，三类详情轨迹均按“创建时间、主键”从新到旧稳定展示，便于重复排障与证据比对。
+2. 自增 `id` 只裁决各事实表内部同秒记录，不表达路由、通知和事件三种事实之间的全局先后或因果关系。
+3. 本地 H2 不证明生产 MySQL 执行计划、真实渠道通知时序、下游事件消费、支付成功、账务入账或资金对账一致性；release 四项真实治理阻断不变。

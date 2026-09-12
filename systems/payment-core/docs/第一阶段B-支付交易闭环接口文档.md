@@ -4032,6 +4032,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `GET /api/payment-records/{paymentOrderId}` 的最近支付尝试必须按 `created_at DESC, id DESC` 唯一选择；不能只以 `MAX(created_at)` 关联后依赖无排序 `LIMIT 1` 裁决同秒记录。
 4. 最近尝试表示 payment-core 中已记录的最新提交尝试，不等于渠道已受理、支付已成功、退款已到账或资金已完成对账。
 
+### 14.267 支付详情三类轨迹稳定排序契约
+
+1. `GET /api/payments/{paymentOrderId}` 与 `GET /api/payment-records/{paymentOrderId}` 返回的路由、通知和事件轨迹继续来自 `PaymentMapper.findRouteLogs / findNotifyLogs / findEventItems`。
+2. 每类轨迹必须在本事实表内按 `created_at DESC, id DESC` 返回；当秒级创建时间相同时，以该表自增 `id` 作为唯一且不可变的次排序键。
+3. 本契约不改变轨迹文本格式、支付单过滤范围、详情响应字段或三个轨迹集合之间的独立结构；服务层不得再次以不完整字段重排。
+4. 各表 `id` 只能表达本表记录的插入先后，不能推导三类事实之间的全局因果顺序，也不表示渠道通知、事件消费、支付或资金处理已经完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
