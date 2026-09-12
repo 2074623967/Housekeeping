@@ -15,6 +15,8 @@ const actionResultMessage = ref("");
 const activeRefundOrderId = ref("");
 const activeAction = ref("");
 const refundOperator = ref("");
+const applyIdempotencyKey = ref("");
+const applyRequestFingerprint = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const loadedPageNo = ref(1);
@@ -60,6 +62,13 @@ function buildQuery() {
 
 function isActionRunning(refundOrderId, actionName) {
   return activeRefundOrderId.value === refundOrderId && activeAction.value === actionName;
+}
+
+function generateApplyIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `REFUND-APPLY-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function resetFilters() {
@@ -164,16 +173,25 @@ async function handleApply() {
     actionResultMessage.value = "";
     return;
   }
+  const requestPayload = {
+    paymentOrderId: applyForm.value.paymentOrderId.trim(),
+    refundAmount,
+    refundMethod: applyForm.value.refundMethod.trim() || "原路退款",
+    refundReason: applyForm.value.refundReason.trim(),
+    operator
+  };
+  const requestFingerprint = JSON.stringify(requestPayload);
+  if (!applyIdempotencyKey.value || applyRequestFingerprint.value !== requestFingerprint) {
+    applyIdempotencyKey.value = generateApplyIdempotencyKey();
+    applyRequestFingerprint.value = requestFingerprint;
+  }
   activeAction.value = "apply";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
     const refund = await refundApi.apply({
-      paymentOrderId: applyForm.value.paymentOrderId,
-      refundAmount,
-      refundMethod: applyForm.value.refundMethod,
-      refundReason: applyForm.value.refundReason,
-      operator
+      ...requestPayload,
+      idempotencyKey: applyIdempotencyKey.value
     });
     actionResultMessage.value = `退款单 ${refund.refundOrderId} 已创建，等待审核。`;
     applyForm.value = {
@@ -182,6 +200,8 @@ async function handleApply() {
       refundMethod: "原路退款",
       refundReason: ""
     };
+    applyIdempotencyKey.value = "";
+    applyRequestFingerprint.value = "";
     pageNo.value = 1;
     actionRefreshErrorMessage.value = "";
     await loadRefunds(refund.refundOrderId, true, buildQuery());

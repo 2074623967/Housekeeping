@@ -1,6 +1,7 @@
 package com.abc123.hsp.mapper;
 
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundApplicationIdempotencyDTO;
 import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
@@ -55,6 +56,13 @@ public interface RefundMapper {
      * 查询并锁定可退款的原支付单快照。
      */
     RefundPaymentSourceDTO findPaymentSourceForUpdate(String paymentOrderId);
+
+    /**
+     * 按支付单与客户端幂等键查询既有退款申请。
+     */
+    RefundApplicationIdempotencyDTO findApplicationByIdempotencyKey(
+            @Param("paymentOrderId") String paymentOrderId,
+            @Param("idempotencyKey") String idempotencyKey);
 
     /**
      * 查询并锁定失败退款重试额度快照。

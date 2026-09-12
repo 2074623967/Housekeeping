@@ -6,6 +6,7 @@ import com.abc123.hsp.dto.PageResultDTO;
 import com.abc123.hsp.dto.RefundChannelSubmitRequestDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundApplicationIdempotencyDTO;
 import com.abc123.hsp.dto.RefundCallbackRequestDTO;
 import com.abc123.hsp.dto.RefundCallbackSourceDTO;
 import com.abc123.hsp.dto.RefundChannelQueryResultDTO;
@@ -34,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -66,6 +68,7 @@ public class RefundServiceImpl implements RefundService {
     private static final int MONEY_MAX_SCALE = 2;
     private static final BigDecimal MAX_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final int PAYMENT_ORDER_ID_MAX_LENGTH = 64;
+    private static final int APPLICATION_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
     private static final int REFUND_METHOD_MAX_LENGTH = 32;
     private static final int REFUND_STATUS_MAX_LENGTH = 32;
     private static final int REFUND_REASON_MAX_LENGTH = 255;
@@ -183,9 +186,20 @@ public class RefundServiceImpl implements RefundService {
     public RefundListItemDTO apply(RefundApplyRequestDTO request) {
         String operator = normalizeOperator(request == null ? null : request.getOperator());
         validateApplyRequest(request);
-        RefundPaymentSourceDTO source = refundMapper.findPaymentSourceForUpdate(request.getPaymentOrderId().trim());
+        request.setOperator(operator);
+        RefundPaymentSourceDTO source = refundMapper.findPaymentSourceForUpdate(request.getPaymentOrderId());
         if (source == null) {
             throw new IllegalArgumentException("原支付单不存在");
+        }
+        RefundApplicationIdempotencyDTO existingApplication = refundMapper.findApplicationByIdempotencyKey(
+                request.getPaymentOrderId(), request.getIdempotencyKey());
+        if (existingApplication != null) {
+            if (!isSameApplication(existingApplication, request)) {
+                throw new BusinessException(
+                        ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_CONFLICT,
+                        "退款申请幂等键已用于其他申请内容");
+            }
+            return maskedCopy(refundMapper.findByRefundOrderId(existingApplication.getRefundOrderId()));
         }
         if (!PAYMENT_STATUS_SUCCESS.equals(source.getStatus())) {
             throw new IllegalArgumentException("只有支付成功的支付单允许发起退款");
@@ -469,6 +483,7 @@ public class RefundServiceImpl implements RefundService {
         }
         request.setPaymentOrderId(normalizeRequiredRequestField(
                 request.getPaymentOrderId(), "原支付单号", PAYMENT_ORDER_ID_MAX_LENGTH));
+        request.setIdempotencyKey(normalizeApplicationIdempotencyKey(request.getIdempotencyKey()));
         if (request.getRefundAmount() == null || request.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("退款金额必须大于0");
         }
@@ -483,6 +498,37 @@ public class RefundServiceImpl implements RefundService {
         String refundReason = normalizeOptionalRequestField(
                 request.getRefundReason(), "退款原因", REFUND_REASON_MAX_LENGTH);
         request.setRefundReason(refundReason == null ? "" : refundReason);
+    }
+
+    private String normalizeApplicationIdempotencyKey(String idempotencyKey) {
+        if (!StringUtils.hasText(idempotencyKey)) {
+            throw new BusinessException(
+                    ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
+                    "退款申请幂等键不能为空");
+        }
+        if (containsIsoControl(idempotencyKey)) {
+            throw new BusinessException(
+                    ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
+                    "退款申请幂等键不能包含控制字符");
+        }
+        String normalized = idempotencyKey.trim();
+        if (normalized.length() > APPLICATION_IDEMPOTENCY_KEY_MAX_LENGTH) {
+            throw new BusinessException(
+                    ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID,
+                    "退款申请幂等键长度不能超过 128 个字符");
+        }
+        return normalized;
+    }
+
+    private boolean isSameApplication(
+            RefundApplicationIdempotencyDTO existingApplication,
+            RefundApplyRequestDTO request) {
+        return Objects.equals(existingApplication.getPaymentOrderId(), request.getPaymentOrderId())
+                && existingApplication.getRefundAmount() != null
+                && existingApplication.getRefundAmount().compareTo(request.getRefundAmount()) == 0
+                && Objects.equals(existingApplication.getRefundMethod(), request.getRefundMethod())
+                && Objects.equals(existingApplication.getRefundReason(), request.getRefundReason())
+                && Objects.equals(existingApplication.getOperator(), request.getOperator());
     }
 
     private String normalizeRequiredRequestField(String value, String fieldName, int maxLength) {

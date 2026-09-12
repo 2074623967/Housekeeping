@@ -179,10 +179,10 @@ SELECT pe.event_no, pe.payment_order_id, pe.biz_no, NULL, 'PAYMENT_EVENT', pe.ev
        'payment-core', pe.created_at
 FROM t_payment_event pe;
 
-INSERT INTO t_refund_order (refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES
-('REF202607190001', 'PAY202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
-('REF202607180019', 'PAY202607180074', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
-('REF202607170088', 'PAY202607160031', 'ORD202607160071', '赵女士', 200.00, '退转付', '用户重复支付', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
+INSERT INTO t_refund_order (refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES
+('REF202607190001', 'PAY202607190001', 'LEGACY:REF202607190001', 'ORD202607190001', '张女士', 68.00, '原路退款', '客户取消服务', 'PROCESSING', 'warn', '2026-07-19 11:05:10', NULL),
+('REF202607180019', 'PAY202607180074', 'LEGACY:REF202607180019', 'ORD202607180118', '企业客户-晨星科技', 600.00, '原路退款', '服务未按约履行', 'SUCCESS', 'success', '2026-07-18 19:00:11', '2026-07-18 19:03:26'),
+('REF202607170088', 'PAY202607160031', 'LEGACY:REF202607170088', 'ORD202607160071', '赵女士', 200.00, '退转付', '用户重复支付', 'FAIL', 'danger', '2026-07-17 15:10:32', NULL);
 
 INSERT INTO t_refund_operation_log (log_no, refund_order_id, action_code, action_name, from_status, to_status, operator_name, operation_remark, created_at) VALUES
 ('ROL202607190001', 'REF202607190001', 'APPLY', '发起退款申请', 'INIT', 'REVIEWING', 'payment-core-admin', '客户取消服务', '2026-07-19 11:05:10'),

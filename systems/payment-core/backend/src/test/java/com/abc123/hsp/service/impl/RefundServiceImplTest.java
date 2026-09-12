@@ -20,6 +20,7 @@ import com.abc123.hsp.dto.RefundDetailDTO;
 import com.abc123.hsp.dto.RefundOperationLogItemDTO;
 import com.abc123.hsp.dto.RefundActionRequestDTO;
 import com.abc123.hsp.dto.RefundApplyRequestDTO;
+import com.abc123.hsp.dto.RefundApplicationIdempotencyDTO;
 import com.abc123.hsp.dto.RefundListItemDTO;
 import com.abc123.hsp.dto.RefundQueryDTO;
 import com.abc123.hsp.dto.RefundPaymentSourceDTO;
@@ -159,6 +160,7 @@ class RefundServiceImplTest {
     void shouldApplyRefundForSuccessfulPayment() {
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId("PAY-001");
+        request.setIdempotencyKey("REFUND-APPLY-001");
         request.setRefundAmount(new BigDecimal("20.00"));
         request.setRefundMethod("原路退款");
         request.setOperator(" refund-applicant ");
@@ -184,6 +186,76 @@ class RefundServiceImplTest {
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->
                 "APPLY".equals(log.getActionCode())
                         && "refund-applicant".equals(log.getOperatorName())));
+    }
+
+    @Test
+    void shouldReturnExistingRefundForSameIdempotentApplication() {
+        RefundApplyRequestDTO request = refundApplyRequest(new BigDecimal("20.00"));
+        request.setRefundReason("客户取消服务");
+        RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
+        source.setPaymentOrderId("PAY-001");
+        RefundApplicationIdempotencyDTO existing = new RefundApplicationIdempotencyDTO();
+        existing.setRefundOrderId("REF-EXISTING");
+        existing.setPaymentOrderId("PAY-001");
+        existing.setRefundAmount(new BigDecimal("20.0"));
+        existing.setRefundMethod("原路退款");
+        existing.setRefundReason("客户取消服务");
+        existing.setOperator("refund-applicant");
+        RefundListItemDTO existingItem = new RefundListItemDTO();
+        existingItem.setRefundOrderId("REF-EXISTING");
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
+        when(refundMapper.findApplicationByIdempotencyKey("PAY-001", "REFUND-APPLY-001"))
+                .thenReturn(existing);
+        when(refundMapper.findByRefundOrderId("REF-EXISTING")).thenReturn(existingItem);
+
+        RefundListItemDTO result = createService().apply(request);
+
+        assertEquals("REF-EXISTING", result.getRefundOrderId());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .sumActiveRefundAmount(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).insertRefund(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .insertOperationLog(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRejectDifferentApplicationContentUsingSameIdempotencyKey() {
+        RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
+        source.setPaymentOrderId("PAY-001");
+        RefundApplicationIdempotencyDTO existing = new RefundApplicationIdempotencyDTO();
+        existing.setRefundOrderId("REF-EXISTING");
+        existing.setPaymentOrderId("PAY-001");
+        existing.setRefundAmount(new BigDecimal("20.00"));
+        existing.setRefundMethod("原路退款");
+        existing.setRefundReason("");
+        existing.setOperator("refund-applicant");
+        when(refundMapper.findPaymentSourceForUpdate("PAY-001")).thenReturn(source);
+        when(refundMapper.findApplicationByIdempotencyKey("PAY-001", "REFUND-APPLY-001"))
+                .thenReturn(existing);
+
+        RefundApplyRequestDTO differentAmount = refundApplyRequest(new BigDecimal("19.00"));
+        RefundApplyRequestDTO differentMethod = refundApplyRequest(new BigDecimal("20.00"));
+        differentMethod.setRefundMethod("线下打款");
+        RefundApplyRequestDTO differentReason = refundApplyRequest(new BigDecimal("20.00"));
+        differentReason.setRefundReason("不同退款原因");
+        RefundApplyRequestDTO differentOperator = refundApplyRequest(new BigDecimal("20.00"));
+        differentOperator.setOperator("another-applicant");
+
+        for (RefundApplyRequestDTO request : Arrays.asList(
+                differentAmount, differentMethod, differentReason, differentOperator)) {
+            BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                    BusinessException.class, () -> createService().apply(request));
+            assertEquals(ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_CONFLICT, exception.getCode());
+        }
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never())
+                .sumActiveRefundAmount(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(refundMapper, org.mockito.Mockito.never()).insertRefund(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -214,6 +286,7 @@ class RefundServiceImplTest {
     void shouldRejectRefundWhenAmountExceedsPaidAmount() {
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId("PAY-001");
+        request.setIdempotencyKey("REFUND-APPLY-EXCESSIVE");
         request.setRefundAmount(new BigDecimal("80.00"));
         request.setRefundMethod("原路退款");
         request.setOperator("refund-applicant");
@@ -274,6 +347,7 @@ class RefundServiceImplTest {
     void shouldNormalizeRefundApplyTextFieldsBeforePersistence() {
         RefundApplyRequestDTO request = refundApplyRequest(new BigDecimal("20.00"));
         request.setPaymentOrderId(" PAY-001 ");
+        request.setIdempotencyKey(" REFUND-APPLY-001 ");
         request.setRefundMethod(" 原路退款 ");
         request.setRefundReason(null);
         RefundPaymentSourceDTO source = new RefundPaymentSourceDTO();
@@ -286,6 +360,7 @@ class RefundServiceImplTest {
         createService().apply(request);
 
         assertEquals("PAY-001", request.getPaymentOrderId());
+        assertEquals("REFUND-APPLY-001", request.getIdempotencyKey());
         assertEquals("原路退款", request.getRefundMethod());
         assertEquals("", request.getRefundReason());
         verify(refundMapper).insertRefund(
@@ -317,6 +392,21 @@ class RefundServiceImplTest {
         assertEquals("退款方式不能包含控制字符", applyFailure(invalidMethod).getMessage());
         assertEquals("退款原因长度不能超过255字符", applyFailure(oversizedReason).getMessage());
         assertEquals("退款原因不能包含控制字符", applyFailure(invalidReason).getMessage());
+        org.mockito.Mockito.verifyNoInteractions(refundMapper);
+    }
+
+    @Test
+    void shouldRejectInvalidRefundApplicationIdempotencyKeyBeforeMapperAccess() {
+        RefundApplyRequestDTO missing = refundApplyRequest(new BigDecimal("20.00"));
+        missing.setIdempotencyKey("   ");
+        RefundApplyRequestDTO oversized = refundApplyRequest(new BigDecimal("20.00"));
+        oversized.setIdempotencyKey(String.join("", Collections.nCopies(129, "I")));
+        RefundApplyRequestDTO control = refundApplyRequest(new BigDecimal("20.00"));
+        control.setIdempotencyKey("REFUND-APPLY\n001");
+
+        assertInvalidApplicationIdempotencyKey(missing, "退款申请幂等键不能为空");
+        assertInvalidApplicationIdempotencyKey(oversized, "退款申请幂等键长度不能超过 128 个字符");
+        assertInvalidApplicationIdempotencyKey(control, "退款申请幂等键不能包含控制字符");
         org.mockito.Mockito.verifyNoInteractions(refundMapper);
     }
 
@@ -1058,10 +1148,20 @@ class RefundServiceImplTest {
     private RefundApplyRequestDTO refundApplyRequest(BigDecimal refundAmount) {
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId("PAY-001");
+        request.setIdempotencyKey("REFUND-APPLY-001");
         request.setRefundAmount(refundAmount);
         request.setRefundMethod("原路退款");
         request.setOperator("refund-applicant");
         return request;
+    }
+
+    private void assertInvalidApplicationIdempotencyKey(
+            RefundApplyRequestDTO request,
+            String expectedMessage) {
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> createService().apply(request));
+        assertEquals(ErrorCode.REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID, exception.getCode());
+        assertEquals(expectedMessage, exception.getMessage());
     }
 
     private RefundQueryDTO refundQuery(String refundOrderId,

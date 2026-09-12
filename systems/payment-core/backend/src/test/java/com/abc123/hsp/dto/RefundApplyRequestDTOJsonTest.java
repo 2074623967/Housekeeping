@@ -10,8 +10,10 @@ class RefundApplyRequestDTOJsonTest {
     @Test
     void shouldDeserializeExactDecimalRefundAmountFromString() throws Exception {
         RefundApplyRequestDTO request = new ObjectMapper().readValue(
-                "{\"refundAmount\":\"9999999999999999.99\"}", RefundApplyRequestDTO.class);
+                "{\"idempotencyKey\":\"REFUND-APPLY-001\","
+                        + "\"refundAmount\":\"9999999999999999.99\"}", RefundApplyRequestDTO.class);
 
+        Assertions.assertEquals("REFUND-APPLY-001", request.getIdempotencyKey());
         Assertions.assertEquals(
                 new BigDecimal("9999999999999999.99"), request.getRefundAmount());
     }

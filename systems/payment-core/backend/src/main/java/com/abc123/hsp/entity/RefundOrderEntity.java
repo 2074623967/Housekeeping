@@ -13,6 +13,8 @@ public class RefundOrderEntity {
     private String refundOrderId;
     /** 关联支付单号。 */
     private String paymentOrderId;
+    /** 客户端退款申请幂等键。 */
+    private String idempotencyKey;
     /** 关联订单号。 */
     private String orderNo;
     /** 客户名称。 */

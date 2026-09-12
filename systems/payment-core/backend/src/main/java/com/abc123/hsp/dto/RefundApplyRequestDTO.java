@@ -11,6 +11,8 @@ public class RefundApplyRequestDTO {
 
     /** 原支付单号。 */
     private String paymentOrderId;
+    /** 客户端退款申请幂等键，同一支付单内唯一。 */
+    private String idempotencyKey;
     /** 本次退款金额。 */
     private BigDecimal refundAmount;
     /** 退款方式，例如原路退款、线下打款、退转付。 */

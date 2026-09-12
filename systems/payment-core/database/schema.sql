@@ -791,6 +791,7 @@ CREATE TABLE t_refund_order (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     refund_order_id VARCHAR(64) NOT NULL COMMENT '退款单号',
     payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
+    idempotency_key VARCHAR(128) NOT NULL COMMENT '客户端退款申请幂等键',
     order_no VARCHAR(64) NOT NULL COMMENT '关联订单号',
     customer_name VARCHAR(128) NOT NULL COMMENT '客户名称',
     refund_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '退款金额',
@@ -805,6 +806,7 @@ CREATE TABLE t_refund_order (
     success_at DATETIME DEFAULT NULL COMMENT '退款成功时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_refund_order_id (refund_order_id),
+    UNIQUE KEY uk_refund_apply_idempotency (payment_order_id, idempotency_key),
     UNIQUE KEY uk_refund_channel_no (channel_code, channel_refund_no),
     KEY idx_refund_payment_status (payment_order_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款单表';

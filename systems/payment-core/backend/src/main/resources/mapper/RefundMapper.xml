@@ -173,6 +173,25 @@
         FOR UPDATE
     </select>
 
+    <select id="findApplicationByIdempotencyKey"
+            resultType="com.abc123.hsp.dto.RefundApplicationIdempotencyDTO">
+        SELECT refund_order.refund_order_id AS refundOrderId,
+               refund_order.payment_order_id AS paymentOrderId,
+               refund_order.refund_amount AS refundAmount,
+               refund_order.refund_method AS refundMethod,
+               refund_order.refund_reason AS refundReason,
+               (SELECT operation_log.operator_name
+                FROM t_refund_operation_log operation_log
+                WHERE operation_log.refund_order_id = refund_order.refund_order_id
+                  AND operation_log.action_code = 'APPLY'
+                ORDER BY operation_log.id ASC
+                LIMIT 1) AS operator
+        FROM t_refund_order refund_order
+        WHERE refund_order.payment_order_id = #{paymentOrderId}
+          AND refund_order.idempotency_key = #{idempotencyKey}
+        LIMIT 1
+    </select>
+
     <select id="findRetrySourceForUpdate" resultType="com.abc123.hsp.dto.RefundRetrySourceDTO">
         SELECT refund_order_id AS refundOrderId,
                payment_order_id AS paymentOrderId,
@@ -320,8 +339,8 @@
     </select>
 
     <insert id="insertRefund">
-        INSERT INTO t_refund_order(refund_order_id, payment_order_id, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at)
-        VALUES (#{refundOrderId}, #{source.paymentOrderId}, #{source.orderNo}, #{source.customerName}, #{request.refundAmount}, #{request.refundMethod}, #{request.refundReason}, #{status}, #{statusType}, NOW(), NULL)
+        INSERT INTO t_refund_order(refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, refund_method, refund_reason, status, status_type, applied_at, success_at)
+        VALUES (#{refundOrderId}, #{source.paymentOrderId}, #{request.idempotencyKey}, #{source.orderNo}, #{source.customerName}, #{request.refundAmount}, #{request.refundMethod}, #{request.refundReason}, #{status}, #{statusType}, NOW(), NULL)
     </insert>
 
     <update id="updateRefundStatus">

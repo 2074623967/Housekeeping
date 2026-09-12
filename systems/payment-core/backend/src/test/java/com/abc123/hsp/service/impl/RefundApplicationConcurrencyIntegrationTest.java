@@ -74,10 +74,10 @@ public class RefundApplicationConcurrencyIntegrationTest {
         CountDownLatch secondStarted = new CountDownLatch(1);
         try (SqlSession firstSession = sqlSessionFactory.openSession()) {
             RefundListItemDTO first = createService(firstSession.getMapper(RefundMapper.class))
-                    .apply(refundRequest("60.00"));
+                    .apply(refundRequest("60.00", "REFUND-FIRST"));
 
             Future<RefundListItemDTO> second = executor.submit(
-                    () -> applyInSecondTransaction(secondStarted));
+                    () -> applyInSecondTransaction(secondStarted, "REFUND-SECOND"));
             secondStarted.await(5, TimeUnit.SECONDS);
             assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
 
@@ -95,12 +95,37 @@ public class RefundApplicationConcurrencyIntegrationTest {
     }
 
     @Test
+    void shouldReturnSingleRefundForConcurrentSameIdempotencyKey() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        try (SqlSession firstSession = sqlSessionFactory.openSession()) {
+            RefundListItemDTO first = createService(firstSession.getMapper(RefundMapper.class))
+                    .apply(refundRequest("60.00", "REFUND-SAME-REQUEST"));
+
+            Future<RefundListItemDTO> second = executor.submit(
+                    () -> applyInSecondTransaction(secondStarted, "REFUND-SAME-REQUEST"));
+            secondStarted.await(5, TimeUnit.SECONDS);
+            assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
+
+            firstSession.commit();
+            RefundListItemDTO replay = second.get(5, TimeUnit.SECONDS);
+
+            assertEquals(first.getRefundOrderId(), replay.getRefundOrderId());
+            assertEquals(1, countRefundRows());
+            assertEquals(0, sumRefundAmount().compareTo(new BigDecimal("60.00")));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     void shouldRejectFailedRefundRetryAfterConcurrentReplacementCommit() throws Exception {
         insertFailedRefund("REF-FAILED", "60.00");
         ExecutorService executor = Executors.newSingleThreadExecutor();
         CountDownLatch retryStarted = new CountDownLatch(1);
         try (SqlSession replacementSession = sqlSessionFactory.openSession()) {
-            createService(replacementSession.getMapper(RefundMapper.class)).apply(refundRequest("60.00"));
+            createService(replacementSession.getMapper(RefundMapper.class))
+                    .apply(refundRequest("60.00", "REFUND-REPLACEMENT"));
 
             Future<RefundListItemDTO> retry = executor.submit(
                     () -> retryInSecondTransaction(retryStarted, "REF-FAILED"));
@@ -119,12 +144,13 @@ public class RefundApplicationConcurrencyIntegrationTest {
         }
     }
 
-    private RefundListItemDTO applyInSecondTransaction(CountDownLatch started) throws Exception {
+    private RefundListItemDTO applyInSecondTransaction(CountDownLatch started, String idempotencyKey)
+            throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             started.countDown();
             try {
                 RefundListItemDTO result = createService(session.getMapper(RefundMapper.class))
-                        .apply(refundRequest("60.00"));
+                        .apply(refundRequest("60.00", idempotencyKey));
                 session.commit();
                 return result;
             } catch (RuntimeException exception) {
@@ -160,9 +186,10 @@ public class RefundApplicationConcurrencyIntegrationTest {
                 mock(com.abc123.hsp.service.RefundChannelQueryService.class));
     }
 
-    private RefundApplyRequestDTO refundRequest(String amount) {
+    private RefundApplyRequestDTO refundRequest(String amount, String idempotencyKey) {
         RefundApplyRequestDTO request = new RefundApplyRequestDTO();
         request.setPaymentOrderId(PAYMENT_ORDER_ID);
+        request.setIdempotencyKey(idempotencyKey);
         request.setRefundAmount(new BigDecimal(amount));
         request.setRefundMethod("原路退款");
         request.setRefundReason("并发退款金额保护测试");
@@ -204,9 +231,10 @@ public class RefundApplicationConcurrencyIntegrationTest {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.executeUpdate("INSERT INTO t_refund_order("
-                    + "refund_order_id, payment_order_id, order_no, customer_name, refund_amount, "
+                    + "refund_order_id, payment_order_id, idempotency_key, order_no, customer_name, refund_amount, "
                     + "refund_method, refund_reason, status, status_type, applied_at, success_at) VALUES ('"
-                    + refundOrderId + "', '" + PAYMENT_ORDER_ID + "', 'ORD-REFUND-CONCURRENT', "
+                    + refundOrderId + "', '" + PAYMENT_ORDER_ID + "', 'LEGACY:" + refundOrderId
+                    + "', 'ORD-REFUND-CONCURRENT', "
                     + "'张女士', " + amount + ", '原路退款', '首次退款失败', "
                     + "'FAIL', 'danger', NOW(), NULL)");
             session.commit();
@@ -233,10 +261,12 @@ public class RefundApplicationConcurrencyIntegrationTest {
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, refund_order_id VARCHAR(64) NOT NULL UNIQUE, "
                     + "payment_order_id VARCHAR(64) NOT NULL, order_no VARCHAR(64) NOT NULL, "
+                    + "idempotency_key VARCHAR(128) NOT NULL, "
                     + "customer_name VARCHAR(128) NOT NULL, refund_amount DECIMAL(18,2) NOT NULL, "
                     + "refund_method VARCHAR(32) NOT NULL, refund_reason VARCHAR(255) NOT NULL, "
                     + "status VARCHAR(32) NOT NULL, status_type VARCHAR(32) NOT NULL, "
-                    + "applied_at DATETIME NOT NULL, success_at DATETIME)");
+                    + "applied_at DATETIME NOT NULL, success_at DATETIME, "
+                    + "UNIQUE(payment_order_id, idempotency_key))");
             statement.execute("CREATE TABLE t_refund_operation_log ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, log_no VARCHAR(64) NOT NULL UNIQUE, "
                     + "refund_order_id VARCHAR(64) NOT NULL, action_code VARCHAR(64) NOT NULL, "
