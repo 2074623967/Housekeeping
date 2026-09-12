@@ -11530,3 +11530,31 @@
 1. 运营总览的“到期待重试”现在可作为自动任务当前候选规模的同口径观察值，不再系统性漏掉 `nextRetryAt` 为空的失败事件或首次待派发事件。
 2. 总览仍受页面筛选条件影响，而自动任务读取全局有界批次；筛选后的页面数值不能解释为任务本次一定处理的数量，执行时还会受并发状态变化和行锁裁决影响。
 3. 本地 H2、测试和构建不证明生产候选规模、任务已执行、真实下游完成或稳定性；release 四项真实治理阻断不变。
+
+## 429. 2026-09-12 支付事件列表与导出稳定排序 V1.0 验证
+
+### 429.1 本轮补强
+
+1. `findAll` 与 `findAllForExport` 统一引用 `paymentEventOrder`，避免列表和 CSV 复制排序逻辑。
+2. `createdAt / retryCount / nextRetryAt` 均以对应数据库字段为首排序键，以自增 `id` 为同方向次排序键；默认和非法排序入参仍由 Service 归一为 `createdAt / desc`。
+3. 该变更只确定同值记录次序，不改变筛选条件、分页参数、导出上限、展示字段或业务状态。
+
+### 429.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 定向测试 | `PaymentEventRepublishAuditMapperIntegrationTest` `7` 项通过，`0` failures、`0` errors、`0` skipped |
+| 创建时间跨页 | 三条同秒事件按 `createdAt desc, id desc` 跨三页依次返回 `EVT-AUDIT-003 / 002 / 001`，无重复或遗漏 |
+| 重试次数导出 | 三条同值事件按 `retryCount asc, id asc` 返回 `001 / 002 / 003` |
+| 下次重试时间导出 | 三条 `nextRetryAt=null` 事件按 `nextRetryAt desc, id desc` 返回 `003 / 002 / 001` |
+| payment-core 后端全量测试 | `945` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentEventMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、前端、schema、索引或迁移变化 |
+| 代码提交 | `c76e49f0 fix(payment-core): stabilize payment event ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 429.3 当前判断
+
+1. 在数据集合不变的前提下，列表翻页与 CSV 对同值记录具有确定次序，消除了仅因秒级时间或相同重试字段导致的随机分页边界。
+2. `id` 次排序不能提供跨多个独立查询的数据库快照；翻页期间若有新事件写入或旧事件状态改变，偏移分页仍可能随数据集变化，强快照需求应另行采用游标或一致性读设计。
+3. 本地 H2 不证明生产 MySQL 执行计划、大数据量导出、并发分页快照或稳定性；release 四项真实治理阻断不变。

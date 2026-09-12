@@ -3954,6 +3954,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 总览继续应用支付单号、事件类型、发布状态、下游系统和事件主题筛选；自动任务候选查询不应用页面筛选且受批次上限约束，因此页面值不承诺等于某次任务实际处理数。
 5. 字段只描述查询时刻的候选快照，不证明任务已取得锁、执行重试、下游接受或业务完成。
 
+### 14.256 支付事件列表与导出稳定排序契约
+
+1. `GET /api/payment-events` 与 `GET /api/payment-events/export` 使用相同排序规则；支持的 `sortField=createdAt / retryCount / nextRetryAt` 与既有 `sortOrder=asc / desc` 请求契约不变。
+2. 每个业务排序字段后必须追加数据库自增 `id` 作为同方向次排序键，即升序使用 `field ASC, id ASC`，降序使用 `field DESC, id DESC`；同秒、同重试次数或同为空时间的事件由 `id` 确定顺序。
+3. 列表的 `LIMIT/OFFSET` 和 CSV 的 `LIMIT 1001` 必须引用同一排序 SQL 片段，避免相同查询条件在页面和导出中产生不同的同值记录顺序。
+4. 稳定次排序只保证同一数据集合上的确定顺序，不承诺多个 HTTP 请求间的快照隔离；翻页期间发生插入或更新时，调用方不得把偏移分页解释为数据库一致性快照。
+5. 本契约不改变筛选、默认排序、分页边界、导出上限或响应字段。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
