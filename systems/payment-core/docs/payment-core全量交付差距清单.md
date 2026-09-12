@@ -2337,6 +2337,14 @@
 4. 后端定向 `33` 项、payment-core 后端全量 `967` 项、管理端 `21` 项单测和生产构建通过，Mapper XML 与补丁检查通过；构建保留既有约 `544.72 kB` 单包告警。代码提交为 `6f0cca2a fix(payment-core): align issue alert drilldown`。
 5. 本轮无 API 响应、状态机、schema、索引或迁移变化；本机测试不证明真实渠道状态、异常处置、支付或退款资金结果和生产稳定性。统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
 
+### 8.285 2026-09-12 异常告警明细路由重水合进展
+
+1. 任务中心会分别携带 `receiptQueryState=EXHAUSTED` 或 `providerDeliveryStatus=ACCEPTED&ackStatus=待确认` 进入异常告警明细台；该页面原先只在组件创建时读取查询参数，同页切换入口或通过菜单清除查询时会保留旧筛选和旧列表。
+2. 新增八字段路由转换函数，统一水合 `alertNo / issueNo / paymentOrderId / alertChannel / alertStatus / ackStatus / providerDeliveryStatus / receiptQueryState`；数组、空值和空字符串等非标量或无效输入回退默认值。
+3. 页面监听八个查询字段变化，重置到第一页、清空旧选中快照和操作提示并重新加载；首次进入仍复用同一转换函数，不建立第二套筛选语义。
+4. 管理端 `23` 项单测和生产构建通过，最大 JS 包约 `545.05 kB`，保留既有超过 `500 kB` 告警；同一浏览器页验证 `EXHAUSTED`、`ACCEPTED + 待确认` 与无查询三种路由可依次重水合。代码提交为 `bec50adc fix(payment-core): refresh issue alert filters`。
+5. 本轮无后端、API、状态机、schema、索引或迁移变化；浏览器使用现有模拟数据，只证明路由筛选控件与页面刷新行为，不证明真实告警集合、供应商送达、人工确认或生产稳定性。release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

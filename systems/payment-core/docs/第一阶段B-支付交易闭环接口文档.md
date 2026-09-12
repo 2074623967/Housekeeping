@@ -4128,6 +4128,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 路由查询只有非空字符串可进入筛选；数组、空值和空字符串回退默认值。路由转换只影响现有列表请求，不新增或改变后端 API 参数、响应字段和异常状态。
 5. 待回调异常继续由 `t_payment_order.status='WAIT_CALLBACK'` 直接聚合，不要求预先创建独立异常记录；推荐路由只辅助定位，不证明异常已处置、渠道已恢复或资金已收口。
 
+### 14.280 异常告警明细路由查询契约
+
+1. 管理端 `/payment-issue-alerts` 接收 `alertNo / issueNo / paymentOrderId / alertChannel / alertStatus / ackStatus / providerDeliveryStatus / receiptQueryState` 八个结构化查询字段，与既有告警列表和 CSV 查询字段一一对应。
+2. 任务中心自动次数耗尽入口使用 `receiptQueryState=EXHAUSTED`；未耗尽的待回查入口使用 `providerDeliveryStatus=ACCEPTED&ackStatus=待确认`。页面首次进入及同页查询变化都必须按当前路由重新加载第一页。
+3. 只有非空字符串可以从浏览器路由进入筛选；数组、空值和空字符串回退默认值。后端继续负责字段长度、控制字符和回查状态枚举校验，前端防御不替代服务端验证。
+4. 路由变化时必须清除旧选中告警和操作提示，避免新筛选集合显示上一集合的详情或结果信息；CSV 导出继续复用当前筛选。
+5. 本契约不新增 API 参数或响应字段，也不改变告警派发、供应商回执、人工确认和状态计算；筛选展示不能解释为真实送达或处置证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
