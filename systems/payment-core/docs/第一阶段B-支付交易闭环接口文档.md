@@ -4375,6 +4375,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 人工日志即使携带与自动批次相同的业务关联号，也必须表现为自动批次缺少合法成功日志；该异常按既有巡检规则形成 `WARNING/P2`。
 5. 本契约不变更 DTO、HTTP、schema、索引或前端。历史关联真实性和写入权限仍需生产审计，本地 SQL 回归不证明真实自动运行或资金一致。
 
+### 14.310 自动日终关联证据完整性契约
+
+1. 可关联自动批次的任务日志必须由 `triggered_by=payment-day-end-scheduler` 触发、`processed_count=1` 且 `fail_count=0`；宽松的正处理数或零失败不足以单独证明批次创建成功。
+2. 正常完成日志必须同时满足 `task_status=SUCCESS`、`success_count=1`、`warning_count=0`；告警完成日志必须同时满足 `task_status=WARNING`、`success_count=0`、`warning_count=1`。
+3. 以上条件与 `task_code=PAYMENT_DAY_END`、`run_mode=AUTO`、同业务日和相等批次号共同组成完整证据谓词；三类关联统计及重复检测的较早日志不得采用不同子集。
+4. 状态与计数矛盾、处理数不是一、失败数非零或触发人不匹配的日志不构成关联，并按既有规则表现为自动批次缺少合法成功日志；巡检形成 `WARNING/P2`。
+5. 本契约不改变 HTTP、DTO、schema、索引或前端。系统身份字符串不是认证凭证，生产仍需数据库权限与审计控制；该证据只覆盖本地批次创建留痕。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

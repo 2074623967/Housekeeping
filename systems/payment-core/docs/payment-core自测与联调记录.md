@@ -13103,3 +13103,32 @@
 1. 当前 SQL 与接口契约的 `PAYMENT_DAY_END / AUTO` 集合已经一致，人工日志不能替代自动运行证据。
 2. 数据库没有对历史 `business_ref_no` 的来源真实性作强制约束，目标环境仍需审计存量关联和写入权限；本地测试不证明生产数据未受污染。
 3. 本轮不改变数据水位、渠道账单、账务或资金边界，也不构成自动巡检已启用、告警闭环或 release 放行证明。
+
+## 483. 2026-09-12 自动日终关联证据完整性 V1.0 验证
+
+### 483.1 本轮补强
+
+1. 自动日终有效关联日志必须由固定系统身份触发、恰好处理一个批次且没有失败。
+2. 正常批次只接受 `SUCCESS / successCount=1 / warningCount=0`，告警批次只接受 `WARNING / successCount=0 / warningCount=1`；其他状态计数组合不构成成功创建证据。
+3. 批次缺日志、日志缺批次和重复关联三类 SQL 对当前与较早日志使用同一完整谓词。
+
+### 483.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正常完成证据 | `payment-day-end-scheduler / processed=1 / SUCCESS / success=1 / warning=0 / fail=0` 可完成关联 |
+| 告警完成证据 | `payment-day-end-scheduler / processed=1 / WARNING / success=0 / warning=1 / fail=0` 同样可完成关联 |
+| 畸形日志隔离 | 触发人改为普通操作员且处理数改为 `2` 后，自动批次重新计为缺少合法成功日志，畸形日志不进入另外两类统计 |
+| 原有检测 | 自动运行方式隔离、双向悬空和重复关联场景继续通过 |
+| 定向测试 | Mapper、巡检与任务中心联合 `82` 项通过 |
+| payment-core 后端全量测试 | `1029` 项通过，`0` failures、`0` errors、`0` skipped |
+| XML 与补丁检查 | `PaymentTaskCenterMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2` 仅来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、统一 `blockerCount=1`、内部 `releaseBlockerCount=4` |
+| 代码提交 | `d3e2ee0f fix(payment-core): validate day-end link evidence` |
+| 前端与数据结构 | 无前端、HTTP、schema、索引或迁移变化，未重复运行管理端测试与构建 |
+
+### 483.3 当前判断
+
+1. 新谓词与任务中心当前自动日终写入形态一致，避免宽松计数把畸形日志当作批次创建证据。
+2. 固定 `triggered_by` 是本地系统身份声明而非可信认证；生产仍需最小写库权限、日志审计和数据抽样，不能仅凭字符串证明真实调度来源。
+3. 本轮仍未补齐上游数据水位、渠道账单、账务或资金核验，也不构成生产巡检启用、告警处置或 release 放行证明。

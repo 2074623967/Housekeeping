@@ -2580,6 +2580,14 @@
 4. Mapper/任务中心联合定向 `82` 项、后端全量 `1029` 项、XML 与补丁检查通过；代码提交为 `4e3b9514 fix(payment-core): scope day-end links to automatic runs`。
 5. 本轮无 schema、索引、迁移、HTTP 或前端变化。该修复收紧本地日志集合，不证明历史数据没有伪造关联、生产巡检已启用、告警已送达、资金或正式关账一致；release 四项真实治理阻断不变。
 
+### 8.315 2026-09-12 自动日终关联证据完整性进展
+
+1. 运行方式隔离后继续复核发现，关联 SQL 仍只以 `processed_count > 0 AND fail_count = 0` 表示成功创建；伪造触发人、处理数大于一或状态与成功/告警计数矛盾的日志仍可能掩盖自动批次缺口。
+2. 有效关联日志现要求固定身份 `payment-day-end-scheduler`、`processed_count=1`、`fail_count=0`，并且只能是 `SUCCESS + success_count=1 + warning_count=0` 或 `WARNING + success_count=0 + warning_count=1` 两种组合。
+3. 三类关联查询的当前日志和重复检测较早日志统一采用该证据谓词。Mapper 集成测试验证正常完成与告警完成均可关联，伪造身份和异常处理数均被排除，原有悬空及重复检测继续通过。
+4. 联合定向 `82` 项、后端全量 `1029` 项、Mapper XML 与补丁检查通过；代码提交为 `d3e2ee0f fix(payment-core): validate day-end link evidence`。
+5. 本轮无 schema、索引、迁移、HTTP 或前端变化。固定系统身份仍是应用写入声明，不替代数据库权限和生产审计；本地证据完整性不证明渠道账单、账务、资金或正式关账一致，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
