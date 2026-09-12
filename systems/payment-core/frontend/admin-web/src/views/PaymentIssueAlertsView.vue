@@ -288,6 +288,7 @@ watch(
           <label>告警状态</label>
           <select v-model="filters.alertStatus">
             <option>全部</option>
+            <option value="PENDING_DISPATCH">待派发（已生成 / 部分失败 / 派发失败）</option>
             <option>已生成</option>
             <option>已派发</option>
             <option>部分失败</option>

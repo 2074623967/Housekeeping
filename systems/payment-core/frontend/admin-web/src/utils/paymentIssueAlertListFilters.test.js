@@ -6,6 +6,7 @@ test("hydrates payment issue alert log filters from route query", () => {
   assert.deepEqual(paymentIssueAlertListFiltersFromQuery({
     alertNo: "ALERT-001",
     alertChannel: "SMS",
+    alertStatus: "PENDING_DISPATCH",
     providerDeliveryStatus: "ACCEPTED",
     ackStatus: "待确认",
     receiptQueryState: "EXHAUSTED"
@@ -14,7 +15,7 @@ test("hydrates payment issue alert log filters from route query", () => {
     issueNo: "",
     paymentOrderId: "",
     alertChannel: "SMS",
-    alertStatus: "全部",
+    alertStatus: "PENDING_DISPATCH",
     ackStatus: "待确认",
     providerDeliveryStatus: "ACCEPTED",
     receiptQueryState: "EXHAUSTED"

@@ -230,7 +230,9 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_ISSUE_ALERT_DISPATCH_BACKLOG".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
-                        && alert.getAlertMessage().contains("其中 1 条仍存在派发异常")));
+                        && alert.getAlertMessage().contains("其中 1 条仍存在派发异常")
+                        && ("/payment-issue-alerts?alertChannel=IN_APP_OUTBOX"
+                        + "&alertStatus=PENDING_DISPATCH&ackStatus=待确认").equals(alert.getActionRoute())));
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_ISSUE_ALERT_RECEIPT_BACKLOG".equals(alert.getAlertType())
                         && "P2".equals(alert.getAlertLevel())

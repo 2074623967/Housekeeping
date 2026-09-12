@@ -1319,7 +1319,7 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                         failedIssueAlertDispatchCount,
                         oldestPendingIssueAlertDispatchMinutes)
                         : "暂无待派发异常告警",
-                "/payment-issue-alerts",
+                "/payment-issue-alerts?alertChannel=IN_APP_OUTBOX&alertStatus=PENDING_DISPATCH&ackStatus=待确认",
                 issueAlertDispatchThresholdExceeded ? "P1" : pendingIssueAlertDispatchCount > 0 ? "P2" : "P3",
                 issueAlertDispatchThresholdExceeded ? "danger" : pendingIssueAlertDispatchCount > 0 ? "warn" : "success"
         ));

@@ -554,6 +554,17 @@
         </if>
     </sql>
 
+    <sql id="alertStatusFilter">
+        <choose>
+            <when test="query.alertStatus == 'PENDING_DISPATCH'">
+                AND alert_status IN ('已生成', '部分失败', '派发失败')
+            </when>
+            <when test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
+                AND alert_status = #{query.alertStatus}
+            </when>
+        </choose>
+    </sql>
+
     <select id="findAlertLogs" resultType="com.abc123.hsp.dto.PaymentIssueAlertLogRowDTO">
         SELECT alert_no AS alertNo,
                source_alert_no AS sourceAlertNo,
@@ -601,9 +612,7 @@
             <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
                 AND alert_channel = #{query.alertChannel}
             </if>
-            <if test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
-                AND alert_status = #{query.alertStatus}
-            </if>
+            <include refid="alertStatusFilter"/>
             <if test="query.ackStatus != null and query.ackStatus != '' and query.ackStatus != '全部'">
                 AND ack_status = #{query.ackStatus}
             </if>
@@ -669,9 +678,7 @@
             <if test="query.alertChannel != null and query.alertChannel != '' and query.alertChannel != '全部'">
                 AND alert_channel = #{query.alertChannel}
             </if>
-            <if test="query.alertStatus != null and query.alertStatus != '' and query.alertStatus != '全部'">
-                AND alert_status = #{query.alertStatus}
-            </if>
+            <include refid="alertStatusFilter"/>
             <if test="query.ackStatus != null and query.ackStatus != '' and query.ackStatus != '全部'">
                 AND ack_status = #{query.ackStatus}
             </if>

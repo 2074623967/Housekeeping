@@ -279,6 +279,18 @@ public class PaymentTaskCenterMapperIntegrationTest {
 
             PaymentIssueMapper issueMapper = session.getMapper(PaymentIssueMapper.class);
             PaymentIssueAlertLogQueryDTO query = new PaymentIssueAlertLogQueryDTO();
+            query.setAlertChannel("IN_APP_OUTBOX");
+            query.setAlertStatus("PENDING_DISPATCH");
+            query.setAckStatus("待确认");
+            assertEquals(2, issueMapper.countAlertLogs(query));
+            assertEquals(Arrays.asList("部分失败", "已生成"),
+                    issueMapper.findAlertLogs(query).stream()
+                            .map(PaymentIssueAlertLogRowDTO::getAlertStatus)
+                            .collect(java.util.stream.Collectors.toList()));
+
+            query.setAlertChannel("全部");
+            query.setAlertStatus("全部");
+            query.setAckStatus("全部");
             query.setReceiptQueryMinAgeSeconds(60);
             query.setReceiptQueryMaxAttempts(10);
             query.setReceiptQueryClaimTimeoutSeconds(30);
