@@ -64,4 +64,5 @@ public final class ErrorCode {
     public static final String PAYMENT_ISSUE_ALERT_RECEIPT_QUERY_RATE_LIMITED = "PAYMENT-1051";
     public static final String REFUND_APPLICATION_IDEMPOTENCY_KEY_INVALID = "PAYMENT-1052";
     public static final String REFUND_APPLICATION_IDEMPOTENCY_CONFLICT = "PAYMENT-1053";
+    public static final String PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING = "PAYMENT-1054";
 }

@@ -618,6 +618,49 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectCallbackWithoutChannelSubmissionFact() {
+        PaymentDetailDTO detail = new PaymentDetailDTO();
+        detail.setPaymentOrderId("PAY-CALLBACK-NOT-SUBMITTED");
+        detail.setOrderNo("ORD-CALLBACK-NOT-SUBMITTED");
+        detail.setChannel("wx_h5");
+        detail.setStatus("RISK_REJECTED");
+        when(paymentMapper.findDetail("PAY-CALLBACK-NOT-SUBMITTED")).thenReturn(detail);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-NOT-SUBMITTED");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-NOT-SUBMITTED");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING, exception.getCode());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).markPaymentPendingFromCallback(anyString(), anyString());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
+    }
+
+    @Test
     void shouldThrowBusinessExceptionWhenCashierPrepayOrderMissing() {
         when(paymentMapper.findPrepay("PRE-MISSING")).thenReturn(null);
 
@@ -1057,6 +1100,7 @@ class PaymentServiceImplTest {
         detail.setOrderNo("WALLET-RECHARGE-001");
         detail.setChannel("alipay_h5");
         detail.setStatus("WAIT_CALLBACK");
+        detail.setLatestAttemptStatus("待回调");
         detail.setAmount("¥99.00");
         when(paymentMapper.findDetail("PAY-VIRTUAL-CALLBACK")).thenReturn(detail, detail);
         when(paymentMapper.lockPrepayCreation("WALLET-RECHARGE-001"))
@@ -1100,6 +1144,7 @@ class PaymentServiceImplTest {
         detail.setOrderNo("ORD-CALLBACK-001");
         detail.setChannel("wx_h5");
         detail.setStatus("WAIT_CALLBACK");
+        detail.setLatestAttemptStatus("待回调");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-001")).thenReturn(detail, detail);
         when(paymentMapper.lockPrepayCreation("ORD-CALLBACK-001"))
@@ -1161,6 +1206,7 @@ class PaymentServiceImplTest {
         detail.setOrderNo("ORD-CALLBACK-002");
         detail.setChannel("wx_h5");
         detail.setStatus("WAIT_CALLBACK");
+        detail.setLatestAttemptStatus("待回调");
         detail.setAmount("¥168.00");
         when(paymentMapper.findDetail("PAY-CALLBACK-002")).thenReturn(detail, detail);
         when(paymentMapper.markPaymentPendingFromCallback(
@@ -2439,6 +2485,39 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectActiveQueryWithoutChannelSubmissionFact() {
+        PaymentDetailDTO detail = queryDetail("PAY-QUERY-NOT-SUBMITTED", "WAIT_CALLBACK");
+        detail.setLatestAttemptStatus(null);
+        when(paymentMapper.findDetail("PAY-QUERY-NOT-SUBMITTED")).thenReturn(detail);
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-NOT-SUBMITTED");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService,
+                paymentChannelQueryRateLimitService)
+                .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING, exception.getCode());
+        verifyNoInteractions(paymentChannelQueryRateLimitService, paymentChannelQueryService);
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+    }
+
+    @Test
     void shouldOnlyRecordQueryWhenChannelStatusIsNotSuccess() {
         PaymentDetailDTO detail = queryDetail("PAY-QUERY-002", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-QUERY-002")).thenReturn(detail);
@@ -2739,6 +2818,9 @@ class PaymentServiceImplTest {
         detail.setChannel("wx_h5");
         detail.setAmount("¥168.00");
         detail.setStatus(status);
+        if ("WAIT_CALLBACK".equals(status)) {
+            detail.setLatestAttemptStatus("待回调");
+        }
         return detail;
     }
 

@@ -367,7 +367,14 @@
             channel_transaction_no = #{channelTransactionNo}
         WHERE payment_order_id = #{paymentOrderId}
           AND (
-            status NOT IN ('SUCCESS', 'CLOSED')
+            (
+              status = 'WAIT_CALLBACK'
+              AND EXISTS (
+                SELECT 1
+                FROM t_payment_attempt submitted_attempt
+                WHERE submitted_attempt.payment_order_id = t_payment_order.payment_order_id
+              )
+            )
             OR (
               status = 'CLOSED'
               AND EXISTS (
@@ -396,7 +403,12 @@
             status_type = 'warn',
             channel_transaction_no = #{channelTransactionNo}
         WHERE payment_order_id = #{paymentOrderId}
-          AND status NOT IN ('SUCCESS', 'CLOSED')
+          AND status = 'WAIT_CALLBACK'
+          AND EXISTS (
+            SELECT 1
+            FROM t_payment_attempt submitted_attempt
+            WHERE submitted_attempt.payment_order_id = t_payment_order.payment_order_id
+          )
     </update>
 
     <update id="markExpiredUnsubmittedPaymentClosed">

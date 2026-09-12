@@ -873,6 +873,7 @@ public class PaymentServiceImpl implements PaymentService {
             paymentMapper.releaseSubmitConcurrencyToken(request.getPaymentOrderId(), "CALLBACK_ALREADY_FINALIZED");
             return outwardDetail(detail);
         }
+        requireChannelSubmissionFact(detail);
         if (paySuccess) {
             detail = lockAndReloadPaymentForSettlement(detail);
             if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
@@ -987,6 +988,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
+        requireChannelSubmissionFact(detail);
         try {
             paymentChannelQueryRateLimitService.acquire(detail.getChannel(), detail.getPaymentOrderId());
         } catch (BusinessException exception) {
@@ -1066,6 +1068,19 @@ public class PaymentServiceImpl implements PaymentService {
         latestDetail.setQuerySource(queryResult.getQuerySource());
         applyReturnCodeStandardization(latestDetail, queryResult);
         return outwardDetail(latestDetail);
+    }
+
+    private void requireChannelSubmissionFact(PaymentDetailDTO detail) {
+        if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
+                || "CLOSED".equalsIgnoreCase(detail.getStatus())) {
+            return;
+        }
+        if (!"WAIT_CALLBACK".equalsIgnoreCase(detail.getStatus())
+                || !StringUtils.hasText(detail.getLatestAttemptStatus())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMISSION_FACT_MISSING,
+                    "payment has no eligible channel submission fact");
+        }
     }
 
     private PaymentChannelQueryResultDTO queryChannel(PaymentDetailDTO detail, String operator) {

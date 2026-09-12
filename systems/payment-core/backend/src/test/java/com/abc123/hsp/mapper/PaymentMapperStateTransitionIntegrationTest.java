@@ -185,6 +185,24 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldRequireSubmissionAttemptForChannelStateTransitions() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(0, mapper.markPaymentSuccessFromChannelResult(
+                    "PAY-RISK-REJECTED", "WX-NOT-SUBMITTED"));
+            assertEquals(0, mapper.markPaymentSuccessFromChannelResult(
+                    "PAY-ABNORMAL-WAIT", "WX-NOT-SUBMITTED"));
+            assertEquals(0, mapper.markPaymentPendingFromCallback(
+                    "PAY-RISK-REJECTED", "WX-NOT-SUBMITTED"));
+            assertEquals(0, mapper.markPaymentPendingFromCallback(
+                    "PAY-ABNORMAL-WAIT", "WX-NOT-SUBMITTED"));
+            assertEquals(1, mapper.markPaymentSuccessFromChannelResult(
+                    "PAY-SUBMITTED", "WX-SUBMITTED"));
+        }
+    }
+
+    @Test
     void shouldOnlyAllowManualCloseBeforeChannelSubmission() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -235,7 +253,9 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "('PAY-EXPIRED-CLOSED', 'ORD-4', 'CLOSED', 'danger'), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', 'ORD-5', 'CLOSED', 'danger'), "
                     + "('PAY-MANUAL-CLOSEABLE', 'ORD-6', 'RISK_REVIEW', 'warn'), "
-                    + "('PAY-FINAL-SUCCESS', 'ORD-7', 'SUCCESS', 'success')");
+                    + "('PAY-FINAL-SUCCESS', 'ORD-7', 'SUCCESS', 'success'), "
+                    + "('PAY-RISK-REJECTED', 'ORD-8', 'RISK_REJECTED', 'danger'), "
+                    + "('PAY-ABNORMAL-WAIT', 'ORD-9', 'WAIT_CALLBACK', 'warn')");
             statement.executeUpdate("UPDATE t_payment_order "
                     + "SET channel_transaction_no = 'WX-SUCCESS' "
                     + "WHERE payment_order_id = 'PAY-FINAL-SUCCESS'");
