@@ -160,12 +160,13 @@
 ```json
 {
   "refundOrderId": "REF202609100001",
+  "refundAttemptNo": "RFA202609100001",
   "channelCode": "wx_h5",
   "channelRefundNo": "WX-REFUND-202609100001"
 }
 ```
 
-`refundOrderId / channelCode` 必填。已有渠道受理事实时必须传 `channelRefundNo`；退款提交结果未知且尚未取得渠道退款号时允许省略该字段，由上游按平台退款单号核查。显式传入的可选字段仍执行长度和 ISO 控制字符校验。
+`refundOrderId / refundAttemptNo / channelCode` 必填。`refundAttemptNo` 是该轮退款渠道请求的商户侧身份，必须与提交时使用的值一致。已有渠道受理事实时必须传 `channelRefundNo`；退款提交结果未知且尚未取得渠道退款号时允许省略该字段，由上游按退款尝试号和平台退款单号核查。显式传入的可选字段仍执行长度和 ISO 控制字符校验。
 
 成功响应中的 `data` 必须包含 `refundStatus / channelRefundNo / querySource`。`refundStatus` 只允许 `PROCESSING / SUCCESS / FAIL`；请求已携带 `channelRefundNo` 时，响应必须与其完全一致；请求未携带时，响应仍必须返回非空渠道退款号，供支付核心首次绑定可信受理事实。缺失、超长、含 ISO 控制字符、状态非法或已有关联键不一致均返回 `GATEWAY_UPSTREAM_INVALID_RESPONSE`，不会修改为其他退款事实。
 
@@ -192,6 +193,7 @@
 ```json
 {
   "refundOrderId": "REF202609100001",
+  "refundAttemptNo": "RFA202609100001",
   "paymentOrderId": "PAY202609100001",
   "orderNo": "ORD202609100001",
   "customerName": "客户姓名",
@@ -202,7 +204,7 @@
 }
 ```
 
-退款金额必须为正数且最多两位小数；标识、退款方式与渠道为必填，文本执行长度和 ISO 控制字符校验。代理前复用接入应用、权限、网关、有效证书和发布路由门禁。
+退款金额必须为正数且最多两位小数；`refundOrderId / refundAttemptNo / paymentOrderId / orderNo / refundMethod / channelCode` 必填，文本执行长度和 ISO 控制字符校验。`refundAttemptNo` 作为每轮渠道侧商户退款请求号原样转发，同一轮调用前失败重试必须复用，新的退款业务重试必须使用新值。代理前复用接入应用、权限、网关、有效证书和发布路由门禁。
 
 成功响应必须同时包含 `channelRefundNo / status / statusType`，其中 `status` 只允许 `PROCESSING / SUCCESS`。空响应、上游业务码非 `0`、字段缺失或非法均不视为明确受理；超时统一返回 `GATEWAY_UPSTREAM_UNAVAILABLE` 并提示先查单再重试。
 
@@ -214,7 +216,7 @@
 | `HSP_GATEWAY_ALIPAY_REFUND_SUBMIT_URL` | 支付宝 H5 |
 | `HSP_GATEWAY_BANK_REFUND_SUBMIT_URL` | 线下银行 |
 
-每次请求尽力写入 `REFUND_SUBMIT` 最小审计，不保存访问密钥、请求报文、上游原始响应或异常原文。本接口只形成稳定代理契约，不证明具体渠道协议、签名验签、幂等受理、生产密钥托管、退款到账、对账或财务验收完成。
+每次请求尽力写入 `REFUND_SUBMIT` 最小审计，不保存访问密钥、请求报文、上游原始响应或异常原文。生成或收到 `refundAttemptNo` 不等于渠道已经受理；UNKNOWN 结果必须先按同一尝试号查单，不能直接换号或重发。本接口只形成稳定代理契约，不证明具体渠道协议、签名验签、幂等受理、生产密钥托管、退款到账、对账或财务验收完成。
 
 ## 12. 交易提交审计结果语义
 

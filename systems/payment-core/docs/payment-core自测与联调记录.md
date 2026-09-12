@@ -11267,3 +11267,32 @@
 1. 生产代码产生的退款提交未知态已具备渠道定位事实，可进入按平台退款单号主动查单及任务候选，不再因 `channelCode` 为空永久滞留。
 2. `channelCode` 只证明平台实际调用了哪个渠道，不证明渠道收到、受理或完成退款；渠道退款号、受理时间和终态仍须可信外部结果形成。
 3. 本地自动化不替代真实网关超时语义、渠道按商户退款单号查单能力、生产 MySQL 竞态、退款到账和财务对账核验，release 四项真实阻断不变。
+
+## 419. 2026-09-12 退款渠道多尝试事实 V1.0 验证
+
+### 419.1 本轮补强
+
+1. 新增 `t_refund_attempt` 与迁移回填，使用唯一 `refundAttemptNo` 贯穿 outbox、渠道提交、主动查单和 gateway-access 上游请求；`refundOrderId` 继续承担平台退款单归属。
+2. 调用前失败将当前尝试标记为 `FAILED` 并复用原尝试号重发；渠道调用结果未知将尝试和事件标记为 `UNKNOWN` 并停止直接重发；只有退款终态失败后的业务重试才创建新尝试号。
+3. 渠道已受理事实先绑定尝试再投影退款单；终态只允许从 `ACCEPTED` 收口。可信查单或验签回调会先恢复 UNKNOWN 受理事实，再确认 outbox 和退款终态。
+4. 回调通过 `channelCode + channelRefundNo` 查询历史尝试归属，旧尝试回调不得收口当前尝试；自动查单退避只统计当前尝试创建后的查询日志。
+5. 管理端退款详情新增渠道退款尝试表及空态，gateway-access submit/query 契约新增必填 `refundAttemptNo` 并原样转发上游。
+
+### 419.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| payment-core 后端全量测试 | `931` 项通过，`0` failures，`0` errors，`0` skipped |
+| gateway-access 后端全量测试 | `50` 项通过，`0` failures，`0` errors，`0` skipped |
+| payment-core 管理端测试 | `13` 项通过，`0` fail |
+| payment-core 管理端生产构建 | `npm run build` 通过；保留既有单包大于 `500 kB` 警告 |
+| Mapper 与脚本检查 | 两份 Mapper `xmllint`、退款 schema/data 双份一致性及 `git diff --check` 通过 |
+| 代码提交 | `dc330fed feat(payment-core): track refund channel attempts` |
+
+覆盖重点包括：同一轮尝试号在尝试表/outbox/派发间一致、调用前失败复用身份、UNKNOWN 禁止重发、可信查单恢复、旧尝试渠道退款号隔离、终态原子收口、新尝试不继承旧查单退避，以及前后端跨系统字段透传。
+
+### 419.3 当前判断
+
+1. 本地实现已具备结构化退款多尝试事实，不再依赖退款单当前投影解释历史渠道请求。
+2. `refundAttemptNo` 只是每轮商户请求身份，不表示渠道已收到、受理或完成退款；`UNKNOWN` 仍必须先核查，不能直接重发。
+3. 本地 H2/MySQL 模式测试不替代生产 MySQL 迁移演练、真实渠道幂等与查单协议、退款到账、渠道账单及财务对账核验，release 四项真实阻断不变。

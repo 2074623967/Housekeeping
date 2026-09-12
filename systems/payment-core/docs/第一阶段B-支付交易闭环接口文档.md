@@ -3875,6 +3875,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 明确在调用上游前被配置或治理门禁拒绝时不得写未知渠道，事件沿既有失败重试路径处理；结果未知事件仍不得通过事件重发接口直接再次提交。
 4. 主动查单与自动补偿继续要求退款为 `PROCESSING`、渠道非空，并具备渠道退款号或最近提交事件为 `UNKNOWN`；可信查单或验签回调是补齐受理号和退款终态的唯一现有入口。
 
+### 14.246 退款渠道尝试身份与详情契约
+
+1. 内部退款提交接口调整为 `publishRefundSubmit(eventNo, refundAttemptNo, operator)`；`REFUND_SUBMIT` outbox 的 `biz_no` 等于 `refundAttemptNo`，不再等于 `refundOrderId`。同一事件重发复用原尝试号，退款终态失败后的业务重试创建新尝试号和新事件号。
+2. payment-core 调用 `POST /api/gateway/refunds/submit` 与 `POST /api/gateway/refunds/query` 时新增必填 `refundAttemptNo`，长度上限 `64` 且拒绝 ISO 控制字符；gateway-access 原样转发给上游，作为该轮渠道侧商户退款请求身份。
+3. `GET /api/refunds/{refundOrderId}` 的响应新增 `attempts` 数组；元素包含 `refundAttemptNo / channelCode / channelRefundNo / attemptStatus / attemptStatusType / submittedAt / completedAt / createdAt`。既有退款单字段保持当前尝试投影语义。
+4. `UNKNOWN` 尝试没有渠道退款号时允许按 `refundAttemptNo + refundOrderId + channelCode` 主动查单；可信结果返回渠道退款号后先恢复当前尝试受理事实，再确认未知 outbox 和退款终态。
+5. 回调继续兼容 `refundOrderId + channelRefundNo`，但服务端会查找渠道退款号所属历史尝试；若不属于当前最新尝试，返回 `REFUND_CALLBACK_TRANSACTION_MISMATCH`，不得更新退款终态。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

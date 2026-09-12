@@ -1522,6 +1522,15 @@ t_order
 3. 渠道字段、未知操作日志和事件未知状态处于退款事件派发的同一新事务，异常回滚时不留下部分未知事实；后续恢复查询以 `PROCESSING + channel_code + (channel_refund_no 或 UNKNOWN 事件)` 为候选边界。
 4. 本轮复用既有可空列，无 schema、索引、数据回填或迁移变化；当前单字段模型仍不能区分多次退款尝试、旧回调归属或每轮渠道请求身份。
 
+### 4.177 退款渠道多尝试事实数据边界
+
+1. 新增 `t_refund_attempt`：`refund_attempt_no` 唯一标识每轮渠道请求，`refund_order_id` 表示平台退款归属；渠道、渠道退款号、尝试状态、提交/完成/创建时间均按轮次保存。
+2. 状态机为 `PENDING -> FAILED -> ACCEPTED` 或 `PENDING/FAILED -> UNKNOWN -> ACCEPTED`，随后由 `ACCEPTED -> SUCCESS/FAIL`；调用前失败可继续使用同一尝试号，UNKNOWN 不允许直接进入终态或重发。
+3. 唯一键包括 `uk_refund_attempt_no` 与 `uk_refund_attempt_channel_no(channel_code, channel_refund_no)`，查询索引为 `idx_refund_attempt_order_created(refund_order_id, created_at, id)`；退款详情与回调按 `created_at DESC, id DESC` 选当前尝试。
+4. `t_refund_order.channel_*` 只保存当前尝试投影。投影更新必须校验目标尝试为最新、已 `ACCEPTED`，且渠道和渠道退款号与尝试事实一致；历史尝试不被覆盖。
+5. 迁移 `2026-09-12-add-refund-attempt.sql` 为既有 `PROCESSING/SUCCESS/FAIL` 退款各回填一条尝试，只读取最新旧退款提交事件，并将旧事件 `biz_no` 改为尝试号；缺失渠道使用明确占位 `legacy_unknown`，不推断真实渠道。
+6. 自动查单退避按当前尝试创建时间切分查询日志，避免新尝试继承旧尝试次数。生产执行前仍需备份、行数核对、重复事件抽样和回滚演练；本地 H2 不证明生产 MySQL 迁移结果。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
