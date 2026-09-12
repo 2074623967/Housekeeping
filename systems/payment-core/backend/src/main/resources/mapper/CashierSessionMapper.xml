@@ -45,6 +45,28 @@
         </where>
     </sql>
 
+    <sql id="cashierSessionOrder">
+        <choose>
+            <when test="query.sortField == 'expiresAt'">
+                ORDER BY pr.expires_at
+            </when>
+            <when test="query.sortField == 'amount'">
+                ORDER BY pr.amount
+            </when>
+            <otherwise>
+                ORDER BY pr.created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC, pr.id ASC
+            </when>
+            <otherwise>
+                DESC, pr.id DESC
+            </otherwise>
+        </choose>
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.CashierSessionListItemDTO">
         SELECT pr.prepay_order_no AS sessionNo,
                pr.prepay_order_no AS prepayOrderNo,
@@ -61,25 +83,7 @@
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
         <include refid="cashierSessionWhere"/>
-        <choose>
-            <when test="query.sortField == 'expiresAt'">
-                ORDER BY pr.expires_at
-            </when>
-            <when test="query.sortField == 'amount'">
-                ORDER BY pr.amount
-            </when>
-            <otherwise>
-                ORDER BY pr.created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="cashierSessionOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
@@ -118,25 +122,7 @@
                DATE_FORMAT(pr.expires_at, '%Y-%m-%d %H:%i:%s') AS expiresAt
         FROM t_prepay_order pr
         <include refid="cashierSessionWhere"/>
-        <choose>
-            <when test="query.sortField == 'expiresAt'">
-                ORDER BY pr.expires_at
-            </when>
-            <when test="query.sortField == 'amount'">
-                ORDER BY pr.amount
-            </when>
-            <otherwise>
-                ORDER BY pr.created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="cashierSessionOrder"/>
         LIMIT 1001
     </select>
 </mapper>
