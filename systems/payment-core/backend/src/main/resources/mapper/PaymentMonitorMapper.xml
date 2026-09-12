@@ -72,9 +72,9 @@
                    '%'
                ) AS successRate,
                CONCAT('¥', FORMAT(COALESCE(SUM(CASE WHEN status = 'SUCCESS' THEN amount ELSE 0 END), 0), 2)) AS successAmount,
-               SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) AS pendingCount,
+               SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) AS pendingCount,
                CASE
-                   WHEN SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) &gt; 0 THEN 'P1'
+                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) &gt; 0 THEN 'P1'
                    WHEN (
                        CASE WHEN COUNT(1) = 0 THEN 0
                             ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
@@ -83,7 +83,7 @@
                    ELSE '正常'
                END AS riskLevel,
                CASE
-                   WHEN SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) &gt; 0 THEN 'danger'
+                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) &gt; 0 THEN 'danger'
                    WHEN (
                        CASE WHEN COUNT(1) = 0 THEN 0
                             ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
@@ -92,7 +92,7 @@
                    ELSE 'success'
                END AS riskLevelType,
                CASE
-                   WHEN SUM(CASE WHEN status IN ('PREPAY_CREATED', 'WAIT_CALLBACK') THEN 1 ELSE 0 END) &gt; 0 THEN '存在待收口支付单，建议优先查单并核对回调。'
+                   WHEN SUM(CASE WHEN status = 'WAIT_CALLBACK' THEN 1 ELSE 0 END) &gt; 0 THEN '存在待收口支付单，建议优先查单并核对回调。'
                    WHEN (
                        CASE WHEN COUNT(1) = 0 THEN 0
                             ELSE SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) * 100 / COUNT(1)
@@ -101,6 +101,11 @@
                    ELSE '当前渠道表现稳定，可持续观察。'
                END AS riskHint
         FROM t_payment_order
+        WHERE EXISTS (
+            SELECT 1
+            FROM t_payment_attempt
+            WHERE t_payment_attempt.payment_order_id = t_payment_order.payment_order_id
+        )
         GROUP BY channel_code, payment_method
         ORDER BY totalCount DESC, successCount DESC, channel_code ASC, payment_method ASC
     </select>

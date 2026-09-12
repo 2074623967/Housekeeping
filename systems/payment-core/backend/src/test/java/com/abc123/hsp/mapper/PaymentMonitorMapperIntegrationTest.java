@@ -119,15 +119,15 @@ class PaymentMonitorMapperIntegrationTest {
     }
 
     @Test
-    void shouldNotTreatPrepayCreatedPaymentAsCallbackAlert() throws Exception {
+    void shouldNotTreatUnsubmittedPrepayAsCallbackOrChannelRisk() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
             statement.executeUpdate("DELETE FROM t_payment_order");
             statement.executeUpdate("DELETE FROM t_refund_order");
             statement.executeUpdate("DELETE FROM t_payment_channel_config");
             statement.executeUpdate("INSERT INTO t_payment_order("
-                    + "channel_code, payment_method, status, amount) VALUES "
-                    + "('channel-a', 'method-a', 'PREPAY_CREATED', 10.00)");
+                    + "payment_order_id, channel_code, payment_method, status, amount) VALUES "
+                    + "('PAY-PREPAY-ONLY', 'channel-a', 'method-a', 'PREPAY_CREATED', 10.00)");
 
             PaymentMonitorMapper mapper = session.getMapper(PaymentMonitorMapper.class);
             PaymentMonitorSummaryDTO summary = mapper.findSummary();
@@ -135,6 +135,7 @@ class PaymentMonitorMapperIntegrationTest {
             assertEquals(Integer.valueOf(1), summary.getPendingPaymentCount());
             assertEquals(Integer.valueOf(0), summary.getAlertCount());
             assertEquals(List.of(), mapper.findAlerts());
+            assertEquals(List.of(), mapper.findChannelMetrics());
         }
     }
 
@@ -171,22 +172,27 @@ class PaymentMonitorMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_order");
             statement.execute("DROP TABLE IF EXISTS t_refund_order");
             statement.execute("DROP TABLE IF EXISTS t_payment_channel_config");
+            statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("CREATE TABLE t_payment_order ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, channel_code VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), channel_code VARCHAR(64), "
                     + "payment_method VARCHAR(32), status VARCHAR(32), amount DECIMAL(18, 2), "
                     + "created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)");
             statement.execute("CREATE TABLE t_refund_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_channel_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, status VARCHAR(32))");
+            statement.execute("CREATE TABLE t_payment_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64))");
             statement.executeUpdate("INSERT INTO t_payment_order("
-                    + "channel_code, payment_method, status, amount) VALUES "
-                    + "('channel-b', 'method-a', 'SUCCESS', 10.00), "
-                    + "('channel-b', 'method-a', 'WAIT_CALLBACK', 10.00), "
-                    + "('channel-a', 'method-b', 'SUCCESS', 10.00), "
-                    + "('channel-a', 'method-b', 'FAIL', 10.00), "
-                    + "('channel-a', 'method-a', 'SUCCESS', 10.00), "
-                    + "('channel-a', 'method-a', 'CLOSED', 10.00)");
+                    + "payment_order_id, channel_code, payment_method, status, amount) VALUES "
+                    + "('PAY-001', 'channel-b', 'method-a', 'SUCCESS', 10.00), "
+                    + "('PAY-002', 'channel-b', 'method-a', 'WAIT_CALLBACK', 10.00), "
+                    + "('PAY-003', 'channel-a', 'method-b', 'SUCCESS', 10.00), "
+                    + "('PAY-004', 'channel-a', 'method-b', 'FAIL', 10.00), "
+                    + "('PAY-005', 'channel-a', 'method-a', 'SUCCESS', 10.00), "
+                    + "('PAY-006', 'channel-a', 'method-a', 'CLOSED', 10.00)");
+            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id) VALUES "
+                    + "('PAY-001'), ('PAY-001'), ('PAY-002'), ('PAY-003'), ('PAY-004'), ('PAY-005'), ('PAY-006')");
             statement.executeUpdate("INSERT INTO t_refund_order(status) VALUES ('FAIL')");
             statement.executeUpdate("INSERT INTO t_payment_channel_config(status) VALUES ('DISABLED')");
             session.commit();
