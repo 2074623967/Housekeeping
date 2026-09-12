@@ -592,24 +592,27 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         if (!isRepublishableStatus(event.getPublishStatus())) {
             return false;
         }
-        PaymentDetailDTO detail = paymentMapper.findDetail(paymentOrderId);
-        if (detail == null) {
-            markFailedOrDeadLetter(eventNo);
-            return false;
-        }
         try {
-            validatePaymentSuccessDetail(paymentOrderId, detail);
-            BigDecimal amount = parsePaymentSuccessAmount(detail.getAmount());
-            String orderNo = detail.getOrderNo().trim();
-            String customerName = detail.getCustomerName().trim();
-            String workerName = normalizeWorkerName(paymentMapper.findWorkerNameByOrderNo(orderNo));
             validateDispatchMode();
-            if (usesAmqp()) {
-                publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName, workerName, amount);
-            } else {
-                validateHttpDispatchConfiguration();
-                dispatchPaymentSuccessViaHttp(
-                        event, detail, orderNo, customerName, workerName, amount);
+            boolean amqp = usesAmqp();
+            String httpStage = amqp ? null : requirePaymentSuccessHttpStage(event);
+            if (!HTTP_STAGE_COMPLETED.equals(httpStage)) {
+                PaymentDetailDTO detail = paymentMapper.findDetail(paymentOrderId);
+                if (detail == null) {
+                    throw new IllegalArgumentException("支付成功事件对应支付详情不存在");
+                }
+                validatePaymentSuccessDetail(paymentOrderId, detail);
+                BigDecimal amount = parsePaymentSuccessAmount(detail.getAmount());
+                String orderNo = detail.getOrderNo().trim();
+                String customerName = detail.getCustomerName().trim();
+                String workerName = normalizeWorkerName(paymentMapper.findWorkerNameByOrderNo(orderNo));
+                if (amqp) {
+                    publishToAmqp(eventNo, detail.getPaymentOrderId(), orderNo, customerName, workerName, amount);
+                } else {
+                    validateHttpDispatchConfiguration();
+                    dispatchPaymentSuccessViaHttp(
+                            event, httpStage, detail, orderNo, customerName, workerName, amount);
+                }
             }
             if (paymentEventMapper.markPublishSuccess(eventNo) != 1) {
                 throw new IllegalStateException("支付成功事件成功状态更新失败");
@@ -622,17 +625,12 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
     }
 
     private void dispatchPaymentSuccessViaHttp(PaymentEventListItemDTO event,
+                                               String stage,
                                                PaymentDetailDTO detail,
                                                String orderNo,
                                                String customerName,
                                                String workerName,
                                                BigDecimal amount) {
-        String stage = StringUtils.hasText(event.getPaymentSuccessHttpStage())
-                ? event.getPaymentSuccessHttpStage().trim()
-                : "";
-        if (HTTP_STAGE_COMPLETED.equals(stage)) {
-            return;
-        }
         if (HTTP_STAGE_PENDING.equals(stage)) {
             postForSuccess(clearingUrl, buildClearingPayload(
                     detail.getPaymentOrderId(), orderNo, customerName, workerName, amount));
@@ -647,6 +645,18 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
         if (paymentEventMapper.markPaymentSuccessHttpCompleted(event.getEventNo()) != 1) {
             throw new IllegalStateException("支付成功事件 HTTP 完成阶段更新失败");
         }
+    }
+
+    private String requirePaymentSuccessHttpStage(PaymentEventListItemDTO event) {
+        String stage = StringUtils.hasText(event.getPaymentSuccessHttpStage())
+                ? event.getPaymentSuccessHttpStage().trim()
+                : "";
+        if (!HTTP_STAGE_PENDING.equals(stage)
+                && !HTTP_STAGE_CLEARING_ACCEPTED.equals(stage)
+                && !HTTP_STAGE_COMPLETED.equals(stage)) {
+            throw new IllegalArgumentException("支付成功事件 HTTP 投递阶段非法");
+        }
+        return stage;
     }
 
     private void validatePaymentSuccessDetail(String paymentOrderId, PaymentDetailDTO detail) {

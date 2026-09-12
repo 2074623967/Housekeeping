@@ -781,24 +781,23 @@ class PaymentEventDispatchServiceImplTest {
 
     @Test
     void shouldOnlyCloseEventWhenHttpDeliveryWasAlreadyCompleted() {
-        PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = paymentEvent("EVT-HTTP-COMPLETED", 1);
         event.setPaymentSuccessHttpStage("COMPLETED");
         when(paymentEventMapper.findByEventNoForUpdate("EVT-HTTP-COMPLETED")).thenReturn(event);
-        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
-        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.markPublishSuccess("EVT-HTTP-COMPLETED")).thenReturn(1);
 
         boolean success = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
                 paymentEventMapper,
-                "http://127.0.0.1:18120/api/clearing/events/payments/success",
-                "http://127.0.0.1:18110/api/accounting/events/payments/success",
-                "ACT10003",
+                " ",
+                " ",
+                " ",
                 restTemplate
         ).republish("EVT-HTTP-COMPLETED", " payment-event-scheduler ");
 
         Assertions.assertTrue(success);
+        verify(paymentMapper, never()).findDetail(any());
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
         verify(restTemplate, never()).postForEntity(any(), any(), any());
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
         verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
@@ -807,7 +806,6 @@ class PaymentEventDispatchServiceImplTest {
 
     @Test
     void shouldRejectMissingOrUnknownHttpStageBeforeCallingDownstream() {
-        PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO blankStage = paymentEvent("EVT-HTTP-STAGE-BLANK", 0);
         blankStage.setPaymentSuccessHttpStage(" ");
         PaymentEventListItemDTO unknownStage = paymentEvent("EVT-HTTP-STAGE-UNKNOWN", 0);
@@ -816,8 +814,6 @@ class PaymentEventDispatchServiceImplTest {
                 .thenReturn(blankStage);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-HTTP-STAGE-UNKNOWN"))
                 .thenReturn(unknownStage);
-        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
-        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
 
         PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
                 paymentMapper,
@@ -830,6 +826,8 @@ class PaymentEventDispatchServiceImplTest {
 
         Assertions.assertFalse(service.republish("EVT-HTTP-STAGE-BLANK", " payment-event-scheduler "));
         Assertions.assertFalse(service.republish("EVT-HTTP-STAGE-UNKNOWN", " payment-event-scheduler "));
+        verify(paymentMapper, never()).findDetail(any());
+        verify(paymentMapper, never()).findWorkerNameByOrderNo(any());
         verify(restTemplate, never()).postForEntity(any(), any(), any());
         verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
         verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
@@ -1245,10 +1243,7 @@ class PaymentEventDispatchServiceImplTest {
 
     @Test
     void shouldRejectUnsupportedDispatchModeBeforeCallingEitherDownstream() {
-        PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = paymentEvent("EVT-MODE-INVALID", 0);
-        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
-        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
         when(paymentEventMapper.findByEventNo("EVT-MODE-INVALID")).thenReturn(event);
 
         new PaymentEventDispatchServiceImpl(
@@ -1263,6 +1258,7 @@ class PaymentEventDispatchServiceImplTest {
                 new ObjectMapper()
         ).publishPaymentSuccess("EVT-MODE-INVALID", "PAY-001");
 
+        org.mockito.Mockito.verifyNoInteractions(paymentMapper);
         verify(restTemplate, never()).postForEntity(any(), any(), any());
         verify(rabbitTemplate, never()).invoke(any());
         verify(paymentEventMapper).markPublishFailed("EVT-MODE-INVALID");
