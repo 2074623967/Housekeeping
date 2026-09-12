@@ -4104,6 +4104,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 管理端从结构化路由查询初始化上述筛选；支付监控 `channelMetrics[].pendingCount>0` 时，下钻必须携带该项的 `channelCode`、`paymentMethod` 与 `status=WAIT_CALLBACK`。
 5. 本契约只定义 payment-core 本地查询和页面导航，不证明渠道受理、支付成功、退款到账、账务入账、资金一致或生产稳定性。
 
+### 14.277 退款告警下钻与待收口组合筛选契约
+
+1. `GET /api/refunds` 与 `GET /api/refunds/export` 的既有 `refundStatus` 参数新增只读查询虚拟值 `PENDING`，其含义固定为退款状态属于 `REVIEWING / PROCESSING`。
+2. `PENDING` 不是退款状态机状态，不得用于退款申请、审核、渠道提交、查单、回调、事件载荷或数据库状态字段；单状态筛选 `REVIEWING / PROCESSING / SUCCESS / FAIL` 保持原精确匹配语义。
+3. 分页列表、对应总数和 CSV 导出必须对 `PENDING` 使用同一组合条件；管理端从路由查询初始化筛选并在路由条件变化时重新加载第一页。
+4. 支付监控退款失败告警继续跳转 `/refunds?refundStatus=FAIL`；支付日终退款待收口告警跳转 `/refunds?refundStatus=PENDING`，覆盖其统计口径中的待审核与处理中退款。
+5. 组合筛选只反映 payment-core 本地退款状态，不构成渠道已受理、退款到账、资金一致、对账完成或生产稳定性证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

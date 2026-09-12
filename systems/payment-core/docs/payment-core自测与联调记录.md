@@ -12133,3 +12133,32 @@
 1. 待回调渠道指标现在可以下钻到同一渠道、同一支付方式和同一状态的支付单集合，页面列表与 CSV 使用同一筛选口径。
 2. P1 仅表示待回调与退款失败，停用渠道继续为 P2；本轮没有改变告警生成条件、等级或状态机。
 3. 本机测试不证明真实渠道、资金、生产数据或稳定性；发布说明正式化、正式签字审批、发布后现场核验和 `master` 稳定观察结束结论仍未形成。
+
+## 450. 2026-09-12 退款告警下钻闭环 V1.0 验证
+
+### 450.1 本轮补强
+
+1. 退款管理页从路由查询初始化 `refundOrderId / paymentOrderId / refundStatus / refundMethod`，并在同一页面查询参数变化时回到第一页重新加载。
+2. 新增查询虚拟值 `PENDING`，只在列表查询边界映射为 `REVIEWING / PROCESSING`；日终退款待收口告警改用该值，监控退款失败告警继续使用 `FAIL`。
+3. 状态下拉增加“待收口（待审核 / 处理中）”，列表和 CSV 继续共享当前页面筛选；`PENDING` 不进入退款状态迁移或数据库存储。
+
+### 450.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端定向测试 | `RefundListMapperIntegrationTest,RefundServiceImplTest,PaymentDayEndServiceImplTest` `54` 项通过，`0` failures、`0` errors、`0` skipped |
+| 待收口组合筛选 | `REVIEWING / PROCESSING` 进入结果，`SUCCESS / FAIL` 被排除；列表、计数、导出均为 `2` 笔 |
+| 日终动作路由 | 退款待收口动作固定为 `/refunds?refundStatus=PENDING`，建议文案同步为待审核与处理中 |
+| 管理端单测 | `17` 项通过，含 `FAIL / PENDING` 路由水合与非标量查询防御 |
+| 管理端生产构建 | 通过；最大 JS 包约 `543.32 kB`，保留既有超过 `500 kB` 告警 |
+| payment-core 后端全量测试 | `966` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `RefundMapper.xml / PaymentDayEndMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 扩展退款列表查询语义与前端筛选；无状态机、schema、索引或迁移变化 |
+| 代码提交 | `12e86bf3 fix(payment-core): align refund alert drilldown` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 450.3 当前判断
+
+1. 监控退款失败告警和日终退款待收口告警现在都能落到与告警口径一致的退款集合，且页面导出不会丢失当前筛选。
+2. `PENDING` 仅是管理查询的组合条件，不是新的退款生命周期状态，也不得出现在回调、提交、事件或数据库状态字段中。
+3. 本机 H2 与管理端测试不证明真实退款提交、渠道受理、到账、资金一致或生产稳定性；release 四项真实治理阻断不变。
