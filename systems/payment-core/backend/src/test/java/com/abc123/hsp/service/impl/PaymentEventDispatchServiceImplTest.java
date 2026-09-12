@@ -554,6 +554,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setPublishStatus("FAILED");
+        event.setPaymentSuccessHttpStage("PENDING");
         event.setRetryCount(0);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
         when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
@@ -715,6 +716,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setPublishStatus("FAILED");
+        event.setPaymentSuccessHttpStage("PENDING");
         event.setRetryCount(0);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-001")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
@@ -804,6 +806,39 @@ class PaymentEventDispatchServiceImplTest {
     }
 
     @Test
+    void shouldRejectMissingOrUnknownHttpStageBeforeCallingDownstream() {
+        PaymentDetailDTO detail = buildPaymentDetail();
+        PaymentEventListItemDTO blankStage = paymentEvent("EVT-HTTP-STAGE-BLANK", 0);
+        blankStage.setPaymentSuccessHttpStage(" ");
+        PaymentEventListItemDTO unknownStage = paymentEvent("EVT-HTTP-STAGE-UNKNOWN", 0);
+        unknownStage.setPaymentSuccessHttpStage("UNKNOWN_STAGE");
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-HTTP-STAGE-BLANK"))
+                .thenReturn(blankStage);
+        when(paymentEventMapper.findByEventNoForUpdate("EVT-HTTP-STAGE-UNKNOWN"))
+                .thenReturn(unknownStage);
+        when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);
+        when(paymentMapper.findWorkerNameByOrderNo("ORD-001")).thenReturn("李阿姨");
+
+        PaymentEventDispatchServiceImpl service = new PaymentEventDispatchServiceImpl(
+                paymentMapper,
+                paymentEventMapper,
+                "http://127.0.0.1:18120/api/clearing/events/payments/success",
+                "http://127.0.0.1:18110/api/accounting/events/payments/success",
+                "ACT10003",
+                restTemplate
+        );
+
+        Assertions.assertFalse(service.republish("EVT-HTTP-STAGE-BLANK", " payment-event-scheduler "));
+        Assertions.assertFalse(service.republish("EVT-HTTP-STAGE-UNKNOWN", " payment-event-scheduler "));
+        verify(restTemplate, never()).postForEntity(any(), any(), any());
+        verify(paymentEventMapper, never()).markPaymentSuccessClearingAccepted(any());
+        verify(paymentEventMapper, never()).markPaymentSuccessHttpCompleted(any());
+        verify(paymentEventMapper).markPublishFailed("EVT-HTTP-STAGE-BLANK");
+        verify(paymentEventMapper).markPublishFailed("EVT-HTTP-STAGE-UNKNOWN");
+        verify(paymentEventMapper, never()).markPublishSuccess(any());
+    }
+
+    @Test
     void shouldMarkDeadLetterWhenRetryCountReachesUpperLimit() {
         PaymentDetailDTO detail = buildPaymentDetail();
         PaymentEventListItemDTO event = new PaymentEventListItemDTO();
@@ -811,6 +846,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setPublishStatus("FAILED");
+        event.setPaymentSuccessHttpStage("PENDING");
         event.setRetryCount(2);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-RETRY-003")).thenReturn(event);
         when(paymentEventMapper.findByEventNo("EVT-RETRY-003")).thenReturn(event);
@@ -1163,6 +1199,7 @@ class PaymentEventDispatchServiceImplTest {
         event.setEventType("PAYMENT_SUCCESS");
         event.setPaymentOrderId("PAY-001");
         event.setPublishStatus("FAILED");
+        event.setPaymentSuccessHttpStage("PENDING");
         event.setRetryCount(0);
         when(paymentEventMapper.findByEventNoForUpdate("EVT-CLEARING-FAIL")).thenReturn(event);
         when(paymentMapper.findDetail("PAY-001")).thenReturn(detail);

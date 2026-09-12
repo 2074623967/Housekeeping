@@ -629,7 +629,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                                                BigDecimal amount) {
         String stage = StringUtils.hasText(event.getPaymentSuccessHttpStage())
                 ? event.getPaymentSuccessHttpStage().trim()
-                : HTTP_STAGE_PENDING;
+                : "";
         if (HTTP_STAGE_COMPLETED.equals(stage)) {
             return;
         }
