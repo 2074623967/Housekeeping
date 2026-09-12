@@ -2377,6 +2377,14 @@
 4. 来源确认 SQL 新增 `issue_no` 等值和 `source_alert_no IS NULL` 约束，只允许确认同一异常的顶层 `IN_APP_OUTBOX`；正式 Mapper 测试验证错异常和嵌套 outbox 均影响 `0` 行。实现提交为 `7fc7d7a1`、`712f589e`、`3ee427ce`。
 5. 服务与 Mapper 联合定向 `66` 项通过，payment-core 后端全量 `970` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 API、前端、schema、索引或迁移变化，本地 mock/H2 不证明真实供应商受理、送达、人员响应或生产稳定性，release 四项真实治理阻断不变。
 
+### 8.290 2026-09-12 告警来源确认幂等裁决进展
+
+1. 首次直接送达已经对来源确认 `0` 行失败闭合，但异步回查在外发日志更新为 `DELIVERED` 后仍忽略来源确认影响行数；来源缺失或错关联时可能提交外发终态并报告成功，与逐条事务一致性设计不符。
+2. 来源确认现在采用“条件更新或已确认复验”：更新命中即成功；更新 `0` 行时，只有数据库证明相同 `alertNo + issueNo` 的顶层 `IN_APP_OUTBOX` 已确认才按幂等成功，其余情况抛出稳定内部异常并回滚当前条目。
+3. 该裁决同时用于首次 `DELIVERED` 和异步回查 `DELIVERED`；允许运营人员先确认来源后的并发结果收口，但不允许不存在、错异常、嵌套 outbox 或仍待确认对象冒充幂等成功。
+4. Mapper 新增内部布尔查询并由正式 H2 测试覆盖更新前 false、正确确认后 true、错异常 false 和嵌套 outbox false；服务测试覆盖更新 `0` 行时“已确认=true”成功与“已确认=false”失败。代码提交为 `70c6cfb5 fix(payment-core): verify alert source acknowledgement`。
+5. 服务与 Mapper 联合定向 `67` 项、payment-core 后端全量 `971` 项通过，均为 `0` failures、`0` errors、`0` skipped；Mapper XML 与补丁检查通过。本轮无 HTTP API、前端、schema、索引或迁移变化，本地 mock/H2 不证明真实供应商送达、人员确认或生产并发稳定性，release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

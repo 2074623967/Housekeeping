@@ -4168,6 +4168,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 来源确认必须同时匹配来源 `alert_no`、外发日志 `issue_no`、`alert_channel=IN_APP_OUTBOX`、`source_alert_no IS NULL` 和 `ack_status=待确认`；错异常、升级 outbox、已确认或不存在的来源不得被联动确认。
 5. 本轮不改变 HTTP API、DTO、持久化状态集合、schema、索引或迁移；本地测试结果不构成供应商真实受理、最终送达、人员响应或生产稳定性证明。
 
+### 14.285 告警来源确认幂等裁决契约
+
+1. 首次派发或异步回查取得明确 `DELIVERED` 后，来源确认条件更新影响行数大于 `0` 表示本次完成确认；不得忽略更新结果并直接报告成功。
+2. 条件更新影响 `0` 行时，服务必须查询相同 `alertNo + issueNo`、`alert_channel=IN_APP_OUTBOX`、`source_alert_no IS NULL` 且 `ack_status=已确认` 的来源事实；仅该查询为 true 时允许按并发幂等成功。
+3. 来源不存在、异常号不一致、目标为升级或嵌套 outbox、目标仍待确认或状态查询为 false 时，当前条目必须失败闭合；逐条事务存在时，已经写入的外发 `DELIVERED` 一并回滚。
+4. 已由人工或另一并发执行者确认的来源不得被重复覆盖确认人和确认时间；只读复验仅判定幂等结果，不执行第二次写入。
+5. 该内部 Mapper 契约不新增 HTTP API 或响应字段，也不改变持久化状态集合；本地结果不证明真实供应商送达、人工确认身份可信或生产并发稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
