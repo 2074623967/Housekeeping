@@ -1618,6 +1618,14 @@ t_order
 4. 本轮不新增字段、索引或迁移，不对历史异常行做自动修复。后续全量巡检需单独定义扫描集合、告警、处置权限和审计记录，不能以当前时间伪造原始完成时间。
 5. 该数据边界只保证应用事务内和再次触达时的本地一致性检查；目标 MySQL 隔离级别、多实例时序及历史分布仍需真实环境验证。
 
+### 4.187 退款终态事实主动巡检数据边界
+
+1. `t_payment_day_end_batch` 新增 `refund_terminal_fact_mismatch_count`。全新 schema 为 `INT NOT NULL DEFAULT 0`；增量迁移使用可空字段，历史 `NULL` 表示未采集，不伪造零值。
+2. 扫描以退款申请日为完整性归属，终态退款存在失败残留成功时间，或不存在“最新尝试状态等于退款单状态且完成时间非空”的记录时计数。最新尝试通过 `ORDER BY created_at DESC, id DESC` 稳定选取。
+3. 查询复用既有 `idx_refund_attempt_order_created(refund_order_id, created_at, id)`；退款状态与申请日扫描使用既有 `idx_refund_status_applied(status, applied_at)`，本轮不新增重复索引。
+4. 迁移 `2026-09-12-add-refund-terminal-fact-guard.sql` 只新增批次快照字段，不回填历史批次，也不修改退款单或退款尝试。
+5. 目标 MySQL 执行前需预查字段冲突、评估在线 DDL 与相关子查询执行计划，并抽样核对历史异常集合；本地 H2 不证明生产性能、渠道到账或资金一致。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

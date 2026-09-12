@@ -4428,6 +4428,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 本契约不新增前端响应字段；快照字段仅供服务端收口校验。当前仍缺少不依赖再次触达的历史全量巡检与日终尝试一致性快照。
 6. 本地终态一致只证明 payment-core 的退款单与尝试记录互相匹配，不证明渠道退款到账、渠道账单、账务冲销、资金一致或正式关账。
 
+### 14.316 退款终态事实主动巡检契约
+
+1. 退款终态事实不一致集合固定为：退款单状态为 `SUCCESS/FAIL`，且失败退款残留 `success_at`，或最新退款尝试不存在、尝试状态不等于退款单状态、尝试 `completed_at` 为空。
+2. `SUCCESS + success_at IS NULL` 由 `REFUND_SUCCESS_TIME_MISSING` 单独负责；只缺成功时间且最新成功尝试完整的退款不进入新集合，避免两个告警无条件重复。
+3. 日终批次新增 `refundTerminalFactMismatchCount`，按退款单 `applied_at` 所在业务日采集；总览新增 `openRefundTerminalFactMismatchCount`，最近批次和 CSV 同步返回。任一非零使批次 `WARNING` 并禁止进入对账。
+4. 历史批次未采集该字段时返回 `NULL`，总览和批次必须显示事实不完整并要求 `RERUN`；不得使用当前扫描值回填旧批次。
+5. `GET /api/refunds` 与导出接口接受虚拟筛选 `TERMINAL_FACT_MISMATCH`，列表、计数和 CSV 使用同一集合；日终和支付监控告警类型为 `REFUND_TERMINAL_FACT_MISMATCH / P1`，动作路由固定为 `/refunds?refundStatus=TERMINAL_FACT_MISMATCH`。
+6. 本契约报告 payment-core 内部结构化事实一致性，不证明渠道到账、渠道账单、账务冲销、资金一致或告警处置完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
