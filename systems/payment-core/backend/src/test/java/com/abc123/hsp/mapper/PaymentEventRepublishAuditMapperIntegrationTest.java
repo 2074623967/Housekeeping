@@ -11,6 +11,8 @@ import java.io.InputStream;
 import java.sql.Statement;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -152,6 +154,42 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
     }
 
     @Test
+    void shouldUseStableIdTieBreakerForListAndExport() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_event SET created_at='2026-09-12 10:00:00', "
+                    + "retry_count=1, next_retry_at=NULL WHERE event_no='EVT-AUDIT-001'");
+            statement.executeUpdate("INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, "
+                    + "downstream_system, event_topic, publish_status, publish_status_type, retry_count, "
+                    + "next_retry_at, event_payload, created_at) VALUES "
+                    + "('EVT-AUDIT-002', 'PAYMENT_SUCCESS', 'PAY-002', 'ORD-002', 'accounting-system', "
+                    + "'payment.trade.succeeded.v1', 'FAILED', 'danger', 1, NULL, '{}', '2026-09-12 10:00:00'), "
+                    + "('EVT-AUDIT-003', 'PAYMENT_SUCCESS', 'PAY-003', 'ORD-003', 'accounting-system', "
+                    + "'payment.trade.succeeded.v1', 'FAILED', 'danger', 1, NULL, '{}', '2026-09-12 10:00:00')");
+            PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
+
+            PaymentEventQueryDTO query = new PaymentEventQueryDTO();
+            query.setPageSize(1);
+            query.setSortField("createdAt");
+            query.setSortOrder("desc");
+            assertEquals("EVT-AUDIT-003", mapper.findAll(query).get(0).getEventNo());
+            query.setPageNo(2);
+            assertEquals("EVT-AUDIT-002", mapper.findAll(query).get(0).getEventNo());
+            query.setPageNo(3);
+            assertEquals("EVT-AUDIT-001", mapper.findAll(query).get(0).getEventNo());
+
+            query.setSortField("retryCount");
+            query.setSortOrder("asc");
+            assertEquals(Arrays.asList("EVT-AUDIT-001", "EVT-AUDIT-002", "EVT-AUDIT-003"),
+                    eventNos(mapper.findAllForExport(query)));
+            query.setSortField("nextRetryAt");
+            query.setSortOrder("desc");
+            assertEquals(Arrays.asList("EVT-AUDIT-003", "EVT-AUDIT-002", "EVT-AUDIT-001"),
+                    eventNos(mapper.findAllForExport(query)));
+        }
+    }
+
+    @Test
     void shouldPersistPaymentSuccessHttpStagesInOrder() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentEventMapper mapper = session.getMapper(PaymentEventMapper.class);
@@ -192,5 +230,9 @@ public class PaymentEventRepublishAuditMapperIntegrationTest {
                     + "'{}', NOW())");
             session.commit();
         }
+    }
+
+    private List<String> eventNos(List<PaymentEventListItemDTO> events) {
+        return events.stream().map(PaymentEventListItemDTO::getEventNo).collect(Collectors.toList());
     }
 }

@@ -38,6 +38,29 @@
         AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
     </sql>
 
+    <sql id="paymentEventOrder">
+        ORDER BY
+        <choose>
+            <when test="query.sortField == 'retryCount'">
+                retry_count
+            </when>
+            <when test="query.sortField == 'nextRetryAt'">
+                next_retry_at
+            </when>
+            <otherwise>
+                created_at
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="query.sortOrder == 'asc'">
+                ASC, id ASC
+            </when>
+            <otherwise>
+                DESC, id DESC
+            </otherwise>
+        </choose>
+    </sql>
+
     <select id="findAll" resultType="com.abc123.hsp.dto.PaymentEventListItemDTO">
         SELECT event_no AS eventNo,
                event_type AS eventType,
@@ -57,25 +80,7 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
         <include refid="paymentEventWhere"/>
-        <choose>
-            <when test="query.sortField == 'retryCount'">
-                ORDER BY retry_count
-            </when>
-            <when test="query.sortField == 'nextRetryAt'">
-                ORDER BY next_retry_at
-            </when>
-            <otherwise>
-                ORDER BY created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="paymentEventOrder"/>
         LIMIT #{query.limit} OFFSET #{query.offset}
     </select>
 
@@ -121,25 +126,7 @@
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
         FROM t_payment_event
         <include refid="paymentEventWhere"/>
-        <choose>
-            <when test="query.sortField == 'retryCount'">
-                ORDER BY retry_count
-            </when>
-            <when test="query.sortField == 'nextRetryAt'">
-                ORDER BY next_retry_at
-            </when>
-            <otherwise>
-                ORDER BY created_at
-            </otherwise>
-        </choose>
-        <choose>
-            <when test="query.sortOrder == 'asc'">
-                ASC
-            </when>
-            <otherwise>
-                DESC
-            </otherwise>
-        </choose>
+        <include refid="paymentEventOrder"/>
         LIMIT 1001
     </select>
 
