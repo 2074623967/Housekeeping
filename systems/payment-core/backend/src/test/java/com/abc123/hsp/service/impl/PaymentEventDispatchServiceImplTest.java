@@ -138,6 +138,7 @@ class PaymentEventDispatchServiceImplTest {
                 .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertFalse(success);
+        verify(refundMapper).recordUnknownRefundSubmitChannel("REF-001", "wx_h5");
         verify(paymentEventMapper).markPublishUnknown("EVTR-001");
         verify(paymentEventMapper, never()).markPublishFailed("EVTR-001");
         verify(paymentEventMapper, never()).markPublishSuccess("EVTR-001");
@@ -161,6 +162,7 @@ class PaymentEventDispatchServiceImplTest {
                 .publishRefundSubmit("EVTR-001", "REF-001", " refund-operator ");
 
         Assertions.assertFalse(success);
+        verify(refundMapper, never()).recordUnknownRefundSubmitChannel(any(), any());
         verify(paymentEventMapper).markPublishFailed("EVTR-001");
         verify(paymentEventMapper, never()).markPublishUnknown("EVTR-001");
         verify(refundMapper).insertOperationLog(org.mockito.ArgumentMatchers.argThat(log ->

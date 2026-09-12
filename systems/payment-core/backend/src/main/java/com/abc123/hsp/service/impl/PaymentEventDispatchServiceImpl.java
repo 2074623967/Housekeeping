@@ -393,7 +393,7 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 if (resultUnknown) {
                     throw refundSubmitReviewRequired();
                 }
-                markRefundSubmitUnknown(eventNo, refundOrderId, operator);
+                markRefundSubmitUnknown(eventNo, refundOrderId, request.getChannelCode(), operator);
                 return false;
             }
         }
@@ -429,10 +429,10 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 markFailedOrDeadLetter(eventNo);
                 return false;
             }
-            markRefundSubmitUnknown(eventNo, refundOrderId, operator);
+            markRefundSubmitUnknown(eventNo, refundOrderId, request.getChannelCode(), operator);
             return false;
         } catch (RuntimeException exception) {
-            markRefundSubmitUnknown(eventNo, refundOrderId, operator);
+            markRefundSubmitUnknown(eventNo, refundOrderId, request.getChannelCode(), operator);
             return false;
         }
     }
@@ -454,7 +454,11 @@ public class PaymentEventDispatchServiceImpl implements PaymentEventDispatchServ
                 remark));
     }
 
-    private void markRefundSubmitUnknown(String eventNo, String refundOrderId, String operator) {
+    private void markRefundSubmitUnknown(String eventNo,
+                                         String refundOrderId,
+                                         String channelCode,
+                                         String operator) {
+        refundMapper.recordUnknownRefundSubmitChannel(refundOrderId, channelCode.trim());
         refundMapper.insertOperationLog(RefundServiceImpl.buildOperationLog(
                 refundOrderId,
                 "CHANNEL_SUBMIT_UNKNOWN",

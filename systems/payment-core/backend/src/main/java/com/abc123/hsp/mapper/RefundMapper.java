@@ -106,6 +106,12 @@ public interface RefundMapper {
                                          @Param("channelRefundNo") String channelRefundNo);
 
     /**
+     * 记录结果未知的退款提交实际调用渠道，不伪造渠道受理号。
+     */
+    int recordUnknownRefundSubmitChannel(@Param("refundOrderId") String refundOrderId,
+                                         @Param("channelCode") String channelCode);
+
+    /**
      * 将已由可信查单或验签回调确认的退款提交未知事件收敛为成功。
      */
     int markUnknownRefundSubmitEventConfirmed(@Param("refundOrderId") String refundOrderId);

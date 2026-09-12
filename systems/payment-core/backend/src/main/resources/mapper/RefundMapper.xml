@@ -319,6 +319,14 @@
           )
     </update>
 
+    <update id="recordUnknownRefundSubmitChannel">
+        UPDATE t_refund_order
+        SET channel_code = #{channelCode}
+        WHERE refund_order_id = #{refundOrderId}
+          AND status = 'PROCESSING'
+          AND channel_refund_no IS NULL
+    </update>
+
     <update id="markUnknownRefundSubmitEventConfirmed">
         UPDATE t_payment_event
         SET publish_status = 'SUCCESS',

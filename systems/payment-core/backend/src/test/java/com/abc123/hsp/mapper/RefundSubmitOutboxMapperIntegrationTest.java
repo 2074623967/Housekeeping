@@ -141,9 +141,12 @@ class RefundSubmitOutboxMapperIntegrationTest {
             PaymentEventMapper eventMapper = session.getMapper(PaymentEventMapper.class);
             refundMapper.upsertRefundSubmitEvent("EVTR-RECOVER", "REF-UNKNOWN", "PAY-UNKNOWN");
             assertEquals(1, eventMapper.markPublishUnknown("EVTR-RECOVER"));
+            assertEquals(1, refundMapper.recordUnknownRefundSubmitChannel(
+                    "REF-UNKNOWN", "wx_h5"));
 
             RefundCallbackSourceDTO before =
                     refundMapper.findCallbackSourceByRefundOrderId("REF-UNKNOWN");
+            assertEquals("wx_h5", before.getChannelCode());
             assertNull(before.getChannelRefundNo());
             assertEquals("UNKNOWN", before.getSubmitEventStatus());
             assertEquals(0, refundMapper.bindUnknownRefundChannelAccepted(
@@ -283,7 +286,7 @@ class RefundSubmitOutboxMapperIntegrationTest {
                     + "UNIQUE(channel_code, channel_refund_no))");
             statement.executeUpdate("INSERT INTO t_refund_order(refund_order_id, channel_code, status) "
                     + "VALUES ('REF-TRACE', NULL, 'PROCESSING'), "
-                    + "('REF-UNKNOWN', 'wx_h5', 'PROCESSING')");
+                    + "('REF-UNKNOWN', NULL, 'PROCESSING')");
             session.commit();
         }
     }
