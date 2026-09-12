@@ -4358,6 +4358,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. 最终日志编码为 `PAYMENT_DAY_END_PATROL`，日志号按业务日固定为 `PTL-DAY-END-PATROL-{yyyyMMdd}`；唯一键冲突表示其他实例已记录同日最终结论，不重复插入。技术失败另写随机日志号和稳定摘要 `PAYMENT_DAY_END_PATROL_FAILED`，不得复制异常原文，且原异常必须继续抛出。
 6. 巡检只比较批次与任务日志数量，不自动生成或修改日终批次，不证明账期数据完整、资金一致、渠道账单一致、正式关账或发布放行。
 
+### 14.308 自动日终批次关联契约
+
+1. `PaymentDayEndService.runAutomatically()` 的已执行结果新增必填 `batchNo`，值为本轮实际持久化的日终批次号；批次号不得为空、空白或超过 `64` 字符。未执行结果的 `batchNo` 必须为空，矛盾组合按技术失败处理。
+2. 实际创建新批次的 `PAYMENT_DAY_END / AUTO` 任务日志写入 `businessRefNo=batchNo`。已有批次跳过、租约忙和技术失败没有本轮新批次，必须保持空值；其他任务不因该字段被强制关联。
+3. `PaymentTaskRunLogItemDTO` 与任务日志 CSV 新增可空 `businessRefNo`；既有列表和导出 URL 不增加查询参数。管理端空值显示 `-`，不得从摘要推断或补造关联号。
+4. 巡检分别统计：缺少成功日志关联的 `AUTO` 批次、缺少 `AUTO` 批次关联的成功自动日终日志，以及重复关联同一 `AUTO` 批次的额外成功日志。任一计数大于零记 `WARNING/P2`，三者均为零才允许声明本地记录一一关联。
+5. 成功自动日终日志仍要求 `processed_count > 0 AND fail_count = 0`；关联还必须满足同一业务日和相等批次号，不能只依赖全局唯一批次号或数量相等。
+6. 本契约不新增外部 HTTP 入口，也不证明渠道账单、账务或资金一致。历史空关联不自动回填，目标库迁移、线上数据分布和多实例时序需另行验证。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

@@ -1556,6 +1556,17 @@ t_order
 
 迁移：`database/migrations/2026-09-12-add-task-run-business-date.sql` 增加列和索引。自动日终的完成、跳过与失败日志写入目标业务日；不从 `summary_comment` 推断历史日期，不改变 `task_log_no` 唯一键、任务计数或批次事务。目标 MySQL 执行前仍需评估在线 DDL、锁等待、备份与回滚，本地 schema 与 H2 测试不等于生产迁移完成。
 
+### 4.181 任务运行日志业务单据关联边界
+
+表：`t_payment_task_run_log`
+
+| 字段或索引 | 设计 |
+| --- | --- |
+| `business_ref_no` | `VARCHAR(64) NULL`；当前仅保存自动日终本轮新生成的批次号，无新单据或无法可靠关联时为空 |
+| `idx_task_code_business_ref` | `(task_code, business_ref_no)`；支撑按任务类型和业务单据号定位关联日志 |
+
+迁移：`database/migrations/2026-09-12-add-task-run-business-reference.sql` 只增加列和索引，不回填历史记录。自动日终巡检以 `task_code=PAYMENT_DAY_END`、同一 `biz_date`、成功创建条件和 `business_ref_no=batch_no` 勾稽 `AUTO` 批次，并检测双向悬空及重复关联。目标 MySQL 执行前仍需预查字段冲突、评估在线 DDL 和锁等待、准备备份与回滚；本地 schema 与 H2 结果不代表生产迁移完成。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
