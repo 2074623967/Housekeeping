@@ -256,6 +256,7 @@ public class RefundServiceImpl implements RefundService {
             throw new BusinessException(ErrorCode.REFUND_ORDER_NOT_FOUND, "退款单不存在");
         }
         if (STATUS_SUCCESS.equals(snapshot.getStatus()) || STATUS_FAIL.equals(snapshot.getStatus())) {
+            validateTerminalFacts(snapshot);
             return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
         }
         validateQueryableRefund(snapshot);
@@ -343,6 +344,9 @@ public class RefundServiceImpl implements RefundService {
                     "callback transaction does not match refund transaction");
         }
         if (targetStatus.equals(source.getStatus())) {
+            if (STATUS_SUCCESS.equals(targetStatus) || STATUS_FAIL.equals(targetStatus)) {
+                validateTerminalFacts(source);
+            }
             if (recordSameStatus) {
                 refundMapper.insertOperationLog(buildOperationLog(
                         refundOrderId,
@@ -395,6 +399,18 @@ public class RefundServiceImpl implements RefundService {
                 recordSameStatus ? "渠道查单确认退款" + (success ? "成功" : "失败")
                         : success ? "渠道确认退款成功" : "渠道确认退款失败"));
         return maskedCopy(refundMapper.findByRefundOrderId(refundOrderId));
+    }
+
+    private void validateTerminalFacts(RefundCallbackSourceDTO source) {
+        boolean success = STATUS_SUCCESS.equals(source.getStatus());
+        boolean failed = STATUS_FAIL.equals(source.getStatus());
+        if ((!success && !failed)
+                || !source.getStatus().equals(source.getAttemptStatus())
+                || !StringUtils.hasText(source.getAttemptCompletedAt())
+                || (success && !StringUtils.hasText(source.getSuccessAt()))
+                || (failed && StringUtils.hasText(source.getSuccessAt()))) {
+            throw new IllegalStateException("refund terminal facts are inconsistent");
+        }
     }
 
     private void validateQueryableRefund(RefundCallbackSourceDTO source) {

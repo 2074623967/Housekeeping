@@ -199,6 +199,8 @@ class RefundSubmitOutboxMapperIntegrationTest {
             RefundCallbackSourceDTO source = refundMapper.findCallbackSourceForUpdate("REF-TRACE");
             int finalized = refundMapper.updateRefundStatus(
                     "REF-TRACE", "PROCESSING", "SUCCESS", "success", true);
+            assertEquals(1, refundMapper.finalizeRefundAttempt(
+                    "RFA-TRACE", "SUCCESS", "success"));
             int repeated = refundMapper.updateRefundStatus(
                     "REF-TRACE", "PROCESSING", "FAIL", "danger", false);
 
@@ -210,6 +212,11 @@ class RefundSubmitOutboxMapperIntegrationTest {
             assertEquals("RCH-TRACE", source.getChannelRefundNo());
             assertEquals(1, finalized);
             assertEquals(0, repeated);
+            RefundCallbackSourceDTO terminal = refundMapper.findCallbackSourceForUpdate("REF-TRACE");
+            assertEquals("SUCCESS", terminal.getStatus());
+            assertEquals("SUCCESS", terminal.getAttemptStatus());
+            assertNotNull(terminal.getSuccessAt());
+            assertNotNull(terminal.getAttemptCompletedAt());
             session.rollback();
         }
     }

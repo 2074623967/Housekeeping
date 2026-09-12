@@ -324,10 +324,12 @@
     <select id="findCallbackSourceForUpdate" resultType="com.abc123.hsp.dto.RefundCallbackSourceDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.status,
+               refund_order.success_at AS successAt,
                attempt.refund_attempt_no AS refundAttemptNo,
                attempt.channel_code AS channelCode,
                attempt.channel_refund_no AS channelRefundNo,
                attempt.attempt_status AS attemptStatus,
+               attempt.completed_at AS attemptCompletedAt,
                (SELECT event.publish_status
                 FROM t_payment_event event
                 WHERE event.event_type = 'REFUND_SUBMIT'
@@ -349,10 +351,12 @@
     <select id="findCallbackSourceByRefundOrderId" resultType="com.abc123.hsp.dto.RefundCallbackSourceDTO">
         SELECT refund_order.refund_order_id AS refundOrderId,
                refund_order.status,
+               refund_order.success_at AS successAt,
                attempt.refund_attempt_no AS refundAttemptNo,
                attempt.channel_code AS channelCode,
                attempt.channel_refund_no AS channelRefundNo,
                attempt.attempt_status AS attemptStatus,
+               attempt.completed_at AS attemptCompletedAt,
                (SELECT event.publish_status
                 FROM t_payment_event event
                 WHERE event.event_type = 'REFUND_SUBMIT'
@@ -569,7 +573,7 @@
         SET status = #{status},
             status_type = #{statusType},
             success_at = CASE
-                WHEN #{success} THEN NOW()
+                WHEN #{success} THEN COALESCE(success_at, NOW())
                 WHEN #{status} = 'PROCESSING' THEN NULL
                 ELSE success_at
             END
