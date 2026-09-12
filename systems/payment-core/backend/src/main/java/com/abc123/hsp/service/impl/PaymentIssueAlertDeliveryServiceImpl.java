@@ -674,8 +674,13 @@ public class PaymentIssueAlertDeliveryServiceImpl implements PaymentIssueAlertDe
         entity.setAlertChannel(channelCode);
         entity.setAlertStatus(alertStatus);
         entity.setAlertStatusType(alertStatusType);
-        entity.setAckStatus("无需回执");
-        entity.setAckStatusType("info");
+        if ("ACCEPTED".equals(deliveryResult.getProviderDeliveryStatus())) {
+            entity.setAckStatus("待确认");
+            entity.setAckStatusType("warn");
+        } else {
+            entity.setAckStatus("无需回执");
+            entity.setAckStatusType("info");
+        }
         entity.setProviderReceiptSnapshot(deliveryResult.getProviderReceiptSnapshot());
         entity.setProviderReceiptNo(deliveryResult.getProviderReceiptNo());
         entity.setProviderDeliveryStatus(deliveryResult.getProviderDeliveryStatus());

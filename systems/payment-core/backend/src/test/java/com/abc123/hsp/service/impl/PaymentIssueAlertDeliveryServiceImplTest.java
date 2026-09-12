@@ -102,6 +102,8 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "企业微信告警机器人-P1".equals(log.getProviderName())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "TPL_PAYMENT_ISSUE_IM_P1_V1".equals(log.getTemplateCode())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+        Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log ->
+                "待确认".equals(log.getAckStatus()) && "warn".equals(log.getAckStatusType())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> "IM-RECEIPT-001".equals(log.getProviderReceiptNo())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().allMatch(log -> org.springframework.util.StringUtils.hasText(log.getProviderReceiptSnapshot())));
         Assertions.assertTrue(deliveryLogCaptor.getAllValues().stream().anyMatch(log -> log.getProviderReceiptSnapshot().contains("ACCEPTED")));
@@ -774,11 +776,15 @@ class PaymentIssueAlertDeliveryServiceImplTest {
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-主".equals(log.getProviderName())
                         && "派发失败".equals(log.getAlertStatus())
-                        && "FAILED".equals(log.getProviderDeliveryStatus())));
+                        && "FAILED".equals(log.getProviderDeliveryStatus())
+                        && "无需回执".equals(log.getAckStatus())
+                        && "info".equals(log.getAckStatusType())));
         Assertions.assertTrue(logCaptor.getAllValues().stream().anyMatch(log ->
                 "企业微信告警机器人-备".equals(log.getProviderName())
                         && "已派发".equals(log.getAlertStatus())
-                        && "ACCEPTED".equals(log.getProviderDeliveryStatus())));
+                        && "ACCEPTED".equals(log.getProviderDeliveryStatus())
+                        && "待确认".equals(log.getAckStatus())
+                        && "warn".equals(log.getAckStatusType())));
     }
 
     @Test
