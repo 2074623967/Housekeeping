@@ -1832,7 +1832,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 6. `focusAlerts`：重点任务告警，包含告警标题、告警等级、影响数量和建议跳转路由。
 7. `overdueIssueCount`：超过 SLA 的支付交易异常数。
 8. `recentTaskRuns`：最近 10 条任务执行日志。
-9. `pendingQueryBacklogCount`：已达到首次主动补查等待阈值且预付单仍有效的支付单数。
+9. `pendingQueryBacklogCount`：存在支付尝试、已达到首次主动补查等待阈值且仍为 `WAIT_CALLBACK` 的支付单数；预付单过期不排除已提交交易。
 10. `duePendingQueryCount`：当前已达到指数退避时间、可由自动任务查询的支付单数。
 11. `queryMonitorWindowHours`：查单监控回看窗口小时数。
 12. `recentQueryCount`、`recentQueryFailureCount`、`recentQueryFailureRate`：窗口内查单总数、失败数和失败率。
@@ -4504,6 +4504,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `focusAlerts` 新增 `REFUND_RETRY`。失败总数非零时为 P1；阻断数非零时路由终态事实不一致列表，否则路由普通失败退款列表。
 4. 管理端不得将总失败数当作按钮可执行数量。按钮状态和候选提示使用 `retryableFailedRefundCount`，事实异常数即使不可批量执行也必须持续显示。
 5. 新字段只描述 payment-core 当前本地结构化事实和任务资格，不证明渠道结果、客户到账、账务冲销、资金一致或正式关账。
+
+### 14.325 主动查单人工候选展示契约
+
+1. `pendingQueryBacklogCount` 与人工 `POST /api/payment-task-center/query-pending-payments` 使用同一基础资格：存在支付尝试、达到首次等待阈值且仍为 `WAIT_CALLBACK`；预付单过期不排除已提交交易。
+2. `pendingRefundQueryBacklogCount` 与人工 `POST /api/payment-task-center/query-pending-refunds` 使用同一基础资格：退款为 `PROCESSING`、最新尝试具备渠道定位事实，并且已有渠道退款号和提交时间，或无渠道退款号但尝试及对应提交事件均为 `UNKNOWN`。
+3. `duePendingQueryCount / duePendingRefundQueryCount` 在基础资格上继续应用自动查询历史退避，只用于表达当前自动到期量；管理端人工按钮不得以这两个字段决定可执行状态。
+4. 管理端在对应人工候选数为零时禁用按钮，非零时展示候选数。该前端保护不替代服务端再次查询资格，也不承诺点击时处理数必然等于此前总览快照。
+5. 本轮不新增或修改 HTTP 字段、请求、响应、候选 SQL 与任务状态机；页面和固定 mock 不证明真实渠道查询、回调收口、退款到账或资金一致。
 
 ## 15. 结论
 
