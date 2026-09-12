@@ -4046,6 +4046,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 本契约不改变 `PREPAY_CREATED` 资格、空渠道流水要求、支付尝试排除、重试到期判断、批次上限、逐笔条件更新、失败退避、任务租约或状态机。
 4. 稳定读取顺序只保证同一候选集合和批次参数下的确定结果，不承诺多实例全局串行，也不表示真实渠道已经关单、支付资金已经收口或对账一致。
 
+### 14.269 支付监控渠道指标稳定排序契约
+
+1. `GET /api/payment-monitor/overview` 的 `channelMetrics` 继续按支付单的 `channel_code, payment_method` 分组，响应字段和统计口径不变。
+2. 渠道指标必须按 `totalCount DESC, successCount DESC, channel_code ASC, payment_method ASC` 返回；总量和成功量优先，统计值相同时以完整分组键形成确定次序。
+3. 服务层与前端应消费 Mapper 已确定的数组顺序，不得在缺少完整裁决字段时自行重排；本契约不改变成功率、成功金额、待处理数或风险等级计算。
+4. 稳定排序只描述同一查询快照中的展示顺序，不承诺跨请求快照一致性，也不构成真实渠道成功率、渠道稳定性、支付成功、账务入账或资金对账证明。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

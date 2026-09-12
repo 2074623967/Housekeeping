@@ -11907,3 +11907,31 @@
 1. 在资格集合和数据库内容不变时，相同最早失效时间的候选具有确定顺序，固定批次边界可重复解释。
 2. 该顺序不提供多实例全局串行；并发任务仍由已有租约限制调度，并由逐笔条件更新裁决最终状态迁移。
 3. 本地 H2 不证明生产 MySQL 分组排序执行计划、并发调度、真实渠道关单、生产稳定性、资金或对账结果；release 四项真实治理阻断不变。
+
+## 442. 2026-09-12 支付监控渠道指标稳定排序 V1.0 验证
+
+### 442.1 本轮补强
+
+1. `PaymentMonitorMapper.findChannelMetrics` 在既有 `totalCount DESC, successCount DESC` 后追加 `channel_code ASC, payment_method ASC`。
+2. 两个新增字段正好覆盖查询的完整分组键，使统计值相同的分组仍具有确定顺序，同时保留业务量和成功量优先的既有展示语义。
+3. 该变更不改变统计范围、成功率、成功金额、待处理数、风险等级、服务装配、接口字段、前端、schema、索引或迁移。
+
+### 442.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 正式 Mapper 与监控服务定向测试 | `PaymentMonitorMapperIntegrationTest,PaymentMonitorServiceImplTest` `2` 项通过，`0` failures、`0` errors、`0` skipped |
+| 同统计值顺序 | 三组总量均为 `2`、成功量均为 `1`，稳定返回 `channel-a/method-a`、`channel-a/method-b`、`channel-b/method-a` |
+| 聚合字段回归 | 每组 `totalCount=2`、`successCount=1`，证明测试确实进入分组键次排序 |
+| 服务装配回归 | 监控服务继续直接装配摘要、趋势、渠道指标和告警，不在服务层重排渠道指标 |
+| payment-core 后端全量测试 | `959` 项通过，`0` failures、`0` errors、`0` skipped |
+| Mapper 与补丁检查 | `PaymentMonitorMapper.xml` 的 `xmllint` 与 `git diff --check` 通过 |
+| 结构变化 | 无 API、DTO、前端、schema、索引或迁移变化 |
+| 代码提交 | `88c4f248 fix(payment-core): stabilize channel metric ordering` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`，统一 `blockerCount=1`，内部 `releaseBlockerCount=4` |
+
+### 442.3 当前判断
+
+1. 对同一统计快照，总量和成功量相同的渠道分组具有按完整分组键裁决的确定阅读顺序。
+2. 该排序不提供多个请求之间的数据库快照；支付单新增或状态变化会合理改变聚合值和榜单顺序。
+3. 本地 H2 不证明生产 MySQL 聚合排序计划、渠道数据完整、真实成功率、渠道稳定性、支付成功、账务入账或资金对账一致性；release 四项真实治理阻断不变。

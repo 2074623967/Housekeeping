@@ -2249,6 +2249,14 @@
 4. 本轮无 API、DTO、前端、schema、索引或迁移变化；稳定候选顺序不等于多实例任务全局串行，仍依赖已有任务租约与逐笔数据库条件更新裁决。
 5. 本地 H2 不证明生产 MySQL 分组排序执行计划、并发调度、真实渠道关单、生产稳定性、资金或对账结果；统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`，release 四项真实治理阻断不变。
 
+### 8.274 2026-09-12 支付监控渠道指标稳定排序进展
+
+1. 支付监控渠道指标按 `channel_code, payment_method` 分组，原查询只按总支付量和成功量降序；多个渠道分组统计值完全相同时没有确定次序，页面重复刷新时的渠道阅读顺序可能漂移。
+2. `PaymentMonitorMapper.findChannelMetrics` 现在按 `totalCount DESC, successCount DESC, channel_code ASC, payment_method ASC` 返回；先保持业务量和成功量优先，再以完整分组键裁决同值。
+3. 新增正式 Mapper 集成测试，以三组总量均为 `2`、成功量均为 `1` 且逆业务键插入的数据，验证稳定返回 `channel-a/method-a`、`channel-a/method-b`、`channel-b/method-a`。定向 `2` 项、payment-core 后端全量 `959` 项通过，均为 `0` failures、`0` errors、`0` skipped，Mapper XML 与补丁检查通过。
+4. 本轮不改变统计聚合、成功率、成功金额、待处理数、风险等级、接口字段、前端、schema、索引或迁移；完整分组键只提供同一统计快照内的确定展示顺序。
+5. 本地 H2 不证明生产 MySQL 聚合排序计划、渠道数据完整、真实成功率、渠道稳定性、支付成功、账务入账或资金对账一致性；release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
