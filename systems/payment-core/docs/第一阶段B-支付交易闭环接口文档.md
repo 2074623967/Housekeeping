@@ -4538,6 +4538,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 5. `POST /api/payment-task-center/reconcile-issue-alert-receipts/{alertNo}` 的指定单条人工回查请求、响应和编号校验契约不变，其最终执行仍不得抢占有效 claim。
 6. 新字段与候选口径只描述 payment-core 本地任务资格；本地 H2、固定 mock 和接口响应不证明真实供应商查询、通知网关、最终送达、多实例结果、资金一致或生产稳定性。
 
+### 14.329 异常告警派发候选按钮契约
+
+1. `GET /api/payment-task-center/overview` 的 `pendingIssueAlertDispatchCount` 表示当前顶层、待确认且状态为已生成、部分失败或派发失败的 `IN_APP_OUTBOX` 数量，与人工派发的基础候选资格一致。
+2. 管理端使用该字段决定按钮文案和禁用状态；`POST /api/payment-task-center/dispatch-issue-alerts` 不接收页面数量，执行时重新查询有界候选并逐条锁定来源。
+3. 总览与执行之间允许发生并发变化，实际 `processedCount` 不承诺等于页面快照；候选为零时的前端禁用只避免主动生成空批次，不替代服务端资格与锁裁决。
+4. 本轮不新增或修改 HTTP 字段、请求、响应、SQL、schema 或迁移；固定样例不证明真实供应商、通知送达、多实例结果或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
