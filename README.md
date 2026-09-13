@@ -43,6 +43,11 @@
 - `systems/accounting-system`
 - `systems/clearing-system`
 - `systems/settlement-system`
+- `systems/refund-center`
+- `systems/reconciliation-system`
+- `systems/deposit-system`
+- `systems/ops-config-system`
+- `systems/risk-control-system`
 - `systems/wallet-system`
 - `systems/gateway-access`
 
@@ -108,6 +113,55 @@
 
 ## 运行说明
 
-详细启动方式请看：
+仓库根目录提供统一运行入口：
+
+```bash
+# 检查 Java、Maven、Node 和前端依赖
+tools/dev/local-stack.sh doctor all
+
+# 在当前终端前台托管全部系统；保持运行，Ctrl-C 后统一清理
+tools/dev/local-stack.sh up all
+
+# 查看状态或重新执行前端、后端及代理链路冒烟
+tools/dev/local-stack.sh status all
+tools/dev/local-stack.sh smoke all
+tools/dev/local-stack.sh happy-path
+```
+
+也可以只运行某一类或某个系统：
+
+```bash
+tools/dev/local-stack.sh up backends
+tools/dev/local-stack.sh up frontends
+tools/dev/local-stack.sh up payment-core
+```
+
+`up` 适合由当前 Codex 任务窗口持续托管：暂停 Codex 任务不会主动停止服务，回到原任务后可以继续检查；只有在托管终端发送 `Ctrl-C` 才会停止本次脚本拉起的进程。需要脱离当前窗口运行时使用 `start`，之后用 `stop` 显式停止。
+
+运行日志位于 `.runtime/local-stack/logs/`，PID 文件位于 `.runtime/local-stack/pids/`。
+
+### 本地入口
+
+| 系统 | 前端入口 |
+| --- | --- |
+| 支付后台 | http://127.0.0.1:5174 |
+| 支付 App / H5 / PC | http://127.0.0.1:5175 / 5176 / 5177 |
+| 钱包账户 | http://127.0.0.1:5178 |
+| 退款中心 | http://127.0.0.1:5179 |
+| 对账系统 | http://127.0.0.1:5180 |
+| 保证金 | http://127.0.0.1:5181 |
+| 运营配置 | http://127.0.0.1:5182 |
+| 风控 | http://127.0.0.1:5183 |
+| 网关接入 | http://127.0.0.1:5184 |
+| 钱包与营销资金 | http://127.0.0.1:5185 |
+| 清分 | http://127.0.0.1:5273 |
+| 结算 | http://127.0.0.1:5274 |
+| 账务 | http://127.0.0.1:5275 |
+
+系统当前可操作能力、验证口径和待补项见：
+
+- `docs/本地可运行骨架与功能矩阵.md`
+
+`payment-core` 的单模块详细启动方式见：
 
 - `systems/payment-core/docs/开发落地说明.md`
