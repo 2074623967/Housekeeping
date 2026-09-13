@@ -41,6 +41,7 @@ const overview = ref({
   retryableFailedRefundCount: 0,
   blockedFailedRefundCount: 0,
   warningDayEndBatchCount: 0,
+  enabledControlPolicyCount: 0,
   controlPolicyWarningCount: 0,
   overdueIssueCount: 0,
   focusAlerts: [],
@@ -262,6 +263,7 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">控制策略告警</div>
             <div class="detail-value">{{ overview.controlPolicyWarningCount }}</div>
+            <div class="meta">启用策略 {{ overview.enabledControlPolicyCount }} 条</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">SLA 超时异常</div>
@@ -501,10 +503,10 @@ onMounted(loadOverview);
               <p>批量扫描启用中的来源应用支付控制策略，回写渠道、网关、商户号和令牌配置是否满足当前准入要求。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.enabledControlPolicyCount === 0"
                 @click="runTask('PAYMENT_CONTROL_SELF_CHECK', '支付控制策略自动巡检', paymentTaskCenterApi.runControlPolicySelfChecks)"
               >
-                {{ activeTaskCode === "PAYMENT_CONTROL_SELF_CHECK" ? "执行中..." : "执行控制策略巡检" }}
+                {{ activeTaskCode === "PAYMENT_CONTROL_SELF_CHECK" ? "执行中..." : overview.enabledControlPolicyCount === 0 ? "暂无启用控制策略" : `执行控制策略巡检（${overview.enabledControlPolicyCount}）` }}
               </button>
             </div>
 

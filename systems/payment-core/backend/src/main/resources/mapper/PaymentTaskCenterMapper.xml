@@ -95,6 +95,11 @@
                 SELECT COUNT(1)
                 FROM t_payment_control_policy
                 WHERE status = 'ENABLED'
+            ), 0) AS enabledControlPolicyCount,
+            COALESCE((
+                SELECT COUNT(1)
+                FROM t_payment_control_policy
+                WHERE status = 'ENABLED'
                    AND COALESCE(self_check_status, 'WARN') &lt;&gt; 'PASS'
             ), 0) AS controlPolicyWarningCount,
             COALESCE((

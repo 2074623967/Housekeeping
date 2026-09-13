@@ -135,6 +135,24 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldSeparateEnabledControlPolicyCandidatesFromCurrentWarnings() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("INSERT INTO t_payment_control_policy(status, self_check_status) VALUES "
+                    + "('ENABLED', 'PASS'), "
+                    + "('ENABLED', 'WARN'), "
+                    + "('DISABLED', 'WARN')");
+
+            PaymentTaskCenterOverviewDTO overview = session
+                    .getMapper(PaymentTaskCenterMapper.class)
+                    .findOverviewSummary();
+
+            assertEquals(2, overview.getEnabledControlPolicyCount());
+            assertEquals(1, overview.getControlPolicyWarningCount());
+        }
+    }
+
+    @Test
     void shouldQuerySubmittedPaymentsAfterPrepayExpiryAndPreserveBackoffRules() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);

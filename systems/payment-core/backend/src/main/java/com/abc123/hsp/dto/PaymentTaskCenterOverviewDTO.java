@@ -89,6 +89,8 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer blockedFailedRefundCount;
     /** 日终告警批次数。 */
     private Integer warningDayEndBatchCount;
+    /** 当前启用、可执行批量自检的支付控制策略数。 */
+    private Integer enabledControlPolicyCount;
     /** 支付控制策略异常数。 */
     private Integer controlPolicyWarningCount;
     /** SLA 超时异常数。 */
