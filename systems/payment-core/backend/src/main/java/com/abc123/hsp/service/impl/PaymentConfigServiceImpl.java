@@ -576,8 +576,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             if (currentRules == null) {
                 currentRules = paymentConfigMapper.findRouteRules();
             }
-            Set<String> ruleCodes = findPriorityCollisionRuleCodes(toConfigDto(review), currentRules);
+            PaymentRouteRuleConfigDTO candidate = toConfigDto(review);
+            List<PaymentRouteRuleConflictDTO> candidateConflicts = findCandidateConflicts(candidate, currentRules);
+            Set<String> ruleCodes = extractPriorityCollisionRuleCodes(candidate, candidateConflicts);
             review.setPreviewPriorityCollisionRuleCodes(new ArrayList<String>(ruleCodes));
+            review.setPreviewBlockingConflicts(extractBlockingConflicts(candidateConflicts));
         }
         return reviews;
     }
@@ -2885,6 +2888,17 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             PaymentRouteRuleConfigDTO candidate,
             List<PaymentRouteRuleConfigDTO> currentRules) {
         return extractPriorityCollisionRuleCodes(candidate, findCandidateConflicts(candidate, currentRules));
+    }
+
+    private List<PaymentRouteRuleConflictDTO> extractBlockingConflicts(
+            Collection<PaymentRouteRuleConflictDTO> candidateConflicts) {
+        List<PaymentRouteRuleConflictDTO> blockingConflicts = new ArrayList<PaymentRouteRuleConflictDTO>();
+        for (PaymentRouteRuleConflictDTO conflict : candidateConflicts) {
+            if ("BLOCKER".equals(conflict.getSeverity())) {
+                blockingConflicts.add(conflict);
+            }
+        }
+        return blockingConflicts;
     }
 
     private Set<String> extractPriorityCollisionRuleCodes(

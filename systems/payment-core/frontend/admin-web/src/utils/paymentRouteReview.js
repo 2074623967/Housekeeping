@@ -10,9 +10,49 @@ function normalizePreviewRuleCodes(review = {}) {
     : [];
 }
 
+export function routeRuleBlockingConflicts(review = {}) {
+  if (!Array.isArray(review.previewBlockingConflicts)) {
+    return [];
+  }
+  return review.previewBlockingConflicts.filter((conflict) => (
+    conflict
+      && conflict.severity === "BLOCKER"
+      && typeof conflict.message === "string"
+      && conflict.message.trim()
+  ));
+}
+
+export function hasInvalidRouteRuleBlockingPreview(review = {}) {
+  const conflicts = review.previewBlockingConflicts;
+  if (conflicts == null) {
+    return false;
+  }
+  return !Array.isArray(conflicts) || conflicts.some((conflict) => (
+    !conflict
+      || conflict.severity !== "BLOCKER"
+      || typeof conflict.message !== "string"
+      || !conflict.message.trim()
+  ));
+}
+
+export function canApproveRouteRuleReview(review = {}) {
+  return !hasInvalidRouteRuleBlockingPreview(review)
+    && routeRuleBlockingConflicts(review).length === 0;
+}
+
+export function formatRouteRuleBlockingConflict(review = {}, conflict = {}) {
+  const counterpartRuleCode = [conflict.ruleCode, conflict.conflictingRuleCode]
+    .find((ruleCode) => typeof ruleCode === "string" && ruleCode && ruleCode !== review.ruleCode);
+  const conflictType = typeof conflict.conflictType === "string" && conflict.conflictType
+    ? conflict.conflictType
+    : "BLOCKER";
+  return `${conflictType} / ${counterpartRuleCode || "候选规则"}：${conflict.message.trim()}`;
+}
+
 export function buildRouteRuleCollisionAcknowledgement(review = {}) {
   const ruleCodes = normalizePreviewRuleCodes(review);
-  if (typeof review.requestNo !== "string" || !review.requestNo || !ruleCodes.length) {
+  if (!canApproveRouteRuleReview(review)
+    || typeof review.requestNo !== "string" || !review.requestNo || !ruleCodes.length) {
     return null;
   }
   return { requestNo: review.requestNo, ruleCodes };
@@ -21,6 +61,7 @@ export function buildRouteRuleCollisionAcknowledgement(review = {}) {
 export function isRouteRuleCollisionAcknowledged(review = {}, acknowledgement = null) {
   const previewRuleCodes = normalizePreviewRuleCodes(review);
   return Boolean(acknowledgement)
+    && canApproveRouteRuleReview(review)
     && review.requestNo === acknowledgement.requestNo
     && previewRuleCodes.length > 0
     && previewRuleCodes.length === acknowledgement.ruleCodes?.length

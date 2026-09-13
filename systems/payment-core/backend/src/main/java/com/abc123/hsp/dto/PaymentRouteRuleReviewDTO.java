@@ -38,6 +38,8 @@ public class PaymentRouteRuleReviewDTO {
     private String priorityCollisionRuleCodesJson;
     /** 待办候选基于当前运行态计算的同优先级冲突规则编码预览。 */
     private List<String> previewPriorityCollisionRuleCodes;
+    /** 待办候选基于当前运行态计算的阻断级冲突预览。 */
+    private List<PaymentRouteRuleConflictDTO> previewBlockingConflicts;
     private String createdAt;
     private String reviewedAt;
     /** 身份可信度固定为自声明，避免被误读成已认证签字。 */

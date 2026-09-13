@@ -10,8 +10,12 @@ import {
 import {
   buildRouteRuleCollisionAcknowledgement,
   buildRouteRuleReviewActionPayload,
+  canApproveRouteRuleReview,
+  formatRouteRuleBlockingConflict,
   formatRouteRuleConflictAudit,
-  isRouteRuleCollisionAcknowledged
+  hasInvalidRouteRuleBlockingPreview,
+  isRouteRuleCollisionAcknowledged,
+  routeRuleBlockingConflicts
 } from "../utils/paymentRouteReview";
 
 const route = useRoute();
@@ -837,6 +841,10 @@ async function handleRouteRuleReview(review, approved) {
   }
   if (!reviewComment.value) {
     actionMessage.value = `复核处理失败：${approved ? "复核意见" : "驳回原因"}不能为空。`;
+    return;
+  }
+  if (approved && !canApproveRouteRuleReview(review)) {
+    actionMessage.value = `复核处理失败：申请 ${review.requestNo} 当前存在阻断冲突，请刷新或调整候选规则。`;
     return;
   }
   const actionLabel = approved ? "通过并发布" : "驳回";
@@ -2958,24 +2966,43 @@ function exportGovernanceSnapshot(section = "ALL") {
                     </td>
                     <td>
                       <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
-                        <label
-                          v-if="review.previewPriorityCollisionRuleCodes?.length"
-                          class="route-risk-acknowledgement"
+                        <div
+                          v-if="!canApproveRouteRuleReview(review)"
+                          class="route-blocking-preview"
+                          role="alert"
                         >
-                          <input
-                            type="checkbox"
-                            :checked="isRouteRuleCollisionAcknowledged(review, priorityCollisionAcknowledgement)"
-                            @change="setRouteRuleCollisionAcknowledgement(review, $event.target.checked)"
-                          />
-                          <span>
-                            仅确认申请 {{ review.requestNo }} 与
-                            {{ review.previewPriorityCollisionRuleCodes.join(" / ") }} 的同优先级潜在冲突风险
+                          <strong>
+                            {{ hasInvalidRouteRuleBlockingPreview(review)
+                              ? "阻断冲突预览异常，请刷新后再操作"
+                              : "当前候选存在阻断冲突，不能批准" }}
+                          </strong>
+                          <span
+                            v-for="conflict in routeRuleBlockingConflicts(review)"
+                            :key="`${conflict.conflictType}:${conflict.ruleCode}:${conflict.conflictingRuleCode}`"
+                          >
+                            {{ formatRouteRuleBlockingConflict(review, conflict) }}
                           </span>
-                        </label>
-                        <span v-else class="muted-text">当前快照未发现需确认的同优先级风险</span>
+                        </div>
+                        <template v-else>
+                          <label
+                            v-if="review.previewPriorityCollisionRuleCodes?.length"
+                            class="route-risk-acknowledgement"
+                          >
+                            <input
+                              type="checkbox"
+                              :checked="isRouteRuleCollisionAcknowledged(review, priorityCollisionAcknowledgement)"
+                              @change="setRouteRuleCollisionAcknowledgement(review, $event.target.checked)"
+                            />
+                            <span>
+                              仅确认申请 {{ review.requestNo }} 与
+                              {{ review.previewPriorityCollisionRuleCodes.join(" / ") }} 的同优先级潜在冲突风险
+                            </span>
+                          </label>
+                          <span v-else class="muted-text">当前快照未发现需确认的同优先级风险</span>
+                        </template>
                         <button
                           class="link-button"
-                          :disabled="Boolean(activeConfigCode)"
+                          :disabled="Boolean(activeConfigCode) || !canApproveRouteRuleReview(review)"
                           @click="handleRouteRuleReview(review, true)"
                         >
                           通过并发布
@@ -4869,5 +4896,16 @@ function exportGovernanceSnapshot(section = "ALL") {
   margin: 2px 0 0;
   flex: 0 0 16px;
   accent-color: #2563eb;
+}
+
+.route-blocking-preview {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  margin-bottom: 8px;
+  color: #991b1b;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 </style>
