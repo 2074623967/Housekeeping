@@ -4529,6 +4529,15 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 总览读取与任务执行之间允许发生并发状态变化，实际 `processedCount` 以执行时 SQL 为准，不承诺等于此前页面快照，也不得为保持相等而锁住全部积压。
 5. 本轮不新增或修改 HTTP 字段、候选 SQL、状态机、schema、索引或迁移；页面固定样例不证明真实关单、渠道状态、多实例行为或生产稳定性。
 
+### 14.328 告警回执人工候选与有效占用契约
+
+1. `GET /api/payment-task-center/overview` 新增 `manualIssueAlertReceiptCount`，表示当前可由人工批量回查的外发告警数；`pendingIssueAlertReceiptCount` 继续表示全部供应商已受理且待确认的风险存量，两者不要求相等。
+2. 人工计数与 `POST /api/payment-task-center/reconcile-issue-alert-receipts` 的执行候选共享资格：外部通道、已派发、供应商 `ACCEPTED`、待确认，并关联同一异常下仍待确认的顶层 `IN_APP_OUTBOX` 来源。
+3. 人工批量允许越过首次等待、失败退避和自动次数上限，但不得越过仍处于 claim 超时窗口内的 `QUERYING`；claim 已过期时可重新进入候选。自动到期、退避、查询中和自动耗尽字段继续保持各自既有语义。
+4. 管理端以 `manualIssueAlertReceiptCount` 决定按钮文案和禁用状态，但执行接口不接收页面候选数量；实际处理集合由服务端在请求时重新查询并通过 claim CAS 裁决。
+5. `POST /api/payment-task-center/reconcile-issue-alert-receipts/{alertNo}` 的指定单条人工回查请求、响应和编号校验契约不变，其最终执行仍不得抢占有效 claim。
+6. 新字段与候选口径只描述 payment-core 本地任务资格；本地 H2、固定 mock 和接口响应不证明真实供应商查询、通知网关、最终送达、多实例结果、资金一致或生产稳定性。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
