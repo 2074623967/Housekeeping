@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentFlowApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
@@ -10,11 +10,15 @@ const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
 const expandedFlowNo = ref("");
+let latestLoadRequestId = 0;
 const filters = ref({
   paymentOrderId: route.query.paymentOrderId || "",
   orderNo: route.query.orderNo || "",
@@ -33,8 +37,21 @@ const metrics = computed(() => ({
   warnTotal: items.value.filter((item) => item.businessStatusType === "warn").length,
   flowTypeCount: new Set(items.value.map((item) => item.flowType).filter(Boolean)).size
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+
+function buildQuery() {
+  return {
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
@@ -52,8 +69,17 @@ function resetFilters() {
 }
 
 function applyFilters() {
-  expandedFlowNo.value = "";
+  if (isLoading.value) {
+    return;
+  }
   pageNo.value = 1;
+  loadPaymentFlows();
+}
+
+function refreshPaymentFlows() {
+  if (isLoading.value) {
+    return;
+  }
   loadPaymentFlows();
 }
 
@@ -65,40 +91,44 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadPaymentFlows() {
+async function loadPaymentFlows(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await paymentFlowApi.getList({
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      flowType: filters.value.flowType,
-      channelCode: filters.value.channelCode,
-      terminal: filters.value.terminal,
-      businessStatus: filters.value.businessStatus,
-      keyword: filters.value.keyword,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await paymentFlowApi.getList(query);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    expandedFlowNo.value = "";
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  expandedFlowNo.value = "";
-  loadPaymentFlows();
+  loadPaymentFlows({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 function openPaymentDetail(paymentOrderId) {
@@ -122,21 +152,35 @@ function formatPayload(value) {
 }
 
 function exportFlows() {
-  const exportUrl = paymentFlowApi.buildExportUrl({
-    paymentOrderId: filters.value.paymentOrderId,
-    orderNo: filters.value.orderNo,
-    flowType: filters.value.flowType,
-    channelCode: filters.value.channelCode,
-    terminal: filters.value.terminal,
-    businessStatus: filters.value.businessStatus,
-    keyword: filters.value.keyword,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = paymentFlowApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 onMounted(loadPaymentFlows);
+
+watch(
+  () => [route.query.paymentOrderId, route.query.orderNo, route.query.flowType,
+    route.query.channelCode, route.query.terminal, route.query.businessStatus,
+    route.query.keyword, route.query.sortField, route.query.sortOrder],
+  () => {
+    filters.value = {
+      paymentOrderId: route.query.paymentOrderId || "",
+      orderNo: route.query.orderNo || "",
+      flowType: route.query.flowType || "全部",
+      channelCode: route.query.channelCode || "",
+      terminal: route.query.terminal || "全部",
+      businessStatus: route.query.businessStatus || "全部",
+      keyword: route.query.keyword || "",
+      sortField: route.query.sortField || "createdAt",
+      sortOrder: route.query.sortOrder || "desc"
+    };
+    pageNo.value = 1;
+    loadPaymentFlows();
+  }
+);
 </script>
 
 <template>
@@ -146,10 +190,15 @@ onMounted(loadPaymentFlows);
         <h2>支付流水查询</h2>
         <p>统一查看支付尝试、渠道回调、路由决策和业务事件，支撑交易链路排障</p>
       </div>
-      <button class="button primary" @click="exportFlows">导出流水</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="refreshPaymentFlows">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="isLoading || !canExport" @click="exportFlows">导出流水</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">流水总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -170,21 +219,21 @@ onMounted(loadPaymentFlows);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付流水数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付流水数据刷新失败，当前展示上次成功快照：" : "支付流水数据加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>流水类型</label>
-          <select v-model="filters.flowType">
+          <select v-model="filters.flowType" :disabled="isLoading">
             <option>全部</option>
             <option>支付尝试</option>
             <option>渠道回调</option>
@@ -194,11 +243,11 @@ onMounted(loadPaymentFlows);
         </div>
         <div class="field">
           <label>渠道编码</label>
-          <input v-model="filters.channelCode" placeholder="如 wx_h5 / alipay_app" />
+          <input v-model="filters.channelCode" placeholder="如 wx_h5 / alipay_app" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>终端</label>
-          <select v-model="filters.terminal">
+          <select v-model="filters.terminal" :disabled="isLoading">
             <option>全部</option>
             <option>H5</option>
             <option>PC</option>
@@ -208,7 +257,7 @@ onMounted(loadPaymentFlows);
         </div>
         <div class="field">
           <label>业务状态</label>
-          <select v-model="filters.businessStatus">
+          <select v-model="filters.businessStatus" :disabled="isLoading">
             <option>全部</option>
             <option>处理中</option>
             <option>等待回调</option>
@@ -224,11 +273,11 @@ onMounted(loadPaymentFlows);
         </div>
         <div class="field">
           <label>关键字</label>
-          <input v-model="filters.keyword" placeholder="支持摘要、请求报文、响应报文检索" />
+          <input v-model="filters.keyword" placeholder="支持摘要、请求报文、响应报文检索" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="retryCount">重试次数</option>
             <option value="flowType">流水类型</option>
@@ -236,7 +285,7 @@ onMounted(loadPaymentFlows);
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
@@ -246,12 +295,16 @@ onMounted(loadPaymentFlows);
           <input value="已支持渠道、终端、关键字、原始报文与联查动作，便于运营和研发统一排障" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付流水数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付流水快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付流水数据</div>
 
@@ -350,11 +403,11 @@ onMounted(loadPaymentFlows);
           <div v-else class="state-box">选择左侧支付流水后，可在这里查看链路快照与排障建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条支付流水</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
