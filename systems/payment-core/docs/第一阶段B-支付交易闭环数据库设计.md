@@ -1765,6 +1765,13 @@ t_order
 4. 唯一键只约束技术协调行，不限制合法非重叠规则数量；停用和 `0%` 候选不获取协调锁，协调行不随业务规则停用或删除而回收。
 5. 双份全量 schema 与幂等建表迁移 `database/migrations/2026-09-13-add-payment-route-rule-conflict-lock.sql` 已同步，无业务数据回填。目标 MySQL 执行前仍需验证 DDL、锁等待、死锁、超时、回滚和容量；H2 双连接只证明本地协议形状。
 
+### 4.207 路由同优先级潜在冲突确认的数据边界
+
+1. `priorityCollisionAcknowledged` 是批准请求的瞬时布尔声明，不落入运行态规则、复核申请或版本表；本轮不新增表、字段、索引、schema 或迁移。
+2. 服务端取得 `t_payment_route_rule_conflict_lock` 的 `ENABLED_RULE_SET` 行锁后，继续通过既有 `SELECT ... FOR UPDATE` 当前读规则全集；确认值只影响候选所涉及 `PRIORITY_COLLISION` 的放行，不影响 `BLOCKER` 拒绝。
+3. 该字段不改变表达式、优先级或运行时 `priority ASC, id ASC` 顺序，也不形成表达式互斥证明。若后续需要持久化风险接受证据，应另行设计可信身份、审计主体和不可抵赖记录，不能把当前自声明字段追认为正式审批。
+4. 本地 Mockito 和 H2 不证明目标 MySQL 当前读、锁等待或生产数据下的表达式关系；真实审批与生产配置正确性仍需外部证据。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
