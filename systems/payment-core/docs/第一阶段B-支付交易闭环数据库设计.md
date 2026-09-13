@@ -1729,6 +1729,13 @@ t_order
 2. 应用层按规范化星期、日期策略和 24 小时集合判断交集；停用配置和候选自身排除。本轮不新增列、唯一约束、索引或迁移。
 3. 无匹配行时的目标 MySQL 间隙锁效果仍需真实并发测试；历史重叠不自动删除或改状态，由运行时确定性规则兜底并人工治理。
 
+### 4.202 值班路由批准范围协调表
+
+1. 新增 `t_payment_issue_duty_roster_scope_lock`：主键 `id`，协调维度 `issue_type VARCHAR(64)`、`severity VARCHAR(32)`，以及创建和更新时间；`uk_issue_duty_roster_scope_lock(issue_type, severity)` 保证每个批准范围只有一个稳定锁对象。
+2. 批准启用候选先 `INSERT IGNORE` 惰性创建协调行，再以相同维度 `SELECT id ... FOR UPDATE`；取得行锁后才读取 `t_payment_issue_duty_roster` 并完成重叠判断和写入，所有步骤共用批准事务。
+3. 唯一键约束协调行而非业务路由，不限制同范围的日班/夜班、不同星期或工作日/非工作日配置共存。停用候选不需要范围锁，协调行不因路由停用或删除而回收，避免锁对象消失重新暴露空范围窗口。
+4. 双份全量 schema 与幂等建表迁移 `database/migrations/2026-09-13-add-payment-issue-duty-roster-scope-lock.sql` 已同步，无历史数据回填。目标 MySQL 执行前仍需评估 DDL、锁等待、死锁、事务超时和范围基数；H2 双连接仅证明本地协议形状。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
