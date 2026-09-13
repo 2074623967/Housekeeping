@@ -2859,6 +2859,14 @@
 4. `PaymentConfigServiceImplTest` `74/74`、payment-core 后端全量 `1088/1088` 和补丁检查通过，实现提交为 `0a31c817`。本轮无前端、Mapper、schema、索引或迁移变化。
 5. 统一门禁仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4`；本地 Mockito 不证明目标 MySQL 锁等待、真实审批主体、生产配置或稳定性。
 
+### 8.348 2026-09-13 候选路由冲突扫描边界收窄进展
+
+1. 继续审计发现候选预览与批准复验原先把候选追加到全部运行态规则后调用全量两两冲突检测，再过滤与候选无关的结果；规则数为 `N` 时会在全局协调锁内执行 `O(N²)` 次组合检查。
+2. 候选路径改为先校验候选表达式，再按 Mapper 返回顺序逐条比较 `currentRule -> candidate`；同编码、停用、`0%` 灰度和表达式无效的当前规则继续跳过，候选自身表达式无效仍返回 `INVALID_EXPRESSION / BLOCKER`。
+3. 全量冲突查询接口继续保留完整两两扫描和全部规则间冲突语义；只有待办预览与批准锁内的候选相关扫描收窄为 `O(N)`，冲突类型、严重级别、顺序和最终审计快照契约不变。
+4. 既有预览用例新增两条彼此形成 `ROUTE_DIVERGENCE / BLOCKER`、但与候选场景无交集的规则，结果仍只返回候选相关的 `RULE_A_APP / RULE_Z_APP`。服务定向 `74/74`、后端全量 `1088/1088` 和补丁检查通过，实现提交为 `818178b1`。
+5. 统一门禁实测仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4`。复杂度结论来自代码路径，不代表目标 MySQL 锁等待、生产数据规模、吞吐或稳定性已经压测验证。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
