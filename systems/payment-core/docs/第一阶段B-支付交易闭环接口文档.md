@@ -545,6 +545,8 @@
 
 `clientIp` 请求字段仅为兼容保留，HTTP 入口不会信任该值，而是始终按 14.46 节的连接与可信代理规则覆盖。
 
+`terminal` 的规范值包含 `APP / H5 / PC / MINI_PROGRAM / UNKNOWN`。微信小程序应发送 `MINI_PROGRAM`；服务端兼容 `WECHAT_MINI_PROGRAM / WX_MINI_PROGRAM / 小程序` 并统一保存为 `MINI_PROGRAM`。本地 demo 来源应用 `housekeeping-mini-program` 仅允许微信支付、`wx_h5` 与 `MCH_WX_10001`，真实环境必须由受控配置和密钥托管替换示例令牌。
+
 `channelCode` 会由支付核心统一规范化为标准编码：
 
 | 请求渠道/支付方式 | 标准渠道编码 |
@@ -2367,7 +2369,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 1. `POST /api/payments/submit` 在查找预付单前校验请求。`prepayOrderNo` 必填且最长 `64` 字符；`paymentMethod/channelCode/sourceAppId/merchantNo/accessToken/clientIp/clientDeviceId/payerPhone` 非空时最长分别为 `32/64/64/128/128/64/128/32` 字符，所有字段去除首尾空白并拒绝 ISO 控制字符。
 2. 支付方式允许先为空并由有效运营配置补齐，但补齐结果仍必须满足必填和 `32` 字符上限；请求渠道允许为空交给路由选择，路由最终渠道必填且最长 `64` 字符。
-3. `terminal` 缺失时为 `UNKNOWN`；规范值仅有 `APP/H5/PC/UNKNOWN`。兼容别名 `APP_WEB -> APP`、`H5_WEB/MOBILE_WEB -> H5`、`PC_WEB -> PC`，其他值返回 `PAYMENT-1035`，不得形成新的限流、风控或审计维度。
+3. `terminal` 缺失时为 `UNKNOWN`；规范值仅有 `APP/H5/PC/MINI_PROGRAM/UNKNOWN`。兼容别名 `APP_WEB -> APP`、`H5_WEB/MOBILE_WEB -> H5`、`PC_WEB -> PC`、`WECHAT_MINI_PROGRAM/WX_MINI_PROGRAM/小程序 -> MINI_PROGRAM`，其他值返回 `PAYMENT-1035`，不得形成新的限流、风控或审计维度。
 4. 显式 `idempotencyKey` 继续按 14.38 的 `128` 字符与控制字符规则返回 `PAYMENT-1028`；其他提交字段非法统一返回 `PAYMENT-1035`。以上限制不替代部署网关的整体 JSON 请求体上限和渠道专属字段规则。
 
 ### 14.48 渠道查单结果字段契约

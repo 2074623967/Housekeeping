@@ -366,6 +366,12 @@ final class PaymentRouteExpressionEvaluator {
         if ("app".equals(normalizedTerminal) || "app_native".equals(normalizedTerminal)) {
             return "app";
         }
+        if ("mini_program".equals(normalizedTerminal)
+                || "wechat_mini_program".equals(normalizedTerminal)
+                || "wx_mini_program".equals(normalizedTerminal)
+                || "小程序".equals(normalizedTerminal)) {
+            return "mini_program";
+        }
         return normalizedTerminal;
     }
 

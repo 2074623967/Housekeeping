@@ -384,6 +384,12 @@ public class PaymentChannelRoutingServiceImpl implements PaymentChannelRoutingSe
         if ("app".equals(normalizedToken) || "app_native".equals(normalizedToken)) {
             return "app";
         }
+        if ("mini_program".equals(normalizedToken)
+                || "wechat_mini_program".equals(normalizedToken)
+                || "wx_mini_program".equals(normalizedToken)
+                || "小程序".equals(normalizedToken)) {
+            return "mini_program";
+        }
         return normalizedToken;
     }
 }

@@ -33,6 +33,16 @@ class PaymentRouteExpressionEvaluatorTest {
     }
 
     @Test
+    void shouldNormalizeMiniProgramTerminalAliasesInExpressions() {
+        PaymentRouteContextDTO context = buildContext(
+                "微信支付", "BALANCE_PAY_MINI_PROGRAM", "WECHAT_MINI_PROGRAM", "张女士", "WX_H5", "68");
+
+        assertTrue(PaymentRouteExpressionEvaluator.matches(context, "terminal=小程序"));
+        assertTrue(PaymentRouteExpressionEvaluator.matches(context, "terminal=MINI_PROGRAM"));
+        assertTrue(PaymentRouteExpressionEvaluator.matches(context, "terminal=WX_MINI_PROGRAM"));
+    }
+
+    @Test
     void shouldSupportAllAmountComparisonsAndExistingFlatSyntax() {
         PaymentRouteContextDTO context = buildContext("银行转账", "ENTERPRISE", "PC", "企业客户-晨星科技", "", "5000");
 

@@ -73,7 +73,8 @@ INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_pa
 ('default-app', '默认收银台应用', '微信支付,支付宝,银行卡', 'wx_h5,alipay_h5,offline_bank', 'MCH_WX_10001,MCH_ALI_20001,BANK_OFFLINE_30001', 120, 90, '关闭', 'token-default-app', '关闭', 'PASS', 'success', '默认策略仅做基础治理，不阻断提交流程', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 40, 20, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_ALI_20001,BANK_OFFLINE_30001', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'PASS', 'success', '支付方式、渠道和网关接入均已通过自检', 'ENABLED', 'success', '2026-07-21 09:00:00');
+('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_ALI_20001,BANK_OFFLINE_30001', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'PASS', 'success', '支付方式、渠道和网关接入均已通过自检', 'ENABLED', 'success', '2026-07-21 09:00:00'),
+('housekeeping-mini-program', '家政微信小程序收银台', '微信支付', 'wx_h5', 'MCH_WX_10001', 30, 15, '开启', 'token-housekeeping-mini-program', '开启', 'PASS', 'success', '小程序支付方式、渠道和来源策略已通过本地自检', 'ENABLED', 'success', '2026-09-14 09:00:00');
 
 INSERT INTO t_payment_control_policy_version (
     source_app_id, version_no, source_app_name, allowed_payment_methods,

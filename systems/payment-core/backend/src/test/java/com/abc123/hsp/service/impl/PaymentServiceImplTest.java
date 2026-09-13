@@ -356,6 +356,29 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldNormalizeSupportedMiniProgramTerminalsBeforeLoadingPrepay() {
+        PaymentServiceImpl service = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService);
+
+        for (String terminal : Arrays.asList("MINI_PROGRAM", "WECHAT_MINI_PROGRAM", "WX_MINI_PROGRAM", "小程序")) {
+            PaymentSubmitRequestDTO request = validSubmitRequest();
+            request.setPrepayOrderNo("PRE-MINI-" + terminal);
+            request.setTerminal(terminal);
+
+            BusinessException exception = assertThrows(BusinessException.class, () -> service.submit(request));
+
+            org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PREPAY_ORDER_NOT_FOUND, exception.getCode());
+            org.junit.jupiter.api.Assertions.assertEquals("MINI_PROGRAM", request.getTerminal());
+        }
+        verify(paymentMapper, times(4)).findPrepay(org.mockito.ArgumentMatchers.startsWith("PRE-MINI-"));
+        verifyNoInteractions(paymentChannelRoutingService, paymentRiskControlService, paymentChannelSubmitService);
+    }
+
+    @Test
     void shouldRejectOversizedRiskFieldBeforeAnySubmitInteraction() {
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-INVALID-DEVICE");

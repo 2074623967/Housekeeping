@@ -1746,10 +1746,16 @@ public class PaymentServiceImpl implements PaymentService {
         if ("PC".equals(normalized) || "PC_WEB".equals(normalized)) {
             return "PC";
         }
+        if ("MINI_PROGRAM".equals(normalized)
+                || "WECHAT_MINI_PROGRAM".equals(normalized)
+                || "WX_MINI_PROGRAM".equals(normalized)
+                || "小程序".equals(normalized)) {
+            return "MINI_PROGRAM";
+        }
         if ("UNKNOWN".equals(normalized)) {
             return normalized;
         }
-        throw invalidSubmitRequest("终端标识仅支持 APP、H5、PC 或 UNKNOWN");
+        throw invalidSubmitRequest("终端标识仅支持 APP、H5、PC、MINI_PROGRAM 或 UNKNOWN");
     }
 
     private String normalizeRequiredSubmitField(String value, String fieldName, int maxLength) {

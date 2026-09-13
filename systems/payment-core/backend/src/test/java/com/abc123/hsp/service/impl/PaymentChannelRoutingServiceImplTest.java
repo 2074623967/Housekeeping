@@ -72,6 +72,24 @@ class PaymentChannelRoutingServiceImplTest {
     }
 
     @Test
+    void shouldMatchMiniProgramTerminalAgainstChineseChannelScope() {
+        PaymentChannelRoutingConfigDTO requestedChannel = buildChannel(
+                "wx_h5", "微信支付", "H5/APP/小程序", new BigDecimal("5000.00"));
+        when(paymentConfigMapper.findEnabledChannelsForRouting())
+                .thenReturn(Collections.singletonList(requestedChannel));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("wx_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext(
+                        "微信支付", "WX_H5", "BALANCE_PAY_MINI_PROGRAM", "MINI_PROGRAM",
+                        "张女士", new BigDecimal("68.00")));
+
+        assertEquals("wx_h5", decision.getChannelCode());
+        assertEquals("REQUESTED_CHANNEL", decision.getRouteRule());
+    }
+
+    @Test
     void shouldFallbackToPaymentMethodDefaultWhenRequestedChannelMissing() {
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
                 buildChannel("wx_h5", "微信支付"),

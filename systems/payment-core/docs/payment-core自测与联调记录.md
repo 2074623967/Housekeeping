@@ -14835,3 +14835,31 @@
 1. 订单中心展示、翻页、导出和行级操作现共享同一成功查询，不再由筛选草稿、失败页码或过期订单驱动后续动作。
 2. 支付发起成功后的收银台结果仍作为独立 POST 事实保留，列表刷新失败不会将成功结果改写为失败。
 3. 自动化、构建和真实 API 结果不替代待解锁的页面视觉复验，也不证明真实渠道支付、资金、生产并发、权限或 release 放行条件。
+
+## 547. 2026-09-14 小程序支付后端接入基线 V1.0 验证
+
+### 547.1 本轮补强
+
+1. 支付提交新增 `MINI_PROGRAM` 规范终端及三个兼容别名，未知终端仍失败关闭。
+2. 支付渠道场景和路由表达式统一支持小程序终端归一化，既有中文“小程序”范围可被规范终端命中。
+3. demo 增加独立小程序来源控制策略和微信支付端到端提交样例。
+
+### 547.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 提交终端边界 | `MINI_PROGRAM / WECHAT_MINI_PROGRAM / WX_MINI_PROGRAM / 小程序` 均归一化为 `MINI_PROGRAM`；未知值既有拒绝用例保持通过 |
+| 路由场景 | `MINI_PROGRAM` 成功命中 `H5/APP/小程序` 渠道范围并选择 `wx_h5` |
+| 路由表达式 | 小程序上下文可匹配 `terminal=小程序 / MINI_PROGRAM / WX_MINI_PROGRAM` |
+| demo 提交闭环 | 独立来源策略下创建预付单并提交微信支付，收银台为“支付中”、支付单为 `WAIT_CALLBACK`、最近终端为 `MINI_PROGRAM` |
+| 后端定向测试 | `PaymentServiceImplTest,PaymentChannelRoutingServiceImplTest,PaymentRouteExpressionEvaluatorTest,PaymentDemoProfileIntegrationTest` 通过 |
+| 后端全量测试 | `1107/1107` 通过，`0` failures、`0` errors、`0` skipped |
+| 静态检查 | `git diff --check` 通过 |
+| 运行边界 | 当前长驻 payment-core 进程尚未重启到本批代码；真实接口验证留待小程序前端完成后一并执行 |
+| 统一门禁复判 | 脚本退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4` |
+
+### 547.3 当前判断
+
+1. 小程序已经具备可复用支付主链路的后端接入地基，但前端工程、微信登录态和 `wx.requestPayment` 尚未交付，端类型不能改判为已实现。
+2. 独立来源策略避免小程序冒用 App/H5 接入身份；示例令牌只适用于本地 demo，不能进入真实环境。
+3. 本地 H2、模拟渠道和单进程测试不证明真实微信受理、扣款、回调、资金一致、生产并发或 release 放行条件。

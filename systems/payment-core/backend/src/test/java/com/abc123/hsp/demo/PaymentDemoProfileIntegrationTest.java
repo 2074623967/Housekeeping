@@ -44,6 +44,7 @@ class PaymentDemoProfileIntegrationTest {
                 assertNotNull(context.getBean(PaymentIssueService.class).list(new PaymentIssueQueryDTO()).getItems());
                 verifyPaymentSubmit(context.getBean(PaymentService.class));
                 verifyPcAlipaySubmit(context.getBean(PaymentService.class));
+                verifyMiniProgramWechatSubmit(context.getBean(PaymentService.class));
             }
         } finally {
             rootLogger.setLevel(originalRootLevel);
@@ -107,5 +108,34 @@ class PaymentDemoProfileIntegrationTest {
         assertEquals("PAYMENT-CHANNEL-2001", detail.getStandardizedCode());
         assertEquals("是", detail.getRetryable());
         assertEquals("否", detail.getManualInterventionRequired());
+    }
+
+    private void verifyMiniProgramWechatSubmit(PaymentService paymentService) {
+        PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+        prepayRequest.setOrderNo("DEMO-INTEGRATION-MINI-WECHAT-001");
+        prepayRequest.setPayScene("BALANCE_PAY_MINI_PROGRAM");
+        prepayRequest.setCustomerName("demo mini program integration");
+        prepayRequest.setAmount(new BigDecimal("68.00"));
+        prepayRequest.setCashierTitle("mini program payment");
+        PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+
+        PaymentSubmitRequestDTO submitRequest = new PaymentSubmitRequestDTO();
+        submitRequest.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        submitRequest.setPaymentMethod("微信支付");
+        submitRequest.setChannelCode("wx_h5");
+        submitRequest.setSourceAppId("housekeeping-mini-program");
+        submitRequest.setMerchantNo("MCH_WX_10001");
+        submitRequest.setAccessToken("token-housekeeping-mini-program");
+        submitRequest.setTerminal("WECHAT_MINI_PROGRAM");
+        submitRequest.setClientIp("127.0.0.1");
+        submitRequest.setClientDeviceId("demo-mini-program-integration");
+        submitRequest.setPayerPhone("13800000002");
+        submitRequest.setIdempotencyKey("DEMO-INTEGRATION-MINI-WECHAT-001");
+
+        PrepayOrderDTO submitted = paymentService.submit(submitRequest);
+        PaymentDetailDTO detail = paymentService.detail(submitted.getPaymentOrderId());
+        assertEquals("支付中", submitted.getCashierStatus());
+        assertEquals("WAIT_CALLBACK", detail.getStatus());
+        assertEquals("MINI_PROGRAM", detail.getLatestTerminal());
     }
 }
