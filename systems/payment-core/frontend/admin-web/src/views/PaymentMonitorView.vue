@@ -26,6 +26,9 @@ const overview = ref({
 const isLoading = ref(true);
 const hasLoadedData = ref(false);
 const errorMessage = ref("");
+let latestLoadRequestId = 0;
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canDrillDown = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
 
 const monitorCards = computed(() => {
   const summary = overview.value.summary || {};
@@ -141,28 +144,44 @@ const channelSuggestions = computed(() => {
 });
 
 async function loadOverview() {
+  if (isLoading.value && hasLoadedData.value) {
+    return;
+  }
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    overview.value = await paymentMonitorApi.getOverview();
-    selectedAlert.value = overview.value.alerts?.[0] || null;
-    selectedChannel.value = overview.value.channelMetrics?.[0] || null;
+    const result = await paymentMonitorApi.getOverview();
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
+    overview.value = result;
+    selectedAlert.value = result.alerts?.[0] || null;
+    selectedChannel.value = result.channelMetrics?.[0] || null;
     hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function openAlertRoute(actionRoute) {
-  if (!actionRoute) {
+  if (!canDrillDown.value || !actionRoute) {
     return;
   }
   router.push(actionRoute);
 }
 
 function openChannelDrillDown(item) {
+  if (!canDrillDown.value) {
+    return;
+  }
   if ((item.pendingCount || 0) > 0) {
     router.push(paymentsRoute({
       channelCode: item.channelCode,
@@ -192,7 +211,9 @@ onMounted(loadOverview);
         <h2>支付监控分析</h2>
         <p>查看最近支付趋势、渠道表现和待处理异常</p>
       </div>
-      <button class="button secondary" @click="loadOverview">刷新</button>
+      <button class="button secondary" :disabled="isLoading" @click="loadOverview">
+        {{ isLoading ? "刷新中..." : "刷新" }}
+      </button>
     </div>
 
     <section class="panel">
@@ -243,27 +264,29 @@ onMounted(loadOverview);
               <h3>最近支付事实趋势</h3>
               <span class="meta">创建按创建日，成功按成功日</span>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>日期</th>
-                  <th>创建单量</th>
-                  <th>成功发生量</th>
-                  <th>成功金额</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="!overview.trends?.length">
-                  <td colspan="4" class="state-box">当前暂无支付趋势数据</td>
-                </tr>
-                <tr v-for="item in overview.trends" :key="item.statDate">
-                  <td>{{ item.statDate }}</td>
-                  <td>{{ item.totalCount }}</td>
-                  <td>{{ item.successCount }}</td>
-                  <td>{{ item.successAmount }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>创建单量</th>
+                    <th>成功发生量</th>
+                    <th>成功金额</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!overview.trends?.length">
+                    <td colspan="4" class="state-box">当前暂无支付趋势数据</td>
+                  </tr>
+                  <tr v-for="item in overview.trends" :key="item.statDate">
+                    <td>{{ item.statDate }}</td>
+                    <td>{{ item.totalCount }}</td>
+                    <td>{{ item.successCount }}</td>
+                    <td>{{ item.successAmount }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </section>
 
           <section class="panel mini">
@@ -271,33 +294,35 @@ onMounted(loadOverview);
               <h3>异常告警</h3>
               <span class="meta">优先处理</span>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>等级</th>
-                  <th>标题</th>
-                  <th>影响</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="!overview.alerts?.length">
-                  <td colspan="4" class="state-box">当前暂无待处理异常告警</td>
-                </tr>
-                <tr v-for="alert in overview.alerts" :key="alert.alertType">
-                  <td><span :class="['badge', alert.alertLevelType]">{{ alert.alertLevel }}</span></td>
-                  <td>
-                    <button class="table-link" @click="pickAlert(alert)">{{ alert.alertTitle }}</button>
-                    <div class="meta">{{ alert.alertMessage }}</div>
-                    <div class="meta">{{ alert.suggestedAction }}</div>
-                  </td>
-                  <td>{{ alert.affectedCount }} 笔</td>
-                  <td>
-                    <button class="link-button" @click="openAlertRoute(alert.actionRoute)">立即排查</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>等级</th>
+                    <th>标题</th>
+                    <th>影响</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!overview.alerts?.length">
+                    <td colspan="4" class="state-box">当前暂无待处理异常告警</td>
+                  </tr>
+                  <tr v-for="alert in overview.alerts" :key="alert.alertType">
+                    <td><span :class="['badge', alert.alertLevelType]">{{ alert.alertLevel }}</span></td>
+                    <td>
+                      <button class="table-link" @click="pickAlert(alert)">{{ alert.alertTitle }}</button>
+                      <div class="meta">{{ alert.alertMessage }}</div>
+                      <div class="meta">{{ alert.suggestedAction }}</div>
+                    </td>
+                    <td>{{ alert.affectedCount }} 笔</td>
+                    <td>
+                      <button class="link-button" :disabled="!canDrillDown" @click="openAlertRoute(alert.actionRoute)">立即排查</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </section>
         </div>
 
@@ -381,7 +406,7 @@ onMounted(loadOverview);
                   <td><span :class="['badge', item.riskLevelType]">{{ item.riskLevel }}</span></td>
                   <td class="flow-summary-cell">{{ item.riskHint }}</td>
                   <td>
-                    <button class="link-button" @click="openChannelDrillDown(item)">查看明细</button>
+                    <button class="link-button" :disabled="!canDrillDown" @click="openChannelDrillDown(item)">查看明细</button>
                   </td>
                 </tr>
               </tbody>
@@ -410,8 +435,8 @@ onMounted(loadOverview);
               <div class="ops-card">
                 <div class="ops-title">联查入口</div>
                 <div class="list-actions">
-                  <button class="link-button" @click="openChannelDrillDown(selectedChannel)">查看渠道明细</button>
-                  <button class="link-button" @click="router.push('/payment-config')">查看支付配置</button>
+                  <button class="link-button" :disabled="!canDrillDown" @click="openChannelDrillDown(selectedChannel)">查看渠道明细</button>
+                  <button class="link-button" :disabled="!canDrillDown" @click="router.push('/payment-config')">查看支付配置</button>
                 </div>
               </div>
             </div>
