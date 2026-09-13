@@ -6,7 +6,9 @@ import { dashboardApi, paymentMetricsApi } from "../api/client";
 const router = useRouter();
 const summary = ref([]);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
+let latestLoadRequestId = 0;
 const metrics = ref({
   totalCount: 0,
   successCount: 0,
@@ -16,14 +18,7 @@ const metrics = ref({
   closedCount: 0
 });
 
-const fallbackCards = [
-  { key: "payment-count", title: "支付单总量", value: "0", badgeType: "info", badgeText: "待同步" },
-  { key: "paid-amount", title: "成功支付金额", value: "¥0.00", badgeType: "success", badgeText: "交易金额" },
-  { key: "pending-orders", title: "待收口支付", value: "0", badgeType: "warn", badgeText: "优先排查" },
-  { key: "closed-orders", title: "已关闭支付", value: "0", badgeType: "danger", badgeText: "关闭保护" }
-];
-
-const overviewCards = computed(() => (summary.value.length ? summary.value : fallbackCards));
+const overviewCards = computed(() => summary.value);
 
 const focusQueue = computed(() => [
   {
@@ -99,16 +94,29 @@ const quickActions = [
 ];
 
 async function loadDashboard() {
+  if (isLoading.value && hasLoadedData.value) {
+    return;
+  }
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
     const [data, metricData] = await Promise.all([dashboardApi.getSummary(), paymentMetricsApi.getSummary()]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     summary.value = data.cards || [];
     metrics.value = metricData;
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
@@ -126,7 +134,9 @@ onMounted(loadDashboard);
         <h2>工作台</h2>
         <p>查看家政支付系统当天核心指标、待办风险和支付主链路健康度</p>
       </div>
-      <button class="button secondary" @click="loadDashboard">刷新</button>
+      <button class="button secondary" :disabled="isLoading" @click="loadDashboard">
+        {{ isLoading ? "刷新中..." : "刷新" }}
+      </button>
     </div>
 
     <div class="risk-banner">
@@ -134,10 +144,12 @@ onMounted(loadDashboard);
     </div>
 
     <div v-if="errorMessage" class="error-banner">
-      工作台数据加载失败：{{ errorMessage }}
+      {{ hasLoadedData ? "工作台数据刷新失败，当前展示上次成功快照：" : "工作台数据加载失败：" }}{{ errorMessage }}
     </div>
 
     <div v-if="isLoading" class="state-box">工作台数据加载中...</div>
+
+    <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的工作台数据快照</div>
 
     <template v-else>
       <div class="card-grid">
@@ -147,6 +159,8 @@ onMounted(loadDashboard);
           <span :class="['badge', card.badgeType]">{{ card.badgeText }}</span>
         </div>
       </div>
+
+      <div v-if="!overviewCards.length" class="state-box">当前暂无支付概览指标</div>
 
       <div class="split-panels">
         <section class="panel">
