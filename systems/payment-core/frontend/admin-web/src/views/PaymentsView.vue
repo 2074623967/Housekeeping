@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
@@ -22,14 +22,25 @@ const operationOperator = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
-const filters = ref({
-  paymentOrderId: route.query.paymentOrderId || "",
-  orderNo: route.query.orderNo || "",
-  channelCode: route.query.channelCode || "",
-  paymentMethod: route.query.paymentMethod || "全部",
-  status: route.query.status || "全部"
-});
+let latestLoadRequestId = 0;
+
+function queryString(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function filtersFromRoute() {
+  return {
+    paymentOrderId: queryString(route.query.paymentOrderId, ""),
+    orderNo: queryString(route.query.orderNo, ""),
+    channelCode: queryString(route.query.channelCode, ""),
+    paymentMethod: queryString(route.query.paymentMethod, "全部"),
+    status: queryString(route.query.status, "全部")
+  };
+}
+
+const filters = ref(filtersFromRoute());
 
 const metrics = computed(() => ({
   total: total.value,
@@ -41,6 +52,11 @@ const metrics = computed(() => ({
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
 ));
+const isActionRunningOnPage = computed(() => Boolean(activePaymentOrderId.value));
+const canUseSnapshot = computed(() => (
+  hasLoadedData.value && !isLoading.value && !isSnapshotStale.value && !isActionRunningOnPage.value
+));
+const canExport = computed(() => canUseSnapshot.value && total.value > 0);
 
 function buildQuery() {
   return {
@@ -55,6 +71,9 @@ function buildQuery() {
 }
 
 function resetFilters() {
+  if (isLoading.value || isActionRunningOnPage.value) {
+    return;
+  }
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
@@ -71,15 +90,25 @@ async function refreshList(
   afterAction = false,
   query = buildQuery()
 ) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  if (afterAction) {
+    actionRefreshErrorMessage.value = "";
+  } else {
+    loadErrorMessage.value = "";
+  }
   try {
     const result = await paymentApi.getList(query);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items.find((item) => item.paymentOrderId === preferredPaymentOrderId)
       || result.items[0]
       || null;
     loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
@@ -88,6 +117,9 @@ async function refreshList(
       actionResultMessage.value = "";
     }
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -98,28 +130,50 @@ async function refreshList(
       pageNo.value = loadedPageNo.value;
     }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function applyFilters() {
+  if (isLoading.value || isActionRunningOnPage.value) {
+    return;
+  }
   pageNo.value = 1;
   refreshList();
 }
 
+function refreshPayments() {
+  if (isLoading.value || isActionRunningOnPage.value) {
+    return;
+  }
+  const query = loadedQuery.value
+    ? { ...loadedQuery.value, pageNo: loadedPageNo.value }
+    : buildQuery();
+  refreshList(selectedItem.value?.paymentOrderId, false, query);
+}
+
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (!canUseSnapshot.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  refreshList();
+  refreshList(selectedItem.value?.paymentOrderId, false, { ...loadedQuery.value, pageNo: nextPage });
 }
 
 function openDetail(paymentOrderId) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   router.push(paymentDetailRoute(paymentOrderId));
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
 }
 
@@ -158,7 +212,7 @@ function updatePaymentSnapshot(paymentDetail) {
 
 async function handleQuery(paymentOrderId) {
   const paymentItem = items.value.find((item) => item.paymentOrderId === paymentOrderId);
-  if (!paymentItem || !canRunQuery(paymentItem)) {
+  if (!canUseSnapshot.value || !loadedQuery.value || !paymentItem || !canRunQuery(paymentItem)) {
     actionErrorMessage.value = `支付单 ${paymentOrderId} 没有可供渠道查单的提交事实。`;
     actionResultMessage.value = "";
     return;
@@ -169,7 +223,7 @@ async function handleQuery(paymentOrderId) {
     actionResultMessage.value = "";
     return;
   }
-  const query = buildQuery();
+  const query = { ...loadedQuery.value };
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "query";
   actionErrorMessage.value = "";
@@ -189,13 +243,19 @@ async function handleQuery(paymentOrderId) {
 }
 
 async function handleClose(paymentOrderId) {
+  const paymentItem = items.value.find((item) => item.paymentOrderId === paymentOrderId);
+  if (!canUseSnapshot.value || !loadedQuery.value || !paymentItem || !canRunClose(paymentItem)) {
+    actionErrorMessage.value = `支付单 ${paymentOrderId} 当前不满足人工关闭条件。`;
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = operationOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
     actionResultMessage.value = "";
     return;
   }
-  const query = buildQuery();
+  const query = { ...loadedQuery.value };
   activePaymentOrderId.value = paymentOrderId;
   activeAction.value = "close";
   actionErrorMessage.value = "";
@@ -217,17 +277,24 @@ async function handleClose(paymentOrderId) {
 }
 
 function exportPayments() {
-  const exportUrl = paymentApi.buildExportUrl({
-    paymentOrderId: filters.value.paymentOrderId,
-    orderNo: filters.value.orderNo,
-    channelCode: filters.value.channelCode,
-    paymentMethod: filters.value.paymentMethod,
-    status: filters.value.status
-  });
+  if (!canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = paymentApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 onMounted(refreshList);
+
+watch(
+  () => [route.query.paymentOrderId, route.query.orderNo, route.query.channelCode,
+    route.query.paymentMethod, route.query.status],
+  () => {
+    filters.value = filtersFromRoute();
+    pageNo.value = 1;
+    refreshList();
+  }
+);
 </script>
 
 <template>
@@ -238,8 +305,10 @@ onMounted(refreshList);
         <p>统一查看支付单、支付方式、渠道交易和回调收敛情况</p>
       </div>
       <div class="toolbar-actions">
-        <button class="button secondary" :disabled="isLoading || Boolean(activePaymentOrderId)" @click="refreshList()">刷新</button>
-        <button class="button primary" @click="exportPayments">导出支付单</button>
+        <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="refreshPayments">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="!canExport" @click="exportPayments">导出支付单</button>
       </div>
     </div>
 
@@ -279,19 +348,19 @@ onMounted(refreshList);
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" :disabled="Boolean(activePaymentOrderId)" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" :disabled="isLoading || isActionRunningOnPage" placeholder="请输入支付单号" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" :disabled="Boolean(activePaymentOrderId)" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" :disabled="isLoading || isActionRunningOnPage" placeholder="请输入订单号" />
         </div>
         <div class="field">
           <label>渠道编码</label>
-          <input v-model="filters.channelCode" :disabled="Boolean(activePaymentOrderId)" maxlength="64" placeholder="请输入渠道编码" />
+          <input v-model="filters.channelCode" :disabled="isLoading || isActionRunningOnPage" maxlength="64" placeholder="请输入渠道编码" />
         </div>
         <div class="field">
           <label>支付方式</label>
-          <select v-model="filters.paymentMethod" :disabled="Boolean(activePaymentOrderId)">
+          <select v-model="filters.paymentMethod" :disabled="isLoading || isActionRunningOnPage">
             <option>全部</option>
             <option>微信</option>
             <option>支付宝</option>
@@ -301,7 +370,7 @@ onMounted(refreshList);
         </div>
         <div class="field">
           <label>支付状态</label>
-          <select v-model="filters.status" :disabled="Boolean(activePaymentOrderId)">
+          <select v-model="filters.status" :disabled="isLoading || isActionRunningOnPage">
             <option>全部</option>
             <option>SUCCESS</option>
             <option>WAIT_CALLBACK</option>
@@ -318,11 +387,13 @@ onMounted(refreshList);
         </div>
         <div class="field">
           <label>操作人</label>
-          <input v-model.trim="operationOperator" :disabled="Boolean(activePaymentOrderId)" maxlength="64" placeholder="请输入操作人" />
+          <input v-model.trim="operationOperator" :disabled="isLoading || isActionRunningOnPage" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" :disabled="isLoading || Boolean(activePaymentOrderId)" @click="applyFilters">查询</button>
-          <button class="button secondary" :disabled="isLoading || Boolean(activePaymentOrderId)" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading || isActionRunningOnPage" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -362,12 +433,12 @@ onMounted(refreshList);
                 <td>{{ item.createdAt }}</td>
                 <td>
                   <div class="list-actions">
-                    <button class="link-button" @click="pickItem(item)">快照</button>
-                    <button class="link-button" @click="openDetail(item.paymentOrderId)">详情</button>
-                    <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData || !canRunQuery(item)" @click="handleQuery(item.paymentOrderId)">
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">快照</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openDetail(item.paymentOrderId)">详情</button>
+                    <button class="link-button" :disabled="!canUseSnapshot || !canRunQuery(item)" @click="handleQuery(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "query") ? "查单中..." : "查单" }}
                     </button>
-                    <button class="link-button" :disabled="Boolean(activePaymentOrderId) || isSnapshotStale || !hasLoadedData || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
+                    <button class="link-button" :disabled="!canUseSnapshot || !canRunClose(item)" @click="handleClose(item.paymentOrderId)">
                       {{ isActionRunning(item.paymentOrderId, "close") ? "关闭中..." : "关闭" }}
                     </button>
                   </div>
@@ -406,9 +477,9 @@ onMounted(refreshList);
       </div>
       <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条支付单</span>
-        <button class="button secondary" :disabled="pageNo === 1 || isLoading || Boolean(activePaymentOrderId) || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || Boolean(activePaymentOrderId) || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
@@ -424,11 +495,13 @@ onMounted(refreshList);
 .detail-side {
   display: grid;
   align-self: start;
+  min-width: 0;
 }
 
 .detail-stack {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .detail-grid {
@@ -453,6 +526,7 @@ onMounted(refreshList);
 
 .detail-card strong {
   color: #0f172a;
+  word-break: break-word;
 }
 
 .ops-card {
@@ -477,5 +551,17 @@ onMounted(refreshList);
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ops-row {
+    flex-direction: column;
+  }
 }
 </style>
