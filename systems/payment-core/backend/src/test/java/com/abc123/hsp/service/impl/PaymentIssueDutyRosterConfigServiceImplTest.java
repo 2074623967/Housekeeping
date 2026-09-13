@@ -4,7 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,9 +20,11 @@ import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import com.abc123.hsp.mapper.PaymentConfigMapper;
 import java.util.Collections;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -30,6 +35,12 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void setUpScopeLock() {
+        lenient().when(paymentConfigMapper.lockIssueDutyRosterScope(anyString(), anyString()))
+                .thenReturn(Long.valueOf(1L));
+    }
 
     @Test
     void shouldSubmitCreateUpdateAndStatusCandidatesWithoutChangingRuntime() {
@@ -137,6 +148,31 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
 
         assertTrue(conflict.getMessage().contains("DUTY_EXISTING_P1"));
         assertTrue(conflict.getMessage().contains("重叠"));
+        InOrder scopeLockOrder = inOrder(paymentConfigMapper);
+        scopeLockOrder.verify(paymentConfigMapper)
+                .initIssueDutyRosterScopeLock("待回调未收口", "P1");
+        scopeLockOrder.verify(paymentConfigMapper)
+                .lockIssueDutyRosterScope("待回调未收口", "P1");
+        scopeLockOrder.verify(paymentConfigMapper)
+                .findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1");
+        verify(paymentConfigMapper, never()).insertIssueDutyRoster(any());
+    }
+
+    @Test
+    void shouldFailApprovalWhenScopeLockCannotBeLoaded() {
+        PaymentIssueDutyRosterReviewEntity review = review("CREATE", null);
+        review.setRosterCode("DUTY_NEW_P1");
+        when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
+        when(paymentConfigMapper.lockIssueDutyRosterScope("待回调未收口", "P1")).thenReturn(null);
+
+        IllegalStateException lockFailure = assertThrows(IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).approveIssueDutyRosterReview(
+                        "DRR-001", action("checker-b", "确认新增")));
+
+        assertTrue(lockFailure.getMessage().contains("并发锁获取失败"));
+        verify(paymentConfigMapper).initIssueDutyRosterScopeLock("待回调未收口", "P1");
+        verify(paymentConfigMapper, never())
+                .findIssueDutyRostersByScopeForUpdate(anyString(), anyString());
         verify(paymentConfigMapper, never()).insertIssueDutyRoster(any());
     }
 

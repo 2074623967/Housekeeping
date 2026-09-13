@@ -1511,6 +1511,23 @@
         FOR UPDATE
     </select>
 
+    <insert id="initIssueDutyRosterScopeLock">
+        INSERT IGNORE INTO t_payment_issue_duty_roster_scope_lock(
+            issue_type, severity, created_at, updated_at
+        ) VALUES (
+            #{issueType}, #{severity}, NOW(), NOW()
+        )
+    </insert>
+
+    <select id="lockIssueDutyRosterScope" resultType="long">
+        SELECT id
+        FROM t_payment_issue_duty_roster_scope_lock
+        WHERE issue_type = #{issueType}
+          AND severity = #{severity}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
     <select id="findIssueDutyRostersByScopeForUpdate"
             resultType="com.abc123.hsp.entity.PaymentIssueDutyRosterEntity">
         SELECT roster_code AS rosterCode,

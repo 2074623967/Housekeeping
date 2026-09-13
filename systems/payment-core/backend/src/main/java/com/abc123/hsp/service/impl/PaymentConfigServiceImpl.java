@@ -3296,6 +3296,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!STATUS_ENABLED.equals(candidate.getStatus())) {
             return;
         }
+        paymentConfigMapper.initIssueDutyRosterScopeLock(
+                candidate.getIssueType(), candidate.getSeverity());
+        Long scopeLockId = paymentConfigMapper.lockIssueDutyRosterScope(
+                candidate.getIssueType(), candidate.getSeverity());
+        if (scopeLockId == null) {
+            throw new IllegalStateException("异常告警值班路由范围并发锁获取失败");
+        }
         List<PaymentIssueDutyRosterEntity> existingRosters =
                 paymentConfigMapper.findIssueDutyRostersByScopeForUpdate(
                         candidate.getIssueType(), candidate.getSeverity());

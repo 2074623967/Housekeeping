@@ -325,6 +325,16 @@ public interface PaymentConfigMapper {
     PaymentIssueDutyRosterEntity findIssueDutyRosterByCodeForUpdate(
             @Param("rosterCode") String rosterCode);
 
+    /** 幂等初始化异常类型和严重等级维度的值班路由批准协调行。 */
+    int initIssueDutyRosterScopeLock(
+            @Param("issueType") String issueType,
+            @Param("severity") String severity);
+
+    /** 锁定异常类型和严重等级维度的值班路由批准协调行。 */
+    Long lockIssueDutyRosterScope(
+            @Param("issueType") String issueType,
+            @Param("severity") String severity);
+
     /** 按异常类型和严重等级加锁查询值班路由，用于批准前重叠复验。 */
     List<PaymentIssueDutyRosterEntity> findIssueDutyRostersByScopeForUpdate(
             @Param("issueType") String issueType,

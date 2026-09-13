@@ -2,12 +2,20 @@ package com.abc123.hsp.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.abc123.hsp.dto.PaymentIssueDutyRosterReviewDTO;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterEntity;
 import com.abc123.hsp.entity.PaymentIssueDutyRosterReviewEntity;
 import java.io.InputStream;
 import java.sql.Statement;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -29,7 +37,8 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
     void setUp() throws Exception {
         UnpooledDataSource dataSource = new UnpooledDataSource(
                 "org.h2.Driver",
-                "jdbc:h2:mem:payment_issue_duty_roster_review;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
+                "jdbc:h2:mem:payment_issue_duty_roster_review;MODE=MySQL;DB_CLOSE_DELAY=-1;"
+                        + "DATABASE_TO_LOWER=TRUE;LOCK_TIMEOUT=5000",
                 "sa",
                 "");
         Environment environment = new Environment("test", new JdbcTransactionFactory(), dataSource);
@@ -56,6 +65,10 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     mapper.findIssueDutyRosterByCodeForUpdate("DUTY_CALLBACK_P1");
             assertEquals("支付后端值班", roster.getReceiver());
             assertEquals(Integer.valueOf(30), roster.getEscalationTimeoutMinutes());
+            assertEquals(1, mapper.initIssueDutyRosterScopeLock(
+                    roster.getIssueType(), roster.getSeverity()));
+            assertEquals(Long.valueOf(1L), mapper.lockIssueDutyRosterScope(
+                    roster.getIssueType(), roster.getSeverity()));
             assertEquals(1, mapper.findIssueDutyRostersByScopeForUpdate(
                     roster.getIssueType(), roster.getSeverity()).size());
 
@@ -104,6 +117,38 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
             assertEquals("5,6,7", completed.getWeekdayScope());
             assertEquals("SELF_DECLARED", completed.getIdentityTrustLevel());
             assertEquals(2, reviews.size());
+        }
+    }
+
+    @Test
+    void shouldSerializeConcurrentApprovalsForInitiallyEmptyScope() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        try (SqlSession firstSession = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper firstMapper = firstSession.getMapper(PaymentConfigMapper.class);
+            assertEquals(1, firstMapper.initIssueDutyRosterScopeLock("新异常范围", "P2"));
+            Long firstLockId = firstMapper.lockIssueDutyRosterScope("新异常范围", "P2");
+            assertEquals(Long.valueOf(1L), firstLockId);
+
+            Future<Long> second = executor.submit(() -> lockScopeInSecondTransaction(secondStarted));
+            assertTrue(secondStarted.await(5, TimeUnit.SECONDS));
+            assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
+
+            firstSession.commit();
+            assertEquals(firstLockId, second.get(5, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private Long lockScopeInSecondTransaction(CountDownLatch started) throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            started.countDown();
+            mapper.initIssueDutyRosterScopeLock("新异常范围", "P2");
+            Long lockId = mapper.lockIssueDutyRosterScope("新异常范围", "P2");
+            session.commit();
+            return lockId;
         }
     }
 
@@ -167,6 +212,11 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     + ".dateFormat\"");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_duty_roster_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_issue_duty_roster");
+            statement.execute("DROP TABLE IF EXISTS t_payment_issue_duty_roster_scope_lock");
+            statement.execute("CREATE TABLE t_payment_issue_duty_roster_scope_lock ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, issue_type VARCHAR(64) NOT NULL, "
+                    + "severity VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL, "
+                    + "updated_at DATETIME NOT NULL, UNIQUE(issue_type, severity))");
             statement.execute("CREATE TABLE t_payment_issue_duty_roster ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, roster_code VARCHAR(64) NOT NULL UNIQUE, "
                     + "issue_type VARCHAR(64) NOT NULL, severity VARCHAR(32) NOT NULL, "
