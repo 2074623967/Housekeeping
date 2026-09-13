@@ -23,6 +23,7 @@ const isActionRunning = ref(false);
 const selectedIssueNos = ref([]);
 const responsibilitySummaries = ref([]);
 const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const actionForm = ref({
   actionType: "分派处理人",
   assignee: "支付运营",
@@ -30,6 +31,7 @@ const actionForm = ref({
   remark: "请按建议动作完成排查并回写处理结果"
 });
 const filters = ref(paymentIssueListFiltersFromQuery(route.query));
+let latestLoadRequestId = 0;
 
 const issueOverview = computed(() => ({
   groupCount: responsibilitySummaries.value.length,
@@ -45,6 +47,10 @@ const isSnapshotStale = computed(() => Boolean(
 const isWriteDisabled = computed(() => (
   !hasLoadedData.value || isLoading.value || isSnapshotStale.value || isActionRunning.value
 ));
+const isInteractionLocked = computed(() => isLoading.value || isActionRunning.value);
+const canUseSnapshot = computed(() => hasLoadedData.value
+  && !isInteractionLocked.value
+  && !isSnapshotStale.value);
 
 function buildQuery() {
   return {
@@ -71,6 +77,9 @@ function buildSummaryQuery(query) {
 }
 
 function resetFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
@@ -84,32 +93,45 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   pageNo.value = 1;
   loadIssues();
 }
 
 async function loadIssues(afterAction = false, query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   isSummaryLoading.value = true;
+  loadErrorMessage.value = "";
+  actionRefreshErrorMessage.value = "";
   try {
     const summaryPromise = paymentIssueApi.getResponsibilitySummary(buildSummaryQuery(query));
     const listPromise = paymentIssueApi.getList(query);
     const [summaryResult, result] = await Promise.all([summaryPromise, listPromise]);
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     responsibilitySummaries.value = summaryResult;
     items.value = result.items;
     total.value = result.total;
     selectedIssueNos.value = selectedIssueNos.value.filter((issueNo) =>
       result.items.some((item) => item.issueNo === issueNo)
     );
+    pageNo.value = query.pageNo;
     loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
-    loadErrorMessage.value = "";
-    actionRefreshErrorMessage.value = "";
     if (!afterAction) {
       actionErrorMessage.value = "";
       actionResultMessage.value = "";
     }
+    return true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -119,29 +141,47 @@ async function loadIssues(afterAction = false, query = buildQuery()) {
     if (hasLoadedData.value) {
       pageNo.value = loadedPageNo.value;
     }
+    return false;
   } finally {
-    isLoading.value = false;
-    isSummaryLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+      isSummaryLoading.value = false;
+    }
   }
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (!canUseSnapshot.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadIssues();
+  loadIssues(false, { ...loadedQuery.value, pageNo: nextPage });
 }
 
 function openIssue(item) {
-  if (item.recommendedRoute) {
-    router.push(item.recommendedRoute);
+  const currentItem = items.value.find((candidate) => candidate.issueNo === item.issueNo);
+  if (!canUseSnapshot.value || !currentItem) {
     return;
   }
-  router.push(paymentDetailRoute(item.paymentOrderId));
+  if (currentItem.recommendedRoute) {
+    router.push(currentItem.recommendedRoute);
+    return;
+  }
+  router.push(paymentDetailRoute(currentItem.paymentOrderId));
+}
+
+function openSnapshotRoute(target) {
+  if (!canUseSnapshot.value || !target) {
+    return;
+  }
+  router.push(target);
 }
 
 function toggleIssueSelection(issueNo, checked) {
+  if (isWriteDisabled.value || !items.value.some((item) => item.issueNo === issueNo)) {
+    return;
+  }
   if (checked && !selectedIssueNos.value.includes(issueNo)) {
     selectedIssueNos.value = [...selectedIssueNos.value, issueNo];
     return;
@@ -152,6 +192,14 @@ function toggleIssueSelection(issueNo, checked) {
 }
 
 async function submitBatchAction() {
+  const hasInvalidSelection = selectedIssueNos.value.some((issueNo) =>
+    !items.value.some((item) => item.issueNo === issueNo)
+  );
+  if (isWriteDisabled.value || !loadedQuery.value || hasInvalidSelection) {
+    actionErrorMessage.value = "当前异常快照不可操作，请刷新成功后重新选择异常。";
+    actionResultMessage.value = "";
+    return;
+  }
   if (!selectedIssueNos.value.length) {
     actionErrorMessage.value = "请先选择需要处理的异常。";
     actionResultMessage.value = "";
@@ -164,7 +212,7 @@ async function submitBatchAction() {
     return;
   }
   const issueNos = [...selectedIssueNos.value];
-  const query = buildQuery();
+  const query = { ...loadedQuery.value };
   isActionRunning.value = true;
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
@@ -214,7 +262,7 @@ watch(
         <h2>支付交易异常中心</h2>
         <p>统一聚合支付状态、下游事件、渠道配置和超额成功收款问题，支撑运营、财务与研发排障</p>
       </div>
-      <button class="button secondary" :disabled="isLoading || isActionRunning" @click="loadIssues()">刷新</button>
+      <button class="button secondary" :disabled="isInteractionLocked" @click="loadIssues()">刷新</button>
     </div>
 
     <section class="panel">
@@ -234,15 +282,15 @@ watch(
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isActionRunning" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isInteractionLocked" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isActionRunning" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isInteractionLocked" />
         </div>
         <div class="field">
           <label>异常类型</label>
-          <select v-model="filters.issueType" :disabled="isActionRunning">
+          <select v-model="filters.issueType" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>待回调未收口</option>
             <option>回调处理待跟进</option>
@@ -254,7 +302,7 @@ watch(
         </div>
         <div class="field">
           <label>严重等级</label>
-          <select v-model="filters.severity" :disabled="isActionRunning">
+          <select v-model="filters.severity" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>P1</option>
             <option>P2</option>
@@ -262,11 +310,11 @@ watch(
         </div>
         <div class="field">
           <label>渠道编码</label>
-          <input v-model="filters.channelCode" placeholder="如 alipay_h5 / wx_jsapi" :disabled="isActionRunning" />
+          <input v-model="filters.channelCode" placeholder="如 alipay_h5 / wx_jsapi" :disabled="isInteractionLocked" />
         </div>
         <div class="field">
           <label>支付方式</label>
-          <select v-model="filters.paymentMethod" :disabled="isActionRunning">
+          <select v-model="filters.paymentMethod" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>微信</option>
             <option>支付宝</option>
@@ -278,8 +326,8 @@ watch(
           <input value="该页用于支付主链路异常聚合，便于统一排障与联查" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" :disabled="isLoading || isActionRunning" @click="applyFilters">查询</button>
-          <button class="button secondary" :disabled="isLoading || isActionRunning" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isInteractionLocked" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isInteractionLocked" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -317,7 +365,6 @@ watch(
       </div>
 
       <div v-if="isSummaryLoading" class="state-box">责任组统计加载中...</div>
-      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的责任组统计快照</div>
       <section v-else-if="responsibilitySummaries.length" class="panel overview-panel">
         <div class="section-title">
           <h3>异常风险总览</h3>
@@ -405,9 +452,9 @@ watch(
               </td>
               <td>{{ item.issueNo }}</td>
               <td>
-                <RouterLink class="link-button" :to="paymentDetailRoute(item.paymentOrderId)">
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(paymentDetailRoute(item.paymentOrderId))">
                   {{ item.paymentOrderId }}
-                </RouterLink>
+                </button>
               </td>
               <td>{{ item.orderNo }}</td>
               <td>{{ item.customerName }}</td>
@@ -442,9 +489,9 @@ watch(
                 <div class="muted-text">
                   {{ item.latestAlertReceiptSummary }}
                 </div>
-                <RouterLink class="link-button" :to="paymentIssueAlertsRoute({ issueNo: item.issueNo })">
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(paymentIssueAlertsRoute({ issueNo: item.issueNo }))">
                   查看明细
-                </RouterLink>
+                </button>
               </td>
               <td>
                 <span :class="['badge', item.slaStatusType]">{{ item.slaStatus }}</span>
@@ -455,7 +502,7 @@ watch(
               <td class="flow-summary-cell">{{ item.latestActionSummary }}</td>
               <td>{{ item.createdAt }}</td>
               <td>
-                <button class="link-button" @click="openIssue(item)">立即排查</button>
+                <button class="link-button" :disabled="!canUseSnapshot" @click="openIssue(item)">立即排查</button>
               </td>
             </tr>
           </tbody>
@@ -465,9 +512,9 @@ watch(
       <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条支付交易异常</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1 || isLoading || isActionRunning || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="!canUseSnapshot || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || isActionRunning || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="!canUseSnapshot || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>

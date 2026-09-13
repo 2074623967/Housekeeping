@@ -14567,3 +14567,34 @@
 1. 事件页不再让未提交筛选、失败页码、过期响应或陈旧事件驱动导出、手动重发和跨页联查。
 2. 前端快照与动作锁不替代服务端事件行锁、重试状态机、消息发布确认、消费者幂等和权限审计。
 3. 本机 demo 事件不证明真实消息送达、下游消费、账务入账、资金一致、生产稳定性或 release 放行条件。
+
+## 538. 2026-09-13 支付异常中心可运行骨架恢复 V1.0 验证
+
+### 538.1 本轮补强
+
+1. `PaymentIssueMapper.findAll` 的列表字段、筛选字段及排序字段显式限定为 `payment_issue_union`，修复连接动作、告警和通道统计后 `issue_no` 等列在 H2 中歧义的问题。
+2. `PaymentDemoProfileIntegrationTest` 新增 `PaymentIssueService.list` 真实查询断言，把异常中心主列表纳入 demo 应用可运行门禁。
+3. `PaymentIssuesView` 以同一查询并发读取列表与责任组统计，只有两者同时成功且请求仍为最新时才落页；翻页、批量写入及三个联查入口只使用有效成功快照。
+
+### 538.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| Mapper XML | `xmllint --noout` 通过，`git diff --check` 通过 |
+| demo 集成测试 | `PaymentDemoProfileIntegrationTest` 通过，异常列表可在完整 Spring demo 上下文中真实执行 |
+| 后端定向测试 | `PaymentIssueServiceImplTest,PaymentIssueControllerTest,PaymentOverpaidProfileIntegrationTest` 全部通过 |
+| 后端全量测试 | `1104/1104` 通过，`0` failures、`0` errors、`0` skipped |
+| 管理端自动化 | Node 测试 `37/37` 通过，零失败、零跳过 |
+| 管理端构建 | Vite 转换 `85` 个模块并构建通过；保留既有大包提示 |
+| 真实接口 | `GET /api/payment-issues` 返回 `code=0` 和 `2` 条异常；责任组统计返回支付后端值班组 `2` 条、SLA 超时 `2` 条、P1 `2` 条 |
+| 真实页面 | `http://127.0.0.1:5174/payment-issues` 正常展示 2 条异常、风险总览、责任组统计、批量表单和联查入口，无错误提示 |
+| 页面宽度 | 无头 Chromium 实测 `documentElement.scrollWidth=1440`、`clientWidth=1440`，整页无横向溢出 |
+| 持续运行 | 当前窗口托管会话 `61700` 持续运行；后端 PID `58243`，管理端、App、H5、PC 及代理均为 `READY` |
+| 操作边界 | 本轮未勾选异常、未提交批量动作、未确认告警，不制造运营处置事实 |
+| 统一门禁复判 | 脚本退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4` |
+
+### 538.3 当前判断
+
+1. 支付异常中心已从“页面可进入但主列表真实查询报 `PAYMENT-500`”恢复为可查询、可筛选、可联查且具备批量处理入口的本地可运行骨架。
+2. 前端成功快照和动作锁不替代服务端事务、状态资格复验、可信身份、权限与审计；本轮只验证动作入口可用，没有执行运营处置。
+3. 本机 demo 数据、自动化测试和页面渲染不证明真实渠道、生产并发、资金一致性、稳定观察或 release 放行条件。

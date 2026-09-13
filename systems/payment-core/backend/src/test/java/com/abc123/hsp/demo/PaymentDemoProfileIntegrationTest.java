@@ -7,9 +7,11 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import com.abc123.hsp.HomeServicePaymentApplication;
 import com.abc123.hsp.dto.PaymentDetailDTO;
+import com.abc123.hsp.dto.PaymentIssueQueryDTO;
 import com.abc123.hsp.dto.PaymentSubmitRequestDTO;
 import com.abc123.hsp.dto.PrepayOrderDTO;
 import com.abc123.hsp.dto.PrepayRequestDTO;
+import com.abc123.hsp.service.PaymentIssueService;
 import com.abc123.hsp.service.PaymentMetricsService;
 import com.abc123.hsp.service.PaymentMonitorService;
 import com.abc123.hsp.service.PaymentService;
@@ -39,6 +41,7 @@ class PaymentDemoProfileIntegrationTest {
                 assertNotNull(context.getBean(PaymentMetricsService.class).summary());
                 assertNotNull(context.getBean(PaymentMonitorService.class).overview().getTrends());
                 assertNotNull(context.getBean(PaymentTaskCenterService.class).overview());
+                assertNotNull(context.getBean(PaymentIssueService.class).list(new PaymentIssueQueryDTO()).getItems());
                 verifyPaymentSubmit(context.getBean(PaymentService.class));
                 verifyPcAlipaySubmit(context.getBean(PaymentService.class));
             }
