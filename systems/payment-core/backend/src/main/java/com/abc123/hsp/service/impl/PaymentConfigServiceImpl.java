@@ -635,7 +635,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 throw new IllegalArgumentException("规则已产生新版本，请重新提交复核申请");
             }
         }
-        ensureCandidateHasNoBlocker(candidate);
+        ensureCandidateHasNoUnacknowledgedConflict(
+                candidate,
+                request != null && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged()));
         if (current == null) {
             paymentConfigMapper.insertRouteRule(candidate);
         } else {
@@ -2762,7 +2764,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return copy;
     }
 
-    private void ensureCandidateHasNoBlocker(PaymentRouteRuleConfigEntity candidate) {
+    private void ensureCandidateHasNoUnacknowledgedConflict(PaymentRouteRuleConfigEntity candidate,
+                                                            boolean priorityCollisionAcknowledged) {
         if (!STATUS_ENABLED.equals(candidate.getStatus())
                 || candidate.getRolloutPercentage() == null
                 || candidate.getRolloutPercentage().intValue() <= 0) {
@@ -2780,6 +2783,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                     || candidate.getRuleCode().equalsIgnoreCase(conflict.getConflictingRuleCode());
             if (candidateInvolved && "BLOCKER".equals(conflict.getSeverity())) {
                 throw new IllegalArgumentException("候选规则存在阻断级冲突：" + conflict.getMessage());
+            }
+            if (candidateInvolved
+                    && "PRIORITY_COLLISION".equals(conflict.getConflictType())
+                    && !priorityCollisionAcknowledged) {
+                throw new IllegalArgumentException(
+                        "候选规则存在同优先级潜在冲突，请确认表达式互斥性风险后再批准：" + conflict.getMessage());
             }
         }
     }

@@ -12,4 +12,6 @@ public class PaymentRouteRuleReviewActionRequestDTO {
     private String reviewer;
     /** 复核意见。 */
     private String reviewComment;
+    /** 是否已确认同优先级不同表达式可能同时命中的路由风险。 */
+    private Boolean priorityCollisionAcknowledged;
 }

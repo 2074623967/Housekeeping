@@ -108,6 +108,7 @@ const routeRuleActionRequester = ref("");
 const routeRuleActionReason = ref("");
 const reviewer = ref("");
 const reviewComment = ref("");
+const priorityCollisionAcknowledged = ref(false);
 const editingProtocolCode = ref("");
 const protocolVersionCode = ref("");
 const protocolVersions = ref([]);
@@ -830,7 +831,8 @@ async function handleRouteRuleReview(review, approved) {
   actionMessage.value = "";
   const payload = {
     reviewer: reviewer.value,
-    reviewComment: reviewComment.value
+    reviewComment: reviewComment.value,
+    priorityCollisionAcknowledged: approved && priorityCollisionAcknowledged.value
   };
   try {
     try {
@@ -838,6 +840,7 @@ async function handleRouteRuleReview(review, approved) {
         ? await paymentConfigApi.approveRouteRuleReview(review.requestNo, payload)
         : await paymentConfigApi.rejectRouteRuleReview(review.requestNo, payload);
       reviewComment.value = "";
+      priorityCollisionAcknowledged.value = false;
       actionMessage.value = approved
         ? `复核申请 ${review.requestNo} 已通过，候选规则已写入运行态。`
         : `复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
@@ -2870,6 +2873,10 @@ function exportGovernanceSnapshot(section = "ALL") {
                 复核意见 / 驳回原因
                 <input v-model.trim="reviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
               </label>
+              <label class="wide-field route-risk-acknowledgement">
+                <input v-model="priorityCollisionAcknowledged" type="checkbox" />
+                <span>已核对同优先级潜在冲突，并确认候选表达式与现有规则互斥</span>
+              </label>
             </div>
             <div v-if="reviewErrorMessage" class="error-banner">
               {{ routeRuleReviews.length ? "路由规则复核申请刷新失败，当前展示上次成功快照：" : "路由规则复核申请加载失败：" }}{{ reviewErrorMessage }}
@@ -4801,5 +4808,23 @@ function exportGovernanceSnapshot(section = "ALL") {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.filter-grid .route-risk-acknowledgement {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.filter-grid .route-risk-acknowledgement input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  flex: 0 0 16px;
+  accent-color: #2563eb;
 }
 </style>

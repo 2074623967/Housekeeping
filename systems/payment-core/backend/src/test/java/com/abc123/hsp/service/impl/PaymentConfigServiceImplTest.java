@@ -385,6 +385,9 @@ class PaymentConfigServiceImplTest {
         PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
         action.setReviewer("reviewer-b");
         action.setReviewComment("配置与风险检查通过");
+        action.setPriorityCollisionAcknowledged(Boolean.TRUE);
+        PaymentRouteRuleConfigDTO potentialCollision = buildConflictRule(
+                "RULE_APP_ONLY", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
         when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
         when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode())).thenReturn(current);
         when(paymentConfigMapper.findChannelForRouting("wx_h5"))
@@ -394,7 +397,7 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
         when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
-                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+                .thenReturn(Collections.singletonList(potentialCollision));
         when(paymentConfigMapper.completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "配置与风险检查通过"))
                 .thenReturn(1);
@@ -616,6 +619,7 @@ class PaymentConfigServiceImplTest {
         PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
         action.setReviewer("reviewer-b");
         action.setReviewComment("检查冲突");
+        action.setPriorityCollisionAcknowledged(Boolean.TRUE);
         PaymentRouteRuleConfigDTO conflicting = buildConflictRule(
                 "RULE_CONFLICTING", "HOME_CLEAN/APP",
                 "terminal IN (H5, APP) AND amount<=500", "offline_bank", 10, "ENABLED");
@@ -641,6 +645,37 @@ class PaymentConfigServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
+    }
+
+    @Test
+    void shouldRequireAcknowledgementForCandidatePriorityCollision() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("表达式已人工核对");
+        PaymentRouteRuleConfigDTO potentialCollision = buildConflictRule(
+                "RULE_APP_ONLY", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.singletonList(potentialCollision));
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("请确认表达式互斥性风险"));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleVersion(org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
     }
 
     @Test
