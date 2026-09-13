@@ -14092,3 +14092,29 @@
 1. 支付成功事实现在不会因查单/回调并发窗口返回或写入另一渠道流水；这只证明本地服务编排保护，不证明渠道侧交易归属。
 2. 本轮不改端点、DTO、Mapper、schema、迁移或前端；`PAYMENT-1030 / PAYMENT-1031 / PAYMENT-1026` 沿用既有错误边界。
 3. 本地 Mockito 与 H2 回归不替代真实渠道、目标 MySQL 并发、到账、对账、正式审批或生产稳定性证据。
+
+## 520. 2026-09-13 支付成功精确账单结算 V1.0 验证
+
+### 520.1 本轮补强
+
+1. 支付详情从 `t_bill.order_no` 宽关联收窄为 `latest prepay.bill_no -> t_bill.bill_no` 精确关联，避免同订单多账单导致详情多行或账单号漂移。
+2. 成功回调与主动查单统一按详情中的 `billNo` 结算账单；不再按订单号批量更新同订单账单。
+3. 标准订单和绑定账单更新均要求影响一行，绑定缺失或更新未命中时在成功事件创建前失败，由外层事务回滚本次成功收口。
+
+### 520.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 精确详情关联 | 同订单两张账单时 `findDetail` 返回预付单绑定的 `BILL-SNAPSHOT-TARGET`，不产生多行详情 |
+| 精确账单更新 | 更新目标账单后另一账单仍为 `0.00 / 待支付`，目标账单为 `88.00 / 已结清` |
+| 失败闭合 | 绑定账单更新返回零行时抛出 `payment bill settlement was not applied atomically`，不创建成功事件 |
+| 定向测试 | `PaymentServiceImplTest + PaymentReturnCodeSnapshotMapperIntegrationTest` 合计 `87/87` 通过 |
+| payment-core 后端全量 | `1092/1092` 通过，`0` failures、`0` errors |
+| 静态检查 | `git diff --check` 通过；实现提交 `33a3c7bf` |
+| 统一门禁复判 | 退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4` |
+
+### 520.3 当前判断
+
+1. 支付核心现在以预付单绑定账单作为结算目标，消除了按订单号误结清其他账单的代码路径。
+2. 本轮不增加数据库唯一约束或迁移，不推断一个订单只能有一张账单；多账单业务含义仍由账单域决定。
+3. H2 和 Mockito 不证明生产历史绑定完整、目标 MySQL 影响行数与事务回滚、真实到账、对账或财务核验。
