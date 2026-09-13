@@ -18,7 +18,10 @@
                     SELECT pa.id
                     FROM t_payment_attempt pa
                     WHERE pa.payment_order_id = prr.payment_order_id
-                       AND pa.created_at &lt;= prr.created_at
+                      AND (
+                          pa.attempt_no = prr.attempt_no
+                          OR (prr.attempt_no IS NULL AND pa.created_at &lt;= prr.created_at)
+                      )
                     ORDER BY pa.created_at DESC, pa.id DESC
                     LIMIT 1
                 )

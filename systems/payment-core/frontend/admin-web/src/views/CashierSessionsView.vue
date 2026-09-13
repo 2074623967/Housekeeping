@@ -5,6 +5,7 @@ import { cashierSessionApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
+import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
 const route = useRoute();
 const items = ref([]);
@@ -179,7 +180,7 @@ watch(
     <div class="topbar">
       <div>
         <h2>收银台会话管理</h2>
-        <p>查看预付单会话、终端来源、支付关联和失效状态，快速定位收银台异常</p>
+        <p>查看预付单会话、业务场景、发起终端、支付关联和失效状态，快速定位收银台异常</p>
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" :disabled="isLoading" @click="refreshCashierSessions">
@@ -263,13 +264,11 @@ watch(
           <input v-model="filters.customerName" placeholder="请输入客户名称" :disabled="isLoading" />
         </div>
         <div class="field">
-          <label>终端场景</label>
+          <label>发起终端</label>
           <select v-model="filters.terminal" :disabled="isLoading">
-            <option>全部</option>
-            <option>H5</option>
-            <option>PC</option>
-            <option>APP</option>
-            <option>小程序</option>
+            <option v-for="option in PAYMENT_TERMINAL_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
           </select>
         </div>
         <div class="field">
@@ -326,6 +325,7 @@ watch(
                 <th>支付单号</th>
                 <th>订单号</th>
                 <th>客户</th>
+                <th>业务场景</th>
                 <th>终端</th>
                 <th>金额</th>
                 <th>会话状态</th>
@@ -341,6 +341,7 @@ watch(
                 <td>{{ item.paymentOrderId }}</td>
                 <td>{{ item.orderNo }}</td>
                 <td>{{ item.customerName }}</td>
+                <td>{{ item.payScene }}</td>
                 <td>{{ item.terminal }}</td>
                 <td>{{ item.amount }}</td>
                 <td><span :class="['badge', item.sessionStatusType]">{{ item.sessionStatus }}</span></td>
@@ -363,6 +364,7 @@ watch(
               <div class="detail-card"><span>支付单号</span><strong>{{ selectedItem.paymentOrderId }}</strong></div>
               <div class="detail-card"><span>订单号</span><strong>{{ selectedItem.orderNo }}</strong></div>
               <div class="detail-card"><span>客户名称</span><strong>{{ selectedItem.customerName }}</strong></div>
+              <div class="detail-card"><span>业务场景</span><strong>{{ selectedItem.payScene }}</strong></div>
               <div class="detail-card"><span>终端</span><strong>{{ selectedItem.terminal }}</strong></div>
               <div class="detail-card"><span>会话状态</span><strong>{{ selectedItem.sessionStatus }}</strong></div>
               <div class="detail-card"><span>会话金额</span><strong>{{ selectedItem.amount }}</strong></div>

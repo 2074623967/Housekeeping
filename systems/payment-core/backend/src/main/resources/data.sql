@@ -5,8 +5,8 @@ INSERT INTO t_dashboard_card (card_key, title, value, badge_type, badge_text, so
 ('recon_gap', '未关闭差异金额', '¥3,120', 'danger', '阻断级 2 笔', 4);
 
 INSERT INTO t_payment_channel_config (channel_code, channel_name, payment_method, merchant_no, merchant_app_id, callback_secret, callback_sign_algorithm, callback_public_key, callback_notify_url, certificate_profile, notify_sign_window_sec, refund_window_days, risk_control_tag, scene_scope, status, status_type, daily_limit, priority, route_weight, updated_at) VALUES
-('wx_h5', '微信 H5 支付', '微信支付', 'MCH_WX_10001', 'wx-app-h5-001', 'wx-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/wx_h5', 'wx-cert-profile-v2026.07', 300, 180, '实名校验+重复支付监控', 'H5/APP/小程序', 'ENABLED', 'success', 500000.00, 1, 100, '2026-07-20 22:40:00'),
-('alipay_h5', '支付宝 H5 支付', '支付宝', 'MCH_ALI_20001', 'ali-app-h5-002', 'alipay-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/alipay_h5', 'ali-cert-profile-v2026.06', 600, 365, '大额风控+商户黑名单联动', 'H5/APP/PC', 'ENABLED', 'success', 500000.00, 2, 100, '2026-07-20 22:40:00'),
+('wx_h5', '微信 H5 支付', '微信支付', 'MCH_WX_10001', 'wx-app-h5-001', 'wx-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/wx_h5', 'wx-cert-profile-v2026.07', 300, 180, '实名校验+重复支付监控', 'H5/APP/小程序/API', 'ENABLED', 'success', 500000.00, 1, 100, '2026-07-20 22:40:00'),
+('alipay_h5', '支付宝 H5 支付', '支付宝', 'MCH_ALI_20001', 'ali-app-h5-002', 'alipay-h5-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/alipay_h5', 'ali-cert-profile-v2026.06', 600, 365, '大额风控+商户黑名单联动', 'H5/APP/PC/API', 'ENABLED', 'success', 500000.00, 2, 100, '2026-07-20 22:40:00'),
 ('offline_bank', '线下银行转账', '银行转账', 'BANK_OFFLINE_30001', 'bank-offline-batch-003', 'offline-bank-secret-2026', 'HMAC-SHA256', NULL, 'https://pay.housekeeping.local/callback/offline_bank', 'bank-batch-profile-v2026.05', 1800, 1095, '对公白名单+人工复核', '企业客户/大额订单', 'ENABLED', 'success', 2000000.00, 3, 100, '2026-07-20 22:40:00');
 
 INSERT INTO t_payment_channel_version (
@@ -74,7 +74,8 @@ INSERT INTO t_payment_control_policy (source_app_id, source_app_name, allowed_pa
 ('housekeeping-app-web', '家政 App 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 40, 20, '开启', 'token-housekeeping-app-web', '开启', 'PASS', 'success', 'App 收银台自检通过，可正常受理正向支付', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-h5-web', '家政 H5 收银台', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 25, 12, '开启', 'token-housekeeping-h5-web', '开启', 'PASS', 'success', 'H5 收银台链路正常，允许继续提交', 'ENABLED', 'success', '2026-07-21 09:00:00'),
 ('housekeeping-pc-web', '家政 PC 收银台', '支付宝,银行卡', 'alipay_h5,offline_bank', 'MCH_ALI_20001,BANK_OFFLINE_30001', 15, 8, '开启', 'token-housekeeping-pc-web', '开启', 'PASS', 'success', '支付方式、渠道和网关接入均已通过自检', 'ENABLED', 'success', '2026-07-21 09:00:00'),
-('housekeeping-mini-program', '家政微信小程序收银台', '微信支付', 'wx_h5', 'MCH_WX_10001', 30, 15, '开启', 'token-housekeeping-mini-program', '开启', 'PASS', 'success', '小程序支付方式、渠道和来源策略已通过本地自检', 'ENABLED', 'success', '2026-09-14 09:00:00');
+('housekeeping-mini-program', '家政微信小程序收银台', '微信支付', 'wx_h5', 'MCH_WX_10001', 30, 15, '开启', 'token-housekeeping-mini-program', '开启', 'PASS', 'success', '小程序支付方式、渠道和来源策略已通过本地自检', 'ENABLED', 'success', '2026-09-14 09:00:00'),
+('housekeeping-api', '家政服务端支付 API', '微信支付,支付宝', 'wx_h5,alipay_h5', 'MCH_WX_10001,MCH_ALI_20001', 60, 30, '开启', 'token-housekeeping-api', '开启', 'PASS', 'success', '服务端 API 支付方式、渠道和来源策略已通过本地自检', 'ENABLED', 'success', '2026-09-14 10:00:00');
 
 INSERT INTO t_payment_control_policy_version (
     source_app_id, version_no, source_app_name, allowed_payment_methods,
@@ -134,10 +135,10 @@ INSERT INTO t_payment_notify_log (notify_no, payment_order_id, channel_code, not
 ('NTF202607190002', 'PAY202607190002', 'alipay_h5', 'WAITING', '{"tradeStatus":"WAIT_BUYER_PAY"}', NULL, '待处理', 'warn', '2026-07-19 10:03:18'),
 ('NTF202607180074', 'PAY202607180074', 'offline_bank', 'SUCCESS', '{"status":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-18 18:41:20');
 
-INSERT INTO t_payment_route_record (route_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES
-('RTR202607190001', 'PAY202607190001', 'wx_jsapi', 'customer_channel=wechat', '微信JSAPI', '2026-07-19 09:20:59'),
-('RTR202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
-('RTR202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
+INSERT INTO t_payment_route_record (route_no, attempt_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES
+('RTR202607190001', 'ATT202607190001', 'PAY202607190001', 'wx_jsapi', 'customer_channel=wechat', '微信JSAPI', '2026-07-19 09:20:59'),
+('RTR202607190002', 'ATT202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
+('RTR202607180074', 'ATT202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
 
 INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, downstream_system, event_topic, publish_status, publish_status_type, payment_success_http_stage, retry_count, last_published_at, next_retry_at, event_payload, created_at) VALUES
 ('EVT202607190001', 'PAYMENT_SUCCESS', 'PAY202607190001', 'ORD202607190001', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'SUCCESS', 'success', 'COMPLETED', 1, '2026-07-19 09:21:25', NULL, '{"amount":268.00}', '2026-07-19 09:21:23'),

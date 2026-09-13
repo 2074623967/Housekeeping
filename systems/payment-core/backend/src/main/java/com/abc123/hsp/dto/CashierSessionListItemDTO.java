@@ -22,7 +22,9 @@ public class CashierSessionListItemDTO {
     private String customerName;
     /** 收银台标题。 */
     private String cashierTitle;
-    /** 支付终端场景。 */
+    /** 预付单业务支付场景。 */
+    private String payScene;
+    /** 最近一次支付尝试的规范终端，未提交时回退为业务支付场景。 */
     private String terminal;
     /** 收银台金额。 */
     private String amount;

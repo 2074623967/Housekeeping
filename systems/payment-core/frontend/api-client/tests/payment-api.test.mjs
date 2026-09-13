@@ -1,0 +1,89 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  buildRequest,
+  executeRequest,
+  parseArguments,
+  resolveBaseUrl
+} from "../payment-api.mjs";
+
+test("parses spaced and inline command options", () => {
+  assert.deepEqual(
+    parseArguments(["detail", "--payment-order-id=PAY/1", "--base-url", "http://localhost:18081/"]),
+    {
+      command: "detail",
+      options: {
+        "payment-order-id": "PAY/1",
+        "base-url": "http://localhost:18081/"
+      }
+    }
+  );
+  assert.throws(() => parseArguments(["unknown"]), /命令仅支持/);
+  assert.throws(() => parseArguments(["detail", "--payment-order-id"]), /缺少值/);
+});
+
+test("builds a complete prepay contract", () => {
+  assert.deepEqual(buildRequest("prepay", {
+    "order-no": "ORD-API-1",
+    "pay-scene": "SERVICE_ORDER_API",
+    "customer-name": "API 客户",
+    amount: "168.00",
+    "cashier-title": "API 支付"
+  }), {
+    method: "POST",
+    path: "/api/payments/prepay",
+    data: {
+      orderNo: "ORD-API-1",
+      payScene: "SERVICE_ORDER_API",
+      customerName: "API 客户",
+      amount: "168.00",
+      cashierTitle: "API 支付"
+    }
+  });
+});
+
+test("builds an API submit contract with stable explicit facts", () => {
+  const request = buildRequest("submit", {
+    "prepay-order-no": "PRE-API-1",
+    "access-token": "demo-token"
+  }, 123);
+  assert.equal(request.data.terminal, "API");
+  assert.equal(request.data.sourceAppId, "housekeeping-api");
+  assert.equal(request.data.channelCode, "ALIPAY_H5");
+  assert.equal(request.data.idempotencyKey, "API-PRE-API-1-123");
+});
+
+test("encodes identifiers as one API path segment", () => {
+  assert.equal(
+    buildRequest("cashier", { "prepay-order-no": "PRE/1?#" }).path,
+    "/api/payments/cashier/PRE%2F1%3F%23"
+  );
+  assert.equal(
+    buildRequest("detail", { "payment-order-id": "PAY/1?#" }).path,
+    "/api/payments/PAY%2F1%3F%23"
+  );
+});
+
+test("resolves and normalizes the API base URL", () => {
+  assert.equal(resolveBaseUrl({}, {}), "http://127.0.0.1:18081");
+  assert.equal(resolveBaseUrl({}, { PAYMENT_API_BASE_URL: "https://pay.example.com/" }), "https://pay.example.com");
+  assert.equal(resolveBaseUrl({ "base-url": "http://localhost:19000/" }, {}), "http://localhost:19000");
+});
+
+test("keeps the original service envelope and rejects business failures", async () => {
+  const successPayload = { code: "0", message: "success", data: { status: "WAIT_CALLBACK" } };
+  const success = await executeRequest("http://localhost", { method: "GET", path: "/detail" }, async () => ({
+    ok: true,
+    json: async () => successPayload
+  }));
+  assert.equal(success, successPayload);
+
+  await assert.rejects(
+    executeRequest("http://localhost", { method: "GET", path: "/detail" }, async () => ({
+      ok: true,
+      json: async () => ({ code: "PAYMENT-1002", message: "支付单不存在" })
+    })),
+    (error) => error.payload.code === "PAYMENT-1002"
+  );
+});

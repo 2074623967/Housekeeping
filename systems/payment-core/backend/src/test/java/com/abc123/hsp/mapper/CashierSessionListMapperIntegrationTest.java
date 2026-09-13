@@ -3,6 +3,7 @@ package com.abc123.hsp.mapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.abc123.hsp.dto.CashierSessionListItemDTO;
+import com.abc123.hsp.dto.CashierSessionOverviewDTO;
 import com.abc123.hsp.dto.CashierSessionQueryDTO;
 import java.io.InputStream;
 import java.sql.Statement;
@@ -76,6 +77,31 @@ class CashierSessionListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldSeparatePaySceneFromLatestAttemptTerminalAndFilterByTerminal() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            CashierSessionMapper mapper = session.getMapper(CashierSessionMapper.class);
+            CashierSessionQueryDTO query = new CashierSessionQueryDTO();
+            query.setTerminal("API");
+
+            List<CashierSessionListItemDTO> sessions = mapper.findAll(query);
+            assertEquals(1, sessions.size());
+            assertEquals("PRE-STABLE-001", sessions.get(0).getSessionNo());
+            assertEquals("H5", sessions.get(0).getPayScene());
+            assertEquals("API", sessions.get(0).getTerminal());
+            assertEquals(1L, mapper.count(query));
+
+            CashierSessionOverviewDTO overview = mapper.findOverview(new CashierSessionQueryDTO());
+            assertEquals(3, overview.getDistinctTerminalCount());
+
+            CashierSessionQueryDTO fallbackQuery = new CashierSessionQueryDTO();
+            fallbackQuery.setSessionNo("PRE-STABLE-003");
+            CashierSessionListItemDTO fallback = mapper.findAllForExport(fallbackQuery).get(0);
+            assertEquals("H5", fallback.getPayScene());
+            assertEquals("H5", fallback.getTerminal());
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {
@@ -86,6 +112,7 @@ class CashierSessionListMapperIntegrationTest {
                     + PaymentReturnCodeSnapshotMapperIntegrationTest.class.getName()
                     + ".format\"");
             statement.execute("DROP TABLE IF EXISTS t_prepay_order");
+            statement.execute("DROP TABLE IF EXISTS t_payment_attempt");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64) NOT NULL, "
                     + "payment_order_id VARCHAR(64), order_no VARCHAR(64) NOT NULL, bill_no VARCHAR(64) NOT NULL, "
@@ -93,6 +120,9 @@ class CashierSessionListMapperIntegrationTest {
                     + "pay_scene VARCHAR(32) NOT NULL, amount DECIMAL(18, 2) NOT NULL, "
                     + "cashier_status VARCHAR(32) NOT NULL, cashier_status_type VARCHAR(32) NOT NULL, "
                     + "created_at DATETIME NOT NULL, expires_at DATETIME NOT NULL)");
+            statement.execute("CREATE TABLE t_payment_attempt ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, attempt_no VARCHAR(64) NOT NULL, "
+                    + "payment_order_id VARCHAR(64) NOT NULL, terminal VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL)");
             statement.executeUpdate("INSERT INTO t_prepay_order "
                     + "(prepay_order_no, payment_order_id, order_no, bill_no, customer_name, cashier_title, "
                     + "pay_scene, amount, cashier_status, cashier_status_type, created_at, expires_at) VALUES "
@@ -102,6 +132,11 @@ class CashierSessionListMapperIntegrationTest {
                     + "'H5', 100.00, '待支付', 'warning', '2026-09-12 12:00:00', '2026-09-15 12:00:00'), "
                     + "('PRE-STABLE-003', 'PAY-003', 'ORD-003', 'BILL-003', '客户三', '收银台三', "
                     + "'H5', 100.00, '待支付', 'warning', '2026-09-12 12:00:00', '2026-09-15 12:00:00')");
+            statement.executeUpdate("INSERT INTO t_payment_attempt "
+                    + "(attempt_no, payment_order_id, terminal, created_at) VALUES "
+                    + "('ATT-001-OLD', 'PAY-001', 'H5', '2026-09-12 12:00:00'), "
+                    + "('ATT-001-NEW', 'PAY-001', 'API', '2026-09-12 12:00:00'), "
+                    + "('ATT-002', 'PAY-002', 'MINI_PROGRAM', '2026-09-12 12:00:00')");
             session.commit();
         }
     }

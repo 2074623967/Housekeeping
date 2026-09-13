@@ -90,6 +90,24 @@ class PaymentChannelRoutingServiceImplTest {
     }
 
     @Test
+    void shouldMatchApiTerminalAgainstApiChannelScope() {
+        PaymentChannelRoutingConfigDTO requestedChannel = buildChannel(
+                "alipay_h5", "支付宝", "H5/APP/PC/API", new BigDecimal("5000.00"));
+        when(paymentConfigMapper.findEnabledChannelsForRouting())
+                .thenReturn(Collections.singletonList(requestedChannel));
+        when(paymentConfigMapper.findEnabledRouteRulesForRouting()).thenReturn(Collections.emptyList());
+        when(paymentMapper.sumTodayAcceptedAmountByChannel("alipay_h5")).thenReturn(BigDecimal.ZERO);
+
+        PaymentRouteDecisionDTO decision = new PaymentChannelRoutingServiceImpl(paymentConfigMapper, paymentMapper)
+                .resolve(buildContext(
+                        "支付宝", "ALIPAY_H5", "SERVICE_ORDER_API", "API",
+                        "企业客户-晨星科技", new BigDecimal("168.00")));
+
+        assertEquals("alipay_h5", decision.getChannelCode());
+        assertEquals("REQUESTED_CHANNEL", decision.getRouteRule());
+    }
+
+    @Test
     void shouldFallbackToPaymentMethodDefaultWhenRequestedChannelMissing() {
         when(paymentConfigMapper.findEnabledChannelsForRouting()).thenReturn(Arrays.asList(
                 buildChannel("wx_h5", "微信支付"),

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { paymentFlowApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
+import { PAYMENT_TERMINAL_OPTIONS } from "../utils/paymentTerminal";
 
 const route = useRoute();
 const router = useRouter();
@@ -248,11 +249,9 @@ watch(
         <div class="field">
           <label>终端</label>
           <select v-model="filters.terminal" :disabled="isLoading">
-            <option>全部</option>
-            <option>H5</option>
-            <option>PC</option>
-            <option>APP</option>
-            <option>小程序</option>
+            <option v-for="option in PAYMENT_TERMINAL_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
           </select>
         </div>
         <div class="field">

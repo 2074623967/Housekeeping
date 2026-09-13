@@ -292,6 +292,7 @@ public interface PaymentMapper {
      * 写入支付路由日志。
      */
     void insertRouteRecord(@Param("routeNo") String routeNo,
+            @Param("attemptNo") String attemptNo,
             @Param("paymentOrderId") String paymentOrderId,
             @Param("channelCode") String channelCode,
             @Param("routeRule") String routeRule,

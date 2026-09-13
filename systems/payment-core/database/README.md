@@ -34,6 +34,7 @@
 - `migrations/2026-09-10-add-issue-alert-generation-key.sql`：为 SLA 初次告警和升级告警增加可空业务唯一键，并回填每组存量记录中最早一条；脚本非幂等，只执行一次
 - `migrations/2026-09-10-add-payment-submit-rate-limit-bucket.sql`：幂等建立支付提交共享固定时间窗限流桶，以摘要维度和原子更新约束多实例并发提交
 - `migrations/2026-09-10-add-payment-prepay-creation-lock.sql`：幂等建立订单维度预付单创建协调表，以唯一订单号和事务行锁串行化同一订单的查重与创建
+- `migrations/2026-09-14-add-payment-route-attempt-reference.sql`：为路由记录增加可空支付尝试号并回填可判定的存量记录，新写入使用显式关联避免同秒重复尝试串联
 
 初始化方式：
 
@@ -68,7 +69,8 @@
 23. 执行一次 `migrations/2026-09-10-add-issue-alert-generation-key.sql`，为 SLA 告警补齐数据库级生成幂等；上线前先在备份库审查历史重复并评估加索引锁影响
 24. 执行 `migrations/2026-09-10-add-payment-submit-rate-limit-bucket.sql`，建立支付提交共享限流桶；脚本可重复执行
 25. 执行 `migrations/2026-09-10-add-payment-prepay-creation-lock.sql`，建立预付单创建并发协调表；脚本可重复执行
-26. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
+26. 执行一次 `migrations/2026-09-14-add-payment-route-attempt-reference.sql`，为路由记录补齐支付尝试关联；迁移前应评估更新存量路由的锁影响，无法按历史时间可靠判定的记录允许保持为空并由兼容查询读取
+27. 增量脚本不替代全量 `schema.sql`，执行完成后应至少验证：
    - `SHOW TABLES LIKE 't_payment_task_lease'`
    - `source_alert_no IS NULL AND alert_content LIKE '升级来源告警 %' AND ack_status = '待确认'` 的历史递归告警数已清零
    - `SHOW TABLES LIKE 't_payment_route_rule_version'`
@@ -118,6 +120,7 @@
    - `scope_key` 仅保存限流维度的 SHA-256 摘要，不得写入客户端 IP 等维度原文
    - `SHOW TABLES LIKE 't_payment_prepay_creation_lock'` 返回一行
    - `SHOW INDEX FROM t_payment_prepay_creation_lock WHERE Key_name = 'uk_prepay_creation_order'` 返回唯一索引；`SELECT order_no, COUNT(*) FROM t_payment_prepay_creation_lock GROUP BY order_no HAVING COUNT(*) > 1` 返回空集
+   - `SHOW COLUMNS FROM t_payment_route_record LIKE 'attempt_no'` 与 `SHOW INDEX FROM t_payment_route_record WHERE Key_name = 'idx_route_attempt_no'` 均返回记录；新路由的 `attempt_no` 必须命中同支付单的唯一支付尝试
    - 复核表中的申请人和复核人均为自声明，不得解释为可信身份、正式审批或不可抵赖签字
    - 最新 backend 连接原始运行库后，不再因为 `t_payment_task_lease` 缺失或 `PAYMENT_ISSUE_ESCALATE` 告警内容越界导致调度任务报错
 

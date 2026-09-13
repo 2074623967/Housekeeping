@@ -9,8 +9,10 @@
 ```text
 frontend
 ├── admin-web
+├── api-client
 ├── app-web
 ├── h5-web
+├── mini-program
 ├── pc-web
 └── shared
 ```
@@ -29,6 +31,10 @@ frontend
 当前已经落地的页面全部归属于：
 
 - `admin-web`
+
+### api-client
+
+服务到服务 API 联调端，覆盖预付、收银台、提交、详情、主动查单和受限关单。
 
 ### app-web
 
@@ -58,6 +64,10 @@ frontend
 
 - PC 收银台
 - PC 支付结果页
+
+### mini-program
+
+原生微信小程序支付端，覆盖四类业务入口、收银台和支付结果闭环。
 
 ### shared
 

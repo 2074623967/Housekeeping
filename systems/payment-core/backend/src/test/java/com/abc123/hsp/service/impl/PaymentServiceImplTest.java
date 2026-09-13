@@ -379,6 +379,27 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldAcceptApiTerminalBeforeLoadingPrepay() {
+        PaymentSubmitRequestDTO request = validSubmitRequest();
+        request.setPrepayOrderNo("PRE-API-TERMINAL");
+        request.setTerminal(" api ");
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService).submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(ErrorCode.PREPAY_ORDER_NOT_FOUND, exception.getCode());
+        org.junit.jupiter.api.Assertions.assertEquals("API", request.getTerminal());
+        verify(paymentMapper).findPrepay("PRE-API-TERMINAL");
+        verifyNoInteractions(paymentChannelRoutingService, paymentRiskControlService, paymentChannelSubmitService);
+    }
+
+    @Test
     void shouldRejectOversizedRiskFieldBeforeAnySubmitInteraction() {
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-INVALID-DEVICE");
@@ -1726,6 +1747,7 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
         verify(paymentMapper, never()).insertPaymentAttempt(
                 org.mockito.ArgumentMatchers.anyString(),
@@ -1852,7 +1874,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).findOrderNoByPrepayOrderNo(anyString());
         verify(paymentMapper, never()).updatePrepayToPaying(anyString());
         verify(paymentMapper, never()).insertRouteRecord(
-                anyString(), anyString(), anyString(), anyString(), anyString());
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         verify(paymentChannelSubmitService, never()).submit(
                 org.mockito.ArgumentMatchers.any(PaymentChannelSubmitRequestDTO.class));
     }
@@ -2056,6 +2078,7 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyInt());
         verify(paymentMapper, times(1)).insertRouteRecord(
                 org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("PAY-300"),
                 org.mockito.ArgumentMatchers.eq("offline_bank"),
                 org.mockito.ArgumentMatchers.eq("RULE_ENTERPRISE_BANK"),
@@ -2078,6 +2101,13 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.eq("渠道提交中"),
                 org.mockito.ArgumentMatchers.eq("warn"));
+        org.mockito.InOrder routePersistenceOrder = org.mockito.Mockito.inOrder(paymentMapper);
+        routePersistenceOrder.verify(paymentMapper).insertPaymentAttempt(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.isNull(), anyString(), anyString());
+        routePersistenceOrder.verify(paymentMapper).insertRouteRecord(
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
         verify(paymentMapper).updatePaymentAttemptSubmitResult(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.eq("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}"),

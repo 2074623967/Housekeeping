@@ -545,7 +545,7 @@
 
 `clientIp` 请求字段仅为兼容保留，HTTP 入口不会信任该值，而是始终按 14.46 节的连接与可信代理规则覆盖。
 
-`terminal` 的规范值包含 `APP / H5 / PC / MINI_PROGRAM / UNKNOWN`。微信小程序应发送 `MINI_PROGRAM`；服务端兼容 `WECHAT_MINI_PROGRAM / WX_MINI_PROGRAM / 小程序` 并统一保存为 `MINI_PROGRAM`。本地 demo 来源应用 `housekeeping-mini-program` 仅允许微信支付、`wx_h5` 与 `MCH_WX_10001`，真实环境必须由受控配置和密钥托管替换示例令牌。
+`terminal` 的规范值包含 `APP / H5 / PC / MINI_PROGRAM / API / UNKNOWN`。微信小程序应发送 `MINI_PROGRAM`；服务端兼容 `WECHAT_MINI_PROGRAM / WX_MINI_PROGRAM / 小程序` 并统一保存为 `MINI_PROGRAM`。服务到服务调用必须显式发送 `API`。本地 demo 来源应用 `housekeeping-mini-program` 仅允许微信支付、`wx_h5` 与 `MCH_WX_10001`，真实环境必须由受控配置和密钥托管替换示例令牌。
 
 小程序本地 demo 提交示例：
 
@@ -2387,7 +2387,7 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 
 1. `POST /api/payments/submit` 在查找预付单前校验请求。`prepayOrderNo` 必填且最长 `64` 字符；`paymentMethod/channelCode/sourceAppId/merchantNo/accessToken/clientIp/clientDeviceId/payerPhone` 非空时最长分别为 `32/64/64/128/128/64/128/32` 字符，所有字段去除首尾空白并拒绝 ISO 控制字符。
 2. 支付方式允许先为空并由有效运营配置补齐，但补齐结果仍必须满足必填和 `32` 字符上限；请求渠道允许为空交给路由选择，路由最终渠道必填且最长 `64` 字符。
-3. `terminal` 缺失时为 `UNKNOWN`；规范值仅有 `APP/H5/PC/MINI_PROGRAM/UNKNOWN`。兼容别名 `APP_WEB -> APP`、`H5_WEB/MOBILE_WEB -> H5`、`PC_WEB -> PC`、`WECHAT_MINI_PROGRAM/WX_MINI_PROGRAM/小程序 -> MINI_PROGRAM`，其他值返回 `PAYMENT-1035`，不得形成新的限流、风控或审计维度。
+3. `terminal` 缺失时为 `UNKNOWN`；规范值仅有 `APP/H5/PC/MINI_PROGRAM/API/UNKNOWN`。兼容别名 `APP_WEB -> APP`、`H5_WEB/MOBILE_WEB -> H5`、`PC_WEB -> PC`、`WECHAT_MINI_PROGRAM/WX_MINI_PROGRAM/小程序 -> MINI_PROGRAM`，其他值返回 `PAYMENT-1035`，不得形成新的限流、风控或审计维度。
 4. 显式 `idempotencyKey` 继续按 14.38 的 `128` 字符与控制字符规则返回 `PAYMENT-1028`；其他提交字段非法统一返回 `PAYMENT-1035`。以上限制不替代部署网关的整体 JSON 请求体上限和渠道专属字段规则。
 
 ### 14.48 渠道查单结果字段契约
@@ -4728,6 +4728,21 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 只有收银台仍为待支付、支付单为 `PREPAY_CREATED`、没有渠道尝试、微信通道可用且 `expiresAt` 未到期时允许提交；幂等键在单次提交期间不可变，重复操作必须互斥。
 4. 收银台摘要没有 `channelTransactionNo`，不得仅凭摘要判断可关单；客户端必须读取完整支付详情，并仅在未提交渠道且服务端状态允许时展示关单动作，服务端仍执行最终校验。
 5. 当前响应没有微信支付签名参数，小程序不得调用空参数 `wx.requestPayment` 或把 `WAIT_CALLBACK` 渲染为支付成功；该缺口补齐前只属于本地功能联调骨架。
+
+### 14.351 服务端 API 支付调用契约
+
+1. 服务调用方沿用 `POST /api/payments/prepay`、`GET /api/payments/cashier/{prepayOrderNo}`、`POST /api/payments/submit`、`GET /api/payments/{paymentOrderId}`、`POST /api/payments/query` 和 `POST /api/payments/close`，不新增平行状态机或专用资金接口。
+2. 提交请求的 `terminal` 固定为 `API`。本地 demo 可使用 `sourceAppId=housekeeping-api`，支付宝对应 `ALIPAY_H5 / MCH_ALI_20001`，微信对应 `WX_H5 / MCH_WX_10001`；生产配置与凭证不得复用示例值。
+3. `idempotencyKey` 由调用方按业务请求稳定生成，同一次重试必须复用；预付单号和支付单号作为单一路径段编码，不能通过 `/ ? # %` 改变 API 路由结构。
+4. API 调用端原样输出统一响应包。HTTP 非成功或业务码非 `0` 必须返回非零进程状态；`WAIT_CALLBACK`、`USERPAYING`、结果未知和请求异常均不得映射为支付成功。
+5. 仓库 CLI 不提供持久化生产密钥、人工回调或强制成功能力。正式服务接入仍需可信身份、凭证托管、请求签名、防重放、来源控制和真实渠道验收。
+
+### 14.352 API 终端运营查询契约
+
+1. `GET /api/payment-routes`、`GET /api/cashier-sessions`、`GET /api/payment-requests` 与 `GET /api/payment-flows` 接收 `terminal=API`，列表、总数、总览和导出必须复用相同筛选口径。
+2. 路由结果的 `paymentMethod / terminal / clientIp / idempotencyKey / requestPayload / responsePayload` 来自该路由显式关联的支付尝试，不得取同支付单的任意最新尝试。
+3. 收银台列表项新增独立 `payScene`，`terminal` 表示最近一次支付尝试的规范终端；无支付尝试时 `terminal` 回退为 `payScene`，保证待提交会话仍可读取但不伪造渠道尝试。
+4. 响应继续执行客户、IP、幂等键和报文脱敏。运营查询命中只证明本地事实可追踪，不表示渠道支付成功、真实身份认证或资金一致。
 
 ## 15. 结论
 

@@ -719,8 +719,8 @@
     </insert>
 
     <insert id="insertRouteRecord">
-        INSERT INTO t_payment_route_record(route_no, payment_order_id, channel_code, route_rule, route_result, created_at)
-        VALUES (#{routeNo}, #{paymentOrderId}, #{channelCode}, #{routeRule}, #{routeResult}, NOW())
+        INSERT INTO t_payment_route_record(route_no, attempt_no, payment_order_id, channel_code, route_rule, route_result, created_at)
+        VALUES (#{routeNo}, #{attemptNo}, #{paymentOrderId}, #{channelCode}, #{routeRule}, #{routeResult}, NOW())
     </insert>
 
     <insert id="insertEvent">

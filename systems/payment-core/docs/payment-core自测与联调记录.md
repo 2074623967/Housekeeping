@@ -14893,3 +14893,35 @@
 1. 小程序已从“未实现”推进到“部分实现”的可运行功能骨架，可用于本地预付、提交和结果联调。
 2. 真实微信支付仍需补齐登录态/openid、签名参数、AppID 与商户绑定、合法域名、证书、回调验签及真机验收。
 3. Node 自动化和本地 demo 不能替代微信开发者工具编译、真机行为、真实渠道、生产并发或 release 放行证据。
+
+## 549. 2026-09-14 服务端 API 支付终端与运营查询骨架 V1.0 验证
+
+### 549.1 本轮补强
+
+1. 新增零依赖 API CLI，覆盖预付、收银台、提交、详情、主动查单和受限关单；后端把 `API` 纳入规范终端、渠道场景、路由表达式和独立来源控制策略。
+2. 管理端路由、收银台、支付请求和支付流水统一使用规范终端选项；中文“小程序”查询值修正为 `MINI_PROGRAM`，API 使用 `API`。
+3. 路由记录新增可空 `attempt_no` 和普通索引，新提交显式绑定本次尝试；存量记录保留兼容读取，避免同秒重复尝试串联。
+4. 收银台拆分预付业务场景 `payScene` 与实际发起终端 `terminal`，已提交会话读取最新尝试终端，无尝试时回退业务场景。
+
+### 549.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端定向测试 | `PaymentRouteExecutionMapperIntegrationTest,CashierSessionListMapperIntegrationTest,PaymentServiceImplTest` 通过，覆盖显式关联、同秒排序、终端筛选、场景拆分和写入顺序 |
+| 后端全量测试 | `1112/1112` 通过，`0` failures、`0` errors、`0` skipped |
+| 管理端自动化 | Node 测试 `41/41` 通过，规范终端选项用例零失败 |
+| 管理端构建 | Vite 转换 `87` 个模块并构建通过；保留既有大包提示 |
+| API CLI 自动化 | Node 测试 `6/6` 通过，覆盖命令参数、请求契约、路径编码、地址归一化和业务失败 |
+| 本地真实支付 | 创建 `PRE1789343473684316ad947 / PAY17893434736837c091a2d / API-DEMO-VERIFY-20260914-02` 并提交支付宝模拟渠道；结果保持 `WAIT_CALLBACK / alipay_h5 / API / WAIT_BUYER_PAY` |
+| API 主动查单 | CLI 查询返回 `querySource=ALIPAY_SIMULATION`、`status=WAIT_CALLBACK`、`successAt=null`，未制造成功事实 |
+| 四列表筛选 | 路由、收银台、支付请求、支付流水使用 `terminal=API` 均返回 `total=1`；收银台同时返回 `payScene=SERVICE_ORDER_API / terminal=API` |
+| 路由关联 | 新路由 `RTR178934348577598f8c9ca` 正确读取本次 API 尝试 `ATT1789343485775f081e370` 的支付宝、终端和脱敏报文，不再因先前时间条件消失 |
+| 长驻运行 | payment-core 在当前窗口持续运行，后端 PID `83333`，`18081` 与 Admin/App/H5/PC 四个入口及代理均为 `READY` |
+| 静态检查 | `git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4` |
+
+### 549.3 当前判断
+
+1. API 端已从“未实现”推进到可运行的服务调用骨架，并具备四类管理查询的最小运营可观测性；它仍不是完整开放平台。
+2. 显式路由尝试号消除了新数据的同秒串联风险；生产执行增量迁移前仍需评估大表更新锁影响并抽样核对存量回填，不能把兼容推断当成确定历史事实。
+3. 本地 demo、模拟渠道和单机测试不证明生产凭证托管、请求签名、IP 白名单、真实渠道受理、资金结果、生产并发或 release 放行条件。

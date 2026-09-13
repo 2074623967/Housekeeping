@@ -205,6 +205,7 @@ t_order
 | 字段 | 说明 |
 | --- | --- |
 | `route_no` | 路由记录号 |
+| `attempt_no` | 关联支付尝试号；新写入必传，存量兼容可为空 |
 | `payment_order_id` | 支付单号 |
 | `channel_code` | 渠道编码 |
 | `route_rule` | 路由规则 |
@@ -1859,6 +1860,14 @@ t_order
 3. 结果未知恢复只更新仍为 `WAIT_CALLBACK` 且流水兼容的支付单，使用 `COALESCE(NULLIF(TRIM(channel_transaction_no), ''), incoming)` 保留已有相同流水；成功和关闭状态返回零行。
 4. `t_payment_attempt` 的提交结果按唯一 `attempt_no` 更新并校验影响一行；`completed_at` 非空时只补 `response_payload`，保留 `attempt_status / attempt_status_type` 终态。
 5. 本轮复用现有字段、唯一键和索引，无 schema、索引、历史回填或迁移变化；H2 MySQL 模式不证明目标 MySQL 执行计划、锁等待、隔离与回滚。
+
+### 4.220 路由记录与支付尝试显式关联的数据边界
+
+1. `t_payment_route_record.attempt_no` 显式记录产生本次路由决策的支付尝试号，新支付提交先写尝试再写路由，两者位于同一事务且使用同一个 `attemptNo`。
+2. 路由列表按显式尝试号连接支付方式、规范终端、客户端和请求响应报文，避免同一支付单在一秒内产生多次尝试时把旧路由关联到后续尝试。
+3. 字段保持可空以兼容存量数据；兼容查询仅在 `attempt_no IS NULL` 时使用既有时间条件。迁移按当时可见的最近尝试回填，无法可靠判定的历史记录不得伪造关联。
+4. 新增普通索引 `idx_route_attempt_no` 支撑关联查询，不增加外键，避免迁移因历史孤儿记录直接失败；生产上线前仍需抽样审计回填正确性和评估大表更新锁影响。
+5. 收银台列表把 `payScene` 与 `terminal` 分开：前者来自预付单，后者来自最新支付尝试；尚未提交时才回退为业务场景，不再将两个概念混为同一数据库事实。
 
 ## 5. 状态建议
 

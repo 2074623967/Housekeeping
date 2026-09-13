@@ -20,8 +20,10 @@ payment-core
 ```text
 frontend
 ├── admin-web
+├── api-client
 ├── app-web
 ├── h5-web
+├── mini-program
 ├── pc-web
 └── shared
 ```
@@ -51,6 +53,8 @@ frontend
 - `app-web` 用户端收银台与支付结果页
 - `h5-web` H5 收银台与支付结果页
 - `pc-web` PC 收银台与支付结果页
+- `mini-program` 微信小程序业务入口、收银台与结果页
+- `api-client` 服务到服务预付、提交、详情、查单与关单调用端
 
 其中后台页面归属于：
 
@@ -61,6 +65,8 @@ frontend
 - `frontend/app-web`
 - `frontend/h5-web`
 - `frontend/pc-web`
+- `frontend/mini-program`
+- `frontend/api-client`
 
 ## 当前交付状态
 

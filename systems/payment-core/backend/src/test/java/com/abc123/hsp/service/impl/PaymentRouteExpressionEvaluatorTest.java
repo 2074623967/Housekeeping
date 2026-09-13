@@ -43,6 +43,16 @@ class PaymentRouteExpressionEvaluatorTest {
     }
 
     @Test
+    void shouldMatchApiTerminalInExpressions() {
+        PaymentRouteContextDTO context = buildContext(
+                "支付宝", "SERVICE_ORDER_API", "API", "企业客户-晨星科技", "ALIPAY_H5", "168");
+
+        assertTrue(PaymentRouteExpressionEvaluator.matches(context, "terminal=API"));
+        assertTrue(PaymentRouteExpressionEvaluator.matches(context, "terminal IN (H5, API)"));
+        assertFalse(PaymentRouteExpressionEvaluator.matches(context, "terminal=APP"));
+    }
+
+    @Test
     void shouldSupportAllAmountComparisonsAndExistingFlatSyntax() {
         PaymentRouteContextDTO context = buildContext("银行转账", "ENTERPRISE", "PC", "企业客户-晨星科技", "", "5000");
 

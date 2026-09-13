@@ -40,6 +40,8 @@
 2. `app-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 3. `h5-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
 4. `pc-web`：当前真实路由包括 `/recharge`、`/withdraw`、`/transfer`、`/balance-pay`、`/cashier/:prepayOrderNo`、`/payment-result/:paymentOrderId`
+5. `mini-program`：当前原生页面包括四类业务入口、收银台和支付结果
+6. `api-client`：当前命令包括预付、收银台、提交、支付详情、主动查单和关单
 
 因此后续做边界判定时，不能只看资料里的“目标页面”，还要同时看当前仓库里“已经先落在 payment-core”的实际页面。下面的归属结论，都是在这个真实路由事实之上做的。
 
@@ -65,8 +67,9 @@
 | 统一支付记录 | PC 后台 | `payment-core` | 已补齐原型版 | 按原型提供完整横向字段表格、查询、排序和支付记录详情入口 |
 | 微信支付宝支付记录 | PC 后台 | `payment-core` | 已补齐原型版 | 按支付渠道维度查询微信和支付宝收款记录，并支持运营筛选与排序 |
 | 银行卡支付记录 | PC 后台 | `payment-core` | 已补齐原型版 | 按银行卡/银行转账渠道维度查询收款记录，并支持运营筛选与排序 |
-| 收银台 | APP / H5 / PC 支付端 | `payment-core` | 部分实现 | 当前 `app-web`、`h5-web`、`pc-web` 已支持同一套交易逻辑，接入令牌不再进入 URL 并兼容旧链接清理；后续继续补真实 PC 二维码、可信认证与服务端会话 |
-| 支付结果页 | APP / H5 / PC 支付端 | `payment-core` | 部分实现 | 当前 `app-web`、`h5-web`、`pc-web` 已支持主动查单和轨迹展示，页面不提供人工回调或制造成功终态的入口；后续补 PC 端桌面化展示与补充动作 |
+| 收银台 | APP / H5 / PC / 小程序支付端 | `payment-core` | 部分实现 | Web 三端与原生小程序已支持主链路，接入令牌不进入 URL；后续继续补真实渠道参数、可信认证与服务端会话 |
+| 支付结果页 | APP / H5 / PC / 小程序支付端 | `payment-core` | 部分实现 | Web 三端与原生小程序已支持详情和主动查单，不提供人工回调或制造成功终态的入口 |
+| 支付 API 调用端 | API | `payment-core` | 已实现基础骨架 | 零依赖 CLI 覆盖预付、收银台、提交、详情、查单和关单，正式商户认证与真实渠道待接 |
 
 ### 3.2 保留后端能力
 
@@ -100,8 +103,9 @@
 | 支付流水查询 | PC 后台 | `payment-core` | 是 | 面向支付运营排障，不是会计流水 |
 | 支付路由执行结果 | PC 后台 | `payment-core` | 是 | 属于支付路由命中解释、渠道选择和规则排障能力 |
 | 收银台会话管理 | PC 后台 | `payment-core` | 是 | 属于支付终端会话治理能力 |
-| 收银台 | APP/H5/PC | `payment-core` | 是 | 属于支付交易前台 |
-| 支付结果页 | APP/H5/PC | `payment-core` | 是 | 属于支付交易结果反馈 |
+| 收银台 | APP/H5/PC/小程序 | `payment-core` | 是 | 属于支付交易前台 |
+| 支付结果页 | APP/H5/PC/小程序 | `payment-core` | 是 | 属于支付交易结果反馈 |
+| 支付调用端 | API | `payment-core` | 是 | 属于服务到服务支付接入与联调能力 |
 | 支付请求管理 | PC 后台 | `payment-core` | 是 | 属于支付主链路过程可观测能力 |
 | 支付处理日志 | PC 后台 | `payment-core` | 是 | 属于交易排查与审计基础能力 |
 | 支付状态查询 API | API | `payment-core` | 是 | 属于交易状态服务 |

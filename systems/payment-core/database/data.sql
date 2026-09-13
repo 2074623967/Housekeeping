@@ -100,10 +100,10 @@ INSERT INTO t_payment_notify_log (notify_no, payment_order_id, channel_code, not
 ('NTF202607190002', 'PAY202607190002', 'alipay_h5', 'WAITING', '{"tradeStatus":"WAIT_BUYER_PAY"}', NULL, '待处理', 'warn', '2026-07-19 10:03:18'),
 ('NTF202607180074', 'PAY202607180074', 'offline_bank', 'SUCCESS', '{"status":"SUCCESS"}', '{"code":"SUCCESS"}', '已收口', 'success', '2026-07-18 18:41:20');
 
-INSERT INTO t_payment_route_record (route_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES
-('RTR202607190001', 'PAY202607190001', 'wx_jsapi', 'customer_channel=wechat', '微信JSAPI', '2026-07-19 09:20:59'),
-('RTR202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
-('RTR202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
+INSERT INTO t_payment_route_record (route_no, attempt_no, payment_order_id, channel_code, route_rule, route_result, created_at) VALUES
+('RTR202607190001', 'ATT202607190001', 'PAY202607190001', 'wx_jsapi', 'customer_channel=wechat', '微信JSAPI', '2026-07-19 09:20:59'),
+('RTR202607190002', 'ATT202607190002', 'PAY202607190002', 'alipay_h5', 'amount>1000 => alipay', '支付宝H5', '2026-07-19 10:03:02'),
+('RTR202607180074', 'ATT202607180074', 'PAY202607180074', 'offline_bank', 'business=enterprise => offline', '线下转账', '2026-07-18 18:40:54');
 
 INSERT INTO t_payment_event (event_no, event_type, payment_order_id, biz_no, downstream_system, event_topic, publish_status, publish_status_type, payment_success_http_stage, retry_count, last_published_at, next_retry_at, event_payload, created_at) VALUES
 ('EVT202607190001', 'PAYMENT_SUCCESS', 'PAY202607190001', 'ORD202607190001', 'accounting-system,clearing-system,settlement-system', 'payment.trade.succeeded.v1', 'SUCCESS', 'success', 'COMPLETED', 1, '2026-07-19 09:21:25', NULL, '{"amount":268.00}', '2026-07-19 09:21:23'),

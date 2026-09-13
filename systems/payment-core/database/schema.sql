@@ -810,6 +810,7 @@ CREATE TABLE t_payment_notify_log (
 CREATE TABLE t_payment_route_record (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     route_no VARCHAR(64) NOT NULL COMMENT '路由记录号',
+    attempt_no VARCHAR(64) DEFAULT NULL COMMENT '关联支付尝试号，存量路由可为空',
     payment_order_id VARCHAR(64) NOT NULL COMMENT '关联支付单号',
     channel_code VARCHAR(64) NOT NULL COMMENT '渠道编码',
     route_rule VARCHAR(128) NOT NULL COMMENT '路由规则描述',
@@ -818,6 +819,7 @@ CREATE TABLE t_payment_route_record (
     created_at DATETIME NOT NULL COMMENT '创建时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_route_no (route_no),
+    KEY idx_route_attempt_no (attempt_no),
     KEY idx_route_payment_created (payment_order_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由记录表';
 

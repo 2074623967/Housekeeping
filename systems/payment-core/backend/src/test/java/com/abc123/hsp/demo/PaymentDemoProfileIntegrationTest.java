@@ -45,6 +45,7 @@ class PaymentDemoProfileIntegrationTest {
                 verifyPaymentSubmit(context.getBean(PaymentService.class));
                 verifyPcAlipaySubmit(context.getBean(PaymentService.class));
                 verifyMiniProgramWechatSubmit(context.getBean(PaymentService.class));
+                verifyApiAlipaySubmit(context.getBean(PaymentService.class));
             }
         } finally {
             rootLogger.setLevel(originalRootLevel);
@@ -137,5 +138,33 @@ class PaymentDemoProfileIntegrationTest {
         assertEquals("支付中", submitted.getCashierStatus());
         assertEquals("WAIT_CALLBACK", detail.getStatus());
         assertEquals("MINI_PROGRAM", detail.getLatestTerminal());
+    }
+
+    private void verifyApiAlipaySubmit(PaymentService paymentService) {
+        PrepayRequestDTO prepayRequest = new PrepayRequestDTO();
+        prepayRequest.setOrderNo("DEMO-INTEGRATION-API-ALIPAY-001");
+        prepayRequest.setPayScene("SERVICE_ORDER_API");
+        prepayRequest.setCustomerName("demo api integration");
+        prepayRequest.setAmount(new BigDecimal("168.00"));
+        prepayRequest.setCashierTitle("api payment");
+        PrepayOrderDTO prepay = paymentService.prepay(prepayRequest);
+
+        PaymentSubmitRequestDTO submitRequest = new PaymentSubmitRequestDTO();
+        submitRequest.setPrepayOrderNo(prepay.getPrepayOrderNo());
+        submitRequest.setPaymentMethod("支付宝");
+        submitRequest.setChannelCode("alipay_h5");
+        submitRequest.setSourceAppId("housekeeping-api");
+        submitRequest.setMerchantNo("MCH_ALI_20001");
+        submitRequest.setAccessToken("token-housekeeping-api");
+        submitRequest.setTerminal("API");
+        submitRequest.setClientIp("127.0.0.1");
+        submitRequest.setClientDeviceId("demo-api-integration");
+        submitRequest.setIdempotencyKey("DEMO-INTEGRATION-API-ALIPAY-001");
+
+        PrepayOrderDTO submitted = paymentService.submit(submitRequest);
+        PaymentDetailDTO detail = paymentService.detail(submitted.getPaymentOrderId());
+        assertEquals("支付中", submitted.getCashierStatus());
+        assertEquals("WAIT_CALLBACK", detail.getStatus());
+        assertEquals("API", detail.getLatestTerminal());
     }
 }

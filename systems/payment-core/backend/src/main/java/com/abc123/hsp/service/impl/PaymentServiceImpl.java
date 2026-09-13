@@ -642,22 +642,6 @@ public class PaymentServiceImpl implements PaymentService {
         String resolvedChannelCode = routeDecision.getChannelCode();
         paymentMapper.updatePaymentMethodAndChannel(
                 paymentOrderId, request.getPaymentMethod(), resolvedChannelCode, null);
-        paymentMapper.insertRouteRecord(
-                routeNo,
-                paymentOrderId,
-                resolvedChannelCode,
-                routeDecision.getRouteRule(),
-                routeDecision.getRouteResult());
-        recordProcessLog(
-                routeNo,
-                paymentOrderId,
-                orderNo,
-                attemptNo,
-                "PAYMENT_ROUTE",
-                "支付路由",
-                "info",
-                "路由规则=" + routeDecision.getRouteRule() + "；路由结果=" + routeDecision.getRouteResult(),
-                resolvedChannelCode);
         paymentMapper.insertPaymentAttempt(
                 attemptNo,
                 request.getPrepayOrderNo(),
@@ -672,6 +656,23 @@ public class PaymentServiceImpl implements PaymentService {
                 null,
                 "渠道提交中",
                 "warn");
+        paymentMapper.insertRouteRecord(
+                routeNo,
+                attemptNo,
+                paymentOrderId,
+                resolvedChannelCode,
+                routeDecision.getRouteRule(),
+                routeDecision.getRouteResult());
+        recordProcessLog(
+                routeNo,
+                paymentOrderId,
+                orderNo,
+                attemptNo,
+                "PAYMENT_ROUTE",
+                "支付路由",
+                "info",
+                "路由规则=" + routeDecision.getRouteRule() + "；路由结果=" + routeDecision.getRouteResult(),
+                resolvedChannelCode);
         recordProcessLog(
                 attemptNo,
                 paymentOrderId,
@@ -1752,10 +1753,13 @@ public class PaymentServiceImpl implements PaymentService {
                 || "小程序".equals(normalized)) {
             return "MINI_PROGRAM";
         }
+        if ("API".equals(normalized)) {
+            return normalized;
+        }
         if ("UNKNOWN".equals(normalized)) {
             return normalized;
         }
-        throw invalidSubmitRequest("终端标识仅支持 APP、H5、PC、MINI_PROGRAM 或 UNKNOWN");
+        throw invalidSubmitRequest("终端标识仅支持 APP、H5、PC、MINI_PROGRAM、API 或 UNKNOWN");
     }
 
     private String normalizeRequiredSubmitField(String value, String fieldName, int maxLength) {
