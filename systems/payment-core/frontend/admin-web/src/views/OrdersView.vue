@@ -1,10 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { orderApi, paymentApi } from "../api/client";
 import { paymentDetailRoute, paymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute } from "../router/listRoutes";
 
+const router = useRouter();
 const items = ref([]);
 const isLoading = ref(false);
 const hasLoadedData = ref(false);
@@ -17,7 +19,9 @@ const activeOrderNo = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
+let latestLoadRequestId = 0;
 const filters = ref({
   orderNo: "",
   serviceType: "全部",
@@ -28,10 +32,11 @@ const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
 ));
 const actionRunning = computed(() => isLoading.value || Boolean(activeOrderNo.value));
-const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
-const isWriteDisabled = computed(() => (
-  !hasLoadedData.value || actionRunning.value || isSnapshotStale.value
+const canUseSnapshot = computed(() => Boolean(
+  hasLoadedData.value && loadedQuery.value && !actionRunning.value && !isSnapshotStale.value
 ));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+const isWriteDisabled = computed(() => !canUseSnapshot.value);
 
 function buildQuery() {
   return {
@@ -68,12 +73,22 @@ async function loadOrders(afterAction = false, query = buildQuery()) {
   if (actionRunning.value && !afterAction) {
     return;
   }
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  if (afterAction) {
+    actionRefreshErrorMessage.value = "";
+  } else {
+    loadErrorMessage.value = "";
+  }
   try {
     const result = await orderApi.getList(query);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     items.value = result.items;
     total.value = result.total;
     loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
@@ -82,6 +97,9 @@ async function loadOrders(afterAction = false, query = buildQuery()) {
       actionResultMessage.value = "";
     }
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -92,8 +110,17 @@ async function loadOrders(afterAction = false, query = buildQuery()) {
       pageNo.value = loadedPageNo.value;
     }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
+}
+
+function refreshOrders() {
+  if (actionRunning.value) {
+    return;
+  }
+  loadOrders(false, loadedQuery.value || buildQuery());
 }
 
 function canLaunchPayment(orderItem) {
@@ -101,22 +128,22 @@ function canLaunchPayment(orderItem) {
 }
 
 function goToPage(nextPage) {
-  if (actionRunning.value || isSnapshotStale.value
+  if (!canUseSnapshot.value
       || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadOrders();
+  loadOrders(false, { ...loadedQuery.value, pageNo: nextPage });
 }
 
 function exportOrders() {
-  if (actionRunning.value || !canExport.value) {
+  if (actionRunning.value || !canExport.value || !loadedQuery.value) {
     return;
   }
   const exportUrl = orderApi.buildExportUrl({
-    orderNo: filters.value.orderNo,
-    serviceType: filters.value.serviceType,
-    orderStatus: filters.value.orderStatus
+    orderNo: loadedQuery.value.orderNo,
+    serviceType: loadedQuery.value.serviceType,
+    orderStatus: loadedQuery.value.orderStatus
   });
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
@@ -126,7 +153,7 @@ async function launchPayment(orderNo) {
   if (isWriteDisabled.value || !canLaunchPayment(orderItem)) {
     return;
   }
-  const query = buildQuery();
+  const query = { ...loadedQuery.value };
   activeOrderNo.value = orderNo;
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
@@ -156,6 +183,25 @@ function canOpenCashier(orderItem) {
   return Boolean(orderItem.latestPrepayOrderNo);
 }
 
+function isCurrentSnapshotOrder(orderItem) {
+  return canUseSnapshot.value
+    && items.value.some((item) => item.orderNo === orderItem?.orderNo);
+}
+
+function openSnapshotRoute(orderItem, targetRoute) {
+  if (!isCurrentSnapshotOrder(orderItem) || !targetRoute) {
+    return;
+  }
+  router.push(targetRoute);
+}
+
+function openSnapshotCashier(orderItem) {
+  if (!isCurrentSnapshotOrder(orderItem) || !canOpenCashier(orderItem)) {
+    return;
+  }
+  window.open(buildAppWebCashierUrl(orderItem.latestPrepayOrderNo), "_blank", "noopener,noreferrer");
+}
+
 onMounted(loadOrders);
 </script>
 
@@ -167,7 +213,7 @@ onMounted(loadOrders);
         <p>查看家政订单、支付状态和履约进展，并从订单侧发起支付</p>
       </div>
       <div class="toolbar-actions">
-        <button class="button secondary" :disabled="actionRunning" @click="loadOrders()">
+        <button class="button secondary" :disabled="actionRunning" @click="refreshOrders">
           {{ isLoading ? "刷新中..." : "刷新" }}
         </button>
         <button class="button primary" :disabled="actionRunning || !canExport" @click="exportOrders">导出订单</button>
@@ -289,32 +335,33 @@ onMounted(loadOrders);
                 <div class="list-actions">
                   <span>{{ item.orderStatus === "待支付" ? "待发起" : "已生成支付链路" }}</span>
                   <span>{{ item.billNo ? `账单 ${item.billNo}` : "尚未生成账单" }}</span>
-                  <RouterLink v-if="item.latestPaymentOrderId" class="link-button" :to="paymentDetailRoute(item.latestPaymentOrderId)">
+                  <button v-if="item.latestPaymentOrderId" class="link-button" :disabled="!canUseSnapshot" @click="openSnapshotRoute(item, paymentDetailRoute(item.latestPaymentOrderId))">
                     查看支付单
-                  </RouterLink>
-                  <RouterLink
+                  </button>
+                  <button
                     v-if="item.latestPaymentOrderId"
                     class="link-button"
-                    :to="paymentRecordDetailRoute(item.latestPaymentOrderId)"
+                    :disabled="!canUseSnapshot"
+                    @click="openSnapshotRoute(item, paymentRecordDetailRoute(item.latestPaymentOrderId))"
                   >
                     查看支付记录
-                  </RouterLink>
-                  <RouterLink
+                  </button>
+                  <button
                     v-if="item.billNo"
                     class="link-button"
-                    :to="billsRoute({ billNo: item.billNo, orderNo: item.orderNo })"
+                    :disabled="!canUseSnapshot"
+                    @click="openSnapshotRoute(item, billsRoute({ billNo: item.billNo, orderNo: item.orderNo }))"
                   >
                     查看账单
-                  </RouterLink>
-                  <a
+                  </button>
+                  <button
                     v-if="canOpenCashier(item)"
                     class="link-button"
-                    :href="buildAppWebCashierUrl(item.latestPrepayOrderNo)"
-                    target="_blank"
-                    rel="noreferrer"
+                    :disabled="!canUseSnapshot"
+                    @click="openSnapshotCashier(item)"
                   >
                     打开收银台
-                  </a>
+                  </button>
                   <button
                     class="link-button"
                     :disabled="isWriteDisabled || !canLaunchPayment(item)"
@@ -336,9 +383,9 @@ onMounted(loadOrders);
       </div>
       <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条订单</span>
-        <button class="button secondary" :disabled="pageNo === 1 || isLoading || Boolean(activeOrderNo) || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || Boolean(activeOrderNo) || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
