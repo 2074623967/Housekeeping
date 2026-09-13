@@ -1757,6 +1757,14 @@ t_order
 3. 总览与后续写入不构成同一事务快照；查询流量、限流记录或告警确认状态可在读取与点击之间变化，执行端必须重新复验并依赖既有生成键和任务租约。
 4. 目标 MySQL 仍需以真实日志与告警规模验证窗口聚合和冷却查询的执行计划与响应耗时；Mockito 和固定页面数据不证明生产容量或通知送达。
 
+### 4.206 路由规则冲突批准协调表
+
+1. 新增 `t_payment_route_rule_conflict_lock`：主键 `id`、协调维度 `lock_name VARCHAR(64)` 和创建、更新时间；`uk_route_rule_conflict_lock(lock_name)` 保证固定键 `ENABLED_RULE_SET` 只有一个稳定锁对象。
+2. 启用且灰度比例大于 `0` 的批准先 `INSERT IGNORE` 惰性创建协调行，再以固定键 `SELECT id ... FOR UPDATE`；取得协调锁后才锁当前规则并以 `SELECT ... FOR UPDATE` 当前读全部规则，完成冲突复验与写入。
+3. 协调锁先于当前规则行锁，避免不同规则事务各自持锁后再争抢全局锁。冲突查询必须使用当前读，避免同一事务较早的渠道查询在 MySQL `REPEATABLE READ` 下形成旧快照。
+4. 唯一键只约束技术协调行，不限制合法非重叠规则数量；停用和 `0%` 候选不获取协调锁，协调行不随业务规则停用或删除而回收。
+5. 双份全量 schema 与幂等建表迁移 `database/migrations/2026-09-13-add-payment-route-rule-conflict-lock.sql` 已同步，无业务数据回填。目标 MySQL 执行前仍需验证 DDL、锁等待、死锁、超时、回滚和容量；H2 双连接只证明本地协议形状。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
