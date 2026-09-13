@@ -255,6 +255,8 @@ CREATE TABLE t_payment_route_rule_review (
     review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
     reviewer VARCHAR(64) DEFAULT NULL COMMENT '复核人自声明',
     review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见',
+    priority_collision_detected TINYINT(1) DEFAULT NULL COMMENT '批准复验是否检测到同优先级潜在冲突，未执行批准复验为空',
+    priority_collision_acknowledged TINYINT(1) DEFAULT NULL COMMENT '检测到潜在冲突时是否完成显式风险确认，未执行批准复验为空',
     created_at DATETIME NOT NULL COMMENT '申请时间',
     reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
     updated_at DATETIME NOT NULL COMMENT '更新时间',

@@ -429,7 +429,9 @@ public interface PaymentConfigMapper {
                                 @Param("reviewStatus") String reviewStatus,
                                 @Param("reviewStatusType") String reviewStatusType,
                                 @Param("reviewer") String reviewer,
-                                @Param("reviewComment") String reviewComment);
+                                @Param("reviewComment") String reviewComment,
+                                @Param("priorityCollisionDetected") Boolean priorityCollisionDetected,
+                                @Param("priorityCollisionAcknowledged") Boolean priorityCollisionAcknowledged);
 
     /**
      * 新增支付协议配置。

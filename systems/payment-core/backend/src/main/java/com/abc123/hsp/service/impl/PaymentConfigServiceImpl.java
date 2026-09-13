@@ -635,9 +635,10 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 throw new IllegalArgumentException("规则已产生新版本，请重新提交复核申请");
             }
         }
-        ensureCandidateHasNoUnacknowledgedConflict(
-                candidate,
-                request != null && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged()));
+        boolean priorityCollisionAcknowledged = request != null
+                && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged());
+        boolean priorityCollisionDetected = ensureCandidateHasNoUnacknowledgedConflict(
+                candidate, priorityCollisionAcknowledged);
         if (current == null) {
             paymentConfigMapper.insertRouteRule(candidate);
         } else {
@@ -652,7 +653,10 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             sourceVersionNo = review.getSourceVersionNo();
         }
         recordRouteRuleVersion(candidate, versionChangeType, sourceVersionNo, review.getRequestReason());
-        completeRouteRuleReview(review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment);
+        completeRouteRuleReview(
+                review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment,
+                Boolean.valueOf(priorityCollisionDetected),
+                Boolean.valueOf(priorityCollisionDetected && priorityCollisionAcknowledged));
         return paymentConfigMapper.findRouteRuleReviews();
     }
 
@@ -664,7 +668,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewer = requireDistinctReviewer(review, request);
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
-        completeRouteRuleReview(review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment);
+        completeRouteRuleReview(
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment, null, null);
         return paymentConfigMapper.findRouteRuleReviews();
     }
 
@@ -2693,9 +2698,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                          String reviewStatus,
                                          String reviewStatusType,
                                          String reviewer,
-                                         String reviewComment) {
+                                         String reviewComment,
+                                         Boolean priorityCollisionDetected,
+                                         Boolean priorityCollisionAcknowledged) {
         int affectedRows = paymentConfigMapper.completeRouteRuleReview(
-                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment);
+                requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment,
+                priorityCollisionDetected, priorityCollisionAcknowledged);
         if (affectedRows == 0) {
             throw new IllegalArgumentException("路由规则复核状态已变化，请刷新后重试");
         }
@@ -2764,12 +2772,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return copy;
     }
 
-    private void ensureCandidateHasNoUnacknowledgedConflict(PaymentRouteRuleConfigEntity candidate,
-                                                            boolean priorityCollisionAcknowledged) {
+    private boolean ensureCandidateHasNoUnacknowledgedConflict(PaymentRouteRuleConfigEntity candidate,
+                                                               boolean priorityCollisionAcknowledged) {
         if (!STATUS_ENABLED.equals(candidate.getStatus())
                 || candidate.getRolloutPercentage() == null
                 || candidate.getRolloutPercentage().intValue() <= 0) {
-            return;
+            return false;
         }
         List<PaymentRouteRuleConfigDTO> candidateRules = new ArrayList<PaymentRouteRuleConfigDTO>();
         for (PaymentRouteRuleConfigDTO rule : paymentConfigMapper.findRouteRulesForConflictCheckForUpdate()) {
@@ -2778,19 +2786,27 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         candidateRules.add(toConfigDto(candidate));
+        boolean priorityCollisionDetected = false;
+        String priorityCollisionMessage = null;
         for (PaymentRouteRuleConflictDTO conflict : detectRouteRuleConflicts(candidateRules)) {
             boolean candidateInvolved = candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
                     || candidate.getRuleCode().equalsIgnoreCase(conflict.getConflictingRuleCode());
             if (candidateInvolved && "BLOCKER".equals(conflict.getSeverity())) {
                 throw new IllegalArgumentException("候选规则存在阻断级冲突：" + conflict.getMessage());
             }
-            if (candidateInvolved
-                    && "PRIORITY_COLLISION".equals(conflict.getConflictType())
-                    && !priorityCollisionAcknowledged) {
-                throw new IllegalArgumentException(
-                        "候选规则存在同优先级潜在冲突，请确认表达式互斥性风险后再批准：" + conflict.getMessage());
+            if (candidateInvolved && "PRIORITY_COLLISION".equals(conflict.getConflictType())) {
+                priorityCollisionDetected = true;
+                if (priorityCollisionMessage == null) {
+                    priorityCollisionMessage = conflict.getMessage();
+                }
             }
         }
+        if (priorityCollisionDetected && !priorityCollisionAcknowledged) {
+            throw new IllegalArgumentException(
+                    "候选规则存在同优先级潜在冲突，请确认表达式互斥性风险后再批准："
+                            + priorityCollisionMessage);
+        }
+        return priorityCollisionDetected;
     }
 
     private void lockRouteRuleConflictSetIfRequired(PaymentRouteRuleConfigEntity candidate) {

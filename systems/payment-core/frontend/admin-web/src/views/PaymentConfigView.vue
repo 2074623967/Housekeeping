@@ -809,6 +809,18 @@ function formatRouteRuleOperation(operationType) {
   return labels[operationType] || operationType;
 }
 
+function formatRouteRuleConflictAudit(review) {
+  if (review.priorityCollisionDetected === true) {
+    return review.priorityCollisionAcknowledged === true
+      ? "同优先级风险已确认"
+      : "同优先级风险未确认";
+  }
+  if (review.priorityCollisionDetected === false) {
+    return "未发现同优先级潜在冲突";
+  }
+  return "冲突复验未执行";
+}
+
 async function handleRouteRuleReview(review, approved) {
   if (!reviewer.value) {
     actionMessage.value = "复核处理失败：复核人声明不能为空。";
@@ -2925,6 +2937,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <td>
                       {{ review.reviewer || "-" }}
                       <div class="muted-text">{{ review.reviewComment || "尚未处理" }}</div>
+                      <div class="muted-text">{{ formatRouteRuleConflictAudit(review) }}</div>
                     </td>
                     <td>
                       {{ review.createdAt }}

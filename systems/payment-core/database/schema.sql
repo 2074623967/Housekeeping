@@ -51,6 +51,8 @@ DROP TABLE IF EXISTS t_payment_control_policy_review;
 DROP TABLE IF EXISTS t_payment_control_policy_version;
 DROP TABLE IF EXISTS t_payment_control_policy;
 DROP TABLE IF EXISTS t_payment_protocol_config;
+DROP TABLE IF EXISTS t_payment_route_rule_version;
+DROP TABLE IF EXISTS t_payment_route_rule_review;
 DROP TABLE IF EXISTS t_payment_route_rule_conflict_lock;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
@@ -201,6 +203,65 @@ CREATE TABLE t_payment_route_rule_config (
     UNIQUE KEY uk_rule_code (rule_code),
     KEY idx_route_scene_status (match_scene, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则配置表';
+
+CREATE TABLE t_payment_route_rule_version (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    rule_code VARCHAR(64) NOT NULL COMMENT '路由规则编码',
+    version_no INT NOT NULL COMMENT '规则版本号',
+    rule_name VARCHAR(128) NOT NULL COMMENT '路由规则名称快照',
+    match_scene VARCHAR(128) NOT NULL COMMENT '匹配业务场景快照',
+    match_expression VARCHAR(512) NOT NULL COMMENT '匹配表达式快照',
+    target_channel_code VARCHAR(64) NOT NULL COMMENT '目标渠道编码快照',
+    fallback_channel_code VARCHAR(64) NOT NULL COMMENT '兜底渠道编码快照',
+    rollout_percentage INT NOT NULL COMMENT '稳定分桶承接比例快照',
+    rollout_salt VARCHAR(64) NOT NULL COMMENT '稳定分桶盐值快照',
+    status VARCHAR(32) NOT NULL COMMENT '规则状态快照',
+    status_type VARCHAR(32) NOT NULL COMMENT '规则状态样式类型快照',
+    priority INT NOT NULL COMMENT '规则优先级快照',
+    change_type VARCHAR(32) NOT NULL COMMENT '变更类型',
+    source_version_no INT NULL COMMENT '回滚来源版本号',
+    change_reason VARCHAR(255) NOT NULL COMMENT '变更原因',
+    created_at DATETIME NOT NULL COMMENT '版本创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_route_rule_version (rule_code, version_no),
+    KEY idx_route_rule_version_created (rule_code, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则版本快照表';
+
+CREATE TABLE t_payment_route_rule_review (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    request_no VARCHAR(64) NOT NULL COMMENT '复核申请编号',
+    rule_code VARCHAR(64) NOT NULL COMMENT '路由规则编码',
+    pending_rule_code VARCHAR(64) DEFAULT NULL COMMENT '待复核规则唯一占位，完成后置空',
+    base_version_no INT NULL COMMENT '提交申请时的运行版本号，新建规则为空',
+    source_version_no INT NULL COMMENT '回滚目标历史版本号，非回滚申请为空',
+    operation_type VARCHAR(32) NOT NULL COMMENT '操作类型：CREATE/UPDATE/STATUS_CHANGE/ROLLBACK',
+    rule_name VARCHAR(128) NOT NULL COMMENT '候选规则名称',
+    match_scene VARCHAR(128) NOT NULL COMMENT '候选匹配场景',
+    match_expression VARCHAR(512) NOT NULL COMMENT '候选匹配表达式',
+    target_channel_code VARCHAR(64) NOT NULL COMMENT '候选目标渠道',
+    fallback_channel_code VARCHAR(64) NOT NULL COMMENT '候选兜底渠道',
+    rollout_percentage INT NOT NULL COMMENT '候选稳定分桶承接比例',
+    rollout_salt VARCHAR(64) NOT NULL COMMENT '候选稳定分桶盐值',
+    status VARCHAR(32) NOT NULL COMMENT '候选规则状态',
+    status_type VARCHAR(32) NOT NULL COMMENT '候选规则状态样式',
+    priority INT NOT NULL COMMENT '候选规则优先级',
+    requester VARCHAR(64) NOT NULL COMMENT '申请人自声明',
+    request_reason VARCHAR(255) NOT NULL COMMENT '申请原因',
+    review_status VARCHAR(32) NOT NULL COMMENT '复核状态',
+    review_status_type VARCHAR(32) NOT NULL COMMENT '复核状态样式',
+    reviewer VARCHAR(64) DEFAULT NULL COMMENT '复核人自声明',
+    review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见',
+    priority_collision_detected TINYINT(1) DEFAULT NULL COMMENT '批准复验是否检测到同优先级潜在冲突，未执行批准复验为空',
+    priority_collision_acknowledged TINYINT(1) DEFAULT NULL COMMENT '检测到潜在冲突时是否完成显式风险确认，未执行批准复验为空',
+    created_at DATETIME NOT NULL COMMENT '申请时间',
+    reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_route_rule_review_request (request_no),
+    UNIQUE KEY uk_route_rule_review_pending (pending_rule_code),
+    KEY idx_route_rule_review_status (review_status, created_at),
+    KEY idx_route_rule_review_rule (rule_code, review_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则复核申请表';
 
 CREATE TABLE t_payment_route_rule_conflict_lock (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

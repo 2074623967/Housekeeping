@@ -136,7 +136,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             assertEquals(Integer.valueOf(30), storedReview.getRolloutPercentage());
             assertEquals("home-app-v2", storedReview.getRolloutSalt());
             assertEquals(1, mapper.completeRouteRuleReview(
-                    "RRV-001", "APPROVED", "success", "reviewer-b", "复核通过"));
+                    "RRV-001", "APPROVED", "success", "reviewer-b", "复核通过",
+                    Boolean.TRUE, Boolean.TRUE));
             assertEquals(0, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
             assertEquals(1, mapper.insertRouteRuleReview(duplicatePending));
             assertEquals(1, mapper.countPendingRouteRuleReviews("RULE_HOME_APP"));
@@ -151,6 +152,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             assertEquals(Integer.valueOf(1), completed.getSourceVersionNo());
             assertEquals(Integer.valueOf(30), completed.getRolloutPercentage());
             assertEquals("home-app-v2", completed.getRolloutSalt());
+            assertEquals(Boolean.TRUE, completed.getPriorityCollisionDetected());
+            assertEquals(Boolean.TRUE, completed.getPriorityCollisionAcknowledged());
             session.commit();
         }
     }
@@ -267,7 +270,8 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
                     + "rollout_percentage INT, rollout_salt VARCHAR(64), "
                     + "status VARCHAR(32), status_type VARCHAR(32), priority INT, requester VARCHAR(64), "
                     + "request_reason VARCHAR(255), review_status VARCHAR(32), review_status_type VARCHAR(32), "
-                    + "reviewer VARCHAR(64), review_comment VARCHAR(255), created_at DATETIME, "
+                    + "reviewer VARCHAR(64), review_comment VARCHAR(255), "
+                    + "priority_collision_detected BOOLEAN, priority_collision_acknowledged BOOLEAN, created_at DATETIME, "
                     + "reviewed_at DATETIME, updated_at DATETIME)");
             statement.executeUpdate("INSERT INTO t_payment_route_rule_config "
                     + "(rule_code, rule_name, match_scene, match_expression, target_channel_code, "

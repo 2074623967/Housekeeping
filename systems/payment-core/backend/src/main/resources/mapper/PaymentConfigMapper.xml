@@ -411,6 +411,8 @@
                review_status_type AS reviewStatusType,
                reviewer,
                review_comment AS reviewComment,
+               priority_collision_detected AS priorityCollisionDetected,
+               priority_collision_acknowledged AS priorityCollisionAcknowledged,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
                'SELF_DECLARED' AS identityTrustLevel
@@ -442,7 +444,9 @@
                review_status AS reviewStatus,
                review_status_type AS reviewStatusType,
                reviewer,
-               review_comment AS reviewComment
+               review_comment AS reviewComment,
+               priority_collision_detected AS priorityCollisionDetected,
+               priority_collision_acknowledged AS priorityCollisionAcknowledged
         FROM t_payment_route_rule_review
         WHERE request_no = #{requestNo}
         LIMIT 1
@@ -1967,6 +1971,8 @@
             pending_rule_code = NULL,
             reviewer = #{reviewer},
             review_comment = #{reviewComment},
+            priority_collision_detected = #{priorityCollisionDetected},
+            priority_collision_acknowledged = #{priorityCollisionAcknowledged},
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}

@@ -29,4 +29,6 @@ public class PaymentRouteRuleReviewEntity {
     private String reviewStatusType;
     private String reviewer;
     private String reviewComment;
+    private Boolean priorityCollisionDetected;
+    private Boolean priorityCollisionAcknowledged;
 }

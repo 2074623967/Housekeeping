@@ -29,6 +29,10 @@ public class PaymentRouteRuleReviewDTO {
     private String reviewStatusType;
     private String reviewer;
     private String reviewComment;
+    /** 批准复验是否检测到同优先级潜在冲突；未执行批准复验时为空。 */
+    private Boolean priorityCollisionDetected;
+    /** 检测到潜在冲突时是否完成显式风险确认；未执行批准复验时为空。 */
+    private Boolean priorityCollisionAcknowledged;
     private String createdAt;
     private String reviewedAt;
     /** 身份可信度固定为自声明，避免被误读成已认证签字。 */
