@@ -4,6 +4,8 @@ const paymentBaseUrl = process.env.HSP_PAYMENT_CORE_BASE_URL || "http://127.0.0.
 const clearingBaseUrl = process.env.HSP_CLEARING_BASE_URL || "http://127.0.0.1:18120";
 const settlementBaseUrl = process.env.HSP_SETTLEMENT_BASE_URL || "http://127.0.0.1:18130";
 const accountingBaseUrl = process.env.HSP_ACCOUNTING_BASE_URL || "http://127.0.0.1:18110";
+const refundBaseUrl = process.env.HSP_REFUND_CENTER_BASE_URL || "http://127.0.0.1:18140";
+const reconciliationBaseUrl = process.env.HSP_RECONCILIATION_BASE_URL || "http://127.0.0.1:18150";
 
 const suffix = `${Date.now()}-${process.pid}`;
 const orderNo = `LOCAL-HAPPY-${suffix}`;
@@ -117,6 +119,77 @@ async function main() {
   assert(accountingClearingEvents.items.some((item) => item.eventType === "CLEARING_GENERATED"),
     "accounting CLEARING_GENERATED event was not consumed");
 
+  await api(`${refundBaseUrl}/api/refunds/internal/payment-success`, {
+    method: "POST",
+    body: JSON.stringify({
+      paymentOrderId: prepay.paymentOrderId,
+      orderNo,
+      customerName: "local happy path",
+      paidAmount: 88,
+      channelCode: "wx_h5"
+    })
+  });
+  const refund = await api(`${refundBaseUrl}/api/refunds/apply`, {
+    method: "POST",
+    body: JSON.stringify({
+      paymentOrderId: prepay.paymentOrderId,
+      refundAmount: 18,
+      refundMethod: "ORIGINAL",
+      refundReason: "local happy path refund",
+      idempotencyKey: `REFUND-${orderNo}`
+    })
+  });
+  await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(refund.refundOrderId)}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ remark: "local happy path approved" })
+  });
+  await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(refund.refundOrderId)}/submit`, {
+    method: "POST",
+    body: JSON.stringify({ remark: "local happy path submitted" })
+  });
+  const refunded = await api(`${refundBaseUrl}/api/refunds/${encodeURIComponent(refund.refundOrderId)}/callback`, {
+    method: "POST",
+    body: JSON.stringify({
+      result: "SUCCESS",
+      channelRefundId: `LOCAL-CHANNEL-REFUND-${suffix}`,
+      rawMessage: "local happy path success"
+    })
+  });
+  assert(refunded.status === "SUCCESS", `unexpected refund status: ${refunded.status}`);
+
+  const refundOutboxPage = await api(
+    `${refundBaseUrl}/api/refunds/outbox?aggregateId=${encodeURIComponent(refund.refundOrderId)}&pageNo=1&pageSize=20`
+  );
+  assert(refundOutboxPage.items.length === 1, "REFUND_SUCCESS outbox event was not created");
+  const refundOutbox = await api(
+    `${refundBaseUrl}/api/refunds/outbox/${encodeURIComponent(refundOutboxPage.items[0].eventId)}/dispatch`,
+    { method: "POST", body: JSON.stringify({ remark: "local happy path dispatch" }) }
+  );
+  assert(refundOutbox.status === "SENT", `unexpected refund outbox status: ${refundOutbox.status}`);
+  const repeatedRefundOutbox = await api(
+    `${refundBaseUrl}/api/refunds/outbox/${encodeURIComponent(refundOutbox.eventId)}/dispatch`,
+    { method: "POST", body: JSON.stringify({ remark: "local happy path repeated dispatch" }) }
+  );
+  assert(repeatedRefundOutbox.status === "SENT", "repeated refund dispatch was not idempotent");
+
+  const accountingRefundEvents = await api(
+    `${accountingBaseUrl}/api/accounting/events?bizNo=${encodeURIComponent(refund.refundOrderId)}&pageNo=1&pageSize=20`
+  );
+  assert(accountingRefundEvents.items.filter((item) => item.eventType === "REFUND_SUCCESS").length === 1,
+    "accounting REFUND_SUCCESS event was not consumed idempotently");
+  const accountingRefundLedgers = await api(
+    `${accountingBaseUrl}/api/accounting/ledgers?bizNo=${encodeURIComponent(refund.refundOrderId)}&bizType=REFUND_SUCCESS_EVENT&pageNo=1&pageSize=20`
+  );
+  assert(accountingRefundLedgers.items.length === 1, "refund success did not create exactly one accounting ledger");
+  assert(accountingRefundLedgers.items[0].direction === "借方", "refund success ledger was not a debit entry");
+  const reconciliationChain = await api(
+    `${reconciliationBaseUrl}/api/reconciliation/cross-system/chains/${encodeURIComponent(`CHAIN-${prepay.paymentOrderId}`)}`
+  );
+  assert(reconciliationChain.facts.filter((item) => item.systemCode === "refund-center"
+    && item.factType === "REFUND_SUCCESS"
+    && item.factNo === refundOutbox.eventId).length === 1,
+  "reconciliation REFUND_SUCCESS fact was not recorded idempotently");
+
   console.log("[PASS] cross-system local happy path");
   console.log(JSON.stringify({
     orderNo,
@@ -124,7 +197,10 @@ async function main() {
     paymentEventNo: paymentEvent.eventNo,
     clearingNo: clearingOrder.clearingNo,
     settlementNo: settlementOrder.settlementNo,
-    accountingEventTypes: ["PAYMENT_SUCCESS", "CLEARING_GENERATED"]
+    refundOrderId: refund.refundOrderId,
+    refundEventId: refundOutbox.eventId,
+    accountingEventTypes: ["PAYMENT_SUCCESS", "CLEARING_GENERATED", "REFUND_SUCCESS"],
+    reconciliationFactTypes: ["REFUND_SUCCESS"]
   }, null, 2));
 }
 

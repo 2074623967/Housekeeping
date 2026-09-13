@@ -26,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * 退款状态机和金额边界单元测试。
@@ -35,6 +37,9 @@ class RefundServiceImplTest {
 
     @Mock
     private RefundDao refundDao;
+
+    @Mock
+    private RestTemplate restTemplate;
 
     private RefundServiceImpl service;
 
@@ -206,6 +211,100 @@ class RefundServiceImplTest {
 
         assertEquals("FAIL", service.dispatchOutbox("REVT-2", request).getStatus());
         verify(refundDao).markOutboxFailed("REVT-2", "账务系统暂不可用");
+    }
+
+    @Test
+    void shouldDispatchRefundSuccessToAccountingAndReconciliation() {
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate);
+        RefundOutboxEventEntity event = outboxEvent("REVT-3", "REF-3");
+        RefundListItemDTO refund = successfulRefund("REF-3", "PAY-3", "10.00");
+        when(refundDao.findOutboxByEventId("REVT-3")).thenReturn(event);
+        when(refundDao.findByRefundOrderId("REF-3")).thenReturn(refund);
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+        when(refundDao.markOutboxSent("REVT-3")).thenReturn(1);
+        RefundOutboxItemDTO sent = new RefundOutboxItemDTO();
+        sent.setEventId("REVT-3");
+        sent.setStatus("SENT");
+        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(sent));
+
+        RefundOutboxItemDTO result = service.dispatchOutbox("REVT-3", new RefundOutboxDispatchRequestDTO());
+
+        assertEquals("SENT", result.getStatus());
+        verify(restTemplate).postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class));
+        verify(restTemplate).postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+    }
+
+    @Test
+    void shouldKeepOutboxFailedWhenARealDownstreamCallFails() {
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate);
+        RefundOutboxEventEntity event = outboxEvent("REVT-4", "REF-4");
+        when(refundDao.findOutboxByEventId("REVT-4")).thenReturn(event);
+        when(refundDao.findByRefundOrderId("REF-4"))
+                .thenReturn(successfulRefund("REF-4", "PAY-4", "10.00"));
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "0")));
+        when(restTemplate.postForEntity(eq("http://reconciliation/facts"), any(), eq(java.util.Map.class)))
+                .thenThrow(new IllegalStateException("downstream unavailable"));
+        when(refundDao.markOutboxFailed("REVT-4", "下游派发失败:IllegalStateException")).thenReturn(1);
+        RefundOutboxItemDTO failed = new RefundOutboxItemDTO();
+        failed.setEventId("REVT-4");
+        failed.setStatus("FAIL");
+        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(failed));
+
+        RefundOutboxItemDTO result = service.dispatchOutbox("REVT-4", new RefundOutboxDispatchRequestDTO());
+
+        assertEquals("FAIL", result.getStatus());
+        verify(refundDao).markOutboxFailed("REVT-4", "下游派发失败:IllegalStateException");
+        verify(refundDao, never()).markOutboxSent("REVT-4");
+    }
+
+    @Test
+    void shouldRejectHttpSuccessWithFailedBusinessCode() {
+        service = new RefundServiceImpl(refundDao, "test-operator", "HTTP",
+                "http://accounting/refunds/success", "ACT10003",
+                "http://reconciliation/facts", restTemplate);
+        RefundOutboxEventEntity event = outboxEvent("REVT-5", "REF-5");
+        when(refundDao.findOutboxByEventId("REVT-5")).thenReturn(event);
+        when(refundDao.findByRefundOrderId("REF-5"))
+                .thenReturn(successfulRefund("REF-5", "PAY-5", "10.00"));
+        when(restTemplate.postForEntity(eq("http://accounting/refunds/success"), any(), eq(java.util.Map.class)))
+                .thenReturn(ResponseEntity.ok(Collections.singletonMap("code", "ACCOUNTING_ERROR")));
+        when(refundDao.markOutboxFailed("REVT-5", "下游派发失败:IllegalStateException")).thenReturn(1);
+        RefundOutboxItemDTO failed = new RefundOutboxItemDTO();
+        failed.setEventId("REVT-5");
+        failed.setStatus("FAIL");
+        when(refundDao.findOutboxList(any())).thenReturn(Collections.singletonList(failed));
+
+        RefundOutboxItemDTO result = service.dispatchOutbox("REVT-5", new RefundOutboxDispatchRequestDTO());
+
+        assertEquals("FAIL", result.getStatus());
+        verify(refundDao, never()).markOutboxSent("REVT-5");
+        verify(restTemplate, never()).postForEntity(
+                eq("http://reconciliation/facts"), any(), eq(java.util.Map.class));
+    }
+
+    private RefundOutboxEventEntity outboxEvent(String eventId, String aggregateId) {
+        RefundOutboxEventEntity event = new RefundOutboxEventEntity();
+        event.setEventId(eventId);
+        event.setAggregateId(aggregateId);
+        event.setStatus("PENDING");
+        return event;
+    }
+
+    private RefundListItemDTO successfulRefund(String refundOrderId, String paymentOrderId, String amount) {
+        RefundListItemDTO refund = new RefundListItemDTO();
+        refund.setRefundOrderId(refundOrderId);
+        refund.setPaymentOrderId(paymentOrderId);
+        refund.setRefundAmount(new BigDecimal(amount));
+        refund.setStatus("SUCCESS");
+        return refund;
     }
 
     private PaymentSuccessProjectionEntity source(String paymentOrderId, String amount) {

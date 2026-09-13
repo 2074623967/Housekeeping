@@ -4,6 +4,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 
 /**
@@ -16,6 +17,8 @@ public interface AccountingEventService {
     AccountEventDTO consumePaymentSuccess(PaymentSuccessEventRequestDTO request);
 
     AccountEventDTO consumeClearingGenerated(ClearingGeneratedEventRequestDTO request);
+
+    AccountEventDTO consumeRefundSuccess(RefundSuccessEventRequestDTO request);
 
     AccountEventDTO consumeSettlementCompensation(SettlementCompensationEventRequestDTO request);
 }

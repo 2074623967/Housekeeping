@@ -23,11 +23,15 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * 退款中心业务编排实现。
@@ -48,11 +52,43 @@ public class RefundServiceImpl implements RefundService {
 
     private final RefundDao refundDao;
     private final String operator;
+    private final String outboxDispatchMode;
+    private final String accountingRefundSuccessUrl;
+    private final String accountingRefundSuccessAccountNo;
+    private final String reconciliationFactUrl;
+    private final RestTemplate restTemplate;
 
+    @Autowired
     public RefundServiceImpl(RefundDao refundDao,
-                             @Value("${refund-center.operator:refund-center-admin}") String operator) {
+                             @Value("${refund-center.operator:refund-center-admin}") String operator,
+                             @Value("${refund-center.outbox-dispatch-mode:HTTP}") String outboxDispatchMode,
+                             @Value("${refund-center.downstream.accounting.refund-success-url:}")
+                             String accountingRefundSuccessUrl,
+                             @Value("${refund-center.downstream.accounting.refund-success-account-no:ACT10003}")
+                             String accountingRefundSuccessAccountNo,
+                             @Value("${refund-center.downstream.reconciliation.fact-url:}") String reconciliationFactUrl) {
+        this(refundDao, operator, outboxDispatchMode, accountingRefundSuccessUrl,
+                accountingRefundSuccessAccountNo, reconciliationFactUrl, new RestTemplate());
+    }
+
+    RefundServiceImpl(RefundDao refundDao, String operator) {
+        this(refundDao, operator, "LOCAL", null, "ACT10003", null, new RestTemplate());
+    }
+
+    RefundServiceImpl(RefundDao refundDao,
+                      String operator,
+                      String outboxDispatchMode,
+                      String accountingRefundSuccessUrl,
+                      String accountingRefundSuccessAccountNo,
+                      String reconciliationFactUrl,
+                      RestTemplate restTemplate) {
         this.refundDao = refundDao;
         this.operator = operator;
+        this.outboxDispatchMode = outboxDispatchMode;
+        this.accountingRefundSuccessUrl = accountingRefundSuccessUrl;
+        this.accountingRefundSuccessAccountNo = accountingRefundSuccessAccountNo;
+        this.reconciliationFactUrl = reconciliationFactUrl;
+        this.restTemplate = restTemplate;
     }
 
     @Override
@@ -278,10 +314,55 @@ public class RefundServiceImpl implements RefundService {
             }
             return loadSingleOutbox(id);
         }
-        if (refundDao.markOutboxSent(id) != 1) {
-            throw new BusinessException("退款成功事件派发状态回写异常");
+        try {
+            if (!"LOCAL".equalsIgnoreCase(outboxDispatchMode == null ? "" : outboxDispatchMode.trim())) {
+                dispatchRefundSuccess(existing);
+            }
+            if (refundDao.markOutboxSent(id) != 1) {
+                throw new BusinessException("退款成功事件派发状态回写异常");
+            }
+        } catch (RuntimeException exception) {
+            String errorMessage = "下游派发失败:" + exception.getClass().getSimpleName();
+            if (refundDao.markOutboxFailed(id, errorMessage) != 1) {
+                throw new BusinessException("退款成功事件派发失败状态回写异常");
+            }
         }
         return loadSingleOutbox(id);
+    }
+
+    private void dispatchRefundSuccess(RefundOutboxEventEntity event) {
+        RefundListItemDTO refund = refundDao.findByRefundOrderId(event.getAggregateId());
+        if (refund == null || !SUCCESS.equals(refund.getStatus())) {
+            throw new BusinessException("退款成功事实不存在或状态异常");
+        }
+        String businessChainId = "CHAIN-" + refund.getPaymentOrderId();
+        postForSuccess(accountingRefundSuccessUrl, new AccountingRefundSuccessPayload(
+                businessChainId,
+                accountingRefundSuccessAccountNo,
+                refund.getRefundOrderId(),
+                refund.getPaymentOrderId(),
+                refund.getRefundAmount(),
+                "退款成功后冲回原支付入账"));
+        postForSuccess(reconciliationFactUrl, new ReconciliationFactPayload(
+                businessChainId,
+                "refund-center",
+                "REFUND_SUCCESS",
+                event.getEventId(),
+                refund.getRefundOrderId(),
+                SUCCESS,
+                refund.getRefundAmount(),
+                "退款成功事实，原支付单号=" + refund.getPaymentOrderId()));
+    }
+
+    private void postForSuccess(String url, Object payload) {
+        if (!StringUtils.hasText(url)) {
+            throw new IllegalStateException("退款成功下游地址未配置");
+        }
+        ResponseEntity<Map> response = restTemplate.postForEntity(url.trim(), payload, Map.class);
+        Object responseCode = response.getBody() == null ? null : response.getBody().get("code");
+        if (!response.getStatusCode().is2xxSuccessful() || !"0".equals(String.valueOf(responseCode))) {
+            throw new IllegalStateException("退款成功下游响应失败");
+        }
     }
 
     @Override
@@ -380,5 +461,105 @@ public class RefundServiceImpl implements RefundService {
 
     private String time(LocalDateTime value) {
         return value == null ? null : value.toString();
+    }
+
+    private static class AccountingRefundSuccessPayload {
+
+        private final String businessChainId;
+        private final String accountNo;
+        private final String refundOrderId;
+        private final String paymentOrderId;
+        private final BigDecimal amount;
+        private final String summary;
+
+        AccountingRefundSuccessPayload(String businessChainId, String accountNo, String refundOrderId,
+                                       String paymentOrderId, BigDecimal amount, String summary) {
+            this.businessChainId = businessChainId;
+            this.accountNo = accountNo;
+            this.refundOrderId = refundOrderId;
+            this.paymentOrderId = paymentOrderId;
+            this.amount = amount;
+            this.summary = summary;
+        }
+
+        public String getBusinessChainId() {
+            return businessChainId;
+        }
+
+        public String getAccountNo() {
+            return accountNo;
+        }
+
+        public String getRefundOrderId() {
+            return refundOrderId;
+        }
+
+        public String getPaymentOrderId() {
+            return paymentOrderId;
+        }
+
+        public BigDecimal getAmount() {
+            return amount;
+        }
+
+        public String getSummary() {
+            return summary;
+        }
+    }
+
+    private static class ReconciliationFactPayload {
+
+        private final String businessChainId;
+        private final String systemCode;
+        private final String factType;
+        private final String factNo;
+        private final String businessNo;
+        private final String factStatus;
+        private final BigDecimal amount;
+        private final String payload;
+
+        ReconciliationFactPayload(String businessChainId, String systemCode, String factType, String factNo,
+                                  String businessNo, String factStatus, BigDecimal amount, String payload) {
+            this.businessChainId = businessChainId;
+            this.systemCode = systemCode;
+            this.factType = factType;
+            this.factNo = factNo;
+            this.businessNo = businessNo;
+            this.factStatus = factStatus;
+            this.amount = amount;
+            this.payload = payload;
+        }
+
+        public String getBusinessChainId() {
+            return businessChainId;
+        }
+
+        public String getSystemCode() {
+            return systemCode;
+        }
+
+        public String getFactType() {
+            return factType;
+        }
+
+        public String getFactNo() {
+            return factNo;
+        }
+
+        public String getBusinessNo() {
+            return businessNo;
+        }
+
+        public String getFactStatus() {
+            return factStatus;
+        }
+
+        public BigDecimal getAmount() {
+            return amount;
+        }
+
+        public String getPayload() {
+            return payload;
+        }
     }
 }

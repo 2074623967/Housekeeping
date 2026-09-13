@@ -4,6 +4,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.ClearingGeneratedEventRequestDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import com.abc123.accounting.service.AccountingEventService;
 import java.util.List;
@@ -82,6 +83,33 @@ public class AccountingEventServiceImpl implements AccountingEventService {
                 request.getSummary(),
                 "{\"bizNo\":\"" + request.getBizNo() + "\",\"amount\":" + request.getAmount() + "}",
                 resolveBusinessChainId(request.getBusinessChainId(), request.getClearingOrderNo())));
+    }
+
+    @Override
+    public AccountEventDTO consumeRefundSuccess(RefundSuccessEventRequestDTO request) {
+        AccountEventDTO existingEvent = findExistingEvent("REFUND_SUCCESS", request.getRefundOrderId());
+        if (existingEvent != null) {
+            return existingEvent;
+        }
+        if (!accountingMemoryStore.hasLedger(
+                request.getAccountNo(), "REFUND_SUCCESS_EVENT", request.getRefundOrderId())) {
+            accountingMemoryStore.debit(
+                    request.getAccountNo(),
+                    "REFUND_SUCCESS_EVENT",
+                    request.getRefundOrderId(),
+                    request.getAmount(),
+                    "退款成功事件消费者");
+        }
+        String summary = request.getSummary() == null || request.getSummary().trim().isEmpty()
+                ? "退款成功后冲回原支付入账"
+                : request.getSummary().trim();
+        return accountingMapper.toEventDTO(accountingMemoryStore.recordEvent(
+                "REFUND_SUCCESS",
+                request.getRefundOrderId(),
+                summary,
+                "{\"paymentOrderId\":\"" + request.getPaymentOrderId()
+                        + "\",\"amount\":" + request.getAmount() + "}",
+                resolveBusinessChainId(request.getBusinessChainId(), request.getPaymentOrderId())));
     }
 
     @Override

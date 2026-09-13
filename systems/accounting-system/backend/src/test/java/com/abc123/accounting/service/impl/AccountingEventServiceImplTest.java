@@ -6,6 +6,7 @@ import com.abc123.accounting.dto.AccountEventDTO;
 import com.abc123.accounting.dto.BalanceSnapshotDTO;
 import com.abc123.accounting.dto.PageResultDTO;
 import com.abc123.accounting.dto.PaymentSuccessEventRequestDTO;
+import com.abc123.accounting.dto.RefundSuccessEventRequestDTO;
 import com.abc123.accounting.dto.SettlementCompensationEventRequestDTO;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,28 @@ class AccountingEventServiceImplTest {
 
         assertEquals(first.getEventNo(), second.getEventNo());
         assertEquals("¥120.00", balance.getAvailableAmount());
+        assertEquals(1, events.getTotal());
+    }
+
+    @Test
+    void shouldDebitBalanceForRefundSuccessAndKeepConsumptionIdempotent() {
+        RefundSuccessEventRequestDTO request = new RefundSuccessEventRequestDTO();
+        request.setBusinessChainId("CHAIN-PAY202607200099");
+        request.setAccountNo("ACT10003");
+        request.setRefundOrderId("REF202607200099");
+        request.setPaymentOrderId("PAY202607200099");
+        request.setAmount(new BigDecimal("5.00"));
+
+        AccountEventDTO first = eventService.consumeRefundSuccess(request);
+        AccountEventDTO second = eventService.consumeRefundSuccess(request);
+        BalanceSnapshotDTO balance = balanceService.detail("ACT10003");
+        PageResultDTO<AccountEventDTO> events =
+                eventService.list("REFUND_SUCCESS", "REF202607200099", 1, 20);
+
+        assertEquals(first.getEventNo(), second.getEventNo());
+        assertEquals("REFUND_SUCCESS", first.getEventType());
+        assertEquals("CHAIN-PAY202607200099", first.getBusinessChainId());
+        assertEquals("¥7.00", balance.getAvailableAmount());
         assertEquals(1, events.getTotal());
     }
 

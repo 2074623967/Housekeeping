@@ -21,7 +21,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 /**
  * 使用 H2 验证 DDL、MyBatis XML 和退款状态机的真实联动。
  */
-@SpringBootTest
+@SpringBootTest(properties = "refund-center.outbox-dispatch-mode=LOCAL")
 class RefundCenterIntegrationTest {
 
     @Autowired
