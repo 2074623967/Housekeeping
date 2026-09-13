@@ -4571,6 +4571,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 管理端只用启用数决定人工巡检按钮状态；`POST /api/payment-task-center/control-policy-self-checks` 请求仍只提交操作人，执行时重新读取启用策略，实际 `processedCount` 不承诺等于页面快照。
 4. 本轮不修改巡检结果字段、任务日志结构或自动调度契约；本地 SQL 与页面样例不构成真实配置准入或生产运行证据。
 
+### 14.334 SLA 风险与动作候选计数契约
+
+1. `GET /api/payment-task-center/overview` 保留 `overdueIssueCount`，表示全部超过 SLA 的基础异常；新增 `pendingIssueAlertGenerationCount`、`pendingIssueAlertEscalationCount` 和 `actionableIssueSlaCount`，无数据时均返回 `0`。
+2. 首次告警候选排除已有待确认告警的同一 `issueNo`；升级候选仅包含超过当前值班路由升级等待时间、尚未确认且尚未生成升级告警的来源告警；`actionableIssueSlaCount` 为两者之和。
+3. 管理端只用动作合计决定人工巡检按钮状态；`POST /api/payment-task-center/escalate-overdue-issues` 请求仍只提交操作人，执行时重新查询两个候选集合，实际 `processedCount` 不承诺等于页面快照。
+4. 本轮不修改 SLA 阈值、告警生成键、每类批次上限、任务日志结构或自动调度契约；本地 SQL 与页面样例不构成真实通知送达或生产运行证据。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
