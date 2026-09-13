@@ -2932,6 +2932,16 @@
 5. 执行 `PaymentServiceImplTest`、`PaymentExpiryTaskServiceImplTest`、`PaymentMapperStateTransitionIntegrationTest` 定向测试、payment-core 后端全量和 `git diff --check`。本轮无前端、schema 或迁移变化，不重复前端与迁移测试。
 6. 目标 MySQL 仍需验证派生表更新、并发锁、事务回滚及生产历史尝试分布；本地 H2 和 Mockito 不证明真实渠道状态、资金到账、对账或生产稳定性。
 
+### 4.366 渠道提交与快速回调并发保护
+
+1. 构造渠道提交调用尚未返回时成功回调先完成的场景；提交结果条件绑定应返回零行，服务重读相同渠道与流水的成功事实，只补尝试响应，不更新返回码快照、不创建待回调通知或 `PAYMENT_SUBMIT` 事件。
+2. 对已完成尝试调用提交结果更新，验证 `response_payload` 写入且 `成功 / success / completed_at` 不变；目标 `attempt_no` 缺失或多行影响必须使收口事务失败。
+3. 模拟正常提交结果事务失败后成功回调先完成，再执行结果未知恢复；验证条件恢复返回零行，支付单和预付单不降级，成功尝试只允许补响应事实。
+4. 连续执行两个不同渠道流水的非成功回调，验证首个流水保留、第二个条件更新返回零行并经重读返回 `PAYMENT-1031`，不产生第二份待回调副作用。
+5. 正向验证待回调支付单可绑定同渠道同流水且状态保持 `WAIT_CALLBACK`，空流水结果未知恢复可写 `danger` 而不制造渠道流水。
+6. 执行 `PaymentServiceImplTest`、`PaymentMapperStateTransitionIntegrationTest`、payment-core 后端全量、Mapper XML 和补丁检查。本轮无前端、schema 或迁移变化，不重复前端与迁移测试。
+7. 目标 MySQL 仍需执行真实并发时序、锁等待与事务回滚验证，并结合渠道订单、到账和对账核验；H2 与 Mockito 不替代生产证据。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

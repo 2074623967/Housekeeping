@@ -1852,6 +1852,14 @@ t_order
 4. 超时关单的原子更新条件已排除存在任意 `t_payment_attempt` 的支付单，因此关单事务不更新或伪造尝试行。
 5. 本轮复用现有主键、支付单关联列和排序列，无 schema、索引、历史回填或迁移变化；目标环境仍需审计同时间戳数据、执行计划、锁等待和事务回滚，本地 H2 不构成生产 MySQL 证明。
 
+### 4.219 渠道提交与快速回调并发的数据边界
+
+1. 渠道提交返回通过 `t_payment_order` 条件更新补充 `payment_method / channel_code / channel_transaction_no`，更新条件固定包含 `status = 'WAIT_CALLBACK'`、渠道相同以及既有流水为空或相同，不修改 `status / status_type`。
+2. 条件更新会取得目标支付单行锁，与成功或非成功回调对同一行的状态迁移串行执行；先提交者决定后续分支，后到流程不得无条件覆盖终态或另一流水。
+3. 结果未知恢复只更新仍为 `WAIT_CALLBACK` 且流水兼容的支付单，使用 `COALESCE(NULLIF(TRIM(channel_transaction_no), ''), incoming)` 保留已有相同流水；成功和关闭状态返回零行。
+4. `t_payment_attempt` 的提交结果按唯一 `attempt_no` 更新并校验影响一行；`completed_at` 非空时只补 `response_payload`，保留 `attempt_status / attempt_status_type` 终态。
+5. 本轮复用现有字段、唯一键和索引，无 schema、索引、历史回填或迁移变化；H2 MySQL 模式不证明目标 MySQL 执行计划、锁等待、隔离与回滚。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

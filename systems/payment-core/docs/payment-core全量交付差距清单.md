@@ -2910,6 +2910,16 @@
 5. 本轮无端点、DTO、前端、schema、索引或迁移变化；H2 与 Mockito 不证明目标 MySQL 更新锁、事务回滚、生产历史数据、真实渠道提交或资金一致性。
 6. 统一门禁复判仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4`；未执行本地 `master` 快进，也未创建或移动 `release/*`。
 
+### 8.354 2026-09-13 渠道提交与快速回调并发收口进展
+
+1. 继续审计发现渠道调用在数据库事务外执行，快速成功回调可能先把支付单和最新尝试收口为成功；原 `completeSubmit` 随后仍无条件把支付单写回 `WAIT_CALLBACK`、把尝试覆盖为“待回调”，未知结果恢复也可能把成功预付单降级为“结果待确认”。
+2. 渠道提交结果改为条件绑定：只允许 `WAIT_CALLBACK`、渠道一致且渠道流水为空或相同的支付单补充方式、渠道和流水，不再修改支付状态。更新本身持有支付单行锁，与回调状态迁移按数据库顺序串行化。
+3. 若成功回调已先完成，提交收口只补写尝试响应原文，并通过 `completed_at` 保护“成功 / success”终态，不再写晚到的提交快照、待回调通知或 `PAYMENT_SUBMIT` 事件；尝试结果必须恰好更新一行。
+4. 未知结果恢复只允许仍为 `WAIT_CALLBACK` 且流水兼容的支付单进入；并发成功、关闭或冲突流水不会被覆盖。两个非成功回调竞争不同流水时，后到请求重读并返回既有 `PAYMENT-1031`。
+5. 服务与 Mapper 定向 `108/108`、payment-core 后端全量 `1099/1099`、Mapper XML 和补丁检查通过，实现提交为 `a5697970`。
+6. 本轮无端点、DTO、前端、schema、索引或迁移变化；H2 与 Mockito 不证明目标 MySQL 行锁时序、真实渠道回调、到账、对账或生产稳定性。
+7. 统一门禁复判仍为 `canPromoteTestToMaster=true`、`canCreateRelease=false`、`blockerCount=1`、`releaseBlockerCount=4`；未执行本地 `master` 快进，也未创建或移动 `release/*`。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。
