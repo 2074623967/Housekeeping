@@ -867,18 +867,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (detail == null) {
             throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
         }
-        if (!StringUtils.hasText(detail.getChannel())
-                || !normalizedChannel.equalsIgnoreCase(detail.getChannel().trim())) {
-            throw new BusinessException(
-                    ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISMATCH,
-                    "callback channel does not match payment channel");
-        }
-        if (StringUtils.hasText(detail.getChannelTransactionNo())
-                && !detail.getChannelTransactionNo().equals(request.getChannelTransactionNo())) {
-            throw new BusinessException(
-                    ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH,
-                    "callback transaction does not match payment transaction");
-        }
+        validatePaymentCallbackBinding(normalizedChannel, request.getChannelTransactionNo(), detail);
         boolean paySuccess = "SUCCESS".equalsIgnoreCase(request.getTradeStatus());
         if ("SUCCESS".equalsIgnoreCase(detail.getStatus())
                 || ("CLOSED".equalsIgnoreCase(detail.getStatus()) && !paySuccess)) {
@@ -891,6 +880,7 @@ public class PaymentServiceImpl implements PaymentService {
         requireChannelSubmissionFact(detail);
         if (paySuccess) {
             detail = lockAndReloadPaymentForSettlement(detail);
+            validatePaymentCallbackBinding(normalizedChannel, request.getChannelTransactionNo(), detail);
             if ("SUCCESS".equalsIgnoreCase(detail.getStatus())) {
                 validatePaymentSuccessFacts(detail);
                 paymentMapper.releaseSubmitConcurrencyToken(
@@ -972,6 +962,22 @@ public class PaymentServiceImpl implements PaymentService {
         return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
     }
 
+    private void validatePaymentCallbackBinding(
+            String normalizedChannel, String channelTransactionNo, PaymentDetailDTO detail) {
+        if (!StringUtils.hasText(detail.getChannel())
+                || !normalizedChannel.equalsIgnoreCase(detail.getChannel().trim())) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CALLBACK_CHANNEL_MISMATCH,
+                    "callback channel does not match payment channel");
+        }
+        if (StringUtils.hasText(detail.getChannelTransactionNo())
+                && !detail.getChannelTransactionNo().equals(channelTransactionNo)) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH,
+                    "callback transaction does not match payment transaction");
+        }
+    }
+
     private void validateCallbackField(String value, int maxLength, String fieldName) {
         if (value.length() > maxLength) {
             throw new IllegalArgumentException(fieldName + " length must not exceed " + maxLength);
@@ -1026,8 +1032,18 @@ public class PaymentServiceImpl implements PaymentService {
         if (requiresSettlement) {
             detail = lockAndReloadPaymentForSettlement(detail);
         }
-        String channelTransactionNo = StringUtils.hasText(queryResult.getChannelTransactionNo())
-                ? queryResult.getChannelTransactionNo().trim()
+        String queriedChannelTransactionNo = queryResult.getChannelTransactionNo();
+        if (StringUtils.hasText(detail.getChannelTransactionNo())
+                && StringUtils.hasText(queriedChannelTransactionNo)
+                && !detail.getChannelTransactionNo().equals(queriedChannelTransactionNo)) {
+            BusinessException queryFailure = new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED,
+                    "channel query transaction does not match payment transaction");
+            recordChannelQueryFailure(detail, queryFailure, operator);
+            throw queryFailure;
+        }
+        String channelTransactionNo = StringUtils.hasText(queriedChannelTransactionNo)
+                ? queriedChannelTransactionNo
                 : detail.getChannelTransactionNo();
         if ("SUCCESS".equalsIgnoreCase(queryResult.getTradeStatus())
                 && !"SUCCESS".equalsIgnoreCase(detail.getStatus())

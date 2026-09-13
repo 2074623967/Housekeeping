@@ -1501,6 +1501,38 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectSuccessCallbackWhenTransactionBindingChangesBeforeSettlementLock() {
+        PaymentDetailDTO initialDetail = queryDetail("PAY-CALLBACK-TXN-RACE", "WAIT_CALLBACK");
+        PaymentDetailDTO lockedDetail = queryDetail("PAY-CALLBACK-TXN-RACE", "WAIT_CALLBACK");
+        lockedDetail.setChannelTransactionNo("WX-OTHER-CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-TXN-RACE"))
+                .thenReturn(initialDetail, lockedDetail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-TXN-RACE");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-TXN-RACE");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).updateOrderAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldStopSuccessCallbackWhenSettlementLockCannotBeRead() {
         PaymentDetailDTO detail = queryDetail("PAY-CALLBACK-LOCK-MISSING", "WAIT_CALLBACK");
         when(paymentMapper.findDetail("PAY-CALLBACK-LOCK-MISSING")).thenReturn(detail);
@@ -2886,6 +2918,45 @@ class PaymentServiceImplTest {
                         + "\"initiatedBy\":\"customer-self-service\"}"),
                 org.mockito.ArgumentMatchers.contains("\"code\":\"SUCCESS\""),
                 eq("已查单"), eq("success"));
+    }
+
+    @Test
+    void shouldRejectQueryTransactionWhenConcurrentCallbackBindsAnotherTransaction() {
+        PaymentDetailDTO querying = queryDetail("PAY-QUERY-TXN-RACE", "WAIT_CALLBACK");
+        PaymentDetailDTO settled = queryDetail("PAY-QUERY-TXN-RACE", "SUCCESS");
+        settled.setChannelTransactionNo("WX-CALLBACK-WINNER");
+        when(paymentMapper.findDetail("PAY-QUERY-TXN-RACE")).thenReturn(querying, settled);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
+        when(paymentChannelQueryService.query(querying))
+                .thenReturn(queryResult("SUCCESS", "WX-QUERY-CONFLICT", "GATEWAY_ACCESS_HTTP"));
+
+        com.abc123.hsp.dto.PaymentQueryRequestDTO request = new com.abc123.hsp.dto.PaymentQueryRequestDTO();
+        request.setPaymentOrderId("PAY-QUERY-TXN-RACE");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService)
+                .query(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CHANNEL_QUERY_FAILED, exception.getCode());
+        verify(paymentMapper).insertNotifyLog(
+                anyString(), eq("PAY-QUERY-TXN-RACE"), eq("wx_h5"), eq("QUERY_FAILED"),
+                eq("{\"querySource\":\"CHANNEL_QUERY\","
+                        + "\"initiatedBy\":\"customer-self-service\"}"),
+                eq("{\"code\":\"PAYMENT-1026\",\"message\":\"channel query failed\"}"),
+                eq("查单失败"), eq("danger"));
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).markPaymentSuccessFromChannelResult(anyString(), anyString());
+        verify(paymentMapper, never()).updateBillAfterPayment(
+                anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentEventDispatchService, never()).publishPaymentSuccess(anyString(), anyString());
     }
 
     @Test
