@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { paymentEventApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { paymentFlowsRoute, paymentLogsRoute } from "../router/listRoutes";
@@ -10,6 +10,7 @@ import {
 } from "../utils/paymentEventStage";
 
 const route = useRoute();
+const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
@@ -34,6 +35,7 @@ const overview = ref({
 });
 const pageNo = ref(1);
 const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
 const activeEventNo = ref("");
 const republishOperator = ref("");
@@ -46,6 +48,7 @@ const filters = ref({
   sortField: typeof route.query.sortField === "string" ? route.query.sortField : "createdAt",
   sortOrder: typeof route.query.sortOrder === "string" ? route.query.sortOrder : "desc"
 });
+let latestLoadRequestId = 0;
 
 const metrics = computed(() => ({
   total: overview.value.totalEventCount,
@@ -63,6 +66,11 @@ const metrics = computed(() => ({
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || overviewRefreshErrorMessage.value)
 ));
+const isInteractionLocked = computed(() => isLoading.value || Boolean(activeEventNo.value));
+const canUseSnapshot = computed(() => hasLoadedData.value
+  && !isInteractionLocked.value
+  && !isSnapshotStale.value);
+const canExport = computed(() => canUseSnapshot.value && total.value > 0 && Boolean(loadedQuery.value));
 
 function buildQuery(includePagination = true) {
   const query = {
@@ -82,6 +90,9 @@ function buildQuery(includePagination = true) {
 }
 
 function resetFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   filters.value = {
     paymentOrderId: "",
     eventType: "全部",
@@ -96,6 +107,9 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   pageNo.value = 1;
   loadEvents();
 }
@@ -104,14 +118,22 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadEvents() {
+async function loadEvents(query = buildQuery()) {
+  if (activeEventNo.value) {
+    return false;
+  }
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  loadErrorMessage.value = "";
+  overviewRefreshErrorMessage.value = "";
   try {
-    const query = buildQuery();
     const [overviewResult, result] = await Promise.all([
       paymentEventApi.getOverview(query),
       paymentEventApi.getList(query)
     ]);
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     overview.value = {
       ...overview.value,
       ...overviewResult
@@ -119,26 +141,45 @@ async function loadEvents() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
-    loadedPageNo.value = pageNo.value;
+    pageNo.value = query.pageNo;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
-    loadErrorMessage.value = "";
-    overviewRefreshErrorMessage.value = "";
+    return true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     loadErrorMessage.value = error.message;
     if (hasLoadedData.value) {
       pageNo.value = loadedPageNo.value;
     }
+    return false;
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function exportEvents() {
-  const exportUrl = paymentEventApi.buildExportUrl(buildQuery(false));
+  if (!canExport.value) {
+    return;
+  }
+  const query = { ...loadedQuery.value };
+  delete query.pageNo;
+  delete query.pageSize;
+  const exportUrl = paymentEventApi.buildExportUrl(query);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 async function republish(item) {
+  const currentItem = items.value.find((candidate) => candidate.eventNo === item.eventNo);
+  if (!canUseSnapshot.value || !loadedQuery.value || !currentItem
+      || ["SUCCESS", "UNKNOWN"].includes(currentItem.publishStatus)) {
+    actionErrorMessage.value = "当前事件快照不可重发，请刷新成功后重新确认事件状态。";
+    return;
+  }
   const operator = republishOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入重发操作人。";
@@ -148,7 +189,7 @@ async function republish(item) {
   actionErrorMessage.value = "";
   successMessage.value = "";
   try {
-    const query = buildQuery();
+    const query = { ...loadedQuery.value };
     const result = await paymentEventApi.republish(item.eventNo, operator, query);
     items.value = result.items;
     total.value = result.total;
@@ -175,11 +216,19 @@ async function republish(item) {
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (!canUseSnapshot.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadEvents();
+  loadEvents({ ...loadedQuery.value, pageNo: nextPage });
+}
+
+function openDrillDown(target) {
+  if (!canUseSnapshot.value || !target) {
+    return;
+  }
+  router.push(target);
 }
 
 onMounted(loadEvents);
@@ -193,8 +242,8 @@ onMounted(loadEvents);
         <p>统一管理 payment-core 向账户、清分、结算等下游系统投递的事件边界与重发动作</p>
       </div>
       <div class="toolbar-actions">
-        <button class="button secondary" :disabled="isLoading || Boolean(activeEventNo)" @click="loadEvents">刷新</button>
-        <button class="button primary" @click="exportEvents">导出事件</button>
+        <button class="button secondary" :disabled="isInteractionLocked" @click="loadEvents">刷新</button>
+        <button class="button primary" :disabled="!canExport" @click="exportEvents">导出事件</button>
       </div>
     </div>
 
@@ -239,7 +288,7 @@ onMounted(loadEvents);
           <p class="overview-title">失败或死信事件</p>
           <strong>{{ metrics.failedTotal }}</strong>
           <span>优先核对失败投递与死信积压，确认是否需要人工补偿或跨系统追单。</span>
-          <RouterLink class="link-button" to="/payment-dead-letter-tasks">查看死信补偿任务</RouterLink>
+          <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown('/payment-dead-letter-tasks')">查看死信补偿任务</button>
         </article>
         <article class="overview-card warn">
           <p class="overview-title">到期待重试</p>
@@ -271,15 +320,15 @@ onMounted(loadEvents);
       <div class="toolbar">
         <div class="field">
           <label>重发操作人</label>
-          <input v-model.trim="republishOperator" maxlength="64" placeholder="请输入操作人" />
+          <input v-model.trim="republishOperator" :disabled="isInteractionLocked" maxlength="64" placeholder="请输入操作人" />
         </div>
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" :disabled="isInteractionLocked" placeholder="请输入支付单号" />
         </div>
         <div class="field">
           <label>事件类型</label>
-          <select v-model="filters.eventType">
+          <select v-model="filters.eventType" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>PAYMENT_SUBMIT</option>
             <option>PAYMENT_PENDING</option>
@@ -291,7 +340,7 @@ onMounted(loadEvents);
         </div>
         <div class="field">
           <label>发布状态</label>
-          <select v-model="filters.publishStatus">
+          <select v-model="filters.publishStatus" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>PENDING</option>
             <option>SUCCESS</option>
@@ -303,7 +352,7 @@ onMounted(loadEvents);
         </div>
         <div class="field">
           <label>下游系统</label>
-          <select v-model="filters.downstreamSystem">
+          <select v-model="filters.downstreamSystem" :disabled="isInteractionLocked">
             <option>全部</option>
             <option>gateway-access</option>
             <option>accounting-system</option>
@@ -314,11 +363,11 @@ onMounted(loadEvents);
         </div>
         <div class="field">
           <label>事件主题</label>
-          <input v-model="filters.eventTopic" placeholder="如 payment.trade.succeeded.v1" />
+          <input v-model="filters.eventTopic" :disabled="isInteractionLocked" placeholder="如 payment.trade.succeeded.v1" />
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isInteractionLocked">
             <option value="createdAt">创建时间</option>
             <option value="retryCount">重试次数</option>
             <option value="nextRetryAt">下次重试时间</option>
@@ -326,14 +375,14 @@ onMounted(loadEvents);
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isInteractionLocked">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" :disabled="isLoading || Boolean(activeEventNo)" @click="applyFilters">查询</button>
-          <button class="button secondary" :disabled="isLoading || Boolean(activeEventNo)" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isInteractionLocked" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isInteractionLocked" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -389,7 +438,7 @@ onMounted(loadEvents);
                   <button class="link-button" @click="pickItem(item)">快照</button>
                   <button
                     class="link-button"
-                    :disabled="Boolean(activeEventNo) || isSnapshotStale || !hasLoadedData || ['SUCCESS', 'UNKNOWN'].includes(item.publishStatus)"
+                    :disabled="!canUseSnapshot || ['SUCCESS', 'UNKNOWN'].includes(item.publishStatus)"
                     @click="republish(item)"
                   >
                     {{ item.publishStatus === "SUCCESS" ? "已发布" : item.publishStatus === "UNKNOWN" ? "待核查" : "重发" }}
@@ -431,10 +480,10 @@ onMounted(loadEvents);
               <div class="ops-row"><span>当前风险面</span><span>{{ metrics.dueRetryCount }} 条到期待重试，{{ metrics.deadLetterTotal }} 条死信，{{ metrics.unknownTotal }} 条结果未知</span></div>
             </div>
             <div class="table-inline-actions">
-              <RouterLink class="link-button" :to="paymentDetailRoute(selectedItem.paymentOrderId)">查看支付单</RouterLink>
-              <RouterLink class="link-button" :to="paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付日志</RouterLink>
-              <RouterLink class="link-button" :to="paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId })">查看支付流水</RouterLink>
-              <RouterLink class="link-button" to="/payment-dead-letter-tasks">查看死信补偿任务</RouterLink>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentDetailRoute(selectedItem.paymentOrderId))">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentLogsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付日志</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown(paymentFlowsRoute({ paymentOrderId: selectedItem.paymentOrderId }))">查看支付流水</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openDrillDown('/payment-dead-letter-tasks')">查看死信补偿任务</button>
             </div>
           </div>
           <div v-else class="state-box">选择左侧支付事件后，可在这里查看事件快照与排障建议。</div>
