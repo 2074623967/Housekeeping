@@ -195,6 +195,30 @@
            OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
     </select>
 
+    <sql id="activeIssueDutyRosterSnapshot">
+        SELECT active_roster.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY active_roster.issue_type, active_roster.severity
+                   ORDER BY active_roster.id ASC
+               ) AS match_rank
+        FROM t_payment_issue_duty_roster active_roster
+        WHERE active_roster.status = 'ENABLED'
+          AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, active_roster.weekday_scope) > 0
+          AND (
+              active_roster.holiday_strategy = 'ALL_DAYS'
+              OR (active_roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
+              OR (active_roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
+          )
+          AND (
+               (active_roster.effective_start_hour &lt;= active_roster.effective_end_hour
+                  AND HOUR(NOW()) BETWEEN active_roster.effective_start_hour AND active_roster.effective_end_hour)
+              OR
+              (active_roster.effective_start_hour > active_roster.effective_end_hour
+                   AND (HOUR(NOW()) >= active_roster.effective_start_hour
+                        OR HOUR(NOW()) &lt;= active_roster.effective_end_hour))
+          )
+    </sql>
+
     <select id="findOverdueIssueAlertCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
         SELECT issue_sla.issue_no AS issueNo,
                issue_sla.payment_order_id AS paymentOrderId,
@@ -268,23 +292,12 @@
                      INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
             WHERE pcc.status = 'DISABLED'
         ) issue_sla
-        LEFT JOIN t_payment_issue_duty_roster roster
-            ON roster.issue_type = issue_sla.issue_type
-           AND roster.severity = issue_sla.severity
-           AND roster.status = 'ENABLED'
-           AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
-           AND (
-               roster.holiday_strategy = 'ALL_DAYS'
-               OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
-               OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
-           )
-           AND (
-                (roster.effective_start_hour &lt;= roster.effective_end_hour
-                   AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
-               OR
-               (roster.effective_start_hour > roster.effective_end_hour
-                    AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
-           )
+        LEFT JOIN (
+            <include refid="activeIssueDutyRosterSnapshot"/>
+        ) roster
+          ON roster.issue_type = issue_sla.issue_type
+         AND roster.severity = issue_sla.severity
+         AND roster.match_rank = 1
         WHERE ((issue_sla.severity = 'P1' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
             OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
           AND NOT EXISTS (
@@ -322,23 +335,12 @@
                       COALESCE(roster.escalation_timeout_minutes, 30),
                       ' 分钟未确认，请升级跟进。原告警：', source_alert.alert_content) AS alertContent
         FROM t_payment_issue_alert_log source_alert
-        LEFT JOIN t_payment_issue_duty_roster roster
-               ON roster.issue_type = source_alert.issue_type
-              AND roster.severity = source_alert.severity
-              AND roster.status = 'ENABLED'
-              AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
-              AND (
-                  roster.holiday_strategy = 'ALL_DAYS'
-                  OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
-                  OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
-              )
-              AND (
-                   (roster.effective_start_hour &lt;= roster.effective_end_hour
-                      AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
-                  OR
-                  (roster.effective_start_hour > roster.effective_end_hour
-                       AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
-              )
+        LEFT JOIN (
+            <include refid="activeIssueDutyRosterSnapshot"/>
+        ) roster
+          ON roster.issue_type = source_alert.issue_type
+         AND roster.severity = source_alert.severity
+         AND roster.match_rank = 1
         WHERE source_alert.alert_channel = 'IN_APP_OUTBOX'
           AND source_alert.source_alert_no IS NULL
           AND source_alert.alert_content NOT LIKE '升级来源告警 %'
@@ -1290,23 +1292,12 @@
                DATE_FORMAT(outbox.created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                outbox.triggered_by AS triggeredBy
         FROM t_payment_issue_alert_log outbox
-        LEFT JOIN t_payment_issue_duty_roster roster
-               ON roster.issue_type = outbox.issue_type
-              AND roster.severity = outbox.severity
-              AND roster.status = 'ENABLED'
-              AND FIND_IN_SET(WEEKDAY(CURDATE()) + 1, roster.weekday_scope) > 0
-              AND (
-                  roster.holiday_strategy = 'ALL_DAYS'
-                  OR (roster.holiday_strategy = 'WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) BETWEEN 2 AND 6)
-                  OR (roster.holiday_strategy = 'NON_WORKDAY_ONLY' AND DAYOFWEEK(CURDATE()) IN (1, 7))
-              )
-              AND (
-                   (roster.effective_start_hour &lt;= roster.effective_end_hour
-                      AND HOUR(NOW()) BETWEEN roster.effective_start_hour AND roster.effective_end_hour)
-                  OR
-                  (roster.effective_start_hour > roster.effective_end_hour
-                       AND (HOUR(NOW()) >= roster.effective_start_hour OR HOUR(NOW()) &lt;= roster.effective_end_hour))
-              )
+        LEFT JOIN (
+            <include refid="activeIssueDutyRosterSnapshot"/>
+        ) roster
+          ON roster.issue_type = outbox.issue_type
+         AND roster.severity = outbox.severity
+         AND roster.match_rank = 1
         WHERE alert_channel = 'IN_APP_OUTBOX'
           AND outbox.source_alert_no IS NULL
           AND alert_status IN ('已生成', '部分失败', '派发失败')

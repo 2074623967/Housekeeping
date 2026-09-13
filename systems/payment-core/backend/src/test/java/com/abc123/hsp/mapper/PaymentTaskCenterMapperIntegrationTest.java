@@ -414,6 +414,7 @@ public class PaymentTaskCenterMapperIntegrationTest {
                         + "('PIA-DISPATCH-NESTED', 'PIA-DISPATCH-PARENT', 'ISSUE-DISPATCH-NESTED', "
                         + "'待回调未收口', 'P1', 'IN_APP_OUTBOX', '待确认', '已生成', "
                         + "TIMESTAMPADD(MINUTE, -4, NOW()))");
+                insertOverlappingPaymentDutyRosters(statement);
             }
 
             List<PaymentIssueAlertDispatchItemDTO> candidates = mapper.findPendingOutboxAlerts(2);
@@ -423,6 +424,8 @@ public class PaymentTaskCenterMapperIntegrationTest {
                     candidates.stream()
                             .map(PaymentIssueAlertDispatchItemDTO::getAlertNo)
                             .collect(java.util.stream.Collectors.toList()));
+            org.junit.jupiter.api.Assertions.assertTrue(candidates.stream().allMatch(candidate ->
+                    "IM".equals(candidate.getNotifyChannels())));
             org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
                     mapper.lockPendingOutboxAlert("PIA-DISPATCH-NESTED", "ISSUE-DISPATCH-NESTED")));
             org.junit.jupiter.api.Assertions.assertFalse(Boolean.TRUE.equals(
@@ -679,9 +682,19 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
-    void shouldCountUnknownRefundSubmitAsOverdueP1Issue() {
+    void shouldCountUnknownRefundSubmitAsOverdueP1Issue() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("INSERT INTO t_payment_issue_duty_roster("
+                        + "issue_type, severity, responsibility_group, receiver, notify_channels, "
+                        + "escalation_level, escalation_receiver, escalation_policy, "
+                        + "escalation_timeout_minutes, schedule_tag, effective_start_hour, "
+                        + "effective_end_hour, weekday_scope, holiday_strategy, status) VALUES ("
+                        + "'退款提交结果待核查', 'P1', '备用责任组', '备用接收人', 'EMAIL', 'L2', "
+                        + "'备用负责人', '备用升级策略', 30, '备用全时段', 0, 23, "
+                        + "'1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED')");
+            }
 
             assertEquals(5, mapper.countUnknownRefundSubmitEvents());
             assertEquals(1, mapper.countOverduePaymentIssues());
@@ -727,13 +740,19 @@ public class PaymentTaskCenterMapperIntegrationTest {
                         + "('PIA-ESCALATE-LATER', 'ISSUE-ESCALATE-2', '待回调未收口', 'P1', "
                         + "'支付运营组', '支付运营', 'IN_APP_OUTBOX', '待确认', '已生成', "
                         + "'较晚待升级告警', TIMESTAMPADD(MINUTE, -35, NOW()))");
+                insertOverlappingPaymentDutyRosters(statement);
             }
 
             List<PaymentIssueAlertCandidateDTO> candidates =
-                    mapper.findUnacknowledgedIssueAlertEscalationCandidates(1);
+                    mapper.findUnacknowledgedIssueAlertEscalationCandidates(2);
 
-            assertEquals(1, candidates.size());
-            assertEquals("PIA-ESCALATE-OLDEST", candidates.get(0).getSourceAlertNo());
+            assertEquals(2, candidates.size());
+            assertEquals(Arrays.asList("PIA-ESCALATE-OLDEST", "PIA-ESCALATE-LATER"),
+                    candidates.stream()
+                            .map(PaymentIssueAlertCandidateDTO::getSourceAlertNo)
+                            .collect(java.util.stream.Collectors.toList()));
+            org.junit.jupiter.api.Assertions.assertTrue(candidates.stream().allMatch(candidate ->
+                    "首选接收人".equals(candidate.getReceiver())));
         }
     }
 
@@ -1405,6 +1424,20 @@ public class PaymentTaskCenterMapperIntegrationTest {
                 return resultSet.getInt(1);
             }
         }
+    }
+
+    private void insertOverlappingPaymentDutyRosters(Statement statement) throws Exception {
+        statement.executeUpdate("INSERT INTO t_payment_issue_duty_roster("
+                + "issue_type, severity, responsibility_group, receiver, notify_channels, "
+                + "escalation_level, escalation_receiver, escalation_policy, "
+                + "escalation_timeout_minutes, schedule_tag, effective_start_hour, "
+                + "effective_end_hour, weekday_scope, holiday_strategy, status) VALUES "
+                + "('待回调未收口', 'P1', '首选责任组', '首选接收人', 'IM', 'L1', "
+                + "'首选接收人', '首选升级策略', 30, '首选全时段', 0, 23, "
+                + "'1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED'),"
+                + "('待回调未收口', 'P1', '备用责任组', '备用接收人', 'EMAIL', 'L2', "
+                + "'备用接收人', '备用升级策略', 30, '备用全时段', 0, 23, "
+                + "'1,2,3,4,5,6,7', 'ALL_DAYS', 'ENABLED')");
     }
 
     private String findAlertNoByGenerationKey(Connection connection, String generationKey) throws Exception {
