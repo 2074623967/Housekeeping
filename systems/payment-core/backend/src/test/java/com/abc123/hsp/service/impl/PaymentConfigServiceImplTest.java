@@ -388,8 +388,13 @@ class PaymentConfigServiceImplTest {
                 "RULE_Z_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
         PaymentRouteRuleConfigDTO earlierCollision = buildConflictRule(
                 "RULE_A_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO unrelatedLeft = buildConflictRule(
+                "RULE_ENTERPRISE_A", "ENTERPRISE/PC", "terminal=PC", "wx_h5", 5, "ENABLED");
+        PaymentRouteRuleConfigDTO unrelatedRight = buildConflictRule(
+                "RULE_ENTERPRISE_B", "ENTERPRISE/PC", "terminal=PC", "alipay_h5", 5, "ENABLED");
         when(paymentConfigMapper.findRouteRuleReviews()).thenReturn(Arrays.asList(pending, completed));
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(laterCollision, earlierCollision));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(
+                laterCollision, unrelatedLeft, unrelatedRight, earlierCollision));
 
         List<PaymentRouteRuleReviewDTO> reviews =
                 new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleReviews();

@@ -2861,17 +2861,20 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         if (!STATUS_ENABLED.equals(candidate.getStatus()) || rolloutPercentageOf(candidate) <= 0) {
             return Collections.emptyList();
         }
-        List<PaymentRouteRuleConfigDTO> candidateRules = new ArrayList<PaymentRouteRuleConfigDTO>();
-        for (PaymentRouteRuleConfigDTO rule : currentRules) {
-            if (!candidate.getRuleCode().equalsIgnoreCase(rule.getRuleCode())) {
-                candidateRules.add(rule);
-            }
-        }
-        candidateRules.add(candidate);
         List<PaymentRouteRuleConflictDTO> candidateConflicts = new ArrayList<PaymentRouteRuleConflictDTO>();
-        for (PaymentRouteRuleConflictDTO conflict : detectRouteRuleConflicts(candidateRules)) {
-            if (candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
-                    || candidate.getRuleCode().equalsIgnoreCase(conflict.getConflictingRuleCode())) {
+        if (!PaymentRouteExpressionEvaluator.isValid(candidate.getMatchExpression())) {
+            candidateConflicts.add(buildInvalidExpressionConflict(candidate));
+            return candidateConflicts;
+        }
+        for (PaymentRouteRuleConfigDTO currentRule : currentRules) {
+            if (candidate.getRuleCode().equalsIgnoreCase(currentRule.getRuleCode())
+                    || !STATUS_ENABLED.equals(currentRule.getStatus())
+                    || rolloutPercentageOf(currentRule) <= 0
+                    || !PaymentRouteExpressionEvaluator.isValid(currentRule.getMatchExpression())) {
+                continue;
+            }
+            PaymentRouteRuleConflictDTO conflict = detectRouteRuleConflict(currentRule, candidate);
+            if (conflict != null) {
                 candidateConflicts.add(conflict);
             }
         }
