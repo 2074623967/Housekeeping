@@ -6,6 +6,8 @@ const items = ref([]);
 const selectedItem = ref(null);
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
 const isLoading = ref(true);
 const hasLoadedData = ref(false);
@@ -20,6 +22,10 @@ const filters = ref({
   targetSystem: "",
   messageId: ""
 });
+let latestLoadRequestId = 0;
+
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(loadErrorMessage.value));
+const isInteractionLocked = computed(() => isLoading.value || Boolean(activeAction.value));
 
 const metricCards = computed(() => [
   { title: "任务总数", value: total.value, hint: "当前筛选条件下的死信补偿任务" },
@@ -61,12 +67,18 @@ const selectedSuggestion = computed(() => {
 });
 
 function resetFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   filters.value = { taskStatus: "", targetSystem: "", messageId: "" };
   pageNo.value = 1;
   loadTasks();
 }
 
 function applyFilters() {
+  if (isInteractionLocked.value) {
+    return;
+  }
   pageNo.value = 1;
   loadTasks();
 }
@@ -75,30 +87,62 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadTasks(preferredTaskNo = selectedItem.value?.taskNo) {
+function buildQuery() {
+  return {
+    taskStatus: filters.value.taskStatus,
+    targetSystem: filters.value.targetSystem,
+    messageId: filters.value.messageId.trim(),
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
+
+async function loadTasks(preferredTaskNo = selectedItem.value?.taskNo, query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   loadErrorMessage.value = "";
   actionErrorMessage.value = "";
   try {
-    const result = await paymentDeadLetterTaskApi.getList({
-      ...filters.value,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await paymentDeadLetterTaskApi.getList(query);
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items.find((item) => item.taskNo === preferredTaskNo)
       || result.items[0]
       || null;
+    pageNo.value = query.pageNo;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
+    return true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return false;
+    }
     loadErrorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
+    return false;
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 async function runAction(item, action) {
+  const currentItem = items.value.find((candidate) => candidate.taskNo === item.taskNo);
+  const isAllowedAction = action === "replay"
+    ? currentItem?.taskStatus === "READY_TO_REPLAY"
+    : ["ready", "resolve"].includes(action) && currentItem && canReview(currentItem);
+  if (isInteractionLocked.value || isSnapshotStale.value || !hasLoadedData.value
+      || !loadedQuery.value || !isAllowedAction) {
+    actionErrorMessage.value = "当前任务快照不可操作，请刷新成功后重新确认任务状态";
+    return;
+  }
   const normalizedOperator = operator.value.trim();
   const normalizedNote = resolutionNote.value.trim();
   if (!normalizedOperator) {
@@ -121,13 +165,16 @@ async function runAction(item, action) {
     } else {
       await paymentDeadLetterTaskApi.replay(item.taskNo, payload);
     }
-    await loadTasks(item.taskNo);
     if (action === "ready") {
       successMessage.value = `任务 ${item.taskNo} 已通过复核，等待定向重放`;
     } else if (action === "resolve") {
       successMessage.value = `任务 ${item.taskNo} 已人工结案`;
     } else {
       successMessage.value = `任务 ${item.taskNo} 已执行定向重放，请继续核对目标系统`;
+    }
+    const refreshed = await loadTasks(item.taskNo, { ...loadedQuery.value });
+    if (!refreshed) {
+      actionErrorMessage.value = `任务 ${item.taskNo} 操作已完成，但最新列表刷新失败，请刷新成功后再继续操作`;
     }
   } catch (error) {
     actionErrorMessage.value = `死信任务操作失败：${error.message}`;
@@ -137,11 +184,12 @@ async function runAction(item, action) {
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isInteractionLocked.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadTasks();
+  loadTasks(selectedItem.value?.taskNo, { ...loadedQuery.value, pageNo: nextPage });
 }
 
 function canReview(item) {
@@ -169,7 +217,9 @@ onMounted(loadTasks);
         <h2>死信补偿任务</h2>
         <p>复核支付消息死信，按原消费者执行受控定向重放或人工结案</p>
       </div>
-      <button class="button secondary" :disabled="isLoading" @click="loadTasks()">刷新</button>
+      <button class="button secondary" :disabled="isInteractionLocked" @click="loadTasks()">
+        {{ isLoading ? "刷新中..." : "刷新" }}
+      </button>
     </div>
 
     <section v-if="hasLoadedData" class="detail-card-grid">
@@ -193,15 +243,15 @@ onMounted(loadTasks);
       <div class="filter-grid action-grid">
         <label>
           处置人
-          <input v-model="operator" maxlength="64" placeholder="请输入处置人" />
+          <input v-model="operator" :disabled="isInteractionLocked" maxlength="64" placeholder="请输入处置人" />
         </label>
         <label class="wide-field">
           处置说明
-          <input v-model="resolutionNote" maxlength="512" placeholder="请填写核对依据或结案原因" />
+          <input v-model="resolutionNote" :disabled="isInteractionLocked" maxlength="512" placeholder="请填写核对依据或结案原因" />
         </label>
         <label>
           任务状态
-          <select v-model="filters.taskStatus">
+          <select v-model="filters.taskStatus" :disabled="isInteractionLocked">
             <option value="">全部</option>
             <option value="PENDING_REVIEW">待复核</option>
             <option value="READY_TO_REPLAY">待重放</option>
@@ -213,7 +263,7 @@ onMounted(loadTasks);
         </label>
         <label>
           目标系统
-          <select v-model="filters.targetSystem">
+          <select v-model="filters.targetSystem" :disabled="isInteractionLocked">
             <option value="">全部</option>
             <option value="clearing-system">清分系统</option>
             <option value="accounting-system">账务系统</option>
@@ -222,11 +272,11 @@ onMounted(loadTasks);
         </label>
         <label>
           消息 ID
-          <input v-model="filters.messageId" maxlength="128" placeholder="请输入消息 ID" />
+          <input v-model="filters.messageId" :disabled="isInteractionLocked" maxlength="128" placeholder="请输入消息 ID" />
         </label>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isInteractionLocked" @click="applyFilters">查询</button>
+          <button class="button secondary" :disabled="isInteractionLocked" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -265,19 +315,19 @@ onMounted(loadTasks);
                     <button
                       v-if="canReview(item)"
                       class="link-button"
-                      :disabled="Boolean(activeAction) || Boolean(loadErrorMessage) || !hasLoadedData"
+                      :disabled="isInteractionLocked || isSnapshotStale || !hasLoadedData"
                       @click="runAction(item, 'ready')"
                     >允许重放</button>
                     <button
                       v-if="canReview(item)"
                       class="link-button"
-                      :disabled="Boolean(activeAction) || Boolean(loadErrorMessage) || !hasLoadedData"
+                      :disabled="isInteractionLocked || isSnapshotStale || !hasLoadedData"
                       @click="runAction(item, 'resolve')"
                     >人工结案</button>
                     <button
                       v-if="item.taskStatus === 'READY_TO_REPLAY'"
                       class="link-button"
-                      :disabled="Boolean(activeAction) || Boolean(loadErrorMessage) || !hasLoadedData"
+                      :disabled="isInteractionLocked || isSnapshotStale || !hasLoadedData"
                       @click="runAction(item, 'replay')"
                     >{{ activeAction === `${item.taskNo}:replay` ? "重放中..." : "执行重放" }}</button>
                     <span v-if="!canReview(item) && item.taskStatus !== 'READY_TO_REPLAY'" class="muted-text">无需操作</span>
@@ -328,9 +378,9 @@ onMounted(loadTasks);
       <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条死信补偿任务</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1 || Boolean(loadErrorMessage)" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="isInteractionLocked || pageNo === 1 || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || Boolean(loadErrorMessage)" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="isInteractionLocked || pageNo >= Math.ceil(total / pageSize) || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>
