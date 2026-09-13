@@ -203,6 +203,16 @@ public interface PaymentTaskCenterMapper {
     int countOverduePaymentIssues();
 
     /**
+     * 统计当前需要生成首次 SLA 告警的异常数量。
+     */
+    int countPendingIssueAlertGenerationCandidates();
+
+    /**
+     * 统计当前需要生成未确认升级告警的来源告警数量。
+     */
+    int countPendingIssueAlertEscalationCandidates();
+
+    /**
      * 查询需要生成告警通知的超时异常。
      */
     List<PaymentIssueAlertCandidateDTO> findOverdueIssueAlertCandidates(

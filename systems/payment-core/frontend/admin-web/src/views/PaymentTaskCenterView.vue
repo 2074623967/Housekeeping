@@ -44,6 +44,9 @@ const overview = ref({
   enabledControlPolicyCount: 0,
   controlPolicyWarningCount: 0,
   overdueIssueCount: 0,
+  pendingIssueAlertGenerationCount: 0,
+  pendingIssueAlertEscalationCount: 0,
+  actionableIssueSlaCount: 0,
   focusAlerts: [],
   recentTaskRuns: []
 });
@@ -268,6 +271,7 @@ onMounted(loadOverview);
           <div class="detail-card">
             <div class="detail-label">SLA 超时异常</div>
             <div class="detail-value">{{ overview.overdueIssueCount }}</div>
+            <div class="meta">待首次告警 {{ overview.pendingIssueAlertGenerationCount }} · 待升级 {{ overview.pendingIssueAlertEscalationCount }}</div>
           </div>
           <div class="detail-card">
             <div class="detail-label">异常告警待派发</div>
@@ -515,10 +519,10 @@ onMounted(loadOverview);
               <p>巡检超过 SLA 的支付交易异常，将结果写入任务日志，推动运营和值班负责人跟进。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.actionableIssueSlaCount === 0"
                 @click="runTask('PAYMENT_ISSUE_ESCALATE', '异常 SLA 升级巡检', paymentTaskCenterApi.runEscalateOverdueIssues)"
               >
-                {{ activeTaskCode === "PAYMENT_ISSUE_ESCALATE" ? "执行中..." : "执行 SLA 升级巡检" }}
+                {{ activeTaskCode === "PAYMENT_ISSUE_ESCALATE" ? "执行中..." : overview.actionableIssueSlaCount === 0 ? "暂无可升级异常" : `执行 SLA 升级巡检（${overview.actionableIssueSlaCount}）` }}
               </button>
             </div>
 
@@ -647,7 +651,7 @@ onMounted(loadOverview);
                 <tr>
                   <td>SLA 超时异常</td>
                   <td>{{ overview.overdueIssueCount }}</td>
-                  <td>需要分派值班负责人并进入异常中心跟进</td>
+                  <td>待首次告警 {{ overview.pendingIssueAlertGenerationCount }} 条、待升级 {{ overview.pendingIssueAlertEscalationCount }} 条；其余风险已有待确认告警但尚未到升级时间</td>
                 </tr>
                 <tr>
                   <td>告警回执人工可执行</td>

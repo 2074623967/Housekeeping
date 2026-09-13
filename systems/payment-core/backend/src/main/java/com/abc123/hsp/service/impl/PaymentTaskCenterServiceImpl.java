@@ -367,6 +367,14 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 paymentTaskCenterMapper.findOldestPendingIssueAlertReceiptMinutes());
         overview.setIssueAlertReceiptCountThreshold(issueAlertReceiptCountThreshold);
         overview.setIssueAlertReceiptTimeoutMinutes(issueAlertReceiptTimeoutMinutes);
+        int pendingIssueAlertGenerationCount =
+                paymentTaskCenterMapper.countPendingIssueAlertGenerationCandidates();
+        int pendingIssueAlertEscalationCount =
+                paymentTaskCenterMapper.countPendingIssueAlertEscalationCandidates();
+        overview.setPendingIssueAlertGenerationCount(pendingIssueAlertGenerationCount);
+        overview.setPendingIssueAlertEscalationCount(pendingIssueAlertEscalationCount);
+        overview.setActionableIssueSlaCount(
+                pendingIssueAlertGenerationCount + pendingIssueAlertEscalationCount);
         overview.setQueryTrends(queryTrends);
         overview.setFocusAlerts(buildFocusAlerts(overview));
         overview.setRecentTaskRuns(enrichTaskRuns(paymentTaskCenterMapper.findRecentTaskRuns()));
@@ -1690,15 +1698,25 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                 issueAlertReceiptThresholdExceeded ? "danger" : pendingIssueAlertReceiptCount > 0 ? "warn" : "success"
         ));
         int overdueIssueCount = valueOrZero(overview.getOverdueIssueCount());
+        int pendingIssueAlertGenerationCount = valueOrZero(
+                overview.getPendingIssueAlertGenerationCount());
+        int pendingIssueAlertEscalationCount = valueOrZero(
+                overview.getPendingIssueAlertEscalationCount());
+        int actionableIssueSlaCount = valueOrZero(overview.getActionableIssueSlaCount());
         int controlPolicyWarningCount = valueOrZero(overview.getControlPolicyWarningCount());
         alerts.add(buildAlert(
                 "PAYMENT_ISSUE_SLA",
                 "异常 SLA 超时",
                 overdueIssueCount,
-                overdueIssueCount > 0 ? "存在超过 SLA 的支付交易异常，建议执行升级巡检并分派责任人" : "暂无 SLA 超时异常",
+                overdueIssueCount > 0 || actionableIssueSlaCount > 0
+                        ? String.format("当前有 %d 条基础异常超过 SLA：待首次告警 %d 条、待升级告警 %d 条",
+                        overdueIssueCount,
+                        pendingIssueAlertGenerationCount,
+                        pendingIssueAlertEscalationCount)
+                        : "暂无 SLA 超时异常或待升级告警",
                 "/payment-issues",
-                overdueIssueCount > 0 ? "P1" : "P3",
-                overdueIssueCount > 0 ? "danger" : "success"
+                overdueIssueCount > 0 || actionableIssueSlaCount > 0 ? "P1" : "P3",
+                overdueIssueCount > 0 || actionableIssueSlaCount > 0 ? "danger" : "success"
         ));
         alerts.add(buildAlert(
                 "PAYMENT_CONTROL_POLICY",

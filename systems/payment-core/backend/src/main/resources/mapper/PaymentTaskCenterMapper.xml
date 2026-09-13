@@ -200,6 +200,53 @@
            OR (issue_sla.severity = 'P2' AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120)
     </select>
 
+    <select id="countPendingIssueAlertGenerationCandidates" resultType="int">
+        SELECT COUNT(1)
+        FROM (
+            SELECT CONCAT('ISSUE-WAIT-', po.payment_order_id) AS issue_no,
+                   po.created_at,
+                   'P1' AS severity
+            FROM t_payment_order po
+            WHERE po.status = 'WAIT_CALLBACK'
+            UNION ALL
+            SELECT CONCAT('ISSUE-NOTIFY-', pnl.notify_no) AS issue_no,
+                   pnl.created_at,
+                   'P1' AS severity
+            FROM t_payment_notify_log pnl
+            WHERE pnl.notify_status = '待处理'
+            UNION ALL
+            SELECT CONCAT('ISSUE-EVENT-', pe.event_no) AS issue_no,
+                   pe.created_at,
+                   'P2' AS severity
+            FROM t_payment_event pe
+            WHERE pe.publish_status IN ('FAILED', 'DEAD_LETTER')
+            UNION ALL
+            SELECT CONCAT('ISSUE-REFUND-SUBMIT-UNKNOWN-', pe.event_no) AS issue_no,
+                   COALESCE(pe.last_published_at, pe.created_at) AS created_at,
+                   'P1' AS severity
+            FROM t_payment_event pe
+            WHERE pe.event_type = 'REFUND_SUBMIT'
+              AND pe.publish_status = 'UNKNOWN'
+            UNION ALL
+            SELECT CONCAT('ISSUE-CHANNEL-', po.payment_order_id) AS issue_no,
+                   po.created_at,
+                   'P2' AS severity
+            FROM t_payment_order po
+                     INNER JOIN t_payment_channel_config pcc ON pcc.channel_code = po.channel_code
+            WHERE pcc.status = 'DISABLED'
+        ) issue_sla
+        WHERE ((issue_sla.severity = 'P1'
+                    AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 30)
+            OR (issue_sla.severity = 'P2'
+                    AND TIMESTAMPDIFF(MINUTE, issue_sla.created_at, NOW()) >= 120))
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_issue_alert_log alert_log
+              WHERE alert_log.issue_no = issue_sla.issue_no
+                AND alert_log.ack_status = '待确认'
+          )
+    </select>
+
     <sql id="activeIssueDutyRosterSnapshot">
         SELECT active_roster.*,
                ROW_NUMBER() OVER (
@@ -223,6 +270,34 @@
                         OR HOUR(NOW()) &lt;= active_roster.effective_end_hour))
           )
     </sql>
+
+    <select id="countPendingIssueAlertEscalationCandidates" resultType="int">
+        SELECT COUNT(1)
+        FROM t_payment_issue_alert_log source_alert
+        LEFT JOIN (
+            <include refid="activeIssueDutyRosterSnapshot"/>
+        ) roster
+          ON roster.issue_type = source_alert.issue_type
+         AND roster.severity = source_alert.severity
+         AND roster.match_rank = 1
+        WHERE source_alert.alert_channel = 'IN_APP_OUTBOX'
+          AND source_alert.source_alert_no IS NULL
+          AND source_alert.alert_content NOT LIKE '升级来源告警 %'
+          AND source_alert.ack_status = '待确认'
+          AND TIMESTAMPDIFF(MINUTE, source_alert.created_at, NOW()) >=
+              COALESCE(roster.escalation_timeout_minutes, 30)
+          AND NOT EXISTS (
+              SELECT 1
+              FROM t_payment_issue_alert_log escalated_alert
+              WHERE escalated_alert.issue_no = source_alert.issue_no
+                AND escalated_alert.alert_channel = 'IN_APP_OUTBOX'
+                AND (
+                    escalated_alert.source_alert_no = source_alert.alert_no
+                    OR escalated_alert.alert_content LIKE CONCAT(
+                        '%升级来源告警 ', source_alert.alert_no, '%')
+                )
+          )
+    </select>
 
     <select id="findOverdueIssueAlertCandidates" resultType="com.abc123.hsp.dto.PaymentIssueAlertCandidateDTO">
         SELECT issue_sla.issue_no AS issueNo,

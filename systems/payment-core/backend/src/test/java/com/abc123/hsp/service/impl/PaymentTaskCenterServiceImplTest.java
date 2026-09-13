@@ -187,6 +187,28 @@ class PaymentTaskCenterServiceImplTest {
     }
 
     @Test
+    void shouldExposeIssueSlaRiskAndActionCandidatesSeparately() {
+        PaymentTaskCenterOverviewDTO summary = new PaymentTaskCenterOverviewDTO();
+        summary.setOverdueIssueCount(6);
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(summary);
+        when(paymentTaskCenterMapper.countPendingIssueAlertGenerationCandidates()).thenReturn(2);
+        when(paymentTaskCenterMapper.countPendingIssueAlertEscalationCandidates()).thenReturn(3);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(6, overview.getOverdueIssueCount());
+        Assertions.assertEquals(2, overview.getPendingIssueAlertGenerationCount());
+        Assertions.assertEquals(3, overview.getPendingIssueAlertEscalationCount());
+        Assertions.assertEquals(5, overview.getActionableIssueSlaCount());
+        Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
+                "PAYMENT_ISSUE_SLA".equals(alert.getAlertType())
+                        && Integer.valueOf(6).equals(alert.getAffectedCount())
+                        && alert.getAlertMessage().contains("待首次告警 2 条")
+                        && alert.getAlertMessage().contains("待升级告警 3 条")));
+    }
+
+    @Test
     void shouldRunSpecifiedIssueAlertReceiptQueryAndRefreshOverview() {
         PaymentTaskActionResultDTO actionResult = new PaymentTaskActionResultDTO();
         actionResult.setProcessedCount(1);

@@ -95,6 +95,12 @@ public class PaymentTaskCenterOverviewDTO {
     private Integer controlPolicyWarningCount;
     /** SLA 超时异常数。 */
     private Integer overdueIssueCount;
+    /** 当前需要生成首次 SLA 告警的异常数。 */
+    private Integer pendingIssueAlertGenerationCount;
+    /** 当前需要生成未确认升级告警的来源告警数。 */
+    private Integer pendingIssueAlertEscalationCount;
+    /** 当前可由 SLA 巡检执行的首次告警与升级告警候选总数。 */
+    private Integer actionableIssueSlaCount;
     /** 当前重点任务告警。 */
     private List<PaymentAlertItemDTO> focusAlerts;
     /** 最近任务执行日志。 */

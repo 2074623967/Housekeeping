@@ -726,6 +726,53 @@ public class PaymentTaskCenterMapperIntegrationTest {
     }
 
     @Test
+    void shouldSeparateOverdueRiskFromCurrentIssueSlaActionCandidates() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
+
+            assertEquals(1, mapper.countOverduePaymentIssues());
+            assertEquals(1, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(0, mapper.countPendingIssueAlertEscalationCandidates());
+            List<PaymentIssueAlertCandidateDTO> generationCandidates =
+                    mapper.findOverdueIssueAlertCandidates(100);
+            assertEquals(1, generationCandidates.size());
+            String issueNo = generationCandidates.get(0).getIssueNo();
+
+            try (PreparedStatement statement = session.getConnection().prepareStatement(
+                    "INSERT INTO t_payment_issue_alert_log("
+                            + "alert_no, issue_no, payment_order_id, issue_type, severity, "
+                            + "responsibility_group, receiver, alert_channel, ack_status, alert_status, "
+                            + "alert_content, created_at) VALUES ("
+                            + "'PIA-UNKNOWN-SOURCE', ?, "
+                            + "'PAY-NO-HISTORY', '退款提交结果待核查', 'P1', "
+                            + "'账务清结算联动组', '账清结算联动值班', "
+                            + "'IN_APP_OUTBOX', '待确认', '已生成', '退款提交结果待核查', "
+                            + "TIMESTAMPADD(MINUTE, -10, NOW()))")) {
+                statement.setString(1, issueNo);
+                statement.executeUpdate();
+            }
+            session.clearCache();
+
+            assertEquals(1, mapper.countOverduePaymentIssues());
+            assertEquals(0, mapper.findOverdueIssueAlertCandidates(100).size());
+            assertEquals(0, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(0, mapper.countPendingIssueAlertEscalationCandidates());
+
+            try (Statement statement = session.getConnection().createStatement()) {
+                statement.executeUpdate("UPDATE t_payment_issue_alert_log "
+                        + "SET created_at = TIMESTAMPADD(MINUTE, -31, NOW()) "
+                        + "WHERE alert_no = 'PIA-UNKNOWN-SOURCE'");
+            }
+            session.clearCache();
+
+            assertEquals(0, mapper.countPendingIssueAlertGenerationCandidates());
+            assertEquals(1, mapper.countPendingIssueAlertEscalationCandidates());
+            assertEquals(0, mapper.findOverdueIssueAlertCandidates(100).size());
+            assertEquals(1, mapper.findUnacknowledgedIssueAlertEscalationCandidates(100).size());
+        }
+    }
+
+    @Test
     void shouldLimitOverdueIssueAlertCandidatesAndKeepOldestFirst() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentTaskCenterMapper mapper = session.getMapper(PaymentTaskCenterMapper.class);
