@@ -547,6 +547,24 @@
 
 `terminal` 的规范值包含 `APP / H5 / PC / MINI_PROGRAM / UNKNOWN`。微信小程序应发送 `MINI_PROGRAM`；服务端兼容 `WECHAT_MINI_PROGRAM / WX_MINI_PROGRAM / 小程序` 并统一保存为 `MINI_PROGRAM`。本地 demo 来源应用 `housekeeping-mini-program` 仅允许微信支付、`wx_h5` 与 `MCH_WX_10001`，真实环境必须由受控配置和密钥托管替换示例令牌。
 
+小程序本地 demo 提交示例：
+
+```json
+{
+  "prepayOrderNo": "PRE1752912345678",
+  "paymentMethod": "微信支付",
+  "channelCode": "WX_H5",
+  "sourceAppId": "housekeeping-mini-program",
+  "merchantNo": "MCH_WX_10001",
+  "accessToken": "token-housekeeping-mini-program",
+  "terminal": "MINI_PROGRAM",
+  "clientDeviceId": "wechat-mini-program",
+  "idempotencyKey": "MINI-PRE1752912345678-1789351200000-abc"
+}
+```
+
+示例令牌只存在于 demo profile。当前提交响应只表达本地渠道适配器已受理并进入待回调，不包含微信 `wx.requestPayment` 所需的 `timeStamp / nonceStr / package / signType / paySign`。真实接入必须由可信后端按当前用户 openid 和绑定商户生成短时签名参数，前端不得自行拼装或缓存长期凭证。
+
 `channelCode` 会由支付核心统一规范化为标准编码：
 
 | 请求渠道/支付方式 | 标准渠道编码 |
@@ -4702,6 +4720,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 支付尝试结果更新必须恰好影响一行。目标尝试缺失时本次提交结果事务失败，并进入既有结果未知恢复；恢复同样不能覆盖成功、关闭或不一致渠道流水。
 4. 非成功渠道回调更新 `WAIT_CALLBACK` 时必须满足既有渠道流水为空或相同；条件更新失败后重读并复核绑定，不一致继续返回 `PAYMENT-1031`，不写通知、尝试、预付单或事件。
 5. 本轮不新增端点、请求/响应字段、状态码、schema 或迁移；提交异常和绑定冲突不代表资金失败，仍需按渠道及对账事实核验。
+
+### 14.350 微信小程序前端调用边界
+
+1. 原生小程序按“业务入口 -> 创建预付单 -> 加载收银台 -> 提交支付 -> 支付详情/主动查单”的顺序调用现有接口，路由参数和每次接口响应必须与当前预付单或支付单一致。
+2. 小程序支付提交固定使用来源 `housekeeping-mini-program`、支付方式 `微信支付`、demo 渠道 `WX_H5`、商户 `MCH_WX_10001` 和终端 `MINI_PROGRAM`；生产令牌、用户身份及设备上下文必须由正式认证与受控配置替换。
+3. 只有收银台仍为待支付、支付单为 `PREPAY_CREATED`、没有渠道尝试、微信通道可用且 `expiresAt` 未到期时允许提交；幂等键在单次提交期间不可变，重复操作必须互斥。
+4. 收银台摘要没有 `channelTransactionNo`，不得仅凭摘要判断可关单；客户端必须读取完整支付详情，并仅在未提交渠道且服务端状态允许时展示关单动作，服务端仍执行最终校验。
+5. 当前响应没有微信支付签名参数，小程序不得调用空参数 `wx.requestPayment` 或把 `WAIT_CALLBACK` 渲染为支付成功；该缺口补齐前只属于本地功能联调骨架。
 
 ## 15. 结论
 

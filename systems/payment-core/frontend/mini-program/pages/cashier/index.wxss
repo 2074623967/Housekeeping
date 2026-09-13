@@ -1,0 +1,83 @@
+.amount-panel {
+  text-align: center;
+}
+
+.cashier-amount {
+  margin: 12rpx 0 18rpx;
+  color: #17212b;
+  font-size: 62rpx;
+  font-weight: 750;
+}
+
+.wechat-channel {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 22rpx;
+  border: 2rpx solid #16a34a;
+  border-radius: 8rpx;
+  background: #f0fdf4;
+}
+
+.wechat-mark {
+  display: flex;
+  width: 64rpx;
+  height: 64rpx;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.channel-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.channel-name {
+  font-weight: 700;
+}
+
+.channel-hint {
+  margin-top: 6rpx;
+  color: #607080;
+  font-size: 23rpx;
+  word-break: break-all;
+}
+
+.selected-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border: 7rpx solid #ffffff;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 2rpx #16a34a;
+}
+
+.idempotency-box {
+  margin: 22rpx 0;
+  padding: 20rpx;
+  border: 1rpx solid #dce2e7;
+  border-radius: 8rpx;
+  background: #f8fafc;
+}
+
+.idempotency-key {
+  color: #334155;
+  font-family: monospace;
+  font-size: 22rpx;
+  word-break: break-all;
+}
+
+.text-button {
+  width: auto;
+  min-height: 54rpx;
+  margin: 12rpx 0 0;
+  padding: 0;
+  background: transparent;
+  color: #0f766e;
+  font-size: 24rpx;
+  line-height: 54rpx;
+}

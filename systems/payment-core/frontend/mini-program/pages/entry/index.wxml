@@ -1,0 +1,49 @@
+<view class="page-shell">
+  <view class="page-header">
+    <view class="eyebrow">WECHAT MINI PROGRAM</view>
+    <view class="page-title">家政支付业务入口</view>
+    <view class="page-subtitle">选择业务场景，创建预付单后进入微信支付收银台。</view>
+  </view>
+
+  <scroll-view class="scene-tabs" scroll-x enable-flex>
+    <button
+      wx:for="{{scenes}}"
+      wx:key="key"
+      class="scene-tab {{activeSceneKey === item.key ? 'scene-tab-active' : ''}}"
+      data-scene="{{item.key}}"
+      disabled="{{submitting}}"
+      bindtap="switchScene"
+    >{{item.label}}</button>
+  </scroll-view>
+
+  <view class="panel scene-summary">
+    <view>
+      <view class="section-title">{{activeScene.title}}</view>
+      <view class="page-subtitle">终端 MINI_PROGRAM · 独立来源策略 · 微信支付</view>
+    </view>
+    <view class="amount-preview">¥{{form.amount || activeScene.defaultAmount}}</view>
+  </view>
+
+  <view class="panel">
+    <label class="field">
+      <text class="field-label">客户名称</text>
+      <input class="field-input" value="{{form.customerName}}" data-field="customerName" disabled="{{submitting}}" bindinput="updateField" placeholder="请输入客户名称" />
+    </label>
+    <label class="field">
+      <text class="field-label">{{activeScene.amountLabel}}</text>
+      <input class="field-input" value="{{form.amount}}" data-field="amount" disabled="{{submitting}}" bindinput="updateField" type="digit" placeholder="请输入金额" />
+    </label>
+    <label class="field">
+      <text class="field-label">业务单号</text>
+      <input class="field-input" value="{{form.orderNo}}" data-field="orderNo" disabled="{{submitting}}" bindinput="updateField" maxlength="64" placeholder="可留空，系统自动生成" />
+    </label>
+    <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
+
+    <view class="button-row">
+      <button class="secondary-button" disabled="{{submitting}}" bindtap="resetForm">重置</button>
+      <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="createPrepay">
+        {{submitting ? '创建中...' : '进入收银台'}}
+      </button>
+    </view>
+  </view>
+</view>

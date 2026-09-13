@@ -1,0 +1,52 @@
+<view class="page-shell">
+  <view class="page-header">
+    <view class="eyebrow">PAYMENT RESULT</view>
+    <view class="page-title">{{meta.title}}</view>
+    <view class="page-subtitle">{{meta.hint}}</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="panel empty-state">支付结果加载中...</view>
+  <view wx:elif="{{!detail}}" class="panel">
+    <view class="error-banner">{{errorMessage || '当前没有可用支付结果快照'}}</view>
+    <button class="secondary-button" bindtap="backToEntry">返回业务入口</button>
+  </view>
+  <block wx:else>
+    <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
+    <view wx:if="{{successMessage}}" class="success-banner">{{successMessage}}</view>
+
+    <view class="panel result-summary result-{{meta.tone}}">
+      <view class="result-mark">{{meta.tone === 'success' ? '✓' : meta.tone === 'danger' ? '!' : '…'}}</view>
+      <view class="section-title">{{detail.status}}</view>
+      <view class="page-subtitle">{{scene.title}} · MINI_PROGRAM</view>
+    </view>
+
+    <view class="panel">
+      <view class="section-title">支付详情</view>
+      <view class="detail-list">
+        <view class="detail-row"><text class="detail-label">支付单号</text><text class="detail-value">{{detail.paymentOrderId}}</text></view>
+        <view class="detail-row"><text class="detail-label">预付单号</text><text class="detail-value">{{detail.prepayOrderNo || prepayOrderNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">订单号</text><text class="detail-value">{{detail.orderNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">支付金额</text><text class="detail-value">{{detail.amount || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">支付方式</text><text class="detail-value">{{detail.paymentMethod || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">渠道编码</text><text class="detail-value">{{detail.channel || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">渠道流水</text><text class="detail-value">{{detail.channelTransactionNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">最近尝试</text><text class="detail-value">{{detail.latestAttemptStatus || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">渠道返回码</text><text class="detail-value">{{detail.channelReturnCode || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">标准错误码</text><text class="detail-value">{{detail.standardizedCode || '-'}}</text></view>
+      </view>
+    </view>
+
+    <view class="panel">
+      <view class="section-title">结果操作</view>
+      <view class="button-row button-row-single">
+        <button class="primary-button" loading="{{actionName === 'query'}}" disabled="{{loading || actionName || !canQuery}}" bindtap="queryPayment">
+          {{actionName === 'query' ? '查单中...' : '主动查单'}}
+        </button>
+        <button wx:if="{{canClose}}" class="danger-button" loading="{{actionName === 'close'}}" disabled="{{loading || actionName}}" bindtap="closePayment">关闭支付单</button>
+        <button class="secondary-button" disabled="{{loading || actionName}}" bindtap="loadDetail">刷新结果</button>
+        <button class="secondary-button" disabled="{{actionName || !prepayOrderNo}}" bindtap="backToCashier">返回收银台</button>
+        <button class="secondary-button" disabled="{{actionName}}" bindtap="backToEntry">返回业务入口</button>
+      </view>
+    </view>
+  </block>
+</view>

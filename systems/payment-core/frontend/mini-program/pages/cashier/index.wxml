@@ -1,0 +1,60 @@
+<view class="page-shell">
+  <view class="page-header">
+    <view class="eyebrow">MINI PROGRAM CASHIER</view>
+    <view class="page-title">{{scene.title}}收银台</view>
+    <view class="page-subtitle">当前仅展示控制策略允许的微信支付通道。</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="panel empty-state">收银台加载中...</view>
+  <view wx:elif="{{!cashier}}" class="panel">
+    <view class="error-banner">{{errorMessage || '当前没有可用收银台快照'}}</view>
+    <button class="secondary-button" bindtap="backToEntry">返回业务入口</button>
+  </view>
+  <block wx:else>
+    <view wx:if="{{errorMessage}}" class="error-banner">{{errorMessage}}</view>
+
+    <view class="panel amount-panel">
+      <view class="field-label">本次应付</view>
+      <view class="cashier-amount">{{cashier.amount || '¥0.00'}}</view>
+      <view class="status-pill {{cashier.statusType === 'success' ? 'status-success' : 'status-warn'}}">{{cashier.status}}</view>
+    </view>
+
+    <view class="panel">
+      <view class="section-title">交易信息</view>
+      <view class="detail-list">
+        <view class="detail-row"><text class="detail-label">预付单号</text><text class="detail-value">{{cashier.prepayOrderNo}}</text></view>
+        <view class="detail-row"><text class="detail-label">支付单号</text><text class="detail-value">{{cashier.paymentOrderId || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">业务订单</text><text class="detail-value">{{cashier.orderNo || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">客户名称</text><text class="detail-value">{{cashier.customerName || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">失效时间</text><text class="detail-value">{{cashier.expiresAt || '-'}}</text></view>
+        <view class="detail-row"><text class="detail-label">剩余时间</text><text class="detail-value">{{countdownLabel}}</text></view>
+      </view>
+    </view>
+
+    <view class="panel">
+      <view class="section-title">支付方式</view>
+      <view class="wechat-channel">
+        <view class="wechat-mark">微</view>
+        <view class="channel-copy">
+          <view class="channel-name">微信支付</view>
+          <view class="channel-hint">来源策略：housekeeping-mini-program</view>
+        </view>
+        <view class="selected-dot"></view>
+      </view>
+
+      <view class="idempotency-box">
+        <view class="field-label">本次幂等键</view>
+        <view class="idempotency-key">{{idempotencyKey}}</view>
+        <button class="text-button" disabled="{{!canSubmit || loading || actionName}}" bindtap="regenerateIdempotencyKey">重新生成</button>
+      </view>
+
+      <view class="button-row button-row-single">
+        <button class="primary-button" loading="{{actionName === 'submit'}}" disabled="{{!canSubmit || loading || actionName}}" bindtap="submitPayment">
+          {{actionName === 'submit' ? '提交中...' : '确认微信支付'}}
+        </button>
+        <button class="secondary-button" disabled="{{loading || actionName}}" bindtap="loadCashier">刷新收银台</button>
+        <button class="secondary-button" disabled="{{actionName}}" bindtap="backToEntry">返回业务入口</button>
+      </view>
+    </view>
+  </block>
+</view>

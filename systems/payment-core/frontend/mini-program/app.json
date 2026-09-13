@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/entry/index",
+    "pages/cashier/index",
+    "pages/result/index"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#0f766e",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "家政支付",
+    "backgroundColor": "#f4f6f8",
+    "backgroundTextStyle": "dark"
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}
