@@ -253,6 +253,7 @@ CREATE TABLE t_payment_route_rule_review (
     review_comment VARCHAR(255) DEFAULT NULL COMMENT '复核意见',
     priority_collision_detected TINYINT(1) DEFAULT NULL COMMENT '批准复验是否检测到同优先级潜在冲突，未执行批准复验为空',
     priority_collision_acknowledged TINYINT(1) DEFAULT NULL COMMENT '检测到潜在冲突时是否完成显式风险确认，未执行批准复验为空',
+    priority_collision_rule_codes_json TEXT NULL COMMENT '批准复验检测到的对照规则编码 JSON 数组快照',
     created_at DATETIME NOT NULL COMMENT '申请时间',
     reviewed_at DATETIME DEFAULT NULL COMMENT '复核时间',
     updated_at DATETIME NOT NULL COMMENT '更新时间',

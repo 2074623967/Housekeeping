@@ -413,6 +413,7 @@
                review_comment AS reviewComment,
                priority_collision_detected AS priorityCollisionDetected,
                priority_collision_acknowledged AS priorityCollisionAcknowledged,
+               priority_collision_rule_codes_json AS priorityCollisionRuleCodesJson,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
                DATE_FORMAT(reviewed_at, '%Y-%m-%d %H:%i:%s') AS reviewedAt,
                'SELF_DECLARED' AS identityTrustLevel
@@ -446,7 +447,8 @@
                reviewer,
                review_comment AS reviewComment,
                priority_collision_detected AS priorityCollisionDetected,
-               priority_collision_acknowledged AS priorityCollisionAcknowledged
+               priority_collision_acknowledged AS priorityCollisionAcknowledged,
+               priority_collision_rule_codes_json AS priorityCollisionRuleCodesJson
         FROM t_payment_route_rule_review
         WHERE request_no = #{requestNo}
         LIMIT 1
@@ -1973,6 +1975,7 @@
             review_comment = #{reviewComment},
             priority_collision_detected = #{priorityCollisionDetected},
             priority_collision_acknowledged = #{priorityCollisionAcknowledged},
+            priority_collision_rule_codes_json = #{priorityCollisionRuleCodesJson},
             reviewed_at = NOW(),
             updated_at = NOW()
         WHERE request_no = #{requestNo}

@@ -431,7 +431,8 @@ public interface PaymentConfigMapper {
                                 @Param("reviewer") String reviewer,
                                 @Param("reviewComment") String reviewComment,
                                 @Param("priorityCollisionDetected") Boolean priorityCollisionDetected,
-                                @Param("priorityCollisionAcknowledged") Boolean priorityCollisionAcknowledged);
+                                @Param("priorityCollisionAcknowledged") Boolean priorityCollisionAcknowledged,
+                                @Param("priorityCollisionRuleCodesJson") String priorityCollisionRuleCodesJson);
 
     /**
      * 新增支付协议配置。

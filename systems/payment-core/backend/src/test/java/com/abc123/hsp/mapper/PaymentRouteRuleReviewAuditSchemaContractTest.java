@@ -18,6 +18,8 @@ class PaymentRouteRuleReviewAuditSchemaContractTest {
         String databaseSchema = read("../database/schema.sql");
         String migration = read(
                 "../database/migrations/2026-09-13-add-payment-route-rule-review-conflict-audit.sql");
+        String targetMigration = read(
+                "../database/migrations/2026-09-13-add-payment-route-rule-review-conflict-targets.sql");
         String mapper = read("src/main/resources/mapper/PaymentConfigMapper.xml");
 
         assertCurrentSchema(backendSchema);
@@ -27,10 +29,14 @@ class PaymentRouteRuleReviewAuditSchemaContractTest {
         assertTrue(migration.contains("ALTER TABLE t_payment_route_rule_review"));
         assertTrue(migration.contains("ADD COLUMN priority_collision_detected TINYINT(1) NULL"));
         assertTrue(migration.contains("ADD COLUMN priority_collision_acknowledged TINYINT(1) NULL"));
+        assertTrue(targetMigration.contains("ALTER TABLE t_payment_route_rule_review"));
+        assertTrue(targetMigration.contains("ADD COLUMN priority_collision_rule_codes_json TEXT NULL"));
         assertTrue(mapper.contains("priority_collision_detected AS priorityCollisionDetected"));
         assertTrue(mapper.contains("priority_collision_acknowledged AS priorityCollisionAcknowledged"));
+        assertTrue(mapper.contains("priority_collision_rule_codes_json AS priorityCollisionRuleCodesJson"));
         assertTrue(mapper.contains("priority_collision_detected = #{priorityCollisionDetected}"));
         assertTrue(mapper.contains("priority_collision_acknowledged = #{priorityCollisionAcknowledged}"));
+        assertTrue(mapper.contains("priority_collision_rule_codes_json = #{priorityCollisionRuleCodesJson}"));
     }
 
     private void assertCurrentSchema(String schema) {
@@ -38,6 +44,8 @@ class PaymentRouteRuleReviewAuditSchemaContractTest {
                 "priority_collision_detected TINYINT(1) DEFAULT NULL COMMENT '批准复验是否检测到同优先级潜在冲突，未执行批准复验为空'"));
         assertTrue(schema.contains(
                 "priority_collision_acknowledged TINYINT(1) DEFAULT NULL COMMENT '检测到潜在冲突时是否完成显式风险确认，未执行批准复验为空'"));
+        assertTrue(schema.contains(
+                "priority_collision_rule_codes_json TEXT NULL COMMENT '批准复验检测到的对照规则编码 JSON 数组快照'"));
     }
 
     private String read(String path) throws Exception {

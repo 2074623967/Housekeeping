@@ -94,6 +94,8 @@ import com.abc123.hsp.mapper.PaymentConfigMapper;
 import com.abc123.hsp.service.PaymentConfigService;
 import com.abc123.hsp.service.support.CsvExportRowLimiter;
 import com.abc123.hsp.service.support.CsvExportSanitizer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.StringReader;
 import java.math.BigDecimal;
@@ -113,6 +115,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.TreeSet;
 import java.util.UUID;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
@@ -136,6 +139,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     private static final BigDecimal MAX_CONFIG_MONEY_AMOUNT = new BigDecimal("9999999999999999.99");
     private static final int RETURN_CODE_IMPORT_MAX_BYTES = 512 * 1024;
     private static final int RETURN_CODE_IMPORT_MAX_ROWS = 500;
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
     private static final List<String> RETURN_CODE_IMPORT_HEADERS = Collections.unmodifiableList(Arrays.asList(
             "channelCode",
             "channelReturnCode",
@@ -637,8 +641,9 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         boolean priorityCollisionAcknowledged = request != null
                 && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged());
-        boolean priorityCollisionDetected = ensureCandidateHasNoUnacknowledgedConflict(
+        String priorityCollisionRuleCodesJson = ensureCandidateHasNoUnacknowledgedConflict(
                 candidate, priorityCollisionAcknowledged);
+        boolean priorityCollisionDetected = StringUtils.hasText(priorityCollisionRuleCodesJson);
         if (current == null) {
             paymentConfigMapper.insertRouteRule(candidate);
         } else {
@@ -656,7 +661,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", reviewer, reviewComment,
                 Boolean.valueOf(priorityCollisionDetected),
-                Boolean.valueOf(priorityCollisionDetected && priorityCollisionAcknowledged));
+                Boolean.valueOf(priorityCollisionDetected && priorityCollisionAcknowledged),
+                priorityCollisionRuleCodesJson);
         return paymentConfigMapper.findRouteRuleReviews();
     }
 
@@ -669,7 +675,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         String reviewComment = requireReviewText(
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeRouteRuleReview(
-                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment, null, null);
+                review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment, null, null, null);
         return paymentConfigMapper.findRouteRuleReviews();
     }
 
@@ -2700,10 +2706,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                                          String reviewer,
                                          String reviewComment,
                                          Boolean priorityCollisionDetected,
-                                         Boolean priorityCollisionAcknowledged) {
+                                         Boolean priorityCollisionAcknowledged,
+                                         String priorityCollisionRuleCodesJson) {
         int affectedRows = paymentConfigMapper.completeRouteRuleReview(
                 requestNo, reviewStatus, reviewStatusType, reviewer, reviewComment,
-                priorityCollisionDetected, priorityCollisionAcknowledged);
+                priorityCollisionDetected, priorityCollisionAcknowledged, priorityCollisionRuleCodesJson);
         if (affectedRows == 0) {
             throw new IllegalArgumentException("路由规则复核状态已变化，请刷新后重试");
         }
@@ -2772,12 +2779,12 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return copy;
     }
 
-    private boolean ensureCandidateHasNoUnacknowledgedConflict(PaymentRouteRuleConfigEntity candidate,
-                                                               boolean priorityCollisionAcknowledged) {
+    private String ensureCandidateHasNoUnacknowledgedConflict(PaymentRouteRuleConfigEntity candidate,
+                                                              boolean priorityCollisionAcknowledged) {
         if (!STATUS_ENABLED.equals(candidate.getStatus())
                 || candidate.getRolloutPercentage() == null
                 || candidate.getRolloutPercentage().intValue() <= 0) {
-            return false;
+            return null;
         }
         List<PaymentRouteRuleConfigDTO> candidateRules = new ArrayList<PaymentRouteRuleConfigDTO>();
         for (PaymentRouteRuleConfigDTO rule : paymentConfigMapper.findRouteRulesForConflictCheckForUpdate()) {
@@ -2786,7 +2793,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             }
         }
         candidateRules.add(toConfigDto(candidate));
-        boolean priorityCollisionDetected = false;
+        Set<String> priorityCollisionRuleCodes = new TreeSet<String>();
         String priorityCollisionMessage = null;
         for (PaymentRouteRuleConflictDTO conflict : detectRouteRuleConflicts(candidateRules)) {
             boolean candidateInvolved = candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
@@ -2795,18 +2802,32 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 throw new IllegalArgumentException("候选规则存在阻断级冲突：" + conflict.getMessage());
             }
             if (candidateInvolved && "PRIORITY_COLLISION".equals(conflict.getConflictType())) {
-                priorityCollisionDetected = true;
+                String conflictingRuleCode = candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
+                        ? conflict.getConflictingRuleCode()
+                        : conflict.getRuleCode();
+                if (StringUtils.hasText(conflictingRuleCode)) {
+                    priorityCollisionRuleCodes.add(conflictingRuleCode);
+                }
                 if (priorityCollisionMessage == null) {
                     priorityCollisionMessage = conflict.getMessage();
                 }
             }
         }
-        if (priorityCollisionDetected && !priorityCollisionAcknowledged) {
+        String collisionRuleCodes = String.join(",", priorityCollisionRuleCodes);
+        if (StringUtils.hasText(collisionRuleCodes) && !priorityCollisionAcknowledged) {
             throw new IllegalArgumentException(
-                    "候选规则存在同优先级潜在冲突，请确认表达式互斥性风险后再批准："
+                    "候选规则与以下规则存在同优先级潜在冲突：" + collisionRuleCodes
+                            + "；请确认表达式互斥性风险后再批准："
                             + priorityCollisionMessage);
         }
-        return priorityCollisionDetected;
+        if (!StringUtils.hasText(collisionRuleCodes)) {
+            return null;
+        }
+        try {
+            return JSON_MAPPER.writeValueAsString(priorityCollisionRuleCodes);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("路由规则冲突对象快照序列化失败", exception);
+        }
     }
 
     private void lockRouteRuleConflictSetIfRequired(PaymentRouteRuleConfigEntity candidate) {

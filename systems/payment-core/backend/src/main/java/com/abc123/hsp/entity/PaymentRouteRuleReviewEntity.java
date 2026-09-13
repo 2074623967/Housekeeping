@@ -31,4 +31,5 @@ public class PaymentRouteRuleReviewEntity {
     private String reviewComment;
     private Boolean priorityCollisionDetected;
     private Boolean priorityCollisionAcknowledged;
+    private String priorityCollisionRuleCodesJson;
 }

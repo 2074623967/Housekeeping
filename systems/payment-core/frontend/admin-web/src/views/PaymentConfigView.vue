@@ -9,6 +9,7 @@ import {
 } from "../utils/paymentConfigChannelFilter";
 import {
   buildRouteRuleReviewActionPayload,
+  formatRouteRuleConflictAudit,
   isRouteRuleCollisionAcknowledged
 } from "../utils/paymentRouteReview";
 
@@ -818,18 +819,6 @@ function formatRouteRuleOperation(operationType) {
     ROLLBACK: "回滚"
   };
   return labels[operationType] || operationType;
-}
-
-function formatRouteRuleConflictAudit(review) {
-  if (review.priorityCollisionDetected === true) {
-    return review.priorityCollisionAcknowledged === true
-      ? "同优先级风险已确认"
-      : "同优先级风险未确认";
-  }
-  if (review.priorityCollisionDetected === false) {
-    return "未发现同优先级潜在冲突";
-  }
-  return "冲突复验未执行";
 }
 
 function setRouteRuleCollisionAcknowledgement(requestNo, checked) {

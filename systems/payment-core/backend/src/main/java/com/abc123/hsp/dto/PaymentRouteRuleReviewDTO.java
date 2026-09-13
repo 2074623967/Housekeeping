@@ -33,6 +33,8 @@ public class PaymentRouteRuleReviewDTO {
     private Boolean priorityCollisionDetected;
     /** 检测到潜在冲突时是否完成显式风险确认；未执行批准复验时为空。 */
     private Boolean priorityCollisionAcknowledged;
+    /** 批准复验检测到的对照规则编码 JSON 数组，按编码稳定排序。 */
+    private String priorityCollisionRuleCodesJson;
     private String createdAt;
     private String reviewedAt;
     /** 身份可信度固定为自声明，避免被误读成已认证签字。 */
