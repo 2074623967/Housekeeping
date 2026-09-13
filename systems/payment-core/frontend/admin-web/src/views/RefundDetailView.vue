@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { refundApi } from "../api/client";
 import {
@@ -7,6 +7,7 @@ import {
   paymentRecordDetailRoute as buildPaymentRecordDetailRoute
 } from "../router/detailRoutes";
 import { paymentLogsRoute as buildPaymentLogsRoute } from "../router/listRoutes";
+import { canRunRefundAction } from "../utils/refundAction";
 import { refundAttemptStatusType } from "../utils/refundAttempt";
 
 const route = useRoute();
@@ -21,9 +22,20 @@ const actionResultMessage = ref("");
 const actionRemark = ref("");
 const actionOperator = ref("");
 const activeAction = ref("");
+let latestLoadRequestId = 0;
 
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+const currentRefundOrderId = computed(() => typeof route.params.refundOrderId === "string"
+  ? route.params.refundOrderId
+  : "");
+const canUseSnapshot = computed(() => Boolean(
+  hasLoadedData.value
+  && detail.value?.refundOrderId === currentRefundOrderId.value
+  && !isLoading.value
+  && !isSnapshotStale.value
+  && !activeAction.value
 ));
 
 const paymentDetailRoute = computed(() => {
@@ -102,10 +114,23 @@ const operationSuggestions = computed(() => {
   return suggestions;
 });
 
-async function loadDetail(afterAction = false) {
+async function loadDetail(afterAction = false, refundOrderId = currentRefundOrderId.value) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  if (afterAction) {
+    actionRefreshErrorMessage.value = "";
+  } else {
+    loadErrorMessage.value = "";
+  }
   try {
-    detail.value = await refundApi.getDetail(route.params.refundOrderId);
+    const refundDetail = await refundApi.getDetail(refundOrderId);
+    if (requestId !== latestLoadRequestId || refundOrderId !== currentRefundOrderId.value) {
+      return;
+    }
+    if (!refundDetail || refundDetail.refundOrderId !== refundOrderId) {
+      throw new Error("退款详情响应为空或与当前路由不一致");
+    }
+    detail.value = refundDetail;
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
@@ -114,6 +139,9 @@ async function loadDetail(afterAction = false) {
       actionResultMessage.value = "";
     }
   } catch (error) {
+    if (requestId !== latestLoadRequestId || refundOrderId !== currentRefundOrderId.value) {
+      return;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -121,37 +149,69 @@ async function loadDetail(afterAction = false) {
       actionRefreshErrorMessage.value = "";
     }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
+function openRelatedRoute(targetRoute) {
+  if (!canUseSnapshot.value || !targetRoute) {
+    return;
+  }
+  router.push(targetRoute);
+}
+
 async function runAction(actionName, actionLabel, actionRunner) {
+  if (!canUseSnapshot.value || !canRunRefundAction(detail.value?.status, actionName)) {
+    actionErrorMessage.value = `当前退款单不满足${actionLabel}条件。`;
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = actionOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
     actionResultMessage.value = "";
     return;
   }
+  const refundOrderId = currentRefundOrderId.value;
   activeAction.value = actionName;
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const refundDetail = await actionRunner(route.params.refundOrderId, operator, actionRemark.value);
+    const refundDetail = await actionRunner(refundOrderId, operator, actionRemark.value);
+    if (refundOrderId !== currentRefundOrderId.value) {
+      return;
+    }
     detail.value = refundDetail;
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
-    actionResultMessage.value = `退款单 ${route.params.refundOrderId} 已${actionLabel}，当前状态为 ${refundDetail.status}。`;
+    actionResultMessage.value = `退款单 ${refundOrderId} 已${actionLabel}，当前状态为 ${refundDetail.status}。`;
     actionRemark.value = "";
-    await loadDetail(true);
+    await loadDetail(true, refundOrderId);
   } catch (error) {
-    actionErrorMessage.value = `退款单 ${route.params.refundOrderId} ${actionLabel}失败：${error.message}`;
+    if (refundOrderId !== currentRefundOrderId.value) {
+      return;
+    }
+    actionErrorMessage.value = `退款单 ${refundOrderId} ${actionLabel}失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
 }
 
 onMounted(loadDetail);
+
+watch(currentRefundOrderId, (refundOrderId) => {
+  detail.value = null;
+  hasLoadedData.value = false;
+  actionRefreshErrorMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
+  actionRemark.value = "";
+  actionOperator.value = "";
+  loadDetail(false, refundOrderId);
+});
 </script>
 
 <template>
@@ -163,9 +223,9 @@ onMounted(loadDetail);
       </div>
       <div class="toolbar-actions">
         <RouterLink class="button secondary" to="/refunds">返回退款单</RouterLink>
-        <button class="button secondary" :disabled="!paymentDetailRoute" @click="router.push(paymentDetailRoute)">查看支付单详情</button>
-        <button class="button secondary" :disabled="!paymentRecordDetailRoute" @click="router.push(paymentRecordDetailRoute)">查看支付记录详情</button>
-        <button class="button secondary" :disabled="!paymentLogRoute" @click="router.push(paymentLogRoute)">查看处理日志</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !paymentDetailRoute" @click="openRelatedRoute(paymentDetailRoute)">查看支付单详情</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !paymentRecordDetailRoute" @click="openRelatedRoute(paymentRecordDetailRoute)">查看支付记录详情</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || !paymentLogRoute" @click="openRelatedRoute(paymentLogRoute)">查看处理日志</button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
       </div>
     </div>
@@ -262,9 +322,9 @@ onMounted(loadDetail);
               </div>
             </div>
             <div class="list-actions">
-              <button class="link-button" :disabled="!paymentDetailRoute" @click="router.push(paymentDetailRoute)">查看支付单详情</button>
-              <button class="link-button" :disabled="!paymentRecordDetailRoute" @click="router.push(paymentRecordDetailRoute)">查看支付记录详情</button>
-              <button class="link-button" :disabled="!paymentLogRoute" @click="router.push(paymentLogRoute)">查看支付处理日志</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !paymentDetailRoute" @click="openRelatedRoute(paymentDetailRoute)">查看支付单详情</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !paymentRecordDetailRoute" @click="openRelatedRoute(paymentRecordDetailRoute)">查看支付记录详情</button>
+              <button class="link-button" :disabled="!canUseSnapshot || !paymentLogRoute" @click="openRelatedRoute(paymentLogRoute)">查看支付处理日志</button>
             </div>
           </section>
 
@@ -287,16 +347,16 @@ onMounted(loadDetail);
           <div class="toolbar compact-toolbar">
             <div class="field">
               <label>操作人</label>
-              <input v-model="actionOperator" maxlength="64" placeholder="请输入操作人" :disabled="Boolean(activeAction) || isSnapshotStale" />
+              <input v-model="actionOperator" maxlength="64" placeholder="请输入操作人" :disabled="isLoading || Boolean(activeAction) || isSnapshotStale" />
             </div>
             <div class="field wide-field">
               <label>操作备注</label>
-              <input v-model="actionRemark" placeholder="请输入审核意见、失败原因或重试说明" :disabled="Boolean(activeAction) || isSnapshotStale" />
+              <input v-model="actionRemark" placeholder="请输入审核意见、失败原因或重试说明" :disabled="isLoading || Boolean(activeAction) || isSnapshotStale" />
             </div>
             <div class="toolbar-actions">
-              <button class="button primary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'REVIEWING'" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
-              <button class="button primary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'PROCESSING'" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
-              <button class="button secondary" :disabled="Boolean(activeAction) || isSnapshotStale || detail.status !== 'FAIL'" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
+              <button class="button primary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'approve')" @click="runAction('approve', '审核通过', refundApi.approve)">审核通过</button>
+              <button class="button primary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'query')" @click="runAction('query', '完成主动查单', (refundOrderId, operator) => refundApi.query(refundOrderId, operator))">主动查单</button>
+              <button class="button secondary" :disabled="!canUseSnapshot || !canRunRefundAction(detail.status, 'retry')" @click="runAction('retry', '重试', refundApi.retry)">失败重试</button>
             </div>
           </div>
         </div>

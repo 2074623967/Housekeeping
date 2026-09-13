@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { sumPaymentAmounts } from "../utils/paymentAmount";
-import { canQueryPaymentChannel } from "../utils/paymentAction";
+import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -182,8 +182,7 @@ function isActionRunning(paymentOrderId, actionName) {
 }
 
 function canRunClose(item) {
-  return ["PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED"].includes(item.status)
-    && !item.channelTransactionNo;
+  return canClosePaymentLocally(item.status, item.channelTransactionNo, item.latestAttemptStatus);
 }
 
 function canRunQuery(item) {

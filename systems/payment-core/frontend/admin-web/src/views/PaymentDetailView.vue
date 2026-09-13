@@ -1,11 +1,11 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi } from "../api/client";
 import { paymentRecordDetailRoute as buildPaymentRecordDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute, ordersRoute, paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
-import { canQueryPaymentChannel } from "../utils/paymentAction";
+import { canClosePaymentLocally, canQueryPaymentChannel } from "../utils/paymentAction";
 
 const route = useRoute();
 const router = useRouter();
@@ -18,9 +18,20 @@ const actionErrorMessage = ref("");
 const actionResultMessage = ref("");
 const activeAction = ref("");
 const operationOperator = ref("");
+let latestLoadRequestId = 0;
 
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
+));
+const currentPaymentOrderId = computed(() => typeof route.params.paymentOrderId === "string"
+  ? route.params.paymentOrderId
+  : "");
+const canUseSnapshot = computed(() => Boolean(
+  hasLoadedData.value
+  && detail.value?.paymentOrderId === currentPaymentOrderId.value
+  && !isLoading.value
+  && !isSnapshotStale.value
+  && !activeAction.value
 ));
 
 const paymentRecordDetailRoute = computed(() => {
@@ -107,10 +118,23 @@ const operationSuggestions = computed(() => {
   return suggestions;
 });
 
-async function loadDetail(afterAction = false) {
+async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOrderId.value) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  if (afterAction) {
+    actionRefreshErrorMessage.value = "";
+  } else {
+    loadErrorMessage.value = "";
+  }
   try {
-    detail.value = await paymentApi.getDetail(route.params.paymentOrderId);
+    const paymentDetail = await paymentApi.getDetail(paymentOrderId);
+    if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
+    if (!paymentDetail || paymentDetail.paymentOrderId !== paymentOrderId) {
+      throw new Error("支付单详情响应为空或与当前路由不一致");
+    }
+    detail.value = paymentDetail;
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
@@ -119,6 +143,9 @@ async function loadDetail(afterAction = false) {
       actionResultMessage.value = "";
     }
   } catch (error) {
+    if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -126,7 +153,9 @@ async function loadDetail(afterAction = false) {
       actionRefreshErrorMessage.value = "";
     }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
@@ -135,18 +164,33 @@ function isActionRunning(actionName) {
 }
 
 function canRunClose() {
-  return ["PREPAY_CREATED", "RISK_REVIEW", "RISK_BLOCKED", "RISK_REJECTED"]
-    .includes(detail.value?.status)
-    && !detail.value?.channelTransactionNo
-    && !detail.value?.latestAttemptStatus;
+  return canClosePaymentLocally(
+    detail.value?.status,
+    detail.value?.channelTransactionNo,
+    detail.value?.latestAttemptStatus
+  );
 }
 
 function canRunQuery() {
   return canQueryPaymentChannel(detail.value?.status, detail.value?.latestAttemptStatus);
 }
 
+function openRelatedRoute(targetRoute) {
+  if (!canUseSnapshot.value || !targetRoute) {
+    return;
+  }
+  router.push(targetRoute);
+}
+
+function openCashier() {
+  if (!canUseSnapshot.value || !cashierUrl.value) {
+    return;
+  }
+  window.open(cashierUrl.value, "_blank", "noopener,noreferrer");
+}
+
 async function handleQuery() {
-  if (!canRunQuery()) {
+  if (!canUseSnapshot.value || !canRunQuery()) {
     actionErrorMessage.value = "当前支付单没有可供渠道查单的提交事实。";
     actionResultMessage.value = "";
     return;
@@ -157,18 +201,25 @@ async function handleQuery() {
     actionResultMessage.value = "";
     return;
   }
+  const paymentOrderId = currentPaymentOrderId.value;
   activeAction.value = "query";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.query(route.params.paymentOrderId, operator);
+    const paymentDetail = await paymentApi.query(paymentOrderId, operator);
+    if (paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     detail.value = paymentDetail;
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
-    actionResultMessage.value = `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
-    await loadDetail(true);
+    actionResultMessage.value = `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}。`;
+    await loadDetail(true, paymentOrderId);
   } catch (error) {
+    if (paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     actionErrorMessage.value = `主动查单失败：${error.message}`;
   } finally {
     activeAction.value = "";
@@ -176,26 +227,38 @@ async function handleQuery() {
 }
 
 async function handleClose() {
+  if (!canUseSnapshot.value || !canRunClose()) {
+    actionErrorMessage.value = "当前支付单不满足本地关闭条件。";
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = operationOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
     actionResultMessage.value = "";
     return;
   }
+  const paymentOrderId = currentPaymentOrderId.value;
   activeAction.value = "close";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.close(route.params.paymentOrderId, operator);
+    const paymentDetail = await paymentApi.close(paymentOrderId, operator);
+    if (paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     detail.value = paymentDetail;
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
     actionResultMessage.value = paymentDetail.status === "CLOSED"
-      ? `支付单 ${route.params.paymentOrderId} 已关闭。`
-      : `支付单 ${route.params.paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
-    await loadDetail(true);
+      ? `支付单 ${paymentOrderId} 已关闭。`
+      : `支付单 ${paymentOrderId} 当前状态为 ${paymentDetail.status}，未执行关闭。`;
+    await loadDetail(true, paymentOrderId);
   } catch (error) {
+    if (paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     actionErrorMessage.value = `关闭支付单失败：${error.message}`;
   } finally {
     activeAction.value = "";
@@ -203,6 +266,16 @@ async function handleClose() {
 }
 
 onMounted(loadDetail);
+
+watch(currentPaymentOrderId, (paymentOrderId) => {
+  detail.value = null;
+  hasLoadedData.value = false;
+  actionRefreshErrorMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
+  operationOperator.value = "";
+  loadDetail(false, paymentOrderId);
+});
 </script>
 
 <template>
@@ -214,24 +287,24 @@ onMounted(loadDetail);
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="router.push('/payments')">返回列表</button>
-        <button class="button secondary" @click="router.push(paymentRequestsRoute({ paymentOrderId: route.params.paymentOrderId }))">
+        <button class="button secondary" :disabled="!canUseSnapshot" @click="openRelatedRoute(paymentRequestsRoute({ paymentOrderId: detail?.paymentOrderId }))">
           查看支付请求
         </button>
         <button
           class="button secondary"
-          :disabled="!paymentRecordDetailRoute"
-          @click="router.push(paymentRecordDetailRoute)"
+          :disabled="!canUseSnapshot || !paymentRecordDetailRoute"
+          @click="openRelatedRoute(paymentRecordDetailRoute)"
         >
           查看支付记录
         </button>
-        <button class="button secondary" @click="router.push(paymentLogsRoute({ paymentOrderId: route.params.paymentOrderId }))">
+        <button class="button secondary" :disabled="!canUseSnapshot" @click="openRelatedRoute(paymentLogsRoute({ paymentOrderId: detail?.paymentOrderId }))">
           查看处理日志
         </button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
-        <button class="button secondary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunQuery()" @click="handleQuery">
+        <button class="button secondary" :disabled="!canUseSnapshot || !canRunQuery()" @click="handleQuery">
           {{ isActionRunning("query") ? "查单中..." : "主动查单" }}
         </button>
-        <button class="button primary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunClose()" @click="handleClose">
+        <button class="button primary" :disabled="!canUseSnapshot || !canRunClose()" @click="handleClose">
           {{ isActionRunning("close") ? "关闭中..." : "关闭支付单" }}
         </button>
       </div>
@@ -241,7 +314,7 @@ onMounted(loadDetail);
       <div class="toolbar compact-toolbar">
         <div class="field">
           <label>操作人</label>
-          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" :disabled="Boolean(activeAction) || !hasLoadedData || isSnapshotStale" />
+          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale" />
         </div>
       </div>
       <div v-if="loadErrorMessage" class="error-banner">
@@ -364,10 +437,10 @@ onMounted(loadDetail);
         <section class="panel mini">
           <h4>联查入口</h4>
           <div class="list-actions">
-            <RouterLink v-if="detail.orderNo" class="link-button" :to="orderRoute">回到订单中心</RouterLink>
-            <RouterLink v-if="detail.billNo || detail.orderNo" class="link-button" :to="billRoute">查看账单中心</RouterLink>
-            <RouterLink v-if="paymentRecordDetailRoute" class="link-button" :to="paymentRecordDetailRoute">查看支付记录详情</RouterLink>
-            <a v-if="cashierUrl" class="link-button" :href="cashierUrl" target="_blank" rel="noreferrer">打开当前收银台</a>
+            <button class="link-button" :disabled="!canUseSnapshot || !orderRoute" @click="openRelatedRoute(orderRoute)">回到订单中心</button>
+            <button class="link-button" :disabled="!canUseSnapshot || !billRoute" @click="openRelatedRoute(billRoute)">查看账单中心</button>
+            <button class="link-button" :disabled="!canUseSnapshot || !paymentRecordDetailRoute" @click="openRelatedRoute(paymentRecordDetailRoute)">查看支付记录详情</button>
+            <button class="link-button" :disabled="!canUseSnapshot || !cashierUrl" @click="openCashier">打开当前收银台</button>
           </div>
         </section>
 
