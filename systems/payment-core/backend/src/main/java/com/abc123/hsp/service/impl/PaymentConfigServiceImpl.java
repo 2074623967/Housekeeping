@@ -580,7 +580,8 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             List<PaymentRouteRuleConflictDTO> candidateConflicts = findCandidateConflicts(candidate, currentRules);
             Set<String> ruleCodes = extractPriorityCollisionRuleCodes(candidate, candidateConflicts);
             review.setPreviewPriorityCollisionRuleCodes(new ArrayList<String>(ruleCodes));
-            review.setPreviewBlockingConflicts(extractBlockingConflicts(candidateConflicts));
+            review.setPreviewBlockingConflicts(extractConflictsBySeverity(candidateConflicts, "BLOCKER"));
+            review.setPreviewWarningConflicts(extractConflictsBySeverity(candidateConflicts, "WARNING"));
         }
         return reviews;
     }
@@ -2890,15 +2891,16 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return extractPriorityCollisionRuleCodes(candidate, findCandidateConflicts(candidate, currentRules));
     }
 
-    private List<PaymentRouteRuleConflictDTO> extractBlockingConflicts(
-            Collection<PaymentRouteRuleConflictDTO> candidateConflicts) {
-        List<PaymentRouteRuleConflictDTO> blockingConflicts = new ArrayList<PaymentRouteRuleConflictDTO>();
+    private List<PaymentRouteRuleConflictDTO> extractConflictsBySeverity(
+            Collection<PaymentRouteRuleConflictDTO> candidateConflicts,
+            String severity) {
+        List<PaymentRouteRuleConflictDTO> matchingConflicts = new ArrayList<PaymentRouteRuleConflictDTO>();
         for (PaymentRouteRuleConflictDTO conflict : candidateConflicts) {
-            if ("BLOCKER".equals(conflict.getSeverity())) {
-                blockingConflicts.add(conflict);
+            if (severity.equals(conflict.getSeverity())) {
+                matchingConflicts.add(conflict);
             }
         }
-        return blockingConflicts;
+        return matchingConflicts;
     }
 
     private Set<String> extractPriorityCollisionRuleCodes(

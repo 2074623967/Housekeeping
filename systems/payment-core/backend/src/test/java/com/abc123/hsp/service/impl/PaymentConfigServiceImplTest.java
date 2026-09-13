@@ -379,7 +379,7 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
-    void shouldPreviewCurrentPriorityCollisionTargetsForPendingReviews() {
+    void shouldPreviewCurrentCandidateConflictsForPendingReviews() {
         PaymentRouteRuleReviewDTO pending = buildPendingReviewDto();
         PaymentRouteRuleReviewDTO completed = buildPendingReviewDto();
         completed.setRequestNo("RRV-002");
@@ -391,13 +391,17 @@ class PaymentConfigServiceImplTest {
         PaymentRouteRuleConfigDTO candidateBlocker = buildConflictRule(
                 "RULE_BLOCKING_APP", "HOME_CLEAN/APP",
                 "terminal IN (H5, APP) AND amount<=500", "offline_bank", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO candidateWarning = buildConflictRule(
+                "RULE_DUPLICATE_APP", "HOME_CLEAN/APP",
+                "terminal IN (H5, APP) AND amount<=500", "wx_h5", 10, "ENABLED");
+        candidateWarning.setFallbackChannelCode("alipay_h5");
         PaymentRouteRuleConfigDTO unrelatedLeft = buildConflictRule(
                 "RULE_ENTERPRISE_A", "ENTERPRISE/PC", "terminal=PC", "wx_h5", 5, "ENABLED");
         PaymentRouteRuleConfigDTO unrelatedRight = buildConflictRule(
                 "RULE_ENTERPRISE_B", "ENTERPRISE/PC", "terminal=PC", "alipay_h5", 5, "ENABLED");
         when(paymentConfigMapper.findRouteRuleReviews()).thenReturn(Arrays.asList(pending, completed));
         when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(
-                laterCollision, unrelatedLeft, unrelatedRight, candidateBlocker, earlierCollision));
+                laterCollision, unrelatedLeft, unrelatedRight, candidateBlocker, candidateWarning, earlierCollision));
 
         List<PaymentRouteRuleReviewDTO> reviews =
                 new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleReviews();
@@ -412,8 +416,14 @@ class PaymentConfigServiceImplTest {
                 "RULE_HOME_APP", reviews.get(0).getPreviewBlockingConflicts().get(0).getConflictingRuleCode());
         org.junit.jupiter.api.Assertions.assertEquals(
                 "ROUTE_DIVERGENCE", reviews.get(0).getPreviewBlockingConflicts().get(0).getConflictType());
+        org.junit.jupiter.api.Assertions.assertEquals(1, reviews.get(0).getPreviewWarningConflicts().size());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "RULE_DUPLICATE_APP", reviews.get(0).getPreviewWarningConflicts().get(0).getRuleCode());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "DUPLICATE_RULE", reviews.get(0).getPreviewWarningConflicts().get(0).getConflictType());
         org.junit.jupiter.api.Assertions.assertNull(reviews.get(1).getPreviewPriorityCollisionRuleCodes());
         org.junit.jupiter.api.Assertions.assertNull(reviews.get(1).getPreviewBlockingConflicts());
+        org.junit.jupiter.api.Assertions.assertNull(reviews.get(1).getPreviewWarningConflicts());
         verify(paymentConfigMapper).findRouteRules();
     }
 

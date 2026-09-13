@@ -4,11 +4,13 @@ import {
   buildRouteRuleCollisionAcknowledgement,
   buildRouteRuleReviewActionPayload,
   canApproveRouteRuleReview,
-  formatRouteRuleBlockingConflict,
+  formatRouteRulePreviewConflict,
   formatRouteRuleConflictAudit,
   hasInvalidRouteRuleBlockingPreview,
+  hasInvalidRouteRuleWarningPreview,
   isRouteRuleCollisionAcknowledged,
-  routeRuleBlockingConflicts
+  routeRuleBlockingConflicts,
+  routeRuleWarningConflicts
 } from "./paymentRouteReview.js";
 
 test("binds route collision acknowledgement to the request and exact preview", () => {
@@ -57,7 +59,7 @@ test("blocks approval and clears acknowledgement when the preview contains a blo
   assert.equal(buildRouteRuleCollisionAcknowledgement(review), null);
   assert.equal(isRouteRuleCollisionAcknowledged(review, oldAcknowledgement), false);
   assert.equal(
-    formatRouteRuleBlockingConflict(review, review.previewBlockingConflicts[0]),
+    formatRouteRulePreviewConflict(review, review.previewBlockingConflicts[0]),
     "ROUTE_DIVERGENCE / RULE_BLOCKING_APP：同场景、同优先级和同表达式指向不同渠道"
   );
 });
@@ -70,6 +72,36 @@ test("fails closed for malformed or non-blocking route conflict previews", () =>
   assert.equal(hasInvalidRouteRuleBlockingPreview(malformedReview), true);
   assert.equal(canApproveRouteRuleReview(malformedReview), false);
   assert.deepEqual(routeRuleBlockingConflicts(malformedReview), []);
+});
+
+test("shows valid warning previews without blocking approval", () => {
+  const review = {
+    requestNo: "ROUTE-REVIEW-001",
+    ruleCode: "RULE_HOME_APP",
+    previewWarningConflicts: [{
+      conflictType: "DUPLICATE_RULE",
+      severity: "WARNING",
+      ruleCode: "RULE_DUPLICATE_APP",
+      conflictingRuleCode: "RULE_HOME_APP",
+      message: "场景、优先级、表达式和目标渠道完全相同"
+    }]
+  };
+
+  assert.equal(canApproveRouteRuleReview(review), true);
+  assert.equal(hasInvalidRouteRuleWarningPreview(review), false);
+  assert.equal(routeRuleWarningConflicts(review).length, 1);
+  assert.equal(
+    formatRouteRulePreviewConflict(review, review.previewWarningConflicts[0]),
+    "DUPLICATE_RULE / RULE_DUPLICATE_APP：场景、优先级、表达式和目标渠道完全相同"
+  );
+});
+
+test("fails closed when a returned warning preview is malformed", () => {
+  const review = { previewWarningConflicts: [{ severity: "WARNING", message: "" }] };
+
+  assert.equal(hasInvalidRouteRuleWarningPreview(review), true);
+  assert.equal(canApproveRouteRuleReview(review), false);
+  assert.deepEqual(routeRuleWarningConflicts(review), []);
 });
 
 test("formats persisted route collision targets without inventing missing evidence", () => {

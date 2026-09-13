@@ -22,6 +22,18 @@ export function routeRuleBlockingConflicts(review = {}) {
   ));
 }
 
+export function routeRuleWarningConflicts(review = {}) {
+  if (!Array.isArray(review.previewWarningConflicts)) {
+    return [];
+  }
+  return review.previewWarningConflicts.filter((conflict) => (
+    conflict
+      && conflict.severity === "WARNING"
+      && typeof conflict.message === "string"
+      && conflict.message.trim()
+  ));
+}
+
 export function hasInvalidRouteRuleBlockingPreview(review = {}) {
   const conflicts = review.previewBlockingConflicts;
   if (conflicts == null) {
@@ -35,12 +47,26 @@ export function hasInvalidRouteRuleBlockingPreview(review = {}) {
   ));
 }
 
+export function hasInvalidRouteRuleWarningPreview(review = {}) {
+  const conflicts = review.previewWarningConflicts;
+  if (conflicts == null) {
+    return false;
+  }
+  return !Array.isArray(conflicts) || conflicts.some((conflict) => (
+    !conflict
+      || conflict.severity !== "WARNING"
+      || typeof conflict.message !== "string"
+      || !conflict.message.trim()
+  ));
+}
+
 export function canApproveRouteRuleReview(review = {}) {
   return !hasInvalidRouteRuleBlockingPreview(review)
+    && !hasInvalidRouteRuleWarningPreview(review)
     && routeRuleBlockingConflicts(review).length === 0;
 }
 
-export function formatRouteRuleBlockingConflict(review = {}, conflict = {}) {
+export function formatRouteRulePreviewConflict(review = {}, conflict = {}) {
   const counterpartRuleCode = [conflict.ruleCode, conflict.conflictingRuleCode]
     .find((ruleCode) => typeof ruleCode === "string" && ruleCode && ruleCode !== review.ruleCode);
   const conflictType = typeof conflict.conflictType === "string" && conflict.conflictType

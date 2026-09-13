@@ -40,6 +40,8 @@ public class PaymentRouteRuleReviewDTO {
     private List<String> previewPriorityCollisionRuleCodes;
     /** 待办候选基于当前运行态计算的阻断级冲突预览。 */
     private List<PaymentRouteRuleConflictDTO> previewBlockingConflicts;
+    /** 待办候选基于当前运行态计算的警告级冲突预览。 */
+    private List<PaymentRouteRuleConflictDTO> previewWarningConflicts;
     private String createdAt;
     private String reviewedAt;
     /** 身份可信度固定为自声明，避免被误读成已认证签字。 */

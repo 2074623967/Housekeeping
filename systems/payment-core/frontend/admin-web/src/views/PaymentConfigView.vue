@@ -11,11 +11,13 @@ import {
   buildRouteRuleCollisionAcknowledgement,
   buildRouteRuleReviewActionPayload,
   canApproveRouteRuleReview,
-  formatRouteRuleBlockingConflict,
+  formatRouteRulePreviewConflict,
   formatRouteRuleConflictAudit,
   hasInvalidRouteRuleBlockingPreview,
+  hasInvalidRouteRuleWarningPreview,
   isRouteRuleCollisionAcknowledged,
-  routeRuleBlockingConflicts
+  routeRuleBlockingConflicts,
+  routeRuleWarningConflicts
 } from "../utils/paymentRouteReview";
 
 const route = useRoute();
@@ -844,7 +846,10 @@ async function handleRouteRuleReview(review, approved) {
     return;
   }
   if (approved && !canApproveRouteRuleReview(review)) {
-    actionMessage.value = `复核处理失败：申请 ${review.requestNo} 当前存在阻断冲突，请刷新或调整候选规则。`;
+    actionMessage.value = hasInvalidRouteRuleBlockingPreview(review)
+      || hasInvalidRouteRuleWarningPreview(review)
+      ? `复核处理失败：申请 ${review.requestNo} 的冲突预览异常，请刷新后重试。`
+      : `复核处理失败：申请 ${review.requestNo} 当前存在阻断冲突，请刷新或调整候选规则。`;
     return;
   }
   const actionLabel = approved ? "通过并发布" : "驳回";
@@ -2967,7 +2972,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                     <td>
                       <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
                         <div
-                          v-if="!canApproveRouteRuleReview(review)"
+                          v-if="routeRuleBlockingConflicts(review).length || hasInvalidRouteRuleBlockingPreview(review)"
                           class="route-blocking-preview"
                           role="alert"
                         >
@@ -2980,7 +2985,7 @@ function exportGovernanceSnapshot(section = "ALL") {
                             v-for="conflict in routeRuleBlockingConflicts(review)"
                             :key="`${conflict.conflictType}:${conflict.ruleCode}:${conflict.conflictingRuleCode}`"
                           >
-                            {{ formatRouteRuleBlockingConflict(review, conflict) }}
+                            {{ formatRouteRulePreviewConflict(review, conflict) }}
                           </span>
                         </div>
                         <template v-else>
@@ -3000,6 +3005,23 @@ function exportGovernanceSnapshot(section = "ALL") {
                           </label>
                           <span v-else class="muted-text">当前快照未发现需确认的同优先级风险</span>
                         </template>
+                        <div
+                          v-if="routeRuleWarningConflicts(review).length || hasInvalidRouteRuleWarningPreview(review)"
+                          class="route-warning-preview"
+                          role="status"
+                        >
+                          <strong>
+                            {{ hasInvalidRouteRuleWarningPreview(review)
+                              ? "维护风险预览异常，请刷新后再操作"
+                              : "当前候选存在可复核的维护风险" }}
+                          </strong>
+                          <span
+                            v-for="conflict in routeRuleWarningConflicts(review)"
+                            :key="`${conflict.conflictType}:${conflict.ruleCode}:${conflict.conflictingRuleCode}`"
+                          >
+                            {{ formatRouteRulePreviewConflict(review, conflict) }}
+                          </span>
+                        </div>
                         <button
                           class="link-button"
                           :disabled="Boolean(activeConfigCode) || !canApproveRouteRuleReview(review)"
@@ -4898,14 +4920,22 @@ function exportGovernanceSnapshot(section = "ALL") {
   accent-color: #2563eb;
 }
 
-.route-blocking-preview {
+.route-blocking-preview,
+.route-warning-preview {
   display: grid;
   gap: 4px;
   min-width: 220px;
   margin-bottom: 8px;
-  color: #991b1b;
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+.route-blocking-preview {
+  color: #991b1b;
+}
+
+.route-warning-preview {
+  color: #92400e;
 }
 </style>
