@@ -90,6 +90,10 @@ const actionMessagePresentation = computed(() => {
   return { className: "success-banner", role: "status" };
 });
 const activeConfigCode = ref("");
+const canExportGovernanceSnapshot = computed(() => hasLoadedOverview.value
+  && !isLoading.value
+  && !overviewErrorMessage.value
+  && !activeConfigCode.value);
 const channelReviews = ref([]);
 const isChannelReviewLoading = ref(false);
 const channelReviewError = ref("");
@@ -2102,6 +2106,9 @@ watch(
 );
 
 function exportGovernanceSnapshot(section = "ALL") {
+  if (!canExportGovernanceSnapshot.value) {
+    return;
+  }
   const exportUrl = paymentConfigApi.buildExportUrl(section);
   window.open(exportUrl, "_blank", "noopener");
 }
@@ -2116,7 +2123,7 @@ function exportGovernanceSnapshot(section = "ALL") {
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" :disabled="isLoading" @click="loadOverview">刷新配置</button>
-        <button class="button secondary" @click="exportGovernanceSnapshot()">导出治理快照</button>
+        <button class="button secondary" :disabled="!canExportGovernanceSnapshot" @click="exportGovernanceSnapshot()">导出治理快照</button>
         <span class="badge info">配置中心 V1.23</span>
       </div>
     </div>
