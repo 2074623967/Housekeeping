@@ -4564,6 +4564,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. HTTP 路径、请求和响应保持不变，客户端不传递锁键、锁标识或等待结果。协调表唯一键只定义技术锁粒度，不把同范围合法非重叠路由收窄为单条。
 4. 本地双事务测试不承诺目标 MySQL 的等待时长、错误类型或死锁行为；调用方仍应按既有统一错误契约处理失败，不得据此宣称生产审批或排班已验证。
 
+### 14.333 控制策略巡检候选计数契约
+
+1. `GET /api/payment-task-center/overview` 新增 `enabledControlPolicyCount`，表示当前状态为 `ENABLED`、会被批量控制策略自检扫描的策略数量；无数据时返回 `0`。
+2. `controlPolicyWarningCount` 继续表示启用且最近自检状态非 PASS 的策略数。两字段允许分别为 `N/0`，不得以告警为零推断没有巡检候选。
+3. 管理端只用启用数决定人工巡检按钮状态；`POST /api/payment-task-center/control-policy-self-checks` 请求仍只提交操作人，执行时重新读取启用策略，实际 `processedCount` 不承诺等于页面快照。
+4. 本轮不修改巡检结果字段、任务日志结构或自动调度契约；本地 SQL 与页面样例不构成真实配置准入或生产运行证据。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
