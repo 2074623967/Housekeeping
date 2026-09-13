@@ -277,7 +277,7 @@ onMounted(() => {
             <option value="CLOSED">CLOSED</option>
           </select>
           <input v-model="query.extRefNo" placeholder="外部主体编号" />
-          <button class="button" @click="loadAccounts">查询</button>
+          <button class="button" :disabled="loading" @click="loadAccounts">{{ loading ? "查询中..." : "查询" }}</button>
           <button class="button button--light" type="button" @click="startOpenAccount">新增开户</button>
         </div>
         <p v-if="actionMessage" class="action-message">{{ actionMessage }}</p>
@@ -338,6 +338,9 @@ onMounted(() => {
                   </button>
                 </td>
               </tr>
+              <tr v-if="!loading && !errorMessage && accounts.length === 0">
+                <td colspan="10" class="muted">当前筛选条件下暂无钱包账户</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -374,7 +377,8 @@ onMounted(() => {
 
         <div class="panel">
           <h3>最近流水</h3>
-          <div class="detail-grid">
+          <div v-if="recentFlows.length === 0" class="muted">当前账户暂无钱包流水</div>
+          <div v-else class="detail-grid">
             <div v-for="flow in recentFlows" :key="flow.flowNo" class="detail-card">
               <div class="detail-label">{{ flow.flowType }} / {{ flow.flowNo }}</div>
               <div class="detail-value">{{ flow.changeAmount }}</div>

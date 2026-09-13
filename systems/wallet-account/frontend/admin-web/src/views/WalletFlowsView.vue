@@ -100,7 +100,7 @@ onMounted(() => {
         <input v-model="query.walletAccountNo" placeholder="钱包账户号" />
         <input v-model="query.sourceSystem" placeholder="来源系统" />
         <input v-model="query.sourceBizNo" placeholder="来源业务单号" />
-        <button class="button" @click="loadFlows">筛选</button>
+        <button class="button" :disabled="loading" @click="loadFlows">{{ loading ? "筛选中..." : "筛选" }}</button>
         <button class="button button--light" :disabled="exporting" @click="exportFlows">
           {{ exporting ? "提交中..." : "导出流水" }}
         </button>
@@ -133,6 +133,9 @@ onMounted(() => {
               <td>{{ flow.beforeAvailableBalance }}</td>
               <td>{{ flow.afterAvailableBalance }}</td>
               <td>{{ flow.operatorName }}</td>
+            </tr>
+            <tr v-if="!loading && !errorMessage && flows.length === 0">
+              <td colspan="8" class="muted">当前筛选条件下暂无钱包流水</td>
             </tr>
           </tbody>
         </table>
@@ -188,6 +191,9 @@ onMounted(() => {
               <td>
                 <button class="text-button" type="button" @click="downloadTask(task)">下载 CSV</button>
               </td>
+            </tr>
+            <tr v-if="exportTasks.length === 0">
+              <td colspan="9" class="muted">当前筛选条件下暂无导出任务</td>
             </tr>
           </tbody>
         </table>
