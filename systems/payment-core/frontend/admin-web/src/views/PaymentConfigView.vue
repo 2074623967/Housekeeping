@@ -7,6 +7,10 @@ import {
   filterPaymentConfigChannels,
   paymentConfigChannelStatusFromQuery
 } from "../utils/paymentConfigChannelFilter";
+import {
+  buildRouteRuleReviewActionPayload,
+  isRouteRuleCollisionAcknowledged
+} from "../utils/paymentRouteReview";
 
 const route = useRoute();
 const channels = ref([]);
@@ -108,7 +112,7 @@ const routeRuleActionRequester = ref("");
 const routeRuleActionReason = ref("");
 const reviewer = ref("");
 const reviewComment = ref("");
-const priorityCollisionAcknowledged = ref(false);
+const priorityCollisionAcknowledgedRequestNo = ref("");
 const editingProtocolCode = ref("");
 const protocolVersionCode = ref("");
 const protocolVersions = ref([]);
@@ -792,6 +796,13 @@ async function loadRouteRuleReviews() {
   reviewErrorMessage.value = "";
   try {
     routeRuleReviews.value = await paymentConfigApi.getRouteRuleReviews();
+    const acknowledgedReviewStillPending = routeRuleReviews.value.some((review) => (
+      review.requestNo === priorityCollisionAcknowledgedRequestNo.value
+        && review.reviewStatus === "PENDING_REVIEW"
+    ));
+    if (!acknowledgedReviewStillPending) {
+      priorityCollisionAcknowledgedRequestNo.value = "";
+    }
   } catch (error) {
     reviewErrorMessage.value = error.message;
   } finally {
@@ -821,6 +832,14 @@ function formatRouteRuleConflictAudit(review) {
   return "冲突复验未执行";
 }
 
+function setRouteRuleCollisionAcknowledgement(requestNo, checked) {
+  if (checked) {
+    priorityCollisionAcknowledgedRequestNo.value = requestNo;
+  } else if (priorityCollisionAcknowledgedRequestNo.value === requestNo) {
+    priorityCollisionAcknowledgedRequestNo.value = "";
+  }
+}
+
 async function handleRouteRuleReview(review, approved) {
   if (!reviewer.value) {
     actionMessage.value = "复核处理失败：复核人声明不能为空。";
@@ -831,9 +850,15 @@ async function handleRouteRuleReview(review, approved) {
     return;
   }
   const actionLabel = approved ? "通过并发布" : "驳回";
+  const collisionAcknowledged = approved && isRouteRuleCollisionAcknowledged(
+    review.requestNo,
+    priorityCollisionAcknowledgedRequestNo.value
+  );
   const confirmed = window.confirm(
     approved
-      ? `确认通过申请 ${review.requestNo} 并将候选规则写入运行态？`
+      ? `确认通过申请 ${review.requestNo} 并将候选规则写入运行态？\n${collisionAcknowledged
+        ? "本次已确认该申请的同优先级潜在冲突风险。"
+        : "本次未确认同优先级潜在冲突风险；若服务端复验发现风险，将拒绝批准。"}`
       : `确认驳回申请 ${review.requestNo}？运行态不会改变。`
   );
   if (!confirmed) {
@@ -841,18 +866,22 @@ async function handleRouteRuleReview(review, approved) {
   }
   activeConfigCode.value = `review:${review.requestNo}`;
   actionMessage.value = "";
-  const payload = {
+  const payload = buildRouteRuleReviewActionPayload({
     reviewer: reviewer.value,
     reviewComment: reviewComment.value,
-    priorityCollisionAcknowledged: approved && priorityCollisionAcknowledged.value
-  };
+    approved,
+    reviewRequestNo: review.requestNo,
+    acknowledgedRequestNo: priorityCollisionAcknowledgedRequestNo.value
+  });
   try {
     try {
       routeRuleReviews.value = approved
         ? await paymentConfigApi.approveRouteRuleReview(review.requestNo, payload)
         : await paymentConfigApi.rejectRouteRuleReview(review.requestNo, payload);
       reviewComment.value = "";
-      priorityCollisionAcknowledged.value = false;
+      if (priorityCollisionAcknowledgedRequestNo.value === review.requestNo) {
+        priorityCollisionAcknowledgedRequestNo.value = "";
+      }
       actionMessage.value = approved
         ? `复核申请 ${review.requestNo} 已通过，候选规则已写入运行态。`
         : `复核申请 ${review.requestNo} 已驳回，运行态未改变。`;
@@ -2885,10 +2914,6 @@ function exportGovernanceSnapshot(section = "ALL") {
                 复核意见 / 驳回原因
                 <input v-model.trim="reviewComment" maxlength="255" placeholder="处理待复核申请时必填" />
               </label>
-              <label class="wide-field route-risk-acknowledgement">
-                <input v-model="priorityCollisionAcknowledged" type="checkbox" />
-                <span>已核对同优先级潜在冲突，并确认候选表达式与现有规则互斥</span>
-              </label>
             </div>
             <div v-if="reviewErrorMessage" class="error-banner">
               {{ routeRuleReviews.length ? "路由规则复核申请刷新失败，当前展示上次成功快照：" : "路由规则复核申请加载失败：" }}{{ reviewErrorMessage }}
@@ -2945,6 +2970,14 @@ function exportGovernanceSnapshot(section = "ALL") {
                     </td>
                     <td>
                       <template v-if="review.reviewStatus === 'PENDING_REVIEW'">
+                        <label class="route-risk-acknowledgement">
+                          <input
+                            type="checkbox"
+                            :checked="isRouteRuleCollisionAcknowledged(review.requestNo, priorityCollisionAcknowledgedRequestNo)"
+                            @change="setRouteRuleCollisionAcknowledgement(review.requestNo, $event.target.checked)"
+                          />
+                          <span>仅确认申请 {{ review.requestNo }} 的同优先级潜在冲突风险</span>
+                        </label>
                         <button
                           class="link-button"
                           :disabled="Boolean(activeConfigCode)"
@@ -4823,17 +4856,19 @@ function exportGovernanceSnapshot(section = "ALL") {
   border: 0;
 }
 
-.filter-grid .route-risk-acknowledgement {
+.route-risk-acknowledgement {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   gap: 10px;
+  min-width: 220px;
+  margin-bottom: 8px;
   color: #334155;
   font-size: 13px;
   line-height: 1.5;
 }
 
-.filter-grid .route-risk-acknowledgement input {
+.route-risk-acknowledgement input {
   width: 16px;
   height: 16px;
   margin: 2px 0 0;
