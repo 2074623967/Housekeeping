@@ -633,6 +633,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 && (review.getSourceVersionNo() == null || review.getSourceVersionNo().intValue() <= 0)) {
             throw new IllegalArgumentException("路由规则回滚候选缺少目标历史版本");
         }
+        boolean priorityCollisionAcknowledged = request != null
+                && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged());
+        Set<String> acknowledgedPriorityCollisionRuleCodes = priorityCollisionAcknowledged
+                ? normalizeAcknowledgedPriorityCollisionRuleCodes(request.getAcknowledgedPriorityCollisionRuleCodes())
+                : Collections.<String>emptySet();
         PaymentRouteRuleConfigEntity candidate = "STATUS_CHANGE".equals(review.getOperationType())
                 && STATUS_DISABLED.equals(review.getStatus())
                 ? copyRouteRuleEntity(review)
@@ -652,11 +657,6 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 throw new IllegalArgumentException("规则已产生新版本，请重新提交复核申请");
             }
         }
-        boolean priorityCollisionAcknowledged = request != null
-                && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged());
-        Set<String> acknowledgedPriorityCollisionRuleCodes = priorityCollisionAcknowledged
-                ? normalizeAcknowledgedPriorityCollisionRuleCodes(request.getAcknowledgedPriorityCollisionRuleCodes())
-                : Collections.<String>emptySet();
         String priorityCollisionRuleCodesJson = ensureCandidateHasNoUnacknowledgedConflict(
                 candidate, priorityCollisionAcknowledged, acknowledgedPriorityCollisionRuleCodes);
         boolean priorityCollisionDetected = StringUtils.hasText(priorityCollisionRuleCodesJson);

@@ -531,13 +531,6 @@ class PaymentConfigServiceImplTest {
         action.setPriorityCollisionAcknowledged(Boolean.TRUE);
         action.setAcknowledgedPriorityCollisionRuleCodes(Arrays.asList("RULE_A_APP", "RULE_A_APP"));
         when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
-        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
-                .thenReturn(buildRouteRuleEntity());
-        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
-        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
-                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
-        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
 
         IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
@@ -545,9 +538,39 @@ class PaymentConfigServiceImplTest {
                         .approveRouteRuleReview(review.getRequestNo(), action));
 
         org.junit.jupiter.api.Assertions.assertEquals("已确认冲突规则编码不能重复", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).findChannelForRouting(
+                org.mockito.ArgumentMatchers.anyString());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).initRouteRuleConflictLock();
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).lockRouteRuleConflictSet();
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).findRouteRuleByCodeForUpdate(
+                org.mockito.ArgumentMatchers.anyString());
         verify(paymentConfigMapper, org.mockito.Mockito.never()).findRouteRulesForConflictCheckForUpdate();
         verify(paymentConfigMapper, org.mockito.Mockito.never())
                 .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectControlCharacterInAcknowledgedCollisionTargetBeforeLockingRules() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("配置与风险检查通过");
+        action.setPriorityCollisionAcknowledged(Boolean.TRUE);
+        action.setAcknowledgedPriorityCollisionRuleCodes(Collections.singletonList(" \n"));
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        org.junit.jupiter.api.Assertions.assertEquals("已确认冲突规则编码不能包含控制字符", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).findChannelForRouting(
+                org.mockito.ArgumentMatchers.anyString());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).initRouteRuleConflictLock();
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).lockRouteRuleConflictSet();
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).findRouteRuleByCodeForUpdate(
+                org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
