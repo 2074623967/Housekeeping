@@ -56,6 +56,8 @@ class PaymentConfigIssueDutyRosterReviewMapperIntegrationTest {
                     mapper.findIssueDutyRosterByCodeForUpdate("DUTY_CALLBACK_P1");
             assertEquals("支付后端值班", roster.getReceiver());
             assertEquals(Integer.valueOf(30), roster.getEscalationTimeoutMinutes());
+            assertEquals(1, mapper.findIssueDutyRostersByScopeForUpdate(
+                    roster.getIssueType(), roster.getSeverity()).size());
 
             assertEquals(1, mapper.insertIssueDutyRosterReview(review("DRR-TEST-001")));
             assertEquals("DRR-TEST-001",

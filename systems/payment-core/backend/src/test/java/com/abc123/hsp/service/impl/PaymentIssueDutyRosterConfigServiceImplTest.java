@@ -122,6 +122,95 @@ class PaymentIssueDutyRosterConfigServiceImplTest {
     }
 
     @Test
+    void shouldRejectOverlappingEnabledRosterBeforeApplyingReview() {
+        PaymentIssueDutyRosterReviewEntity review = review("CREATE", null);
+        review.setRosterCode("DUTY_OVERLAP_P1");
+        PaymentIssueDutyRosterEntity existing = roster("ENABLED");
+        existing.setRosterCode("DUTY_EXISTING_P1");
+        when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
+        when(paymentConfigMapper.findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1"))
+                .thenReturn(Collections.singletonList(existing));
+
+        IllegalArgumentException conflict = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).approveIssueDutyRosterReview(
+                        "DRR-001", action("checker-b", "确认新增")));
+
+        assertTrue(conflict.getMessage().contains("DUTY_EXISTING_P1"));
+        assertTrue(conflict.getMessage().contains("重叠"));
+        verify(paymentConfigMapper, never()).insertIssueDutyRoster(any());
+    }
+
+    @Test
+    void shouldAllowNonOverlappingShiftForSameIssueScope() {
+        PaymentIssueDutyRosterReviewEntity review = review("CREATE", null);
+        review.setRosterCode("DUTY_AFTERNOON_P1");
+        review.setEffectiveStartHour(Integer.valueOf(13));
+        review.setEffectiveEndHour(Integer.valueOf(18));
+        PaymentIssueDutyRosterEntity existing = roster("ENABLED");
+        existing.setRosterCode("DUTY_MORNING_P1");
+        existing.setEffectiveStartHour(Integer.valueOf(8));
+        existing.setEffectiveEndHour(Integer.valueOf(12));
+        when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
+        when(paymentConfigMapper.findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1"))
+                .thenReturn(Collections.singletonList(existing));
+        when(paymentConfigMapper.insertIssueDutyRoster(any())).thenReturn(1);
+        when(paymentConfigMapper.completeIssueDutyRosterReview(any(), any(), any(), any(), any()))
+                .thenReturn(1);
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveIssueDutyRosterReview(
+                "DRR-001", action("checker-b", "确认新增"));
+
+        verify(paymentConfigMapper).insertIssueDutyRoster(org.mockito.ArgumentMatchers.argThat(
+                applied -> "DUTY_AFTERNOON_P1".equals(applied.getRosterCode())
+                        && Integer.valueOf(13).equals(applied.getEffectiveStartHour())
+                        && Integer.valueOf(18).equals(applied.getEffectiveEndHour())));
+    }
+
+    @Test
+    void shouldRejectOverlappingCrossMidnightShift() {
+        PaymentIssueDutyRosterReviewEntity review = review("CREATE", null);
+        review.setRosterCode("DUTY_NIGHT_P1");
+        review.setEffectiveStartHour(Integer.valueOf(22));
+        review.setEffectiveEndHour(Integer.valueOf(6));
+        PaymentIssueDutyRosterEntity existing = roster("ENABLED");
+        existing.setRosterCode("DUTY_EARLY_P1");
+        existing.setEffectiveStartHour(Integer.valueOf(5));
+        existing.setEffectiveEndHour(Integer.valueOf(8));
+        when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
+        when(paymentConfigMapper.findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1"))
+                .thenReturn(Collections.singletonList(existing));
+
+        IllegalArgumentException conflict = assertThrows(IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper).approveIssueDutyRosterReview(
+                        "DRR-001", action("checker-b", "确认新增")));
+
+        assertTrue(conflict.getMessage().contains("DUTY_EARLY_P1"));
+        verify(paymentConfigMapper, never()).insertIssueDutyRoster(any());
+    }
+
+    @Test
+    void shouldAllowDisjointWorkdayStrategies() {
+        PaymentIssueDutyRosterReviewEntity review = review("CREATE", null);
+        review.setRosterCode("DUTY_WORKDAY_P1");
+        PaymentIssueDutyRosterEntity existing = roster("ENABLED");
+        existing.setRosterCode("DUTY_NON_WORKDAY_P1");
+        existing.setHolidayStrategy("NON_WORKDAY_ONLY");
+        when(paymentConfigMapper.findIssueDutyRosterReviewForUpdate("DRR-001")).thenReturn(review);
+        when(paymentConfigMapper.findIssueDutyRostersByScopeForUpdate("待回调未收口", "P1"))
+                .thenReturn(Collections.singletonList(existing));
+        when(paymentConfigMapper.insertIssueDutyRoster(any())).thenReturn(1);
+        when(paymentConfigMapper.completeIssueDutyRosterReview(any(), any(), any(), any(), any()))
+                .thenReturn(1);
+        when(paymentConfigMapper.findIssueDutyRosterReviews()).thenReturn(Collections.emptyList());
+
+        new PaymentConfigServiceImpl(paymentConfigMapper).approveIssueDutyRosterReview(
+                "DRR-001", action("checker-b", "确认新增"));
+
+        verify(paymentConfigMapper).insertIssueDutyRoster(any());
+    }
+
+    @Test
     void shouldRejectSameStatusPendingReviewAndPendingRace() {
         when(paymentConfigMapper.findIssueDutyRosterByCodeForUpdate("DUTY_CALLBACK_P1"))
                 .thenReturn(roster("ENABLED"));

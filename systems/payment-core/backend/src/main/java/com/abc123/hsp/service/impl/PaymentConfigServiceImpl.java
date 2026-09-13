@@ -920,6 +920,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         PaymentIssueDutyRosterEntity candidate = buildIssueDutyRosterEntity(
                 toIssueDutyRosterUpsertRequest(review), review.getRosterCode());
+        ensureIssueDutyRosterDoesNotOverlap(candidate);
         int affectedRows;
         try {
             affectedRows = createOperation
@@ -3289,6 +3290,56 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         entity.setStatus(resolveStatus(request.getEnabled()));
         entity.setStatusType(resolveStatusType(request.getEnabled()));
         return entity;
+    }
+
+    private void ensureIssueDutyRosterDoesNotOverlap(PaymentIssueDutyRosterEntity candidate) {
+        if (!STATUS_ENABLED.equals(candidate.getStatus())) {
+            return;
+        }
+        List<PaymentIssueDutyRosterEntity> existingRosters =
+                paymentConfigMapper.findIssueDutyRostersByScopeForUpdate(
+                        candidate.getIssueType(), candidate.getSeverity());
+        for (PaymentIssueDutyRosterEntity existing : existingRosters) {
+            if (candidate.getRosterCode().equals(existing.getRosterCode())
+                    || !STATUS_ENABLED.equals(existing.getStatus())) {
+                continue;
+            }
+            if (dutyRosterWeekdaysOverlap(candidate, existing)
+                    && dutyRosterHolidayStrategiesOverlap(candidate, existing)
+                    && dutyRosterHoursOverlap(candidate, existing)) {
+                throw new IllegalArgumentException(
+                        "异常告警值班路由生效范围与 " + existing.getRosterCode() + " 重叠");
+            }
+        }
+    }
+
+    private boolean dutyRosterWeekdaysOverlap(PaymentIssueDutyRosterEntity left,
+                                               PaymentIssueDutyRosterEntity right) {
+        Set<String> leftDays = new HashSet<String>(Arrays.asList(left.getWeekdayScope().split(",")));
+        return Arrays.stream(right.getWeekdayScope().split(",")).anyMatch(leftDays::contains);
+    }
+
+    private boolean dutyRosterHolidayStrategiesOverlap(PaymentIssueDutyRosterEntity left,
+                                                        PaymentIssueDutyRosterEntity right) {
+        return "ALL_DAYS".equals(left.getHolidayStrategy())
+                || "ALL_DAYS".equals(right.getHolidayStrategy())
+                || left.getHolidayStrategy().equals(right.getHolidayStrategy());
+    }
+
+    private boolean dutyRosterHoursOverlap(PaymentIssueDutyRosterEntity left,
+                                           PaymentIssueDutyRosterEntity right) {
+        for (int hour = 0; hour < 24; hour++) {
+            if (dutyRosterContainsHour(left, hour) && dutyRosterContainsHour(right, hour)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean dutyRosterContainsHour(PaymentIssueDutyRosterEntity roster, int hour) {
+        int start = roster.getEffectiveStartHour().intValue();
+        int end = roster.getEffectiveEndHour().intValue();
+        return start <= end ? hour >= start && hour <= end : hour >= start || hour <= end;
     }
 
     private String requireText(String text, String message) {
