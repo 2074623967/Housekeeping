@@ -2,6 +2,7 @@ package com.abc123.hsp.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -10,6 +11,8 @@ import static org.mockito.Mockito.when;
 import com.abc123.hsp.common.BusinessException;
 import com.abc123.hsp.common.ErrorCode;
 import com.abc123.hsp.dto.PaymentRecordDetailDTO;
+import com.abc123.hsp.dto.PaymentRecordQueryDTO;
+import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.PaymentRecordMapper;
 import java.util.Arrays;
@@ -102,5 +105,50 @@ class PaymentRecordServiceImplTest {
         verify(paymentMapper, times(1)).findRouteLogs("PAY-DETAIL-001");
         verify(paymentMapper, times(1)).findNotifyLogs("PAY-DETAIL-001");
         verify(paymentMapper, times(1)).findEventItems("PAY-DETAIL-001");
+    }
+
+    @Test
+    void shouldExportMaskedAndSpreadsheetSafePaymentRecords() {
+        PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+        query.setRecordType(" ALL ");
+        query.setUserId(" 张女士 ");
+        PaymentRecordRowDTO row = new PaymentRecordRowDTO();
+        row.setSerialNo(1L);
+        row.setPaymentOrderId("=PAY-001");
+        row.setBusinessOrderNo("ORDER-\"001");
+        row.setPaymentAmount("¥100.00");
+        row.setRefundCount(1);
+        row.setUserPaymentChannelId("channel-user-张女士");
+        row.setUserId("user-张女士");
+        when(paymentRecordMapper.findAllForExport(query)).thenReturn(Collections.singletonList(row));
+
+        String csv = new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).exportCsv(query);
+
+        assertTrue(csv.startsWith("\uFEFF序号,支付单号"));
+        assertTrue(csv.contains("\"'=PAY-001\""));
+        assertTrue(csv.contains("\"ORDER-\"\"001\""));
+        assertTrue(csv.contains("\"channel-****\""));
+        assertTrue(csv.contains("\"user-****\""));
+        assertEquals("ALL", query.getRecordType());
+        assertEquals("张女士", query.getUserId());
+        assertEquals(1, query.getPageNo());
+        assertEquals(20, query.getPageSize());
+        assertEquals("=PAY-001", row.getPaymentOrderId());
+        assertEquals("user-张女士", row.getUserId());
+        verify(paymentRecordMapper).findAllForExport(query);
+    }
+
+    @Test
+    void shouldRejectPaymentRecordExportAboveLimit() {
+        PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+        PaymentRecordRowDTO row = new PaymentRecordRowDTO();
+        when(paymentRecordMapper.findAllForExport(query))
+                .thenReturn(Collections.nCopies(1001, row));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentRecordServiceImpl(paymentRecordMapper, paymentMapper).exportCsv(query));
+
+        assertEquals("导出数据超过1000条，请缩小筛选范围", exception.getMessage());
     }
 }

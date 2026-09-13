@@ -19,6 +19,11 @@ public interface PaymentRecordService {
     PageResultDTO<PaymentRecordRowDTO> list(PaymentRecordQueryDTO query);
 
     /**
+     * 导出当前筛选条件下的收款记录。
+     */
+    String exportCsv(PaymentRecordQueryDTO query);
+
+    /**
      * 查询收款记录详情。
      */
     PaymentRecordDetailDTO detail(String paymentOrderId);

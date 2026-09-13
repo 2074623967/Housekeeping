@@ -20,6 +20,11 @@ public interface PaymentRecordMapper {
     List<PaymentRecordRowDTO> findAll(@Param("query") PaymentRecordQueryDTO query);
 
     /**
+     * 查询导出记录，固定多取一行用于探测同步导出上限。
+     */
+    List<PaymentRecordRowDTO> findAllForExport(@Param("query") PaymentRecordQueryDTO query);
+
+    /**
      * 统计符合条件的收款记录总数。
      */
     long count(@Param("query") PaymentRecordQueryDTO query);

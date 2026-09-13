@@ -9,6 +9,8 @@ import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import com.abc123.hsp.mapper.PaymentMapper;
 import com.abc123.hsp.mapper.PaymentRecordMapper;
 import com.abc123.hsp.service.PaymentRecordService;
+import com.abc123.hsp.service.support.CsvExportRowLimiter;
+import com.abc123.hsp.service.support.CsvExportSanitizer;
 import com.abc123.hsp.service.support.PaymentSensitiveDataMasker;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -60,6 +62,51 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
                 query.getPageNo(),
                 query.getPageSize()
         );
+    }
+
+    @Override
+    public String exportCsv(PaymentRecordQueryDTO query) {
+        normalizeQuery(query);
+        List<PaymentRecordRowDTO> rows = maskRows(CsvExportRowLimiter.requireWithinLimit(
+                paymentRecordMapper.findAllForExport(query)));
+        StringBuilder builder = new StringBuilder("\uFEFF");
+        builder.append("序号,支付单号,业务订单号,支付请求号,应用来源ID,业务线ID,外部交易流水号,")
+                .append("支付通道,支付渠道,支付类型,支付状态,银行名,卡号,渠道返回码,返参类型,")
+                .append("参数值,有效期,支付金额,退款次数,已退金额,商品名称,用户支付渠道唯一标识,")
+                .append("收款账号,通知地址,回调MQ主题,失效时间,创建时间,更新时间,支付成功时间,用户ID\n");
+        for (PaymentRecordRowDTO row : rows) {
+            builder.append(csvCell(row.getSerialNo())).append(',')
+                    .append(csvCell(row.getPaymentOrderId())).append(',')
+                    .append(csvCell(row.getBusinessOrderNo())).append(',')
+                    .append(csvCell(row.getPaymentRequestNo())).append(',')
+                    .append(csvCell(row.getApplicationSourceId())).append(',')
+                    .append(csvCell(row.getBusinessLineId())).append(',')
+                    .append(csvCell(row.getExternalTransactionNo())).append(',')
+                    .append(csvCell(row.getPaymentGateway())).append(',')
+                    .append(csvCell(row.getPaymentChannel())).append(',')
+                    .append(csvCell(row.getPaymentType())).append(',')
+                    .append(csvCell(row.getPaymentStatus())).append(',')
+                    .append(csvCell(row.getBankName())).append(',')
+                    .append(csvCell(row.getCardNo())).append(',')
+                    .append(csvCell(row.getChannelReturnCode())).append(',')
+                    .append(csvCell(row.getReturnParameterType())).append(',')
+                    .append(csvCell(row.getParameterValue())).append(',')
+                    .append(csvCell(row.getValidityPeriod())).append(',')
+                    .append(csvCell(row.getPaymentAmount())).append(',')
+                    .append(csvCell(row.getRefundCount())).append(',')
+                    .append(csvCell(row.getRefundedAmount())).append(',')
+                    .append(csvCell(row.getProductName())).append(',')
+                    .append(csvCell(row.getUserPaymentChannelId())).append(',')
+                    .append(csvCell(row.getReceivingAccount())).append(',')
+                    .append(csvCell(row.getNotifyUrl())).append(',')
+                    .append(csvCell(row.getCallbackMqTopic())).append(',')
+                    .append(csvCell(row.getExpireTime())).append(',')
+                    .append(csvCell(row.getCreatedAt())).append(',')
+                    .append(csvCell(row.getUpdatedAt())).append(',')
+                    .append(csvCell(row.getPaidAt())).append(',')
+                    .append(csvCell(row.getUserId())).append('\n');
+        }
+        return builder.toString();
     }
 
     private void normalizeQuery(PaymentRecordQueryDTO query) {
@@ -162,5 +209,11 @@ public class PaymentRecordServiceImpl implements PaymentRecordService {
         row.setUserId(sensitiveDataMasker.maskUserReference(row.getUserId()));
         row.setUserPaymentChannelId(
                 sensitiveDataMasker.maskUserReference(row.getUserPaymentChannelId()));
+    }
+
+    private String csvCell(Object value) {
+        String normalizedValue = CsvExportSanitizer.preventFormula(
+                value == null ? "" : String.valueOf(value)).replace("\"", "\"\"");
+        return "\"" + normalizedValue + "\"";
     }
 }

@@ -14278,3 +14278,31 @@
 1. 账单页面的筛选、汇总、列表、页码和导出现在基于同一成功快照，不再把未提交条件或失败页码混入当前事实。
 2. 前端快照治理不等于账务事实校验；账单应收、已收、待收仍以服务端数据和后续账务/对账系统为最终依据。
 3. demo 账单及浏览器页面不证明生产应收、渠道到账、总分平衡、导出权限、正式关账或 release 放行条件。
+
+## 527. 2026-09-13 统一支付记录导出与查询快照 V1.0 验证
+
+### 527.1 本轮补强
+
+1. 新增支付记录 CSV 导出端点，筛选、排序、成功退款聚合和脱敏口径与列表一致，导出不受当前分页限制。
+2. 同步导出最多 `1000` 条，Mapper 多取一行探测超限；CSV 使用 UTF-8 BOM、完整单元格转义和公式注入防护。
+3. 页面补齐最近成功查询、成功页码、请求序号、刷新、导出、首次加载、空结果和失败快照状态；加载期间统一锁定筛选和翻页动作。
+
+### 527.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 后端导出定向测试 | `PaymentRecordServiceImplTest + PaymentRecordServiceListTest + PaymentRecordControllerTest + PaymentRecordListMapperIntegrationTest` 通过，覆盖脱敏、BOM、转义、公式防护、超限、下载头及无分页导出 |
+| 后端全量回归 | `1104/1104` 通过，`0` failures、`0` errors、`0` skipped |
+| 管理端自动化 | Node 测试 `37/37` 通过，零失败、零跳过 |
+| 管理端构建 | Vite 转换 `85` 个模块并构建通过；保留既有大包提示 |
+| 真实接口 | `GET /api/payment-records/export` 返回 HTTP `200`、`Content-Disposition: attachment; filename=payment-records.csv`、UTF-8 BOM 和 `1901` 字节 CSV；3 条 demo 行的用户标识已脱敏 |
+| 真实页面 | `http://127.0.0.1:5174/payment-records` 完成态展示 3 条记录、4 项指标、筛选和首条快照；刷新、导出恢复可用，加载态所有查询控件与动作均禁用 |
+| 持续运行 | 原窗口新增前台托管会话 `34148`，payment-core 后端 PID `47639`；管理端、App、H5、PC 及代理冒烟均为 `READY` |
+| 静态检查 | `git diff --check` 通过 |
+| 统一门禁复判 | 脚本退出码 `2` 来自 release 治理阻断；`canPromoteTestToMaster=true`、`canCreateRelease=false`、统一 `blockerCount=1`、内部 `releaseBlockerCount=4` |
+
+### 527.3 当前判断
+
+1. 统一支付记录已形成从列表查询到完整 CSV 下载的可操作闭环，页面不会把未提交条件、失败页码或过期快照用于导出。
+2. 本地同步导出只适合当前测试和运营排障规模；大数据异步任务、生产权限、审批、水印、下载审计与文件留存仍需后续治理。
+3. demo 数据、H2/MyBatis 测试和本机页面不证明真实渠道交易、生产资金事实、生产稳定性或正式发布条件。

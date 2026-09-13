@@ -11,9 +11,13 @@ const rows = ref([]);
 const selectedRow = ref(null);
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
 const isLoading = ref(false);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
+let latestLoadRequestId = 0;
 const filters = ref({
   userId: "",
   businessOrderNo: "",
@@ -35,6 +39,8 @@ const metrics = computed(() => ({
   closedTotal: rows.value.filter((item) => item.paymentStatus === "已关闭").length,
   refundAmountTotal: `¥${sumPaymentAmounts(rows.value.map((item) => item.refundedAmount))}`
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
 
 const columns = [
   { key: "serialNo", label: "序号", className: "col-serial" },
@@ -69,27 +75,49 @@ const columns = [
   { key: "userId", label: "用户ID", className: "col-user-id" }
 ];
 
-async function loadRows() {
+function buildQuery() {
+  return {
+    recordType: pageConfig.value.recordType,
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
+
+async function loadRows(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const result = await paymentRecordApi.getList({
-      recordType: pageConfig.value.recordType,
-      ...filters.value,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const result = await paymentRecordApi.getList(query);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     rows.value = result.items;
     total.value = result.total;
     selectedRow.value = result.items[0] || null;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     userId: "",
     businessOrderNo: "",
@@ -103,12 +131,35 @@ function resetFilters() {
   loadRows();
 }
 
+function applyFilters() {
+  if (isLoading.value) {
+    return;
+  }
+  pageNo.value = 1;
+  loadRows();
+}
+
+function refreshRows() {
+  if (isLoading.value) {
+    return;
+  }
+  loadRows();
+}
+
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadRows();
+  loadRows({ ...loadedQuery.value, pageNo: nextPage });
+}
+
+function exportRows() {
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  window.open(paymentRecordApi.buildExportUrl(loadedQuery.value), "_blank", "noopener,noreferrer");
 }
 
 function openPayment(row) {
@@ -124,7 +175,10 @@ function formatCell(row, column) {
   return value === null || value === undefined || value === "" ? "—" : value;
 }
 
-watch(() => route.meta.recordType, loadRows);
+watch(() => route.meta.recordType, () => {
+  pageNo.value = 1;
+  loadRows();
+});
 onMounted(loadRows);
 </script>
 
@@ -135,9 +189,17 @@ onMounted(loadRows);
         <h2>{{ pageConfig.title }}</h2>
         <p>从收款运营视角统一查看支付记录、退款影响和最近交易快照，减少在多个页面间来回排查。</p>
       </div>
+      <div class="toolbar-actions">
+        <button class="button secondary" type="button" :disabled="isLoading" @click="refreshRows">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" type="button" :disabled="isLoading || !canExport" @click="exportRows">
+          导出记录
+        </button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">记录总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -160,22 +222,22 @@ onMounted(loadRows);
       <div class="toolbar">
         <div class="field">
           <label for="record-user-id">用户ID</label>
-          <input id="record-user-id" v-model="filters.userId" placeholder="请输入用户ID" />
+          <input id="record-user-id" v-model="filters.userId" placeholder="请输入用户ID" :disabled="isLoading" />
         </div>
         <div class="field">
           <label for="record-order-no">商户订单号</label>
-          <input id="record-order-no" v-model="filters.businessOrderNo" placeholder="请输入商户订单号" />
+          <input id="record-order-no" v-model="filters.businessOrderNo" placeholder="请输入商户订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label for="record-payment-type">支付类型</label>
-          <select id="record-payment-type" v-model="filters.paymentType">
+          <select id="record-payment-type" v-model="filters.paymentType" :disabled="isLoading">
             <option value="">全部</option>
             <option value="消费支付">消费支付</option>
           </select>
         </div>
         <div class="field">
           <label for="record-payment-status">支付状态</label>
-          <select id="record-payment-status" v-model="filters.paymentStatus">
+          <select id="record-payment-status" v-model="filters.paymentStatus" :disabled="isLoading">
             <option value="全部">全部</option>
             <option value="支付成功">支付成功</option>
             <option value="支付中">支付中</option>
@@ -185,11 +247,11 @@ onMounted(loadRows);
         </div>
         <div class="field">
           <label for="record-payment-channel">支付渠道</label>
-          <input id="record-payment-channel" v-model="filters.paymentChannel" placeholder="请输入支付渠道编码" />
+          <input id="record-payment-channel" v-model="filters.paymentChannel" placeholder="请输入支付渠道编码" :disabled="isLoading" />
         </div>
         <div class="field">
           <label for="record-sort-field">排序字段</label>
-          <select id="record-sort-field" v-model="filters.sortField">
+          <select id="record-sort-field" v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="paymentAmount">支付金额</option>
             <option value="paidAt">支付成功时间</option>
@@ -197,19 +259,25 @@ onMounted(loadRows);
         </div>
         <div class="field">
           <label for="record-sort-order">排序方向</label>
-          <select id="record-sort-order" v-model="filters.sortOrder">
+          <select id="record-sort-order" v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" type="button" @click="loadRows">查询</button>
-          <button class="button secondary" type="button" @click="resetFilters">重置</button>
+          <button class="button primary" type="button" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" type="button" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
-      <div v-if="errorMessage" class="error-banner">支付记录加载失败：{{ errorMessage }}</div>
-      <div v-else-if="isLoading" class="state-box">支付记录加载中...</div>
+      <div v-if="errorMessage" class="error-banner">
+        {{ hasLoadedData ? "支付记录刷新失败，当前展示上次成功快照：" : "支付记录加载失败：" }}{{ errorMessage }}
+      </div>
+      <div v-if="isLoading" class="state-box">支付记录加载中...</div>
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付记录快照</div>
+      <div v-else-if="!rows.length" class="state-box">暂无符合条件的支付记录</div>
       <div v-else class="detail-layout">
         <div class="table-wrap">
           <table>
@@ -233,9 +301,6 @@ onMounted(loadRows);
                   <button class="link-button" type="button" @click="pickRow(row)">查看快照</button>
                   <button class="link-button" type="button" @click="openPayment(row)">详情</button>
                 </td>
-              </tr>
-              <tr v-if="!rows.length">
-                <td class="prototype-empty" :colspan="columns.length + 1">暂无符合条件的支付记录</td>
               </tr>
             </tbody>
           </table>
@@ -270,11 +335,11 @@ onMounted(loadRows);
         </aside>
       </div>
 
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条</span>
-        <button class="button secondary" type="button" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" type="button" :disabled="isLoading || isSnapshotStale || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" type="button" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" type="button" :disabled="isLoading || isSnapshotStale || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

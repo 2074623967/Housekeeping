@@ -6,6 +6,10 @@ import com.abc123.hsp.dto.PaymentRecordDetailDTO;
 import com.abc123.hsp.dto.PaymentRecordQueryDTO;
 import com.abc123.hsp.dto.PaymentRecordRowDTO;
 import com.abc123.hsp.service.PaymentRecordService;
+import java.nio.charset.StandardCharsets;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,6 +56,35 @@ public class PaymentRecordController {
         query.setPageNo(pageNo);
         query.setPageSize(pageSize);
         return ApiResponse.success(paymentRecordService.list(query));
+    }
+
+    /**
+     * 导出当前筛选条件下的收款记录。
+     */
+    @GetMapping(value = "/export", produces = "text/csv;charset=UTF-8")
+    public ResponseEntity<byte[]> export(
+            @RequestParam(defaultValue = "ALL") String recordType,
+            @RequestParam(required = false) String userId,
+            @RequestParam(required = false) String businessOrderNo,
+            @RequestParam(required = false) String paymentType,
+            @RequestParam(defaultValue = "全部") String paymentStatus,
+            @RequestParam(required = false) String paymentChannel,
+            @RequestParam(defaultValue = "createdAt") String sortField,
+            @RequestParam(defaultValue = "desc") String sortOrder) {
+        PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+        query.setRecordType(recordType);
+        query.setUserId(userId);
+        query.setBusinessOrderNo(businessOrderNo);
+        query.setPaymentType(paymentType);
+        query.setPaymentStatus(paymentStatus);
+        query.setPaymentChannel(paymentChannel);
+        query.setSortField(sortField);
+        query.setSortOrder(sortOrder);
+        byte[] csvBytes = paymentRecordService.exportCsv(query).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=payment-records.csv")
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .body(csvBytes);
     }
 
     /**

@@ -100,6 +100,25 @@ class PaymentRecordListMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldExportAllMatchingRowsWithTheSameStableOrder() {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentRecordMapper mapper = session.getMapper(PaymentRecordMapper.class);
+            PaymentRecordQueryDTO query = new PaymentRecordQueryDTO();
+            query.setBusinessOrderNo("ORDER-RECORD-STABLE");
+            query.setPageNo(2);
+            query.setPageSize(1);
+            query.setSortField("paymentAmount");
+            query.setSortOrder("asc");
+
+            assertEquals(Arrays.asList(
+                            "PAY-RECORD-STABLE-001",
+                            "PAY-RECORD-STABLE-002",
+                            "PAY-RECORD-STABLE-003"),
+                    paymentOrderIds(mapper.findAllForExport(query)));
+        }
+    }
+
     private void createFixture() throws Exception {
         try (SqlSession session = sqlSessionFactory.openSession();
              Statement statement = session.getConnection().createStatement()) {

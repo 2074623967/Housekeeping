@@ -811,6 +811,28 @@ export const paymentRecordApi = {
     });
     return request(`/api/payment-records?${params.toString()}`);
   },
+  buildExportUrl: ({
+    recordType = "ALL",
+    userId = "",
+    businessOrderNo = "",
+    paymentType = "",
+    paymentStatus = "全部",
+    paymentChannel = "",
+    sortField = "createdAt",
+    sortOrder = "desc"
+  } = {}) => {
+    const params = new URLSearchParams({
+      recordType,
+      userId,
+      businessOrderNo,
+      paymentType,
+      paymentStatus,
+      paymentChannel,
+      sortField,
+      sortOrder
+    });
+    return `/api/payment-records/export?${params.toString()}`;
+  },
   getDetail: (paymentOrderId) => request(`/api/payment-records/${encodeURIComponent(paymentOrderId)}`)
 };
 

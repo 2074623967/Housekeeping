@@ -40,6 +40,7 @@
 | `/api/payment-logs/overview` | `GET` | 查询支付处理日志总览指标 |
 | `/api/payment-logs/export` | `GET` | 导出支付处理日志 CSV |
 | `/api/payment-records` | `GET` | 按支付维度分页查询收款记录 |
+| `/api/payment-records/export` | `GET` | 导出当前筛选条件下的收款记录 CSV |
 | `/api/payment-records/{paymentOrderId}` | `GET` | 查询单笔收款记录详情 |
 | `/api/payment-metrics/summary` | `GET` | 查询支付成功率、成功金额和状态分布 |
 | `/api/payment-events` | `GET` | 查询支付事件出站台账，支持 `FAILED_OR_DEAD_LETTER` 联合口径 |
@@ -758,11 +759,17 @@
 
 接口：`GET /api/payment-records`
 
+导出接口：`GET /api/payment-records/export`
+
 当前补充能力：
 
 1. 已支持 `paymentStatus`、`paymentChannel` 两类运营筛选。
 2. 已支持按 `createdAt / paymentAmount / paidAt` 排序。
 3. 适用于统一支付记录、微信支付宝支付记录和银行卡支付记录三类列表页共用。
+4. 导出接口复用 `recordType / userId / businessOrderNo / paymentType / paymentStatus / paymentChannel / sortField / sortOrder`，不接收分页参数，并与列表使用同一筛选、排序和成功退款聚合口径。
+5. 导出最多允许 `1000` 条完整记录，Mapper 固定读取 `1001` 条用于超限探测；超限时整体失败并提示缩小筛选范围，不静默截断。
+6. 文件名固定为 `payment-records.csv`，采用 UTF-8 BOM；列值沿用列表脱敏规则并统一执行 CSV 转义和表格公式注入防护。
+7. 当前导出用于本地运营排障和测试留档，不代表生产导出权限、审批、水印、下载审计和保留策略已完成。
 
 接口：`GET /api/bills`
 
