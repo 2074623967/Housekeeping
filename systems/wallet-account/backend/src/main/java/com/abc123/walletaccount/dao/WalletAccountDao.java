@@ -16,7 +16,7 @@ import java.util.List;
  */
 public interface WalletAccountDao {
 
-    long countAccounts(String keyword, String ownerType, String accountType, String accountStatus);
+    long countAccounts(String keyword, String ownerType, String accountType, String accountStatus, String extRefNo);
 
     List<WalletAccountEntity> listAccounts(String keyword, String ownerType, String accountType,
             String accountStatus, String extRefNo, int offset, int limit);

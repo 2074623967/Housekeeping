@@ -7,7 +7,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 1280px; }
+body { margin: 0; min-width: 0; }
 button, input, select { font: inherit; }
 
 .hero {
@@ -67,6 +67,12 @@ button, input, select { font: inherit; }
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 16px;
+}
+
+.layout > *,
+.panel,
+.detail-grid {
+  min-width: 0;
 }
 
 .panel {
@@ -302,3 +308,74 @@ th {
 }
 
 .modal__actions { justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .hero {
+    flex-direction: column;
+    gap: 16px;
+    padding: 22px 20px 8px;
+  }
+
+  .top-nav {
+    width: 100%;
+    padding-top: 0;
+    overflow-x: auto;
+  }
+
+  .top-nav__link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .page {
+    padding: 14px 20px 24px;
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  .hero {
+    padding-inline: 14px;
+  }
+
+  .hero h1 {
+    font-size: 26px;
+  }
+
+  .page {
+    padding: 12px 14px 20px;
+  }
+
+  .panel {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .toolbar input,
+  .toolbar select,
+  .toolbar .button {
+    width: 100%;
+  }
+
+  .kpi-grid,
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modal-backdrop {
+    padding: 12px;
+  }
+
+  .modal {
+    max-height: calc(100vh - 24px);
+    padding: 18px;
+    overflow-y: auto;
+  }
+}

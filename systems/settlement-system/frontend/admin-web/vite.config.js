@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
-const settlementApiTarget = process.env.HSP_SETTLEMENT_API_TARGET || "http://127.0.0.1:18132";
+const settlementApiTarget = process.env.HSP_SETTLEMENT_API_TARGET || "http://127.0.0.1:18130";
 
 export default defineConfig({
   plugins: [vue()],

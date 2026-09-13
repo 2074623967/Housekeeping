@@ -22,8 +22,9 @@ public class WalletAccountDaoImpl implements WalletAccountDao {
     }
 
     @Override
-    public long countAccounts(String keyword, String ownerType, String accountType, String accountStatus) {
-        return walletAccountMapper.countAccounts(keyword, ownerType, accountType, accountStatus);
+    public long countAccounts(String keyword, String ownerType, String accountType, String accountStatus,
+            String extRefNo) {
+        return walletAccountMapper.countAccounts(keyword, ownerType, accountType, accountStatus, extRefNo);
     }
 
     @Override

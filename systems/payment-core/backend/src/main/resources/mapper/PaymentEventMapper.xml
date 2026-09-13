@@ -216,7 +216,7 @@
             publish_status_type = 'danger',
             retry_count = retry_count + 1,
             last_published_at = NOW(),
-            next_retry_at = DATE_ADD(NOW(), INTERVAL 5 MINUTE)
+            next_retry_at = TIMESTAMPADD(MINUTE, 5, NOW())
         WHERE event_no = #{eventNo}
           AND publish_status IN ('PENDING', 'FAILED')
     </update>

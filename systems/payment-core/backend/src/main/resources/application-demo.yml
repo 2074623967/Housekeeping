@@ -1,11 +1,20 @@
+server:
+  port: ${HSP_PAYMENT_CORE_PORT:18081}
+
 spring:
   config:
     activate:
       on-profile: demo
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: ${HSP_DEMO_DB_URL:jdbc:h2:mem:payment_core;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=VALUE}
+    username: ${HSP_DEMO_DB_USERNAME:sa}
+    password: ${HSP_DEMO_DB_PASSWORD:}
   sql:
     init:
       # 仅演示环境允许用仓库样例数据重建数据库。
       mode: always
+      schema-locations: classpath:schema.sql,classpath:schema-demo.sql
 
 payment:
   callback:

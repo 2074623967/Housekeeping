@@ -154,26 +154,28 @@ onMounted(loadDashboard);
             <h3>今日重点事项</h3>
             <span class="meta">按支付运营处理优先级排序</span>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>事项</th>
-                <th>责任角色</th>
-                <th>影响范围</th>
-                <th>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in focusQueue" :key="item.title">
-                <td>
-                  <button class="table-link" @click="openRoute(item.route)">{{ item.title }}</button>
-                </td>
-                <td>{{ item.owner }}</td>
-                <td>{{ item.impact }}</td>
-                <td><span :class="['badge', item.badgeType]">{{ item.status }}</span></td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>事项</th>
+                  <th>责任角色</th>
+                  <th>影响范围</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in focusQueue" :key="item.title">
+                  <td>
+                    <button class="table-link" @click="openRoute(item.route)">{{ item.title }}</button>
+                  </td>
+                  <td>{{ item.owner }}</td>
+                  <td>{{ item.impact }}</td>
+                  <td><span :class="['badge', item.badgeType]">{{ item.status }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="panel">

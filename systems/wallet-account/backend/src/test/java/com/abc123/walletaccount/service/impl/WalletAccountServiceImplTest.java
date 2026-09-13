@@ -195,14 +195,14 @@ class WalletAccountServiceImplTest {
         queryDTO.setAccountType("MAIN");
         queryDTO.setAccountStatus("ACTIVE");
         queryDTO.setExtRefNo("EXT-001");
-        when(dao.countAccounts("WA-001", "USER", "MAIN", "ACTIVE")).thenReturn(1L);
+        when(dao.countAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001")).thenReturn(1L);
         when(dao.listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", 0, 20))
                 .thenReturn(Collections.singletonList(createAccount("WA-001", "ACTIVE", "0.00", "0.00", "0.00", "0.00")));
 
         PageResultDTO<com.abc123.walletaccount.dto.WalletAccountDTO> resultDTO = service.pageAccounts(queryDTO);
 
         assertEquals(1L, resultDTO.getTotal());
-        verify(dao).countAccounts("WA-001", "USER", "MAIN", "ACTIVE");
+        verify(dao).countAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001");
         verify(dao).listAccounts("WA-001", "USER", "MAIN", "ACTIVE", "EXT-001", 0, 20);
     }
 

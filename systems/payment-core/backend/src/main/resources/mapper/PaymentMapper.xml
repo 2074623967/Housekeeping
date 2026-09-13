@@ -664,7 +664,7 @@
             NULL,
             NOW(),
             NULL,
-            DATE_ADD(NOW(), INTERVAL #{expireAfterSeconds} SECOND),
+            TIMESTAMPADD(SECOND, #{expireAfterSeconds}, NOW()),
             NOW(),
             NOW()
         )
@@ -680,7 +680,7 @@
             release_reason = NULL,
             last_occupied_at = NOW(),
             released_at = NULL,
-            expire_at = DATE_ADD(NOW(), INTERVAL #{expireAfterSeconds} SECOND),
+            expire_at = TIMESTAMPADD(SECOND, #{expireAfterSeconds}, NOW()),
             updated_at = NOW()
         WHERE prepay_order_no = #{prepayOrderNo}
           AND source_app_id = #{sourceAppId}
@@ -761,7 +761,7 @@
             'warn',
             0,
             NULL,
-            DATE_ADD(NOW(), INTERVAL 5 MINUTE),
+            TIMESTAMPADD(MINUTE, 5, NOW()),
             #{eventPayload},
             NOW()
         )
@@ -864,7 +864,7 @@
         WHERE channel_code = #{channelCode}
           AND status IN ('WAIT_CALLBACK', 'SUCCESS')
           AND created_at &gt;= CURDATE()
-          AND created_at &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND created_at &lt; TIMESTAMPADD(DAY, 1, CURDATE())
     </select>
 
     <select id="findRecentChannelQueryHealth"

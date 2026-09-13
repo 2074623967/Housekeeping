@@ -448,7 +448,8 @@ th {
 
 /* 收款记录按原型采用紧凑横向表格，而不是卡片化列表。 */
 .prototype-page {
-  min-width: 1680px;
+  width: 100%;
+  min-width: 0;
   color: #222;
 }
 
@@ -878,6 +879,27 @@ th {
   .wide-field {
     min-width: 0;
   }
+
+  .prototype-query-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-inline: 0;
+  }
+
+  .prototype-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .prototype-field input,
+  .prototype-field select {
+    width: 100%;
+  }
+
+  .prototype-query-actions {
+    align-items: end;
+  }
 }
 
 @media (max-width: 520px) {
@@ -931,5 +953,27 @@ th {
   .meta-link {
     max-width: none;
     text-align: left;
+  }
+
+  .prototype-titlebar {
+    margin-bottom: 18px;
+  }
+
+  .prototype-query-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prototype-query-actions,
+  .prototype-query-actions .prototype-button {
+    width: 100%;
+  }
+
+  .prototype-query-actions .prototype-button {
+    flex: 1 1 0;
+  }
+
+  .prototype-pagination {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }

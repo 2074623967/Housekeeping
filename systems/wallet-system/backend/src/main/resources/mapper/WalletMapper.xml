@@ -9,9 +9,9 @@
                owner_name AS ownerName,
                wallet_type AS walletType,
                status,
-               FORMAT(available_amount, 2) AS availableAmount,
-               FORMAT(frozen_amount, 2) AS frozenAmount,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               available_amount AS availableAmount,
+               frozen_amount AS frozenAmount,
+               created_at AS createdAt
         FROM t_wallet_account
         ORDER BY created_at DESC
     </select>
@@ -21,9 +21,9 @@
                owner_name AS ownerName,
                wallet_type AS walletType,
                status,
-               FORMAT(available_amount, 2) AS availableAmount,
-               FORMAT(frozen_amount, 2) AS frozenAmount,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               available_amount AS availableAmount,
+               frozen_amount AS frozenAmount,
+               created_at AS createdAt
         FROM t_wallet_account
         WHERE account_no = #{accountNo}
     </select>
@@ -33,9 +33,9 @@
                account_no AS accountNo,
                biz_type AS bizType,
                biz_no AS bizNo,
-               FORMAT(amount, 2) AS amount,
+               amount,
                direction,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_ledger
         WHERE account_no = #{accountNo}
         ORDER BY created_at DESC
@@ -46,9 +46,9 @@
                account_no AS accountNo,
                biz_type AS bizType,
                biz_no AS bizNo,
-               FORMAT(amount, 2) AS amount,
+               amount,
                direction,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_ledger
         <where>
             <if test="accountNo != null and accountNo != ''">
@@ -84,9 +84,9 @@
         SELECT recharge_no AS rechargeNo,
                account_no AS accountNo,
                biz_no AS bizNo,
-               FORMAT(amount, 2) AS amount,
+               amount,
                status,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_recharge_order
         WHERE recharge_no = #{rechargeNo}
     </select>
@@ -100,9 +100,9 @@
         SELECT withdraw_no AS withdrawNo,
                account_no AS accountNo,
                biz_no AS bizNo,
-               FORMAT(amount, 2) AS amount,
+               amount,
                status,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_withdraw_order
         WHERE withdraw_no = #{withdrawNo}
     </select>
@@ -117,9 +117,9 @@
                source_account_no AS sourceAccountNo,
                target_account_no AS targetAccountNo,
                biz_no AS bizNo,
-               FORMAT(amount, 2) AS amount,
+               amount,
                status,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_transfer_order
         WHERE transfer_no = #{transferNo}
     </select>
@@ -133,9 +133,9 @@
         SELECT balance_payment_no AS balancePaymentNo,
                account_no AS accountNo,
                biz_no AS bizNo,
-               FORMAT(amount, 2) AS amount,
+               amount,
                status,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_balance_payment_order
         WHERE balance_payment_no = #{balancePaymentNo}
     </select>
@@ -144,10 +144,10 @@
         SELECT red_packet_no AS redPacketNo,
                account_no AS accountNo,
                campaign_name AS campaignName,
-               FORMAT(total_amount, 2) AS totalAmount,
+               total_amount AS totalAmount,
                packet_count AS packetCount,
                status,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_red_packet
         ORDER BY created_at DESC
     </select>
@@ -156,10 +156,10 @@
         SELECT red_packet_no AS redPacketNo,
                account_no AS accountNo,
                campaign_name AS campaignName,
-               FORMAT(total_amount, 2) AS totalAmount,
+               total_amount AS totalAmount,
                packet_count AS packetCount,
                status,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt
+               created_at AS createdAt
         FROM t_wallet_red_packet
         WHERE red_packet_no = #{redPacketNo}
     </select>
@@ -189,8 +189,8 @@
                risk_reason AS riskReason,
                handled_by AS handledBy,
                handled_remark AS handledRemark,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
-               DATE_FORMAT(handled_at, '%Y-%m-%d %H:%i:%s') AS handledAt
+               created_at AS createdAt,
+               handled_at AS handledAt
         FROM t_wallet_risk_event
         ORDER BY created_at DESC
     </select>
@@ -204,8 +204,8 @@
                risk_reason AS riskReason,
                handled_by AS handledBy,
                handled_remark AS handledRemark,
-               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
-               DATE_FORMAT(handled_at, '%Y-%m-%d %H:%i:%s') AS handledAt
+               created_at AS createdAt,
+               handled_at AS handledAt
         FROM t_wallet_risk_event
         WHERE event_no = #{eventNo}
     </select>
