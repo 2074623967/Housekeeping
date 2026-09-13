@@ -117,6 +117,15 @@ public interface PaymentConfigMapper {
      */
     PaymentRouteRuleConfigEntity findRouteRuleByCodeForUpdate(@Param("ruleCode") String ruleCode);
 
+    /** 幂等初始化启用路由规则冲突全集的批准协调行。 */
+    int initRouteRuleConflictLock();
+
+    /** 锁定启用路由规则冲突全集的批准协调行。 */
+    Long lockRouteRuleConflictSet();
+
+    /** 当前读并锁定全部路由规则，供批准后的冲突复验。 */
+    List<PaymentRouteRuleConfigDTO> findRouteRulesForConflictCheckForUpdate();
+
     /**
      * 查询支付路由规则历史版本。
      */

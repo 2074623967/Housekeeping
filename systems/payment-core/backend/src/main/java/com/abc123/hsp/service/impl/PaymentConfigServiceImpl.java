@@ -620,6 +620,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 && STATUS_DISABLED.equals(review.getStatus())
                 ? copyRouteRuleEntity(review)
                 : buildRouteRuleEntity(toUpsertRequest(review), review.getRuleCode());
+        lockRouteRuleConflictSetIfRequired(candidate);
         PaymentRouteRuleConfigEntity current = paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode());
         if (createOperation) {
             if (current != null) {
@@ -2762,8 +2763,13 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
     }
 
     private void ensureCandidateHasNoBlocker(PaymentRouteRuleConfigEntity candidate) {
+        if (!STATUS_ENABLED.equals(candidate.getStatus())
+                || candidate.getRolloutPercentage() == null
+                || candidate.getRolloutPercentage().intValue() <= 0) {
+            return;
+        }
         List<PaymentRouteRuleConfigDTO> candidateRules = new ArrayList<PaymentRouteRuleConfigDTO>();
-        for (PaymentRouteRuleConfigDTO rule : paymentConfigMapper.findRouteRules()) {
+        for (PaymentRouteRuleConfigDTO rule : paymentConfigMapper.findRouteRulesForConflictCheckForUpdate()) {
             if (!candidate.getRuleCode().equalsIgnoreCase(rule.getRuleCode())) {
                 candidateRules.add(rule);
             }
@@ -2775,6 +2781,19 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
             if (candidateInvolved && "BLOCKER".equals(conflict.getSeverity())) {
                 throw new IllegalArgumentException("候选规则存在阻断级冲突：" + conflict.getMessage());
             }
+        }
+    }
+
+    private void lockRouteRuleConflictSetIfRequired(PaymentRouteRuleConfigEntity candidate) {
+        if (!STATUS_ENABLED.equals(candidate.getStatus())
+                || candidate.getRolloutPercentage() == null
+                || candidate.getRolloutPercentage().intValue() <= 0) {
+            return;
+        }
+        paymentConfigMapper.initRouteRuleConflictLock();
+        Long conflictLockId = paymentConfigMapper.lockRouteRuleConflictSet();
+        if (conflictLockId == null) {
+            throw new IllegalStateException("支付路由规则冲突全集并发锁获取失败");
         }
     }
 

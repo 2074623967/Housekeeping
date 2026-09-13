@@ -15,6 +15,12 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
@@ -149,6 +155,38 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
         }
     }
 
+    @Test
+    void shouldSerializeConcurrentApprovalsWithInitiallyMissingCoordinator() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        CountDownLatch secondStarted = new CountDownLatch(1);
+        try (SqlSession firstSession = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper firstMapper = firstSession.getMapper(PaymentConfigMapper.class);
+            assertEquals(1, firstMapper.initRouteRuleConflictLock());
+            Long firstLockId = firstMapper.lockRouteRuleConflictSet();
+            assertEquals(Long.valueOf(1L), firstLockId);
+
+            Future<Long> second = executor.submit(() -> lockRuleSetInSecondTransaction(secondStarted));
+            org.junit.jupiter.api.Assertions.assertTrue(secondStarted.await(5, TimeUnit.SECONDS));
+            assertThrows(TimeoutException.class, () -> second.get(200, TimeUnit.MILLISECONDS));
+
+            firstSession.commit();
+            assertEquals(firstLockId, second.get(5, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private Long lockRuleSetInSecondTransaction(CountDownLatch started) throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentConfigMapper mapper = session.getMapper(PaymentConfigMapper.class);
+            started.countDown();
+            mapper.initRouteRuleConflictLock();
+            Long lockId = mapper.lockRouteRuleConflictSet();
+            session.commit();
+            return lockId;
+        }
+    }
+
     private PaymentRouteRuleReviewEntity buildReview(String requestNo) {
         PaymentRouteRuleReviewEntity review = new PaymentRouteRuleReviewEntity();
         review.setRequestNo(requestNo);
@@ -202,12 +240,16 @@ public class PaymentConfigRouteRuleVersionMapperIntegrationTest {
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_version");
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_review");
             statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_config");
+            statement.execute("DROP TABLE IF EXISTS t_payment_route_rule_conflict_lock");
             statement.execute("CREATE TABLE t_payment_route_rule_config ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64) UNIQUE, "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "
                     + "target_channel_code VARCHAR(64), fallback_channel_code VARCHAR(64), "
                     + "rollout_percentage INT, rollout_salt VARCHAR(64), "
                     + "status VARCHAR(32), status_type VARCHAR(32), priority INT, updated_at DATETIME)");
+            statement.execute("CREATE TABLE t_payment_route_rule_conflict_lock ("
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, lock_name VARCHAR(64) UNIQUE, "
+                    + "created_at DATETIME, updated_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_route_rule_version ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, rule_code VARCHAR(64), version_no INT, "
                     + "rule_name VARCHAR(128), match_scene VARCHAR(128), match_expression VARCHAR(512), "

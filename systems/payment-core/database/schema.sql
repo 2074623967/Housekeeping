@@ -51,6 +51,7 @@ DROP TABLE IF EXISTS t_payment_control_policy_review;
 DROP TABLE IF EXISTS t_payment_control_policy_version;
 DROP TABLE IF EXISTS t_payment_control_policy;
 DROP TABLE IF EXISTS t_payment_protocol_config;
+DROP TABLE IF EXISTS t_payment_route_rule_conflict_lock;
 DROP TABLE IF EXISTS t_payment_route_rule_config;
 DROP TABLE IF EXISTS t_payment_channel_config;
 DROP TABLE IF EXISTS t_order;
@@ -200,6 +201,15 @@ CREATE TABLE t_payment_route_rule_config (
     UNIQUE KEY uk_rule_code (rule_code),
     KEY idx_route_scene_status (match_scene, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则配置表';
+
+CREATE TABLE t_payment_route_rule_conflict_lock (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    lock_name VARCHAR(64) NOT NULL COMMENT '冲突全集协调维度',
+    created_at DATETIME NOT NULL COMMENT '创建时间',
+    updated_at DATETIME NOT NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_route_rule_conflict_lock (lock_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付路由规则冲突复验协调表';
 
 CREATE TABLE t_payment_protocol_config (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',

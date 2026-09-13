@@ -317,6 +317,28 @@
         FOR UPDATE
     </select>
 
+    <insert id="initRouteRuleConflictLock">
+        INSERT IGNORE INTO t_payment_route_rule_conflict_lock(
+            lock_name, created_at, updated_at
+        ) VALUES (
+            'ENABLED_RULE_SET', NOW(), NOW()
+        )
+    </insert>
+
+    <select id="lockRouteRuleConflictSet" resultType="long">
+        SELECT id
+        FROM t_payment_route_rule_conflict_lock
+        WHERE lock_name = 'ENABLED_RULE_SET'
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <select id="findRouteRulesForConflictCheckForUpdate"
+            resultType="com.abc123.hsp.dto.PaymentRouteRuleConfigDTO">
+        <include refid="routeRuleGovernanceSnapshotColumns"/>
+        FOR UPDATE
+    </select>
+
     <select id="findRouteRuleVersions" resultType="com.abc123.hsp.dto.PaymentRouteRuleVersionDTO">
         SELECT rule_code AS ruleCode,
                version_no AS versionNo,

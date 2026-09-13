@@ -48,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -63,6 +64,12 @@ class PaymentConfigServiceImplTest {
 
     @Mock
     private PaymentConfigMapper paymentConfigMapper;
+
+    @BeforeEach
+    void setUpRouteRuleConflictLock() {
+        org.mockito.Mockito.lenient().when(paymentConfigMapper.lockRouteRuleConflictSet())
+                .thenReturn(Long.valueOf(1L));
+    }
 
     @Test
     void shouldCreateAndUpdateValidatedRouteRule() {
@@ -386,7 +393,8 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
         when(paymentConfigMapper.completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "配置与风险检查通过"))
                 .thenReturn(1);
@@ -394,6 +402,13 @@ class PaymentConfigServiceImplTest {
 
         new PaymentConfigServiceImpl(paymentConfigMapper).approveRouteRuleReview(review.getRequestNo(), action);
 
+        org.mockito.InOrder approvalOrder = org.mockito.Mockito.inOrder(paymentConfigMapper);
+        approvalOrder.verify(paymentConfigMapper).initRouteRuleConflictLock();
+        approvalOrder.verify(paymentConfigMapper).lockRouteRuleConflictSet();
+        approvalOrder.verify(paymentConfigMapper).findRouteRuleByCodeForUpdate(review.getRuleCode());
+        approvalOrder.verify(paymentConfigMapper).findRouteRulesForConflictCheckForUpdate();
+        approvalOrder.verify(paymentConfigMapper)
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
         verify(paymentConfigMapper).updateRouteRule(org.mockito.ArgumentMatchers.argThat(
                 entity -> review.getRuleCode().equals(entity.getRuleCode())
                         && Integer.valueOf(30).equals(entity.getRolloutPercentage())
@@ -403,6 +418,31 @@ class PaymentConfigServiceImplTest {
                         && Integer.valueOf(4).equals(version.getVersionNo())));
         verify(paymentConfigMapper).completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "配置与风险检查通过");
+    }
+
+    @Test
+    void shouldFailClosedWhenRouteRuleConflictLockCannotBeRead() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("配置与风险检查通过");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.lockRouteRuleConflictSet()).thenReturn(null);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).findRouteRulesForConflictCheckForUpdate();
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleVersion(org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
     }
 
     @Test
@@ -553,7 +593,8 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(null);
         when(paymentConfigMapper.completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "新规则配置检查通过"))
@@ -586,7 +627,8 @@ class PaymentConfigServiceImplTest {
         when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.singletonList(conflicting));
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.singletonList(conflicting));
 
         org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalArgumentException.class,
@@ -782,7 +824,6 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(buildRouteRuleEntity());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
         when(paymentConfigMapper.completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "确认停用"))
                 .thenReturn(1);
@@ -818,7 +859,8 @@ class PaymentConfigServiceImplTest {
                 .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
         when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode()))
                 .thenReturn(Integer.valueOf(3), Integer.valueOf(3));
-        when(paymentConfigMapper.findRouteRules()).thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
         when(paymentConfigMapper.completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "确认回滚"))
                 .thenReturn(1);
