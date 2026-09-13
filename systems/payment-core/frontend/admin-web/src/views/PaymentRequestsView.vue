@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { paymentRequestApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
@@ -25,23 +25,36 @@ const overview = ref({
 });
 const items = ref([]);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const expandedRequestNo = ref("");
 const selectedItem = ref(null);
 const total = ref(0);
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
-const filters = ref({
-  requestNo: route.query.requestNo || "",
-  paymentOrderId: route.query.paymentOrderId || "",
-  orderNo: route.query.orderNo || "",
-  channelCode: route.query.channelCode || "",
-  terminal: route.query.terminal || "全部",
-  clientIp: route.query.clientIp || "",
-  requestStatus: route.query.requestStatus || "全部",
-  sortField: route.query.sortField || "createdAt",
-  sortOrder: route.query.sortOrder || "desc"
-});
+let latestLoadRequestId = 0;
+
+function queryString(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function filtersFromRoute() {
+  return {
+    requestNo: queryString(route.query.requestNo, ""),
+    paymentOrderId: queryString(route.query.paymentOrderId, ""),
+    orderNo: queryString(route.query.orderNo, ""),
+    channelCode: queryString(route.query.channelCode, ""),
+    terminal: queryString(route.query.terminal, "全部"),
+    clientIp: queryString(route.query.clientIp, ""),
+    requestStatus: queryString(route.query.requestStatus, "全部"),
+    sortField: queryString(route.query.sortField, "createdAt"),
+    sortOrder: queryString(route.query.sortOrder, "desc")
+  };
+}
+
+const filters = ref(filtersFromRoute());
 
 const metrics = computed(() => ({
   total: overview.value.totalRequestCount,
@@ -49,8 +62,21 @@ const metrics = computed(() => ({
   failedTotal: overview.value.failedRequestCount,
   terminalCount: overview.value.distinctTerminalCount
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+
+function buildQuery() {
+  return {
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     requestNo: "",
     paymentOrderId: "",
@@ -62,7 +88,6 @@ function resetFilters() {
     sortField: "createdAt",
     sortOrder: "desc"
   };
-  expandedRequestNo.value = "";
   pageNo.value = 1;
   loadPaymentRequests();
 }
@@ -75,75 +100,85 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadPaymentRequests() {
+async function loadPaymentRequests(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    overview.value = await paymentRequestApi.getOverview({
-      requestNo: filters.value.requestNo,
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      channelCode: filters.value.channelCode,
-      terminal: filters.value.terminal,
-      clientIp: filters.value.clientIp,
-      requestStatus: filters.value.requestStatus,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder
-    });
-    const result = await paymentRequestApi.getList({
-      requestNo: filters.value.requestNo,
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      channelCode: filters.value.channelCode,
-      terminal: filters.value.terminal,
-      clientIp: filters.value.clientIp,
-      requestStatus: filters.value.requestStatus,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    });
+    const [overviewResult, result] = await Promise.all([
+      paymentRequestApi.getOverview(query),
+      paymentRequestApi.getList(query)
+    ]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
+    overview.value = { ...overview.value, ...overviewResult };
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    expandedRequestNo.value = "";
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function applyFilters() {
-  expandedRequestNo.value = "";
+  if (isLoading.value) {
+    return;
+  }
   pageNo.value = 1;
   loadPaymentRequests();
 }
 
+function refreshPaymentRequests() {
+  if (isLoading.value) {
+    return;
+  }
+  loadPaymentRequests();
+}
+
 function exportRequests() {
-  const exportUrl = paymentRequestApi.buildExportUrl({
-    requestNo: filters.value.requestNo,
-    paymentOrderId: filters.value.paymentOrderId,
-    orderNo: filters.value.orderNo,
-    channelCode: filters.value.channelCode,
-    terminal: filters.value.terminal,
-    clientIp: filters.value.clientIp,
-    requestStatus: filters.value.requestStatus,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = paymentRequestApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  expandedRequestNo.value = "";
-  loadPaymentRequests();
+  loadPaymentRequests({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 onMounted(loadPaymentRequests);
+
+watch(
+  () => [route.query.requestNo, route.query.paymentOrderId, route.query.orderNo,
+    route.query.channelCode, route.query.terminal, route.query.clientIp,
+    route.query.requestStatus, route.query.sortField, route.query.sortOrder],
+  () => {
+    filters.value = filtersFromRoute();
+    pageNo.value = 1;
+    loadPaymentRequests();
+  }
+);
 </script>
 
 <template>
@@ -153,10 +188,15 @@ onMounted(loadPaymentRequests);
         <h2>支付请求管理</h2>
         <p>查看支付尝试的请求报文、响应报文、渠道和路由结果，支撑联调与问题定位</p>
       </div>
-      <button class="button primary" @click="exportRequests">导出请求</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="refreshPaymentRequests">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="isLoading || !canExport" @click="exportRequests">导出请求</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">请求总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -175,7 +215,7 @@ onMounted(loadPaymentRequests);
       </article>
     </section>
 
-    <section class="panel">
+    <section v-if="hasLoadedData" class="panel">
       <div class="detail-card-grid">
         <div class="detail-card">
           <div class="detail-label">处理中请求</div>
@@ -216,29 +256,29 @@ onMounted(loadPaymentRequests);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付请求数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付请求数据刷新失败，当前展示上次成功快照：" : "支付请求数据加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>请求编号</label>
-          <input v-model="filters.requestNo" placeholder="请输入支付请求编号" />
+          <input v-model="filters.requestNo" placeholder="请输入支付请求编号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>渠道编码</label>
-          <input v-model="filters.channelCode" placeholder="如 wx_h5 / alipay_h5" />
+          <input v-model="filters.channelCode" placeholder="如 wx_h5 / alipay_h5" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>终端</label>
-          <select v-model="filters.terminal">
+          <select v-model="filters.terminal" :disabled="isLoading">
             <option>全部</option>
             <option>H5</option>
             <option>PC</option>
@@ -248,11 +288,11 @@ onMounted(loadPaymentRequests);
         </div>
         <div class="field">
           <label>客户端 IP</label>
-          <input v-model="filters.clientIp" placeholder="如 127.0.0.1" />
+          <input v-model="filters.clientIp" placeholder="如 127.0.0.1" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>请求状态</label>
-          <select v-model="filters.requestStatus">
+          <select v-model="filters.requestStatus" :disabled="isLoading">
             <option>全部</option>
             <option>请求已发起</option>
             <option>请求成功</option>
@@ -262,7 +302,7 @@ onMounted(loadPaymentRequests);
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="channelCode">渠道编码</option>
             <option value="terminal">终端</option>
@@ -270,7 +310,7 @@ onMounted(loadPaymentRequests);
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
@@ -280,12 +320,16 @@ onMounted(loadPaymentRequests);
           <input value="已支持订单号、渠道、终端、IP 筛选与排序，并对 IP、幂等键和敏感报文字段做基础脱敏；后续继续补权限分域控制" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付请求数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付请求快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付请求</div>
 
@@ -389,12 +433,12 @@ onMounted(loadPaymentRequests);
           <div v-else class="state-box">选择左侧支付请求后，可在这里查看详情与联查建议。</div>
         </aside>
       </div>
-      <div class="pager">
+      <div v-if="hasLoadedData" class="pager">
         <span>共 {{ total }} 条支付请求</span>
         <template v-if="total > pageSize">
-          <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+          <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
           <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-          <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+          <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
         </template>
       </div>
     </section>

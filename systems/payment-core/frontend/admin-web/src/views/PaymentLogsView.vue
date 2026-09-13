@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { paymentLogApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
@@ -9,6 +9,7 @@ const route = useRoute();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const total = ref(0);
 const overview = ref({
@@ -24,17 +25,29 @@ const overview = ref({
   latestLogAt: ""
 });
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
-const filters = ref({
-  paymentOrderId: route.query.paymentOrderId || "",
-  orderNo: route.query.orderNo || "",
-  processStage: route.query.processStage || "全部",
-  logLevel: route.query.logLevel || "全部",
-  source: route.query.source || "",
-  keyword: route.query.keyword || "",
-  sortField: route.query.sortField || "createdAt",
-  sortOrder: route.query.sortOrder || "desc"
-});
+let latestLoadRequestId = 0;
+
+function queryString(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function filtersFromRoute() {
+  return {
+    paymentOrderId: queryString(route.query.paymentOrderId, ""),
+    orderNo: queryString(route.query.orderNo, ""),
+    processStage: queryString(route.query.processStage, "全部"),
+    logLevel: queryString(route.query.logLevel, "全部"),
+    source: queryString(route.query.source, ""),
+    keyword: queryString(route.query.keyword, ""),
+    sortField: queryString(route.query.sortField, "createdAt"),
+    sortOrder: queryString(route.query.sortOrder, "desc")
+  };
+}
+
+const filters = ref(filtersFromRoute());
 
 const metrics = computed(() => ({
   total: overview.value.totalLogCount,
@@ -48,8 +61,21 @@ const metrics = computed(() => ({
   callbackKeywordCount: overview.value.callbackKeywordCount,
   latestLogAt: overview.value.latestLogAt || "-"
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+
+function buildQuery() {
+  return {
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
@@ -65,7 +91,17 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isLoading.value) {
+    return;
+  }
   pageNo.value = 1;
+  loadPaymentLogs();
+}
+
+function refreshPaymentLogs() {
+  if (isLoading.value) {
+    return;
+  }
   loadPaymentLogs();
 }
 
@@ -73,26 +109,18 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadPaymentLogs() {
+async function loadPaymentLogs(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const query = {
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      processStage: filters.value.processStage,
-      logLevel: filters.value.logLevel,
-      source: filters.value.source,
-      keyword: filters.value.keyword,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    };
     const [overviewResult, result] = await Promise.all([
       paymentLogApi.getOverview(query),
       paymentLogApi.getList(query)
     ]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     overview.value = {
       ...overview.value,
       ...overviewResult
@@ -100,36 +128,53 @@ async function loadPaymentLogs() {
     total.value = result.total;
     items.value = result.items;
     selectedItem.value = result.items[0] || null;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function exportLogs() {
-  const exportUrl = paymentLogApi.buildExportUrl({
-    paymentOrderId: filters.value.paymentOrderId,
-    orderNo: filters.value.orderNo,
-    processStage: filters.value.processStage,
-    logLevel: filters.value.logLevel,
-    source: filters.value.source,
-    keyword: filters.value.keyword,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = paymentLogApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadPaymentLogs();
+  loadPaymentLogs({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 onMounted(loadPaymentLogs);
+
+watch(
+  () => [route.query.paymentOrderId, route.query.orderNo, route.query.processStage,
+    route.query.logLevel, route.query.source, route.query.keyword,
+    route.query.sortField, route.query.sortOrder],
+  () => {
+    filters.value = filtersFromRoute();
+    pageNo.value = 1;
+    loadPaymentLogs();
+  }
+);
 </script>
 
 <template>
@@ -139,10 +184,15 @@ onMounted(loadPaymentLogs);
         <h2>支付处理日志</h2>
         <p>按处理阶段查看支付提交、路由、回调和业务事件日志，支撑异常定位与测试回归</p>
       </div>
-      <button class="button primary" @click="exportLogs">导出日志</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="refreshPaymentLogs">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="isLoading || !canExport" @click="exportLogs">导出日志</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">日志总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -181,7 +231,7 @@ onMounted(loadPaymentLogs);
       </article>
     </section>
 
-    <section class="panel overview-panel">
+    <section v-if="hasLoadedData" class="panel overview-panel">
       <div class="section-title">
         <h3>风险总览</h3>
         <span class="meta">最近日志时间：{{ metrics.latestLogAt }}</span>
@@ -207,21 +257,21 @@ onMounted(loadPaymentLogs);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        支付处理日志加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "支付处理日志刷新失败，当前展示上次成功快照：" : "支付处理日志加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>处理阶段</label>
-          <select v-model="filters.processStage">
+          <select v-model="filters.processStage" :disabled="isLoading">
             <option>全部</option>
             <option>支付提交</option>
             <option>支付路由</option>
@@ -231,7 +281,7 @@ onMounted(loadPaymentLogs);
         </div>
         <div class="field">
           <label>日志级别</label>
-          <select v-model="filters.logLevel">
+          <select v-model="filters.logLevel" :disabled="isLoading">
             <option>全部</option>
             <option>INFO</option>
             <option>WARN</option>
@@ -240,15 +290,15 @@ onMounted(loadPaymentLogs);
         </div>
         <div class="field">
           <label>日志来源</label>
-          <input v-model="filters.source" placeholder="如 wx_h5 / payment-core" />
+          <input v-model="filters.source" placeholder="如 wx_h5 / payment-core" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>日志关键字</label>
-          <input v-model="filters.keyword" placeholder="如 回调 / 路由 / SUCCESS" />
+          <input v-model="filters.keyword" placeholder="如 回调 / 路由 / SUCCESS" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="logLevel">日志级别</option>
             <option value="processStage">处理阶段</option>
@@ -256,7 +306,7 @@ onMounted(loadPaymentLogs);
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
@@ -266,12 +316,16 @@ onMounted(loadPaymentLogs);
           <input value="已支持订单号、来源、关键字检索与排序，生产环境需接入检索与告警平台" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">支付处理日志加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的支付处理日志快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的支付处理日志</div>
 
@@ -343,11 +397,11 @@ onMounted(loadPaymentLogs);
           <div v-else class="state-box">选择左侧日志后，可在这里查看详情与排障建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条日志</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
