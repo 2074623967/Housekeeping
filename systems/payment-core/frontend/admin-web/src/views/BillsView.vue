@@ -8,7 +8,8 @@ const route = useRoute();
 const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
-const isLoading = ref(true);
+const isLoading = ref(false);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const total = ref(0);
 const overview = ref({
@@ -22,7 +23,10 @@ const overview = ref({
   totalUnpaidAmount: "¥0.00"
 });
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
+let latestLoadRequestId = 0;
 const filters = ref({
   billNo: route.query.billNo || "",
   orderNo: route.query.orderNo || "",
@@ -42,8 +46,26 @@ const metrics = computed(() => ({
   billAmountTotal: overview.value.totalBillAmount,
   paidAmountTotal: overview.value.totalPaidAmount
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+
+function buildQuery() {
+  return {
+    billNo: filters.value.billNo,
+    orderNo: filters.value.orderNo,
+    customerName: filters.value.customerName,
+    billStatus: filters.value.billStatus,
+    sortField: filters.value.sortField,
+    sortOrder: filters.value.sortOrder,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     billNo: "",
     orderNo: "",
@@ -57,28 +79,25 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isLoading.value) {
+    return;
+  }
   pageNo.value = 1;
   loadBills();
 }
 
-async function loadBills() {
+async function loadBills(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const query = {
-      billNo: filters.value.billNo,
-      orderNo: filters.value.orderNo,
-      customerName: filters.value.customerName,
-      billStatus: filters.value.billStatus,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    };
     const [overviewResult, result] = await Promise.all([
       billApi.getOverview(query),
       billApi.getList(query)
     ]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     overview.value = {
       ...overview.value,
       ...overviewResult
@@ -86,19 +105,38 @@ async function loadBills() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
+function refreshBills() {
+  if (isLoading.value) {
+    return;
+  }
+  loadBills();
+}
+
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadBills();
+  loadBills({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 function pickItem(item) {
@@ -106,14 +144,10 @@ function pickItem(item) {
 }
 
 function exportBills() {
-  const exportUrl = billApi.buildExportUrl({
-    billNo: filters.value.billNo,
-    orderNo: filters.value.orderNo,
-    customerName: filters.value.customerName,
-    billStatus: filters.value.billStatus,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = billApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
@@ -151,10 +185,15 @@ watch(
         <h2>账单中心</h2>
         <p>按交易账单视角查看订单应收、已收和待收进展，为支付排查提供中间桥梁</p>
       </div>
-      <button class="button primary" @click="exportBills">导出账单</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="refreshBills">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="isLoading || !canExport" @click="exportBills">导出账单</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">账单总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -181,7 +220,7 @@ watch(
       </article>
     </section>
 
-    <section class="panel overview-panel">
+    <section v-if="hasLoadedData" class="panel overview-panel">
       <div class="section-title">
         <h3>账单风险总览</h3>
         <span class="meta">用于识别逾期账单、部分支付和待收金额聚集风险</span>
@@ -192,12 +231,12 @@ watch(
           <strong>{{ metrics.overdueTotal }}</strong>
           <span>优先联查订单履约状态、支付单状态和催缴动作，避免应收长期挂账。</span>
         </article>
-        <article class="overview-card.warn">
+        <article class="overview-card warn">
           <p class="overview-title">已付金额合计</p>
           <strong>{{ metrics.paidAmountTotal }}</strong>
           <span>帮助运营快速判断当前筛选条件下的回款进度和账单收口体量。</span>
         </article>
-        <article class="overview-card.info">
+        <article class="overview-card info">
           <p class="overview-title">待收金额合计</p>
           <strong>{{ metrics.unpaidAmountTotal }}</strong>
           <span>重点关注尾款催缴、部分支付补收和超期账单的持续增长风险。</span>
@@ -207,25 +246,25 @@ watch(
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        账单数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "账单数据刷新失败，当前展示上次成功快照：" : "账单数据加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>账单号</label>
-          <input v-model="filters.billNo" placeholder="请输入账单号" />
+          <input v-model="filters.billNo" placeholder="请输入账单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>客户名称</label>
-          <input v-model="filters.customerName" placeholder="请输入客户名称" />
+          <input v-model="filters.customerName" placeholder="请输入客户名称" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>账单状态</label>
-          <select v-model="filters.billStatus">
+          <select v-model="filters.billStatus" :disabled="isLoading">
             <option>全部</option>
             <option>待支付</option>
             <option>部分支付</option>
@@ -235,7 +274,7 @@ watch(
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="dueAt">到期时间</option>
             <option value="billAmount">账单应收</option>
@@ -244,7 +283,7 @@ watch(
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
@@ -254,12 +293,16 @@ watch(
           <input value="当前已接入后端筛选和排序，不承接账务会计口径" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">账单数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的账单快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的账单数据</div>
 
@@ -330,11 +373,11 @@ watch(
           <div v-else class="state-box">选择左侧账单后，可在这里查看账单快照与运营建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条账单</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="pageNo === 1 || isLoading || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
