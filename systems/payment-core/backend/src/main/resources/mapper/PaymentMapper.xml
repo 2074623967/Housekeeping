@@ -588,11 +588,20 @@
         WHERE payment_order_id = #{paymentOrderId}
     </update>
 
-    <update id="updatePaymentAttemptStatusByPaymentOrderId">
+    <update id="updateLatestPaymentAttemptStatus">
         UPDATE t_payment_attempt
         SET attempt_status = #{attemptStatus},
             attempt_status_type = #{attemptStatusType}
-        WHERE payment_order_id = #{paymentOrderId}
+        WHERE id = (
+            SELECT latest_attempt.id
+            FROM (
+                SELECT id
+                FROM t_payment_attempt
+                WHERE payment_order_id = #{paymentOrderId}
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            ) latest_attempt
+        )
     </update>
 
     <insert id="insertSubmitConcurrencyToken">

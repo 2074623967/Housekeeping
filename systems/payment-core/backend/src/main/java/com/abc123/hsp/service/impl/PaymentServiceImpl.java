@@ -925,8 +925,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (paySuccess) {
             finalizeLatestPaymentAttemptSuccess(request.getPaymentOrderId());
         } else {
-            paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(
-                    request.getPaymentOrderId(), "待回调", "warn");
+            if (paymentMapper.updateLatestPaymentAttemptStatus(
+                    request.getPaymentOrderId(), "待回调", "warn") != 1) {
+                throw new IllegalStateException(
+                        "payment attempt pending update was not applied atomically");
+            }
         }
         paymentMapper.updatePrepayStatusByPaymentOrderId(
                 request.getPaymentOrderId(),

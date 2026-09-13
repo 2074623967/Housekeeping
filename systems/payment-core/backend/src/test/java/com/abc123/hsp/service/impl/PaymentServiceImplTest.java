@@ -689,7 +689,7 @@ class PaymentServiceImplTest {
                 anyString(), anyString(), anyString(), anyString());
         verify(paymentMapper, never()).insertPaymentProcessLog(
                 org.mockito.ArgumentMatchers.any(com.abc123.hsp.entity.PaymentProcessLogEntity.class));
-        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
                 anyString(), anyString(), anyString());
         verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
                 anyString(), anyString(), anyString());
@@ -731,7 +731,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).insertNotifyLog(
                 anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString(), anyString(), anyString());
-        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
                 anyString(), anyString(), anyString());
         verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
                 anyString(), anyString(), anyString());
@@ -771,7 +771,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).insertNotifyLog(
                 anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString(), anyString(), anyString());
-        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
                 anyString(), anyString(), anyString());
         verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
                 anyString(), anyString(), anyString());
@@ -1428,6 +1428,8 @@ class PaymentServiceImplTest {
         when(paymentMapper.findDetail("PAY-CALLBACK-002")).thenReturn(detail, detail);
         when(paymentMapper.markPaymentPendingFromCallback(
                 "PAY-CALLBACK-002", "WX-CALLBACK-002")).thenReturn(1);
+        when(paymentMapper.updateLatestPaymentAttemptStatus(
+                "PAY-CALLBACK-002", "待回调", "warn")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-CALLBACK-002")).thenReturn(Collections.emptyList());
@@ -1467,6 +1469,37 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldFailPendingCallbackWhenLatestAttemptCannotBeUpdated() {
+        PaymentDetailDTO detail = queryDetail("PAY-CALLBACK-PENDING-MISSING", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-PENDING-MISSING")).thenReturn(detail);
+        when(paymentMapper.markPaymentPendingFromCallback(
+                "PAY-CALLBACK-PENDING-MISSING", "WX-CALLBACK-PENDING-MISSING")).thenReturn(1);
+        when(paymentMapper.updateLatestPaymentAttemptStatus(
+                "PAY-CALLBACK-PENDING-MISSING", "待回调", "warn")).thenReturn(0);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-PENDING-MISSING");
+        callback.setTradeStatus("PROCESSING");
+        callback.setChannelTransactionNo("WX-CALLBACK-PENDING-MISSING");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment attempt pending update was not applied atomically", exception.getMessage());
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldNotLetPendingCallbackOverwriteConcurrentSuccess() {
         PaymentDetailDTO pendingDetail = queryDetail("PAY-CALLBACK-PENDING-RACE", "WAIT_CALLBACK");
         PaymentDetailDTO settledDetail = queryDetail("PAY-CALLBACK-PENDING-RACE", "SUCCESS");
@@ -1496,7 +1529,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper, never()).insertNotifyLog(
                 anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString(), anyString(), anyString());
-        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
                 anyString(), anyString(), anyString());
         verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
                 anyString(), anyString(), anyString());
@@ -3095,7 +3128,7 @@ class PaymentServiceImplTest {
                 paymentEventDispatchService)
                 .query(request);
 
-        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
                 anyString(), anyString(), anyString());
         verify(paymentMapper, never()).insertEvent(
                 anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());

@@ -91,7 +91,6 @@ public class PaymentExpiryTaskServiceImpl implements PaymentExpiryTaskService {
             paymentMapper.deleteExpiryCloseRetry(payment.getPaymentOrderId());
             return false;
         }
-        paymentMapper.updatePaymentAttemptStatusByPaymentOrderId(payment.getPaymentOrderId(), "已关闭", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(payment.getPaymentOrderId(), "已失效", "danger");
         String eventNo = "EVT" + System.currentTimeMillis()
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8);

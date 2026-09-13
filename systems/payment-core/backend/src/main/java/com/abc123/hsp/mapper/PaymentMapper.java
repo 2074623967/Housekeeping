@@ -240,9 +240,9 @@ public interface PaymentMapper {
             @Param("mappingMatched") Boolean mappingMatched);
 
     /**
-     * 按支付单回写支付尝试状态，便于前后端查看当前尝试收口结果。
+     * 回写支付单的最新一次支付尝试状态，保留历史尝试事实。
      */
-    void updatePaymentAttemptStatusByPaymentOrderId(@Param("paymentOrderId") String paymentOrderId,
+    int updateLatestPaymentAttemptStatus(@Param("paymentOrderId") String paymentOrderId,
             @Param("attemptStatus") String attemptStatus,
             @Param("attemptStatusType") String attemptStatusType);
 

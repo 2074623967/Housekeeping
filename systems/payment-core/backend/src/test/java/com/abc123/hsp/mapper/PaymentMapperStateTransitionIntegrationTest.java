@@ -242,6 +242,17 @@ class PaymentMapperStateTransitionIntegrationTest {
     }
 
     @Test
+    void shouldOnlyUpdateLatestPaymentAttemptStatus() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(1, mapper.updateLatestPaymentAttemptStatus(
+                    "PAY-SUBMITTED", "待回调", "warn"));
+            assertPaymentAttemptStatuses(session, "PAY-SUBMITTED", "待回调", "待回调", "warn");
+        }
+    }
+
+    @Test
     void shouldExposeLatestSubmissionFactToPaymentListAndCashier() {
         try (SqlSession session = sqlSessionFactory.openSession()) {
             PaymentMapper mapper = session.getMapper(PaymentMapper.class);
@@ -448,6 +459,24 @@ class PaymentMapperStateTransitionIntegrationTest {
                 org.junit.jupiter.api.Assertions.assertTrue(resultSet.next());
                 assertEquals("待回调", resultSet.getString("attempt_status"));
                 org.junit.jupiter.api.Assertions.assertNull(resultSet.getTimestamp("completed_at"));
+            }
+        }
+    }
+
+    private void assertPaymentAttemptStatuses(SqlSession session, String paymentOrderId,
+            String earlierStatus, String latestStatus, String latestStatusType) throws Exception {
+        try (java.sql.PreparedStatement statement = session.getConnection().prepareStatement(
+                "SELECT attempt_status, attempt_status_type FROM t_payment_attempt "
+                        + "WHERE payment_order_id = ? ORDER BY created_at ASC, id ASC")) {
+            statement.setString(1, paymentOrderId);
+            try (java.sql.ResultSet resultSet = statement.executeQuery()) {
+                org.junit.jupiter.api.Assertions.assertTrue(resultSet.next());
+                assertEquals(earlierStatus, resultSet.getString("attempt_status"));
+                org.junit.jupiter.api.Assertions.assertNull(resultSet.getString("attempt_status_type"));
+                org.junit.jupiter.api.Assertions.assertTrue(resultSet.next());
+                assertEquals(latestStatus, resultSet.getString("attempt_status"));
+                assertEquals(latestStatusType, resultSet.getString("attempt_status_type"));
+                org.junit.jupiter.api.Assertions.assertFalse(resultSet.next());
             }
         }
     }

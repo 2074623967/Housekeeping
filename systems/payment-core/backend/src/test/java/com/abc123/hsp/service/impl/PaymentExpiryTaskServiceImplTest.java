@@ -59,8 +59,10 @@ class PaymentExpiryTaskServiceImplTest {
         org.junit.jupiter.api.Assertions.assertTrue(result.getFailedPaymentOrderIds().isEmpty());
         verify(transactionManager).commit(transactionStatus);
         verify(paymentMapper).markExpiredUnsubmittedPaymentClosed("PAY-EXPIRED");
-        verify(paymentMapper).updatePaymentAttemptStatusByPaymentOrderId(
-                "PAY-EXPIRED", "已关闭", "danger");
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString());
         verify(paymentMapper).updatePrepayStatusByPaymentOrderId(
                 "PAY-EXPIRED", "已失效", "danger");
         verify(paymentMapper).insertEvent(
@@ -138,7 +140,7 @@ class PaymentExpiryTaskServiceImplTest {
         org.junit.jupiter.api.Assertions.assertEquals(0, result.getSuccessCount());
         org.junit.jupiter.api.Assertions.assertEquals(1, result.getSkippedCount());
         org.junit.jupiter.api.Assertions.assertEquals(0, result.getFailCount());
-        verify(paymentMapper, never()).updatePaymentAttemptStatusByPaymentOrderId(
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
