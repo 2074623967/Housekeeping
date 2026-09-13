@@ -123,6 +123,7 @@ onMounted(loadAll);
           <table>
             <thead><tr><th>编码</th><th>策略</th><th>维度</th><th>动作</th><th>等级</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
+              <tr v-if="policies.length === 0"><td colspan="7" class="empty-cell">暂无风险策略。</td></tr>
               <tr v-for="item in policies" :key="item.policyCode">
                 <td>{{ item.policyCode }}</td><td>{{ item.policyName }}</td><td>{{ item.riskDimension }}</td><td>{{ item.hitAction }}</td><td>{{ item.riskLevel }}</td>
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
@@ -137,6 +138,7 @@ onMounted(loadAll);
           <table>
             <thead><tr><th>编码</th><th>规则</th><th>对象</th><th>场景</th><th>限额</th><th>时间窗</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
+              <tr v-if="limitRules.length === 0"><td colspan="8" class="empty-cell">暂无限额规则。</td></tr>
               <tr v-for="item in limitRules" :key="item.ruleCode">
                 <td>{{ item.ruleCode }}</td><td>{{ item.ruleName }}</td><td>{{ item.targetType }}</td><td>{{ item.sceneCode }}</td><td>{{ item.limitValue }}</td><td>{{ item.timeWindow }}</td>
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
@@ -153,6 +155,7 @@ onMounted(loadAll);
           <table>
             <thead><tr><th>编码</th><th>主体</th><th>类型</th><th>原因</th><th>动作</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
+              <tr v-if="blocklists.length === 0"><td colspan="7" class="empty-cell">暂无黑名单记录。</td></tr>
               <tr v-for="item in blocklists" :key="item.blockCode">
                 <td>{{ item.blockCode }}</td><td>{{ item.subjectValue }}</td><td>{{ item.subjectType }}</td><td>{{ item.reason }}</td><td>{{ item.actionType }}</td>
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
@@ -167,6 +170,7 @@ onMounted(loadAll);
           <table>
             <thead><tr><th>编码</th><th>规则</th><th>对象</th><th>阈值</th><th>通知</th><th>状态</th><th>操作</th></tr></thead>
             <tbody>
+              <tr v-if="monitorRules.length === 0"><td colspan="7" class="empty-cell">暂无监控规则。</td></tr>
               <tr v-for="item in monitorRules" :key="item.monitorCode">
                 <td>{{ item.monitorCode }}</td><td>{{ item.monitorName }}</td><td>{{ item.monitorTarget }}</td><td>{{ item.alertThreshold }}</td><td>{{ item.notifyPolicy }}</td>
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
@@ -183,6 +187,7 @@ onMounted(loadAll);
           <table>
             <thead><tr><th>事件号</th><th>支付单</th><th>命中策略</th><th>风险等级</th><th>结果</th><th>来源</th><th>时间</th></tr></thead>
             <tbody>
+              <tr v-if="interceptEvents.length === 0"><td colspan="7" class="empty-cell">暂无风险拦截事件。</td></tr>
               <tr v-for="item in interceptEvents" :key="item.eventNo">
                 <td>{{ item.eventNo }}</td><td>{{ item.paymentOrderId }}</td><td>{{ item.hitPolicy }}</td><td>{{ item.riskLevel }}</td><td>{{ item.decisionResult }}</td><td>{{ item.sourceSystem }}</td><td>{{ item.happenedAt }}</td>
               </tr>
@@ -198,6 +203,7 @@ onMounted(loadAll);
           <table>
             <thead><tr><th>复核单号</th><th>业务单号</th><th>风险标签</th><th>事项</th><th>状态</th><th>审核人</th><th>操作</th></tr></thead>
             <tbody>
+              <tr v-if="reviewOrders.length === 0"><td colspan="7" class="empty-cell">暂无人工复核单。</td></tr>
               <tr v-for="item in reviewOrders" :key="item.reviewNo">
                 <td>{{ item.reviewNo }}</td><td>{{ item.businessNo }}</td><td>{{ item.riskTag }}</td><td>{{ item.reviewItem }}</td>
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td><td>{{ item.reviewer || "-" }}</td>

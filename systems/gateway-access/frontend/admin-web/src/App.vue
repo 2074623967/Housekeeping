@@ -229,6 +229,7 @@ onMounted(loadAll);
             </tr>
           </thead>
           <tbody>
+            <tr v-if="applications.length === 0"><td colspan="9" class="empty-cell">暂无接入应用。</td></tr>
             <tr v-for="item in applications" :key="item.appCode">
               <td>{{ item.appCode }}</td>
               <td>{{ item.appName }}</td>
@@ -283,6 +284,7 @@ onMounted(loadAll);
             </tr>
           </thead>
           <tbody>
+            <tr v-if="gateways.length === 0"><td colspan="9" class="empty-cell">当前筛选条件下暂无渠道网关。</td></tr>
             <tr v-for="item in gateways" :key="item.gatewayCode">
               <td>{{ item.gatewayCode }}</td>
               <td>{{ item.gatewayName }}</td>
@@ -331,6 +333,7 @@ onMounted(loadAll);
               </tr>
             </thead>
             <tbody>
+              <tr v-if="certificates.length === 0"><td colspan="8" class="empty-cell">当前筛选条件下暂无证书。</td></tr>
               <tr v-for="item in certificates" :key="item.certificateCode">
                 <td>{{ item.certificateCode }}</td>
                 <td>{{ item.gatewayCode }}</td>
@@ -369,6 +372,7 @@ onMounted(loadAll);
               </tr>
             </thead>
             <tbody>
+              <tr v-if="permissions.length === 0"><td colspan="6" class="empty-cell">暂无接入权限。</td></tr>
               <tr v-for="item in permissions" :key="item.permissionCode">
                 <td>{{ item.permissionCode }}</td>
                 <td>{{ item.appCode }}</td>
@@ -420,6 +424,7 @@ onMounted(loadAll);
             </tr>
           </thead>
           <tbody>
+            <tr v-if="releaseRoutes.length === 0"><td colspan="9" class="empty-cell">当前筛选条件下暂无灰度路由。</td></tr>
             <tr v-for="item in releaseRoutes" :key="item.routeCode">
               <td>{{ item.routeCode }}</td>
               <td>{{ item.gatewayCode }}</td>
@@ -476,6 +481,7 @@ onMounted(loadAll);
             </tr>
           </thead>
           <tbody>
+            <tr v-if="auditLogs.length === 0"><td colspan="9" class="empty-cell">当前筛选条件下暂无审计记录。</td></tr>
             <tr v-for="item in auditLogs" :key="item.requestId">
               <td>{{ item.requestId }}</td>
               <td>{{ item.appCode }}</td>
