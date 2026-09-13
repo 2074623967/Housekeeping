@@ -4578,6 +4578,13 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. 管理端只用动作合计决定人工巡检按钮状态；`POST /api/payment-task-center/escalate-overdue-issues` 请求仍只提交操作人，执行时重新查询两个候选集合，实际 `processedCount` 不承诺等于页面快照。
 4. 本轮不修改 SLA 阈值、告警生成键、每类批次上限、任务日志结构或自动调度契约；本地 SQL 与页面样例不构成真实通知送达或生产运行证据。
 
+### 14.335 查单监控告警候选计数契约
+
+1. `GET /api/payment-task-center/overview` 新增 `actionableQueryMonitorAlertCount`，表示当前可生成的查单失败趋势和限流拒绝监控告警类别数，无候选时返回 `0`，最大返回 `2`。
+2. 失败趋势候选沿用失败笔数阈值，或最小样本数与失败率组合阈值；限流候选沿用限流拒绝次数阈值。任一类别在冷却窗口内已有同类待确认 `IN_APP_OUTBOX` 来源告警时不计入候选。
+3. 管理端只用候选数决定人工按钮状态；`POST /api/payment-task-center/generate-query-monitor-alerts` 请求仍只提交操作人，执行时重新读取指标和冷却状态，实际 `processedCount` 与 `successCount` 不承诺等于页面快照。
+4. 本轮不修改阈值配置、冷却时长、生成键、任务日志或自动调度契约；固定样例不构成真实查询流量、生产告警生成或通知送达证据。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
