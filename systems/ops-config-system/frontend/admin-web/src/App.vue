@@ -289,6 +289,7 @@ onMounted(loadAll);
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td><button class="link" :disabled="activeCode === item.templateCode" @click="toggle(opsConfigApi.toggleAgreementTemplate, item.templateCode, item.status !== 'ENABLED', '协议模板')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
               </tr>
+              <tr v-if="agreementTemplates.length === 0"><td colspan="7" class="empty">暂无协议模板</td></tr>
             </tbody>
           </table>
         </article>
@@ -303,6 +304,7 @@ onMounted(loadAll);
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td><button class="link" :disabled="activeCode === item.businessCode" @click="toggle(opsConfigApi.toggleBusinessLine, item.businessCode, item.status !== 'ENABLED', '业务线')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
               </tr>
+              <tr v-if="businessLines.length === 0"><td colspan="7" class="empty">暂无业务线</td></tr>
             </tbody>
           </table>
         </article>
@@ -319,6 +321,7 @@ onMounted(loadAll);
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td><button class="link" :disabled="activeCode === item.typeCode" @click="toggle(opsConfigApi.togglePaymentType, item.typeCode, item.status !== 'ENABLED', '支付类型')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
               </tr>
+              <tr v-if="paymentTypes.length === 0"><td colspan="7" class="empty">暂无支付类型</td></tr>
             </tbody>
           </table>
         </article>
@@ -333,6 +336,7 @@ onMounted(loadAll);
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td><button class="link" :disabled="activeCode === item.templateCode" @click="toggle(opsConfigApi.toggleCashierTemplate, item.templateCode, item.status !== 'ENABLED', '收银台模板')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
               </tr>
+              <tr v-if="cashierTemplates.length === 0"><td colspan="7" class="empty">暂无收银台模板</td></tr>
             </tbody>
           </table>
         </article>
@@ -349,6 +353,7 @@ onMounted(loadAll);
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td><button class="link" :disabled="activeCode === item.channelCode" @click="toggle(opsConfigApi.toggleChannelProfile, item.channelCode, item.status !== 'ENABLED', '渠道档案')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
               </tr>
+              <tr v-if="channelProfiles.length === 0"><td colspan="8" class="empty">暂无渠道档案</td></tr>
             </tbody>
           </table>
         </article>
@@ -363,6 +368,7 @@ onMounted(loadAll);
                 <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
                 <td><button class="link" :disabled="activeCode === item.routeCode" @click="toggle(opsConfigApi.toggleRoutingRule, item.routeCode, item.status !== 'ENABLED', '路由规则')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
               </tr>
+              <tr v-if="routingRules.length === 0"><td colspan="8" class="empty">暂无路由规则</td></tr>
             </tbody>
           </table>
         </article>
@@ -378,6 +384,7 @@ onMounted(loadAll);
               <td><span class="tag" :class="item.statusType">{{ item.status }}</span></td>
               <td><button class="link" :disabled="activeCode === item.controlCode" @click="toggle(opsConfigApi.toggleSystemControl, item.controlCode, item.status !== 'ENABLED', '系统控制')">{{ item.status === "ENABLED" ? "停用" : "启用" }}</button></td>
             </tr>
+            <tr v-if="systemControls.length === 0"><td colspan="7" class="empty">暂无系统控制项</td></tr>
           </tbody>
         </table>
       </section>

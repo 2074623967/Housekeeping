@@ -333,6 +333,9 @@ onMounted(refresh);
               <td><em>{{ item.status }}</em></td>
               <td><button class="link" @click="selectTotalAccount(item)">查看详情</button></td>
             </tr>
+            <tr v-if="totalAccounts.length === 0">
+              <td colspan="9" class="empty">暂无总保证金账户预览</td>
+            </tr>
           </tbody>
         </table>
 
@@ -365,6 +368,9 @@ onMounted(refresh);
                   <td>¥{{ Number(item.currentBalance || 0).toFixed(2) }}</td>
                   <td>{{ item.bindingStatus }}</td>
                 </tr>
+                <tr v-if="totalAccountDetail.bindings.length === 0">
+                  <td colspan="6" class="empty">当前总账户暂无规则绑定</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -389,12 +395,15 @@ onMounted(refresh);
                   <td>¥{{ Number(item.migratedBalance || 0).toFixed(2) }}</td>
                   <td>{{ item.migrationStatus }}</td>
                 </tr>
+                <tr v-if="totalAccountDetail.migrations.length === 0">
+                  <td colspan="4" class="empty">当前总账户暂无结转记录</td>
+                </tr>
               </tbody>
             </table>
           </div>
         </div>
 
-        <div class="panel" v-if="migrations.length">
+        <div class="panel">
           <div class="section-head">
             <div>
               <span>MIGRATION BOARD</span>
@@ -415,6 +424,9 @@ onMounted(refresh);
                 <td>{{ item.targetTotalAccountNo }}</td>
                 <td>¥{{ Number(item.migratedBalance || 0).toFixed(2) }}</td>
                 <td>{{ item.migrationRemark }}</td>
+              </tr>
+              <tr v-if="migrations.length === 0">
+                <td colspan="6" class="empty">暂无待结转账户</td>
               </tr>
             </tbody>
           </table>

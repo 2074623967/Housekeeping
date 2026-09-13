@@ -12,7 +12,9 @@ import {
 
 const activeView = ref("dashboard");
 const loading = ref(false);
+const activeOperation = ref("");
 const errorMessage = ref("");
+const overviewError = ref("");
 const selectedRefund = ref(null);
 const query = reactive({
   refundOrderId: "",
@@ -59,7 +61,12 @@ const selectedStatus = computed(() =>
 );
 
 async function loadOverview() {
-  Object.assign(overview, await getOverview());
+  overviewError.value = "";
+  try {
+    Object.assign(overview, await getOverview());
+  } catch (error) {
+    overviewError.value = error.message;
+  }
 }
 
 async function loadList() {
@@ -113,7 +120,9 @@ async function exportDetail(refundOrderId) {
 }
 
 async function runAction(action) {
-  if (!selectedRefund.value) return;
+  if (!selectedRefund.value || activeOperation.value) return;
+  activeOperation.value = `refund:${action}`;
+  errorMessage.value = "";
   try {
     const payload = action === "callback"
       ? {
@@ -130,6 +139,8 @@ async function runAction(action) {
     selectedRefund.value = await getRefundDetail(selectedRefund.value.refundOrderId);
   } catch (error) {
     errorMessage.value = error.message;
+  } finally {
+    activeOperation.value = "";
   }
 }
 
@@ -144,6 +155,9 @@ async function showOutbox() {
 }
 
 async function runOutboxDispatch(item, simulateResult) {
+  if (activeOperation.value) return;
+  activeOperation.value = `outbox:${item.eventId}:${simulateResult}`;
+  errorMessage.value = "";
   try {
     await dispatchRefundOutbox(item.eventId, {
       simulateResult,
@@ -152,6 +166,8 @@ async function runOutboxDispatch(item, simulateResult) {
     await loadOutbox();
   } catch (error) {
     errorMessage.value = error.message;
+  } finally {
+    activeOperation.value = "";
   }
 }
 
@@ -205,10 +221,11 @@ async function refreshCurrentView() {
           <p class="eyebrow">HOME SERVICE PAYMENT PLATFORM / REVERSE FLOW</p>
           <h1>{{ activeView === "detail" ? "退款单详情" : activeView === "list" ? "退款单管理" : activeView === "outbox" ? "退款成功事件出站管理" : "退款运营工作台" }}</h1>
         </div>
-        <button class="refresh-button" @click="refreshCurrentView()">刷新数据</button>
+        <button class="refresh-button" :disabled="loading || !!activeOperation" @click="refreshCurrentView()">{{ loading ? "刷新中..." : "刷新数据" }}</button>
       </header>
 
       <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
+      <div v-if="overviewError" class="error-banner">概览加载失败：{{ overviewError }}</div>
 
       <section v-if="activeView === 'dashboard'" class="dashboard">
         <div class="hero panel">
@@ -284,8 +301,8 @@ async function refreshCurrentView() {
             <td>{{ item.lastRelayAt ? item.lastRelayAt.replace("T", " ") : "-" }}</td>
             <td>{{ item.lastErrorMessage || "-" }}</td>
             <td class="table-actions">
-              <button v-if="item.status !== 'SENT'" class="link-button" @click="runOutboxDispatch(item, 'SUCCESS')">模拟派发成功</button>
-              <button v-if="item.status !== 'SENT'" class="link-button danger-link" @click="runOutboxDispatch(item, 'FAIL')">模拟派发失败</button>
+              <button v-if="item.status !== 'SENT'" class="link-button" :disabled="!!activeOperation" @click="runOutboxDispatch(item, 'SUCCESS')">{{ activeOperation === `outbox:${item.eventId}:SUCCESS` ? "派发中..." : "模拟派发成功" }}</button>
+              <button v-if="item.status !== 'SENT'" class="link-button danger-link" :disabled="!!activeOperation" @click="runOutboxDispatch(item, 'FAIL')">{{ activeOperation === `outbox:${item.eventId}:FAIL` ? "派发中..." : "模拟派发失败" }}</button>
             </td>
           </tr></tbody>
         </table>
@@ -304,15 +321,15 @@ async function refreshCurrentView() {
             <div class="wide"><span>退款原因</span><strong>{{ selectedRefund.refundReason }}</strong></div>
           </div>
           <div class="actions">
-            <button class="secondary-button" @click="exportDetail(selectedRefund.refundOrderId)">导出快照</button>
-            <button v-if="selectedRefund.status === 'REVIEWING'" class="primary-button" @click="runAction('approve')">审核通过</button>
-            <button v-if="selectedRefund.status === 'APPROVED'" class="primary-button" @click="runAction('submit')">提交渠道</button>
-            <button v-if="selectedRefund.status === 'FAIL'" class="primary-button" @click="runAction('retry')">失败重试</button>
-            <button v-if="selectedRefund.status === 'PROCESSING'" class="secondary-button" @click="runAction('callback')">模拟成功回调</button>
-            <button class="secondary-button" @click="showList">返回列表</button>
+            <button class="secondary-button" :disabled="!!activeOperation" @click="exportDetail(selectedRefund.refundOrderId)">导出快照</button>
+            <button v-if="selectedRefund.status === 'REVIEWING'" class="primary-button" :disabled="!!activeOperation" @click="runAction('approve')">{{ activeOperation === "refund:approve" ? "审核中..." : "审核通过" }}</button>
+            <button v-if="selectedRefund.status === 'APPROVED'" class="primary-button" :disabled="!!activeOperation" @click="runAction('submit')">{{ activeOperation === "refund:submit" ? "提交中..." : "提交渠道" }}</button>
+            <button v-if="selectedRefund.status === 'FAIL'" class="primary-button" :disabled="!!activeOperation" @click="runAction('retry')">{{ activeOperation === "refund:retry" ? "重试中..." : "失败重试" }}</button>
+            <button v-if="selectedRefund.status === 'PROCESSING'" class="secondary-button" :disabled="!!activeOperation" @click="runAction('callback')">{{ activeOperation === "refund:callback" ? "回调中..." : "模拟成功回调" }}</button>
+            <button class="secondary-button" :disabled="!!activeOperation" @click="showList">返回列表</button>
           </div>
         </section>
-        <section v-if="selectedRefund" class="panel timeline-panel"><span class="section-kicker">AUDIT TRAIL</span><h3>操作日志</h3><ol class="timeline"><li v-for="log in selectedRefund.operationLogs" :key="log.logNo"><span class="timeline-dot"></span><div><strong>{{ log.actionName }}</strong><small>{{ log.operatorName }} · {{ log.operatedAt?.replace("T", " ") }}</small><p>{{ log.operationRemark }}</p></div><em>{{ statusLabel[log.toStatus] || log.toStatus }}</em></li></ol></section>
+        <section v-if="selectedRefund" class="panel timeline-panel"><span class="section-kicker">AUDIT TRAIL</span><h3>操作日志</h3><div v-if="!selectedRefund.operationLogs.length" class="empty-state">暂无操作日志</div><ol v-else class="timeline"><li v-for="log in selectedRefund.operationLogs" :key="log.logNo"><span class="timeline-dot"></span><div><strong>{{ log.actionName }}</strong><small>{{ log.operatorName }} · {{ log.operatedAt?.replace("T", " ") }}</small><p>{{ log.operationRemark }}</p></div><em>{{ statusLabel[log.toStatus] || log.toStatus }}</em></li></ol></section>
       </section>
     </main>
   </div>
