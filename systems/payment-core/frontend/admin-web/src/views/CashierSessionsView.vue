@@ -1,13 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import { cashierSessionApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
 import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { ordersRoute, paymentFlowsRoute } from "../router/listRoutes";
 
+const route = useRoute();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const total = ref(0);
 const overview = ref({
@@ -21,17 +24,29 @@ const overview = ref({
   totalAmount: "¥0.00"
 });
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
-const filters = ref({
-  sessionNo: "",
-  paymentOrderId: "",
-  orderNo: "",
-  customerName: "",
-  terminal: "全部",
-  sessionStatus: "全部",
-  sortField: "createdAt",
-  sortOrder: "desc"
-});
+let latestLoadRequestId = 0;
+
+function queryString(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function filtersFromRoute() {
+  return {
+    sessionNo: queryString(route.query.sessionNo, ""),
+    paymentOrderId: queryString(route.query.paymentOrderId, ""),
+    orderNo: queryString(route.query.orderNo, ""),
+    customerName: queryString(route.query.customerName, ""),
+    terminal: queryString(route.query.terminal, "全部"),
+    sessionStatus: queryString(route.query.sessionStatus, "全部"),
+    sortField: queryString(route.query.sortField, "createdAt"),
+    sortOrder: queryString(route.query.sortOrder, "desc")
+  };
+}
+
+const filters = ref(filtersFromRoute());
 
 const metrics = computed(() => ({
   total: overview.value.totalSessionCount,
@@ -43,8 +58,21 @@ const metrics = computed(() => ({
   expiringSoonCount: overview.value.expiringSoonCount,
   totalAmount: overview.value.totalAmount
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+
+function buildQuery() {
+  return {
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     sessionNo: "",
     paymentOrderId: "",
@@ -60,7 +88,17 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isLoading.value) {
+    return;
+  }
   pageNo.value = 1;
+  loadCashierSessions();
+}
+
+function refreshCashierSessions() {
+  if (isLoading.value) {
+    return;
+  }
   loadCashierSessions();
 }
 
@@ -68,26 +106,18 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadCashierSessions() {
+async function loadCashierSessions(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const query = {
-      sessionNo: filters.value.sessionNo,
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      customerName: filters.value.customerName,
-      terminal: filters.value.terminal,
-      sessionStatus: filters.value.sessionStatus,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    };
     const [overviewResult, result] = await Promise.all([
       cashierSessionApi.getOverview(query),
       cashierSessionApi.getList(query)
     ]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     overview.value = {
       ...overview.value,
       ...overviewResult
@@ -95,36 +125,53 @@ async function loadCashierSessions() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function exportSessions() {
-  const exportUrl = cashierSessionApi.buildExportUrl({
-    sessionNo: filters.value.sessionNo,
-    paymentOrderId: filters.value.paymentOrderId,
-    orderNo: filters.value.orderNo,
-    customerName: filters.value.customerName,
-    terminal: filters.value.terminal,
-    sessionStatus: filters.value.sessionStatus,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = cashierSessionApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadCashierSessions();
+  loadCashierSessions({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 onMounted(loadCashierSessions);
+
+watch(
+  () => [route.query.sessionNo, route.query.paymentOrderId, route.query.orderNo,
+    route.query.customerName, route.query.terminal, route.query.sessionStatus,
+    route.query.sortField, route.query.sortOrder],
+  () => {
+    filters.value = filtersFromRoute();
+    pageNo.value = 1;
+    loadCashierSessions();
+  }
+);
 </script>
 
 <template>
@@ -134,10 +181,15 @@ onMounted(loadCashierSessions);
         <h2>收银台会话管理</h2>
         <p>查看预付单会话、终端来源、支付关联和失效状态，快速定位收银台异常</p>
       </div>
-      <button class="button primary" @click="exportSessions">导出会话</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="refreshCashierSessions">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="isLoading || !canExport" @click="exportSessions">导出会话</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">会话总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -164,7 +216,7 @@ onMounted(loadCashierSessions);
       </article>
     </section>
 
-    <section class="panel overview-panel">
+    <section v-if="hasLoadedData" class="panel overview-panel">
       <div class="section-title">
         <h3>会话风险总览</h3>
         <span class="meta">用于识别即将失效、金额聚集和终端分布异常</span>
@@ -190,29 +242,29 @@ onMounted(loadCashierSessions);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        收银台会话加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "收银台会话刷新失败，当前展示上次成功快照：" : "收银台会话加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>会话号</label>
-          <input v-model="filters.sessionNo" placeholder="请输入预付单/会话号" />
+          <input v-model="filters.sessionNo" placeholder="请输入预付单/会话号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>客户名称</label>
-          <input v-model="filters.customerName" placeholder="请输入客户名称" />
+          <input v-model="filters.customerName" placeholder="请输入客户名称" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>终端场景</label>
-          <select v-model="filters.terminal">
+          <select v-model="filters.terminal" :disabled="isLoading">
             <option>全部</option>
             <option>H5</option>
             <option>PC</option>
@@ -222,7 +274,7 @@ onMounted(loadCashierSessions);
         </div>
         <div class="field">
           <label>会话状态</label>
-          <select v-model="filters.sessionStatus">
+          <select v-model="filters.sessionStatus" :disabled="isLoading">
             <option>全部</option>
             <option>待支付</option>
             <option>支付中</option>
@@ -233,7 +285,7 @@ onMounted(loadCashierSessions);
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="expiresAt">失效时间</option>
             <option value="amount">会话金额</option>
@@ -241,7 +293,7 @@ onMounted(loadCashierSessions);
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
@@ -251,12 +303,16 @@ onMounted(loadCashierSessions);
           <input value="当前已接入后端筛选和排序，便于定位终端会话异常" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">收银台会话加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的收银台会话快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的收银台会话</div>
 
@@ -337,11 +393,11 @@ onMounted(loadCashierSessions);
           <div v-else class="state-box">选择左侧会话后，可在这里查看详情与排查建议。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条会话</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>

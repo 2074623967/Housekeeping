@@ -5,6 +5,7 @@ import { settlementApi } from "../api/client";
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
+const hasLoadedData = ref(false);
 const errorMessage = ref("");
 const total = ref(0);
 const overview = ref({
@@ -19,7 +20,10 @@ const overview = ref({
   negativeNetSettleCount: 0
 });
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
+let latestLoadRequestId = 0;
 const filters = ref({
   settlementOrderId: "",
   workerKeyword: "",
@@ -38,8 +42,21 @@ const metrics = computed(() => ({
   depositImpactTotal: overview.value.totalDepositImpactAmount,
   negativeNetSettleCount: overview.value.negativeNetSettleCount
 }));
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
+
+function buildQuery() {
+  return {
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     settlementOrderId: "",
     workerKeyword: "",
@@ -51,7 +68,17 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isLoading.value) {
+    return;
+  }
   pageNo.value = 1;
+  loadWorkerSettlements();
+}
+
+function refreshWorkerSettlements() {
+  if (isLoading.value) {
+    return;
+  }
   loadWorkerSettlements();
 }
 
@@ -59,22 +86,18 @@ function pickItem(item) {
   selectedItem.value = item;
 }
 
-async function loadWorkerSettlements() {
+async function loadWorkerSettlements(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const query = {
-      settlementOrderId: filters.value.settlementOrderId,
-      workerKeyword: filters.value.workerKeyword,
-      settlementStatus: filters.value.settlementStatus,
-      payoutStatus: filters.value.payoutStatus,
-      pageNo: pageNo.value,
-      pageSize
-    };
     const [overviewResult, result] = await Promise.all([
       settlementApi.getWorkerOverview(query),
       settlementApi.getWorkerList(query)
     ]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     overview.value = {
       ...overview.value,
       ...overviewResult
@@ -82,28 +105,38 @@ async function loadWorkerSettlements() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
+    hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (isLoading.value || isSnapshotStale.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadWorkerSettlements();
+  loadWorkerSettlements({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 function exportWorkerSettlements() {
-  const exportUrl = settlementApi.buildWorkerExportUrl({
-    settlementOrderId: filters.value.settlementOrderId,
-    workerKeyword: filters.value.workerKeyword,
-    settlementStatus: filters.value.settlementStatus,
-    payoutStatus: filters.value.payoutStatus
-  });
+  if (isLoading.value || !canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = settlementApi.buildWorkerExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
@@ -117,10 +150,15 @@ onMounted(loadWorkerSettlements);
         <h2>服务者结算单</h2>
         <p>查看家政服务者的待结算、审核、出款状态</p>
       </div>
-      <button class="button primary" @click="exportWorkerSettlements">导出结算单</button>
+      <div class="toolbar-actions">
+        <button class="button secondary" :disabled="isLoading" @click="refreshWorkerSettlements">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="isLoading || !canExport" @click="exportWorkerSettlements">导出结算单</button>
+      </div>
     </div>
 
-    <section class="card-grid">
+    <section v-if="hasLoadedData" class="card-grid">
       <article class="card">
         <p class="card-title">结算单总数</p>
         <p class="card-value">{{ metrics.total }}</p>
@@ -147,7 +185,7 @@ onMounted(loadWorkerSettlements);
       </article>
     </section>
 
-    <section class="panel overview-panel">
+    <section v-if="hasLoadedData" class="panel overview-panel">
       <div class="section-title">
         <h3>结算风险总览</h3>
         <span class="meta">用于支付侧快速判断服务者出款压力与欠款风险</span>
@@ -173,21 +211,21 @@ onMounted(loadWorkerSettlements);
 
     <section class="panel">
       <div v-if="errorMessage" class="error-banner">
-        服务者结算数据加载失败：{{ errorMessage }}
+        {{ hasLoadedData ? "服务者结算数据刷新失败，当前展示上次成功快照：" : "服务者结算数据加载失败：" }}{{ errorMessage }}
       </div>
 
       <div class="toolbar">
         <div class="field">
           <label>结算单号</label>
-          <input v-model="filters.settlementOrderId" placeholder="请输入结算单号" />
+          <input v-model="filters.settlementOrderId" placeholder="请输入结算单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>服务者 ID</label>
-          <input v-model="filters.workerKeyword" placeholder="请输入服务者名称" />
+          <input v-model="filters.workerKeyword" placeholder="请输入服务者名称" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>出款状态</label>
-          <select v-model="filters.payoutStatus">
+          <select v-model="filters.payoutStatus" :disabled="isLoading">
             <option>全部</option>
             <option>待出款</option>
             <option>出款中</option>
@@ -196,7 +234,7 @@ onMounted(loadWorkerSettlements);
         </div>
         <div class="field">
           <label>结算状态</label>
-          <select v-model="filters.settlementStatus">
+          <select v-model="filters.settlementStatus" :disabled="isLoading">
             <option>全部</option>
             <option>待审核</option>
             <option>待出款</option>
@@ -204,12 +242,16 @@ onMounted(loadWorkerSettlements);
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
       <div v-if="isLoading" class="state-box">服务者结算数据加载中...</div>
+
+      <div v-else-if="!hasLoadedData" class="state-box">当前没有可展示的服务者结算快照</div>
 
       <div v-else-if="!items.length" class="state-box">当前暂无符合条件的服务者结算数据</div>
 
@@ -278,11 +320,11 @@ onMounted(loadWorkerSettlements);
           <div v-else class="state-box">选择左侧结算单后，可在这里查看结算快照与定位说明。</div>
         </aside>
       </div>
-      <div v-if="total > pageSize" class="pager">
+      <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条服务者结算单</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="isLoading || isSnapshotStale || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
