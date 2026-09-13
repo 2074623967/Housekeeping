@@ -714,6 +714,14 @@ button {
 }
 
 @media (max-width: 640px) {
+  .section-heading {
+    flex-direction: column;
+  }
+
+  .support-tag {
+    align-self: flex-start;
+  }
+
   .channel-card {
     grid-template-columns: 54px minmax(0, 1fr);
   }
