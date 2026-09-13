@@ -18,6 +18,7 @@ const overview = ref({
   queryFailureRateMinimumSampleCount: 10,
   recentQueryRateLimitRejectionCount: 0,
   queryRateLimitRejectionCountThreshold: 10,
+  actionableQueryMonitorAlertCount: 0,
   pendingIssueAlertDispatchCount: 0,
   failedIssueAlertDispatchCount: 0,
   oldestPendingIssueAlertDispatchMinutes: 0,
@@ -459,10 +460,10 @@ onMounted(loadOverview);
               <p>评估当前监控窗口内的查单失败笔数、失败率和限流拒绝次数，命中阈值时生成可由现有 IM、短信和邮件链路派发的 outbox 告警。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.actionableQueryMonitorAlertCount === 0"
                 @click="runTask('PAYMENT_QUERY_MONITOR_ALERT', '主动查单监控告警', paymentTaskCenterApi.runGenerateQueryMonitorAlerts)"
               >
-                {{ activeTaskCode === "PAYMENT_QUERY_MONITOR_ALERT" ? "执行中..." : "生成查单监控告警" }}
+                {{ activeTaskCode === "PAYMENT_QUERY_MONITOR_ALERT" ? "执行中..." : overview.actionableQueryMonitorAlertCount === 0 ? "暂无可生成监控告警" : `生成查单监控告警（${overview.actionableQueryMonitorAlertCount}）` }}
               </button>
             </div>
 

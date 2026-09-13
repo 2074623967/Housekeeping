@@ -262,6 +262,7 @@ class PaymentTaskCenterServiceImplTest {
         Assertions.assertEquals(12, overview.getRecentQueryCount());
         Assertions.assertEquals(4, overview.getRecentQueryFailureCount());
         Assertions.assertEquals("33.33%", overview.getRecentQueryFailureRate());
+        Assertions.assertEquals(1, overview.getActionableQueryMonitorAlertCount());
         Assertions.assertEquals("33.33%", overview.getQueryTrends().get(0).getFailureRate());
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_QUERY_FAILURE_TREND".equals(alert.getAlertType())
@@ -279,10 +280,30 @@ class PaymentTaskCenterServiceImplTest {
 
         Assertions.assertEquals(10, overview.getRecentQueryRateLimitRejectionCount());
         Assertions.assertEquals(10, overview.getQueryRateLimitRejectionCountThreshold());
+        Assertions.assertEquals(1, overview.getActionableQueryMonitorAlertCount());
         Assertions.assertTrue(overview.getFocusAlerts().stream().anyMatch(alert ->
                 "PAYMENT_QUERY_RATE_LIMIT_REJECTION".equals(alert.getAlertType())
                         && "P1".equals(alert.getAlertLevel())
                         && alert.getAlertMessage().contains("共有 10 次支付或退款查单")));
+    }
+
+    @Test
+    void shouldExcludeQueryMonitorAlertsSuppressedByCooldownFromActionCandidates() {
+        when(paymentTaskCenterMapper.findOverviewSummary()).thenReturn(new PaymentTaskCenterOverviewDTO());
+        when(paymentTaskCenterMapper.countRecentChannelQueries(24)).thenReturn(12);
+        when(paymentTaskCenterMapper.countRecentChannelQueryFailures(24)).thenReturn(4);
+        when(paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(24)).thenReturn(10);
+        when(paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                "主动查单失败趋势", 60)).thenReturn(1);
+        when(paymentTaskCenterMapper.findRecentTaskRuns()).thenReturn(Collections.emptyList());
+
+        PaymentTaskCenterOverviewDTO overview = buildQueryTaskCenterService().overview();
+
+        Assertions.assertEquals(1, overview.getActionableQueryMonitorAlertCount());
+        verify(paymentTaskCenterMapper).countRecentUnacknowledgedQueryMonitorAlerts(
+                "主动查单失败趋势", 60);
+        verify(paymentTaskCenterMapper).countRecentUnacknowledgedQueryMonitorAlerts(
+                "主动查单限流拒绝", 60);
     }
 
     @Test

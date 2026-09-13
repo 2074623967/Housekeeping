@@ -341,6 +341,10 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         overview.setQueryFailureRateMinimumSampleCount(queryFailureRateMinimumSampleCount);
         overview.setRecentQueryRateLimitRejectionCount(recentQueryRateLimitRejectionCount);
         overview.setQueryRateLimitRejectionCountThreshold(queryRateLimitRejectionCountThreshold);
+        overview.setActionableQueryMonitorAlertCount(countActionableQueryMonitorAlerts(
+                recentQueryCount,
+                recentQueryFailureCount,
+                recentQueryRateLimitRejectionCount));
         overview.setPendingIssueAlertDispatchCount(paymentTaskCenterMapper.countPendingIssueAlertDispatches());
         overview.setFailedIssueAlertDispatchCount(paymentTaskCenterMapper.countFailedIssueAlertDispatches());
         overview.setOldestPendingIssueAlertDispatchMinutes(
@@ -882,10 +886,8 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
         int failureCount = paymentTaskCenterMapper.countRecentChannelQueryFailures(queryMonitorLookbackHours);
         int rejectionCount = paymentTaskCenterMapper.countRecentChannelQueryRateLimitRejections(
                 queryMonitorLookbackHours);
-        boolean failureThresholdReached = failureCount >= queryFailureCountThreshold
-                || (queryCount >= queryFailureRateMinimumSampleCount
-                && failureCount * 100L >= queryCount * (long) queryFailureRateThresholdPercent);
-        boolean rejectionThresholdReached = rejectionCount >= queryRateLimitRejectionCountThreshold;
+        boolean failureThresholdReached = isQueryFailureThresholdReached(queryCount, failureCount);
+        boolean rejectionThresholdReached = isQueryRateLimitThresholdReached(rejectionCount);
 
         int matchedCount = 0;
         int generatedCount = 0;
@@ -932,6 +934,33 @@ public class PaymentTaskCenterServiceImpl implements PaymentTaskCenterService {
                         : String.format("命中 %d 类主动查单监控阈值，生成 %d 条 outbox 告警，冷却窗口抑制 %d 条重复告警。",
                         matchedCount, generatedCount, suppressedCount)
         );
+    }
+
+    private int countActionableQueryMonitorAlerts(int queryCount,
+                                                  int failureCount,
+                                                  int rejectionCount) {
+        int actionableCount = 0;
+        if (isQueryFailureThresholdReached(queryCount, failureCount)
+                && paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                QUERY_FAILURE_ISSUE_TYPE, queryMonitorAlertCooldownMinutes) == 0) {
+            actionableCount++;
+        }
+        if (isQueryRateLimitThresholdReached(rejectionCount)
+                && paymentTaskCenterMapper.countRecentUnacknowledgedQueryMonitorAlerts(
+                QUERY_RATE_LIMIT_ISSUE_TYPE, queryMonitorAlertCooldownMinutes) == 0) {
+            actionableCount++;
+        }
+        return actionableCount;
+    }
+
+    private boolean isQueryFailureThresholdReached(int queryCount, int failureCount) {
+        return failureCount >= queryFailureCountThreshold
+                || (queryCount >= queryFailureRateMinimumSampleCount
+                && failureCount * 100L >= queryCount * (long) queryFailureRateThresholdPercent);
+    }
+
+    private boolean isQueryRateLimitThresholdReached(int rejectionCount) {
+        return rejectionCount >= queryRateLimitRejectionCountThreshold;
     }
 
     private int generateQueryMonitorAlertIfAllowed(String issueType,
