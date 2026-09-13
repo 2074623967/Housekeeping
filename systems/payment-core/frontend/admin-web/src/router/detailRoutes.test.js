@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { paymentDetailRoute, paymentRecordDetailRoute, refundDetailRoute } from "./detailRoutes.js";
+import {
+  normalizePaymentRecordType,
+  paymentDetailRoute,
+  paymentRecordDetailRoute,
+  refundDetailRoute
+} from "./detailRoutes.js";
 
 function createTestRouter() {
   return createRouter({
@@ -23,4 +28,18 @@ test("resolves admin detail identifiers as encoded route parameters", () => {
     "/payment-records/PAY%2F1%3F%23%25?recordType=BANK_CARD"
   );
   assert.equal(router.resolve(refundDetailRoute("REF/1?#%")).href, "/refunds/REF%2F1%3F%23%25");
+});
+
+test("normalizes payment record source types before building detail routes", () => {
+  const router = createTestRouter();
+
+  assert.equal(normalizePaymentRecordType("WECHAT"), "WECHAT");
+  assert.equal(normalizePaymentRecordType("BANK_CARD"), "BANK_CARD");
+  assert.equal(normalizePaymentRecordType("UNKNOWN"), "ALL");
+  assert.equal(normalizePaymentRecordType(["WECHAT"]), "ALL");
+  assert.equal(normalizePaymentRecordType(null), "ALL");
+  assert.equal(
+    router.resolve(paymentRecordDetailRoute("PAY-1", "UNKNOWN")).href,
+    "/payment-records/PAY-1?recordType=ALL"
+  );
 });

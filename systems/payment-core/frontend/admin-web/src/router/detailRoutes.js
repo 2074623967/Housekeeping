@@ -5,11 +5,15 @@ export function paymentDetailRoute(paymentOrderId) {
   };
 }
 
+export function normalizePaymentRecordType(recordType) {
+  return ["ALL", "WECHAT", "BANK_CARD"].includes(recordType) ? recordType : "ALL";
+}
+
 export function paymentRecordDetailRoute(paymentOrderId, recordType = "ALL") {
   return {
     name: "payment-record-detail",
     params: { paymentOrderId },
-    query: { recordType }
+    query: { recordType: normalizePaymentRecordType(recordType) }
   };
 }
 

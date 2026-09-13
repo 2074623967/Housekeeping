@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentApi, paymentRecordApi } from "../api/client";
-import { paymentDetailRoute } from "../router/detailRoutes";
+import { normalizePaymentRecordType, paymentDetailRoute } from "../router/detailRoutes";
 import { paymentLogsRoute, paymentRequestsRoute } from "../router/listRoutes";
 import { canQueryPaymentChannel } from "../utils/paymentAction";
 
@@ -17,12 +17,23 @@ const actionErrorMessage = ref("");
 const actionResultMessage = ref("");
 const activeAction = ref("");
 const operationOperator = ref("");
+let latestLoadRequestId = 0;
 
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
 ));
+const currentPaymentOrderId = computed(() => typeof route.params.paymentOrderId === "string"
+  ? route.params.paymentOrderId
+  : "");
+const canUseSnapshot = computed(() => Boolean(
+  hasLoadedData.value
+  && detail.value?.paymentOrderId === currentPaymentOrderId.value
+  && !isLoading.value
+  && !isSnapshotStale.value
+  && !activeAction.value
+));
 
-const recordType = computed(() => route.query.recordType || "ALL");
+const recordType = computed(() => normalizePaymentRecordType(route.query.recordType));
 const recordTypeLabel = computed(() => {
   if (recordType.value === "WECHAT") {
     return "微信支付宝支付记录";
@@ -38,10 +49,23 @@ const canRunQuery = computed(() => canQueryPaymentChannel(
   detail.value?.latestAttemptStatus
 ));
 
-async function loadDetail(afterAction = false) {
+async function loadDetail(afterAction = false, paymentOrderId = currentPaymentOrderId.value) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  if (afterAction) {
+    actionRefreshErrorMessage.value = "";
+  } else {
+    loadErrorMessage.value = "";
+  }
   try {
-    detail.value = await paymentRecordApi.getDetail(route.params.paymentOrderId);
+    const paymentRecordDetail = await paymentRecordApi.getDetail(paymentOrderId);
+    if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
+    if (!paymentRecordDetail || paymentRecordDetail.paymentOrderId !== paymentOrderId) {
+      throw new Error("支付记录详情响应为空或与当前路由不一致");
+    }
+    detail.value = paymentRecordDetail;
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
@@ -50,6 +74,9 @@ async function loadDetail(afterAction = false) {
       actionResultMessage.value = "";
     }
   } catch (error) {
+    if (requestId !== latestLoadRequestId || paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -57,7 +84,9 @@ async function loadDetail(afterAction = false) {
       actionRefreshErrorMessage.value = "";
     }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
@@ -71,15 +100,24 @@ function goBackToList() {
 }
 
 function openPaymentDetail() {
-  router.push(paymentDetailRoute(route.params.paymentOrderId));
+  if (!canUseSnapshot.value) {
+    return;
+  }
+  router.push(paymentDetailRoute(detail.value.paymentOrderId));
 }
 
 function openPaymentRequests() {
-  router.push(paymentRequestsRoute({ paymentOrderId: route.params.paymentOrderId }));
+  if (!canUseSnapshot.value) {
+    return;
+  }
+  router.push(paymentRequestsRoute({ paymentOrderId: detail.value.paymentOrderId }));
 }
 
 function openPaymentLogs() {
-  router.push(paymentLogsRoute({ paymentOrderId: route.params.paymentOrderId }));
+  if (!canUseSnapshot.value) {
+    return;
+  }
+  router.push(paymentLogsRoute({ paymentOrderId: detail.value.paymentOrderId }));
 }
 
 function formatValue(value) {
@@ -139,7 +177,7 @@ const operationSuggestions = computed(() => {
 });
 
 async function handleQueryPayment() {
-  if (!canRunQuery.value) {
+  if (!canUseSnapshot.value || !canRunQuery.value) {
     actionErrorMessage.value = "当前支付单没有可供渠道查单的提交事实。";
     actionResultMessage.value = "";
     return;
@@ -150,16 +188,23 @@ async function handleQueryPayment() {
     actionResultMessage.value = "";
     return;
   }
+  const paymentOrderId = currentPaymentOrderId.value;
   activeAction.value = "query";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
   try {
-    const paymentDetail = await paymentApi.query(route.params.paymentOrderId, operator);
+    const paymentDetail = await paymentApi.query(paymentOrderId, operator);
+    if (paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
-    actionResultMessage.value = `支付单 ${route.params.paymentOrderId} 已完成主动查单，当前状态为 ${paymentDetail.status}。`;
-    await loadDetail(true);
+    actionResultMessage.value = `支付单 ${paymentOrderId} 已完成主动查单，当前状态为 ${paymentDetail.status}。`;
+    await loadDetail(true, paymentOrderId);
   } catch (error) {
+    if (paymentOrderId !== currentPaymentOrderId.value) {
+      return;
+    }
     actionErrorMessage.value = `主动查单失败：${error.message}`;
   } finally {
     activeAction.value = "";
@@ -167,6 +212,16 @@ async function handleQueryPayment() {
 }
 
 onMounted(loadDetail);
+
+watch(currentPaymentOrderId, (paymentOrderId) => {
+  detail.value = null;
+  hasLoadedData.value = false;
+  actionRefreshErrorMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
+  operationOperator.value = "";
+  loadDetail(false, paymentOrderId);
+});
 </script>
 
 <template>
@@ -178,11 +233,11 @@ onMounted(loadDetail);
       </div>
       <div class="toolbar-actions">
         <button class="button secondary" @click="goBackToList">返回{{ recordTypeLabel }}</button>
-        <button class="button secondary" @click="openPaymentDetail">查看支付单详情</button>
-        <button class="button secondary" @click="openPaymentRequests">查看支付请求</button>
-        <button class="button secondary" @click="openPaymentLogs">查看处理日志</button>
+        <button class="button secondary" :disabled="!canUseSnapshot" @click="openPaymentDetail">查看支付单详情</button>
+        <button class="button secondary" :disabled="!canUseSnapshot" @click="openPaymentRequests">查看支付请求</button>
+        <button class="button secondary" :disabled="!canUseSnapshot" @click="openPaymentLogs">查看处理日志</button>
         <button class="button secondary" :disabled="isLoading || Boolean(activeAction)" @click="loadDetail()">刷新</button>
-        <button class="button primary" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale || !canRunQuery" @click="handleQueryPayment">
+        <button class="button primary" :disabled="!canUseSnapshot || !canRunQuery" @click="handleQueryPayment">
           {{ activeAction === "query" ? "查单中..." : "主动查单" }}
         </button>
       </div>
@@ -192,7 +247,7 @@ onMounted(loadDetail);
       <div class="toolbar compact-toolbar">
         <div class="field">
           <label>操作人</label>
-          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" :disabled="Boolean(activeAction) || !hasLoadedData || isSnapshotStale" />
+          <input v-model.trim="operationOperator" maxlength="64" placeholder="请输入操作人" :disabled="isLoading || Boolean(activeAction) || !hasLoadedData || isSnapshotStale" />
         </div>
       </div>
       <div v-if="loadErrorMessage" class="error-banner">
