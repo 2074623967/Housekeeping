@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -35,6 +36,8 @@ public class PaymentRouteRuleReviewDTO {
     private Boolean priorityCollisionAcknowledged;
     /** 批准复验检测到的对照规则编码 JSON 数组，按编码稳定排序。 */
     private String priorityCollisionRuleCodesJson;
+    /** 待办候选基于当前运行态计算的同优先级冲突规则编码预览。 */
+    private List<String> previewPriorityCollisionRuleCodes;
     private String createdAt;
     private String reviewedAt;
     /** 身份可信度固定为自声明，避免被误读成已认证签字。 */

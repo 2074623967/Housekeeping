@@ -105,6 +105,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -566,7 +567,19 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
 
     @Override
     public List<PaymentRouteRuleReviewDTO> listRouteRuleReviews() {
-        return paymentConfigMapper.findRouteRuleReviews();
+        List<PaymentRouteRuleReviewDTO> reviews = paymentConfigMapper.findRouteRuleReviews();
+        List<PaymentRouteRuleConfigDTO> currentRules = null;
+        for (PaymentRouteRuleReviewDTO review : reviews) {
+            if (!"PENDING_REVIEW".equals(review.getReviewStatus())) {
+                continue;
+            }
+            if (currentRules == null) {
+                currentRules = paymentConfigMapper.findRouteRules();
+            }
+            Set<String> ruleCodes = findPriorityCollisionRuleCodes(toConfigDto(review), currentRules);
+            review.setPreviewPriorityCollisionRuleCodes(new ArrayList<String>(ruleCodes));
+        }
+        return reviews;
     }
 
     @Override
@@ -598,7 +611,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该路由规则已有待复核申请");
         }
-        return paymentConfigMapper.findRouteRuleReviews();
+        return listRouteRuleReviews();
     }
 
     @Override
@@ -641,8 +654,11 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         }
         boolean priorityCollisionAcknowledged = request != null
                 && Boolean.TRUE.equals(request.getPriorityCollisionAcknowledged());
+        Set<String> acknowledgedPriorityCollisionRuleCodes = priorityCollisionAcknowledged
+                ? normalizeAcknowledgedPriorityCollisionRuleCodes(request.getAcknowledgedPriorityCollisionRuleCodes())
+                : Collections.<String>emptySet();
         String priorityCollisionRuleCodesJson = ensureCandidateHasNoUnacknowledgedConflict(
-                candidate, priorityCollisionAcknowledged);
+                candidate, priorityCollisionAcknowledged, acknowledgedPriorityCollisionRuleCodes);
         boolean priorityCollisionDetected = StringUtils.hasText(priorityCollisionRuleCodesJson);
         if (current == null) {
             paymentConfigMapper.insertRouteRule(candidate);
@@ -663,7 +679,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 Boolean.valueOf(priorityCollisionDetected),
                 Boolean.valueOf(priorityCollisionDetected && priorityCollisionAcknowledged),
                 priorityCollisionRuleCodesJson);
-        return paymentConfigMapper.findRouteRuleReviews();
+        return listRouteRuleReviews();
     }
 
     @Override
@@ -676,7 +692,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
                 request == null ? null : request.getReviewComment(), "驳回原因不能为空");
         completeRouteRuleReview(
                 review.getRequestNo(), "REJECTED", "danger", reviewer, reviewComment, null, null, null);
-        return paymentConfigMapper.findRouteRuleReviews();
+        return listRouteRuleReviews();
     }
 
     @Override
@@ -2675,7 +2691,7 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (DuplicateKeyException exception) {
             throw new IllegalArgumentException("该路由规则已有待复核申请");
         }
-        return paymentConfigMapper.findRouteRuleReviews();
+        return listRouteRuleReviews();
     }
 
     private PaymentRouteRuleReviewEntity requirePendingRouteRuleReview(String requestNo) {
@@ -2779,46 +2795,41 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         return copy;
     }
 
-    private String ensureCandidateHasNoUnacknowledgedConflict(PaymentRouteRuleConfigEntity candidate,
-                                                              boolean priorityCollisionAcknowledged) {
+    private String ensureCandidateHasNoUnacknowledgedConflict(
+            PaymentRouteRuleConfigEntity candidate,
+            boolean priorityCollisionAcknowledged,
+            Set<String> acknowledgedPriorityCollisionRuleCodes) {
         if (!STATUS_ENABLED.equals(candidate.getStatus())
                 || candidate.getRolloutPercentage() == null
                 || candidate.getRolloutPercentage().intValue() <= 0) {
             return null;
         }
-        List<PaymentRouteRuleConfigDTO> candidateRules = new ArrayList<PaymentRouteRuleConfigDTO>();
-        for (PaymentRouteRuleConfigDTO rule : paymentConfigMapper.findRouteRulesForConflictCheckForUpdate()) {
-            if (!candidate.getRuleCode().equalsIgnoreCase(rule.getRuleCode())) {
-                candidateRules.add(rule);
-            }
-        }
-        candidateRules.add(toConfigDto(candidate));
-        Set<String> priorityCollisionRuleCodes = new TreeSet<String>();
+        PaymentRouteRuleConfigDTO candidateDto = toConfigDto(candidate);
+        List<PaymentRouteRuleConflictDTO> candidateConflicts = findCandidateConflicts(
+                candidateDto, paymentConfigMapper.findRouteRulesForConflictCheckForUpdate());
         String priorityCollisionMessage = null;
-        for (PaymentRouteRuleConflictDTO conflict : detectRouteRuleConflicts(candidateRules)) {
-            boolean candidateInvolved = candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
-                    || candidate.getRuleCode().equalsIgnoreCase(conflict.getConflictingRuleCode());
-            if (candidateInvolved && "BLOCKER".equals(conflict.getSeverity())) {
+        for (PaymentRouteRuleConflictDTO conflict : candidateConflicts) {
+            if ("BLOCKER".equals(conflict.getSeverity())) {
                 throw new IllegalArgumentException("候选规则存在阻断级冲突：" + conflict.getMessage());
             }
-            if (candidateInvolved && "PRIORITY_COLLISION".equals(conflict.getConflictType())) {
-                String conflictingRuleCode = candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
-                        ? conflict.getConflictingRuleCode()
-                        : conflict.getRuleCode();
-                if (StringUtils.hasText(conflictingRuleCode)) {
-                    priorityCollisionRuleCodes.add(conflictingRuleCode);
-                }
+            if ("PRIORITY_COLLISION".equals(conflict.getConflictType())) {
                 if (priorityCollisionMessage == null) {
                     priorityCollisionMessage = conflict.getMessage();
                 }
             }
         }
+        Set<String> priorityCollisionRuleCodes = extractPriorityCollisionRuleCodes(candidateDto, candidateConflicts);
         String collisionRuleCodes = String.join(",", priorityCollisionRuleCodes);
         if (StringUtils.hasText(collisionRuleCodes) && !priorityCollisionAcknowledged) {
             throw new IllegalArgumentException(
                     "候选规则与以下规则存在同优先级潜在冲突：" + collisionRuleCodes
                             + "；请确认表达式互斥性风险后再批准："
                             + priorityCollisionMessage);
+        }
+        if (priorityCollisionAcknowledged
+                && !priorityCollisionRuleCodes.equals(acknowledgedPriorityCollisionRuleCodes)) {
+            throw new IllegalArgumentException(
+                    "同优先级潜在冲突集合已变化，当前为：" + collisionRuleCodes + "；请刷新后重新确认");
         }
         if (!StringUtils.hasText(collisionRuleCodes)) {
             return null;
@@ -2828,6 +2839,67 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("路由规则冲突对象快照序列化失败", exception);
         }
+    }
+
+    private Set<String> normalizeAcknowledgedPriorityCollisionRuleCodes(List<String> ruleCodes) {
+        Set<String> normalizedRuleCodes = new TreeSet<String>();
+        if (ruleCodes == null) {
+            return normalizedRuleCodes;
+        }
+        for (String ruleCode : ruleCodes) {
+            String normalizedRuleCode = requireBusinessKey(ruleCode, "已确认冲突规则编码");
+            if (!normalizedRuleCodes.add(normalizedRuleCode)) {
+                throw new IllegalArgumentException("已确认冲突规则编码不能重复");
+            }
+        }
+        return normalizedRuleCodes;
+    }
+
+    private List<PaymentRouteRuleConflictDTO> findCandidateConflicts(
+            PaymentRouteRuleConfigDTO candidate,
+            List<PaymentRouteRuleConfigDTO> currentRules) {
+        if (!STATUS_ENABLED.equals(candidate.getStatus()) || rolloutPercentageOf(candidate) <= 0) {
+            return Collections.emptyList();
+        }
+        List<PaymentRouteRuleConfigDTO> candidateRules = new ArrayList<PaymentRouteRuleConfigDTO>();
+        for (PaymentRouteRuleConfigDTO rule : currentRules) {
+            if (!candidate.getRuleCode().equalsIgnoreCase(rule.getRuleCode())) {
+                candidateRules.add(rule);
+            }
+        }
+        candidateRules.add(candidate);
+        List<PaymentRouteRuleConflictDTO> candidateConflicts = new ArrayList<PaymentRouteRuleConflictDTO>();
+        for (PaymentRouteRuleConflictDTO conflict : detectRouteRuleConflicts(candidateRules)) {
+            if (candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
+                    || candidate.getRuleCode().equalsIgnoreCase(conflict.getConflictingRuleCode())) {
+                candidateConflicts.add(conflict);
+            }
+        }
+        return candidateConflicts;
+    }
+
+    private Set<String> findPriorityCollisionRuleCodes(
+            PaymentRouteRuleConfigDTO candidate,
+            List<PaymentRouteRuleConfigDTO> currentRules) {
+        return extractPriorityCollisionRuleCodes(candidate, findCandidateConflicts(candidate, currentRules));
+    }
+
+    private Set<String> extractPriorityCollisionRuleCodes(
+            PaymentRouteRuleConfigDTO candidate,
+            Collection<PaymentRouteRuleConflictDTO> candidateConflicts) {
+        Set<String> ruleCodes = new TreeSet<String>();
+        for (PaymentRouteRuleConflictDTO conflict : candidateConflicts) {
+            if (!"PRIORITY_COLLISION".equals(conflict.getConflictType())) {
+                continue;
+            }
+            String conflictingRuleCode = candidate.getRuleCode().equalsIgnoreCase(conflict.getRuleCode())
+                    ? conflict.getConflictingRuleCode()
+                    : conflict.getRuleCode();
+            if (StringUtils.hasText(conflictingRuleCode)) {
+                ruleCodes.add(conflictingRuleCode);
+            }
+        }
+        return ruleCodes;
     }
 
     private void lockRouteRuleConflictSetIfRequired(PaymentRouteRuleConfigEntity candidate) {
@@ -2856,6 +2928,22 @@ public class PaymentConfigServiceImpl implements PaymentConfigService {
         dto.setStatus(entity.getStatus());
         dto.setStatusType(entity.getStatusType());
         dto.setPriority(entity.getPriority());
+        return dto;
+    }
+
+    private PaymentRouteRuleConfigDTO toConfigDto(PaymentRouteRuleReviewDTO review) {
+        PaymentRouteRuleConfigDTO dto = new PaymentRouteRuleConfigDTO();
+        dto.setRuleCode(review.getRuleCode());
+        dto.setRuleName(review.getRuleName());
+        dto.setMatchScene(review.getMatchScene());
+        dto.setMatchExpression(review.getMatchExpression());
+        dto.setTargetChannelCode(review.getTargetChannelCode());
+        dto.setFallbackChannelCode(review.getFallbackChannelCode());
+        dto.setRolloutPercentage(review.getRolloutPercentage());
+        dto.setRolloutSalt(review.getRolloutSalt());
+        dto.setStatus(review.getStatus());
+        dto.setStatusType(review.getStatusType());
+        dto.setPriority(review.getPriority());
         return dto;
     }
 

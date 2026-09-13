@@ -1,21 +1,48 @@
-export function isRouteRuleCollisionAcknowledged(reviewRequestNo, acknowledgedRequestNo) {
-  return typeof reviewRequestNo === "string"
-    && reviewRequestNo.length > 0
-    && reviewRequestNo === acknowledgedRequestNo;
+function normalizePreviewRuleCodes(review = {}) {
+  const ruleCodes = review.previewPriorityCollisionRuleCodes;
+  if (!Array.isArray(ruleCodes)
+    || ruleCodes.some((ruleCode) => typeof ruleCode !== "string" || !ruleCode.trim())) {
+    return [];
+  }
+  const normalizedRuleCodes = ruleCodes.map((ruleCode) => ruleCode.trim());
+  return new Set(normalizedRuleCodes).size === normalizedRuleCodes.length
+    ? normalizedRuleCodes
+    : [];
+}
+
+export function buildRouteRuleCollisionAcknowledgement(review = {}) {
+  const ruleCodes = normalizePreviewRuleCodes(review);
+  if (typeof review.requestNo !== "string" || !review.requestNo || !ruleCodes.length) {
+    return null;
+  }
+  return { requestNo: review.requestNo, ruleCodes };
+}
+
+export function isRouteRuleCollisionAcknowledged(review = {}, acknowledgement = null) {
+  const previewRuleCodes = normalizePreviewRuleCodes(review);
+  return Boolean(acknowledgement)
+    && review.requestNo === acknowledgement.requestNo
+    && previewRuleCodes.length > 0
+    && previewRuleCodes.length === acknowledgement.ruleCodes?.length
+    && previewRuleCodes.every((ruleCode, index) => ruleCode === acknowledgement.ruleCodes[index]);
 }
 
 export function buildRouteRuleReviewActionPayload({
   reviewer,
   reviewComment,
   approved,
-  reviewRequestNo,
-  acknowledgedRequestNo
+  review,
+  acknowledgement
 }) {
+  const priorityCollisionAcknowledged = Boolean(approved)
+    && isRouteRuleCollisionAcknowledged(review, acknowledgement);
   return {
     reviewer,
     reviewComment,
-    priorityCollisionAcknowledged: Boolean(approved)
-      && isRouteRuleCollisionAcknowledged(reviewRequestNo, acknowledgedRequestNo)
+    priorityCollisionAcknowledged,
+    acknowledgedPriorityCollisionRuleCodes: priorityCollisionAcknowledged
+      ? normalizePreviewRuleCodes(review)
+      : []
   };
 }
 

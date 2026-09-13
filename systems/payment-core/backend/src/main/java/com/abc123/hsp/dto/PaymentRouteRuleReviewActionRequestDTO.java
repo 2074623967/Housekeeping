@@ -1,5 +1,6 @@
 package com.abc123.hsp.dto;
 
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -14,4 +15,6 @@ public class PaymentRouteRuleReviewActionRequestDTO {
     private String reviewComment;
     /** 是否已确认同优先级不同表达式可能同时命中的路由风险。 */
     private Boolean priorityCollisionAcknowledged;
+    /** 复核人确认时看到的同优先级冲突规则编码集合。 */
+    private List<String> acknowledgedPriorityCollisionRuleCodes;
 }

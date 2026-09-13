@@ -10,6 +10,7 @@ import com.abc123.hsp.dto.PaymentMonitorOverviewDTO;
 import com.abc123.hsp.dto.PaymentMonitorSummaryDTO;
 import com.abc123.hsp.dto.PaymentTrendPointDTO;
 import com.abc123.hsp.mapper.PaymentMonitorMapper;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class PaymentMonitorServiceImplTest {
         when(paymentMonitorMapper.findSummary()).thenReturn(summary);
         when(paymentMonitorMapper.findRecentTrends()).thenReturn(Collections.<PaymentTrendPointDTO>emptyList());
         when(paymentMonitorMapper.findChannelMetrics()).thenReturn(Collections.<PaymentChannelMetricDTO>emptyList());
-        when(paymentMonitorMapper.findAlerts()).thenReturn(List.of(
+        when(paymentMonitorMapper.findAlerts()).thenReturn(Arrays.asList(
                 new PaymentAlertItemDTO(),
                 new PaymentAlertItemDTO()));
 

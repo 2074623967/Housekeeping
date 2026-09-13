@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
@@ -26,7 +27,13 @@ class PaymentDayEndBusinessDateRangeContractTest {
     void shouldKeepEveryBusinessDatePredicateSargable() throws Exception {
         String mapperXml;
         try (InputStream input = Resources.getResourceAsStream("mapper/PaymentDayEndMapper.xml")) {
-            mapperXml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = input.read(buffer)) >= 0) {
+                output.write(buffer, 0, bytesRead);
+            }
+            mapperXml = new String(output.toByteArray(), StandardCharsets.UTF_8);
         }
 
         assertFalse(FUNCTION_WRAPPED_BIZ_DATE_COLUMN.matcher(mapperXml).find());

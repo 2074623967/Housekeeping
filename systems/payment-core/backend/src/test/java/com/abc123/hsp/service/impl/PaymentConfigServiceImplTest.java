@@ -379,6 +379,29 @@ class PaymentConfigServiceImplTest {
     }
 
     @Test
+    void shouldPreviewCurrentPriorityCollisionTargetsForPendingReviews() {
+        PaymentRouteRuleReviewDTO pending = buildPendingReviewDto();
+        PaymentRouteRuleReviewDTO completed = buildPendingReviewDto();
+        completed.setRequestNo("RRV-002");
+        completed.setReviewStatus("APPROVED");
+        PaymentRouteRuleConfigDTO laterCollision = buildConflictRule(
+                "RULE_Z_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO earlierCollision = buildConflictRule(
+                "RULE_A_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
+        when(paymentConfigMapper.findRouteRuleReviews()).thenReturn(Arrays.asList(pending, completed));
+        when(paymentConfigMapper.findRouteRules()).thenReturn(Arrays.asList(laterCollision, earlierCollision));
+
+        List<PaymentRouteRuleReviewDTO> reviews =
+                new PaymentConfigServiceImpl(paymentConfigMapper).listRouteRuleReviews();
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                Arrays.asList("RULE_A_APP", "RULE_Z_APP"),
+                reviews.get(0).getPreviewPriorityCollisionRuleCodes());
+        org.junit.jupiter.api.Assertions.assertNull(reviews.get(1).getPreviewPriorityCollisionRuleCodes());
+        verify(paymentConfigMapper).findRouteRules();
+    }
+
+    @Test
     void shouldApproveReviewWithDifferentDeclaredReviewerAndPublishVersion() {
         PaymentRouteRuleReviewEntity review = buildPendingReview();
         PaymentRouteRuleConfigEntity current = buildRouteRuleEntity();
@@ -386,6 +409,7 @@ class PaymentConfigServiceImplTest {
         action.setReviewer("reviewer-b");
         action.setReviewComment("配置与风险检查通过");
         action.setPriorityCollisionAcknowledged(Boolean.TRUE);
+        action.setAcknowledgedPriorityCollisionRuleCodes(Arrays.asList("RULE_A_APP", "RULE_Z_APP"));
         PaymentRouteRuleConfigDTO laterCollision = buildConflictRule(
                 "RULE_Z_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
         PaymentRouteRuleConfigDTO earlierCollision = buildConflictRule(
@@ -425,6 +449,105 @@ class PaymentConfigServiceImplTest {
         verify(paymentConfigMapper).completeRouteRuleReview(
                 review.getRequestNo(), "APPROVED", "success", "reviewer-b", "配置与风险检查通过",
                 Boolean.TRUE, Boolean.TRUE, "[\"RULE_A_APP\",\"RULE_Z_APP\"]");
+    }
+
+    @Test
+    void shouldRejectApprovalWhenAcknowledgedPriorityCollisionTargetsChanged() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("配置与风险检查通过");
+        action.setPriorityCollisionAcknowledged(Boolean.TRUE);
+        action.setAcknowledgedPriorityCollisionRuleCodes(Collections.singletonList("RULE_A_APP"));
+        PaymentRouteRuleConfigDTO existingCollision = buildConflictRule(
+                "RULE_A_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
+        PaymentRouteRuleConfigDTO newCollision = buildConflictRule(
+                "RULE_NEW_APP", "HOME_CLEAN/APP", "terminal=APP", "wx_h5", 10, "ENABLED");
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Arrays.asList(existingCollision, newCollision));
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("同优先级潜在冲突集合已变化"));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("RULE_NEW_APP"));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .insertRouteRuleVersion(org.mockito.ArgumentMatchers.any(PaymentRouteRuleVersionEntity.class));
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).completeRouteRuleReview(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void shouldRejectApprovalWhenAcknowledgedPriorityCollisionTargetsDisappear() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("配置与风险检查通过");
+        action.setPriorityCollisionAcknowledged(Boolean.TRUE);
+        action.setAcknowledgedPriorityCollisionRuleCodes(Collections.singletonList("RULE_A_APP"));
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
+        when(paymentConfigMapper.findRouteRulesForConflictCheckForUpdate())
+                .thenReturn(Collections.<PaymentRouteRuleConfigDTO>emptyList());
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("同优先级潜在冲突集合已变化"));
+        org.junit.jupiter.api.Assertions.assertTrue(exception.getMessage().contains("当前为："));
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
+    }
+
+    @Test
+    void shouldRejectDuplicateAcknowledgedPriorityCollisionTargets() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewActionRequestDTO action = new PaymentRouteRuleReviewActionRequestDTO();
+        action.setReviewer("reviewer-b");
+        action.setReviewComment("配置与风险检查通过");
+        action.setPriorityCollisionAcknowledged(Boolean.TRUE);
+        action.setAcknowledgedPriorityCollisionRuleCodes(Arrays.asList("RULE_A_APP", "RULE_A_APP"));
+        when(paymentConfigMapper.findRouteRuleReviewForUpdate(review.getRequestNo())).thenReturn(review);
+        when(paymentConfigMapper.findRouteRuleByCodeForUpdate(review.getRuleCode()))
+                .thenReturn(buildRouteRuleEntity());
+        when(paymentConfigMapper.findChannelForRouting("wx_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findChannelForRouting("alipay_h5"))
+                .thenReturn(new com.abc123.hsp.dto.PaymentChannelRoutingConfigDTO());
+        when(paymentConfigMapper.findLatestRouteRuleVersionNo(review.getRuleCode())).thenReturn(Integer.valueOf(3));
+
+        IllegalArgumentException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> new PaymentConfigServiceImpl(paymentConfigMapper)
+                        .approveRouteRuleReview(review.getRequestNo(), action));
+
+        org.junit.jupiter.api.Assertions.assertEquals("已确认冲突规则编码不能重复", exception.getMessage());
+        verify(paymentConfigMapper, org.mockito.Mockito.never()).findRouteRulesForConflictCheckForUpdate();
+        verify(paymentConfigMapper, org.mockito.Mockito.never())
+                .updateRouteRule(org.mockito.ArgumentMatchers.any(PaymentRouteRuleConfigEntity.class));
     }
 
     @Test
@@ -1936,6 +2059,25 @@ class PaymentConfigServiceImplTest {
         review.setReviewStatus("PENDING_REVIEW");
         review.setReviewStatusType("warn");
         return review;
+    }
+
+    private PaymentRouteRuleReviewDTO buildPendingReviewDto() {
+        PaymentRouteRuleReviewEntity review = buildPendingReview();
+        PaymentRouteRuleReviewDTO dto = new PaymentRouteRuleReviewDTO();
+        dto.setRequestNo(review.getRequestNo());
+        dto.setRuleCode(review.getRuleCode());
+        dto.setRuleName(review.getRuleName());
+        dto.setMatchScene(review.getMatchScene());
+        dto.setMatchExpression(review.getMatchExpression());
+        dto.setTargetChannelCode(review.getTargetChannelCode());
+        dto.setFallbackChannelCode(review.getFallbackChannelCode());
+        dto.setRolloutPercentage(review.getRolloutPercentage());
+        dto.setRolloutSalt(review.getRolloutSalt());
+        dto.setStatus(review.getStatus());
+        dto.setStatusType(review.getStatusType());
+        dto.setPriority(review.getPriority());
+        dto.setReviewStatus(review.getReviewStatus());
+        return dto;
     }
 
     private PaymentRouteRuleVersionEntity buildRouteRuleVersionEntity(int versionNo, String expression) {

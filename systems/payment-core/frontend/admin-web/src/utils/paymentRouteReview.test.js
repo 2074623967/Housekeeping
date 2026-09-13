@@ -1,15 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildRouteRuleCollisionAcknowledgement,
   buildRouteRuleReviewActionPayload,
   formatRouteRuleConflictAudit,
   isRouteRuleCollisionAcknowledged
 } from "./paymentRouteReview.js";
 
-test("scopes route collision acknowledgement to the selected review request", () => {
-  assert.equal(isRouteRuleCollisionAcknowledged("ROUTE-REVIEW-001", "ROUTE-REVIEW-001"), true);
-  assert.equal(isRouteRuleCollisionAcknowledged("ROUTE-REVIEW-002", "ROUTE-REVIEW-001"), false);
-  assert.equal(isRouteRuleCollisionAcknowledged("", ""), false);
+test("binds route collision acknowledgement to the request and exact preview", () => {
+  const review = {
+    requestNo: "ROUTE-REVIEW-001",
+    previewPriorityCollisionRuleCodes: ["RULE_A_APP", "RULE_Z_APP"]
+  };
+  const acknowledgement = buildRouteRuleCollisionAcknowledgement(review);
+
+  assert.deepEqual(acknowledgement, {
+    requestNo: "ROUTE-REVIEW-001",
+    ruleCodes: ["RULE_A_APP", "RULE_Z_APP"]
+  });
+  assert.equal(isRouteRuleCollisionAcknowledged(review, acknowledgement), true);
+  assert.equal(isRouteRuleCollisionAcknowledged({ ...review, requestNo: "ROUTE-REVIEW-002" }, acknowledgement), false);
+  assert.equal(isRouteRuleCollisionAcknowledged({
+    ...review,
+    previewPriorityCollisionRuleCodes: ["RULE_A_APP", "RULE_NEW_APP", "RULE_Z_APP"]
+  }, acknowledgement), false);
+  assert.equal(buildRouteRuleCollisionAcknowledgement({
+    requestNo: "ROUTE-REVIEW-003",
+    previewPriorityCollisionRuleCodes: []
+  }), null);
 });
 
 test("formats persisted route collision targets without inventing missing evidence", () => {
@@ -34,29 +52,31 @@ test("formats persisted route collision targets without inventing missing eviden
   assert.equal(formatRouteRuleConflictAudit({}), "冲突复验未执行");
 });
 
-test("only submits collision acknowledgement for the approved selected review", () => {
+test("only submits the exact collision preview for the approved selected review", () => {
+  const review = {
+    requestNo: "ROUTE-REVIEW-001",
+    previewPriorityCollisionRuleCodes: ["RULE_A_APP", "RULE_Z_APP"]
+  };
   const baseAction = {
     reviewer: "reviewer-b",
     reviewComment: "checked",
     approved: true,
-    acknowledgedRequestNo: "ROUTE-REVIEW-001"
+    review,
+    acknowledgement: buildRouteRuleCollisionAcknowledgement(review)
   };
 
-  assert.deepEqual(buildRouteRuleReviewActionPayload({
-    ...baseAction,
-    reviewRequestNo: "ROUTE-REVIEW-001"
-  }), {
+  assert.deepEqual(buildRouteRuleReviewActionPayload(baseAction), {
     reviewer: "reviewer-b",
     reviewComment: "checked",
-    priorityCollisionAcknowledged: true
+    priorityCollisionAcknowledged: true,
+    acknowledgedPriorityCollisionRuleCodes: ["RULE_A_APP", "RULE_Z_APP"]
   });
   assert.equal(buildRouteRuleReviewActionPayload({
     ...baseAction,
-    reviewRequestNo: "ROUTE-REVIEW-002"
+    review: { ...review, requestNo: "ROUTE-REVIEW-002" }
   }).priorityCollisionAcknowledged, false);
-  assert.equal(buildRouteRuleReviewActionPayload({
+  assert.deepEqual(buildRouteRuleReviewActionPayload({
     ...baseAction,
-    approved: false,
-    reviewRequestNo: "ROUTE-REVIEW-001"
-  }).priorityCollisionAcknowledged, false);
+    approved: false
+  }).acknowledgedPriorityCollisionRuleCodes, []);
 });

@@ -776,7 +776,7 @@ class RefundServiceImplTest {
         RefundCallbackRequestDTO missingAttemptNo = buildCallbackRequest("SUCCESS");
         missingAttemptNo.setRefundAttemptNo(" ");
         RefundCallbackRequestDTO oversizedAttemptNo = buildCallbackRequest("SUCCESS");
-        oversizedAttemptNo.setRefundAttemptNo("R".repeat(65));
+        oversizedAttemptNo.setRefundAttemptNo(String.join("", Collections.nCopies(65, "R")));
 
         assertRefundCallbackRequestInvalid(
                 () -> service.callback("wx_h5", missingAttemptNo));

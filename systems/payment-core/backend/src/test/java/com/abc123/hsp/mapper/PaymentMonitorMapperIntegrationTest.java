@@ -9,6 +9,7 @@ import com.abc123.hsp.dto.PaymentTrendPointDTO;
 import java.io.InputStream;
 import java.sql.Statement;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -225,8 +226,8 @@ class PaymentMonitorMapperIntegrationTest {
 
             assertEquals(Integer.valueOf(1), summary.getPendingPaymentCount());
             assertEquals(Integer.valueOf(0), summary.getAlertCount());
-            assertEquals(List.of(), mapper.findAlerts());
-            assertEquals(List.of(), mapper.findChannelMetrics());
+            assertEquals(Collections.emptyList(), mapper.findAlerts());
+            assertEquals(Collections.emptyList(), mapper.findChannelMetrics());
         }
     }
 

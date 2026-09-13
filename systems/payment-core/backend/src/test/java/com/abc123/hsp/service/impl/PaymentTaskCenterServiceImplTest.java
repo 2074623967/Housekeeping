@@ -944,7 +944,7 @@ class PaymentTaskCenterServiceImplTest {
     @Test
     void shouldFailClosedWhenExecutedAutomaticDayEndBatchReferenceIsTooLong() {
         PaymentDayEndAutoRunResultDTO result = dayEndResult(true, null, "COMPLETED");
-        result.setBatchNo("B".repeat(65));
+        result.setBatchNo(String.join("", Collections.nCopies(65, "B")));
         when(paymentDayEndService.runAutomatically()).thenReturn(result);
 
         IllegalStateException error = Assertions.assertThrows(

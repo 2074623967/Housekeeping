@@ -389,7 +389,8 @@ class PaymentMapperStateTransitionIntegrationTest {
             assertEquals(3L, mapper.count(query));
             assertEquals(3, mapper.findAllForExport(query).size());
             org.junit.jupiter.api.Assertions.assertEquals(
-                    java.util.Set.of("PAY-FACT-NO-ATTEMPT", "PAY-FACT-STATUS", "PAY-FACT-NO-COMPLETION"),
+                    new java.util.HashSet<String>(java.util.Arrays.asList(
+                            "PAY-FACT-NO-ATTEMPT", "PAY-FACT-STATUS", "PAY-FACT-NO-COMPLETION")),
                     items.stream().map(PaymentListItemDTO::getPaymentOrderId)
                             .collect(java.util.stream.Collectors.toSet()));
         }
