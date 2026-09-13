@@ -2814,6 +2814,16 @@
 5. 后端定向 `84/84`、后端全量 `1082/1082`、管理端 `30/30`、Vite 构建和补丁检查通过，实现提交为 `1404405b`。本轮无 schema、索引或迁移变化。
 6. 固定 mock、Mockito 和本地 H2 不证明表达式真的互斥、可信身份审批、目标 MySQL 并发行为、真实渠道或生产稳定性；release 四项真实治理阻断不变。
 
+### 8.343 2026-09-13 路由冲突复核审计持久化与全量 schema 收口进展
+
+1. 继续审计发现确认值只存在于批准请求，复核完成后无法区分“未执行批准复验”“批准时未发现潜在碰撞”和“批准时发现并显式确认潜在碰撞”；同时 `systems/payment-core/database/schema.sql` 遗漏路由版本表和复核表，按该全量脚本新建环境会缺少应用依赖表。
+2. `t_payment_route_rule_review` 新增可空 `priority_collision_detected` 与 `priority_collision_acknowledged`。待处理或直接驳回保持 `NULL/NULL`；批准无碰撞写 `false/false`；批准存在 `PRIORITY_COLLISION` 且已确认写 `true/true`，与复核状态同一事务完成。
+3. 冲突裁决先遍历并优先拒绝任一候选相关 `BLOCKER`，再判断潜在碰撞是否缺少确认，避免复核级提示掩盖阻断级原因。确认记录仍只代表自声明风险接受，不证明表达式实际互斥或正式审批。
+4. 管理端复核记录展示“冲突复验未执行 / 未发现同优先级潜在冲突 / 同优先级风险已确认”，并对异常 `true/false` 组合显示“同优先级风险未确认”，不把未知值折算为未发现。
+5. 数据库全量脚本补齐 `t_payment_route_rule_version` 和 `t_payment_route_rule_review`，两份全量 schema 同步审计字段；新增一次性增量迁移 `2026-09-13-add-payment-route-rule-review-conflict-audit.sql` 和静态契约测试，迁移未在目标 MySQL 执行。
+6. 修正映射位置后的定向 `88/88`、后端全量 `1083/1083`、管理端 `30/30`、Vite 构建、Mapper XML 与补丁检查通过；固定三状态样例在 `1280x720` 和 `462x674` 完成视觉与控制台检查，实现提交为 `ac1cdf12`。
+7. 固定 mock、H2 和静态 schema 契约不证明生产迁移、历史数据分布、可信身份审批、目标 MySQL 锁行为或表达式互斥性；release 四项真实治理阻断不变。
+
 ## 9. 最终结论
 
 当前 `payment-core` 已经具备一定的真实工程基础，但它距离你期望的“完整支付系统前后端”仍有明显差距。

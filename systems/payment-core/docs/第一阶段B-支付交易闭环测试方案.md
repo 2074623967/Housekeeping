@@ -2833,6 +2833,16 @@
 6. 执行服务与控制器定向、payment-core 后端全量、管理端全量单测、Vite 生产构建、Mapper XML 和补丁检查。本轮无 schema 或迁移，仍需确认双份 schema 未发生非预期差异。
 7. 固定 mock、Mockito 和 H2 不证明表达式实际互斥、可信身份审批、目标 MySQL 并发行为、真实渠道或生产稳定性；这些仍需目标环境与外部证据。
 
+### 4.355 路由冲突复核审计持久化与 schema 基线保护
+
+1. Mapper 集成测试完成一条批准复核，验证 `priority_collision_detected`、`priority_collision_acknowledged` 持久化并由列表 DTO 返回 `true/true`，同时回归唯一待办释放和后续申请插入。
+2. 服务测试分别验证有潜在碰撞的批准写 `true/true`、无碰撞批准写 `false/false`、直接驳回写 `null/null`；失败、基线漂移和 `BLOCKER` 不得完成复核记录。
+3. 构造潜在碰撞先于阻断冲突的检测顺序且不传确认，验证最终优先返回阻断级错误；确认字段不得遮蔽或绕过任一 `BLOCKER`。
+4. 静态契约同时读取后端与数据库全量 schema、增量迁移和 Mapper，验证两张路由版本/复核表存在、两列定义一致且查询与更新均映射；不得只证明单份 schema。
+5. 固定页面样例覆盖 `null/null`、`false/false`、`true/true` 和异常 `true/false` 文案；在桌面和窄屏检查复核状态、审计说明、确认框、表格局部滚动和全局横向溢出，并检查控制台。
+6. 执行服务、控制器、Mapper 与 schema 契约定向测试、payment-core 后端全量、管理端单测、Vite 生产构建、Mapper XML 和补丁检查；首次失败和畸形 mock 必须记录并修正后重跑。
+7. 目标 MySQL 需独立执行迁移预演和回滚演练，核对历史记录仍为 `NULL`、新批准记录按规则写入及 DDL 影响；本地 H2、固定 mock 和静态契约不替代该证据。
+
 ## 5. 验收标准
 
 1. P0 用例全部通过。

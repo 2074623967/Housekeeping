@@ -1772,6 +1772,14 @@ t_order
 3. 该字段不改变表达式、优先级或运行时 `priority ASC, id ASC` 顺序，也不形成表达式互斥证明。若后续需要持久化风险接受证据，应另行设计可信身份、审计主体和不可抵赖记录，不能把当前自声明字段追认为正式审批。
 4. 本地 Mockito 和 H2 不证明目标 MySQL 当前读、锁等待或生产数据下的表达式关系；真实审批与生产配置正确性仍需外部证据。
 
+### 4.208 路由冲突复核审计字段与全量 schema 基线
+
+1. `t_payment_route_rule_review` 新增 `priority_collision_detected TINYINT(1) NULL` 和 `priority_collision_acknowledged TINYINT(1) NULL`。空值表示批准冲突复验未执行或迁移前无证据，不得解释为未发现或未确认。
+2. 批准无潜在碰撞写 `0/0`，批准存在 `PRIORITY_COLLISION` 且显式确认写 `1/1`；直接驳回保持 `NULL/NULL`。两列与复核状态、复核人、意见和时间在同一事务更新，失败或 `BLOCKER` 回滚不留批准事实。
+3. `systems/payment-core/database/schema.sql` 已补齐此前遗漏的 `t_payment_route_rule_version` 与 `t_payment_route_rule_review`，其字段、唯一键和索引与后端全量 schema 对齐；静态契约防止这两张应用依赖表再次从数据库全量基线消失。
+4. 存量环境通过一次性迁移 `2026-09-13-add-payment-route-rule-review-conflict-audit.sql` 增加两列，不回填历史复核，避免根据现有表达式倒推批准时快照。目标 MySQL 执行仍需评估 DDL 锁、耗时、回滚方案和版本编排。
+5. 两列只保存自声明审批流程中的技术快照，不是可信身份、不可抵赖签字或表达式互斥证明；如需合规级审计，应另行接入认证主体、授权与签名证据。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态

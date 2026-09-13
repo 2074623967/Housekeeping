@@ -4599,6 +4599,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 3. `BLOCKER` 不受确认字段影响，任何取值都必须拒绝。服务端在批准事务中取得 `ENABLED_RULE_SET` 协调锁并当前读最新规则全集后裁决，客户端预检结果和页面状态不得替代该判断。
 4. 现有响应结构、复核状态、异人声明、基线漂移和回滚语义不变；本轮不新增数据库字段。该自声明确认不构成可信登录身份、正式签字审批或生产放行证据。
 
+### 14.338 路由冲突复核审计响应契约
+
+1. 路由复核列表项新增可空布尔字段 `priorityCollisionDetected` 与 `priorityCollisionAcknowledged`。两者来自批准事务持久化快照，不由查询时重新计算。
+2. 待处理、直接驳回及迁移前历史已完成记录返回 `null/null`，表示没有可证明的批准冲突复验事实；批准时未发现潜在碰撞返回 `false/false`；发现并完成显式确认返回 `true/true`。
+3. 服务端不会正常生成 `true/false`，但客户端必须将该组合视为未确认异常，不得展示为已确认。`BLOCKER` 请求仍失败回滚，不形成批准状态或碰撞确认记录。
+4. 批准请求字段 `priorityCollisionAcknowledged` 的输入语义不变；新增响应字段只增强事后审计。自声明值不代表可信身份、正式签字、不可抵赖凭证或表达式互斥证明。
+5. 目标 MySQL 使用新响应前必须执行 `2026-09-13-add-payment-route-rule-review-conflict-audit.sql`；当前本地 H2 与 DTO 验证不代表生产迁移已经完成。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
