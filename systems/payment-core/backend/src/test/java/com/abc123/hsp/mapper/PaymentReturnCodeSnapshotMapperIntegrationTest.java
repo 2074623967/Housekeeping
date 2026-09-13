@@ -77,6 +77,30 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
             assertEquals("否", detail.getManualInterventionRequired());
             assertEquals("v2026.09.1", detail.getReturnCodeMappingVersion());
             assertTrue(detail.getReturnCodeMappingMatched());
+            assertEquals("BILL-SNAPSHOT-TARGET", detail.getBillNo());
+        }
+    }
+
+    @Test
+    void shouldOnlySettleBillBoundToPaymentPrepay() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(1, mapper.updateBillAfterPayment(
+                    "BILL-SNAPSHOT-TARGET", new BigDecimal("88.00"), "已结清", "success"));
+
+            try (Statement statement = session.getConnection().createStatement();
+                 java.sql.ResultSet resultSet = statement.executeQuery(
+                         "SELECT bill_no, paid_amount, bill_status FROM t_bill ORDER BY bill_no")) {
+                assertTrue(resultSet.next());
+                assertEquals("BILL-SNAPSHOT-OTHER", resultSet.getString("bill_no"));
+                assertEquals(0, resultSet.getBigDecimal("paid_amount").compareTo(BigDecimal.ZERO));
+                assertEquals("待支付", resultSet.getString("bill_status"));
+                assertTrue(resultSet.next());
+                assertEquals("BILL-SNAPSHOT-TARGET", resultSet.getString("bill_no"));
+                assertEquals(0, resultSet.getBigDecimal("paid_amount").compareTo(new BigDecimal("88.00")));
+                assertEquals("已结清", resultSet.getString("bill_status"));
+            }
         }
     }
 
@@ -104,9 +128,10 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                     + "status VARCHAR(32), status_type VARCHAR(32), success_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_prepay_order ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, prepay_order_no VARCHAR(64), "
-                    + "payment_order_id VARCHAR(64), created_at DATETIME)");
+                    + "bill_no VARCHAR(64), payment_order_id VARCHAR(64), created_at DATETIME)");
             statement.execute("CREATE TABLE t_bill ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR(64), order_no VARCHAR(64))");
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, bill_no VARCHAR(64), order_no VARCHAR(64), "
+                    + "paid_amount DECIMAL(18,2), bill_status VARCHAR(32), bill_status_type VARCHAR(32))");
             statement.execute("CREATE TABLE t_payment_attempt ("
                     + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), terminal VARCHAR(64), "
                     + "client_ip VARCHAR(64), idempotency_key VARCHAR(128), attempt_status VARCHAR(32), "
@@ -116,6 +141,13 @@ public class PaymentReturnCodeSnapshotMapperIntegrationTest {
                     + "payment_method, channel_code, channel_transaction_no, status, status_type, created_at) VALUES "
                     + "('PAY-SNAPSHOT-001', 'ORD-SNAPSHOT-001', '测试客户', 88.00, "
                     + "'微信支付', 'wx_h5', 'CH-SNAPSHOT-001', 'WAIT_CALLBACK', 'warn', NOW())");
+            statement.executeUpdate("INSERT INTO t_prepay_order "
+                    + "(prepay_order_no, bill_no, payment_order_id, created_at) VALUES "
+                    + "('PRE-SNAPSHOT-001', 'BILL-SNAPSHOT-TARGET', 'PAY-SNAPSHOT-001', NOW())");
+            statement.executeUpdate("INSERT INTO t_bill "
+                    + "(bill_no, order_no, paid_amount, bill_status, bill_status_type) VALUES "
+                    + "('BILL-SNAPSHOT-TARGET', 'ORD-SNAPSHOT-001', 0.00, '待支付', 'warn'), "
+                    + "('BILL-SNAPSHOT-OTHER', 'ORD-SNAPSHOT-001', 0.00, '待支付', 'warn')");
             session.commit();
         }
     }

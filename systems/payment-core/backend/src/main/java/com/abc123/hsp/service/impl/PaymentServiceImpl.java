@@ -934,14 +934,7 @@ public class PaymentServiceImpl implements PaymentService {
                 paySuccess ? "success" : "warn"
         );
         if (paySuccess) {
-            BigDecimal latestOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
-            BigDecimal settledAmount = latestOrderAmount == null
-                    ? parseAmount(detail.getAmount())
-                    : latestOrderAmount;
-            if (latestOrderAmount != null) {
-                paymentMapper.updateOrderAfterPayment(detail.getOrderNo(), latestOrderAmount, "待履约", "info");
-            }
-            paymentMapper.updateBillAfterPayment(detail.getOrderNo(), settledAmount, "已结清", "success");
+            settleOrderAndBill(detail);
         }
         String eventNo = buildBusinessNo("EVT");
         String eventType = paySuccess ? "PAYMENT_SUCCESS" : "PAYMENT_PENDING";
@@ -1285,16 +1278,21 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private void settleOrderAndBill(PaymentDetailDTO detail) {
+        if (!StringUtils.hasText(detail.getBillNo())) {
+            throw new IllegalStateException("payment bill binding is missing");
+        }
         BigDecimal latestOrderAmount = paymentMapper.findOrderAmount(detail.getOrderNo());
         BigDecimal settledAmount = latestOrderAmount == null
                 ? parseAmount(detail.getAmount())
                 : latestOrderAmount;
-        if (latestOrderAmount != null) {
-            paymentMapper.updateOrderAfterPayment(
-                    detail.getOrderNo(), latestOrderAmount, "待履约", "info");
+        if (latestOrderAmount != null && paymentMapper.updateOrderAfterPayment(
+                detail.getOrderNo(), latestOrderAmount, "待履约", "info") != 1) {
+            throw new IllegalStateException("payment order settlement was not applied atomically");
         }
-        paymentMapper.updateBillAfterPayment(
-                detail.getOrderNo(), settledAmount, "已结清", "success");
+        if (paymentMapper.updateBillAfterPayment(
+                detail.getBillNo(), settledAmount, "已结清", "success") != 1) {
+            throw new IllegalStateException("payment bill settlement was not applied atomically");
+        }
     }
 
     @Transactional

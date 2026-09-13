@@ -579,6 +579,10 @@ class PaymentServiceImplTest {
         when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-EXPIRED-CALLBACK")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
                 .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.updateOrderAfterPayment(
+                "ORD-QUERY-001", new BigDecimal("168.00"), "待履约", "info")).thenReturn(1);
+        when(paymentMapper.updateBillAfterPayment(
+                "BILL-QUERY-001", new BigDecimal("168.00"), "已结清", "success")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-EXPIRED-CALLBACK")).thenReturn(Collections.emptyList());
@@ -600,7 +604,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper).updateOrderAfterPayment(
                 "ORD-QUERY-001", new BigDecimal("168.00"), "待履约", "info");
         verify(paymentMapper).updateBillAfterPayment(
-                "ORD-QUERY-001", new BigDecimal("168.00"), "已结清", "success");
+                "BILL-QUERY-001", new BigDecimal("168.00"), "已结清", "success");
         verify(paymentMapper).insertEvent(
                 anyString(), eq("PAYMENT_SUCCESS"), eq("PAY-EXPIRED-CALLBACK"),
                 eq("ORD-QUERY-001"), eq("{\"channel\":\"wx_h5\"}"));
@@ -1223,6 +1227,7 @@ class PaymentServiceImplTest {
     void shouldUsePaymentAmountToCloseBillWhenCallbackOrderSourceMissing() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-VIRTUAL-CALLBACK");
+        detail.setBillNo("BILL-VIRTUAL-CALLBACK");
         detail.setOrderNo("WALLET-RECHARGE-001");
         detail.setChannel("alipay_h5");
         detail.setStatus("WAIT_CALLBACK");
@@ -1235,6 +1240,8 @@ class PaymentServiceImplTest {
                 "PAY-VIRTUAL-CALLBACK", "ALI-VIRTUAL-001")).thenReturn(1);
         when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-VIRTUAL-CALLBACK")).thenReturn(1);
         when(paymentMapper.findOrderAmount("WALLET-RECHARGE-001")).thenReturn(null);
+        when(paymentMapper.updateBillAfterPayment(
+                "BILL-VIRTUAL-CALLBACK", new BigDecimal("99.00"), "已结清", "success")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-VIRTUAL-CALLBACK")).thenReturn(Collections.emptyList());
@@ -1258,7 +1265,7 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString());
         verify(paymentMapper, times(1)).updateBillAfterPayment(
-                "WALLET-RECHARGE-001",
+                "BILL-VIRTUAL-CALLBACK",
                 new BigDecimal("99.00"),
                 "已结清",
                 "success");
@@ -1268,6 +1275,7 @@ class PaymentServiceImplTest {
     void shouldPublishDownstreamEventWhenCallbackMarksPaymentSuccess() {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId("PAY-CALLBACK-001");
+        detail.setBillNo("BILL-CALLBACK-001");
         detail.setOrderNo("ORD-CALLBACK-001");
         detail.setChannel("wx_h5");
         detail.setStatus("WAIT_CALLBACK");
@@ -1280,6 +1288,10 @@ class PaymentServiceImplTest {
                 "PAY-CALLBACK-001", "WX-CALLBACK-001")).thenReturn(1);
         when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-CALLBACK-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-CALLBACK-001")).thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.updateOrderAfterPayment(
+                "ORD-CALLBACK-001", new BigDecimal("168.00"), "待履约", "info")).thenReturn(1);
+        when(paymentMapper.updateBillAfterPayment(
+                "BILL-CALLBACK-001", new BigDecimal("168.00"), "已结清", "success")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-CALLBACK-001")).thenReturn(Collections.emptyList());
@@ -1371,6 +1383,35 @@ class PaymentServiceImplTest {
                 anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
         verify(paymentMapper, never()).updateBillAfterPayment(
                 anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldFailSuccessSettlementWhenBoundBillCannotBeUpdated() {
+        PaymentDetailDTO detail = queryDetail("PAY-CALLBACK-BILL-MISSING", "WAIT_CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-BILL-MISSING")).thenReturn(detail, detail);
+        when(paymentMapper.lockPrepayCreation("ORD-QUERY-001")).thenReturn("ORD-QUERY-001");
+        when(paymentMapper.markPaymentSuccessFromChannelResult(
+                "PAY-CALLBACK-BILL-MISSING", "WX-CALLBACK-BILL-MISSING")).thenReturn(1);
+        when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-CALLBACK-BILL-MISSING")).thenReturn(1);
+        when(paymentMapper.findOrderAmount("ORD-QUERY-001")).thenReturn(null);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-BILL-MISSING");
+        callback.setTradeStatus("SUCCESS");
+        callback.setChannelTransactionNo("WX-CALLBACK-BILL-MISSING");
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService)
+                .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "payment bill settlement was not applied atomically", exception.getMessage());
         verify(paymentMapper, never()).insertEvent(
                 anyString(), eq("PAYMENT_SUCCESS"), anyString(), anyString(), anyString());
     }
@@ -2642,6 +2683,10 @@ class PaymentServiceImplTest {
         when(paymentMapper.finalizeLatestPaymentAttemptSuccess("PAY-QUERY-001")).thenReturn(1);
         when(paymentMapper.findOrderAmount("ORD-QUERY-001"))
                 .thenReturn(new BigDecimal("168.00"));
+        when(paymentMapper.updateOrderAfterPayment(
+                "ORD-QUERY-001", new BigDecimal("168.00"), "待履约", "info")).thenReturn(1);
+        when(paymentMapper.updateBillAfterPayment(
+                "BILL-QUERY-001", new BigDecimal("168.00"), "已结清", "success")).thenReturn(1);
         when(paymentMapper.findRouteLogs("PAY-QUERY-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findNotifyLogs("PAY-QUERY-001")).thenReturn(Collections.emptyList());
         when(paymentMapper.findEventItems("PAY-QUERY-001")).thenReturn(Collections.emptyList());
@@ -2666,7 +2711,7 @@ class PaymentServiceImplTest {
         verify(paymentMapper).updateOrderAfterPayment(
                 "ORD-QUERY-001", new BigDecimal("168.00"), "待履约", "info");
         verify(paymentMapper).updateBillAfterPayment(
-                "ORD-QUERY-001", new BigDecimal("168.00"), "已结清", "success");
+                "BILL-QUERY-001", new BigDecimal("168.00"), "已结清", "success");
         verify(paymentMapper).insertEvent(
                 anyString(),
                 eq("PAYMENT_SUCCESS"),
@@ -3061,6 +3106,7 @@ class PaymentServiceImplTest {
     private PaymentDetailDTO queryDetail(String paymentOrderId, String status) {
         PaymentDetailDTO detail = new PaymentDetailDTO();
         detail.setPaymentOrderId(paymentOrderId);
+        detail.setBillNo("BILL-QUERY-001");
         detail.setOrderNo("ORD-QUERY-001");
         detail.setChannel("wx_h5");
         detail.setAmount("¥168.00");

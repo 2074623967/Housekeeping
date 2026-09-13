@@ -249,7 +249,7 @@ public interface PaymentMapper {
     /**
      * 支付成功后更新订单已支付金额和订单状态。
      */
-    void updateOrderAfterPayment(@Param("orderNo") String orderNo,
+    int updateOrderAfterPayment(@Param("orderNo") String orderNo,
             @Param("paidAmount") BigDecimal paidAmount,
             @Param("orderStatus") String orderStatus,
             @Param("orderStatusType") String orderStatusType);
@@ -257,7 +257,7 @@ public interface PaymentMapper {
     /**
      * 支付成功后更新账单已支付金额和账单状态。
      */
-    void updateBillAfterPayment(@Param("orderNo") String orderNo,
+    int updateBillAfterPayment(@Param("billNo") String billNo,
             @Param("paidAmount") BigDecimal paidAmount,
             @Param("billStatus") String billStatus,
             @Param("billStatusType") String billStatusType);

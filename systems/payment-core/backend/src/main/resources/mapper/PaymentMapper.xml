@@ -281,7 +281,7 @@
                     ORDER BY latest_pr.created_at DESC, latest_pr.id DESC
                     LIMIT 1
                 )
-                 LEFT JOIN t_bill b ON b.order_no = p.order_no
+                 LEFT JOIN t_bill b ON b.bill_no = pr.bill_no
                  LEFT JOIN t_payment_attempt pa ON pa.id = (
                     SELECT latest_pa.id
                     FROM t_payment_attempt latest_pa
@@ -667,7 +667,7 @@
         SET paid_amount = #{paidAmount},
             bill_status = #{billStatus},
             bill_status_type = #{billStatusType}
-        WHERE order_no = #{orderNo}
+        WHERE bill_no = #{billNo}
     </update>
 
     <insert id="insertNotifyLog">
