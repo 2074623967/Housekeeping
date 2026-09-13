@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { paymentRouteApi } from "../api/client";
 import { paymentDetailRoute } from "../router/detailRoutes";
@@ -29,19 +29,31 @@ const overview = ref({
   routeHealthMinimumSampleCount: 10
 });
 const pageNo = ref(1);
+const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
 const expandedRouteNo = ref("");
-const filters = ref({
-  paymentOrderId: route.query.paymentOrderId || "",
-  orderNo: route.query.orderNo || "",
-  routeRule: route.query.routeRule || "",
-  channelCode: route.query.channelCode || "",
-  paymentMethod: route.query.paymentMethod || "全部",
-  terminal: route.query.terminal || "全部",
-  routeResult: route.query.routeResult || "全部",
-  sortField: route.query.sortField || "createdAt",
-  sortOrder: route.query.sortOrder || "desc"
-});
+let latestLoadRequestId = 0;
+
+function queryString(value, fallback) {
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function filtersFromRoute() {
+  return {
+    paymentOrderId: queryString(route.query.paymentOrderId, ""),
+    orderNo: queryString(route.query.orderNo, ""),
+    routeRule: queryString(route.query.routeRule, ""),
+    channelCode: queryString(route.query.channelCode, ""),
+    paymentMethod: queryString(route.query.paymentMethod, "全部"),
+    terminal: queryString(route.query.terminal, "全部"),
+    routeResult: queryString(route.query.routeResult, "全部"),
+    sortField: queryString(route.query.sortField, "createdAt"),
+    sortOrder: queryString(route.query.sortOrder, "desc")
+  };
+}
+
+const filters = ref(filtersFromRoute());
 
 const metrics = computed(() => ({
   total: overview.value.totalRouteCount,
@@ -61,8 +73,22 @@ const routeHealthPolicyText = computed(() => {
   return `近 ${overview.value.routeHealthLookbackHours} 小时，失败 ≥ ${overview.value.routeHealthFailureCountThreshold}，`
     + `或样本 ≥ ${overview.value.routeHealthMinimumSampleCount} 且失败率 ≥ ${overview.value.routeHealthFailureRateThresholdPercent}%`;
 });
+const isSnapshotStale = computed(() => hasLoadedData.value && Boolean(errorMessage.value));
+const canUseSnapshot = computed(() => hasLoadedData.value && !isLoading.value && !isSnapshotStale.value);
+const canExport = computed(() => canUseSnapshot.value && total.value > 0);
+
+function buildQuery() {
+  return {
+    ...filters.value,
+    pageNo: pageNo.value,
+    pageSize
+  };
+}
 
 function resetFilters() {
+  if (isLoading.value) {
+    return;
+  }
   filters.value = {
     paymentOrderId: "",
     orderNo: "",
@@ -80,40 +106,47 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isLoading.value) {
+    return;
+  }
   expandedRouteNo.value = "";
   pageNo.value = 1;
   loadPaymentRoutes();
 }
 
+function refreshPaymentRoutes() {
+  if (isLoading.value) {
+    return;
+  }
+  loadPaymentRoutes();
+}
+
 function toggleExpanded(routeNo) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   expandedRouteNo.value = expandedRouteNo.value === routeNo ? "" : routeNo;
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
 }
 
-async function loadPaymentRoutes() {
+async function loadPaymentRoutes(query = buildQuery()) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
   errorMessage.value = "";
   try {
-    const query = {
-      paymentOrderId: filters.value.paymentOrderId,
-      orderNo: filters.value.orderNo,
-      routeRule: filters.value.routeRule,
-      channelCode: filters.value.channelCode,
-      paymentMethod: filters.value.paymentMethod,
-      terminal: filters.value.terminal,
-      routeResult: filters.value.routeResult,
-      sortField: filters.value.sortField,
-      sortOrder: filters.value.sortOrder,
-      pageNo: pageNo.value,
-      pageSize
-    };
     const [overviewResult, result] = await Promise.all([
       paymentRouteApi.getOverview(query),
       paymentRouteApi.getList(query)
     ]);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     overview.value = {
       ...overview.value,
       ...overviewResult
@@ -121,32 +154,53 @@ async function loadPaymentRoutes() {
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items[0] || null;
+    expandedRouteNo.value = "";
+    loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     errorMessage.value = error.message;
+    if (hasLoadedData.value) {
+      pageNo.value = loadedPageNo.value;
+    }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (!canUseSnapshot.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
   expandedRouteNo.value = "";
-  loadPaymentRoutes();
+  loadPaymentRoutes({ ...loadedQuery.value, pageNo: nextPage });
 }
 
 function openPaymentDetail(paymentOrderId) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   router.push(paymentDetailRoute(paymentOrderId));
 }
 
 function openPaymentFlows(paymentOrderId) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   router.push(paymentFlowsRoute({ paymentOrderId, flowType: "路由记录" }));
 }
 
 function openPaymentRequests(paymentOrderId) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   router.push(paymentRequestsRoute({ paymentOrderId }));
 }
 
@@ -163,21 +217,25 @@ function formatPayload(value) {
 }
 
 function exportRoutes() {
-  const exportUrl = paymentRouteApi.buildExportUrl({
-    paymentOrderId: filters.value.paymentOrderId,
-    orderNo: filters.value.orderNo,
-    routeRule: filters.value.routeRule,
-    channelCode: filters.value.channelCode,
-    paymentMethod: filters.value.paymentMethod,
-    terminal: filters.value.terminal,
-    routeResult: filters.value.routeResult,
-    sortField: filters.value.sortField,
-    sortOrder: filters.value.sortOrder
-  });
+  if (!canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = paymentRouteApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
 }
 
 onMounted(loadPaymentRoutes);
+
+watch(
+  () => [route.query.paymentOrderId, route.query.orderNo, route.query.routeRule,
+    route.query.channelCode, route.query.paymentMethod, route.query.terminal,
+    route.query.routeResult, route.query.sortField, route.query.sortOrder],
+  () => {
+    filters.value = filtersFromRoute();
+    pageNo.value = 1;
+    loadPaymentRoutes();
+  }
+);
 </script>
 
 <template>
@@ -188,7 +246,10 @@ onMounted(loadPaymentRoutes);
         <p>统一查看每笔支付命中的路由规则、落地渠道和请求上下文，支撑运营、研发和测试联合排障</p>
       </div>
       <div class="table-inline-actions">
-        <button class="button secondary" @click="exportRoutes">导出路由</button>
+        <button class="button secondary" :disabled="isLoading" @click="refreshPaymentRoutes">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button secondary" :disabled="isLoading || !canExport" @click="exportRoutes">导出路由</button>
         <button class="button primary" @click="openPaymentConfig">查看路由配置</button>
       </div>
     </div>
@@ -256,23 +317,23 @@ onMounted(loadPaymentRoutes);
       <div class="toolbar">
         <div class="field">
           <label>支付单号</label>
-          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" />
+          <input v-model="filters.paymentOrderId" placeholder="请输入支付单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>路由规则</label>
-          <input v-model="filters.routeRule" placeholder="如 RULE_HOME_WX / amount>5000" />
+          <input v-model="filters.routeRule" placeholder="如 RULE_HOME_WX / amount>5000" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>渠道编码</label>
-          <input v-model="filters.channelCode" placeholder="如 wx_h5 / offline_bank" />
+          <input v-model="filters.channelCode" placeholder="如 wx_h5 / offline_bank" :disabled="isLoading" />
         </div>
         <div class="field">
           <label>支付方式</label>
-          <select v-model="filters.paymentMethod">
+          <select v-model="filters.paymentMethod" :disabled="isLoading">
             <option>全部</option>
             <option>微信</option>
             <option>支付宝</option>
@@ -281,7 +342,7 @@ onMounted(loadPaymentRoutes);
         </div>
         <div class="field">
           <label>终端</label>
-          <select v-model="filters.terminal">
+          <select v-model="filters.terminal" :disabled="isLoading">
             <option>全部</option>
             <option>H5</option>
             <option>PC</option>
@@ -291,7 +352,7 @@ onMounted(loadPaymentRoutes);
         </div>
         <div class="field">
           <label>路由结果</label>
-          <select v-model="filters.routeResult">
+          <select v-model="filters.routeResult" :disabled="isLoading">
             <option>全部</option>
             <option>微信JSAPI</option>
             <option>支付宝H5</option>
@@ -302,7 +363,7 @@ onMounted(loadPaymentRoutes);
         </div>
         <div class="field">
           <label>排序字段</label>
-          <select v-model="filters.sortField">
+          <select v-model="filters.sortField" :disabled="isLoading">
             <option value="createdAt">创建时间</option>
             <option value="channelCode">渠道编码</option>
             <option value="routeResult">路由结果</option>
@@ -310,14 +371,16 @@ onMounted(loadPaymentRoutes);
         </div>
         <div class="field">
           <label>排序方向</label>
-          <select v-model="filters.sortOrder">
+          <select v-model="filters.sortOrder" :disabled="isLoading">
             <option value="desc">倒序</option>
             <option value="asc">正序</option>
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" @click="applyFilters">查询</button>
-          <button class="button secondary" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="isLoading" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="isLoading" @click="resetFilters">重置</button>
         </div>
       </div>
 
@@ -350,7 +413,7 @@ onMounted(loadPaymentRoutes);
                 <tr>
                   <td>{{ item.routeNo }}</td>
                   <td>
-                    <button class="link-button" @click="openPaymentDetail(item.paymentOrderId)">
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(item.paymentOrderId)">
                       {{ item.paymentOrderId }}
                     </button>
                   </td>
@@ -363,8 +426,8 @@ onMounted(loadPaymentRoutes);
                   <td>{{ formatValue(item.opsConfigSnapshotVersion) }}</td>
                   <td>{{ item.createdAt }}</td>
                   <td>
-                    <button class="link-button" @click="pickItem(item)">查看快照</button>
-                    <button class="link-button" @click="toggleExpanded(item.routeNo)">
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">查看快照</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="toggleExpanded(item.routeNo)">
                       {{ expandedRouteNo === item.routeNo ? "收起报文" : "查看报文" }}
                     </button>
                   </td>
@@ -415,9 +478,9 @@ onMounted(loadPaymentRoutes);
               <div class="ops-row"><span>当前总览</span><span>最近路由 {{ metrics.latestRouteAt }} / 线下 {{ metrics.offlineRouteCount }} / 微信 {{ metrics.wechatRouteCount }} / 支付宝 {{ metrics.alipayRouteCount }}</span></div>
             </div>
             <div class="table-inline-actions">
-              <button class="link-button" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
-              <button class="link-button" @click="openPaymentFlows(selectedItem.paymentOrderId)">查看路由流水</button>
-              <button class="link-button" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentDetail(selectedItem.paymentOrderId)">查看支付单</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentFlows(selectedItem.paymentOrderId)">查看路由流水</button>
+              <button class="link-button" :disabled="!canUseSnapshot" @click="openPaymentRequests(selectedItem.paymentOrderId)">查看支付请求</button>
               <button class="link-button" @click="openPaymentConfig">查看路由配置</button>
             </div>
           </div>
@@ -426,9 +489,9 @@ onMounted(loadPaymentRoutes);
       </div>
       <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条路由执行记录</span>
-        <button class="button secondary" :disabled="pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
