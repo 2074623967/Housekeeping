@@ -4652,6 +4652,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 列表预览不是批准凭证。客户端可用它提示或禁用按钮，服务端仍必须在批准事务的全局协调锁内当前读最新规则并拒绝任一实际 `BLOCKER`；请求不携带或回传阻断预览。
 5. 本轮不新增端点、状态码、数据库字段或迁移，不改变批准失败回滚和最终碰撞审计快照契约。
 
+### 14.345 路由复核警告冲突预览契约
+
+1. 路由复核列表项新增数组字段 `previewWarningConflicts`，元素复用 `PaymentRouteRuleConflictDTO`，返回候选基于查询时当前运行态规则计算出的 `severity=WARNING` 冲突。
+2. 字段覆盖 `DUPLICATE_RULE / OVERLAPPING_DUPLICATE / SHADOWED_RULE / PARTIAL_SHADOW`；待办申请返回数组且可能为空，已完成记录不按当前规则补算并可返回 `null`。
+3. 警告、阻断和同优先级确认编码来自同一次候选扫描。警告仅为维护风险提示，不进入批准请求，不要求确认，不影响 `BLOCKER` 无条件拒绝或 `PRIORITY_COLLISION` 精确集合比较。
+4. 客户端可以展示警告但不得把它解释为已经接受的风险、自动阻断或表达式覆盖证明；列表快照漂移时，服务端批准事务仍以协调锁内最新冲突复验为准。
+5. 本轮不新增端点、状态码、数据库字段或迁移，不改变运行态规则、版本和碰撞审计的写入语义。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。
