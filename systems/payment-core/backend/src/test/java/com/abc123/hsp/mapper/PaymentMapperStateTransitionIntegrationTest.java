@@ -204,6 +204,8 @@ class PaymentMapperStateTransitionIntegrationTest {
             assertEquals(1, mapper.markPaymentPendingFromCallback(
                     "PAY-SUBMITTED", "WX-PENDING"));
             assertEquals(0, mapper.markPaymentPendingFromCallback(
+                    "PAY-SUBMITTED", "WX-OTHER-PENDING"));
+            assertEquals(0, mapper.markPaymentPendingFromCallback(
                     "PAY-FINAL-SUCCESS", "WX-LATE-PENDING"));
             assertEquals(0, mapper.markPaymentPendingFromCallback(
                     "PAY-MANUAL-CLOSED", "WX-LATE-PENDING"));
@@ -211,10 +213,78 @@ class PaymentMapperStateTransitionIntegrationTest {
             try (Statement statement = session.getConnection().createStatement();
                  java.sql.ResultSet resultSet = statement.executeQuery(
                          "SELECT status, channel_transaction_no FROM t_payment_order "
-                                 + "WHERE payment_order_id = 'PAY-FINAL-SUCCESS'")) {
+                                 + "WHERE payment_order_id = 'PAY-SUBMITTED'")) {
                 resultSet.next();
-                assertEquals("SUCCESS", resultSet.getString("status"));
-                assertEquals("WX-SUCCESS", resultSet.getString("channel_transaction_no"));
+                assertEquals("WAIT_CALLBACK", resultSet.getString("status"));
+                assertEquals("WX-PENDING", resultSet.getString("channel_transaction_no"));
+            }
+        }
+    }
+
+    @Test
+    void shouldPreserveFastCallbackFinalStateWhenSubmitResultArrivesLater() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_order SET payment_method = '微信支付', "
+                    + "channel_code = 'wx_h5' WHERE payment_order_id = 'PAY-FINAL-SUCCESS'");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(0, mapper.bindPaymentChannelSubmitResult(
+                    "PAY-FINAL-SUCCESS", "微信支付", "wx_h5", "WX-SUCCESS"));
+            assertEquals(0, mapper.markPaymentSubmitResultUnknown(
+                    "PAY-FINAL-SUCCESS", "WX-SUCCESS"));
+            assertEquals(1, mapper.updatePaymentAttemptSubmitResult(
+                    "ATT-FINAL-SUCCESS", "{\"code\":\"ACCEPTED\"}", "待回调", "warn"));
+
+            try (java.sql.ResultSet payment = statement.executeQuery(
+                    "SELECT status, status_type, channel_transaction_no FROM t_payment_order "
+                            + "WHERE payment_order_id = 'PAY-FINAL-SUCCESS'")) {
+                org.junit.jupiter.api.Assertions.assertTrue(payment.next());
+                assertEquals("SUCCESS", payment.getString("status"));
+                assertEquals("success", payment.getString("status_type"));
+                assertEquals("WX-SUCCESS", payment.getString("channel_transaction_no"));
+            }
+            try (java.sql.ResultSet attempt = statement.executeQuery(
+                    "SELECT response_payload, attempt_status, attempt_status_type, completed_at "
+                            + "FROM t_payment_attempt WHERE attempt_no = 'ATT-FINAL-SUCCESS'")) {
+                org.junit.jupiter.api.Assertions.assertTrue(attempt.next());
+                assertEquals("{\"code\":\"ACCEPTED\"}", attempt.getString("response_payload"));
+                assertEquals("成功", attempt.getString("attempt_status"));
+                assertEquals("success", attempt.getString("attempt_status_type"));
+                org.junit.jupiter.api.Assertions.assertNotNull(attempt.getTimestamp("completed_at"));
+            }
+        }
+    }
+
+    @Test
+    void shouldBindAndRecoverSubmitResultWithoutRegressingPaymentState() throws Exception {
+        try (SqlSession session = sqlSessionFactory.openSession();
+             Statement statement = session.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE t_payment_order SET payment_method = '微信支付', "
+                    + "channel_code = 'wx_h5' WHERE payment_order_id = 'PAY-SUBMITTED'");
+            PaymentMapper mapper = session.getMapper(PaymentMapper.class);
+
+            assertEquals(1, mapper.bindPaymentChannelSubmitResult(
+                    "PAY-SUBMITTED", "微信支付", "wx_h5", "WX-SUBMIT-BOUND"));
+            assertEquals(1, mapper.markPaymentSubmitResultUnknown(
+                    "PAY-ABNORMAL-WAIT", null));
+
+            try (java.sql.ResultSet bound = statement.executeQuery(
+                    "SELECT status, status_type, channel_transaction_no FROM t_payment_order "
+                            + "WHERE payment_order_id = 'PAY-SUBMITTED'")) {
+                org.junit.jupiter.api.Assertions.assertTrue(bound.next());
+                assertEquals("WAIT_CALLBACK", bound.getString("status"));
+                assertEquals("warn", bound.getString("status_type"));
+                assertEquals("WX-SUBMIT-BOUND", bound.getString("channel_transaction_no"));
+            }
+            try (java.sql.ResultSet unknown = statement.executeQuery(
+                    "SELECT status, status_type, channel_transaction_no FROM t_payment_order "
+                            + "WHERE payment_order_id = 'PAY-ABNORMAL-WAIT'")) {
+                org.junit.jupiter.api.Assertions.assertTrue(unknown.next());
+                assertEquals("WAIT_CALLBACK", unknown.getString("status"));
+                assertEquals("danger", unknown.getString("status_type"));
+                org.junit.jupiter.api.Assertions.assertNull(
+                        unknown.getString("channel_transaction_no"));
             }
         }
     }
@@ -515,7 +585,8 @@ class PaymentMapperStateTransitionIntegrationTest {
                     + "cashier_status VARCHAR(32), cashier_status_type VARCHAR(32), "
                     + "payment_order_id VARCHAR(64), created_at DATETIME, expires_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_attempt ("
-                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, payment_order_id VARCHAR(64), "
+                    + "id BIGINT AUTO_INCREMENT PRIMARY KEY, attempt_no VARCHAR(64), "
+                    + "payment_order_id VARCHAR(64), response_payload VARCHAR(2048), "
                     + "attempt_status VARCHAR(64), attempt_status_type VARCHAR(32), "
                     + "completed_at DATETIME, created_at DATETIME)");
             statement.execute("CREATE TABLE t_payment_event (payment_order_id VARCHAR(64), event_type VARCHAR(64))");
@@ -544,13 +615,16 @@ class PaymentMapperStateTransitionIntegrationTest {
             statement.executeUpdate("UPDATE t_prepay_order SET prepay_order_no = 'PRE-SUBMITTED', "
                     + "order_no = 'ORD-2', cashier_status = '支付中', cashier_status_type = 'warn', "
                     + "created_at = NOW() WHERE payment_order_id = 'PAY-SUBMITTED'");
-            statement.executeUpdate("INSERT INTO t_payment_attempt(payment_order_id, attempt_status, created_at) VALUES "
-                    + "('PAY-SUBMITTED', '待回调', TIMESTAMPADD(MINUTE, -1, NOW())), "
-                    + "('PAY-SUBMITTED', '处理中', NOW()), "
-                    + "('PAY-LEGACY-SUBMITTED-CLOSED', '处理中', NOW())");
             statement.executeUpdate("INSERT INTO t_payment_attempt("
-                    + "payment_order_id, attempt_status, completed_at, created_at) "
-                    + "VALUES ('PAY-FINAL-SUCCESS', '成功', NOW(), NOW())");
+                    + "attempt_no, payment_order_id, attempt_status, created_at) VALUES "
+                    + "('ATT-SUBMITTED-EARLIER', 'PAY-SUBMITTED', '待回调', "
+                    + "TIMESTAMPADD(MINUTE, -1, NOW())), "
+                    + "('ATT-SUBMITTED-LATEST', 'PAY-SUBMITTED', '处理中', NOW()), "
+                    + "('ATT-LEGACY-CLOSED', 'PAY-LEGACY-SUBMITTED-CLOSED', '处理中', NOW())");
+            statement.executeUpdate("INSERT INTO t_payment_attempt("
+                    + "attempt_no, payment_order_id, attempt_status, attempt_status_type, "
+                    + "completed_at, created_at) VALUES "
+                    + "('ATT-FINAL-SUCCESS', 'PAY-FINAL-SUCCESS', '成功', 'success', NOW(), NOW())");
             statement.executeUpdate("INSERT INTO t_payment_event(payment_order_id, event_type) "
                     + "VALUES ('PAY-EXPIRED-CLOSED', 'PAYMENT_EXPIRED_CLOSED'), "
                     + "('PAY-LEGACY-SUBMITTED-CLOSED', 'PAYMENT_CLOSED')");

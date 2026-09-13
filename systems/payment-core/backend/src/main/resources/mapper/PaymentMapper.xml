@@ -509,6 +509,10 @@
             channel_transaction_no = #{channelTransactionNo}
         WHERE payment_order_id = #{paymentOrderId}
           AND status = 'WAIT_CALLBACK'
+          AND (
+            NULLIF(TRIM(channel_transaction_no), '') IS NULL
+            OR channel_transaction_no = #{channelTransactionNo}
+          )
           AND EXISTS (
             SELECT 1
             FROM t_payment_attempt submitted_attempt
@@ -573,6 +577,36 @@
             status = 'WAIT_CALLBACK',
             status_type = 'warn'
         WHERE payment_order_id = #{paymentOrderId}
+    </update>
+
+    <update id="bindPaymentChannelSubmitResult">
+        UPDATE t_payment_order
+        SET payment_method = #{paymentMethod},
+            channel_code = #{channelCode},
+            channel_transaction_no = #{channelTransactionNo}
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status = 'WAIT_CALLBACK'
+          AND channel_code = #{channelCode}
+          AND (
+            NULLIF(TRIM(channel_transaction_no), '') IS NULL
+            OR channel_transaction_no = #{channelTransactionNo}
+          )
+    </update>
+
+    <update id="markPaymentSubmitResultUnknown">
+        UPDATE t_payment_order
+        SET status = 'WAIT_CALLBACK',
+            status_type = 'danger',
+            channel_transaction_no = COALESCE(
+                NULLIF(TRIM(channel_transaction_no), ''),
+                #{channelTransactionNo})
+        WHERE payment_order_id = #{paymentOrderId}
+          AND status = 'WAIT_CALLBACK'
+          AND (
+            #{channelTransactionNo} IS NULL
+            OR NULLIF(TRIM(channel_transaction_no), '') IS NULL
+            OR channel_transaction_no = #{channelTransactionNo}
+          )
     </update>
 
     <update id="updatePaymentReturnCodeSnapshot">
@@ -741,8 +775,14 @@
     <update id="updatePaymentAttemptSubmitResult">
         UPDATE t_payment_attempt
         SET response_payload = #{responsePayload},
-            attempt_status = #{attemptStatus},
-            attempt_status_type = #{attemptStatusType}
+            attempt_status = CASE
+                WHEN completed_at IS NULL THEN #{attemptStatus}
+                ELSE attempt_status
+            END,
+            attempt_status_type = CASE
+                WHEN completed_at IS NULL THEN #{attemptStatusType}
+                ELSE attempt_status_type
+            END
         WHERE attempt_no = #{attemptNo}
     </update>
 

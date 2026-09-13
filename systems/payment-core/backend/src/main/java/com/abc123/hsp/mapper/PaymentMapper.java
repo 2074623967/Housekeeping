@@ -226,6 +226,20 @@ public interface PaymentMapper {
             @Param("channelTransactionNo") String channelTransactionNo);
 
     /**
+     * 渠道提交返回后补充支付单渠道事实，只允许待回调状态且不得覆盖已绑定流水。
+     */
+    int bindPaymentChannelSubmitResult(@Param("paymentOrderId") String paymentOrderId,
+            @Param("paymentMethod") String paymentMethod,
+            @Param("channelCode") String channelCode,
+            @Param("channelTransactionNo") String channelTransactionNo);
+
+    /**
+     * 渠道提交结果不确定时原子标记待查单，禁止覆盖成功、关闭或冲突流水。
+     */
+    int markPaymentSubmitResultUnknown(@Param("paymentOrderId") String paymentOrderId,
+            @Param("channelTransactionNo") String channelTransactionNo);
+
+    /**
      * 保存最近一次渠道返回码标准化快照，供详情与排障稳定读取。
      */
     void updatePaymentReturnCodeSnapshot(
@@ -312,10 +326,10 @@ public interface PaymentMapper {
     /**
      * 按支付尝试号回写渠道提交结果，避免覆盖同一支付单的历史尝试。
      */
-    void updatePaymentAttemptSubmitResult(@Param("attemptNo") String attemptNo,
-                                          @Param("responsePayload") String responsePayload,
-                                          @Param("attemptStatus") String attemptStatus,
-                                          @Param("attemptStatusType") String attemptStatusType);
+    int updatePaymentAttemptSubmitResult(@Param("attemptNo") String attemptNo,
+                                         @Param("responsePayload") String responsePayload,
+                                         @Param("attemptStatus") String attemptStatus,
+                                         @Param("attemptStatusType") String attemptStatusType);
 
     /**
      * 写入独立支付处理日志；相同来源事实重复写入时保持幂等。

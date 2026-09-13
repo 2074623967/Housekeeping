@@ -589,7 +589,8 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentChannelSubmitResultDTO uncertainResult = submitResult;
             try {
                 executeSubmitTransaction(() -> {
-                    markSubmitResultUnknown(paymentOrderId, attemptNo, uncertainResult);
+                    markSubmitResultUnknown(
+                            paymentOrderId, resolvedChannelCode, attemptNo, uncertainResult);
                     return null;
                 });
             } catch (RuntimeException recoveryException) {
@@ -695,11 +696,29 @@ public class PaymentServiceImpl implements PaymentService {
             String orderNo,
             String attemptNo,
             PaymentChannelSubmitResultDTO submitResult) {
-        paymentMapper.updatePaymentMethodAndChannel(
+        int boundRows = paymentMapper.bindPaymentChannelSubmitResult(
                 paymentOrderId,
                 request.getPaymentMethod(),
                 resolvedChannelCode,
                 submitResult.getChannelTransactionNo());
+        if (boundRows == 0) {
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
+            validatePaymentSubmitResultBinding(
+                    resolvedChannelCode, submitResult.getChannelTransactionNo(), latestDetail);
+            if (isFinalPaymentState(latestDetail)) {
+                if ("SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                    validatePaymentSuccessFacts(latestDetail);
+                    updatePaymentAttemptSubmitResult(
+                            attemptNo,
+                            submitResult.getResponsePayload(),
+                            submitResult.getAttemptStatus(),
+                            submitResult.getAttemptStatusType());
+                }
+                return paymentMapper.findPrepay(request.getPrepayOrderNo());
+            }
+            throw new IllegalStateException(
+                    "payment channel submit result binding was not applied atomically");
+        }
         paymentMapper.updatePaymentReturnCodeSnapshot(
                 paymentOrderId,
                 submitResult.getChannelReturnCode(),
@@ -710,7 +729,7 @@ public class PaymentServiceImpl implements PaymentService {
                 submitResult.getManualInterventionRequired(),
                 submitResult.getMappingVersion(),
                 submitResult.getReturnCodeMappingMatched());
-        paymentMapper.updatePaymentAttemptSubmitResult(
+        updatePaymentAttemptSubmitResult(
                 attemptNo,
                 submitResult.getResponsePayload(),
                 submitResult.getAttemptStatus(),
@@ -749,18 +768,51 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void markSubmitResultUnknown(
             String paymentOrderId,
+            String resolvedChannelCode,
             String attemptNo,
             PaymentChannelSubmitResultDTO submitResult) {
         String responsePayload = submitResult == null ? null : submitResult.getResponsePayload();
-        paymentMapper.updatePaymentAttemptSubmitResult(
+        String channelTransactionNo = submitResult == null
+                ? null : submitResult.getChannelTransactionNo();
+        if (paymentMapper.markPaymentSubmitResultUnknown(
+                paymentOrderId, channelTransactionNo) == 0) {
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(paymentOrderId);
+            if (latestDetail == null) {
+                throw new IllegalStateException(
+                        "payment submit result recovery target does not exist");
+            }
+            if (submitResult != null) {
+                validatePaymentSubmitResultBinding(
+                        resolvedChannelCode, channelTransactionNo, latestDetail);
+            }
+            if (isFinalPaymentState(latestDetail)) {
+                if (submitResult != null && "SUCCESS".equalsIgnoreCase(latestDetail.getStatus())) {
+                    validatePaymentSuccessFacts(latestDetail);
+                    updatePaymentAttemptSubmitResult(
+                            attemptNo,
+                            responsePayload,
+                            submitResult.getAttemptStatus(),
+                            submitResult.getAttemptStatusType());
+                }
+                return;
+            }
+            throw new IllegalStateException(
+                    "payment submit result recovery was not applied atomically");
+        }
+        updatePaymentAttemptSubmitResult(
                 attemptNo, responsePayload, "结果未知，待查单", "danger");
         paymentMapper.updatePrepayStatusByPaymentOrderId(paymentOrderId, "结果待确认", "danger");
-        if (submitResult != null && StringUtils.hasText(submitResult.getChannelTransactionNo())) {
-            paymentMapper.updatePaymentStatus(
-                    paymentOrderId,
-                    "WAIT_CALLBACK",
-                    "danger",
-                    submitResult.getChannelTransactionNo());
+    }
+
+    private void updatePaymentAttemptSubmitResult(
+            String attemptNo,
+            String responsePayload,
+            String attemptStatus,
+            String attemptStatusType) {
+        if (paymentMapper.updatePaymentAttemptSubmitResult(
+                attemptNo, responsePayload, attemptStatus, attemptStatusType) != 1) {
+            throw new IllegalStateException(
+                    "payment attempt submit result was not applied atomically");
         }
     }
 
@@ -899,7 +951,10 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (!paySuccess && paymentMapper.markPaymentPendingFromCallback(
                 request.getPaymentOrderId(), request.getChannelTransactionNo()) == 0) {
-            return outwardDetail(paymentMapper.findDetail(request.getPaymentOrderId()));
+            PaymentDetailDTO latestDetail = paymentMapper.findDetail(request.getPaymentOrderId());
+            validatePaymentCallbackBinding(
+                    normalizedChannel, request.getChannelTransactionNo(), latestDetail);
+            return outwardDetail(latestDetail);
         }
         // 回调必须落日志、改状态、写事件，三件事一起做才方便对账和排障。
         String notifyNo = buildBusinessNo("NTF");
@@ -960,6 +1015,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private void validatePaymentCallbackBinding(
             String normalizedChannel, String channelTransactionNo, PaymentDetailDTO detail) {
+        if (detail == null) {
+            throw new BusinessException(ErrorCode.PAYMENT_ORDER_NOT_FOUND, "支付单不存在");
+        }
         if (!StringUtils.hasText(detail.getChannel())
                 || !normalizedChannel.equalsIgnoreCase(detail.getChannel().trim())) {
             throw new BusinessException(
@@ -972,6 +1030,26 @@ public class PaymentServiceImpl implements PaymentService {
                     ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH,
                     "callback transaction does not match payment transaction");
         }
+    }
+
+    private void validatePaymentSubmitResultBinding(
+            String channelCode, String channelTransactionNo, PaymentDetailDTO detail) {
+        if (detail == null) {
+            throw new IllegalStateException("payment submit result target does not exist");
+        }
+        if (!StringUtils.hasText(detail.getChannel())
+                || !detail.getChannel().trim().equalsIgnoreCase(channelCode)
+                || (StringUtils.hasText(detail.getChannelTransactionNo())
+                && !detail.getChannelTransactionNo().equals(channelTransactionNo))) {
+            throw new BusinessException(
+                    ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
+                    "payment channel submit result conflicts with payment binding");
+        }
+    }
+
+    private boolean isFinalPaymentState(PaymentDetailDTO detail) {
+        return "SUCCESS".equalsIgnoreCase(detail.getStatus())
+                || "CLOSED".equalsIgnoreCase(detail.getStatus());
     }
 
     private void validateCallbackField(String value, int maxLength, String fieldName) {

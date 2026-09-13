@@ -1539,6 +1539,43 @@ class PaymentServiceImplTest {
     }
 
     @Test
+    void shouldRejectPendingCallbackWhenConcurrentCallbackBoundDifferentTransaction() {
+        PaymentDetailDTO initialDetail = queryDetail("PAY-CALLBACK-PENDING-BIND-RACE", "WAIT_CALLBACK");
+        initialDetail.setChannelTransactionNo(null);
+        PaymentDetailDTO concurrentlyBoundDetail =
+                queryDetail("PAY-CALLBACK-PENDING-BIND-RACE", "WAIT_CALLBACK");
+        concurrentlyBoundDetail.setChannelTransactionNo("WX-OTHER-CALLBACK");
+        when(paymentMapper.findDetail("PAY-CALLBACK-PENDING-BIND-RACE"))
+                .thenReturn(initialDetail, concurrentlyBoundDetail);
+        when(paymentMapper.markPaymentPendingFromCallback(
+                "PAY-CALLBACK-PENDING-BIND-RACE", "WX-CURRENT-CALLBACK")).thenReturn(0);
+
+        PaymentCallbackRequestDTO callback = new PaymentCallbackRequestDTO();
+        callback.setPaymentOrderId("PAY-CALLBACK-PENDING-BIND-RACE");
+        callback.setTradeStatus("PROCESSING");
+        callback.setChannelTransactionNo("WX-CURRENT-CALLBACK");
+
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService)
+                        .callback("wx_h5", callback));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ErrorCode.PAYMENT_CALLBACK_TRANSACTION_MISMATCH, exception.getCode());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).updateLatestPaymentAttemptStatus(
+                anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void shouldNotSettleWhenAnotherSuccessCallbackAlreadyWon() {
         PaymentDetailDTO pendingDetail = queryDetail("PAY-CALLBACK-RACE", "WAIT_CALLBACK");
         PaymentDetailDTO settledDetail = queryDetail("PAY-CALLBACK-RACE", "SUCCESS");
@@ -1955,6 +1992,11 @@ class PaymentServiceImplTest {
         submitResult.setReturnCodeMappingMatched(Boolean.FALSE);
         submitResult.setResponsePayload("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}");
         when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+        when(paymentMapper.bindPaymentChannelSubmitResult(
+                "PAY-300", "银行转账", "offline_bank", "CHANNEL-300")).thenReturn(1);
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"SUCCESS\",\"channelTransactionNo\":\"CHANNEL-300\"}"),
+                eq("处理中"), eq("info"))).thenReturn(1);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-300");
@@ -1975,7 +2017,8 @@ class PaymentServiceImplTest {
                 paymentChannelSubmitService)
                 .submit(request);
 
-        verify(paymentMapper, times(1)).updatePaymentMethodAndChannel("PAY-300", "银行转账", "offline_bank", "CHANNEL-300");
+        verify(paymentMapper).bindPaymentChannelSubmitResult(
+                "PAY-300", "银行转账", "offline_bank", "CHANNEL-300");
         verify(paymentMapper).updatePaymentReturnCodeSnapshot(
                 "PAY-300", "BANK_TRANSFER_PENDING", "PAYMENT-CHANNEL-UNMAPPED",
                 "未配置渠道返回码映射", "保留渠道原始事实并转人工判断",
@@ -2078,6 +2121,10 @@ class PaymentServiceImplTest {
         submitResult.setAttemptStatus("待回调");
         submitResult.setAttemptStatusType("warn");
         when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+        when(paymentMapper.bindPaymentChannelSubmitResult(
+                "PAY-UNKNOWN-001", "微信支付", "wx_h5", "WX-UNKNOWN-001")).thenReturn(1);
+        when(paymentMapper.markPaymentSubmitResultUnknown(
+                "PAY-UNKNOWN-001", "WX-UNKNOWN-001")).thenReturn(1);
         org.mockito.Mockito.doThrow(new IllegalStateException(
                         "jdbc:mysql://internal/payment password=submit-secret\ninvalid SQL"))
                 .when(paymentMapper).updatePaymentAttemptSubmitResult(
@@ -2085,6 +2132,9 @@ class PaymentServiceImplTest {
                         org.mockito.ArgumentMatchers.eq("{\"code\":\"ACCEPTED\"}"),
                         org.mockito.ArgumentMatchers.eq("待回调"),
                         org.mockito.ArgumentMatchers.eq("warn"));
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"ACCEPTED\"}"),
+                eq("结果未知，待查单"), eq("danger"))).thenReturn(1);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-UNKNOWN-001");
@@ -2153,8 +2203,8 @@ class PaymentServiceImplTest {
                 org.mockito.ArgumentMatchers.eq("danger"));
         verify(paymentMapper).updatePrepayStatusByPaymentOrderId(
                 "PAY-UNKNOWN-001", "结果待确认", "danger");
-        verify(paymentMapper).updatePaymentStatus(
-                "PAY-UNKNOWN-001", "WAIT_CALLBACK", "danger", "WX-UNKNOWN-001");
+        verify(paymentMapper).markPaymentSubmitResultUnknown(
+                "PAY-UNKNOWN-001", "WX-UNKNOWN-001");
         verify(paymentMapper, never()).releaseSubmitConcurrencyToken(
                 "PAY-UNKNOWN-001", "SUBMIT_EXCEPTION");
         verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
@@ -2190,6 +2240,11 @@ class PaymentServiceImplTest {
                 .thenThrow(new BusinessException(
                         ErrorCode.PAYMENT_CHANNEL_SUBMIT_FAILED,
                         "payment channel submit result is invalid"));
+        when(paymentMapper.markPaymentSubmitResultUnknown(
+                "PAY-INVALID-RESULT", null)).thenReturn(1);
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), org.mockito.ArgumentMatchers.isNull(),
+                eq("结果未知，待查单"), eq("danger"))).thenReturn(1);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-INVALID-RESULT");
@@ -2214,6 +2269,8 @@ class PaymentServiceImplTest {
                 "PAY-INVALID-RESULT", "结果待确认", "danger");
         verify(paymentMapper, never()).updatePaymentStatus(
                 eq("PAY-INVALID-RESULT"), anyString(), anyString(), anyString());
+        verify(paymentMapper).markPaymentSubmitResultUnknown(
+                "PAY-INVALID-RESULT", null);
         verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
                 anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
@@ -3511,6 +3568,11 @@ class PaymentServiceImplTest {
                 .thenReturn(riskDecision);
         when(paymentMapper.updatePrepayToPaying("PRE-RISK-APPROVED-001")).thenReturn(1);
         when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+        when(paymentMapper.bindPaymentChannelSubmitResult(
+                "PAY-RISK-APPROVED-001", "微信支付", "wx_h5", "WX-APPROVED-001")).thenReturn(1);
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"SUCCESS\"}"), eq("待回调"), eq("warn")))
+                .thenReturn(1);
 
         PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
         request.setPrepayOrderNo("PRE-RISK-APPROVED-001");
@@ -3537,6 +3599,184 @@ class PaymentServiceImplTest {
         verify(paymentChannelSubmitService, times(1)).submit(org.mockito.ArgumentMatchers.any(PaymentChannelSubmitRequestDTO.class));
         verify(paymentMapper, never()).updatePaymentStatus("PAY-RISK-APPROVED-001", "RISK_REVIEW", "warn", "");
         org.junit.jupiter.api.Assertions.assertEquals("PRE-RISK-APPROVED-001", result.getPrepayOrderNo());
+    }
+
+    @Test
+    void shouldNotRegressFastSuccessCallbackWhenSubmitResultCompletes() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-FAST-CALLBACK");
+        prepayOrder.setPaymentOrderId("PAY-FAST-CALLBACK");
+        prepayOrder.setOrderNo("ORD-FAST-CALLBACK");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("168.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+        prepayOrder.setCashierStatus("支付成功");
+
+        PaymentDetailDTO initialDetail = new PaymentDetailDTO();
+        initialDetail.setPaymentOrderId("PAY-FAST-CALLBACK");
+        initialDetail.setOrderNo("ORD-FAST-CALLBACK");
+        initialDetail.setStatus("PREPAY_CREATED");
+
+        PaymentDetailDTO successDetail = queryDetail("PAY-FAST-CALLBACK", "SUCCESS");
+        successDetail.setOrderNo("ORD-FAST-CALLBACK");
+        successDetail.setChannel("wx_h5");
+        successDetail.setChannelTransactionNo("WX-FAST-CALLBACK");
+        successDetail.setLatestAttemptStatus("成功");
+        successDetail.setLatestAttemptCompletedAt("2026-09-13 15:00:00");
+        successDetail.setSuccessAt("2026-09-13 15:00:00");
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_CLEAN");
+        routeDecision.setRouteResult("命中微信 H5");
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("PASS");
+        PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
+        submitResult.setChannelTransactionNo("WX-FAST-CALLBACK");
+        submitResult.setResponsePayload("{\"code\":\"ACCEPTED\"}");
+        submitResult.setAttemptStatus("待回调");
+        submitResult.setAttemptStatusType("warn");
+
+        when(paymentMapper.findPrepay("PRE-FAST-CALLBACK"))
+                .thenReturn(prepayOrder, prepayOrder);
+        when(paymentMapper.findDetail("PAY-FAST-CALLBACK"))
+                .thenReturn(initialDetail, successDetail);
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(routeDecision);
+        when(paymentRiskControlService.evaluateSubmitRisk(
+                org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(riskDecision);
+        when(paymentMapper.updatePrepayToPaying("PRE-FAST-CALLBACK")).thenReturn(1);
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(submitResult);
+        when(paymentMapper.bindPaymentChannelSubmitResult(
+                "PAY-FAST-CALLBACK", "微信支付", "wx_h5", "WX-FAST-CALLBACK"))
+                .thenReturn(0);
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"ACCEPTED\"}"), eq("待回调"), eq("warn")))
+                .thenReturn(1);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-FAST-CALLBACK");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setIdempotencyKey("IDEMP-FAST-CALLBACK");
+
+        PrepayOrderDTO result = new PaymentServiceImpl(
+                paymentMapper,
+                paymentCallbackSignatureService,
+                paymentChannelRoutingService,
+                paymentChannelQueryService,
+                paymentChannelSubmitService,
+                paymentEventDispatchService,
+                paymentRiskControlService,
+                paymentOpsConfigService)
+                .submit(request);
+
+        org.junit.jupiter.api.Assertions.assertEquals("支付成功", result.getCashierStatus());
+        verify(paymentMapper).updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"ACCEPTED\"}"), eq("待回调"), eq("warn"));
+        verify(paymentMapper, never()).updatePaymentReturnCodeSnapshot(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUBMIT"), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertNotifyLog(
+                anyString(), eq("PAY-FAST-CALLBACK"), anyString(), eq("SUBMIT"),
+                anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void shouldNotRegressFastSuccessWhenUnknownResultRecoveryRuns() {
+        PrepayOrderDTO prepayOrder = new PrepayOrderDTO();
+        prepayOrder.setPrepayOrderNo("PRE-FAST-RECOVERY");
+        prepayOrder.setPaymentOrderId("PAY-FAST-RECOVERY");
+        prepayOrder.setOrderNo("ORD-FAST-RECOVERY");
+        prepayOrder.setCustomerName("张女士");
+        prepayOrder.setAmount("168.00");
+        prepayOrder.setPayScene("HOME_CLEAN");
+
+        PaymentDetailDTO initialDetail = new PaymentDetailDTO();
+        initialDetail.setPaymentOrderId("PAY-FAST-RECOVERY");
+        initialDetail.setOrderNo("ORD-FAST-RECOVERY");
+        initialDetail.setStatus("PREPAY_CREATED");
+        PaymentDetailDTO successDetail = queryDetail("PAY-FAST-RECOVERY", "SUCCESS");
+        successDetail.setOrderNo("ORD-FAST-RECOVERY");
+        successDetail.setChannel("wx_h5");
+        successDetail.setChannelTransactionNo("WX-FAST-RECOVERY");
+        successDetail.setLatestAttemptStatus("成功");
+        successDetail.setLatestAttemptCompletedAt("2026-09-13 15:00:00");
+        successDetail.setSuccessAt("2026-09-13 15:00:00");
+
+        PaymentRouteDecisionDTO routeDecision = new PaymentRouteDecisionDTO();
+        routeDecision.setChannelCode("wx_h5");
+        routeDecision.setRouteRule("RULE_HOME_CLEAN");
+        routeDecision.setRouteResult("命中微信 H5");
+        PaymentRiskDecisionResultDTO riskDecision = new PaymentRiskDecisionResultDTO();
+        riskDecision.setDecision("PASS");
+        PaymentChannelSubmitResultDTO submitResult = new PaymentChannelSubmitResultDTO();
+        submitResult.setChannelTransactionNo("WX-FAST-RECOVERY");
+        submitResult.setResponsePayload("{\"code\":\"ACCEPTED\"}");
+        submitResult.setAttemptStatus("待回调");
+        submitResult.setAttemptStatusType("warn");
+
+        when(paymentMapper.findPrepay("PRE-FAST-RECOVERY")).thenReturn(prepayOrder);
+        when(paymentMapper.findDetail("PAY-FAST-RECOVERY"))
+                .thenReturn(initialDetail, successDetail);
+        when(paymentChannelRoutingService.resolve(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(routeDecision);
+        when(paymentRiskControlService.evaluateSubmitRisk(
+                org.mockito.ArgumentMatchers.any(PaymentRiskDecisionRequestDTO.class)))
+                .thenReturn(riskDecision);
+        when(paymentMapper.updatePrepayToPaying("PRE-FAST-RECOVERY")).thenReturn(1);
+        when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(submitResult);
+        when(paymentMapper.bindPaymentChannelSubmitResult(
+                "PAY-FAST-RECOVERY", "微信支付", "wx_h5", "WX-FAST-RECOVERY"))
+                .thenReturn(1);
+        org.mockito.Mockito.doThrow(new IllegalStateException("snapshot write failed"))
+                .when(paymentMapper).updatePaymentReturnCodeSnapshot(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+        when(paymentMapper.markPaymentSubmitResultUnknown(
+                "PAY-FAST-RECOVERY", "WX-FAST-RECOVERY")).thenReturn(0);
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"ACCEPTED\"}"), eq("待回调"), eq("warn")))
+                .thenReturn(1);
+
+        PaymentSubmitRequestDTO request = new PaymentSubmitRequestDTO();
+        request.setPrepayOrderNo("PRE-FAST-RECOVERY");
+        request.setPaymentMethod("微信支付");
+        request.setChannelCode("wx_h5");
+        request.setIdempotencyKey("IDEMP-FAST-RECOVERY");
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () ->
+                new PaymentServiceImpl(
+                        paymentMapper,
+                        paymentCallbackSignatureService,
+                        paymentChannelRoutingService,
+                        paymentChannelQueryService,
+                        paymentChannelSubmitService,
+                        paymentEventDispatchService,
+                        paymentRiskControlService,
+                        paymentOpsConfigService)
+                        .submit(request));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "PAYMENT_SUBMIT_TRANSACTION_FAILED:IllegalStateException", exception.getMessage());
+        verify(paymentMapper).markPaymentSubmitResultUnknown(
+                "PAY-FAST-RECOVERY", "WX-FAST-RECOVERY");
+        verify(paymentMapper).updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"ACCEPTED\"}"), eq("待回调"), eq("warn"));
+        verify(paymentMapper, never()).updatePrepayStatusByPaymentOrderId(
+                eq("PAY-FAST-RECOVERY"), eq("结果待确认"), eq("danger"));
+        verify(paymentMapper, never()).updatePaymentStatus(
+                eq("PAY-FAST-RECOVERY"), anyString(), anyString(), anyString());
+        verify(paymentMapper, never()).insertEvent(
+                anyString(), eq("PAYMENT_SUBMIT"), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -3588,6 +3828,11 @@ class PaymentServiceImplTest {
         when(paymentMapper.existsPaymentAttemptByIdempotencyKey("PRE-OPS-001|微信支付|wx_h5")).thenReturn(false);
         when(paymentMapper.updatePrepayToPaying("PRE-OPS-001")).thenReturn(1);
         when(paymentChannelSubmitService.submit(org.mockito.ArgumentMatchers.any())).thenReturn(submitResult);
+        when(paymentMapper.bindPaymentChannelSubmitResult(
+                "PAY-OPS-001", "微信支付", "wx_h5", "WX-OPS-001")).thenReturn(1);
+        when(paymentMapper.updatePaymentAttemptSubmitResult(
+                anyString(), eq("{\"code\":\"SUCCESS\"}"), eq("待回调"), eq("warn")))
+                .thenReturn(1);
         when(paymentMapper.findOrderNoByPrepayOrderNo("PRE-OPS-001")).thenReturn("ORD-OPS-001");
         when(paymentMapper.findPrepay("PRE-OPS-001")).thenReturn(prepayOrder);
 
