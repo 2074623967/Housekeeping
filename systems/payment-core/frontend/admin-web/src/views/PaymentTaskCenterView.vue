@@ -525,10 +525,10 @@ onMounted(loadOverview);
               <p>将已生成的异常告警 outbox 派发到本地 IM、短信、邮件骨架通道，并回写派发状态，作为后续接入真实通知网关的统一入口。</p>
               <button
                 class="button primary"
-                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="Boolean(activeTaskCode) || Boolean(errorMessage) || !hasLoadedData || overview.pendingIssueAlertDispatchCount === 0"
                 @click="runTask('PAYMENT_ISSUE_ALERT_DISPATCH', '异常告警派发', paymentTaskCenterApi.runDispatchIssueAlerts)"
               >
-                {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_DISPATCH" ? "执行中..." : "执行异常告警派发" }}
+                {{ activeTaskCode === "PAYMENT_ISSUE_ALERT_DISPATCH" ? "执行中..." : overview.pendingIssueAlertDispatchCount === 0 ? "暂无待派发告警" : `执行异常告警派发（${overview.pendingIssueAlertDispatchCount}）` }}
               </button>
             </div>
 
