@@ -1,13 +1,15 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { refundApi } from "../api/client";
 import { refundDetailRoute } from "../router/detailRoutes";
 import { normalizePaymentAmountInput, sumPaymentAmounts } from "../utils/paymentAmount";
+import { canRunRefundAction } from "../utils/refundAction";
 import { resolveRefundApplicationAttempt } from "../utils/refundApplication";
 import { refundListFiltersFromQuery } from "../utils/refundListFilters";
 
 const route = useRoute();
+const router = useRouter();
 const items = ref([]);
 const selectedItem = ref(null);
 const isLoading = ref(true);
@@ -24,7 +26,9 @@ const applyRequestFingerprint = ref("");
 const total = ref(0);
 const pageNo = ref(1);
 const loadedPageNo = ref(1);
+const loadedQuery = ref(null);
 const pageSize = 20;
+let latestLoadRequestId = 0;
 const applyForm = ref({
   paymentOrderId: "",
   refundAmount: "",
@@ -47,6 +51,8 @@ const isSnapshotStale = computed(() => Boolean(
 const isWriteDisabled = computed(() => (
   !hasLoadedData.value || isLoading.value || isSnapshotStale.value || isActionRunningOnPage.value
 ));
+const canUseSnapshot = computed(() => !isWriteDisabled.value);
+const canExport = computed(() => canUseSnapshot.value && total.value > 0);
 
 function buildQuery() {
   return {
@@ -64,6 +70,9 @@ function isActionRunning(refundOrderId, actionName) {
 }
 
 function resetFilters() {
+  if (isLoading.value || isActionRunningOnPage.value) {
+    return;
+  }
   filters.value = {
     refundOrderId: "",
     paymentOrderId: "",
@@ -75,8 +84,21 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (isLoading.value || isActionRunningOnPage.value) {
+    return;
+  }
   pageNo.value = 1;
   loadRefunds();
+}
+
+function refreshRefunds() {
+  if (isLoading.value || isActionRunningOnPage.value) {
+    return;
+  }
+  const query = loadedQuery.value
+    ? { ...loadedQuery.value, pageNo: loadedPageNo.value }
+    : buildQuery();
+  loadRefunds(selectedItem.value?.refundOrderId, false, query);
 }
 
 async function loadRefunds(
@@ -84,15 +106,25 @@ async function loadRefunds(
   afterAction = false,
   query = buildQuery()
 ) {
+  const requestId = ++latestLoadRequestId;
   isLoading.value = true;
+  if (afterAction) {
+    actionRefreshErrorMessage.value = "";
+  } else {
+    loadErrorMessage.value = "";
+  }
   try {
     const result = await refundApi.getList(query);
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     items.value = result.items;
     total.value = result.total;
     selectedItem.value = result.items.find((item) => item.refundOrderId === preferredRefundOrderId)
       || result.items[0]
       || null;
     loadedPageNo.value = query.pageNo;
+    loadedQuery.value = { ...query };
     hasLoadedData.value = true;
     loadErrorMessage.value = "";
     actionRefreshErrorMessage.value = "";
@@ -101,6 +133,9 @@ async function loadRefunds(
       actionResultMessage.value = "";
     }
   } catch (error) {
+    if (requestId !== latestLoadRequestId) {
+      return;
+    }
     if (afterAction) {
       actionRefreshErrorMessage.value = error.message;
     } else {
@@ -111,22 +146,32 @@ async function loadRefunds(
       pageNo.value = loadedPageNo.value;
     }
   } finally {
-    isLoading.value = false;
+    if (requestId === latestLoadRequestId) {
+      isLoading.value = false;
+    }
   }
 }
 
 function pickItem(item) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
   selectedItem.value = item;
 }
 
 function exportRefunds() {
-  const exportUrl = refundApi.buildExportUrl({
-    refundOrderId: filters.value.refundOrderId,
-    paymentOrderId: filters.value.paymentOrderId,
-    refundStatus: filters.value.refundStatus,
-    refundMethod: filters.value.refundMethod
-  });
+  if (!canExport.value || !loadedQuery.value) {
+    return;
+  }
+  const exportUrl = refundApi.buildExportUrl(loadedQuery.value);
   window.open(exportUrl, "_blank", "noopener,noreferrer");
+}
+
+function openRefundDetail(refundOrderId) {
+  if (!canUseSnapshot.value) {
+    return;
+  }
+  router.push(refundDetailRoute(refundOrderId));
 }
 
 function toRefundListItem(refund) {
@@ -153,6 +198,11 @@ function updateRefundSnapshot(refund) {
 }
 
 async function handleApply() {
+  if (isWriteDisabled.value || !loadedQuery.value) {
+    actionErrorMessage.value = "当前退款列表快照不可操作，请先完成查询或刷新。";
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = refundOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
@@ -178,6 +228,7 @@ async function handleApply() {
   });
   applyIdempotencyKey.value = attempt.idempotencyKey;
   applyRequestFingerprint.value = attempt.requestFingerprint;
+  const query = { ...loadedQuery.value, pageNo: 1 };
   activeAction.value = "apply";
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
@@ -197,7 +248,7 @@ async function handleApply() {
     applyRequestFingerprint.value = "";
     pageNo.value = 1;
     actionRefreshErrorMessage.value = "";
-    await loadRefunds(refund.refundOrderId, true, buildQuery());
+    await loadRefunds(refund.refundOrderId, true, query);
   } catch (error) {
     actionErrorMessage.value = `发起退款失败：${error.message}`;
   } finally {
@@ -206,13 +257,20 @@ async function handleApply() {
 }
 
 async function runRefundAction(refundOrderId, actionName, actionLabel, actionRunner) {
+  const refundItem = items.value.find((item) => item.refundOrderId === refundOrderId);
+  if (!canUseSnapshot.value || !loadedQuery.value || !refundItem
+      || !canRunRefundAction(refundItem.status, actionName)) {
+    actionErrorMessage.value = `退款单 ${refundOrderId} 当前不满足${actionLabel}条件。`;
+    actionResultMessage.value = "";
+    return;
+  }
   const operator = refundOperator.value.trim();
   if (!operator) {
     actionErrorMessage.value = "请先输入操作人。";
     actionResultMessage.value = "";
     return;
   }
-  const query = buildQuery();
+  const query = { ...loadedQuery.value };
   activeRefundOrderId.value = refundOrderId;
   activeAction.value = actionName;
   actionErrorMessage.value = "";
@@ -232,11 +290,12 @@ async function runRefundAction(refundOrderId, actionName, actionLabel, actionRun
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (!canUseSnapshot.value || !loadedQuery.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
-  loadRefunds();
+  loadRefunds(selectedItem.value?.refundOrderId, false, { ...loadedQuery.value, pageNo: nextPage });
 }
 
 onMounted(loadRefunds);
@@ -265,8 +324,10 @@ watch(
       </div>
       <div class="toolbar-actions">
         <span v-if="hasLoadedData" class="badge warn">本页待处理 {{ metrics.reviewingTotal }} 笔</span>
-        <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="loadRefunds()">刷新</button>
-        <button class="button primary" @click="exportRefunds">导出退款单</button>
+        <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="refreshRefunds">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="!canExport" @click="exportRefunds">导出退款单</button>
       </div>
     </div>
 
@@ -344,15 +405,15 @@ watch(
       <div class="toolbar">
         <div class="field">
           <label>退款单号</label>
-          <input v-model="filters.refundOrderId" :disabled="isActionRunningOnPage" placeholder="请输入退款单号" />
+          <input v-model="filters.refundOrderId" :disabled="isLoading || isActionRunningOnPage" placeholder="请输入退款单号" />
         </div>
         <div class="field">
           <label>原支付单号</label>
-          <input v-model="filters.paymentOrderId" :disabled="isActionRunningOnPage" placeholder="请输入原支付单号" />
+          <input v-model="filters.paymentOrderId" :disabled="isLoading || isActionRunningOnPage" placeholder="请输入原支付单号" />
         </div>
         <div class="field">
           <label>退款状态</label>
-          <select v-model="filters.refundStatus" :disabled="isActionRunningOnPage">
+          <select v-model="filters.refundStatus" :disabled="isLoading || isActionRunningOnPage">
             <option>全部</option>
             <option value="PENDING">待收口（待审核 / 处理中）</option>
             <option>REVIEWING</option>
@@ -365,7 +426,7 @@ watch(
         </div>
         <div class="field">
           <label>退款方式</label>
-          <select v-model="filters.refundMethod" :disabled="isActionRunningOnPage">
+          <select v-model="filters.refundMethod" :disabled="isLoading || isActionRunningOnPage">
             <option>全部</option>
             <option>原路退款</option>
             <option>线下打款</option>
@@ -373,7 +434,9 @@ watch(
           </select>
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" :disabled="isLoading || isActionRunningOnPage" @click="applyFilters">查询</button>
+          <button class="button primary" :disabled="isLoading || isActionRunningOnPage" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
           <button class="button secondary" :disabled="isLoading || isActionRunningOnPage" @click="resetFilters">重置</button>
         </div>
       </div>
@@ -414,25 +477,25 @@ watch(
                 <td>{{ item.successAt }}</td>
                 <td>
                   <div class="list-actions">
-                    <button class="link-button" @click="pickItem(item)">快照</button>
-                    <RouterLink class="link-button" :to="refundDetailRoute(item.refundOrderId)">详情</RouterLink>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="pickItem(item)">快照</button>
+                    <button class="link-button" :disabled="!canUseSnapshot" @click="openRefundDetail(item.refundOrderId)">详情</button>
                     <button
                       class="link-button"
-                      :disabled="isWriteDisabled || item.status !== 'PROCESSING'"
+                      :disabled="isWriteDisabled || !canRunRefundAction(item.status, 'query')"
                       @click="runRefundAction(item.refundOrderId, 'query', '完成主动查单', refundApi.query)"
                     >
                       {{ isActionRunning(item.refundOrderId, "query") ? "查询中..." : "主动查单" }}
                     </button>
                     <button
                       class="link-button"
-                      :disabled="isWriteDisabled || item.status !== 'REVIEWING'"
+                      :disabled="isWriteDisabled || !canRunRefundAction(item.status, 'approve')"
                       @click="runRefundAction(item.refundOrderId, 'approve', '审核通过', refundApi.approve)"
                     >
                       {{ isActionRunning(item.refundOrderId, "approve") ? "审核中..." : "审核通过" }}
                     </button>
                     <button
                       class="link-button"
-                      :disabled="isWriteDisabled || item.status !== 'FAIL'"
+                      :disabled="isWriteDisabled || !canRunRefundAction(item.status, 'retry')"
                       @click="runRefundAction(item.refundOrderId, 'retry', '重新提交', refundApi.retry)"
                     >
                       {{ isActionRunning(item.refundOrderId, "retry") ? "重试中..." : "重试" }}
@@ -472,9 +535,9 @@ watch(
       </div>
       <div v-if="hasLoadedData && total > pageSize" class="pager">
         <span>共 {{ total }} 条退款单</span>
-        <button class="button secondary" :disabled="pageNo === 1 || isLoading || isActionRunningOnPage || isSnapshotStale" @click="goToPage(pageNo - 1)">上一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo === 1" @click="goToPage(pageNo - 1)">上一页</button>
         <span>第 {{ pageNo }} / {{ Math.ceil(total / pageSize) }} 页</span>
-        <button class="button secondary" :disabled="pageNo >= Math.ceil(total / pageSize) || isLoading || isActionRunningOnPage || isSnapshotStale" @click="goToPage(pageNo + 1)">下一页</button>
+        <button class="button secondary" :disabled="!canUseSnapshot || pageNo >= Math.ceil(total / pageSize)" @click="goToPage(pageNo + 1)">下一页</button>
       </div>
     </section>
   </div>
@@ -490,11 +553,13 @@ watch(
 .detail-side {
   display: grid;
   align-self: start;
+  min-width: 0;
 }
 
 .detail-stack {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .detail-grid {
@@ -519,6 +584,7 @@ watch(
 
 .detail-card strong {
   color: #0f172a;
+  word-break: break-word;
 }
 
 .ops-card {
@@ -543,5 +609,17 @@ watch(
 
 .ops-row:last-child {
   border-bottom: 0;
+}
+
+@media (max-width: 1200px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ops-row {
+    flex-direction: column;
+  }
 }
 </style>
