@@ -6,7 +6,7 @@ import { buildAppWebCashierUrl } from "../router/externalUrls";
 import { billsRoute } from "../router/listRoutes";
 
 const items = ref([]);
-const isLoading = ref(true);
+const isLoading = ref(false);
 const hasLoadedData = ref(false);
 const loadErrorMessage = ref("");
 const actionRefreshErrorMessage = ref("");
@@ -27,8 +27,10 @@ const filters = ref({
 const isSnapshotStale = computed(() => Boolean(
   hasLoadedData.value && (loadErrorMessage.value || actionRefreshErrorMessage.value)
 ));
+const actionRunning = computed(() => isLoading.value || Boolean(activeOrderNo.value));
+const canExport = computed(() => hasLoadedData.value && total.value > 0 && !isSnapshotStale.value);
 const isWriteDisabled = computed(() => (
-  !hasLoadedData.value || isLoading.value || isSnapshotStale.value || Boolean(activeOrderNo.value)
+  !hasLoadedData.value || actionRunning.value || isSnapshotStale.value
 ));
 
 function buildQuery() {
@@ -42,6 +44,9 @@ function buildQuery() {
 }
 
 function resetFilters() {
+  if (actionRunning.value) {
+    return;
+  }
   filters.value = {
     orderNo: "",
     serviceType: "全部",
@@ -52,11 +57,17 @@ function resetFilters() {
 }
 
 function applyFilters() {
+  if (actionRunning.value) {
+    return;
+  }
   pageNo.value = 1;
   loadOrders();
 }
 
 async function loadOrders(afterAction = false, query = buildQuery()) {
+  if (actionRunning.value && !afterAction) {
+    return;
+  }
   isLoading.value = true;
   try {
     const result = await orderApi.getList(query);
@@ -86,11 +97,12 @@ async function loadOrders(afterAction = false, query = buildQuery()) {
 }
 
 function canLaunchPayment(orderItem) {
-  return orderItem.orderStatus === "待支付";
+  return orderItem?.orderStatus === "待支付";
 }
 
 function goToPage(nextPage) {
-  if (nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
+  if (actionRunning.value || isSnapshotStale.value
+      || nextPage < 1 || nextPage > Math.ceil(total.value / pageSize)) {
     return;
   }
   pageNo.value = nextPage;
@@ -98,6 +110,9 @@ function goToPage(nextPage) {
 }
 
 function exportOrders() {
+  if (actionRunning.value || !canExport.value) {
+    return;
+  }
   const exportUrl = orderApi.buildExportUrl({
     orderNo: filters.value.orderNo,
     serviceType: filters.value.serviceType,
@@ -107,10 +122,15 @@ function exportOrders() {
 }
 
 async function launchPayment(orderNo) {
+  const orderItem = items.value.find((item) => item.orderNo === orderNo);
+  if (isWriteDisabled.value || !canLaunchPayment(orderItem)) {
+    return;
+  }
   const query = buildQuery();
   activeOrderNo.value = orderNo;
   actionErrorMessage.value = "";
   actionResultMessage.value = "";
+  launchPayload.value = null;
   try {
     const prepay = await paymentApi.prepay({
       orderNo,
@@ -147,8 +167,10 @@ onMounted(loadOrders);
         <p>查看家政订单、支付状态和履约进展，并从订单侧发起支付</p>
       </div>
       <div class="toolbar-actions">
-        <button class="button secondary" :disabled="isLoading || Boolean(activeOrderNo)" @click="loadOrders()">刷新</button>
-        <button class="button primary" @click="exportOrders">导出订单</button>
+        <button class="button secondary" :disabled="actionRunning" @click="loadOrders()">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
+        <button class="button primary" :disabled="actionRunning || !canExport" @click="exportOrders">导出订单</button>
       </div>
     </div>
 
@@ -169,11 +191,11 @@ onMounted(loadOrders);
       <div class="toolbar">
         <div class="field">
           <label>订单号</label>
-          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="Boolean(activeOrderNo)" />
+          <input v-model="filters.orderNo" placeholder="请输入订单号" :disabled="actionRunning" />
         </div>
         <div class="field">
           <label>服务品类</label>
-          <select v-model="filters.serviceType" :disabled="Boolean(activeOrderNo)">
+          <select v-model="filters.serviceType" :disabled="actionRunning">
             <option>全部</option>
             <option>深度保洁</option>
             <option>月嫂套餐</option>
@@ -182,7 +204,7 @@ onMounted(loadOrders);
         </div>
         <div class="field">
           <label>订单状态</label>
-          <select v-model="filters.orderStatus" :disabled="Boolean(activeOrderNo)">
+          <select v-model="filters.orderStatus" :disabled="actionRunning">
             <option>全部</option>
             <option>待支付</option>
             <option>待履约</option>
@@ -194,8 +216,10 @@ onMounted(loadOrders);
           <input value="当前支持订单号、品类、状态筛选" disabled />
         </div>
         <div class="toolbar-actions">
-          <button class="button primary" :disabled="isLoading || Boolean(activeOrderNo)" @click="applyFilters">查询</button>
-          <button class="button secondary" :disabled="isLoading || Boolean(activeOrderNo)" @click="resetFilters">重置</button>
+          <button class="button primary" :disabled="actionRunning" @click="applyFilters">
+            {{ isLoading ? "查询中..." : "查询" }}
+          </button>
+          <button class="button secondary" :disabled="actionRunning" @click="resetFilters">重置</button>
         </div>
       </div>
 
