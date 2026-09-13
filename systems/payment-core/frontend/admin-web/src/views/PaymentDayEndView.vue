@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { paymentDayEndApi } from "../api/client";
 import { isClosedShanghaiBusinessDate, previousShanghaiBusinessDate } from "../utils/businessDate";
 
@@ -22,11 +22,14 @@ const overview = ref({
   alerts: [],
   recentBatches: []
 });
-const isLoading = ref(true);
+const isLoading = ref(false);
 const hasLoadedData = ref(false);
 const errorMessage = ref("");
-const actionMessage = ref("");
+const actionResultMessage = ref("");
+const actionErrorMessage = ref("");
 const activeAction = ref("");
+const actionRunning = computed(() => isLoading.value || Boolean(activeAction.value));
+const canExport = computed(() => hasLoadedData.value && overview.value.totalBatchCount > 0);
 
 const latestClosedBusinessDate = previousShanghaiBusinessDate();
 const runForm = ref({
@@ -36,6 +39,9 @@ const runForm = ref({
 });
 
 async function loadOverview() {
+  if (actionRunning.value) {
+    return;
+  }
   isLoading.value = true;
   errorMessage.value = "";
   try {
@@ -49,29 +55,38 @@ async function loadOverview() {
 }
 
 async function runBatch() {
+  if (actionRunning.value) {
+    return;
+  }
   if (!isClosedShanghaiBusinessDate(runForm.value.bizDate)) {
-    actionMessage.value = "业务日期必须早于上海当前日期。";
+    actionErrorMessage.value = "业务日期必须早于上海当前日期。";
+    actionResultMessage.value = "";
     return;
   }
   const triggeredBy = runForm.value.triggeredBy.trim();
   if (!triggeredBy) {
-    actionMessage.value = "请先输入触发人。";
+    actionErrorMessage.value = "请先输入触发人。";
+    actionResultMessage.value = "";
     return;
   }
   activeAction.value = "run";
-  actionMessage.value = "";
+  actionErrorMessage.value = "";
+  actionResultMessage.value = "";
   try {
     overview.value = await paymentDayEndApi.runBatch({ ...runForm.value, triggeredBy });
     hasLoadedData.value = true;
-    actionMessage.value = `已触发 ${runForm.value.bizDate} 的支付日终处理。`;
+    actionResultMessage.value = `已触发 ${runForm.value.bizDate} 的支付日终处理。`;
   } catch (error) {
-    actionMessage.value = `支付日终处理触发失败：${error.message}`;
+    actionErrorMessage.value = `支付日终处理触发失败：${error.message}`;
   } finally {
     activeAction.value = "";
   }
 }
 
 function exportBatches() {
+  if (actionRunning.value || !canExport.value) {
+    return;
+  }
   const exportUrl = paymentDayEndApi.buildExportUrl();
   window.open(exportUrl, "_blank", "noopener");
 }
@@ -87,8 +102,10 @@ onMounted(loadOverview);
         <p>统一收口支付、退款、渠道回调和内部事件，作为后续对账与差错处理的前置事实</p>
       </div>
       <div class="toolbar-actions">
-        <button class="button secondary" @click="exportBatches">导出 CSV</button>
-        <button class="button secondary" @click="loadOverview">刷新</button>
+        <button class="button secondary" :disabled="actionRunning || !canExport" @click="exportBatches">导出 CSV</button>
+        <button class="button secondary" :disabled="actionRunning" @click="loadOverview">
+          {{ isLoading ? "刷新中..." : "刷新" }}
+        </button>
       </div>
     </div>
 
@@ -96,8 +113,11 @@ onMounted(loadOverview);
       <div v-if="errorMessage" class="error-banner">
         {{ hasLoadedData ? "支付日终数据刷新失败，当前展示上次成功快照：" : "支付日终数据加载失败：" }}{{ errorMessage }}
       </div>
-      <div v-if="actionMessage" class="success-banner">
-        {{ actionMessage }}
+      <div v-if="actionErrorMessage" class="error-banner">
+        {{ actionErrorMessage }}
+      </div>
+      <div v-if="actionResultMessage" class="success-banner">
+        {{ actionResultMessage }}
       </div>
 
       <div v-if="isLoading" class="state-box">支付日终数据加载中...</div>
@@ -224,7 +244,8 @@ onMounted(loadOverview);
           </div>
         </div>
 
-        <div class="detail-card-grid">
+        <div v-if="!overview.alerts.length" class="state-box">当前日终快照暂无需处理的风险告警</div>
+        <div v-else class="detail-card-grid">
           <div v-for="alert in overview.alerts" :key="alert.alertType" class="detail-card">
             <div class="detail-label">{{ alert.alertTitle }}</div>
             <div class="detail-value">{{ alert.affectedCount }}</div>
@@ -241,26 +262,26 @@ onMounted(loadOverview);
           <div class="toolbar compact-toolbar">
             <div class="field">
               <label>业务日期</label>
-              <input v-model.trim="runForm.bizDate" type="date" :max="latestClosedBusinessDate" />
+              <input v-model.trim="runForm.bizDate" type="date" :max="latestClosedBusinessDate" :disabled="actionRunning" />
             </div>
             <div class="field">
               <label>运行方式</label>
-              <select v-model="runForm.runMode">
+              <select v-model="runForm.runMode" :disabled="actionRunning">
                 <option value="MANUAL">MANUAL</option>
                 <option value="RERUN">RERUN</option>
               </select>
             </div>
             <div class="field wide-field">
               <label>触发人</label>
-              <input v-model.trim="runForm.triggeredBy" maxlength="64" placeholder="请输入触发人" />
+              <input v-model.trim="runForm.triggeredBy" maxlength="64" placeholder="请输入触发人" :disabled="actionRunning" />
             </div>
             <div class="toolbar-actions">
               <button
                 class="button primary"
-                :disabled="activeAction === 'run' || Boolean(errorMessage) || !hasLoadedData"
+                :disabled="actionRunning || Boolean(errorMessage) || !hasLoadedData"
                 @click="runBatch"
               >
-                触发跑批
+                {{ activeAction === "run" ? "跑批处理中..." : "触发跑批" }}
               </button>
             </div>
           </div>
@@ -312,6 +333,9 @@ onMounted(loadOverview);
                 </tr>
               </thead>
               <tbody>
+                <tr v-if="!overview.recentBatches.length">
+                  <td colspan="31" class="state-box">当前暂无支付日终批次</td>
+                </tr>
                 <tr v-for="item in overview.recentBatches" :key="item.batchNo">
                   <td>{{ item.batchNo }}</td>
                   <td>{{ item.bizDate }}</td>
