@@ -14118,3 +14118,29 @@
 1. 支付核心现在以预付单绑定账单作为结算目标，消除了按订单号误结清其他账单的代码路径。
 2. 本轮不增加数据库唯一约束或迁移，不推断一个订单只能有一张账单；多账单业务含义仍由账单域决定。
 3. H2 和 Mockito 不证明生产历史绑定完整、目标 MySQL 影响行数与事务回滚、真实到账、对账或财务核验。
+
+## 521. 2026-09-13 支付尝试历史保留 V1.0 验证
+
+### 521.1 本轮补强
+
+1. 非成功支付回调只更新按 `created_at DESC, id DESC` 排序的最新支付尝试，不再覆盖同一支付单的较早尝试。
+2. 最新尝试更新必须恰好影响一行；零行时在预付单更新和 `PAYMENT_PENDING` 事件前失败，使回调事务回滚。
+3. 超时关单的准入 SQL 已要求不存在支付尝试，因此删除关单服务中原本无效的尝试更新。
+
+### 521.2 验证结果
+
+| 项目 | 结果 |
+| --- | --- |
+| 历史尝试隔离 | H2 MySQL 模式下较早尝试保持“待回调”且状态类型为 `NULL`，最新尝试更新为“待回调 / warn” |
+| 失败闭合 | Mapper 返回 `0` 时抛出 `payment attempt pending update was not applied atomically`，不更新预付单、不创建事件 |
+| 过期关单 | 成功与竞态跳过路径均不调用最新尝试更新，其他关单副作用保持原契约 |
+| 定向测试 | `PaymentServiceImplTest + PaymentExpiryTaskServiceImplTest + PaymentMapperStateTransitionIntegrationTest` 合计 `111/111` 通过 |
+| payment-core 后端全量 | `1094/1094` 通过，`0` failures、`0` errors、`0` skipped |
+| 静态与提交 | `git diff --check` 通过；实现提交 `68d3a326` |
+| 统一门禁复判 | 脚本退出码 `2`；`canPromoteTestToMaster=true`、`canCreateRelease=false`、统一 `blockerCount=1`、内部 `releaseBlockerCount=4` |
+
+### 521.3 当前判断
+
+1. 多次支付提交的较早尝试不再被晚到的非成功回调篡改，当前尝试与历史尝试的审计边界已经分离。
+2. 本轮无前端、HTTP、schema、索引或迁移变化，未重复运行管理端测试、构建或视觉检查。
+3. H2、Mockito 与影响行数断言不替代目标 MySQL 并发、生产存量尝试、真实渠道、到账、对账或正式发布证据。
