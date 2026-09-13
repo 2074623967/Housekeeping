@@ -4622,6 +4622,14 @@ POST /api/payment-config/issue-duty-rosters/reviews/{requestNo}/reject
 4. 客户端必须使用 JSON 解析，不得按逗号拆分；缺失或畸形值应明确暴露未知/异常状态，不得解释为未发现冲突。现有批准请求字段、路由复核路径和其余响应字段不变。
 5. 目标 MySQL 读取该字段前必须执行 `2026-09-13-add-payment-route-rule-review-conflict-targets.sql`；快照只记录检测器输出与自声明确认，不构成表达式互斥、可信签字或生产放行证据。
 
+### 14.341 路由冲突确认绑定精确集合契约
+
+1. 路由复核列表项新增数组字段 `previewPriorityCollisionRuleCodes`。待办申请基于查询时当前运行态计算候选涉及的 `PRIORITY_COLLISION` 对照规则编码并稳定排序；已完成记录不补算，字段可为空。
+2. 批准请求新增数组字段 `acknowledgedPriorityCollisionRuleCodes`，与既有 `priorityCollisionAcknowledged` 同时使用。客户端只有明确确认当前申请和完整预览集合时才传 `true + 非空数组`；驳回或未确认传 `false + []`。
+3. 服务端不信任列表预览。在既有全局协调锁内当前读最新规则全集后，重新计算实际集合并与请求集合精确比较；新增、减少至空、替换、缺失或重复编码均返回业务校验错误“同优先级潜在冲突集合已变化”或对应输入错误，并要求刷新重确认。
+4. 实际集合非空而布尔值未明确为 `true` 时仍按未确认拒绝；任一 `BLOCKER` 仍无条件拒绝。精确匹配成功后，数据库只保存服务端最终集合的 `priorityCollisionRuleCodesJson`，不保存客户端预览。
+5. 本轮不新增端点或改变既有路径、状态码与复核状态机；两个新数组只加强待办展示和批准前置条件，不构成表达式互斥、可信身份、正式签字或生产放行证据。
+
 ## 15. 结论
 
 这份接口文档当前已经可以直接指导前后端联调、测试编写和后续自动化补强，是 `payment-core` 一期支付交易闭环 V1 的正式接口基线。

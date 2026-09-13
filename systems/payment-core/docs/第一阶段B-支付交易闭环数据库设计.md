@@ -1794,6 +1794,13 @@ t_order
 4. 两份全量 schema 已同步字段；存量环境使用 `2026-09-13-add-payment-route-rule-review-conflict-targets.sql` 一次性增加列。迁移依赖前序复核审计迁移，目标 MySQL 仍需核对版本顺序、DDL 锁影响和回滚方案。
 5. 当前未增加 JSON 有效性约束或多值索引，应用以 Jackson 写入、前端防御性解析；该技术快照不是表达式相交证明、可信身份、不可抵赖签字或正式审批证据。
 
+### 4.211 路由冲突确认精确集合的数据边界
+
+1. 本轮新增的 `previewPriorityCollisionRuleCodes` 和 `acknowledgedPriorityCollisionRuleCodes` 均为 HTTP 瞬时数组，不新增表、字段、索引或迁移；页面选择和查询时预览不落库。
+2. 批准事务继续在 `t_payment_route_rule_conflict_lock` 的 `ENABLED_RULE_SET` 协调锁内当前读运行态全集，精确比较请求集合与实际集合；集合变化时事务失败，不更新规则、版本或复核记录。
+3. 成功批准仍只把服务端最终稳定排序集合写入 `t_payment_route_rule_review.priority_collision_rule_codes_json`，并与检测、确认和复核状态同事务提交。客户端数组不能覆盖、补写或删除最终审计快照。
+4. 本地测试不证明目标 MySQL 的锁等待、隔离、回滚与容量；该数据边界也不把自声明确认升级为可信身份、不可抵赖签字或表达式关系证明。
+
 ## 5. 状态建议
 
 ### 5.1 当前版本已使用状态
